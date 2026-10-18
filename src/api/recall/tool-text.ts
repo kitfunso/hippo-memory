@@ -2,7 +2,7 @@
 
 import { truncateWithEllipsis } from '../../util/ellipsize.js';
 import type { SearchResult } from '../../core/search-types.js';
-import type { SessionEvent, TaskSnapshot } from '../../store/rows.js';
+import type { SessionEvent, TaskSnapshot } from '../../store/port/sessions.js';
 import { confidenceLabel } from '../../core/memory.js';
 import type { ContextCost } from '../context-types.js';
 import type { ContinuityBlock, RecallResult, RecallResultItem } from './types.js';
@@ -123,7 +123,7 @@ export function trailPiece(events: readonly SessionEvent[]): string {
   return ['## Recent Session Trail', ...trailLines(events), '', ''].join('\n');
 }
 
-// Sections print ahead of the memories in hippo_context, so getContext pays for each as printed before any memory.
+// Sections print ahead of the memories in hippo_context, so contextGet pays for each as printed before any memory.
 export const contextCost: ContextCost = {
   entry: memoryCost,
   fixed: (budget) => memoriesReserve(budget),

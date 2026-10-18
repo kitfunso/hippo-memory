@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { TOOLS } from '../../src/mcp/tools.js';
 import { DEFAULT_CONFIG } from '../../src/core/config.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../src/store/rows.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../src/core/search-types.js';
 
 function descriptions(toolName: string): string {
   const tool = TOOLS.find((t) => t.name === toolName);

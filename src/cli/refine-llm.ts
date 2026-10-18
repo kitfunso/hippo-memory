@@ -5,7 +5,7 @@
 
 import { MemoryEntry, Layer } from '../core/memory.js';
 import { REFINED_TAG, storeRefinement, type Context } from '../api/index.js';
-import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories/memories.js';
+import { memoryList, memoryListByIds, type TenantReach } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { chunked } from '../util/chunked.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
@@ -128,7 +128,7 @@ export async function refineStore(hippoRoot: string, opts: RefineOptions): Promi
   // No tenant means every tenant, so the ctx's own tenant is never read.
   const ctx = cliApiContext(hippoRoot, opts.tenantId ?? '');
   const reach: TenantReach = { everyTenant: opts.tenantId === undefined };
-  const entries = await listMemories(ctx, reach);
+  const entries = await memoryList(ctx, reach);
   let processed = 0;
 
   for (const entry of entries) {
@@ -162,7 +162,7 @@ async function refineOneEntry(
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
   // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped,
   // so refine still works from the merged content alone.
-  const chunks = await Promise.all(chunked(parentIds).map((chunk) => listMemoriesByIds(ctx, chunk, reach)));
+  const chunks = await Promise.all(chunked(parentIds).map((chunk) => memoryListByIds(ctx, chunk, reach)));
   const found = new Map(chunks.flat().map((p) => [p.id, p]));
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 

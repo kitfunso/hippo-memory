@@ -160,7 +160,7 @@ describe('resolveConflict rejection wiring', () => {
 
   it('a plain resolve writes a conflict_resolve audit with disposition=weakened', async () => {
     const { aId, bId, conflictId } = seedConflict();
-    expect(await api.resolveMemoryConflict(ctx(), conflictId, { keepId: aId })).toEqual({
+    expect(await api.conflictResolve(ctx(), conflictId, { keepId: aId })).toEqual({
       conflictId,
       keptId: aId,
       loserId: bId,
@@ -180,7 +180,7 @@ describe('resolveConflict rejection wiring', () => {
 
   it('resolveConflict --forget writes a conflict_resolve audit with disposition=deleted', async () => {
     const { aId, bId, conflictId } = seedConflict();
-    await api.resolveMemoryConflict(ctx(), conflictId, { keepId: aId, forget: true });
+    await api.conflictResolve(ctx(), conflictId, { keepId: aId, forget: true });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
     const db = openHippoDb(tmpDir);
@@ -195,7 +195,7 @@ describe('resolveConflict rejection wiring', () => {
 
   it('rejectLoserValue tombstones + removes the loser; re-remember of its content is refused', async () => {
     const { aId, bId, conflictId } = seedConflict();
-    await api.resolveMemoryConflict(ctx(), conflictId, { keepId: aId, rejectLoser: true, reason: 'loser rejected' });
+    await api.conflictResolve(ctx(), conflictId, { keepId: aId, rejectLoser: true, reason: 'loser rejected' });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
     await expect(api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' })).rejects.toThrow(
@@ -225,7 +225,7 @@ describe('resolveConflict rejection wiring', () => {
     const otherTenantDup = createMemory(loserContent, { tags: ['dup'], tenantId: 'other-tenant' });
     writeEntry(tmpDir, otherTenantDup);
 
-    await api.resolveMemoryConflict(ctx(), conflictId, {
+    await api.conflictResolve(ctx(), conflictId, {
       keepId: aId,
       rejectLoser: true,
       reason: 'loser + same-tenant duplicates rejected',
@@ -266,7 +266,7 @@ describe('resolveConflict rejection wiring', () => {
     const conflicts = listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
-    await expect(api.resolveMemoryConflict(ctx(), conflictId, { keepId: a.id, forget: true })).resolves.toBeDefined();
+    await expect(api.conflictResolve(ctx(), conflictId, { keepId: a.id, forget: true })).resolves.toBeDefined();
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
 
     const db = openHippoDb(tmpDir);
@@ -302,7 +302,7 @@ describe('resolveConflict rejection wiring', () => {
     // post-commit purge gate required rejectLoserValue too, so this path
     // left the raw mirror orphaned (only the reaper would eventually catch
     // it; a non-raw loser would never be caught at all).
-    await api.resolveMemoryConflict(ctx(), conflictId, { keepId: a.id, forget: true });
+    await api.conflictResolve(ctx(), conflictId, { keepId: a.id, forget: true });
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
     expect(fs.existsSync(mirrorPath)).toBe(false);
 
@@ -339,7 +339,7 @@ describe('resolveConflict rejection wiring', () => {
     const conflictId = conflicts[0]!.id;
 
     await expect(
-      api.resolveMemoryConflict(ctx(), conflictId, {
+      api.conflictResolve(ctx(), conflictId, {
         keepId: a.id,
         rejectLoser: true,
         reason: 'raw loser rejected via GDPR-adjacent path',

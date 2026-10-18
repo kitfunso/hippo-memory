@@ -9,10 +9,11 @@ import {
 } from '../core/handoff.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../core/tenant-id.js';
-import type { TaskSnapshot } from './rows.js';
+import type { TaskSnapshot } from './port/sessions.js';
 import type { StoreFiles } from './open.js';
 import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './sessions.js';
 import type { ContinuityKey } from './port/types.js';
+import type { HandoffFilter, SessionEndHandoffRequest } from './port/sessions.js';
 
 /** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
 export const HANDOFF_COLUMNS =
@@ -78,13 +79,6 @@ export function saveSessionHandoffAt(
   }
 
   return rowToSessionHandoff(row);
-}
-
-export interface HandoffFilter {
-  unfinishedOnly?: boolean;
-  maxAgeMs?: number;
-  scopeFilter?: 'default-deny';
-  excludeSessionId?: string;
 }
 
 function handoffConditions(
@@ -290,15 +284,6 @@ function buildSessionEndHandoff(
     targetRuntime: carryForward ? existing.targetRuntime : undefined,
     cardId: carryForward ? existing.cardId : undefined,
   };
-}
-
-export interface SessionEndHandoffRequest {
-  readonly tenantId: string;
-  readonly sessionId: string;
-  readonly evidence: HandoffEvidence | null;
-  readonly derived?: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null;
-  readonly key?: ContinuityKey;
-  readonly inPlace?: boolean;
 }
 
 /** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace` rewrites an earlier

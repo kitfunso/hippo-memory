@@ -15,7 +15,7 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../core/failure-log-retention.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories/memories.js';
+import { memoryGet } from '../api/memories/memories.js';
 import {
   correctionLatencyReport,
   embeddingReindexNeeded,
@@ -24,7 +24,7 @@ import {
   storedParticles,
   vectorSummary,
 } from '../api/status.js';
-import type { StatusCounts } from '../store/candidates.js';
+import type { StatusCounts } from '../store/port/reports.js';
 import type { Diagnostics } from '../store/port/diagnostics.js';
 import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 
@@ -38,8 +38,7 @@ import { isJsonObject } from '../util/json.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../util/time.js';
 import { CliExit, fail } from './exit.js';
-
-const AT_RISK_BELOW = 0.2;
+import { AT_RISK_BELOW } from '../core/strength-bands.js';
 
 export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -156,7 +155,7 @@ export function physicsEnergyText(particles: PhysicsParticle[], gMemory: number)
 async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
-  const entry = await getMemory(cliApiContext(hippoRoot, tenantId), id);
+  const entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
   if (!entry) {
     fail(`Memory not found: ${id}`);
   }

@@ -29,7 +29,7 @@ const { sqliteStore } = await load('store/sqlite/store.js');
 const { loadConfig } = await load('core/config.js');
 const { resolveProjectIdentity } = await load('core/project-identity.js');
 const { contextCost } = await load('api/context-render.js');
-const { createDeliveryRecorder } = await load('store/delivery-recorder.js');
+const { createDeliveryRecorder } = await load('api/delivery-recorder.js');
 const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { blockHash } = await load('util/token-text.js');
@@ -135,7 +135,7 @@ async function turn(store, mode, i) {
 
   const acc = { ms: 0 };
   const g0 = performance.now();
-  const result = await api.getContext(ctx, { ...opts, deliveryObserver: timedObserver(rec, acc) });
+  const result = await api.contextGet(ctx, { ...opts, deliveryObserver: timedObserver(rec, acc) });
   const contextMs = performance.now() - g0 - acc.ms;
 
   const emitted = result.entries.map((r) => r.entry.content).join('\n');

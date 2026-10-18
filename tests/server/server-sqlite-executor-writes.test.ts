@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { copyFileSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mintApiKey, revokeApiKey } from '../../src/store/auth.js';
+import { revokeApiKey } from '../../src/store/auth.js';
+import { mintApiKey } from '../../src/core/api-key.js';
 import { getHippoDbPath } from '../../src/db/index.js';
 import { startWalCheckpointer } from '../../src/db/wal-checkpointer.js';
 import { log } from '../../src/util/log.js';
@@ -11,7 +12,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memo
 import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
 import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
-import { predictionMirror } from '../../src/store/predictions.js';
+import { predictionMirror } from '../../src/core/prediction.js';
 import { createSqliteExecutor, type SqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';

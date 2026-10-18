@@ -3,13 +3,13 @@
  * (docs/plans/2026-08-23-df3-include-recent-quality-floor.md).
  *
  * Covers the plan's 7-test list against the `includeRecent` block inside
- * `api.getContext`'s `pinnedOnly` branch (src/api/index.ts:2456-2491), which now
+ * `api.contextGet`'s `pinnedOnly` branch (src/api/index.ts:2456-2491), which now
  * filters candidates with `isWorthSurfacing` (src/core/memory-quality.ts) before
  * slicing to `includeRecent`.
  *
  * Real-DB per project convention. Tests 1-6 seed entries directly via
  * `createMemory` + `writeEntry` (so `pinned` and `created` can be set) and
- * assert on `api.getContext`, following the `tmpHome` isolation pattern from
+ * assert on `api.contextGet`, following the `tmpHome` isolation pattern from
  * tests/api/api-context.test.ts. Test 7 goes through the CLI entry, following
  * tests/store/pinned-inject.test.ts's `runHippo` pattern.
  */
@@ -19,7 +19,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'path';
 import { rmSync } from 'node:fs';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
@@ -31,7 +31,7 @@ import { initStore } from '../../src/store/sqlite/handles.js';
 function tmpHome() {
   const home = makeRoot('df3');
   // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir so
-  // hasGlobal=false inside api.getContext (same pattern as api-context.test.ts).
+  // hasGlobal=false inside api.contextGet (same pattern as api-context.test.ts).
   const globalTmp = makeRoot('df3-global', { init: false });
   const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalTmp);
@@ -61,7 +61,7 @@ function seed(home: string, content: string, opts: { pinned?: boolean; created?:
   return entry;
 }
 
-describe('includeRecent quality floor (api.getContext)', () => {
+describe('includeRecent quality floor (api.contextGet)', () => {
   it('test 1 — red-under-old: one junk + four clean recent writes inject only the clean four', async () => {
     const { home, restore } = tmpHome();
     try {
@@ -83,7 +83,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
         created: '2026-08-20T10:00:01.000Z',
       });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 5,
@@ -134,7 +134,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
         created: '2026-08-20T10:00:01.000Z',
       });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 5,
@@ -167,7 +167,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       // every pinned entry unconditionally, untouched by this plan.
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 0,
@@ -213,7 +213,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
         created: '2026-08-20T10:00:00.000Z',
       });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 3,
@@ -240,7 +240,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       const fragment = 'fetches a quote → blank price';
       seed(home, fragment, { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 1,
@@ -270,8 +270,8 @@ describe('includeRecent quality floor (api.getContext)', () => {
       });
       seed(home, 'fixed signals', { created: '2026-08-20T10:00:00.000Z' });
 
-      const resultAbsent = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 500 });
-      const resultExplicitZero = await getContext(ctx, {
+      const resultAbsent = await contextGet(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 500 });
+      const resultExplicitZero = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 0,
@@ -321,7 +321,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       });
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 3,
@@ -350,7 +350,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
         created: '2026-08-20T10:00:00.000Z',
       });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 3,
@@ -388,7 +388,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       });
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-19T10:00:00.000Z' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 3,
@@ -419,7 +419,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'globe view on by default', { created: '2026-08-20T10:00:01.000Z' });
       seed(home, 'quick patch applied', { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 5,
@@ -507,7 +507,7 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
 
   beforeEach(() => {
     home = makeRoot('df3-dedupe');
-    // An INITIALIZED global store, so api.getContext takes the hasGlobal path
+    // An INITIALIZED global store, so api.contextGet takes the hasGlobal path
     // and pinnedGlobal is populated.
     globalTmp = makeRoot('df3-dedupe-global');
     origHippoHome = process.env.HIPPO_HOME;
@@ -549,7 +549,7 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     // A larger budget passes either way and proves nothing (verified: at 46
     // both branches leave room, which is why the first draft of this test was
     // green against the unfixed code).
-    const res = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 35 });
+    const res = await contextGet(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 35 });
     const contents = res.entries.map((e) => e.entry.content);
 
     expect(contents).toContain(pin.content);

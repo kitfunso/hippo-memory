@@ -3,7 +3,7 @@
 import { currentSignal } from '../util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
 import { hasGroup, type HippoStore, type OptionalGroup } from '../store/index.js';
-import { type TokenSurface } from '../store/token-ledger.js';
+import type { TokenSurface } from '../store/port/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { validateToolArgs } from './tool-args.js';

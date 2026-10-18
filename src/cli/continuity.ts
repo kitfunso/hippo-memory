@@ -19,14 +19,15 @@ import {
 import { cliApiContext } from './api-context.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../core/handoff.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
-import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
+import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
 import {
   type CliFlags,
   boolFlag,
-  isStringFlag,
   numberFlag,
+  parsePositiveId,
+  repeatedFlag,
   stringFlagOrExit,
   type CommandContext,
 } from './flag-values.js';
@@ -267,11 +268,6 @@ async function sessionResume(hippoRoot: string, tenantId: string, sessionId: str
   console.log(lines.join('\n'));
 }
 
-/** A repeatable flag as a list: absent is empty, one value is a singleton. */
-function flagList(value: string | boolean | string[] | undefined): string[] {
-  return Array.isArray(value) ? value : isStringFlag(value) ? [value] : [];
-}
-
 const HANDOFF_CREATE_USAGE =
   'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] ' +
   '[--task <id>] [--artifact <path>...] ' +
@@ -294,8 +290,8 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
     `fallback-${Date.now()}-${process.pid}`;
   const nextAction = stringFlagOrExit(flags, 'next') || undefined;
   const taskId = stringFlagOrExit(flags, 'task') || undefined;
-  const artifacts = flagList(flags['artifact']);
-  const constraints = flagList(flags['constraint']);
+  const artifacts = repeatedFlag(flags, 'artifact');
+  const constraints = repeatedFlag(flags, 'constraint');
   const targetRuntime = stringFlagOrExit(flags, 'target-runtime') || undefined;
   const cardId = stringFlagOrExit(flags, 'card-id') || undefined;
   const testStatus = stringFlagOrExit(flags, 'tests') ?? '';
@@ -365,10 +361,7 @@ async function handoffShow(hippoRoot: string, tenantId: string, args: string[], 
     fail('Usage: hippo handoff show <id> [--json]');
   }
 
-  const handoffId = parseInt(idArg, 10);
-  if (!Number.isFinite(handoffId) || handoffId <= 0) {
-    fail(`Invalid handoff ID: ${idArg}`);
-  }
+  const handoffId = parsePositiveId(idArg, 'handoff');
 
   const handoff = await handoffById(cliApiContext(hippoRoot, tenantId), handoffId);
 

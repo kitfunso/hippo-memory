@@ -6,7 +6,7 @@ import { captureTarget } from '../_helpers/cli-stores.js';
 import { extractFromTexts } from '../../src/capture/extract.js';
 import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../../src/learn/autolearn.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { gatedWrite } from '../../src/store/gated-write.js';
@@ -201,7 +201,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
     } finally {
       closeHippoDb(db);
     }
-    const recent = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project' });
+    const recent = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project' });
     const ids = recent.entries.map(({ entry }) => entry.id);
     expect(ids).toContain(manual.id);
     expect(ids).toContain(imported.id);
@@ -220,7 +220,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
       createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'cli', layer: Layer.Episodic }),
     );
     for (const entry of manual) writeEntry(root, entry);
-    const recent = await getContext(ctx, { pinnedOnly: true, includeRecent: 10, currentProject: 'project' });
+    const recent = await contextGet(ctx, { pinnedOnly: true, includeRecent: 10, currentProject: 'project' });
     expect(recent.entries.map(({ entry }) => entry.content).sort()).toEqual([...texts].sort());
   });
 

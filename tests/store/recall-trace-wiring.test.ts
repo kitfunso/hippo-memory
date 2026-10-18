@@ -1,12 +1,12 @@
 /**
  * LC1 wiring tests (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
  *
- * Covers the three wired recall paths: api.recall, api.getContext, CLI
+ * Covers the three wired recall paths: api.recall, api.contextGet, CLI
  * cmdRecall — one trace row per recall, pinnedOnly writes nothing, the
  * v1.11.5 no-side-effects contract (api.recall must NOT write last_trace_id),
  * the F1 atomic last_trace_id/last_retrieval_ids lockstep (via loadLastRecall,
  * since readLastTraceId was deleted), F2 (suppressRecallTrace), and F5
- * (getContext's bare empty-result early return also traces).
+ * (contextGet's bare empty-result early return also traces).
  *
  * This is a NEW file beside the locked tests/api/api-recall-no-side-effects.test.ts
  * — that file is never edited (v1.11.5 lock); this file extends the
@@ -21,7 +21,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { remember, retrieve, getContext } from '../../src/api/index.js';
+import { remember, retrieve, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { resetSessionRings } from '../../src/api/recall/finish.js';
@@ -192,14 +192,14 @@ describe('api.recall — trace wiring', () => {
   });
 });
 
-describe('api.getContext — trace wiring', () => {
+describe('api.contextGet - trace wiring', () => {
   it('writes a trace (pipeline=context) + last_trace_id for a real-query recall, atomically with last_retrieval_ids', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-gamma' });
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'context-trace-target', budget: 1000 });
+      const result = await contextGet(ctx, { currentProject: cwdProject(), q: 'context-trace-target', budget: 1000 });
       expect(result.entries).toHaveLength(1);
 
       const traces = traceRows(home, 'context');
@@ -221,7 +221,7 @@ describe('api.getContext — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       writeEntry(home, createMemory('pinned-context-trace-delta', { pinned: true }));
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 1000 });
+      const result = await contextGet(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 1000 });
       expect(result.entries).toHaveLength(1);
 
       expect(traceRows(home, 'context')).toHaveLength(0);
@@ -246,7 +246,7 @@ describe('api.getContext — trace wiring', () => {
       expect(before.last_trace_id).toBeNull();
       expect(before.last_retrieval_ids ?? []).toEqual([]);
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         q: 'zzz-query-matches-absolutely-nothing-xyzzy',
         budget: 1000,
@@ -276,7 +276,7 @@ describe('api.getContext — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-caller-session' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         q: 'context-trace-target-caller',
         budget: 1000,
@@ -299,7 +299,7 @@ describe('api.getContext — trace wiring', () => {
       disableEmbeddings(home);
       await remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         q: 'zzz-query-matches-absolutely-nothing-xyzzy',
         budget: 1000,

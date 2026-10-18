@@ -14,7 +14,7 @@ import { runDoctor, formatDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import type { SpoolFs } from '../../src/capture/compaction-spool.js';
 import { startCompaction } from '../../src/store/compactions-record.js';
-import { repairProjectNames } from '../../src/api/objects/projects.js';
+import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import {
   openHippoDb,
@@ -429,7 +429,7 @@ describe('hippo doctor', () => {
       runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects'),
     ).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
 
-    repairProjectNames(cliApiContext(global, 'default'), { dryRun: false });
+    projectNameRepair(cliApiContext(global, 'default'), { dryRun: false });
     expect(
       runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects')!.status,
     ).toBe('pass');

@@ -2,7 +2,7 @@
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
 import { sleep } from '../api/sleep/sleep.js';
 import { runConsolidation } from '../consolidate/sleep.js';
-import { isStoreBusy } from '../store/busy.js';
+import { isStoreBusy } from '../store/port.js';
 import { loadConfig } from '../core/config.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
 import { sqliteReach, sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';

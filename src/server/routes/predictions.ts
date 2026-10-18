@@ -1,10 +1,10 @@
 // /v1/predictions routes.
 import {
-  closePrediction,
-  listPredictions,
+  predictionClose,
+  predictionList,
   predictionBaserate,
   predictionById,
-  recordPrediction,
+  predictionRecord,
 } from '../../api/objects/predictions.js';
 import { VALID_CLOSURE_STATES } from '../../core/prediction.js';
 import type { PredictionFilter } from '../../store/port.js';
@@ -45,7 +45,7 @@ export async function handleCreatePrediction({ req, res, ctx }: AuthedRouteReque
   }
   const targetDateValue = getString(body, 'targetDate', MAX_DATE_LEN);
   const claimed = { classTag, claimText: claim, estimateValue, estimateUnit, targetDate: targetDateValue };
-  const prediction = await recordPrediction(ctx, claimed);
+  const prediction = await predictionRecord(ctx, claimed);
   sendJson(res, 201, { prediction });
 }
 
@@ -70,7 +70,7 @@ export async function handleListPredictions({ res, ctx, query }: AuthedRouteRequ
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const predictions = await listPredictions(ctx, { ...listFilter(classTag, status), limit: limit + 1, after });
+  const predictions = await predictionList(ctx, { ...listFilter(classTag, status), limit: limit + 1, after });
   const page = pageOf(predictions, limit, byCreatedAt);
   sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
 }
@@ -122,6 +122,6 @@ export async function handleClosePrediction(
   }
   const closureNote = getString(body, 'note', 2048);
   const close = { closureState: state, actualValue, closureNote };
-  const prediction = await closePrediction(ctx, id, close);
+  const prediction = await predictionClose(ctx, id, close);
   sendJson(res, 200, { prediction });
 }

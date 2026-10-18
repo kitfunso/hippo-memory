@@ -6,12 +6,12 @@ import { raiseMinBinary } from '../../src/db/meta.js';
 import {
   createApiKey,
   insertApiKey,
-  mintApiKey,
   readApiKeyRecord,
   validateApiKey,
   verifyApiKeyCached,
   _readApiKeyVerifyStatsForTests,
 } from '../../src/store/auth.js';
+import { mintApiKey } from '../../src/core/api-key.js';
 import {
   adminActor,
   authCreateSelf,

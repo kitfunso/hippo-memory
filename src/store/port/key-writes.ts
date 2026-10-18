@@ -24,7 +24,7 @@ export interface KeyWrites {
   /** Inserts the key and appends its auth_create row in one transaction; with either one failing, neither is written. A
    * key id taken in any tenant rejects, since keys are looked up by id alone. */
   createApiKey(mint: KeyMint): Promise<void>;
-  /** Serialized per (tenant, owner) before the count (BEGIN IMMEDIATE / pg_advisory_xact_lock): revoke the owner's
+  /** Serialized per (tenant, owner) before the count: revoke the owner's
    * oldest live keys to `perSubject - 1`, then insert the key; append auth_revoke `{ replacedBy }` per revoked key,
    * then auth_create. Live: unrevoked and not expired (NaN counts as expired). */
   createSelfApiKey(mint: SelfKeyMint): Promise<string[]>;

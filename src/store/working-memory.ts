@@ -5,20 +5,9 @@ import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { resolveTenantId } from './tenant.js';
 import type { JsonObject } from './port/types.js';
+import type { WorkingMemoryItem } from './port/sessions.js';
 
 const WM_MAX_ENTRIES = 20;
-
-export interface WorkingMemoryItem {
-  id: number;
-  scope: string;
-  sessionId: string | null;
-  taskId: string | null;
-  importance: number;
-  content: string;
-  metadata: JsonObject;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface WorkingMemoryRow {
   id: number;

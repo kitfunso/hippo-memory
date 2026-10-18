@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process';
 import { errorFields, log } from '../util/log.js';
+import { GIT_PROMPT_TIMEOUT_MS } from '../util/time.js';
 
 const MAX_DIFF_TERMS = 10;
 
@@ -9,14 +10,14 @@ const SKIPPED_PATH_TERMS = ['src', 'dist', 'test', 'tests', 'node_modules', 'ind
 function readGit(args: string[]): string {
   return execFileSync('git', args, {
     encoding: 'utf8',
-    timeout: 3000,
+    timeout: GIT_PROMPT_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'ignore'],
     windowsHide: true,
   }).trim();
 }
 
 /**
- * A context query from the cwd's git state ('' means `getContext` lists by strength); kept out of the api layer, which
+ * A context query from the cwd's git state ('' means `contextGet` lists by strength); kept out of the api layer, which
  * never shells out.
  */
 export function autoDetectContext(): string {

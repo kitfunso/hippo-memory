@@ -17,7 +17,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { isContentWorthStoring } from '../../src/core/memory-quality.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -68,7 +68,7 @@ describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       seed(home, CJK_SENTENCE, { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 1,

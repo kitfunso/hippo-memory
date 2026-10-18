@@ -9,7 +9,6 @@ import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { type StoreFiles } from './open.js';
 import { writeEntryRowAt } from './sqlite/entry-writes-group.js';
 import { assertTenantId } from '../core/tenant-id.js';
-import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
@@ -72,24 +71,6 @@ function rowToPrediction(row: PredictionRow): Prediction {
     closureNote: row.closure_note,
     createdAt: row.created_at,
   };
-}
-
-/** The memory row that mirrors a claim into recall, built here alone so every store keeps the same row for it. */
-export function predictionMirror(
-  tenantId: string,
-  claim: SavePredictionOptions,
-  baseHalfLifeDays: number,
-): MemoryEntry {
-  return createMemory(claim.claimText, {
-    tags: ['prediction', claim.classTag],
-    layer: Layer.Semantic,
-    confidence: 'observed',
-    source: 'prediction',
-    // SAFETY: 'distilled' is a valid MemoryKind literal (see memory.ts).
-    kind: 'distilled' as MemoryKind,
-    baseHalfLifeDays,
-    tenantId,
-  });
 }
 
 /** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant

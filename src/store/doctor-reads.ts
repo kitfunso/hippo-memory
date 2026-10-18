@@ -1,11 +1,6 @@
 // The two counts `hippo doctor` reads from tables whose own store modules belong to other changes.
 import type { DatabaseSyncLike } from '../db/index.js';
-
-export interface CompactionCounts {
-  total: number;
-  summarised: number;
-  started: number;
-}
+import type { CompactionCounts, TokenTally } from './port/diagnostics.js';
 
 /** Compaction records in all, those with a summary whose memories never got saved, and those still without a summary;
  * each cutoff is an ISO time. */
@@ -31,12 +26,6 @@ export function compactionCountsAt(
     summarised: Number(row?.summarised ?? 0),
     started: Number(row?.started ?? 0),
   };
-}
-
-export interface TokenTally {
-  injected: number;
-  tokensSent: number;
-  tokensReread: number;
 }
 
 /** Memory blocks injected since `sinceIso`, the tokens they sent and the tokens later model calls re-read. */

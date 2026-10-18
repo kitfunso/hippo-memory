@@ -12,7 +12,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type MemoryEntry,
 } from '../../src/core/memory.js';
-import { getContext, retrieve } from '../../src/api/index.js';
+import { contextGet, retrieve } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
@@ -110,7 +110,7 @@ describe('own-session compaction items in recent context', () => {
   it('fills the recent slots with older rows instead of the session own items', async () => {
     const { older } = seedFortyItemsAndOlderRows();
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       budget: 2000,
@@ -135,7 +135,7 @@ describe('own-session compaction items in recent context', () => {
       .sort();
 
     for (const currentSessionId of [OTHER, '', null, undefined]) {
-      const result = await getContext(ctx, {
+      const result = await contextGet(ctx, {
         pinnedOnly: true,
         includeRecent: 5,
         budget: 2000,
@@ -149,7 +149,7 @@ describe('own-session compaction items in recent context', () => {
   it('keeps them out of the strength-ranked context too', async () => {
     const { older } = seedFortyItemsAndOlderRows();
 
-    const result = await getContext(ctx, { budget: 2000, currentProject: PROJECT, currentSessionId: OWN });
+    const result = await contextGet(ctx, { budget: 2000, currentProject: PROJECT, currentSessionId: OWN });
 
     expect(ids(result).sort()).toEqual(older.map((e) => e.id).sort());
   });
@@ -160,7 +160,7 @@ describe('own-session compaction items in recent context', () => {
       created: minute(6, 0),
     });
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       budget: 2000,
@@ -194,7 +194,7 @@ describe('own-session compaction items under prompt recall', () => {
     enablePromptRecall(local);
     const { older } = seedRecallRows();
 
-    const result = await getContext(ctx, { pinnedOnly: true, currentProject: PROJECT, currentSessionId: OWN, prompt });
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, currentSessionId: OWN, prompt });
 
     expect(ids(result)).toEqual([older.id]);
     expect(result.entries[0]?.promptRecall).toBe(true);
@@ -204,7 +204,7 @@ describe('own-session compaction items under prompt recall', () => {
     enablePromptRecall(local);
     const { items, older } = seedRecallRows();
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       currentProject: PROJECT,
       currentSessionId: OTHER,

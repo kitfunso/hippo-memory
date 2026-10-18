@@ -1,9 +1,8 @@
 // The agent-memories import's reach into a store chosen by root; synchronous, so each container's writes stay in one
 // transaction that never spans an await.
 import type { MemoryEntry } from '../../core/memory.js';
-import type { GatedWriteResult } from '../gated-write.js';
-import type { ProjectTagReads } from '../project-tags.js';
-import type { SetAsideResult, SetAsideWhy } from '../set-aside.js';
+import type { ProjectTagReads } from './project-tags.js';
+import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
 import type { AppendAuditOpts } from './types.js';
 
 /** The calls one container's sync makes inside its transaction, bound to the target store's handle and root. */
@@ -70,3 +69,5 @@ export interface RenameSourceOptions {
   readonly to: string;
   readonly origin: string | null;
 }
+
+export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';

@@ -6,7 +6,7 @@ import { isPersonalScope } from '../core/recall-scope.js';
 import { mergedSuccessor } from '../core/merged-row.js';
 import type { HippoStore } from '../store/index.js';
 import { normalizeValueForRejection } from '../core/rejection-digest.js';
-import type { AppliedRejection, LiftedRejection, RejectionSource } from '../store/rejected-values.js';
+import type { AppliedRejection, LiftedRejection, RejectionSource } from '../store/port/rejections.js';
 import type { RejectedValueRow } from '../store/port/rejections.js';
 
 export interface RejectFlowOptions {

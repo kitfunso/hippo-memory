@@ -12,7 +12,7 @@ import {
   getCurrentSchemaVersion,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { getContext, adminActor } from '../../src/api/index.js';
+import { contextGet, adminActor } from '../../src/api/index.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
@@ -482,17 +482,17 @@ describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
       closeTaskSnapshotsForSession(root, 'default', sessionId);
     }
 
-    const fresh = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
+    const fresh = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
     expect(fresh.sessionHandoff?.taskId).toBe('T_10');
 
     expect(stampHandoffOutcome(root, 'default', 'sess-10', 'success')).toBe(1);
-    const afterOne = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
+    const afterOne = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
     expect(afterOne.sessionHandoff?.taskId).toBe('T_9');
 
     for (let i = 1; i <= 9; i++) {
       stampHandoffOutcome(root, 'default', `sess-${i}`, 'success');
     }
-    const afterAll = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
+    const afterAll = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
     expect(afterAll.sessionHandoff).toBeUndefined();
   });
 });
@@ -508,7 +508,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
       scope: 'slack:private:C1',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
+    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
     expect(result.sessionHandoff).toBeUndefined();
   });
 
@@ -522,7 +522,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
       scope: 'unknown:legacy',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
+    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
     expect(result.sessionHandoff).toBeUndefined();
   });
 
@@ -536,7 +536,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
       scope: null,
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
+    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
     expect(result.sessionHandoff?.sessionId).toBe('sess-pub');
   });
 
@@ -557,7 +557,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
       scope: 'slack:private:C1',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-priv-active' });
+    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-priv-active' });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
   });
@@ -578,7 +578,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
       artifacts: [],
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-a' });
+    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-a' });
     // pre-fix: activeSnapshot (scope-filtered) was null, so keying on activeSnapshot?.session_id fell through to the ambient unfinishedOnly lookup and surfaced sess-b's handoff.
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
@@ -605,7 +605,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
       scope: 'proj:private:x',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-mix' });
+    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-mix' });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.recentEvents).toHaveLength(1);
     expect(result.recentEvents?.[0].content).toBe('public event');

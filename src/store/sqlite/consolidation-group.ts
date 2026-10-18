@@ -1,5 +1,6 @@
 import { SLEEP_DB_WAIT_MS } from '../../db/index.js';
-import { recordAuditEventsRowByRowAt, reportAuditWriteFailure } from '../audit.js';
+import { recordAuditEventsRowByRowAt } from '../audit.js';
+import { reportAuditWriteFailure } from '../../core/audit-report.js';
 import { replaceDetectedConflictsAt } from '../conflicts.js';
 import {
   commitInChunksAt,

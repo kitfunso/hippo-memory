@@ -1,7 +1,7 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
-// hook route's call). promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the
+// hook route's call). promptHookContext keeps the server-side copy of the CLI's contextGet flags (cli/context.ts); the
 // CLI parity case in tests/store/prompt-hook-context.test.ts is all that ties the two.
-import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
+import { contextGet, type Context, type ContextResult, type ContextResultEntry } from './index.js';
 import { sharedStoreOf } from './types.js';
 import { BadRequestError } from '../core/api-errors.js';
 import type { HippoConfig } from '../core/config.js';
@@ -14,24 +14,27 @@ import {
   settleTokens,
   snapshotText,
 } from './context-render.js';
-import {
-  createDeliveryRecorder,
-  type DeliveryEventType,
-  type DeliveryFault,
-  type DeliveryRecorder,
-} from '../store/delivery-recorder.js';
+import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from './delivery-recorder.js';
+import type { DeliveryEventType } from '../core/delivery.js';
 import type { HookRuntime } from '../core/capture-contract.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerFiles, ledgerLastSent, ledgerReachOf, type LedgerReach } from './ledger-db.js';
-import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
+import {
+  bookLedgerTurn,
+  bookLedgerTurnPerRow,
+  ledgerFiles,
+  ledgerLastSent,
+  ledgerReachOf,
+  type LedgerReach,
+} from './ledger-db.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
-import type { PilotArm } from '../store/pilot-arm.js';
+import type { PilotArm } from '../core/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
-import type { DeliveryWrite } from '../store/ledger-turn.js';
-import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
+import type { DeliveryWrite } from '../store/port/ledger.js';
+import { shouldSkipUnchanged } from '../core/skip-unchanged.js';
+import type { TokenSurface, TokenUse } from '../store/port/token-ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -100,7 +103,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
   }
 }
 
-/** What one render needs once api.getContext has answered. */
+/** What one render needs once api.contextGet has answered. */
 export interface ContextView {
   readonly config: HippoConfig;
   readonly tenantId: string;
@@ -305,13 +308,12 @@ function recordAdditionalContextRows(
     tokens: estimateTokens(part.text),
     hash: blockHash(part.text),
   });
-  bookLedgerTurn(
+  bookLedgerTurnPerRow(
     {
       uses: [
         ...(staticPart.text ? [row(staticPart, surface)] : []),
         ...(recallPart.text ? [row(recallPart, 'hook_recall')] : []),
       ],
-      onRowError: noteLedgerRowSkipped,
       delivery: (write) => flushDeliveryRecorder(view.rec, write),
     },
     view.reach,
@@ -390,7 +392,7 @@ export async function promptHookContext(
   const arm = sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
-  const result = await getContext(ctx, {
+  const result = await contextGet(ctx, {
     budget: HOOK_BUDGET,
     pinnedOnly: true,
     includeRecent: HOOK_INCLUDE_RECENT,

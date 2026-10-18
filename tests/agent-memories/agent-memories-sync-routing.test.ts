@@ -4,7 +4,7 @@ import childProcess, { spawnSync } from 'node:child_process';
 import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
-import { restoreDormant } from '../../src/api/index.js';
+import { dormantRestore } from '../../src/api/index.js';
 import { gitLayout } from '../../src/agent-memories/git.js';
 import { containerId, containerPrefix } from '../../src/agent-memories/source.js';
 import {
@@ -13,7 +13,7 @@ import {
   importProjectMemories,
   importSessionFolder,
 } from '../../src/agent-memories/sync.js';
-import { repairProjectNames } from '../../src/api/objects/projects.js';
+import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
@@ -189,7 +189,7 @@ describe('agent memory sync: routing and sharing', () => {
         )
         .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()),
     );
-    const repair = (dryRun: boolean) => repairProjectNames(cliApiContext(w.global, 'default'), { dryRun });
+    const repair = (dryRun: boolean) => projectNameRepair(cliApiContext(w.global, 'default'), { dryRun });
 
     expect(repair(true).copies).toEqual([stray.id]);
     expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);
@@ -235,7 +235,7 @@ describe('agent memory sync: routing and sharing', () => {
     const goneId = liveRows(w.global).find((e) => e.content.startsWith('This user note'))?.id ?? '';
     unlinkSync(gone);
     importForStore(w.local, opts());
-    await restoreDormant(ctxFor(w.global), goneId);
+    await dormantRestore(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
     expect(syncGlobalToLocal(...sharingStores(w.local, w.global))).toBe(1);
@@ -252,7 +252,7 @@ describe('agent memory sync: routing and sharing', () => {
     const goneId = liveRows(w.local).find((e) => e.content.startsWith('This project note'))?.id ?? '';
     unlinkSync(gone);
     importForStore(w.local, opts());
-    await restoreDormant(ctxFor(w.local), goneId);
+    await dormantRestore(ctxFor(w.local), goneId);
     plainRow(w.local, CONTROL, 'proj');
 
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };

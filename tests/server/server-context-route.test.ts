@@ -1,7 +1,7 @@
 /**
  * Runtime tests for GET /v1/context (Episode B, Task 3).
  *
- * Thin wrapper over api.getContext. Returns ContextResult JSON (entries,
+ * Thin wrapper over api.contextGet. Returns ContextResult JSON (entries,
  * tokens, activeSnapshot, sessionHandoff, recentEvents). No server-side
  * rendering — clients render markdown / json / additional-context.
  *
@@ -282,7 +282,7 @@ describe('GET /v1/context', () => {
   });
 });
 
-// Episode 01M1VQBCH5CFB8RRKNSRE8RP6M, acceptance criterion 4: getContext now
+// Episode 01M1VQBCH5CFB8RRKNSRE8RP6M, acceptance criterion 4: contextGet now
 // returns the computed ambientState, and sendJson(res, 200, result) forwards
 // it unchanged, so the route gains the field for free with no route change.
 describe('GET /v1/context - ambientState field', () => {

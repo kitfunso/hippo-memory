@@ -1,9 +1,9 @@
-// getContext's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
+// contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
 import { recallScopeFilter } from '../core/recall-scope.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { auditQueryFields } from '../store/audit.js';
-import type { ContextReads, HippoStore } from '../store/index.js';
+import { auditQueryFields } from '../core/audit-report.js';
+import type { ContextReads, HippoStore } from '../store/port.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { rankBothStores } from '../sharing/search-both.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
@@ -24,7 +24,7 @@ import {
   type PromptRecallMetric,
   type PromptRecallGate,
 } from '../core/prompt-recall.js';
-import type { DeliveryObserver } from '../store/delivery-recorder.js';
+import type { DeliveryObserver } from './delivery-recorder.js';
 import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';
 import type { Context, GlobalInReach } from './types.js';
@@ -33,13 +33,13 @@ import type { AppendAuditOpts } from '../store/port/types.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
-/** One store getContext reads rows from: its base search and its context reads. */
+/** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {
   readonly store: HippoStore;
   readonly reads: ContextReads;
 }
 
-/** What getContext resolved from opts and config before it read a row. */
+/** What contextGet resolved from opts and config before it read a row. */
 export interface ContextPlan {
   /** The served store, else hippo.db under the root. */
   local: ContextSource;

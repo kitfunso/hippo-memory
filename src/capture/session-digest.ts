@@ -16,8 +16,8 @@ import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { isInitialized } from '../core/project-identity.js';
 import type { ContextReads, EntryWrites, Sync } from '../store/port.js';
 import type { Sessions } from '../store/port-groups.js';
-import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
-import { isSyntheticMessage } from '../store/token-ledger.js';
+import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../core/session-snapshot.js';
+import { isSyntheticMessage } from '../core/transcript-calls.js';
 import { readOpenTranscriptTail } from '../util/transcript-tail.js';
 
 /** Five-word runs are stock phrases; six in a row is a copied clause. */

@@ -540,7 +540,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
 
     // The admin resolves with the CLI on a shared store, which runs this.
-    const resolved = await api.resolveMemoryConflict(apiCtx(store, 'default', api.adminActor('walk')), teamPair, {
+    const resolved = await api.conflictResolve(apiCtx(store, 'default', api.adminActor('walk')), teamPair, {
       keepId: t2,
       rejectLoser: true,
     });

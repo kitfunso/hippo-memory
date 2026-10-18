@@ -2,7 +2,8 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { isFtsAvailable, withWriteScope } from '../db/index.js';
-import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { appendAuditEvent } from './audit.js';
+import { reportAuditWriteFailure } from '../core/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { CLI_ACTOR } from '../core/actor.js';
 

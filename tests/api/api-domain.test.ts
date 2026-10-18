@@ -10,7 +10,7 @@ import {
   forget,
   promote,
   supersede,
-  archiveRaw,
+  rawArchive,
   authCreate,
   authListRows,
   authRevoke,
@@ -201,7 +201,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     home = makeRoot('api-aux');
   });
 
-  it('archiveRaw moves a kind=raw row into raw_archive and removes it from memories', async () => {
+  it('rawArchive moves a kind=raw row into raw_archive and removes it from memories', async () => {
     // createMemory defaults to distilled, but archiveRawMemory only accepts
     // kind='raw'. Insert a raw row directly via SQL to seed the test.
     const db = openHippoDb(home);
@@ -228,7 +228,7 @@ describe('api domain — archive_raw / auth / audit', () => {
       closeHippoDb(db);
     }
 
-    const result = await archiveRaw(
+    const result = await rawArchive(
       apiCtx(home, 'default', { subject: 'api_key:hk_archive', role: 'admin' }),
       rawId,
       'gdpr-request',

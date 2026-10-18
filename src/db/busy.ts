@@ -1,14 +1,6 @@
 import { errorFields, errorMessage, log } from '../util/log.js';
+import { isSqliteBusy } from './busy-code.js';
 import type { DatabaseSyncLike } from './sqlite.js';
-
-function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
-  return typeof cause === 'object' && cause !== null && 'errcode' in cause;
-}
-
-export function isSqliteBusy(cause: unknown): boolean {
-  const code = carriesErrcode(cause) ? cause.errcode : undefined;
-  return code === 5 || code === 6 || code === 517;
-}
 
 /** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
 export const DEFAULT_BUSY_WAIT_MS = 5000;

@@ -1,11 +1,11 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
 import { graphEntityOf, graphRows } from '../../api/objects/graph.js';
-import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
+import { rawArchive, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { sleepInChild } from '../sleep-offload.js';
-import { needGroup } from '../store-edge.js';
+import { withLastRecall } from '../store-edge.js';
 import type { AuthedRouteRequest } from '../types.js';
 import {
   getCallerProject,
@@ -23,7 +23,6 @@ import { MAX_ID_LEN } from '../../util/limits.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
-const NO_LAST_RECALL = 'this store keeps no last recall: send the ids your recall returned';
 
 // POST /v1/memories
 export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
@@ -74,7 +73,7 @@ export async function handleArchiveMemory(
   if (!reason) {
     throw new HttpError(400, 'reason is required');
   }
-  const result = await archiveRaw(ctx, archiveMatch.id!, reason);
+  const result = await rawArchive(ctx, archiveMatch.id!, reason);
   sendJson(res, 200, result);
   return;
 }
@@ -150,7 +149,7 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     sendJson(res, 200, { applied });
   } else {
     // Its own 501 text: a client of such a store can still apply the outcome by sending the ids its recall returned.
-    const result = await outcomeForLastRecall(needGroup(ctx, 'lastRecall', NO_LAST_RECALL), good);
+    const result = await outcomeForLastRecall(withLastRecall(ctx), good);
     sendJson(res, 200, result);
   }
   return;

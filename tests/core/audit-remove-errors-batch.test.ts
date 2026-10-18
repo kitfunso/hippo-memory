@@ -1,10 +1,10 @@
-// removeAuditErrors deletes on one handle after one read of the id set, with the same rows and forget reasons a delete per id wrote.
+// auditRemoveErrors deletes on one handle after one read of the id set, with the same rows and forget reasons a delete per id wrote.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { AuditIssue } from '../../src/core/memory-audit.js';
 import { computeSchemaFit, schemaFitFrom, schemaFitSourceOf } from '../../src/core/memory.js';
-import { removeAuditErrors } from '../../src/api/index.js';
+import { auditRemoveErrors } from '../../src/api/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -25,7 +25,7 @@ const issue = (memoryId: string, severity: AuditIssue['severity'], reason: strin
   reason,
 });
 
-describe('removeAuditErrors', () => {
+describe('auditRemoveErrors', () => {
   it('deletes each unpinned error once, in issue order, with its own forget reason', async () => {
     const root = makeRoot('audit-batch');
     roots.push(root);
@@ -36,7 +36,7 @@ describe('removeAuditErrors', () => {
     const warned = createMemory('only a warning here');
     for (const entry of [first, second, pinned, warned]) writeEntry(root, entry);
 
-    const gone = await removeAuditErrors(ctx, 'audit --fix', [
+    const gone = await auditRemoveErrors(ctx, 'audit --fix', [
       issue(second.id, 'error', 'too short'),
       issue('no-such-id', 'error', 'missing'),
       issue(pinned.id, 'error', 'too short'),
@@ -67,7 +67,7 @@ describe('removeAuditErrors', () => {
 
   it('answers an empty list without opening the store', async () => {
     const ctx: FullContext = apiCtx('/no/such/root', 'default', { subject: 'audit-test', role: 'admin' });
-    expect(await removeAuditErrors(ctx, 'sleep-audit', [issue('x', 'warning', 'vague')])).toEqual([]);
+    expect(await auditRemoveErrors(ctx, 'sleep-audit', [issue('x', 'warning', 'vague')])).toEqual([]);
   });
 });
 

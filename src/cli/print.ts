@@ -1,7 +1,7 @@
 // Text printers for recall results, agent imports, task snapshots, session trails and handoffs.
 
 import { confidenceLabel } from '../core/memory.js';
-import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
+import type { TaskSnapshot, SessionEvent } from '../store/port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import type { SearchResult } from '../core/search-types.js';
 import { explainMatch } from '../search/explain.js';
@@ -81,17 +81,15 @@ export function printHandoff(handoff: SessionHandoff): void {
   console.log(handoffText(handoff));
 }
 
-/** Run `fn` with console.log captured; returns the captured lines joined by newlines (no final newline). */
-export function captureConsole(fn: () => void): string {
-  const lines: string[] = [];
-  const realLog = console.log;
-  console.log = (...parts: unknown[]) => {
-    lines.push(parts.map(String).join(' '));
-  };
-  try {
-    fn();
-  } finally {
-    console.log = realLog;
-  }
-  return lines.join('\n');
+/** The continuity sections in print order (snapshot, handoff, session trail); a missing or empty one is left out. */
+export function continuityTexts(
+  snapshot: TaskSnapshot | null | undefined,
+  handoff: SessionHandoff | null | undefined,
+  events: SessionEvent[] | undefined,
+): string[] {
+  const texts: string[] = [];
+  if (snapshot) texts.push(snapshotText(snapshot));
+  if (handoff) texts.push(handoffText(handoff));
+  if (events && events.length > 0) texts.push(sessionTrailText(events));
+  return texts;
 }

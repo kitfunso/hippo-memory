@@ -14,7 +14,8 @@ import {
 } from '../db/index.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { type HippoIndex, type LegacyStats } from './rows.js';
+import { type HippoIndex } from './rows.js';
+import type { LegacyStats } from './port/reports.js';
 import { audit } from './audit-event.js';
 import { deserializeEntry } from '../core/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';

@@ -19,7 +19,7 @@ export function apiCtx(hippoRoot: string, tenantId = 'default', actor: Actor = a
   return { hippoRoot, tenantId, actor, store, reach: testReach(hippoRoot, store), config: loadConfig(hippoRoot) };
 }
 
-/** The project this test process runs in, which getContext read for itself before the surface named it. */
+/** The project this test process runs in, which contextGet read for itself before the surface named it. */
 export function cwdProject(): ProjectIdentity {
   return resolveProjectIdentity(process.cwd());
 }

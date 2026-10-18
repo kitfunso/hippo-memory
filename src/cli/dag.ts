@@ -4,7 +4,7 @@ import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import * as api from '../api/index.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
-import { listMemories } from '../api/memories/memories.js';
+import { memoryList } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
@@ -16,7 +16,6 @@ import {
   numberFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { captureConsole } from './print.js';
 import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';
 import { CliExit, fail } from './exit.js';
 
@@ -28,7 +27,7 @@ const DAG_CHILD_PREVIEW_CHARS = 100;
 
 export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const entries = await listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
+  const entries = await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
   const isStats = flagIsTrue(flags, 'stats');
 
   const byLevel = new Map<number, number>();
@@ -140,16 +139,14 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
     return;
   }
   console.log(
-    settleTokens((t) =>
-      captureConsole(() => {
-        console.log(assembleHeading({ ...r, items: r.items.length, tokens: t }));
-        for (const it of r.items) {
-          const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
-          const head = it.content.slice(0, DAG_HEAD_CHARS);
-          console.log(`  ${prefix} ${it.createdAt} ${it.id} \u2014 ${head}${it.content.length > 120 ? '…' : ''}`);
-        }
-      }),
-    ),
+    settleTokens((t) => {
+      const rows = r.items.map((it) => {
+        const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
+        const head = it.content.slice(0, DAG_HEAD_CHARS);
+        return `  ${prefix} ${it.createdAt} ${it.id} \u2014 ${head}${it.content.length > DAG_HEAD_CHARS ? '…' : ''}`;
+      });
+      return [assembleHeading({ ...r, items: r.items.length, tokens: t }), ...rows].join('\n');
+    }),
   );
 }
 

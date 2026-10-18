@@ -1,8 +1,8 @@
 // Token-use and failure reports.
 
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
-import type { TokenSummary, TokenSurface } from '../store/token-ledger.js';
-import type { FailureSummary } from '../store/failure-log.js';
+import type { TokenSummary, TokenSurface } from '../store/port/token-ledger.js';
+import type { FailureSummary } from '../store/port/failure-log.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { Context } from './types.js';
 import { DAY_MS } from '../util/time.js';

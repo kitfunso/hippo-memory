@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { cmdCapture } from '../../src/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/capture/transcript.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -28,7 +28,7 @@ describe('capture pins the rules a person states', () => {
     cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
   const injected = async () =>
     (
-      await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT })
+      await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT })
     ).entries.map(({ entry }) => entry.content);
 
   beforeEach(() => {

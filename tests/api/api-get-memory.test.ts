@@ -1,9 +1,9 @@
-// getMemory replaces readEntry in CLI verbs, so it must answer exactly what readEntry answers for every kind of row an id can name.
+// memoryGet replaces readEntry in CLI verbs, so it must answer exactly what readEntry answers for every kind of row an id can name.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { getMemory } from '../../src/api/memories/memories.js';
-import { archiveRaw } from '../../src/api/memories/promote.js';
+import { memoryGet } from '../../src/api/memories/memories.js';
+import { rawArchive } from '../../src/api/memories/promote.js';
 import { adminActor } from '../../src/api/types.js';
 import {
   createMemory,
@@ -51,12 +51,12 @@ function seed(
 }
 
 async function expectSameAnswer(hippoRoot: string, id: string): Promise<MemoryEntry | null> {
-  const viaApi = await getMemory(ctxAt(hippoRoot), id);
+  const viaApi = await memoryGet(ctxAt(hippoRoot), id);
   expect(viaApi).toEqual(readEntry(hippoRoot, id, TENANT));
   return viaApi;
 }
 
-describe('getMemory answers what readEntry answers', () => {
+describe('memoryGet answers what readEntry answers', () => {
   it('a row in the caller tenant', async () => {
     const r = root();
     seed(r, 'mem_plain', { tags: ['billing'] });
@@ -83,7 +83,7 @@ describe('getMemory answers what readEntry answers', () => {
   it('a raw row archived through the api has left memories and reads as null', async () => {
     const r = root();
     seed(r, 'mem_raw', { kind: 'raw' });
-    await archiveRaw(ctxAt(r), 'mem_raw', 'asked to remove it');
+    await rawArchive(ctxAt(r), 'mem_raw', 'asked to remove it');
     expect(await expectSameAnswer(r, 'mem_raw')).toBeNull();
   });
 
@@ -112,8 +112,8 @@ describe('getMemory answers what readEntry answers', () => {
     const served = root();
     const plain = seed(served, 'mem_served');
     const ctx = { ...ctxAt(root()), store: portOnlyStore(served) };
-    expect(await getMemory(ctx, 'mem_served')).toEqual(readEntry(served, 'mem_served', TENANT));
-    expect((await getMemory(ctx, 'mem_served'))?.content).toBe(plain.content);
-    expect(await getMemory(ctxAt(ctx.hippoRoot), 'mem_served')).toBeNull();
+    expect(await memoryGet(ctx, 'mem_served')).toEqual(readEntry(served, 'mem_served', TENANT));
+    expect((await memoryGet(ctx, 'mem_served'))?.content).toBe(plain.content);
+    expect(await memoryGet(ctxAt(ctx.hippoRoot), 'mem_served')).toBeNull();
   });
 });

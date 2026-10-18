@@ -1,4 +1,4 @@
-// The pinned-only branch of getContext used to load every row of both stores to
+// The pinned-only branch of contextGet used to load every row of both stores to
 // return about eleven. These pin what the narrower load must still return.
 
 import type { FullContext } from '../_helpers/api-ctx.js';
@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { isContentWorthStoring } from '../../src/core/memory-quality.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -73,7 +73,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2020-01-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(oldPin.id);
   });
@@ -87,7 +87,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       ),
     );
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 3, currentProject: PROJECT });
 
     const newest = rows.slice(-3).map((r) => r.id);
     for (const id of newest) expect(ids(result)).toContain(id);
@@ -106,7 +106,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2026-01-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(buried.id);
   });
@@ -121,7 +121,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2026-07-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).not.toContain(superseded.id);
   });
@@ -130,7 +130,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
     const globalPin = seed(globalRoot, 'a global pin that must still reach the prompt', { pinned: true });
     seed(local, 'a local row so both stores have something in them');
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(globalPin.id);
   });
@@ -148,7 +148,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2020-01-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       budget: 400,
@@ -176,7 +176,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       return rows;
     });
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     const returned = ids(result);
     expect(returned.length).toBe(5);
@@ -192,7 +192,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2026-06-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(junkPin.id);
   });
@@ -215,7 +215,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       }
     });
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     const returned = ids(result);
     expect(returned).toContain(partial[1].id);
@@ -238,7 +238,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       }),
     );
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 2,
       budget: 5000,
@@ -258,14 +258,14 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       }),
     );
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 2, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 2, currentProject: PROJECT });
 
     expect(ids(result)).toContain(globals[2].id);
     expect(ids(result)).toContain(globals[1].id);
   });
 
   it('returns nothing for two empty stores', async () => {
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(result.entries).toEqual([]);
     expect(result.tokens).toBe(0);

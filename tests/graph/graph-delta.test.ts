@@ -9,7 +9,7 @@ import { saveProjectBrief } from '../../src/objects/project-briefs.js';
 import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../../src/graph/extract.js';
 import { readGraphDelta, entityKey, type GraphOp } from '../../src/graph/delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
-import type { EntityType, SourceObjectType } from '../../src/store/graph-rows.js';
+import type { EntityType, SourceObjectType } from '../../src/store/port/graph-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';

@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { adminActor, getContext } from '../../src/api/index.js';
+import { adminActor, contextGet } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -194,11 +194,11 @@ describe('context reads on a shared store', () => {
     for (const hidden of [ROWS.beta, ROWS.none, ROWS.global]) expect(text).not.toContain(hidden);
   });
 
-  it('getContext refuses a caller with no project', async () => {
+  it('contextGet refuses a caller with no project', async () => {
     await start(true);
     const ctx: FullContext = apiCtx(home, 'default', adminActor('shared-ctx-test'));
-    await expect(getContext(ctx, { currentProject: '' })).rejects.toBeInstanceOf(BadRequestError);
-    await expect(getContext(ctx, { currentProject: { name: '  ', legacyName: '' } })).rejects.toBeInstanceOf(
+    await expect(contextGet(ctx, { currentProject: '' })).rejects.toBeInstanceOf(BadRequestError);
+    await expect(contextGet(ctx, { currentProject: { name: '  ', legacyName: '' } })).rejects.toBeInstanceOf(
       BadRequestError,
     );
   });

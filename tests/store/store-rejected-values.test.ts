@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
-import type { Rejection, RejectionSource } from '../../src/store/rejected-values.js';
+import type { Rejection, RejectionSource } from '../../src/store/port/rejections.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { rejectionDigest } from '../../src/store/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

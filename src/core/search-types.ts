@@ -1,7 +1,11 @@
 import type { MemoryEntry } from './memory.js';
 
+/** Default candidate-pool size for `loadSearchEntriesAt` when `limit` is undefined; `api.recall` imports it for
+ * `RecallResult.windowSize` so the two cannot drift. */
+export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
+
 export const DEFAULT_RECALL_BUDGET = 4000;
-// Local memories outrank global ones by this factor; getContext applies it as a 1/x global discount.
+// Local memories outrank global ones by this factor; contextGet applies it as a 1/x global discount.
 export const DEFAULT_LOCAL_BUMP = 1.2;
 // The relevance side of the MMR relevance-versus-diversity trade; config and hybrid recall both default to it.
 export const DEFAULT_MMR_LAMBDA = 0.7;

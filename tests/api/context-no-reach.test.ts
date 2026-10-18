@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
@@ -57,24 +57,24 @@ afterEach(() => {
 
 const OPTS = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT } as const;
 
-describe('getContext without a reach', () => {
+describe('contextGet without a reach', () => {
   it('reads the global store only when the root gave a reach', async () => {
     const withReach = apiCtx(local);
-    expect(idsOf(await getContext(withReach, OPTS))).toEqual(expect.arrayContaining([localPin, globalPin]));
+    expect(idsOf(await contextGet(withReach, OPTS))).toEqual(expect.arrayContaining([localPin, globalPin]));
     const { reach: _reach, ...bare } = withReach;
-    expect(idsOf(await getContext(bare, OPTS))).toEqual([localPin]);
+    expect(idsOf(await contextGet(bare, OPTS))).toEqual([localPin]);
   });
 
   it('reads a store of another kind as one project with no global store', async () => {
     const { reach: _reach, ...bare } = apiCtx(local);
     const other = { ...sqliteStore(local), localFiles: undefined };
-    expect(idsOf(await getContext({ ...bare, store: other }, OPTS))).toEqual([localPin]);
+    expect(idsOf(await contextGet({ ...bare, store: other }, OPTS))).toEqual([localPin]);
   });
 
   it('still reads the shared flag from config, so a shared store needs the caller project', async () => {
     fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ sharedStore: true }));
     const { reach: _reach, ...bare } = apiCtx(local);
-    await expect(getContext(bare, { pinnedOnly: true, currentProject: '' })).rejects.toThrow(
+    await expect(contextGet(bare, { pinnedOnly: true, currentProject: '' })).rejects.toThrow(
       /shared store needs the caller's project/,
     );
   });

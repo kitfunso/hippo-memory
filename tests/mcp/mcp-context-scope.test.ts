@@ -176,7 +176,7 @@ describe('mcp hippo_context scope filter', () => {
   it('v39 origin partition at the MCP surface: cross-project-origin rows do not inject', async () => {
     // Synced-down / legacy rows in the served store can carry another
     // project's origin; hippo_context must exclude them (same policy as
-    // api.getContext). 'proj-b' can never equal the resolved identity of a
+    // api.contextGet). 'proj-b' can never equal the resolved identity of a
     // fresh tmpdir store, so this is deterministic.
     writeEntry(home, createMemory('own public deploykey fact'));
     writeEntry(home, {

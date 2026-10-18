@@ -16,19 +16,14 @@ import {
   type WriteEntryOptions,
 } from '../entry-writes.js';
 import { loadEntitiesAt, loadRelationsAt } from '../graph-reads.js';
-import type { Entity, EntityType, Relation } from '../graph-rows.js';
 import { saveSessionHandoffAt } from '../handoffs.js';
 import type { DormantMove } from '../port/consolidation.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
+import type { Entity, EntityType, Relation } from '../port/graph-reads.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
+import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
 import type { ContinuityKey } from '../port/types.js';
-import type { SessionEvent, TaskSnapshot } from '../rows.js';
-import {
-  appendSessionEventAt,
-  saveActiveTaskSnapshotAt,
-  type SessionEventInput,
-  type SnapshotInput,
-} from '../sessions.js';
+import { appendSessionEventAt, saveActiveTaskSnapshotAt } from '../sessions.js';
 import { loadEmbeddingIndexAt } from '../vector-index.js';
 import { onHandle, openStore } from './handles.js';
 

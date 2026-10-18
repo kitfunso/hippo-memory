@@ -47,6 +47,16 @@ import { updateStatsAt } from './index-and-stats.js';
 import { type OnHandle, waitingOpener } from './open.js';
 import { resolveTenantId } from './tenant.js';
 import { errorMessage, reportCompactionFailure } from '../util/log.js';
+import type { CompactionStart } from './port/compactions.js';
+import type {
+  CompactionSaveOutcome,
+  CompactionSaveResult,
+  CompactionText,
+  Log,
+  ReplayOptions,
+  ReplaySources,
+  SpoolRecorder,
+} from './port/compaction-hooks.js';
 
 export type { CompactionStatus };
 
@@ -66,8 +76,6 @@ export interface CompactionRecord {
   itemsWritten: number;
   status: CompactionStatus;
 }
-
-export type Log = (message: string) => void;
 
 /** Where the session ran: rows written through the global store or a shared store keep the project the session was
  * in. */
@@ -114,14 +122,6 @@ function toRecord(row: CompactionRow): CompactionRecord {
     itemsWritten: row.items_written,
     status: row.status,
   };
-}
-
-export interface CompactionStart {
-  sessionId: string;
-  originProject: string;
-  trigger: string | null;
-  cwd: string | null;
-  transcriptPath: string | null;
 }
 
 export function startCompaction(
@@ -222,11 +222,6 @@ export function recordSnapshotSaved(on: OnHandle, tenantId: string, recordId: st
   } catch (err) {
     log(`compaction record not marked with its snapshot: ${errorMessage(err)}`);
   }
-}
-
-export interface CompactionText {
-  summary: string;
-  items: string[];
 }
 
 /** A caller's checked project, and the id its retries carry so a retry finds this record. */
@@ -427,21 +422,6 @@ export function saveItems(
   return writes.written.length;
 }
 
-export interface CompactionSaveResult {
-  /** Memories written; null when neither the record nor the items could be saved. */
-  written: number | null;
-  /** True when the rest waits for the next sleep or post-compact. */
-  deferred: boolean;
-  snapshotSaved: boolean;
-}
-
-/** What one PostCompact save did; `spoolReason` is set when the store was busy or would not open, so the caller keeps
- * the summary on disk. */
-export interface CompactionSaveOutcome {
-  result: CompactionSaveResult;
-  spoolReason: string | null;
-}
-
 interface SaveStep {
   db: DatabaseSyncLike;
   hippoRoot: string;
@@ -530,33 +510,6 @@ export function saveCompactionAt(
     reportCompactionFailure(log, 'items step', errorMessage(err));
   }
   return { result, spoolReason: null };
-}
-
-/** One spooled summary, as plain data. */
-export interface SpooledSummary {
-  tenantId: string;
-  payload: Omit<CompactionStart, 'originProject'>;
-  text: CompactionText;
-  at: Date;
-}
-
-/** Records one spooled summary; it calls `recorded` once the store holds it, so the file is done even if a later step
- * throws. */
-export type SpoolRecorder = (spooled: SpooledSummary, recorded: () => void) => void;
-
-/** A summary read out of a transcript, scrubbed; `listed` is false when it had no memories section. */
-export interface TranscriptText {
-  text: CompactionText;
-  listed: boolean;
-}
-
-/** The file work a replay needs, handed in by the caller so the store holds none of it. */
-export interface ReplaySources {
-  /** Feeds each spooled summary to `record`; returns how many it imported. */
-  importSpool(tenantId: string, deadline: number, record: SpoolRecorder): number;
-  transcriptExists(transcriptPath: string): boolean;
-  /** The summary a transcript holds between two moments, or null when it is not (yet) there. */
-  transcriptText(transcriptPath: string, afterMs: number, beforeMs: number): TranscriptText | null;
 }
 
 function closeWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string, log: Log): void {
@@ -701,13 +654,6 @@ function replayCompactions(
     baseHalfLifeDays,
   };
   return replayStalled(run) + replaySpool(run) + replayOpen(run);
-}
-
-export interface ReplayOptions {
-  busyWaitMs?: number;
-  deadline?: number;
-  /** The config default a replayed item's memory starts on. */
-  baseHalfLifeDays: number;
 }
 
 /** For `hippo sleep` and post-compact: opens the store itself and never throws. */

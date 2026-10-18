@@ -1,7 +1,7 @@
 // First-class object verbs for decisions: record one (optionally superseding an older one's memory), list, get, close.
 
 import { MemoryEntry } from '../core/memory.js';
-import { getMemory } from '../api/memories/memories.js';
+import { memoryGet } from '../api/memories/memories.js';
 import { objectsOf } from '../api/objects/objects.js';
 import type { EntryWrites, Objects } from '../store/port.js';
 import { extractPathTags } from '../search/path-context.js';
@@ -82,7 +82,7 @@ async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags)
   let supersedesDecisionId: number | undefined;
   let oldEntry: MemoryEntry | null = null;
   if (supersedesMemId) {
-    oldEntry = await getMemory(ctx, supersedesMemId);
+    oldEntry = await memoryGet(ctx, supersedesMemId);
     if (!oldEntry) {
       fail(`Memory ${supersedesMemId} not found.`);
     }

@@ -1,4 +1,4 @@
-// The rows getContext reads, added to the two-tenant conformance fixture: pins, a recent window one project crowds, every
+// The rows contextGet reads, added to the two-tenant conformance fixture: pins, a recent window one project crowds, every
 // scope and supersede edge, secret tags, a drifted date, and task state with keys, ties, private rows and stale rows.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/util/json.js';
@@ -231,7 +231,7 @@ export function seedContextRows(dir: string): void {
   pinUpdatedAt(dir);
 }
 
-/** A global store with a pin and a recent row in the first tenant, for the getContext runs that read one. */
+/** A global store with a pin and a recent row in the first tenant, for the contextGet runs that read one. */
 export function seedContextGlobal(dir: string): void {
   initStore(dir);
   const a = inTenant(TENANT_A, '');

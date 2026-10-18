@@ -110,7 +110,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
 
     expect(result.removed).toBe(0);
     expect(result.dormant).toBe(1);
-    expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([faded.id]);
+    expect((await api.dormantList(ctxFor(home))).map((m) => m.id)).toEqual([faded.id]);
     expect(loadConfig(home).dormant).toEqual({ enabled: true, retentionDays: 180 });
   });
 
@@ -170,7 +170,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
 
     expect(result.removed).toBe(1);
     expect(result.dormant).toBe(1);
-    expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([plain.id]);
+    expect((await api.dormantList(ctxFor(home))).map((m) => m.id)).toEqual([plain.id]);
     expect(loadAllEntries(home, 'default')).toEqual([]);
   });
 });
@@ -193,7 +193,7 @@ describe('a faded credential-tagged memory', () => {
     expect(result.dormant).toBe(0);
     expect(result.removedIds).toEqual([tagged.id]);
     expect(result.details.some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `))).toBe(true);
-    expect(await api.listDormant(ctxFor(home))).toEqual([]);
+    expect(await api.dormantList(ctxFor(home))).toEqual([]);
     expect(loadAllEntries(home, 'default')).toEqual([]);
   });
 });
@@ -280,7 +280,7 @@ describe('dormant retention', () => {
     expect(result.dormantExpired).toBe(4);
     expect(pauses).toBe(4);
     expect(ids).toContain(kept);
-    expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([kept]);
+    expect((await api.dormantList(ctxFor(home))).map((m) => m.id)).toEqual([kept]);
   });
 
   it('still ages out old dormant memories after the feature is turned off', async () => {
@@ -315,7 +315,7 @@ describe('with dormant memories enabled', () => {
     // cannot re-import the row as active.
     expect(entryMirrorFiles(home, faded.id)).toEqual([]);
 
-    const dormant = await api.listDormant(ctxFor(home));
+    const dormant = await api.dormantList(ctxFor(home));
     expect(dormant).toHaveLength(1);
     expect(dormant[0].id).toBe(faded.id);
     expect(dormant[0].content).toBe(faded.content);
@@ -347,13 +347,13 @@ describe('with dormant memories enabled', () => {
     );
     writeEntry(home, faded);
     await consolidate(home, { now: new Date() });
-    const before = await api.listDormant(ctxFor(home));
+    const before = await api.dormantList(ctxFor(home));
 
     const second = await consolidate(home, { now: new Date(Date.now() + 30 * DAY_MS) });
 
     expect(second.dormant).toBe(0);
     expect(second.removed).toBe(0);
-    expect(await api.listDormant(ctxFor(home))).toEqual(before);
+    expect(await api.dormantList(ctxFor(home))).toEqual(before);
   });
 
   it('pinned memories and raw receipts never go dormant', async () => {
@@ -381,7 +381,7 @@ describe('with dormant memories enabled', () => {
         .map((e) => e.id)
         .sort(),
     ).toEqual([pinned.id, receipt.id].sort());
-    expect(await api.listDormant(ctxFor(home))).toEqual([]);
+    expect(await api.dormantList(ctxFor(home))).toEqual([]);
   });
 
   it('a dry run reports the move but changes nothing', async () => {
@@ -441,15 +441,15 @@ describe('listing, restoring and forgetting dormant memories', () => {
       'coverage stays at 100% for the parser',
       'the env var is named HIPPO_TENANT',
     ]);
-    expect((await api.listDormant(ctxFor(home), { query: 'staging vpn' })).map((m) => m.id)).toEqual([ids[0]]);
-    expect(await api.listDormant(ctxFor(home), { query: 'STAGING' })).toHaveLength(2);
-    expect((await api.listDormant(ctxFor(home), { query: '100%' })).map((m) => m.id)).toEqual([ids[2]]);
-    expect((await api.listDormant(ctxFor(home), { query: 'hippo_tenant' })).map((m) => m.id)).toEqual([ids[3]]);
+    expect((await api.dormantList(ctxFor(home), { query: 'staging vpn' })).map((m) => m.id)).toEqual([ids[0]]);
+    expect(await api.dormantList(ctxFor(home), { query: 'STAGING' })).toHaveLength(2);
+    expect((await api.dormantList(ctxFor(home), { query: '100%' })).map((m) => m.id)).toEqual([ids[2]]);
+    expect((await api.dormantList(ctxFor(home), { query: 'hippo_tenant' })).map((m) => m.id)).toEqual([ids[3]]);
     // As LIKE wildcards these would match "staging database" and
     // "to Staging need"; taken literally they match nothing.
-    expect(await api.listDormant(ctxFor(home), { query: 'g_d' })).toEqual([]);
-    expect(await api.listDormant(ctxFor(home), { query: 'to%need' })).toEqual([]);
-    expect(await api.listDormant(ctxFor(home), { limit: 2 })).toHaveLength(2);
+    expect(await api.dormantList(ctxFor(home), { query: 'g_d' })).toEqual([]);
+    expect(await api.dormantList(ctxFor(home), { query: 'to%need' })).toEqual([]);
+    expect(await api.dormantList(ctxFor(home), { limit: 2 })).toHaveLength(2);
   });
 
   it('restore brings a memory back as if just recalled, and it survives the next sleep', async () => {
@@ -457,13 +457,13 @@ describe('listing, restoring and forgetting dormant memories', () => {
       'zanzibar gateway requires the legacy auth header',
     ]);
     const before = Date.now();
-    const restored = await api.restoreDormant(ctxFor(home), ids[0]);
+    const restored = await api.dormantRestore(ctxFor(home), ids[0]);
 
     expect(restored.id).toBe(ids[0]);
     expect(entryMirrorFiles(home, ids[0])).toHaveLength(1);
     expect(Date.parse(restored.last_retrieved)).toBeGreaterThanOrEqual(before - 1000);
     expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
-    expect(await api.listDormant(ctxFor(home))).toEqual([]);
+    expect(await api.dormantList(ctxFor(home))).toEqual([]);
     expect(
       (await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' })).results.map((r) => r.id),
     ).toContain(ids[0]);
@@ -491,9 +491,9 @@ describe('listing, restoring and forgetting dormant memories', () => {
 
   it("restore refuses an unknown id, another tenant's memory, and an id that is already active", async () => {
     const { home, ids } = await storeWithDormant('dormant-guard', ['zanzibar gateway requires the legacy auth header']);
-    await expect(api.restoreDormant(ctxFor(home), 'mem_doesnotexist')).rejects.toThrow(/dormant memory not found/);
-    await expect(api.restoreDormant(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
-    expect(await api.listDormant(ctxFor(home, 'tenant-b'))).toEqual([]);
+    await expect(api.dormantRestore(ctxFor(home), 'mem_doesnotexist')).rejects.toThrow(/dormant memory not found/);
+    await expect(api.dormantRestore(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
+    expect(await api.dormantList(ctxFor(home, 'tenant-b'))).toEqual([]);
 
     // Same id written back as active (e.g. by an old binary): restore must
     // not overwrite the live row with the older snapshot.
@@ -502,8 +502,8 @@ describe('listing, restoring and forgetting dormant memories', () => {
       id: ids[0],
     };
     writeEntry(home, live);
-    await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(/already active/);
-    expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([ids[0]]);
+    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(/already active/);
+    expect((await api.dormantList(ctxFor(home))).map((m) => m.id)).toEqual([ids[0]]);
   });
 
   it('rejecting a value also purges its dormant copies', async () => {
@@ -515,8 +515,8 @@ describe('listing, restoring and forgetting dormant memories', () => {
       reason: 'stale secret pointer',
     });
     // A rejected value may not linger in dormant storage either.
-    expect(await api.listDormant(ctxFor(home))).toEqual([]);
-    await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
+    expect(await api.dormantList(ctxFor(home))).toEqual([]);
+    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
   });
 
   it('restore honours a tombstone that skipped the purge, and keeps the dormant copy in place', async () => {
@@ -538,8 +538,8 @@ describe('listing, restoring and forgetting dormant memories', () => {
     } finally {
       closeHippoDb(db);
     }
-    await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(RejectedValueError);
-    expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([ids[0]]);
+    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(RejectedValueError);
+    expect((await api.dormantList(ctxFor(home))).map((m) => m.id)).toEqual([ids[0]]);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).not.toContain(ids[0]);
     expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([[ids[0], 'test']]);
   });
@@ -563,26 +563,26 @@ describe('listing, restoring and forgetting dormant memories', () => {
     const as = (owner: string | undefined, role: 'admin' | 'member'): FullContext =>
       apiCtx(home, 'default', owner === undefined ? { subject: 'adm', role } : { subject: owner, role, owner });
     for (const ctx of [as('oid-b', 'member'), as(undefined, 'admin'), as('oid-b', 'admin')]) {
-      expect((await api.listDormant(ctx)).map((m) => m.id)).toEqual([team.id]);
+      expect((await api.dormantList(ctx)).map((m) => m.id)).toEqual([team.id]);
       expect(await api.isDormant(ctx, team.id)).toBe(true);
       expect(await api.isDormant(ctx, mine.id)).toBe(false);
-      await expect(api.restoreDormant(ctx, mine.id)).rejects.toThrow(`dormant memory not found: ${mine.id}`);
-      await expect(api.forgetDormant(ctx, mine.id)).rejects.toThrow(`dormant memory not found: ${mine.id}`);
+      await expect(api.dormantRestore(ctx, mine.id)).rejects.toThrow(`dormant memory not found: ${mine.id}`);
+      await expect(api.dormantForget(ctx, mine.id)).rejects.toThrow(`dormant memory not found: ${mine.id}`);
     }
     const owner = as('oid-a', 'member');
-    expect((await api.listDormant(owner)).map((m) => m.id).sort()).toEqual([mine.id, team.id].sort());
+    expect((await api.dormantList(owner)).map((m) => m.id).sort()).toEqual([mine.id, team.id].sort());
     expect(await api.isDormant(owner, mine.id)).toBe(true);
-    expect((await api.restoreDormant(owner, mine.id)).scope).toBe('personal:private:oid-a');
+    expect((await api.dormantRestore(owner, mine.id)).scope).toBe('personal:private:oid-a');
   });
 
   it('forget deletes a dormant memory permanently, tenant-scoped', async () => {
     const { home, ids } = await storeWithDormant('dormant-forget', [
       'zanzibar gateway requires the legacy auth header',
     ]);
-    await expect(api.forgetDormant(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
-    await api.forgetDormant(ctxFor(home), ids[0]);
-    expect(await api.listDormant(ctxFor(home))).toEqual([]);
-    await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
+    await expect(api.dormantForget(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
+    await api.dormantForget(ctxFor(home), ids[0]);
+    expect(await api.dormantList(ctxFor(home))).toEqual([]);
+    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
     expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([
       [ids[0], 'test', { dormant: true }],
     ]);
@@ -790,7 +790,7 @@ describe('hippo dormant CLI', () => {
       ),
     );
     await consolidate(hippoRoot, { now: new Date() });
-    const [third] = await api.listDormant(ctxFor(hippoRoot));
+    const [third] = await api.dormantList(ctxFor(hippoRoot));
     const hint = await runCli(workspace, 'forget', third.id);
     expect(hint.status).not.toBe(0);
     expect(hint.out).toContain(`hippo dormant forget ${third.id}`);

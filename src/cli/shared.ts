@@ -13,6 +13,7 @@ import { learn, CLI_LEARN } from '../api/index.js';
 import { cliApiContext, cliInitGlobal, cliLocalFiles } from './api-context.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { printError } from './output.js';
+import { GIT_CALL_TIMEOUT_MS } from '../util/time.js';
 import type { CliFlags } from './flag-values.js';
 
 export function requireInit(hippoRoot: string): void {
@@ -34,7 +35,7 @@ export function runChurnStaleForRepo(
   const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
     cwd: process.cwd(),
     encoding: 'utf8',
-    timeout: 10_000,
+    timeout: GIT_CALL_TIMEOUT_MS,
     windowsHide: true,
   }).trim();
   const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());

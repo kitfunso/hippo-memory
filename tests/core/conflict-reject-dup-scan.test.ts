@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { resolveMemoryConflict, type ResolveMemoryConflictResult } from '../../src/api/index.js';
+import { conflictResolve, type ResolveMemoryConflictResult } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -70,7 +70,7 @@ function rejectLoser(): RejectedLoser {
     { memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 },
   ]);
   const conflictId = listMemoryConflicts(root, 'open')[0]!.id;
-  const resolve = () => resolveMemoryConflict(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });
+  const resolve = () => conflictResolve(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });
   return { keepId, loserId, resolve };
 }
 

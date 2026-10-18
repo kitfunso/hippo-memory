@@ -1,11 +1,11 @@
-// With ctx.store, remember, outcome, supersede, archiveRaw and forget write through its entryWrites group and never open hippo.db;
+// With ctx.store, remember, outcome, supersede, rawArchive and forget write through its entryWrites group and never open hippo.db;
 // their routes and the hippo_remember and hippo_outcome tools run under another store only when it has the group.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw,
+  rawArchive,
   forget,
   outcome,
   remember,
@@ -85,7 +85,7 @@ describe('the api with ctx.store', () => {
       const note = await remember(ctx, { content: 'deploys go out on tuesdays' });
       expect(await outcome(ctx, [note.id, 'mem_missing'], true)).toEqual({ applied: 1, appliedIds: [note.id] });
       const { newId } = await supersede(ctx, note.id, 'deploys go out on wednesdays');
-      expect(await archiveRaw(ctx, raw.id, 'source deleted')).toEqual({ ok: true, archivedAt: NOW });
+      expect(await rawArchive(ctx, raw.id, 'source deleted')).toEqual({ ok: true, archivedAt: NOW });
       expect(await forget(ctx, newId)).toEqual({ ok: true, id: newId });
       const rows = await memory.store.entriesByIds([note.id, newId, raw.id], TENANT_A);
       expect(rows.map((r) => [r.id, r.superseded_by, r.outcome_positive])).toEqual([[note.id, newId, 1]]);

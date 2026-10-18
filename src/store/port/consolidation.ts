@@ -3,11 +3,10 @@
 import type { MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
 import type { WriteBudget } from '../../util/write-budget.js';
-import type { HalfLifeMove, HalfLifeRows } from '../half-life.js';
-import type { SessionEvent } from '../rows.js';
-import type { TombstoneChecks } from '../tombstone-checks.js';
+import type { SessionEvent } from './sessions.js';
 import type { AppendAuditOpts } from './types.js';
 import type { AuditOp } from '../../core/audit-ops.js';
+import type { RejectedValueRow } from './rejections.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
@@ -162,4 +161,44 @@ export interface RebuildPatch {
   bumpRebuildCount: boolean;
   zeroChildren: boolean;
   actor: string;
+}
+
+/** What a move is planned from. The object and conflict rows are read only while the typed move is pending. */
+export interface HalfLifeRows {
+  /** The base the store's memories are on. */
+  from: number;
+  /** True until the store has moved its object memories off their old flat half-life. */
+  typedPending: boolean;
+  /** Every row once, by created then id, through one cursor: the plan keeps only what a move needs. */
+  rows: Iterable<MemoryEntry>;
+  objectRows: Array<{ memory_id: string; status: string }>;
+  conflictAudits: Array<{ conflictId: number; loserId: string }>;
+  resolvedConflicts: Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
+}
+
+/** One memory's half-life before and after a move. */
+export interface HalfLifeChange {
+  id: string;
+  tenantId: string;
+  halfLifeDays: number;
+  oldHalfLifeDays: number;
+}
+
+/** The changes of one move, and the bases their audit rows name. */
+export interface HalfLifeMove {
+  from: number;
+  to: number;
+  entries: readonly HalfLifeChange[];
+}
+
+/** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed
+ * once. */
+export interface TombstoneChecks {
+  /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
+  find(tenantId: string, digest: string): RejectedValueRow | null;
+  /** One audit row on the same handle; nothing under dryRun. */
+  audit(event: AppendAuditOpts): void;
+  /** `audit`, with a failed write logged and counted instead of thrown, for a refusal that stands without its row. */
+  auditOrCount(event: AppendAuditOpts): void;
+  close(): void;
 }

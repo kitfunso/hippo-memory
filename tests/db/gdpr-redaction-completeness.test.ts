@@ -4,7 +4,7 @@ import { rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { remember, archiveRaw, retrieve } from '../../src/api/index.js';
+import { remember, rawArchive, retrieve } from '../../src/api/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { recordStatements, countMatching } from '../_helpers/count-statements.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -35,7 +35,7 @@ function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
  * Closes the three holes flagged by the pre-landing /review:
  *   1. Markdown mirror reaper after migration v20 (RTBF on historical archives)
  *   2. Recall audit stores sha256(query) hash instead of original query text
- *   3. archiveRaw mirror cleanup wrapped in try/catch; reaper handles retry
+ *   3. rawArchive mirror cleanup wrapped in try/catch; reaper handles retry
  *
  * Codex round 3 update: the reaper now tracks completion per-row via
  * raw_archive.mirror_cleaned_at (v21), not via a global meta flag. Tests
@@ -263,7 +263,7 @@ describe('GDPR Path A completeness fixes', () => {
     });
 
     // Archive (RTBF). Mirror cleanup must NOT throw.
-    await archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
+    await rawArchive(ctx, id, 'GDPR right-to-be-forgotten');
 
     // Recall using the canary as the query — must not bring back the archived row.
     await retrieve(ctx, { query: canary });
@@ -315,7 +315,7 @@ describe('GDPR Path A completeness fixes', () => {
     expect(r1.results.length).toBeGreaterThanOrEqual(1);
 
     // Archive.
-    await archiveRaw(ctx, id, 'GDPR purge');
+    await rawArchive(ctx, id, 'GDPR purge');
 
     // Recall #2: same query text, no match.
     const r2 = await retrieve(ctx, { query: queryText });

@@ -32,8 +32,8 @@ import {
   type SearchResult,
 } from '../../core/search-types.js';
 import { rankBothStores } from '../../sharing/search-both.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../store/rows.js';
-import type { HippoStore } from '../../store/index.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../core/search-types.js';
+import type { HippoStore } from '../../store/port.js';
 import { isJsonNumber } from '../../util/json.js';
 import { currentSignal } from '../../util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../../util/tokenize.js';
@@ -375,59 +375,51 @@ function byScore(results: SearchResult[]): SearchResult[] {
   return results.sort((a, b) => compareScoresDesc(a.score, b.score));
 }
 
+/** Multiplies each row's score by `multiplier(row)` (undefined leaves the row alone), traces the step and re-sorts. */
+function rescore(
+  opts: RankRecallOptions,
+  results: SearchResult[],
+  stage: string,
+  multiplier: (r: SearchResult) => number | undefined,
+  note?: string,
+): SearchResult[] {
+  return byScore(
+    results.map((r) => {
+      const mult = multiplier(r);
+      if (mult === undefined) return r;
+      const next = { ...r, score: r.score * mult };
+      const step = { stage, multiplier: mult, scoreBefore: r.score, scoreAfter: next.score };
+      return traced(opts, r, next, note === undefined ? step : { ...step, note });
+    }),
+  );
+}
+
 function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
   // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
-  state.results = byScore(
-    state.results.map((r) => {
-      const hasPeerInResults = (r.entry.conflicts_with || []).some((peerId) => presentIds.has(peerId));
-      if (!hasPeerInResults) return r;
-      const next = { ...r, score: r.score * CONFLICT_PEER_MULTIPLIER };
-      return traced(opts, r, next, {
-        stage: 'interference',
-        multiplier: CONFLICT_PEER_MULTIPLIER,
-        scoreBefore: r.score,
-        scoreAfter: next.score,
-      });
-    }),
+  state.results = rescore(opts, state.results, 'interference', (r) =>
+    (r.entry.conflicts_with || []).some((peerId) => presentIds.has(peerId)) ? CONFLICT_PEER_MULTIPLIER : undefined,
   );
 }
 
 function applyValueAware(opts: RankRecallOptions, state: RankState): void {
   // Wider clamp than the always-on outcome boost, so outcome history can decide the order.
-  state.results = byScore(
-    state.results.map((r) => {
-      const pos = r.entry.outcome_positive ?? 0;
-      const neg = r.entry.outcome_negative ?? 0;
-      if (pos === 0 && neg === 0) return r;
-      const valueMult = Math.max(VALUE_MULT_MIN, Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)));
-      const next = { ...r, score: r.score * valueMult };
-      return traced(opts, r, next, {
-        stage: 'value',
-        multiplier: valueMult,
-        scoreBefore: r.score,
-        scoreAfter: next.score,
-      });
-    }),
-  );
+  state.results = rescore(opts, state.results, 'value', (r) => {
+    const pos = r.entry.outcome_positive ?? 0;
+    const neg = r.entry.outcome_negative ?? 0;
+    if (pos === 0 && neg === 0) return undefined;
+    return Math.max(VALUE_MULT_MIN, Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)));
+  });
 }
 
 function applyUtilityRank(opts: RankRecallOptions, state: RankState): void {
-  state.results = byScore(
-    state.results.map((r) => {
-      const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
-      const utilityMult =
-        (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) *
-        (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS));
-      const utility = r.score * utilityMult;
-      return traced(
-        opts,
-        r,
-        { ...r, score: utility },
-        { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility },
-      );
-    }),
-  );
+  state.results = rescore(opts, state.results, 'utility', (r) => {
+    const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
+    return (
+      (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) *
+      (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS))
+    );
+  });
 }
 
 function applyPfcRerankers(opts: RankRecallOptions, state: RankState): void {
@@ -506,18 +498,12 @@ async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, stat
   const { goalTag = '', sessionId } = opts.boost ?? {};
   if (goalTag) {
     // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
-    state.results = byScore(
-      state.results.map((r) => {
-        if (!r.entry.tags?.includes(goalTag)) return r;
-        const boosted = { ...r, score: r.score * GOAL_TAG_BOOST };
-        return traced(opts, r, boosted, {
-          stage: 'goal',
-          multiplier: GOAL_TAG_BOOST,
-          scoreBefore: r.score,
-          scoreAfter: r.score * GOAL_TAG_BOOST,
-          note: `--goal ${goalTag}`,
-        });
-      }),
+    state.results = rescore(
+      opts,
+      state.results,
+      'goal',
+      (r) => (r.entry.tags?.includes(goalTag) ? GOAL_TAG_BOOST : undefined),
+      `--goal ${goalTag}`,
     );
     return;
   }
@@ -543,20 +529,10 @@ async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, stat
 
 /** Soft-demotes rarely recalled rows: score *= max(0.5, retrieval_count / T); never drops one. */
 function applySalience(opts: RankRecallOptions, threshold: number, results: SearchResult[]): SearchResult[] {
-  return byScore(
-    results.map((r) => {
-      const count = r.entry.retrieval_count ?? 0;
-      if (count >= threshold) return r;
-      const mult = Math.max(SALIENCE_MIN_MULTIPLIER, count / threshold);
-      const next = { ...r, score: r.score * mult };
-      return traced(opts, r, next, {
-        stage: 'retrieval-count-downweight',
-        multiplier: mult,
-        scoreBefore: r.score,
-        scoreAfter: next.score,
-      });
-    }),
-  );
+  return rescore(opts, results, 'retrieval-count-downweight', (r) => {
+    const count = r.entry.retrieval_count ?? 0;
+    return count >= threshold ? undefined : Math.max(SALIENCE_MIN_MULTIPLIER, count / threshold);
+  });
 }
 
 function dropUnless(state: RankState, keep: (r: SearchResult) => boolean): void {

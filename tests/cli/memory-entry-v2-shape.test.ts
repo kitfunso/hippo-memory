@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
-import { listMemories } from '../../src/api/memories/memories.js';
+import { memoryList } from '../../src/api/memories/memories.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listDormantSnapshots } from '../../src/store/dormant.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -61,7 +61,7 @@ describe('MemoryEntry 2.0 shape', () => {
 
   it('emits tenant_id and a boolean summary_dirty in the export JSON', async () => {
     writeEntry(root, createMemory('exported note', { tenantId: 'acme' }));
-    const exported = JSON.parse(JSON.stringify(await listMemories(cliApiContext(root, 'acme')), null, 2));
+    const exported = JSON.parse(JSON.stringify(await memoryList(cliApiContext(root, 'acme')), null, 2));
     expect(exported).toHaveLength(1);
     expect(exported[0]).toMatchObject({ tenant_id: 'acme', summary_dirty: false });
     expect(exported[0]).not.toHaveProperty('tenantId');

@@ -119,7 +119,7 @@ describe('MCP tool reply text', () => {
     expect(await call('hippo_status')).toMatchInlineSnapshot(`
       "Memories: 2 (0 pinned, 1 errors)
       Avg strength: 1.00
-      At risk (<0.1): 0
+      At risk (<0.2): 0
       Open conflicts: 0
       Half-life default: 365d"
     `);

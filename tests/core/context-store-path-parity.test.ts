@@ -1,11 +1,11 @@
-// getContext on hippo.db returns and records what each case lists; on a store held in memory it answers the same through
+// contextGet on hippo.db returns and records what each case lists; on a store held in memory it answers the same through
 // the store, with hippo.db blocked.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { getContext, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
+import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
 import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
@@ -349,7 +349,7 @@ interface PassConfig {
   sharedStore?: true;
 }
 
-/** One getContext on a fresh copy of the fixture. */
+/** One contextGet on a fresh copy of the fixture. */
 async function runPass(
   c: Omit<Case, 'name' | 'expected'>,
   { withGlobal, embedded, prepare }: PassOptions,
@@ -386,8 +386,8 @@ async function runPass(
   const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
   const result =
     store && store.kind !== 'sqlite'
-      ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))
-      : await getContext(ctx, opts);
+      ? await withSqliteBlocked(store.kind, async () => contextGet(ctx, opts))
+      : await contextGet(ctx, opts);
   await store?.close();
   return {
     result,
@@ -397,7 +397,7 @@ async function runPass(
   };
 }
 
-describe('getContext on hippo.db returns and records what each case lists', () => {
+describe('contextGet on hippo.db returns and records what each case lists', () => {
   it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
     const pass = await runPass(c, { withGlobal: true, embedded: false });
     const { result } = pass;
@@ -419,7 +419,7 @@ describe('getContext on hippo.db returns and records what each case lists', () =
   });
 });
 
-describe('the recall getContext records on hippo.db', () => {
+describe('the recall contextGet records on hippo.db', () => {
   const idsOf = (pass: Pass): string[] => pass.result.entries.map((e) => e.entry.id);
 
   it('strengthens a row both stores hold in the local store only', async () => {
@@ -473,7 +473,7 @@ describe('the recall getContext records on hippo.db', () => {
   });
 });
 
-describe('getContext on a store held in memory, with hippo.db blocked', () => {
+describe('contextGet on a store held in memory, with hippo.db blocked', () => {
   it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
     const onHippoDb = await runPass(c, { withGlobal: false, embedded: true });
     const before = embeddings.requests();

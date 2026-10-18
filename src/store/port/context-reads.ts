@@ -26,16 +26,16 @@ export interface AmbientCandidates extends AmbientLoadResult {
   refused: AmbientRefusal[];
 }
 
-/** The reads behind getContext beyond the base `continuity`: its fallback handoff, candidate rows and ambient tallies.
- *  getContext with a query under an embedding provider needs `vectors` too, and answers 501 without it. */
+/** The reads behind contextGet beyond the base `continuity`: its fallback handoff, candidate rows and ambient tallies.
+ *  contextGet with a query under an embedding provider needs `vectors` too, and answers 501 without it. */
 export interface ContextReads {
   /** The newest handoff of the last `maxAgeMs` that is its session's highest id, has no outcome or a partial or failed
    * one, and passes recall's default scope deny, as `loadLatestHandoff` with `unfinishedOnly` and `scopeFilter:
    * 'default-deny'`. Rejects an empty tenant id. */
   unfinishedHandoff(tenantId: string, maxAgeMs: number, key: ContinuityKey | null): Promise<SessionHandoff | null>;
   /** As `loadAmbientCandidates` with `ambientRefusal` as its admit; `recall` searches with the query `rarestFtsQuery`
-   * builds from FTS document counts over every tenant's rows, and finds nothing when no term is indexed. Core keeps
-   * only `tenantId`'s rows that the admission passes, whatever the store returns. */
+   * builds from full-text document counts over every tenant's rows, and finds nothing when no term is indexed. Core
+   * keeps only `tenantId`'s rows that the admission passes, whatever the store returns. */
   ambientCandidates(tenantId: string, request: AmbientCandidateRequest): Promise<AmbientCandidates>;
   /** As `loadContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by
    * created, then id. */
@@ -64,7 +64,7 @@ export interface AmbientRecallRequest {
   ownScope?: string;
 }
 
-/** The rows a non-pinned context read may admit; each predicate is one getContext's admission applies again in JS. */
+/** The rows a non-pinned context read may admit; each predicate is one contextGet's admission applies again in JS. */
 export interface ContextCandidateFilter {
   /** Envelope scope asked for by name; absent applies recall's default deny. */
   exactScope?: string;

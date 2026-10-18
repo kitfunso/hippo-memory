@@ -1,4 +1,4 @@
-import { predictionMirror } from '../../store/predictions.js';
+import { predictionMirror } from '../../core/prediction.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../../store/port.js';
 import type { Context } from '../types.js';
 import type { Prediction, SavePredictionOptions } from '../../store/port/predictions.js';
@@ -6,19 +6,19 @@ import type { PredictionBaserate } from '../../store/port/types.js';
 
 const predictionsOf = (ctx: Context): Predictions => ctx.store.predictions;
 
-export async function savePrediction(ctx: Context, input: PredictionSave): Promise<Prediction> {
+export async function predictionSave(ctx: Context, input: PredictionSave): Promise<Prediction> {
   return predictionsOf(ctx).savePrediction(ctx.tenantId, input, ctx.actor.subject);
 }
 
 /** A claim saved with its recall mirror, built under the store root's half-life as the HTTP create route builds it. */
-export async function recordPrediction(ctx: Context, claim: SavePredictionOptions): Promise<Prediction> {
-  return savePrediction(ctx, {
+export async function predictionRecord(ctx: Context, claim: SavePredictionOptions): Promise<Prediction> {
+  return predictionSave(ctx, {
     ...claim,
     mirror: predictionMirror(ctx.tenantId, claim, ctx.config.defaultHalfLifeDays),
   });
 }
 
-export async function listPredictions(
+export async function predictionList(
   ctx: Context,
   query: Parameters<Predictions['listPredictions']>[1],
 ): Promise<Prediction[]> {
@@ -33,6 +33,6 @@ export async function predictionById(ctx: Context, id: number): Promise<Predicti
   return predictionsOf(ctx).predictionById(ctx.tenantId, id);
 }
 
-export async function closePrediction(ctx: Context, id: number, close: PredictionClose): Promise<Prediction> {
+export async function predictionClose(ctx: Context, id: number, close: PredictionClose): Promise<Prediction> {
   return predictionsOf(ctx).closePrediction(ctx.tenantId, id, close, ctx.actor.subject);
 }

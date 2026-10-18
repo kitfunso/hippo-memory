@@ -13,7 +13,7 @@ import {
 } from '../../src/core/memory.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { getContext, adminActor } from '../../src/api/index.js';
+import { contextGet, adminActor } from '../../src/api/index.js';
 import { renderAmbientSummary, tallyAmbientEntries, ambientStateFromTallies } from '../../src/core/ambient.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -48,7 +48,7 @@ describe('ambient summary over the whole store', () => {
     writeEntry(store, createMemory('the deploy pipeline uses blue green rollout for the api', { tags: ['deploy'] }));
     writeEntry(store, createMemory('lunch options near the office include a noodle bar'));
 
-    const result = await getContext(ctx, { q: 'deploy', currentProject: '' });
+    const result = await contextGet(ctx, { q: 'deploy', currentProject: '' });
 
     expect(result.entries).toHaveLength(2);
     expect(result.ambientState?.totalMemories).toBe(3);
@@ -74,7 +74,7 @@ describe('ambient summary over the whole store', () => {
       closeHippoDb(db);
     }
 
-    const result = await getContext(ctx, { currentProject: '', budget: 200 });
+    const result = await contextGet(ctx, { currentProject: '', budget: 200 });
 
     expect(result.ambientState?.totalMemories).toBe(total);
     expect(renderAmbientSummary(result.ambientState!)).toContain(`${total} memories`);

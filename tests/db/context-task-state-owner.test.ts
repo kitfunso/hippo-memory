@@ -1,10 +1,10 @@
-// On a shared store getContext's task state keys on owner and project, so each developer gets their own, across sessions.
+// On a shared store contextGet's task state keys on owner and project, so each developer gets their own, across sessions.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/auth.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
@@ -65,8 +65,8 @@ afterEach(async () => {
 describe('task state on a shared store', () => {
   it("B saves its own snapshot first, A saves a newer one; B's context returns B's row id and never A's", async () => {
     const { a, b } = seedTwoOwners();
-    expect((await getContext(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).activeSnapshot?.id).toBe(b);
-    expect((await getContext(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' })).activeSnapshot?.id).toBe(a);
+    expect((await contextGet(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).activeSnapshot?.id).toBe(b);
+    expect((await contextGet(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' })).activeSnapshot?.id).toBe(a);
   });
 
   it("A's next session gets A's unfinished handoff", async () => {
@@ -74,18 +74,18 @@ describe('task state on a shared store', () => {
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sa1', summary: 'alice left off here' }, KEY_A);
     closeTaskSnapshotsForSession(home, 'default', 'sa1', 'session-ended', KEY_A);
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sb1', summary: 'bob left off here' }, KEY_B);
-    const forA = await getContext(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' });
+    const forA = await contextGet(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' });
     expect(forA.activeSnapshot).toBeUndefined();
     expect(forA.sessionHandoff?.summary).toBe('alice left off here');
-    expect((await getContext(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).sessionHandoff?.summary).toBe(
+    expect((await contextGet(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).sessionHandoff?.summary).toBe(
       'bob left off here',
     );
   });
 
   it('no project gives no task state', async () => {
     const { a } = seedTwoOwners();
-    expect((await getContext(ctx('alice'), { currentProject: P })).activeSnapshot?.id).toBe(a);
-    await expect(getContext(ctx('alice'), { currentProject: { name: '', legacyName: '' } })).rejects.toBeInstanceOf(
+    expect((await contextGet(ctx('alice'), { currentProject: P })).activeSnapshot?.id).toBe(a);
+    await expect(contextGet(ctx('alice'), { currentProject: { name: '', legacyName: '' } })).rejects.toBeInstanceOf(
       BadRequestError,
     );
   });

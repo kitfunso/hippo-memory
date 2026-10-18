@@ -7,7 +7,7 @@ import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../core
 import { computeSalience, type SalienceResult } from '../../core/salience.js';
 import { embedMemory, folderIndex, type EmbedOutcome } from '../../search/embed-memories.js';
 import { errorMessage, log } from '../../util/log.js';
-import { getMemory } from './memories.js';
+import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, ContextWith } from '../types.js';
 
@@ -78,7 +78,7 @@ async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise
 /** The row `remember` just wrote, as the store holds it: the
  * report, the embedding and the extraction all work on that. */
 async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
-  const entry = await getMemory(ctx, id);
+  const entry = await memoryGet(ctx, id);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
 }

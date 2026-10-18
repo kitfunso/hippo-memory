@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMemory } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { auditWriteFailureCount } from '../../src/store/audit.js';
+import { auditWriteFailureCount } from '../../src/core/audit-report.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, writeEntry, readEntry } from '../_helpers/root-forms.js';
 

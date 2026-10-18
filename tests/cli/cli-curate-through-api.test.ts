@@ -2,7 +2,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, ForbiddenError, invalidateMemories, rejectOnHost, remember } from '../../src/api/index.js';
+import { adminActor, ForbiddenError, memoryInvalidate, rejectOnHost, remember } from '../../src/api/index.js';
 import { handleInvalidate, handleReject } from '../../src/cli/curate.js';
 import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -65,10 +65,10 @@ describe('the CLI curate verbs go through src/api', () => {
     );
   });
 
-  it('invalidateMemories weakens only the context tenant', async () => {
+  it('memoryInvalidate weakens only the context tenant', async () => {
     const here = (await remember(cli(), { content: 'we deploy with jenkins pipelines' })).id;
     const there = (await remember(cli('other'), { content: 'we deploy with jenkins pipelines' })).id;
-    const result = invalidateMemories(cli(), { from: 'jenkins', to: 'github actions', type: 'migration' }, {});
+    const result = memoryInvalidate(cli(), { from: 'jenkins', to: 'github actions', type: 'migration' }, {});
     expect(result.targets).toEqual([here]);
     expect(readEntry(root, here, 'default')?.confidence).toBe('stale');
     expect(readEntry(root, there, 'other')?.confidence).not.toBe('stale');
