@@ -10,7 +10,8 @@ import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } fro
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 import { blockHash } from '../util/token-text.js';
-import { placeholders } from '../util/sql.js';
+import { placeholders, rowsPerStatement, valuesRows } from '../util/sql.js';
+import { chunked } from '../util/chunked.js';
 import type { RecallTraceInput } from './port/recall-writes.js';
 
 /** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
@@ -123,8 +124,8 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
   }
 }
 
-/** Pruned on write, counted back from the event's ts capped at the real clock, so a far-future fake time spares real
- * rows. */
+/** Pruned by a write when the store's schedule is due, counted back from the event's ts capped at the real clock, so a
+ * far-future fake time spares real rows. */
 const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 export const DELIVERY_LEDGER_WAIT_MS = 50;
@@ -334,49 +335,79 @@ function deliveryEventValues(input: DeliveryEventInput, turnSeq: number | null, 
   ];
 }
 
+const DELIVERY_CANDIDATE_COLUMNS = [
+  'event_id', 'tenant_id', 'memory_id', 'source_store', 'pool', 'stage', 'outcome', 'reason', 'cand_rank', 'score',
+  'tokens',
+] as const;
+
+/** VALUES binds rather than one JSON array, since a score is a float that JSON text need not give back bit for bit. */
 function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: DeliveryEventInput): void {
-  const insertCandidate = db.prepare(`
-    INSERT INTO delivery_candidates (event_id, tenant_id, memory_id, source_store, pool, stage, outcome, reason,
-    cand_rank, score, tokens)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  for (const c of input.candidates) {
-    insertCandidate.run(
-      eventId,
-      input.tenantId,
-      c.memoryId,
-      c.sourceStore,
-      c.pool,
-      c.stage,
-      c.outcome,
-      c.reason,
-      c.rank,
-      c.score,
+  const width = DELIVERY_CANDIDATE_COLUMNS.length;
+  const columns = DELIVERY_CANDIDATE_COLUMNS.join(', ');
+  for (const chunk of chunked(input.candidates, rowsPerStatement(width))) {
+    db.prepare(
+      `INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`,
+    ).run(...chunk.flatMap((c) => [
+      eventId, input.tenantId, c.memoryId, c.sourceStore, c.pool, c.stage, c.outcome, c.reason, c.rank, c.score,
       c.tokens,
-    );
+    ]));
   }
 }
 
-/** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a
- * transaction on `db`. */
-function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+/** How often a store prunes its delivery ledger: each prune scans for expired rows, so a busy server skips most. */
+const DELIVERY_PRUNE_EVERY_MS = 60_000;
+
+/** When a store last pruned its delivery ledger; each store holds its own, so the minute is counted per store. */
+export interface DeliveryPruneSchedule {
+  due(nowMs: number): boolean;
+  pruned(nowMs: number): void;
+}
+
+/** A schedule that has never pruned, so its first write prunes. */
+export function deliveryPruneSchedule(): DeliveryPruneSchedule {
+  let last = Number.NEGATIVE_INFINITY;
+  return {
+    // A clock set back by a minute or more prunes too, rather than waiting out the gap.
+    due: (nowMs) => Math.abs(nowMs - last) >= DELIVERY_PRUNE_EVERY_MS,
+    pruned: (nowMs) => {
+      last = nowMs;
+    },
+  };
+}
+
+function pruneDeliveryEvents(db: DatabaseSyncLike, eventTs: string, nowMs: number): void {
+  const pruneFrom = Math.min(Date.parse(eventTs), nowMs);
+  const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
+  db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
+}
+
+/** One event plus its candidates in one write transaction, then a prune when `prune` is due; fail-soft. The caller must
+ * not hold a transaction on `db`. */
+function writeDeliveryEvent(
+  db: DatabaseSyncLike,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule,
+): number | null {
   try {
-    return withWriteScope(db, 'write_delivery_event', () => {
+    const now = Date.now();
+    const pruning = prune.due(now);
+    const eventId = withWriteScope(db, 'write_delivery_event', () => {
       // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.
       const isTurn = input.sessionId !== null && (input.sessionState === 'payload' || input.sessionState === 'env');
       const duplicateOf = isTurn ? findDuplicateTurn(db, input) : null;
       const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
       const values = deliveryEventValues(input, turnSeq, duplicateOf);
-      const eventId = Number(db.prepare(`
+      const id = Number(db.prepare(`
         INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})
         VALUES (${placeholders(DELIVERY_EVENT_COLUMNS.length)})
       `).run(...values).lastInsertRowid);
-      insertDeliveryCandidates(db, eventId, input);
-      const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
-      const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
-      db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
-      return eventId;
+      insertDeliveryCandidates(db, id, input);
+      if (pruning) pruneDeliveryEvents(db, input.ts, now);
+      return id;
     });
+    // Only after the commit, so a rolled-back prune leaves the next write due.
+    if (pruning) prune.pruned(now);
+    return eventId;
   } catch (error) {
     log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
@@ -385,12 +416,16 @@ function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): nu
 
 /** Write on the request's handle, or a short-lived one, waiting at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock.
  * Fail-soft. */
-export function writeDeliveryEventVia(on: OnHandle, input: DeliveryEventInput): number | null {
+export function writeDeliveryEventVia(
+  on: OnHandle,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule,
+): number | null {
   let writing = false;
   try {
     return on((db) => {
       writing = true;
-      return writeDeliveryEventOnHandle(db, input);
+      return writeDeliveryEventOnHandle(db, input, prune);
     });
   } catch (error) {
     if (writing) throw error;
@@ -400,12 +435,16 @@ export function writeDeliveryEventVia(on: OnHandle, input: DeliveryEventInput): 
 }
 
 /** On a caller's open handle, which saves a second open and close per turn; the handle's own lock wait comes back
- * after. */
-export function writeDeliveryEventOnHandle(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+ * after. A caller holding only a handle gets a fresh schedule, so each of its writes prunes. */
+export function writeDeliveryEventOnHandle(
+  db: DatabaseSyncLike,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule = deliveryPruneSchedule(),
+): number | null {
   const prior = Math.trunc(Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout));
   db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
   try {
-    return writeDeliveryEvent(db, input);
+    return writeDeliveryEvent(db, input, prune);
   } finally {
     db.exec(`PRAGMA busy_timeout = ${prior}`);
   }

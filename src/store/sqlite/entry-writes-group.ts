@@ -1,7 +1,7 @@
 // hippo.db's half of the EntryWrites store group: the queries remember, outcome, supersede, archive and forget run
 // today.
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent, appendAuditEventsAt } from '../audit.js';
 import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../core/memory.js';
@@ -11,15 +11,18 @@ import { recordTraceOutcome } from '../recall-trace.js';
 import { RejectedValueError } from '../../core/api-errors.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
 import type { PinWrite } from '../port/entry-writes.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
+import type { AppendAuditOpts } from '../port/types.js';
+import { markSummariesDirtyInTx, markSummaryDirtyInTx, summaryDirtyAuditRow } from '../summary-dirty.js';
 import { auditRejectionRefusal } from '../audit-event.js';
 import { deleteEntryCore } from '../delete-and-batch.js';
 import { selectEntriesByIds } from '../entry-reads.js';
-import { writeEntryDbOnly, writeEntryMirrorsIn, type WriteEntryInternalOptions } from '../entry-writes.js';
+import {
+  rememberAuditMetadata, writeEntryDbOnly, writeEntryMirrorsIn, type WriteEntryInternalOptions,
+} from '../entry-writes.js';
 import { updateStatsUnlessBusyAt } from '../index-and-stats.js';
 import { type OnHandle, openStore, type StoreFiles } from '../open.js';
-import { purgeMirrorBestEffortIn, removeEntryMirrorsIn } from '../mirrors.js';
-import { stampOriginProjectIn } from '../entry-row.js';
+import { purgeMirrorBestEffortIn, removeEntryMirrorsIn, writeMarkdownMirrors } from '../mirrors.js';
+import { replaceFtsRows, stampOriginProjectIn, updateMemoryRows } from '../entry-row.js';
 import { selectMemoryReach } from '../tenant-lookup.js';
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves
@@ -82,9 +85,9 @@ export function applyOutcomeAt(
   outcome: OutcomeWrite,
   traceId?: number,
 ): string[] {
-  const rows = applyOutcomeOn(db, outcome);
-  const memoryIds = rows.map((entry) => entry.id);
-  if (traceId !== undefined && rows.length > 0) {
+  const { applied, rows } = applyOutcomeOn(db, outcome);
+  const memoryIds = applied.map((entry) => entry.id);
+  if (traceId !== undefined && memoryIds.length > 0) {
     recordTraceOutcome(db, {
       traceId,
       tenantId: outcome.tenantId,
@@ -92,7 +95,7 @@ export function applyOutcomeAt(
       memoryIds,
     });
   }
-  for (const entry of rows) writeEntryMirrorsIn(files, entry);
+  writeMarkdownMirrors(files.hippoRoot, rows);
   return memoryIds;
 }
 
@@ -157,29 +160,60 @@ export function writeInOwnTenant(
   );
 }
 
-/** The reads, rewrites and outcome rows share one BEGIN IMMEDIATE transaction, hippo.db's form of the port's row lock;
- * the caller writes the mirrors after. */
-function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): MemoryEntry[] {
-  return auditingRefusal(db, outcome.actor, () => withWriteScope(db, 'apply_outcome', () => {
-    const live = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
+/** What an outcome wrote: one entry per applied id with repeats, as callers count them, and each row's final state. */
+interface AppliedOutcome {
+  readonly applied: readonly MemoryEntry[];
+  readonly rows: readonly MemoryEntry[];
+}
+
+/** The read, the row rewrites and the audit rows share one BEGIN IMMEDIATE transaction, hippo.db's form of the port's
+ * row lock, each a set statement whatever the id count; the caller writes the mirrors after. An outcome never changes
+ * content, so the rejected-value guard has nothing to check. */
+function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): AppliedOutcome {
+  return withWriteScope(db, 'apply_outcome', () => {
+    const read = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
+    const latest = new Map<string, MemoryEntry>();
     const applied: MemoryEntry[] = [];
     for (const id of outcome.ids) {
-      const entry = live.get(id);
+      const entry = latest.get(id) ?? read.get(id);
       if (!entry || !ownScopeTouches(outcome.ownScope, entry.scope)) continue;
       const updated = entryAfterOutcome(entry, outcome.good);
-      writeEntryDbOnly(db, updated, { actor: outcome.actor });
-      live.set(id, updated);
-      appendAuditEvent(db, {
-        tenantId: outcome.tenantId,
-        actor: outcome.actor,
-        op: 'outcome',
-        targetId: id,
-        metadata: { good: outcome.good },
-      });
+      latest.set(id, updated);
       applied.push(updated);
     }
-    return applied;
-  }));
+    const rows = [...latest.values()];
+    updateMemoryRows(db, rows);
+    // A good outcome drops the churn-stale tag; only those rows' indexed text changes.
+    const retagged = rows.filter((row) => row.tags.join(' ') !== read.get(row.id)?.tags.join(' '));
+    if (retagged.length > 0) replaceFtsRows(db, retagged, retagged.map((row) => row.id));
+    const parents = [...new Set(rows.flatMap((row) => (row.dag_parent_id ? [row.dag_parent_id] : [])))];
+    const flipped = markSummariesDirtyInTx(db, parents, outcome.tenantId);
+    appendAuditEventsAt(db, outcomeAuditRows(applied, flipped, outcome));
+    return { applied, rows };
+  });
+}
+
+/** Per applied id, the rows its own write used to add in turn: remember, the parent's first dirty mark, outcome. */
+function outcomeAuditRows(
+  applied: readonly MemoryEntry[],
+  flipped: ReadonlyMap<string, number>,
+  outcome: OutcomeWrite,
+): AppendAuditOpts[] {
+  const { actor, tenantId, good } = outcome;
+  const marked = new Set<string>();
+  return applied.flatMap((entry) => {
+    const rows: AppendAuditOpts[] = [
+      { tenantId: entry.tenant_id, actor, op: 'remember', targetId: entry.id, metadata: rememberAuditMetadata(entry) },
+    ];
+    const parent = entry.dag_parent_id;
+    const level = parent ? flipped.get(parent) : undefined;
+    if (parent && level !== undefined && !marked.has(parent)) {
+      marked.add(parent);
+      rows.push(summaryDirtyAuditRow(parent, entry.tenant_id, actor, level));
+    }
+    rows.push({ tenantId, actor, op: 'outcome', targetId: entry.id, metadata: { good } });
+    return rows;
+  });
 }
 
 function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
