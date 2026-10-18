@@ -60,7 +60,7 @@ import {
   type AuditLog, type AuditMaintenance, type ConnectorEvents, type ConnectorWrites, type ContextReads,
   type ContinuityBlock, type DagReads, type EntryWrites, type GraphReads, type HippoStore, type KeyAudit,
   type KeyGrants, type KeyWrites, type LastRecall, type LessonWrites, type Objects, type Predictions, type Quarantine,
-  type Readiness, type StoreGroups, type StoreReach, type Sync, type VectorViews, type VectorWrites,
+  type Readiness, type StoreGroups, type StoreReach, type StoreWith, type Sync, type VectorViews, type VectorWrites,
   hasGroup,
 } from '../port.js';
 import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
@@ -234,18 +234,18 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
 export { runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
 
 /** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
- * `openGlobal` builds the global store, which a server keeps on threads of its own. */
+ * `openGlobal` builds the global store, read and written, which a server keeps on threads of its own. */
 export function sqliteReach(
   hippoRoot: string,
   store: HippoStore,
   shared?: boolean,
-  openGlobal: (root: string) => HippoStore = sqliteStore,
+  openGlobal: (root: string) => StoreWith<'localFiles'> = sqliteStore,
 ): StoreReach {
   const other = hasGroup(store, 'localFiles') ? undefined : store;
   const sharedStore = shared === true || isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
-  const globalTarget = other === undefined ? { root: globalRoot, store: sqliteStore(globalRoot) } : undefined;
+  const globalTarget = other === undefined ? { root: globalRoot, store: openGlobal(globalRoot) } : undefined;
   const reach: StoreReach = {
     hasLocal: other !== undefined || isInitialized(hippoRoot),
     isGlobal: isGlobalStoreRoot(hippoRoot),

@@ -103,29 +103,29 @@ describe('shared store origin stamp', () => {
     }
   });
 
-  it('a NULL row from a flagged store stays NULL in the global copy, labelled shared::', () => {
+  it('a NULL row from a flagged store stays NULL in the global copy, labelled shared::', async () => {
     for (const { store } of layouts(true)) {
       const entry = { ...createMemory('the handbook lives in the wiki under ops'), origin_project: null };
       writeEntry(store, entry);
-      const promoted = copyToGlobal(store, entry.id);
+      const promoted = await copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBeNull();
       expect(promoted.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(promoted.source)).toBeNull();
-      const shared = shareMemory(...sharingStores(store), entry.id, { force: true, skipEmbed: true });
+      const shared = await shareMemory(...sharingStores(store), entry.id, { force: true, skipEmbed: true });
       expect(shared?.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(shared?.source)).toBeNull();
       expect(originOf(getGlobalRoot(), shared?.id ?? '')).toBeNull();
     }
   });
 
-  it('a NULL row from an unflagged store gets the folder stamp and the folder label in the global copy', () => {
+  it('a NULL row from an unflagged store gets the folder stamp and the folder label in the global copy', async () => {
     for (const { store, folderStamp } of layouts(false)) {
       const entry = { ...createMemory('the handbook lives in the wiki under ops'), origin_project: null };
       writeEntry(store, entry);
-      const promoted = copyToGlobal(store, entry.id);
+      const promoted = await copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBe(folderStamp);
       expect(promoted.source).toBe(`promoted:${store}`);
-      const shared = shareMemory(...sharingStores(store), entry.id, { force: true, skipEmbed: true });
+      const shared = await shareMemory(...sharingStores(store), entry.id, { force: true, skipEmbed: true });
       const label = folderStamp === '' ? path.basename(path.dirname(store)) : folderStamp;
       expect(shared?.source.startsWith(`shared:${label}:`)).toBe(true);
       expect(shared?.origin_project).toBe(folderStamp);

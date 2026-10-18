@@ -366,7 +366,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     expect(hostWideRead.map((e) => e.tenant_id).sort()).toEqual(['tenant-a', 'tenant-b']);
   });
 
-  it('case 12: listPeers aggregates across all tenants regardless of source-tenant', () => {
+  it('case 12: listPeers aggregates across all tenants regardless of source-tenant', async () => {
     // listPeers is on the GLOBAL store, not the per-project local. We seed the
     // local root with shared:project-foo: + shared:project-bar: source strings
     // (these would normally land in global after auto-share but the parsing
@@ -391,7 +391,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     writeEntry(hippoRoot, b);
 
     // Both tenants' shared entries surface as peers (host-wide aggregation)
-    const peers = listPeers(folderStore(hippoRoot));
+    const peers = await listPeers(folderStore(hippoRoot));
     const peerNames = peers.map((p) => p.project);
     expect(peerNames).toContain('project-foo');
     expect(peerNames).toContain('project-bar');

@@ -65,13 +65,13 @@ describe('git-learned rows and the global store', () => {
     expect(globalContents()).toEqual([ORDINARY]);
   });
 
-  it('a hand-run share of a git-learned row still copies it', () => {
-    expect(shareMemory(...sharingStores(hippoRoot), seed.id)?.content).toBe(SEED);
+  it('a hand-run share of a git-learned row still copies it', async () => {
+    expect((await shareMemory(...sharingStores(hippoRoot), seed.id))?.content).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });
 
-  it('a hand-run promote of a git-learned row still copies it', () => {
-    expect(copyToGlobal(hippoRoot, seed.id).content).toBe(SEED);
+  it('a hand-run promote of a git-learned row still copies it', async () => {
+    expect((await copyToGlobal(hippoRoot, seed.id)).content).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });
 

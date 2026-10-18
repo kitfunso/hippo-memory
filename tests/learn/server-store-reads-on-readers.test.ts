@@ -120,6 +120,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('rejections.list', (s) => s.rejections.list(TENANT), "reason: 'wrong'"),
   read('rejections.refusedAmong', (s) => s.rejections.refusedAmong([{ tenantId: TENANT, entryId: 'mem_new', content: REFUSED }]), /^\[ true \]$/),
   read('failureLog.requestOutcome', (s) => s.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION), "'stored'"),
+  read('sharing.sourceTallies', (s) => s.localFiles.sharing.sourceTallies(TENANT), /count: [1-9]/),
 ];
 
 const READS: readonly Read[] = [
@@ -181,6 +182,8 @@ function write<T>(name: string, run: Call<T>, leaves: readonly string[]): Write 
 }
 
 const ACTOR = 'reads-on-readers';
+// Its origin is set, so the folders of the two stores leave the same mirror.
+const PROMOTED = { ...createMemory('promoted note on the rollout', { tenantId: TENANT }), id: 'g_promoted', origin_project: 'golden' };
 
 const finishRecall: Call<void> = (s, seed) => s.finishRecall({
   goalLog: [{ goalId: seed.templates.goalId, memoryId: 'mem_p_goal', tenantId: TENANT, sessionId: SESSION, recalledAt: FAKE_NOW, score: 1.6 }],
@@ -201,6 +204,8 @@ const WRITES: readonly Write[] = [
   }), ['vectors {"memory_id":"mem_p_pinned"']),
   write('quarantine.approveQuarantined', (s, seed) => s.quarantine.approveQuarantined(TENANT, seed.held[0] ?? '', ACTOR), ['"status":"approved"', '"op":"quarantine_approve"']),
   write('quarantine.rejectQuarantined', (s, seed) => s.quarantine.rejectQuarantined(TENANT, seed.held[1] ?? '', ACTOR), ['"status":"rejected"', '"op":"quarantine_reject"']),
+  write('promotion.writeCopy', (s) => s.localFiles.promotion.writeCopy(PROMOTED, { actor: ACTOR, sourceId: 'mem_p_plain', auditAs: { tenantId: TENANT, actor: ACTOR } }),
+    ['memories {"id":"g_promoted"', `"actor":"${ACTOR}","op":"promote","target_id":"g_promoted"`]),
 ];
 
 let seed: MovedReadsSeed;

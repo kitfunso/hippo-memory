@@ -1,5 +1,5 @@
 // What crosses between the server thread and a store worker, and which kind of worker runs each store method.
-import type { HippoStore, StoreGroups } from '../port.js';
+import type { HippoStore, LocalFiles, StoreGroups } from '../port.js';
 import type { WireError } from './error-codec.js';
 
 /** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every write. */
@@ -16,9 +16,9 @@ export type OpPlaces<G> = { readonly [M in keyof G]: OpPlace };
 
 type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 
-/** Every store method but hippo.db's local files, so a served store runs no SQLite on the server thread. Tagged by
- * effect: predictionBaserate (audit row) and bumpRecallStats (stats.json) write; an `openStore` read is a read, as the
- * writer runs that open's setup before any reader serves. */
+/** Every store method but most of hippo.db's local files, so a served store runs no SQLite on the server thread.
+ * Tagged by effect: predictionBaserate (audit row) and bumpRecallStats (stats.json) write; an `openStore` read is a
+ * read, as the writer runs that open's setup before any reader serves. */
 export const WORKER_OPS = {
   base: {
     findApiKey: 'read',
@@ -242,8 +242,18 @@ export const WORKER_OPS = {
     markSnapshotSaved: 'write',
     saveCallerItems: 'write',
   },
+  // The local-files methods a route calls on a served store (promote, hippo_peers); the rest of LocalFiles stays in
+  // process, where only the CLI and the sleep child call it.
+  promotion: {
+    writeCopy: 'write',
+  },
+  sharing: {
+    sourceTallies: 'read',
+  },
 } as const satisfies { readonly [G in Exclude<keyof StoreGroups, 'localFiles'>]: OpPlaces<StoreGroups[G]> } & {
   readonly base: OpPlaces<BaseMethods>;
+  readonly promotion: OpPlaces<LocalFiles['promotion']>;
+  readonly sharing: OpPlaces<Pick<LocalFiles['sharing'], 'sourceTallies'>>;
 };
 
 /** Sent by the executor itself and by no store method: the writer runs the store's open-time setup once, before any

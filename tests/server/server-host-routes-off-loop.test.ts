@@ -1,8 +1,9 @@
-// Drill, outcome, context, sleep, both webhooks, POST /mcp, GET /mcp/stream, /health and /ready answer from store
-// workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
+// Drill, outcome, context, promote, sleep, both webhooks, POST /mcp, GET /mcp/stream, /health and /ready answer from
+// store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
@@ -35,6 +36,7 @@ const as = (who: keyof Callers = 'main'): string => seed.keys[who];
 const drill = (tail: string, who?: keyof Callers): Send => (s) => get(s, `/v1/recall/drill/${tail}`, as(who));
 const context = (query: string, who?: keyof Callers): Send => (s) => get(s, `/v1/context${query}`, as(who));
 const outcome = (body: JsonValue, who?: keyof Callers): Send => (s) => post(s, '/v1/outcome', body, as(who));
+const promote = (id: string, who?: keyof Callers): Send => (s) => post(s, `/v1/memories/${id}/promote`, {}, as(who));
 const rpc = (method: string, params?: JsonValue): JsonValue =>
   (params === undefined ? { jsonrpc: '2.0', id: 1, method } : { jsonrpc: '2.0', id: 1, method, params });
 const tool = (name: string, args: JsonValue = {}, who?: keyof Callers): Send =>
@@ -97,6 +99,9 @@ const V1_STEPS: readonly Step[] = [
   ['context with no query', context(''), 200],
   ['context as a member', context('?q=deploy', 'member'), 200],
   ['context with an unknown key', context('?q=deploy', 'unknown'), 401],
+  ['promote', promote('mem_p_noise'), 200],
+  ['promote a missing memory', promote(MISSING), 404],
+  ['promote as the other tenant', promote('mem_p_plain', 'other'), 404],
   ['sleep, a dry run', (s) => post(s, '/v1/sleep', { dry_run: true }, as()), 200],
   ['sleep as a tenant admin', (s) => post(s, '/v1/sleep', { dry_run: true }, as('other')), 403],
 ];
@@ -122,7 +127,9 @@ const HOST_STEPS: readonly Step[] = [
   ['mcp context as a member', tool('hippo_context', {}, 'member'), 200],
   ['mcp outcome', tool('hippo_outcome', { good: true }), 200],
   ['mcp remember', tool('hippo_remember', { text: 'the canary needs ten minutes of traffic' }), 200],
-  ['mcp peers, on the server thread', tool('hippo_peers'), 200],
+  ['mcp share', tool('hippo_share', { id: 'mem_p_plain', force: true }), 200],
+  ['mcp share a missing memory', tool('hippo_share', { id: MISSING }), 200],
+  ['mcp peers', tool('hippo_peers'), 200],
   ['mcp resolve', tool('hippo_resolve', { conflict_id: 1, keep: 'mem_p_plain' }), 200],
   ['mcp resolve, rejecting the loser', tool('hippo_resolve', { conflict_id: 2, keep: 'mem_p_fill0', rejectLoser: true }), 200],
   ['mcp unknown tool', tool('hippo_nope'), 200],
@@ -148,6 +155,8 @@ function copy() {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT, FAKE_NOW);
     for (const [a, b] of [['mem_p_plain', 'mem_p_noise'], ['mem_p_fill0', 'mem_x_cafe']]) db.prepare(CONFLICT).run(a, b, FAKE_NOW, FAKE_NOW, TENANT);
   });
+  // A promote or share embeds its copy after the reply, so a provider would race the server's stop.
+  writeFileSync(join(made.globalRoot, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
   return made;
 }
 
@@ -172,14 +181,20 @@ async function onServer<T>(root: string, store: HippoStore | undefined, use: (se
   }
 }
 
+/** A global copy's id and its source's folder label are minted per run. */
+const runFree = (text: string): string => text.replace(/g_[0-9a-f]+/g, '<global>').replace(/hippo-parity-[\w-]+/gi, '<home>');
+
 /** Connector writes mint random memory ids, so rows are compared by content, in sorted order. */
-const rowsAt = (root: string): string[] => leftBehind(root).map((row) => scrub(row)).sort();
+const rowsAt = (root: string): string[] => leftBehind(root).map((row) => runFree(scrub(row))).sort();
 
 async function runSteps(inProcess: boolean) {
   const { root, globalRoot } = copy();
   const replies = await onServer(root, inProcess ? sqliteStore(root) : undefined, async (server) => {
     const seenSoFar = [];
-    for (const [label, send] of STEPS) seenSoFar.push(await seen(label, await send(server), seed.keyIds));
+    for (const [label, send] of STEPS) {
+      const reply = await seen(label, await send(server), seed.keyIds);
+      seenSoFar.push({ ...reply, body: runFree(reply.body) });
+    }
     return seenSoFar;
   });
   return { replies, audit: auditRows(root, seed.keyIds), stored: rowsAt(root), global: rowsAt(globalRoot), mirrors: mirrorFiles(root) };
@@ -227,6 +242,11 @@ describe('the routes moved off the server thread, on store workers against the i
     expect(bodyOf['mcp stream']).toBe(': ping\n\n');
     expect(bodyOf['mcp resolve']).toContain('weakened');
     expect(bodyOf['mcp resolve, rejecting the loser']).toContain('rejected (tombstoned) and removed');
+    expect(bodyOf['promote']).toBe('{"ok":true,"sourceId":"mem_p_noise","globalId":"<global>"}');
+    expect(bodyOf['mcp share']).toContain('Shared [<global>] to global store');
+    // The promoted and the shared copy both name the project folder.
+    expect(bodyOf['mcp peers']).toContain('<home>: 2 memories');
+    expect(onWorkers.global.filter((row) => row.startsWith('memories '))).toHaveLength(3);
   });
 });
 
@@ -241,6 +261,8 @@ describe("the server-thread block of the routes this file covers", () => {
     ['GET /mcp/stream', (p) => ({ findApiKey: p.findApiKey }), stream(), 501],
     ['POST /mcp, which answers in JSON-RPC', (p) => ({ searchRecallEntries: p.searchRecallEntries }), tool('hippo_recall', { query: 'deploy' }), 200],
     ['POST /mcp hippo_resolve', (p) => ({ conflicts: p.conflicts }), tool('hippo_resolve', { conflict_id: 2, keep: 'mem_p_fill0', rejectLoser: true }), 200],
+    ['POST /v1/memories/:id/promote', (p) => ({ entriesByIds: p.entriesByIds }), promote('mem_p_noise'), 501],
+    ['POST /mcp hippo_share', (p) => ({ entriesByIds: p.entriesByIds }), tool('hippo_share', { id: 'mem_p_plain', force: true }), 200],
   ];
 
   it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, swapped, send, status) => {

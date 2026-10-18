@@ -53,8 +53,6 @@ interface ToolEntry {
   readonly run: ToolHandler;
   /** The optional group it needs; unset, it runs under any store. */
   readonly storeReady?: OptionalGroup;
-  /** Why a server runs it on its own thread: a store write it makes takes a function, which no worker can run. */
-  readonly onServerThread?: string;
 }
 
 /** A tool that runs only under a store with the optional `group`. */
@@ -77,13 +75,6 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_share', toolOn('localFiles', runShareTool)],
   ['hippo_peers', toolOn('localFiles', runPeersTool)],
 ]);
-
-/** A tool call a server runs on its own thread: localFiles has no worker, and some writes take a function. */
-export function runsOnServerThread(req: McpRequest): boolean {
-  const name = req.params?.name;
-  const entry = req.method === 'tools/call' && isJsonString(name) ? TOOL_HANDLERS.get(name) : undefined;
-  return entry !== undefined && (entry.storeReady === 'localFiles' || entry.onServerThread !== undefined);
-}
 
 /** A call with no context yet (tools/list on stdio) lists every tool. */
 function runsOn(store: HippoStore | undefined, toolName: string): boolean {

@@ -1,14 +1,14 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
 import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
-import type { ConnectorEvent, FolderStore } from '../../store/port.js';
+import type { ConnectorEvent } from '../../store/port.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../core/memory.js';
 import { isSharedStore } from '../../core/config.js';
 import { fallbackOrigin } from '../../core/project-identity.js';
 import { detectSecret } from '../../util/secret-detect.js';
-import { embedMemory, folderIndex } from '../../search/embed-memories.js';
+import { embedMemory } from '../../search/embed-memories.js';
 import { configOf } from '../config-of.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context } from '../types.js';
 import { canTouchScope, isPersonalScope, isQuarantineScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
@@ -18,57 +18,37 @@ export interface PromoteResult {
   sourceId: string;
   globalId: string;
 }
-export function promote(
-  ctx: ContextWith<'localFiles'>,
-  id: string,
-): PromoteResult {
-  // Pre-check the row's tenant_id and deny cross-tenant access with archiveRaw's not-found wording (no leak about
-  // whether the id exists in another tenant).
-  const reach = ctx.store.localFiles.promotion.reach(id);
-  if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
-    throw new NotFoundError(`memory not found: ${id}`);
-  }
+export async function promote(ctx: Context, id: string): Promise<PromoteResult> {
+  // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing of either.
+  const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
+  if (!entry || !canTouchScope(ctx.actor, entry.scope ?? null)) throw new NotFoundError(`memory not found: ${id}`);
   // sqliteReach sets it beside hippo.db's files, so only a context built without a reach lacks it.
   const target = ctx.reach?.globalTarget;
   if (target === undefined) throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
+  assertPromotable(id, entry);
 
   // The 'promote' row commits with the global copy, so no write
   // follows the commit and a busy store fails the whole promote.
-  const globalEntry = copyToGlobal({ root: ctx.hippoRoot, store: ctx.store }, target, id, {
+  const globalEntry = globalCopyOf(ctx.hippoRoot, entry);
+  await target.store.localFiles.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
-    tenantId: ctx.tenantId,
+    sourceId: id,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
   // A promote may create the global store, which only the write target names before it exists; this never rejects.
-  void embedMemory(folderIndex(target), globalEntry);
+  void embedMemory({ hippoRoot: target.root, store: target.store }, globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 
-interface PromoteOptions {
-  readonly actor: string;
-  readonly tenantId: string;
-  readonly auditAs: { readonly tenantId: string; readonly actor: string };
-}
-
-/** Copies a local memory to the global store and returns the copy, which gets a new `g_` id so it cannot collide;
- * the caller embeds it. */
-function copyToGlobal(local: FolderStore, global: FolderStore, id: string, opts: PromoteOptions): MemoryEntry {
-  const entry = local.store.localFiles.learning.readEntry(id, opts.tenantId);
-  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
-  assertPromotable(id, entry);
-
-  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and
-  // the label names no path.
-  const globalEntry: MemoryEntry = {
+/** The copy of a local memory, with a new `g_` id so it cannot collide. A project store's NULL row gets its folder
+ * back; a shared store's folder is no caller's project, so NULL stays and the label names no path. */
+function globalCopyOf(localRoot: string, entry: MemoryEntry): MemoryEntry {
+  return {
     ...entry,
     id: generateId('g'),
-    source: isSharedStore(local.root) ? `shared::${new Date().toISOString()}` : `promoted:${local.root}`,
-    origin_project: entry.origin_project ?? fallbackOrigin(local.root),
+    source: isSharedStore(localRoot) ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
+    origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
-  const to = global.store.localFiles;
-  to.ensureFiles();
-  to.promotion.writeCopy(globalEntry, { actor: opts.actor, sourceId: id, auditAs: opts.auditAs });
-  return globalEntry;
 }
 
 function assertPromotable(id: string, entry: MemoryEntry): void {

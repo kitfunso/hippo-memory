@@ -28,10 +28,13 @@ import {
 function workerOps(hippoRoot: string, graphs: VectorGraphs | undefined) {
   const handles = handlesOf(hippoRoot);
   const packed = (ids: readonly string[]) => packVectors(handles.on((db) => loadStoredVectorViewsAt(db, ids)));
+  const sync = sqliteSyncStore(hippoRoot);
   return {
-    ...sqliteSyncStore(hippoRoot),
+    ...sync,
     vectors: { ...sqliteVectorReads(handles, graphs), storedVectors: packed },
     vectorViews: { storedVectorViews: packed },
+    promotion: sync.localFiles.promotion,
+    sharing: sync.localFiles.sharing,
   };
 }
 
