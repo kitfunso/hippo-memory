@@ -5,7 +5,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { remember as apiRemember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';

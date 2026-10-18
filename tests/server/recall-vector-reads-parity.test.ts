@@ -10,7 +10,7 @@ import { folderVectorSource, hybridSearch } from '../../src/entry/folder-search.
 import { resolveVectorArm } from '../../src/search/vector.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { shareRoot } from '../_helpers/share-root.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from '../_helpers/context-fixture.js';

@@ -10,7 +10,7 @@ import {
 } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
-import { lastRecalledIds, resolveClientKey } from '../../src/mcp/session-state.js';
+import { lastRecalledIds, resolveClientKey } from '../../src/api/recall/last-recalled.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';

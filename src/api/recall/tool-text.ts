@@ -1,15 +1,16 @@
 // Text the MCP recall and context tools print, and what each printed piece costs the token budget.
 
-import { truncateWithEllipsis } from '../util/ellipsize.js';
-import type { SearchResult } from '../core/search-types.js';
-import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
-import { confidenceLabel } from '../core/memory.js';
-import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api/index.js';
-import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
-import { printedTokens } from '../api/context-render.js';
-import { detectAnchoring } from '../api/recall/finish.js';
-import { detectAvailabilityBias } from '../api/availability.js';
-import { estimateTokens } from '../util/token-text.js';
+import { truncateWithEllipsis } from '../../util/ellipsize.js';
+import type { SearchResult } from '../../core/search-types.js';
+import type { SessionEvent, TaskSnapshot } from '../../store/rows.js';
+import { confidenceLabel } from '../../core/memory.js';
+import type { ContextCost } from '../context-types.js';
+import type { ContinuityBlock, RecallResult, RecallResultItem } from './types.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from '../../core/handoff.js';
+import { printedTokens } from '../context-render.js';
+import { detectAnchoring } from './finish.js';
+import { detectAvailabilityBias } from '../availability.js';
+import { estimateTokens } from '../../util/token-text.js';
 
 const MCP_PREVIEW_CHARS = 200;
 

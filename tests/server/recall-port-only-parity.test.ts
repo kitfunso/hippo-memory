@@ -7,7 +7,7 @@ import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';

@@ -11,7 +11,7 @@ import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';

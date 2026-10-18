@@ -9,7 +9,7 @@ import {
   MCP_LEARN,
 } from '../api/index.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
-import { lastRecalledIds, resolveClientKey } from './session-state.js';
+import { lastRecalledIds, resolveClientKey } from '../api/recall/last-recalled.js';
 
 export async function runRememberTool(
   { args, ctx, hippoRoot, config, tenantId, store }: ToolCall

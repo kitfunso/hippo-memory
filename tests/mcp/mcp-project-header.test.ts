@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../../src/entry/project-identity.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';

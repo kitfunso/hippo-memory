@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
