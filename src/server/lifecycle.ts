@@ -1,5 +1,6 @@
 // Graceful shutdown and the socket deadlines for hippo's HTTP listeners: the API server and the dashboard.
 import type { Server, ServerResponse } from 'node:http';
+import { envBodyTimeoutMs } from '../util/env.js';
 import { bodyDeadlineMs } from '../util/http-util.js';
 import { log } from '../util/log.js';
 
@@ -14,7 +15,10 @@ export function setKeepAliveTimeouts(server: Server): void {
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 70_000;
   // Never below what a raised body deadline allows, or Node's bare 408 would come before the route's own.
-  server.requestTimeout = Math.max(REQUEST_RECEIVE_TIMEOUT_MS, server.headersTimeout + bodyDeadlineMs());
+  server.requestTimeout = Math.max(
+    REQUEST_RECEIVE_TIMEOUT_MS,
+    server.headersTimeout + bodyDeadlineMs(envBodyTimeoutMs()),
+  );
 }
 
 export const DEFAULT_SHUTDOWN_DRAIN_MS = 5000;

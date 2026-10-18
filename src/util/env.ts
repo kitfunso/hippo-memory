@@ -1,6 +1,7 @@
-// The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other read.
-// Accessors read at call time, so a test that sets a variable between cases, or a HIPPO_HOME switch mid-process, still
-// holds.
+// The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other read, and on an
+// import of this module outside the roots, the adapters and the eval switches. Accessors read at call time, so a test
+// that sets a variable between cases still holds.
+import type { RuntimeSettings } from '../core/config.js';
 
 function raw(name: string): string | undefined {
   return process.env[name];
@@ -130,20 +131,35 @@ export function envFakeNowMs(): number | null {
 export function envLossAversionRatio(): string | undefined {
   return raw('HIPPO_LOSS_AVERSION_RATIO');
 }
-export function envSummaryDeboost(): string | undefined {
+function envSummaryDeboost(): string | undefined {
   return raw('HIPPO_SUMMARY_DEBOOST');
 }
-export function envAutodebiasOff(): boolean {
+function envAutodebiasOff(): boolean {
   return flagIsOff('HIPPO_AUTODEBIAS');
 }
-export function envAnchoringOff(): boolean {
+function envAnchoringOff(): boolean {
   return flagIsOff('HIPPO_ANCHORING');
 }
-export function envAvailabilityOff(): boolean {
+function envAvailabilityOff(): boolean {
   return flagIsOff('HIPPO_AVAILABILITY');
 }
-export function envDagRebuildCap(): number | undefined {
+function envDagRebuildCap(): number | undefined {
   return positiveInt('HIPPO_DAG_REBUILD_CAP');
+}
+
+/** The settings a root hands down in HippoConfig.runtime; an unset number or scope stays undefined. */
+export function envRuntimeSettings(): RuntimeSettings {
+  const deboost = envSummaryDeboost();
+  return {
+    anchoringHint: !envAnchoringOff(),
+    availabilityHint: !envAvailabilityOff(),
+    autodebias: !envAutodebiasOff(),
+    requireSessionScopedFreshTail: envRequireSessionScopedFreshTail(),
+    summaryDeboost: deboost === undefined ? undefined : Number.parseFloat(deboost),
+    queryEmbedTimeoutMs: envQueryEmbedTimeoutMs(),
+    dagRebuildCap: envDagRebuildCap(),
+    activeScope: envActiveScope() ?? undefined,
+  };
 }
 
 // Paths. HIPPO_HOME and XDG_DATA_HOME come back trimmed, possibly empty.
@@ -174,14 +190,9 @@ export function envHippoSessionId(): string | undefined {
 export function envClaudeCodeSessionId(): string | undefined {
   return trimmed('CLAUDE_CODE_SESSION_ID');
 }
-export function envScope(): string | undefined {
-  return raw('HIPPO_SCOPE');
-}
-export function envGstackSkill(): string | undefined {
-  return raw('GSTACK_SKILL');
-}
-export function envOpenclawSkill(): string | undefined {
-  return raw('OPENCLAW_SKILL');
+/** The operational scope, trimmed: HIPPO_SCOPE, else GSTACK_SKILL, else OPENCLAW_SKILL; null when none is set. */
+export function envActiveScope(): string | null {
+  return trimmed('HIPPO_SCOPE') ?? trimmed('GSTACK_SKILL') ?? trimmed('OPENCLAW_SKILL') ?? null;
 }
 
 /** The tenant of a store that names none. */
@@ -205,7 +216,7 @@ export function envMcpStdio(): boolean {
 export function envRequireServer(): boolean {
   return flag('HIPPO_REQUIRE_SERVER');
 }
-export function envRequireSessionScopedFreshTail(): boolean {
+function envRequireSessionScopedFreshTail(): boolean {
   return flag('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
 }
 export function envStdinWaitMs(): number | undefined {
@@ -319,7 +330,7 @@ export function envJevModel(): string | undefined {
  * How long a recall waits for an API provider to embed its query before ranking on BM25 alone; search/vector.ts holds
  * the default.
  */
-export function envQueryEmbedTimeoutMs(): number | undefined {
+function envQueryEmbedTimeoutMs(): number | undefined {
   return positiveInt('HIPPO_QUERY_EMBED_TIMEOUT_MS');
 }
 export function envLlmRerankerUrl(): string | undefined {

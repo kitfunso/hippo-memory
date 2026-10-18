@@ -156,6 +156,28 @@ export interface HippoConfig {
   /** The store serves many people, so a write that names no project is stamped NULL, never this folder's project,
    *  and a context read must name the caller's project. Default false. Read it through isSharedStore. */
   sharedStore: boolean;
+  /** What the composition root read from the environment for this command or request; config.json never sets it. */
+  runtime?: RuntimeSettings;
+}
+
+/** Process settings a root reads from env vars; each absent field takes the default its reader names. */
+export interface RuntimeSettings {
+  /** HIPPO_ANCHORING=off turns the anchoring hint off; on by default. */
+  readonly anchoringHint?: boolean;
+  /** HIPPO_AVAILABILITY=off turns the availability hint off; on by default. */
+  readonly availabilityHint?: boolean;
+  /** HIPPO_AUTODEBIAS=off skips the planning-fallacy claim check; on by default. */
+  readonly autodebias?: boolean;
+  /** HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1 refuses a fresh tail that names no session. */
+  readonly requireSessionScopedFreshTail?: boolean;
+  /** HIPPO_SUMMARY_DEBOOST, used only inside (0, 1]. */
+  readonly summaryDeboost?: number;
+  /** HIPPO_QUERY_EMBED_TIMEOUT_MS: how long a recall waits for its query vector. */
+  readonly queryEmbedTimeoutMs?: number;
+  /** HIPPO_DAG_REBUILD_CAP: summaries one sleep rebuilds. */
+  readonly dagRebuildCap?: number;
+  /** HIPPO_SCOPE, else GSTACK_SKILL, else OPENCLAW_SKILL: the scope recall boosts. */
+  readonly activeScope?: string;
 }
 
 /** The `embeddings` block, which the embedding provider reads alone. */
@@ -417,11 +439,12 @@ export type ConfigReader = (hippoRoot: string) => HippoConfig;
 
 const PARSED_CONFIGS_MAX = 64;
 
-/** A loadConfig whose parses belong to the root that made it, so two servers in one process never share one. */
-export function configReader(): ConfigReader {
+/** A loadConfig whose parses belong to the root that made it, so two servers in one process never share one.
+ * `runtime` is the root's environment read, taken on each call so every command or request sees the current one. */
+export function configReader(runtime?: () => RuntimeSettings): ConfigReader {
   // Keyed by the file's stamp, so an unchanged file costs one stat and no parse, and an edit shows on the next call.
   const parsed = new Map<string, { stamp: string | null; config: HippoConfig }>();
-  return (hippoRoot) => {
+  const read = (hippoRoot: string): HippoConfig => {
     if (hippoRoot === '') return { ...DEFAULT_CONFIG };
     const configPath = path.join(hippoRoot, 'config.json');
     const key = path.resolve(configPath);
@@ -433,6 +456,7 @@ export function configReader(): ConfigReader {
     parsed.set(key, { stamp, config });
     return { ...config };
   };
+  return runtime === undefined ? read : (hippoRoot) => ({ ...read(hippoRoot), runtime: runtime() });
 }
 
 /** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync

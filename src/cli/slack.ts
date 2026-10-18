@@ -1,6 +1,11 @@
 // `hippo slack`: backfill, dead-letter queue and workspace registry for the Slack connector.
 
-import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../util/env.js';
+import {
+  envSlackAllowUnknownTeamFallback,
+  envSlackBotToken,
+  envSlackSigningSecret,
+  envSlackTeamId,
+} from '../util/env.js';
 import * as api from '../api/index.js';
 import { listDlq } from '../connectors/dlq.js';
 import { replayDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
@@ -60,7 +65,11 @@ async function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliF
 async function cmdSlackDlqReplay(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const ctx = cliApiContext(hippoRoot, tenantId);
   await runDlqReplay('slack', args[2], flags, (id, force) =>
-    replayDlqEntry(ctx, id, { force, signingSecret: envSlackSigningSecret() }),
+    replayDlqEntry(ctx, id, {
+      force,
+      signingSecret: envSlackSigningSecret(),
+      allowUnknownTeamFallback: envSlackAllowUnknownTeamFallback(),
+    }),
   );
 }
 

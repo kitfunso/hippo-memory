@@ -4,7 +4,7 @@ import { indexedModel, indexNeedsRebuild } from '../embeddings/index-identity.js
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
-import { envQueryEmbedTimeoutMs } from '../util/env.js';
+import type { RuntimeSettings } from '../core/config.js';
 import type { HippoStore, VectorReads } from '../store/index.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
@@ -38,21 +38,24 @@ export interface VectorArmOptions extends CurrentnessOptions {
   vectorCandidates?: HybridVectorCandidates;
   /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
   queryEmbedDeadline?: AbortSignal;
+  /** The root's settings; a fresh budget lasts its `queryEmbedTimeoutMs`. */
+  runtime?: Pick<RuntimeSettings, 'queryEmbedTimeoutMs'>;
 }
 
 // Jev's default budget (rerankers/jev.ts): each is one off-box call that a recall waits on.
 const QUERY_EMBED_BUDGET_MS = 5_000;
 
 /**
- * How long one recall waits for its query vector, retries included; HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default.
+ * How long one recall waits for its query vector, retries included; the root's HIPPO_QUERY_EMBED_TIMEOUT_MS overrides
+ * the default.
  */
-function queryEmbedBudgetMs(): number {
-  return envQueryEmbedTimeoutMs() ?? QUERY_EMBED_BUDGET_MS;
+function queryEmbedBudgetMs(configured: number | undefined): number {
+  return configured ?? QUERY_EMBED_BUDGET_MS;
 }
 
 /** One deadline for every query embedding a recall makes, so two stores or a physics fallback share the budget. */
-export function startQueryEmbedDeadline(): AbortSignal {
-  return AbortSignal.timeout(queryEmbedBudgetMs());
+export function startQueryEmbedDeadline(configuredMs?: number): AbortSignal {
+  return AbortSignal.timeout(queryEmbedBudgetMs(configuredMs));
 }
 
 /**
@@ -146,11 +149,12 @@ async function fillVectorArm(
   );
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
-  const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(), provider, query);
+  const configuredMs = options.runtime?.queryEmbedTimeoutMs;
+  const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(configuredMs), provider, query);
   if (vec === null) {
     warnBm25Fallback(
       'query-embed-budget',
-      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs()} ms`,
+      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs(configuredMs)} ms`,
     );
     return;
   }

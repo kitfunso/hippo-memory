@@ -244,6 +244,7 @@ function graphStreamSearch(
   return hybridSearch(query, pool.local, {
     budget,
     cost,
+    runtime: ctx.config.runtime,
     source: vectorSourceOf(ctx),
     mmr,
     mmrLambda,
@@ -261,7 +262,7 @@ function graphStreamSearch(
   });
 }
 
-function multihopPoolSearch(opts: RankRecallOptions, pool: RecallPool): SearchResult[] {
+function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: RecallPool): SearchResult[] {
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
@@ -275,6 +276,7 @@ function multihopPoolSearch(opts: RankRecallOptions, pool: RecallPool): SearchRe
     minResults,
     includeSuperseded,
     asOf,
+    scope: ctx.config.runtime?.activeScope ?? null,
   });
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
@@ -293,7 +295,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
   const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
   const { mmr, mmrLambda, minResults, explain } = search;
   if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, pool);
-  if (search.multihop) return multihopPoolSearch(opts, pool);
+  if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
   const vectorCandidates = poolVectorCandidates(ctx, opts);
   if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
@@ -312,6 +314,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
         localBump: search.localBump,
         minResults,
         scope,
+        runtime: ctx.config.runtime,
         tenantId: ctx.tenantId,
         includeSuperseded,
         asOf,
@@ -330,6 +333,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
     budget,
     cost,
     scope,
+    runtime: ctx.config.runtime,
     explain,
     vectorCandidates,
     ...tuning,

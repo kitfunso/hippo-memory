@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { envBodyTimeoutMs } from './env.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
 
@@ -67,16 +66,16 @@ const DEFAULT_BODY_DEADLINE_MS = 30_000;
 
 /**
  * How long any route waits for a request body, so a client that sends headers and then stalls cannot hold a request
- * open: 30 s, or HIPPO_BODY_TIMEOUT_MS.
+ * open: 30 s, or the HIPPO_BODY_TIMEOUT_MS value the root read.
  */
-export function bodyDeadlineMs(): number {
-  return envBodyTimeoutMs() ?? DEFAULT_BODY_DEADLINE_MS;
+export function bodyDeadlineMs(configured?: number): number {
+  return configured ?? DEFAULT_BODY_DEADLINE_MS;
 }
 
 export interface ReadBodyOptions {
   /** Defaults to 1 MB. */
   maxBytes?: number;
-  /** Fails with BodyTimeoutError when the whole body has not arrived by then; defaults to bodyDeadlineMs(). */
+  /** Fails with BodyTimeoutError when the whole body has not arrived by then; defaults to 30 s. */
   deadlineMs?: number;
 }
 

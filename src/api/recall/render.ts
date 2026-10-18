@@ -2,7 +2,14 @@
 
 import type { SearchResult } from '../../core/search-types.js';
 import { estimateTokens } from '../../util/token-text.js';
-import { detectAnchoring, biasHintEnabled, snapshotRing, type AnchoringHint, type RingBuffer } from './finish.js';
+import {
+  detectAnchoring,
+  biasHintEnabled,
+  snapshotRing,
+  type AnchoringHint,
+  type HintConfig,
+  type RingBuffer,
+} from './finish.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import type { RecallSuppressionSummary } from './types.js';
 
@@ -72,11 +79,12 @@ export interface HintInputs {
   readonly queryHash: number;
 }
 
-/** Availability needs a pool only when its env switch is on, so callers skip building one otherwise. */
+/** Availability needs a pool only when its switch is on, so callers skip building one otherwise. */
 export function availabilityPool<E extends { id: string; created: string }>(
+  config: HintConfig,
   entries: () => ReadonlyArray<E>,
 ): Array<{ id: string; created: string }> | null {
-  return biasHintEnabled('availability') ? entries().map((e) => ({ id: e.id, created: e.created })) : null;
+  return biasHintEnabled(config, 'availability') ? entries().map((e) => ({ id: e.id, created: e.created })) : null;
 }
 
 export function detectRecallHints({ list, pool, anchorRing, queryHash }: HintInputs): RecallHints {

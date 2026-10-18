@@ -1,7 +1,7 @@
 /** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info,
  * debug); unset or unknown means warn. `HIPPO_LOG_FORMAT=json` writes JSON lines. */
 
-import { envLogJson, envLogLevel, validateFlags } from './env.js';
+import { envLogJson, envLogLevel } from './env.js';
 import { currentRequestId } from './request-scope.js';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
@@ -139,13 +139,6 @@ export const log = {
   warnThenDebug,
   warnThenSample,
 } as const;
-
-/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe side. */
-export function warnUnknownFlagValues(): void {
-  for (const entry of validateFlags()) {
-    log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);
-  }
-}
 
 /** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause
  * enrichment). */

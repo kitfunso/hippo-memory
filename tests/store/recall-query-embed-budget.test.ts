@@ -52,12 +52,17 @@ function seedStore(): string {
   return root;
 }
 
-async function recall(root: string): Promise<string[]> {
-  const reply = await retrieve(apiCtx(root, TENANT, { subject: 'cli', role: 'admin' }), {
-    query: QUERY,
-    mode: 'hybrid',
-    window: { limit: 20 },
-  });
+// The budget a root hands down from HIPPO_QUERY_EMBED_TIMEOUT_MS; unset means the default.
+async function recall(root: string, queryEmbedTimeoutMs?: number): Promise<string[]> {
+  const ctx = apiCtx(root, TENANT, { subject: 'cli', role: 'admin' });
+  const reply = await retrieve(
+    { ...ctx, config: { ...ctx.config, runtime: { queryEmbedTimeoutMs } } },
+    {
+      query: QUERY,
+      mode: 'hybrid',
+      window: { limit: 20 },
+    },
+  );
   return reply.results.map((r) => r.content);
 }
 
@@ -98,15 +103,14 @@ describe("a recall's query embedding", () => {
 
   it('falls back to BM25 within the budget when the provider never answers, and says so once', async () => {
     const root = seedStore();
-    vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', String(BUDGET_MS));
     embeddings.setFault('stall');
 
     const before = embeddings.requests();
 
     // The provider never answers, so a recall that returns at all returned at its deadline.
-    const shown = await recall(root);
+    const shown = await recall(root, BUDGET_MS);
     const sent = embeddings.requests() - before;
-    await recall(root);
+    await recall(root, BUDGET_MS);
 
     expect(shown).toEqual([LEXICAL]);
     expect(sent).toBe(1);
@@ -132,13 +136,12 @@ describe("a recall's query embedding", () => {
 
   it('ends within the budget when it runs out during the wait a 503 asked for', async () => {
     const root = seedStore();
-    vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', String(BUDGET_MS));
     // Two seconds is the longest wait the provider accepts under a deadline, far past the budget.
     embeddings.setStatus(503, 2);
     const before = embeddings.requests();
     const fetched = vi.spyOn(globalThis, 'fetch');
 
-    const shown = await recall(root);
+    const shown = await recall(root, BUDGET_MS);
 
     expect(shown).toEqual([LEXICAL]);
     // A wait that outlasted the deadline would go on to a second attempt, which the dead signal ends before it reaches the server.
@@ -160,11 +163,14 @@ describe("a recall's query embedding", () => {
 
   it('spends one budget, not two, when physics search hands a stalled query to hybrid search', async () => {
     const root = seedStore();
-    vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', String(BUDGET_MS));
     embeddings.setFault('stall');
     const before = embeddings.requests();
 
-    const ranked = await physicsSearch(QUERY, loadAllEntries(root, 'default'), { hippoRoot: root, budget: 1_000_000 });
+    const ranked = await physicsSearch(QUERY, loadAllEntries(root, 'default'), {
+      hippoRoot: root,
+      budget: 1_000_000,
+      runtime: { queryEmbedTimeoutMs: BUDGET_MS },
+    });
 
     expect(ranked.map((r) => r.entry.content)).toEqual([LEXICAL]);
     expect(embeddings.requests() - before).toBe(1);
@@ -174,7 +180,6 @@ describe("a recall's query embedding", () => {
   it('spends one budget, not two, across the local and the global store', async () => {
     const local = seedStore();
     const global = seedStore();
-    vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', String(BUDGET_MS));
     embeddings.setFault('stall');
     const before = embeddings.requests();
 
@@ -183,6 +188,7 @@ describe("a recall's query embedding", () => {
       tenantId: TENANT,
       recallScope: {},
       scope: null,
+      runtime: { queryEmbedTimeoutMs: BUDGET_MS },
     });
 
     expect([...new Set(ranked.map((r) => r.entry.content))]).toEqual([LEXICAL]);
@@ -226,7 +232,6 @@ describe("a recall's query embedding", () => {
 describe('the write-side embedding', () => {
   it('keeps its own long timeout: a provider slower than the recall budget still gets the memory embedded', async () => {
     const root = seedStore();
-    vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', '50');
     embeddings.setFault(250);
     const entry: MemoryEntry = createMemory('the release train leaves on tuesdays', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -237,6 +242,6 @@ describe('the write-side embedding', () => {
     await embedMemory(localIndex(root), entry);
 
     expect(loadEmbeddingIndex(root)[entry.id]).toHaveLength(16);
-    expect(await recall(root)).not.toContain(VECTOR_ONLY);
+    expect(await recall(root, 50)).not.toContain(VECTOR_ONLY);
   });
 });

@@ -5,8 +5,8 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import {
   envAblateDecay,
   envAllowKeylessLocal,
-  envAutodebiasOff,
   envRequireAuth,
+  envRuntimeSettings,
   validateFlags,
 } from '../../src/util/env.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -46,9 +46,9 @@ describe('flag spellings', () => {
   });
 
   it('keeps HIPPO_AUTODEBIAS=off meaning the hint is off', () => {
-    expect(envAutodebiasOff()).toBe(false);
+    expect(envRuntimeSettings().autodebias).toBe(true);
     vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
-    expect(envAutodebiasOff()).toBe(true);
+    expect(envRuntimeSettings().autodebias).toBe(false);
   });
 
   it('takes the safe side of an unknown spelling without throwing', () => {

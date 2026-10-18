@@ -1,6 +1,5 @@
 // Read path: one typed entry per recall ranker (retrieve, retrieveRanking; the CLI core is in request.ts).
 
-import { envRequireSessionScopedFreshTail } from '../../util/env.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../core/search-types.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import { boostByGoals } from '../../search/goal-boost.js';
@@ -48,7 +47,7 @@ type RankedResults = Awaited<ReturnType<typeof searchByEngine>>;
  * write; a surface that sets `recordAs` also has the recall recorded in full. */
 export async function retrieve(ctx: Context, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
-  const windowSize = recallWindowSize(opts.window);
+  const windowSize = recallWindowSize(ctx, opts.window);
   // From the authenticated actor, never from RecallOptions, which a caller fills in.
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
   const recordAs = opts.trace?.recordAs;
@@ -64,7 +63,7 @@ export async function retrieve(ctx: Context, opts: RecallOptions): Promise<Recal
  * ids `show` returns. `results` stays the top window of that ranking. `recordAs` is not read here. */
 export async function retrieveRanking(ctx: Context, opts: RecallOptions, show: ShowRanking): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
-  const windowSize = recallWindowSize(opts.window);
+  const windowSize = recallWindowSize(ctx, opts.window);
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
   const whole = await rankWholeStore(ctx, opts, windowSize, personalScope);
   // The caller traces and audits the rows it shows, so the window writes neither.
@@ -166,7 +165,10 @@ function rankByEngine(
   searchOpts: EngineSearchOptions,
 ): Promise<RankedResults> {
   const source = vectorSourceOf({ store: ctx.store, config: ctx.config, onHippoDb: ctx.reach?.isHippoDb });
-  return searchByEngine(source, opts.query, pool, physicsFor(ctx, opts), searchOpts);
+  return searchByEngine(source, opts.query, pool, physicsFor(ctx, opts), {
+    runtime: ctx.config.runtime,
+    ...searchOpts,
+  });
 }
 
 /** `first`, then the rows of `second` that `first` does not hold. */
@@ -305,12 +307,13 @@ function shownAuditAndTrace(ctx: Context, opts: RecallOptions, shownIds: readonl
 }
 
 /** Contract preflight: throws before any store-touching work. */
-function recallWindowSize(window: RecallWindowOptions = {}): number {
+function recallWindowSize(ctx: Context, window: RecallWindowOptions = {}): number {
   const { scorerWindow } = window;
   // Throw before the first store read, so a bad window never opens or migrates the store.
   // The consumer site at `if (freshTailCount > 0)` does NOT re-validate.
   const freshTailCountPreflight = window.freshTailCount ?? 0;
-  if (freshTailCountPreflight > 0 && !window.freshTailSessionId && envRequireSessionScopedFreshTail()) {
+  const sessionScoped = ctx.config.runtime?.requireSessionScopedFreshTail === true;
+  if (freshTailCountPreflight > 0 && !window.freshTailSessionId && sessionScoped) {
     throw new RecallContractError(
       'fresh_tail_requires_session_id',
       'fresh-tail requires a session id when HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1; ' +

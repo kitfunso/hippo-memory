@@ -1,11 +1,23 @@
-import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps, validateFlags } from '../util/env.js';
+import {
+  envAllowCleartext,
+  envCallerRps,
+  envLossAversionRatio,
+  envPort,
+  envRequireAuth,
+  envRuntimeSettings,
+  envStoreQueueMax,
+  envV1Rps,
+  validateFlags,
+} from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../store/port.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from '../store/sqlite/held-connection.js';
+import { createSqliteExecutor } from '../store/sqlite/executor.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { configReader } from '../core/config.js';
+import { setLossAversionRatio } from '../core/memory.js';
 import { auditWriteFailureCount } from '../core/audit-report.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { MINUTE_MS } from '../util/time.js';
@@ -395,6 +407,7 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
+  setLossAversionRatio(envLossAversionRatio());
 
   const routes = frozenAddonRoutes(opts.routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
@@ -482,14 +495,15 @@ function servedOptsFor(
   publicJsonBodies: ReadonlyMap<string, string>,
   { callerLimiter, failedAuthLimiter }: BootedLimiters,
 ): ResolvedServeOptions {
-  const store = opts.store ?? workerSqliteStore(opts.hippoRoot);
+  const executorOpts = { queueMax: envStoreQueueMax() };
+  const store = opts.store ?? workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, executorOpts));
   return {
     ...opts,
     routes,
     publicJsonBodies,
     store,
-    globalStores: globalStoresFor(store),
-    configAt: configReader(),
+    globalStores: globalStoresFor(store, executorOpts),
+    configAt: configReader(envRuntimeSettings),
     offLoop: offLoopFor(store),
     callerLimiter,
     failedAuthLimiter,

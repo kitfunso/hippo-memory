@@ -12,7 +12,7 @@ import { compareEntryIdentity } from '../../core/compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../util/same-text.js';
 import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
-import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
+import { autodebiasMode, decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import { passesScopeFilterForRecall } from '../../core/recall-scope.js';
 import type {
@@ -121,7 +121,7 @@ export function planRecall(
       (opts.window?.summarizeOverflow ?? true) && window.entries.length > limit
         ? overflowGroups(window, limit)
         : new Map(),
-    claim: detectPlanningClaim(opts.query),
+    claim: detectPlanningClaim(opts.query, { mode: autodebiasMode(ctx.config.runtime) }),
   };
 }
 
@@ -148,8 +148,8 @@ export function composeRecall(ctx: Context, opts: RecallOptions, options: Compos
     plan.claim && reads.planning
       ? decidePlanningFallacy(plan.claim, reads.planning, ctx.tenantId, ctx.actor.subject)
       : null;
-  const { anchoringHint, suppressedByInterference } = detectRecallAnchoring(opts, rankedOut[0]?.id ?? null);
-  const availabilityHint = detectRecallAvailability(opts, bands.baseSlice, window.entries);
+  const { anchoringHint, suppressedByInterference } = detectRecallAnchoring(ctx, opts, rankedOut[0]?.id ?? null);
+  const availabilityHint = detectRecallAvailability(ctx, opts, bands.baseSlice, window.entries);
 
   const result: RecallResult = {
     results: rankedOut,
@@ -452,9 +452,9 @@ function continuityTokensOf(c: ContinuityBlock): number {
 
 // A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect
 // call; CLI paths pass no history (cmdRecall computes its own hint), so the hint stays absent there.
-function detectRecallAnchoring(opts: RecallOptions, topMemoryId: string | null): AnchoringOutcome {
+function detectRecallAnchoring({ config }: Context, opts: RecallOptions, topMemoryId: string | null): AnchoringOutcome {
   const history = opts.hints?.recallHistory;
-  if (!biasHintEnabled('anchoring') || !history) return { anchoringHint: null, suppressedByInterference: 0 };
+  if (!biasHintEnabled(config, 'anchoring') || !history) return { anchoringHint: null, suppressedByInterference: 0 };
   const queryHash = hashQueryText(opts.query);
   const anchoringHint = detectAnchoring(history, queryHash, topMemoryId);
   return { anchoringHint, suppressedByInterference: anchoringHint?.reason === 'memory_dominance' ? 1 : 0 };
@@ -463,11 +463,12 @@ function detectRecallAnchoring(opts: RecallOptions, topMemoryId: string | null):
 // Compares the returned top-K's ages with the scope-filtered pool it came from, never `all`, whose hidden rows would
 // leak pool shape. A soft warning only; HIPPO_AVAILABILITY=off or a caller computing its own hint skips it.
 function detectRecallAvailability(
+  ctx: Context,
   opts: RecallOptions,
   baseSlice: MemoryEntry[],
   entries: MemoryEntry[],
 ): AvailabilityHint | null {
-  if (!biasHintEnabled('availability') || opts.hints?.suppressAvailabilityHint) return null;
+  if (!biasHintEnabled(ctx.config, 'availability') || opts.hints?.suppressAvailabilityHint) return null;
   return detectAvailabilityBias({
     topK: baseSlice.map((e) => ({ id: e.id, created: e.created })),
     pool: entries.map((e) => ({ id: e.id, created: e.created })),

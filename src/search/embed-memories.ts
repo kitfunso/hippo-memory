@@ -6,7 +6,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { MemoryEntry } from '../core/memory.js';
 import { initializeParticle } from '../core/physics.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
+import { apiKeyMissing, resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import type { EmbeddingsConfig, HippoConfig } from '../core/config.js';
 import {
   embeddingIndexIdentity,
@@ -26,7 +26,6 @@ import type {
 } from '../store/port.js';
 import type { EntryCursor } from '../store/port/consolidation.js';
 import { chunked } from '../util/chunked.js';
-import { envByName } from '../util/env.js';
 import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { MINUTE_MS } from '../util/time.js';
@@ -429,7 +428,7 @@ function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingPro
   // A configured API provider with a missing key is a misconfiguration: surface it so callers of the exported
   // embedAll() learn nothing was written.
   // Local-not-installed and an explicit enabled=false stay silent no-ops.
-  if (provider.kind !== 'local' && cfg.enabled !== false && provider.keyEnv && !envByName(provider.keyEnv)?.trim()) {
+  if (provider.kind !== 'local' && cfg.enabled !== false && apiKeyMissing(provider)) {
     throw new Error(`Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`);
   }
 }

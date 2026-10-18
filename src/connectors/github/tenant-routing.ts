@@ -1,4 +1,4 @@
-import { envGitHubAllowUnknownInstallationFallback, envTenant } from '../../util/env.js';
+import { envTenant } from '../../util/env.js';
 import type { HippoStore } from '../../store/index.js';
 
 export interface ResolveArgs {
@@ -11,10 +11,13 @@ export interface ResolveArgs {
 /** Resolve a GitHub envelope's tenant_id by installation id, then
  * repository.full_name; the HIPPO_TENANT fallback applies only if both tables are
  * empty. An unknown installation or repo on a multi-tenant deployment returns
- * null (fail closed); GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK=1 escapes. */
-export async function resolveTenantForGitHub(store: HippoStore, args: ResolveArgs): Promise<string | null> {
+ * null (fail closed); `escapeHatch`, the caller's GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK, escapes. */
+export async function resolveTenantForGitHub(
+  store: HippoStore,
+  args: ResolveArgs,
+  escapeHatch = false,
+): Promise<string | null> {
   const envFallback = (): string => envTenant();
-  const escapeHatch = envGitHubAllowUnknownInstallationFallback();
 
   const routing = await store.connectorEvents.githubRouting(args);
   if (routing.tenant) return routing.tenant;

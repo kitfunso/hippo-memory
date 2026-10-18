@@ -3,6 +3,7 @@
  * reacts to.
  */
 
+import { envAnthropicApiKey, envLlmTimeoutMs } from './env.js';
 import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
 import { errorFields, errorMessage, log } from './log.js';
 import { readCappedJson, readCappedText } from './capped-json.js';
@@ -44,6 +45,11 @@ export type AnthropicMessageFailure =
 
 export type AnthropicMessageResult = { ok: true; text: string } | { ok: false; failure: AnthropicMessageFailure };
 
+/** The key this client is configured with, ANTHROPIC_API_KEY; an adapter reads its own credential. */
+export function anthropicApiKey(): string | undefined {
+  return envAnthropicApiKey();
+}
+
 /** True for a failure the next call would repeat, so a caller looping over items should stop rather than retry. */
 export function isPermanentFailure(failure: AnthropicMessageFailure): boolean {
   return failure.kind === 'http' && PERMANENT_STATUSES.has(failure.status);
@@ -64,6 +70,7 @@ async function errorSnippet(res: Response): Promise<string> {
 
 /** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'. Never throws. */
 export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promise<AnthropicMessageResult> {
+  const timeoutMs = llmTimeoutMs(envLlmTimeoutMs());
   let res: Response;
   try {
     res = await fetchWithRetry(
@@ -81,7 +88,7 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
           messages: [{ role: 'user', content: req.prompt }],
         }),
       },
-      { timeoutMs: llmTimeoutMs(), totalMs: llmTotalMs(), fetchFn: req.fetcher ?? fetch },
+      { timeoutMs, totalMs: llmTotalMs(timeoutMs), fetchFn: req.fetcher ?? fetch },
     );
   } catch (err) {
     return { ok: false, failure: { kind: 'request', message: errorMessage(err) } };

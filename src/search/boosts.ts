@@ -1,5 +1,5 @@
-import { envSummaryDeboost } from '../util/env.js';
 import { calculateStrength, CHURN_STALE_TAG, DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
+import type { RuntimeSettings } from '../core/config.js';
 import { isOutcomeFastAblated, isRecencyAblated, evalRecencyScaleDays } from '../core/ablation.js';
 import { pathBoostMultiplier } from './path-context.js';
 import { scopeMatch } from '../core/active-scope.js';
@@ -52,19 +52,13 @@ export function isDagSummary(entry: MemoryEntry): boolean {
   return entry.dag_level === DAG_LEVEL.topic || entry.dag_level === DAG_LEVEL.entity;
 }
 
-/** Summary deboost: per-call, then HIPPO_SUMMARY_DEBOOST, then 0.85; values outside (0, 1] fall through. */
-export function resolveSummaryDeboost(perCall?: number): number {
-  if (perCall !== undefined && Number.isFinite(perCall) && perCall > 0 && perCall <= 1) {
-    return perCall;
-  }
-  const raw = envSummaryDeboost();
-  if (raw !== undefined) {
-    const parsed = parseFloat(raw);
-    if (Number.isFinite(parsed) && parsed > 0 && parsed <= 1) {
-      return parsed;
-    }
-  }
-  return DEFAULT_SUMMARY_DEBOOST;
+const isDeboost = (value: number | undefined): value is number =>
+  value !== undefined && Number.isFinite(value) && value > 0 && value <= 1;
+
+/** Summary deboost: per-call, then the root's HIPPO_SUMMARY_DEBOOST, then 0.85; values outside (0, 1] fall through. */
+export function resolveSummaryDeboost(perCall?: number, configured?: number): number {
+  if (isDeboost(perCall)) return perCall;
+  return isDeboost(configured) ? configured : DEFAULT_SUMMARY_DEBOOST;
 }
 
 /** 1.05 for a summary rebuilt within the window; null, unparseable and future timestamps get 1.0. */
@@ -84,8 +78,15 @@ export interface SummaryScoring {
 /** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its scores bit-identical. */
 export const NO_SUMMARY_SCORING: SummaryScoring = { deboost: 1, freshness: false };
 
-export function summaryScoring(options: { summaryDeboost?: number; summaryFreshness?: boolean }): SummaryScoring {
-  return { deboost: resolveSummaryDeboost(options.summaryDeboost), freshness: options.summaryFreshness ?? true };
+export function summaryScoring(options: {
+  summaryDeboost?: number;
+  summaryFreshness?: boolean;
+  runtime?: RuntimeSettings;
+}): SummaryScoring {
+  return {
+    deboost: resolveSummaryDeboost(options.summaryDeboost, options.runtime?.summaryDeboost),
+    freshness: options.summaryFreshness ?? true,
+  };
 }
 
 export function summaryMultipliers(entry: MemoryEntry, now: Date, s: SummaryScoring) {

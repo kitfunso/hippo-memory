@@ -1,9 +1,8 @@
 // Runs the adapters and routes each container to its store: the project pass, the user pass and their call sites (plan
 // designs 2, 8, 11).
-import { processEnv } from '../util/env.js';
-import os from 'node:os';
 import path from 'node:path';
 import { plural } from '../util/format.js';
+import type { Machine } from '../util/agent-homes.js';
 import { errorMessage } from '../util/log.js';
 import type { HippoConfig } from '../core/config.js';
 import type { MemoryEntry } from '../core/memory.js';
@@ -49,17 +48,6 @@ export const ADAPTERS: readonly Adapter[] = [
 
 /** Overrides config because `hippo init` creates the store in the same command that imports. */
 export const TOOLS_ENV = 'HIPPO_AGENT_MEMORY_TOOLS';
-
-/** Everything the adapters may know about the machine; tests hand in a scratch one. */
-export interface Machine {
-  readonly home: string;
-  readonly env: Readonly<Record<string, string | undefined>>;
-  readonly platform: NodeJS.Platform;
-}
-
-export function currentMachine(): Machine {
-  return { home: os.homedir(), env: processEnv(), platform: process.platform };
-}
 
 export interface SyncOptions {
   readonly machine: Machine;

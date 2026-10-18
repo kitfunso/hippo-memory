@@ -4,6 +4,7 @@ import { BadRequestError, ForbiddenError } from '../../core/api-errors.js';
 import type { SearchResult } from '../../core/search-types.js';
 import {
   decidePlanningFallacy,
+  autodebiasMode,
   detectPlanningClaim,
   type PlanningFallacyDecision,
 } from '../../predictions/planning-fallacy.js';
@@ -243,7 +244,7 @@ export async function retrieveWithCliCore(
 }
 
 async function planningFor(ctx: Context, store: HippoStore, query: string): Promise<PlanningFallacyDecision | null> {
-  const claim = detectPlanningClaim(query);
+  const claim = detectPlanningClaim(query, { mode: autodebiasMode(ctx.config.runtime) });
   if (!claim) return null;
   return decidePlanningFallacy(
     claim,

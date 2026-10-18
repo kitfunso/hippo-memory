@@ -3,7 +3,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { isGitRepo } from '../learn/autolearn.js';
-import { importForStore, currentMachine } from '../agent-memories/sync.js';
+import { importForStore } from '../agent-memories/sync.js';
+import { currentMachine } from '../util/agent-homes.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import * as api from '../api/index.js';
 import { cliConfig, cliApiContext, cliLocalFiles, cliSyncOptions } from './api-context.js';
