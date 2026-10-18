@@ -1,14 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { archiveRawMemory } from '../../src/store/raw-archive.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-const repoRoot = resolve(__dirname, '..', '..');
-const cli = resolve(repoRoot, 'dist', 'cli.js');
+import { runCliOut } from '../_helpers/run-cli-as.js';
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -19,18 +15,15 @@ function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 }
 
 describe('audit log captures every mutation', () => {
-  it('remember + recall both logged via CLI flow', () => {
-    if (!existsSync(cli)) {
-      throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
-    }
+  it('remember + recall both logged via CLI flow', async () => {
     // HIPPO_HOME is the global root in --global mode (see getGlobalRoot in
     // src/sharing/global-store.ts). Same pattern as tests/store/recall-why-envelope.test.ts.
     const home = makeRoot('audit-cli', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
-    execSync(`node "${cli}" init`, { env, cwd: home });
-    execSync(`node "${cli}" init --global`, { env, cwd: home });
-    execSync(`node "${cli}" remember "audit-canary-99 distinguishing token" --global`, { env, cwd: home });
-    execSync(`node "${cli}" recall "audit-canary-99"`, { env, cwd: home });
+    await runCliOut(['init'], { env, cwd: home });
+    await runCliOut(['init', '--global'], { env, cwd: home });
+    await runCliOut(['remember', 'audit-canary-99 distinguishing token', '--global'], { env, cwd: home });
+    await runCliOut(['recall', 'audit-canary-99'], { env, cwd: home });
 
     const db = openHippoDb(home);
     try {
@@ -43,15 +36,12 @@ describe('audit log captures every mutation', () => {
     }
   });
 
-  it('promote logs a promote event on the global store', () => {
-    if (!existsSync(cli)) {
-      throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
-    }
+  it('promote logs a promote event on the global store', async () => {
     const home = makeRoot('audit-promote', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
-    execSync(`node "${cli}" init`, { env, cwd: home });
-    execSync(`node "${cli}" init --global`, { env, cwd: home });
-    execSync(`node "${cli}" remember "audit-promote-canary-55 distinguishing token"`, { env, cwd: home });
+    await runCliOut(['init'], { env, cwd: home });
+    await runCliOut(['init', '--global'], { env, cwd: home });
+    await runCliOut(['remember', 'audit-promote-canary-55 distinguishing token'], { env, cwd: home });
     const localRoot = join(home, '.hippo');
     const dbLocal = openHippoDb(localRoot);
     let localId: string | undefined;
@@ -66,7 +56,7 @@ describe('audit log captures every mutation', () => {
     }
     expect(localId, 'expected to find local row id').toBeTruthy();
 
-    execSync(`node "${cli}" promote ${localId}`, { env, cwd: home });
+    await runCliOut(['promote', localId!], { env, cwd: home });
 
     // promote audit lands on the global store (HIPPO_HOME).
     const dbGlobal = openHippoDb(home);
@@ -80,14 +70,11 @@ describe('audit log captures every mutation', () => {
     }
   });
 
-  it('supersede logs a supersede event with newId metadata', () => {
-    if (!existsSync(cli)) {
-      throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
-    }
+  it('supersede logs a supersede event with newId metadata', async () => {
     const home = makeRoot('audit-supersede', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
-    execSync(`node "${cli}" init`, { env, cwd: home });
-    execSync(`node "${cli}" remember "audit-supersede-canary-33 old content"`, { env, cwd: home });
+    await runCliOut(['init'], { env, cwd: home });
+    await runCliOut(['remember', 'audit-supersede-canary-33 old content'], { env, cwd: home });
     const localRoot = join(home, '.hippo');
     const db = openHippoDb(localRoot);
     let oldId: string | undefined;
@@ -102,7 +89,7 @@ describe('audit log captures every mutation', () => {
     }
     expect(oldId, 'expected to find old row id').toBeTruthy();
 
-    execSync(`node "${cli}" supersede ${oldId} "audit-supersede-canary-33 new content"`, { env, cwd: home });
+    await runCliOut(['supersede', oldId!, 'audit-supersede-canary-33 new content'], { env, cwd: home });
 
     const db2 = openHippoDb(localRoot);
     try {
@@ -144,16 +131,13 @@ describe('audit log captures every mutation', () => {
     }
   });
 
-  it('forget logs a forget event', () => {
-    if (!existsSync(cli)) {
-      throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
-    }
+  it('forget logs a forget event', async () => {
     const home = makeRoot('audit-forget', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
     // Local store flow (cmdForget is local-store only). Remember + forget
     // both target the local .hippo dir under cwd=home.
-    execSync(`node "${cli}" init`, { env, cwd: home });
-    execSync(`node "${cli}" remember "audit-forget-canary-77 distinguishing token"`, { env, cwd: home });
+    await runCliOut(['init'], { env, cwd: home });
+    await runCliOut(['remember', 'audit-forget-canary-77 distinguishing token'], { env, cwd: home });
     const localRoot = join(home, '.hippo');
     const db = openHippoDb(localRoot);
     let rememberedId: string | undefined;
@@ -168,7 +152,7 @@ describe('audit log captures every mutation', () => {
     }
     expect(rememberedId, 'expected to find row id in local db').toBeTruthy();
 
-    execSync(`node "${cli}" forget ${rememberedId}`, { env, cwd: home });
+    await runCliOut(['forget', rememberedId!], { env, cwd: home });
 
     const db2 = openHippoDb(localRoot);
     try {

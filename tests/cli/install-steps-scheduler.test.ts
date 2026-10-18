@@ -1,6 +1,5 @@
 // The daily-runner install reaches schtasks and crontab as argv with no shell between; a stand-in runner records the calls, so no real scheduler runs.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import { setupDailySchedule } from '../../src/cli/install-steps.js';
 import { DAILY_TASK_NAME } from '../../src/cli/scheduler.js';
 
@@ -8,10 +7,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+// The runner's options type is private to the module, so it is read off the parameter.
+type SchedulerOptions = Parameters<NonNullable<Parameters<typeof setupDailySchedule>[1]>>[2];
+
 interface Call {
   readonly file: string;
   readonly args: readonly string[];
-  readonly opts: ExecFileSyncOptionsWithStringEncoding;
+  readonly opts: SchedulerOptions;
 }
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;

@@ -23,10 +23,9 @@ describe('hippo-memory/server entry types', () => {
   it('serve takes ServeOpts and resolves to a ServerHandle', () => {
     expectTypeOf(serve).parameters.toEqualTypeOf<[ServeOpts]>();
     expectTypeOf(serve).returns.toEqualTypeOf<Promise<ServerHandle>>();
-    // @ts-expect-error hippoRoot is required
-    typeOnly(() => serve({ port: 0 }));
-    // @ts-expect-error the argument is an options object
-    typeOnly(() => serve('/tmp/root'));
+    // hippoRoot is required, and the argument is an options object
+    expectTypeOf<{ port: number }>().not.toMatchTypeOf<ServeOpts>();
+    expectTypeOf<string>().not.toMatchTypeOf<ServeOpts>();
   });
 
   it('ServeOpts pins the fields an integrator sets', () => {

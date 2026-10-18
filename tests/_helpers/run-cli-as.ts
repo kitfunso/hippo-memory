@@ -11,7 +11,7 @@ import { _resetLossAversionRatioCacheForTests } from '../../src/core/memory.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { withHookStdin } from './hook-stdin.js';
 import { runInProcess, type InProcessResult } from './run-in-process.js';
-import { HIPPO_BIN } from './spawn-hippo.js';
+import { HIPPO_BIN } from './hippo-bin.js';
 
 export interface CliAsOptions {
   readonly cwd?: string;
@@ -77,4 +77,11 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
     if (opts.env) replaceEnv(savedEnv);
     resetProcessCaches();
   }
+}
+
+/** `runCliAs` that returns stdout and throws on a non-zero exit, as execFileSync did for a spawned hippo. */
+export async function runCliOut(args: readonly string[], opts: CliAsOptions = {}): Promise<string> {
+  const r = await runCliAs(args, opts);
+  if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
+  return r.stdout;
 }

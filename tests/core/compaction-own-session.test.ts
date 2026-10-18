@@ -2,9 +2,8 @@
 // Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import {
   COMPACTION_MEMORY_TAG,
   COMPACTION_SOURCE_PREFIX,
@@ -15,6 +14,7 @@ import {
 import { contextGet, retrieve } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
@@ -22,7 +22,6 @@ import { initStore } from '../../src/store/sqlite/handles.js';
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
 const OTHER = 'sess-other';
-const HIPPO_JS = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 let tmpRoot: string;
 let local: string;
@@ -237,15 +236,14 @@ describe('explicit recall is not filtered', () => {
     expect(result.results.map((r) => r.id).sort()).toEqual(wanted.sort());
   });
 
-  it('hippo recall returns them even when the calling session id is the items own', () => {
+  it('hippo recall returns them even when the calling session id is the items own', async () => {
     const { base: cliTmp, root: store } = makeStore('own-session-cli');
     const wanted = seedThree(store);
 
-    const out = execFileSync(process.execPath, [HIPPO_JS, 'recall', 'ledger export dry run', '--json'], {
+    const out = await runCliOut(['recall', 'ledger export dry run', '--json'], {
       env: { ...process.env, HIPPO_HOME: join(cliTmp, 'global'), HIPPO_SESSION_ID: OWN },
       cwd: cliTmp,
       input: JSON.stringify({ session_id: OWN }),
-      encoding: 'utf8',
     });
 
     // SAFETY: `hippo recall --json` prints one object whose results each carry an id.

@@ -1,12 +1,10 @@
 // codex-run starts whatever launcher the wrapper metadata names, and any process of the user can rewrite that file, so
 // it starts only the backup the installer made.
-import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { beforeEach, expect, it } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
+import { runCliAs } from '../_helpers/run-cli-as.js';
 
 let dir: string;
 
@@ -21,7 +19,7 @@ it.each([
     () => JSON.stringify({ realCodexPath: process.execPath, logFile: 'x' }),
   ],
   ['is not JSON', () => '{ not json'],
-])('starts nothing when the metadata %s, and names the file to reinstall', (_label, metadata) => {
+])('starts nothing when the metadata %s, and names the file to reinstall', async (_label, metadata) => {
   const metadataPath = path.join(dir, '.hippo', 'integrations', 'codex.json');
   fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
   fs.writeFileSync(metadataPath, metadata());
@@ -40,7 +38,7 @@ it.each([
     CODEX_HOME: path.join(dir, '.codex'),
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   };
-  const run = spawnSync(process.execPath, [HIPPO_JS, 'codex-run', '--', script], { cwd: dir, env, encoding: 'utf8' });
+  const run = await runCliAs(['codex-run', '--', script], { cwd: dir, env });
 
   expect(run.status).not.toBe(0);
   expect(run.stderr).toContain(

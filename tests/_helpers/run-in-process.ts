@@ -27,8 +27,12 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
   const keep = (sink: string[], text: string): void => {
     if (!exited) sink.push(text);
   };
-  const toErr = (...parts: unknown[]): void => {
-    keep(err, `${format(...parts)}\n`);
+  // Console output goes through the stream write, as in a real process, so a verb that tees the stream sees it.
+  const toStdout = (...parts: unknown[]): void => {
+    process.stdout.write(`${format(...parts)}\n`);
+  };
+  const toStderr = (...parts: unknown[]): void => {
+    process.stderr.write(`${format(...parts)}\n`);
   };
   // Node's write(chunk, cb) and write(chunk, encoding, cb): the drain callback fires at once, as on a drained stream.
   const drained = (rest: unknown[]): void => {
@@ -36,11 +40,9 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
   };
   const priorExitCode = process.exitCode;
   const spies = [
-    vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => {
-      keep(out, `${format(...parts)}\n`);
-    }),
-    vi.spyOn(console, 'error').mockImplementation(toErr),
-    vi.spyOn(console, 'warn').mockImplementation(toErr),
+    vi.spyOn(console, 'log').mockImplementation(toStdout),
+    vi.spyOn(console, 'error').mockImplementation(toStderr),
+    vi.spyOn(console, 'warn').mockImplementation(toStderr),
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array, ...rest: unknown[]) => {
       keep(out, String(chunk));
       drained(rest);
