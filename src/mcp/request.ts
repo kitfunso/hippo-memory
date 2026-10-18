@@ -73,10 +73,7 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_status', { run: runStatusTool }],
   ['hippo_learn', { run: runLearnTool }],
   ['hippo_conflicts', { run: runConflictsTool }],
-  ['hippo_resolve', {
-    run: runResolveTool,
-    onServerThread: "conflicts.resolve takes the reject fate's inReach test",
-  }],
+  ['hippo_resolve', { run: runResolveTool }],
   ['hippo_share', toolOn('localFiles', runShareTool)],
   ['hippo_peers', toolOn('localFiles', runPeersTool)],
 ]);

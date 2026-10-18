@@ -203,8 +203,7 @@ export const WORKER_OPS = {
   conflicts: {
     list: 'read',
     get: 'read',
-    // The reject fate carries the caller's inReach test.
-    resolve: 'server',
+    resolve: 'write',
   },
   dormant: {
     list: 'read',

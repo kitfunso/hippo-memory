@@ -123,7 +123,7 @@ const HOST_STEPS: readonly Step[] = [
   ['mcp outcome', tool('hippo_outcome', { good: true }), 200],
   ['mcp remember', tool('hippo_remember', { text: 'the canary needs ten minutes of traffic' }), 200],
   ['mcp peers, on the server thread', tool('hippo_peers'), 200],
-  ['mcp resolve, on the server thread', tool('hippo_resolve', { conflict_id: 1, keep: 'mem_p_plain' }), 200],
+  ['mcp resolve', tool('hippo_resolve', { conflict_id: 1, keep: 'mem_p_plain' }), 200],
   ['mcp resolve, rejecting the loser', tool('hippo_resolve', { conflict_id: 2, keep: 'mem_p_fill0', rejectLoser: true }), 200],
   ['mcp unknown tool', tool('hippo_nope'), 200],
   ['mcp with a bad body', (s) => postText(s, '/mcp', '{not json', as()), 400],
@@ -225,7 +225,7 @@ describe('the routes moved off the server thread, on store workers against the i
     expect(bodyOf['slack redelivery']).toBe('{"ok":true,"status":"duplicate","memoryId":"<memory>"}');
     expect(bodyOf['github deletion']).toContain('"status":"archived"');
     expect(bodyOf['mcp stream']).toBe(': ping\n\n');
-    expect(bodyOf['mcp resolve, on the server thread']).toContain('weakened');
+    expect(bodyOf['mcp resolve']).toContain('weakened');
     expect(bodyOf['mcp resolve, rejecting the loser']).toContain('rejected (tombstoned) and removed');
   });
 });
@@ -240,6 +240,7 @@ describe("the server-thread block of the routes this file covers", () => {
     ['POST /v1/connectors/github/events', (p) => ({ connectorEvents: p.connectorEvents }), github('d-1', comment('created')), 501],
     ['GET /mcp/stream', (p) => ({ findApiKey: p.findApiKey }), stream(), 501],
     ['POST /mcp, which answers in JSON-RPC', (p) => ({ searchRecallEntries: p.searchRecallEntries }), tool('hippo_recall', { query: 'deploy' }), 200],
+    ['POST /mcp hippo_resolve', (p) => ({ conflicts: p.conflicts }), tool('hippo_resolve', { conflict_id: 2, keep: 'mem_p_fill0', rejectLoser: true }), 200],
   ];
 
   it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, swapped, send, status) => {
