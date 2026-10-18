@@ -35,21 +35,14 @@ afterEach(undoAll);
 const REFUSED = 'the decision a person rejected';
 const BLOCKED_LINE = 'opened on the server thread by a route';
 
-/** An object route left on the server thread on purpose, by its label; each needs its reason beside it. */
-const ON_LOOP: readonly string[] = [];
-
 interface ObjectRoute {
   /** `METHOD /v1/<kind>[/:id[/verb]]`, a regex row read as its pattern would be. */
   readonly label: string;
-  readonly offLoop: boolean;
 }
 
 /** Every V1_ROUTES row under an object kind's path, in table order, read from the live table. */
 function objectRoutes(): ObjectRoute[] {
-  return V1_ROWS.filter(({ key }) => OBJECT_ROW.test(key)).map(({ key, route }) => ({
-    label: key,
-    offLoop: route.loop === 'off',
-  }));
+  return V1_ROWS.filter(({ key }) => OBJECT_ROW.test(key)).map(({ key }) => ({ label: key }));
 }
 
 interface Sent {
@@ -407,16 +400,17 @@ describe('the server-thread block of the object routes', () => {
   const blockedLines = (info: { readonly mock: { readonly calls: ReadonlyArray<readonly unknown[]> } }): string[] =>
     info.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(BLOCKED_LINE));
 
-  it("marks every object route `loop: 'off'`, and this file sends a request to each", () => {
-    const routes = objectRoutes();
-
-    expect(routes.filter((route) => !route.offLoop).map((route) => route.label)).toEqual(ON_LOOP);
-    expect(routes.map((route) => route.label).sort()).toEqual([...SENDS.keys()].sort());
+  it('sends a request to every object route', () => {
+    expect(
+      objectRoutes()
+        .map((route) => route.label)
+        .sort(),
+    ).toEqual([...SENDS.keys()].sort());
   });
 
   it('answers every one of them from the workers with no open of hippo.db on the server thread', async () => {
     const info = vi.spyOn(log, 'info');
-    const steps = routeSteps(objectRoutes().filter((route) => route.offLoop));
+    const steps = routeSteps(objectRoutes());
 
     const { replies } = await runSteps(steps, false);
 
@@ -429,7 +423,7 @@ describe('the server-thread block of the object routes', () => {
     const { keyIds, ...seeded } = seedStore(root);
     const before = [auditRows(root, keyIds), storedRows(root), mirrorFiles(root)];
     const info = vi.spyOn(log, 'info');
-    const steps = routeSteps(objectRoutes().filter((route) => route.offLoop));
+    const steps = routeSteps(objectRoutes());
     // The worker-backed store with the objects group swapped back to the in-process one: the defect the block exists to catch.
     const store = Object.assign(workerSqliteStore(root), { objects: sqliteStore(root).objects });
     const run: Run = { server: await start(root, store), ...seeded, newest: new Map() };

@@ -37,7 +37,7 @@ export interface AddonCall {
 }
 
 /** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the returned
- * value as 200 JSON. Unset, `storeReady` means hippo.db's local files; `loop: 'off'` fences it as a built-in row's. */
+ * value as 200 JSON. Unset, `storeReady` means hippo.db's local files; `loop: 'off'` runs it off-thread like core's. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
@@ -132,8 +132,8 @@ export type RouteEndpoint<R> =
   | { regex: RegExp; handler: (r: R, match: RegExpMatchArray) => Promise<void> };
 
 /** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with one method's handler. Under another
- * store it runs only with its `storeReady` group; `loop: 'off'` runs its SQLite work on a worker thread. */
-export type Route = { method: string; loop?: 'off' } & StoreStatus &
+ * store it runs only with its `storeReady` group; its SQLite work runs on a worker thread when the store has one. */
+export type Route = { method: string } & StoreStatus &
   (
     | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest>)
     | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
