@@ -9,7 +9,7 @@ import { refineStore, type RefineOptions } from '../../src/cli/refine-llm.js';
 import { Layer } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureError } from '../../src/learn/autolearn.js';
-import { recordTokenUse } from '../../src/store/token-ledger.js';
+import { recordTokenUse } from '../../src/store/sqlite/token-ledger.js';
 import type { TokenSurface } from '../../src/store/port/token-ledger.js';
 import { query, Store, type ExtraState, type Row } from '../_helpers/cli-parity-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

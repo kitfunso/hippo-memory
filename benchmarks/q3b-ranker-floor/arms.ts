@@ -9,7 +9,7 @@ import { envActiveScope as detectScope } from '../../dist/util/env.js';
 import type { SearchResult } from '../../dist/core/search-types.js';
 import { getGlobalRoot } from '../../dist/sharing/global-store.js';
 import { getHippoRoot, isInitialized } from '../../dist/core/project-identity.js';
-import { resolveTenantId } from '../../dist/store/tenant.js';
+import { resolveTenantId } from '../../dist/entry/testing.js';
 import { STAGE_LABEL, stagesNotRun, type Arm, type EvalQuery } from './queries.ts';
 
 /** Rows every arm shows and records: the HTTP default band, so the three write the same number of rows in a timed call. */

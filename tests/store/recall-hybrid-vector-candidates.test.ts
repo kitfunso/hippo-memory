@@ -6,7 +6,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { createMemory, type CreateMemoryOptions } from '../../src/core/memory.js';
-import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';

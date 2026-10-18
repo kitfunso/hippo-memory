@@ -15,7 +15,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { writeRecallTrace, recordTraceOutcome } from '../../src/store/recall-trace.js';
+import { writeRecallTrace, recordTraceOutcome } from '../../src/store/sqlite/recall-trace.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 // Row shapes mirror the recall_traces / recall_trace_results /

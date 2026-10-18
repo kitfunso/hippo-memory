@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { autoShare } from '../../src/sharing/share.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
-import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

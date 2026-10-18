@@ -6,6 +6,5 @@
   "src/importers/vault.ts": 1,
   "src/learn/invalidation.ts": 1,
   "src/objects/skills.ts": 2,
-  "src/store/conflicts.ts": 1,
   "src/trust/quarantine.ts": 1
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { rmSync } from 'node:fs';
-import { _readApiKeyVerifyStatsForTests, insertApiKey, verifyApiKeyCached } from '../../src/store/auth.js';
+import { _readApiKeyVerifyStatsForTests, insertApiKey, verifyApiKeyCached } from '../../src/store/sqlite/auth.js';
 import { mintApiKey } from '../../src/core/api-key.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/index.js';

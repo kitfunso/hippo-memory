@@ -6,10 +6,18 @@ export { _resetLossAversionRatioCacheForTests } from '../core/memory.js';
 export { _resetProjectIdentityCacheForTests } from '../core/project-identity.js';
 export { _resetSessionRecallHistoryMcpForTests } from '../mcp/session-state.js';
 export { __resetSessionRecallHistoryHttp } from '../server/routes/recall.js';
-export { _readApiKeyVerifyStatsForTests } from '../store/auth.js';
+export { _readApiKeyVerifyStatsForTests } from '../store/sqlite/auth.js';
 export { _resetLogOnceForTests } from '../util/log.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
 export { ambientSecretAdmit } from '../core/read-admission.js';
 export { initStore } from '../store/sqlite/handles.js';
 export { loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/folder-forms.js';
-export type { WriteEntryOptions } from '../store/entry-writes.js';
+export type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
+// Benchmarks and token evals seed and read hippo.db on a handle they open themselves.
+export { resolveTenantId } from '../store/sqlite/tenant.js';
+export { upsertEntryRow } from '../store/sqlite/entry-row.js';
+export { writeEntryDbOnly } from '../store/sqlite/entry-writes.js';
+export { buildIndexFromDb, writeIndexMirror } from '../store/sqlite/mirrors.js';
+export { loadVectorCandidateEntriesAt } from '../store/sqlite/search-rows.js';
+export { writeDeliveryEventOnHandle } from '../store/sqlite/recall-trace.js';
+export { recordTokenUse, tokensBySession } from '../store/sqlite/token-ledger.js';

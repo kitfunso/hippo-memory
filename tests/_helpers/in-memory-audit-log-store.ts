@@ -1,6 +1,6 @@
 // A store other than hippo.db for the AuditLog group: it copies audit_log out of hippo.db once, then keeps the rows in
 // memory and filters, orders and pages them itself, so a conformance test shows another store can match hippo.db's SQL.
-import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';

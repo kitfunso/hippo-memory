@@ -18,7 +18,7 @@ import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../../sr
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { isDagSummary } from '../../src/search/boosts.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';

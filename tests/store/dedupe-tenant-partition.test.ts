@@ -26,7 +26,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../../src/consolidate/dedupe.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadAllEntries } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';

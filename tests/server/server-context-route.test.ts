@@ -23,7 +23,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember } from '../../src/api/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';

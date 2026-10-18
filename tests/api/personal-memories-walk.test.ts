@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as api from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { extractFromTexts } from '../../src/capture/extract.js';
 import { captureSessionTexts } from '../../src/capture/session-texts.js';
 import { handleRecall } from '../../src/cli/recall.js';

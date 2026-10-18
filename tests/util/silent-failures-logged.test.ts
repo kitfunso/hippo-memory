@@ -13,7 +13,7 @@ import { captureTarget } from '../_helpers/cli-stores.js';
 import { loadConfig } from '../../src/core/config.js';
 import { DEFAULT_EMBEDDING_MODEL, resolveEmbeddingModel } from '../../src/embeddings/local.js';
 import { countTableRows } from '../../src/db/tables.js';
-import { insertDormantRow } from '../../src/store/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { renderGraphHtml } from '../../src/graph/view.js';

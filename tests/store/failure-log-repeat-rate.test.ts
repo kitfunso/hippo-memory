@@ -3,12 +3,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { recordFailure, summarizeFailures, failuresBySession } from '../../src/store/failure-log.js';
+import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
+import { failuresPerSession } from '../../src/core/failure-repeats.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { captureToolFailure } from '../../src/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureSignature, lessonFromFailure } from '../../src/capture/failure-reading.js';
 import { blockHash } from '../../src/util/token-text.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/core/rejection-digest.js';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -75,27 +78,21 @@ describe('repeat-error rate', () => {
   });
 
   it('counts a repeat only when another session hit the signature first', () => {
-    withDb(home, (db) => {
-      const log = (sessionId: string | null, sigHash: string, outcome: FailureOutcome = 'duplicate'): number =>
-        recordFailure(db, { tenantId: 'default', sessionId, tool: 'Bash', outcome, sigHash });
-      log('s1', 'A', 'stored');
-      log('s1', 'A');
-      log('s2', 'A');
-      log('s2', 'B', 'stored');
-      log(null, 'B');
-      log('s3', 'C', 'skipped-routine');
-      log('s4', 'C', 'store-failed');
-      recordFailure(db, { tenantId: 'other', sessionId: 's9', outcome: 'stored', sigHash: 'D' });
-      log('s5', 'B');
+    const { failureLog } = sqliteSyncStore(home);
+    const log = (sessionId: string | null, sigHash: string, outcome: FailureOutcome = 'duplicate'): number =>
+      failureLog.record({ tenantId: 'default', sessionId, tool: 'Bash', outcome, sigHash });
+    log('s1', 'A', 'stored');
+    log('s1', 'A');
+    log('s2', 'A');
+    log('s2', 'B', 'stored');
+    log(null, 'B');
+    log('s3', 'C', 'skipped-routine');
+    log('s4', 'C', 'store-failed');
+    failureLog.record({ tenantId: 'other', sessionId: 's9', outcome: 'stored', sigHash: 'D' });
+    log('s5', 'B');
 
-      const bySession = Object.fromEntries(failuresBySession(db, 'default', ago(1)).map((s) => [s.sessionId, s]));
+    withDb(home, (db) => {
       // s1's retry is the same session; s3's routine C is not rated, so s4's C is new; the null-session B is ignored.
-      expect(bySession).toEqual({
-        s1: { sessionId: 's1', failures: 2, repeats: 0 },
-        s2: { sessionId: 's2', failures: 2, repeats: 1 },
-        s4: { sessionId: 's4', failures: 1, repeats: 0 },
-        s5: { sessionId: 's5', failures: 1, repeats: 1 },
-      });
       expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({
         total: 8,
         rated: 6,
@@ -114,29 +111,67 @@ describe('repeat-error rate', () => {
   });
 
   it('a session that hit a signature first never repeats it, even after another session hits it too', () => {
-    withDb(home, (db) => {
-      for (const sessionId of ['a', 'b', 'a']) {
-        recordFailure(db, { tenantId: 'default', sessionId, outcome: 'duplicate', sigHash: 'E' });
-      }
-      expect(failuresBySession(db, 'default', ago(1))).toEqual([
-        { sessionId: 'a', failures: 2, repeats: 0 },
-        { sessionId: 'b', failures: 1, repeats: 1 },
-      ]);
-    });
+    const { failureLog } = sqliteSyncStore(home);
+    for (const sessionId of ['a', 'b', 'a']) {
+      failureLog.record({ tenantId: 'default', sessionId, outcome: 'duplicate', sigHash: 'E' });
+    }
+    withDb(home, (db) =>
+      expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ rated: 3, repeats: 1, sessions: 2 }),
+    );
   });
 
   it('looks back past the window and prunes rows past retention', () => {
+    const { failureLog } = sqliteSyncStore(home);
     withDb(home, (db) => {
       expect(summarizeFailures(db, 'default', ago(30))).toMatchObject({ total: 0, rated: 0, repeats: 0, sessions: 0 });
-      recordFailure(db, { tenantId: 'default', sessionId: 'old', outcome: 'stored', sigHash: 'A', now: ago(200) });
-      recordFailure(db, { tenantId: 'default', sessionId: 's0', outcome: 'stored', sigHash: 'B', now: ago(10) });
-      recordFailure(db, { tenantId: 'default', sessionId: 's1', outcome: 'duplicate', sigHash: 'B' });
-      recordFailure(db, { tenantId: 'default', sessionId: 's1', outcome: 'stored', sigHash: 'A' });
+      failureLog.record({ tenantId: 'default', sessionId: 'old', outcome: 'stored', sigHash: 'A', now: ago(200) });
+      failureLog.record({ tenantId: 'default', sessionId: 's0', outcome: 'stored', sigHash: 'B', now: ago(10) });
+      failureLog.record({ tenantId: 'default', sessionId: 's1', outcome: 'duplicate', sigHash: 'B' });
+      failureLog.record({ tenantId: 'default', sessionId: 's1', outcome: 'stored', sigHash: 'A' });
       // SAFETY: COUNT(*) aggregate row.
       const old = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE session_id = 'old'`).get() as { n: number };
       expect(Number(old.n)).toBe(0);
       expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ total: 2, rated: 2, repeats: 1 });
     });
+  });
+});
+
+describe('failuresPerSession', () => {
+  const rated = (rows: ReadonlyArray<readonly [string, string]>, ts = ago(0)) =>
+    rows.map(([sessionId, sigHash]) => ({ ts, sessionId, sigHash }));
+
+  it('counts a repeat only when another session hit the signature first', () => {
+    const rows = rated([
+      ['s1', 'A'],
+      ['s1', 'A'],
+      ['s2', 'A'],
+      ['s2', 'B'],
+      ['s4', 'C'],
+      ['s5', 'B'],
+    ]);
+    expect(failuresPerSession(rows, ago(1))).toEqual([
+      { sessionId: 's1', failures: 2, repeats: 0 },
+      { sessionId: 's2', failures: 2, repeats: 1 },
+      { sessionId: 's4', failures: 1, repeats: 0 },
+      { sessionId: 's5', failures: 1, repeats: 1 },
+    ]);
+  });
+
+  it('a session that hit a signature first never repeats it, even after another session hits it too', () => {
+    const rows = rated([
+      ['a', 'E'],
+      ['b', 'E'],
+      ['a', 'E'],
+    ]);
+    expect(failuresPerSession(rows, ago(1))).toEqual([
+      { sessionId: 'a', failures: 2, repeats: 0 },
+      { sessionId: 'b', failures: 1, repeats: 1 },
+    ]);
+  });
+
+  it('a row before the window is not counted but still decides who hit a signature first', () => {
+    const rows = [...rated([['s0', 'B']], ago(10)), ...rated([['s1', 'B']])];
+    expect(failuresPerSession(rows, ago(1))).toEqual([{ sessionId: 's1', failures: 1, repeats: 1 }]);
   });
 });
 

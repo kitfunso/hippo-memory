@@ -7,7 +7,7 @@ import { getHippoDbPath, getMeta } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serializeEntry } from '../../src/core/markdown.js';
-import { HALF_LIFE_BASE_META_KEY } from '../../src/store/open.js';
+import { HALF_LIFE_BASE_META_KEY } from '../../src/store/sqlite/open.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { mintAdminKey } from '../_helpers/admin-server.js';
 import {

@@ -11,10 +11,10 @@ import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { sleep, supersede } from '../../src/api/index.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { sleepResultLines } from '../../src/cli/sleep-render.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadEveryTenantEntries,

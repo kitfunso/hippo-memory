@@ -2,7 +2,7 @@
 
 import { describe, it, expect, expectTypeOf, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { WriteEntryOptions } from '../../src/store/entry-writes.js';
+import type { WriteEntryOptions } from '../../src/store/sqlite/entry-writes.js';
 import { writeEntryThenFail } from '../_helpers/failing-write.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import type { PromotedCopy } from '../../src/store/port/promotion.js';

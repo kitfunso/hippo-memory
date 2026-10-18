@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { layerDir, writeMarkdownMirror, writeMarkdownMirrors } from '../../src/store/mirrors.js';
+import { layerDir, writeMarkdownMirror, writeMarkdownMirrors } from '../../src/store/sqlite/mirrors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

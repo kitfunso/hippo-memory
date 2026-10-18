@@ -1,0 +1,3 @@
+### Changed
+
+- **Each store group is now one port file plus one SQLite file.** Every group's adapter and the SQL only it runs live in `src/store/sqlite/<feature>.ts`, the repeat-error rule moved to `src/core/failure-repeats.ts`, and `scripts/check-store-port.mjs` fails on any other file directly in `src/store`. Published names in `.` and `./store-kit` are unchanged. The internal `dist/store/*.js` modules moved to `dist/store/sqlite/`; `./testing` now exports the nine handle helpers the benchmarks and token evals import (`resolveTenantId`, `upsertEntryRow`, `writeEntryDbOnly`, `buildIndexFromDb`, `writeIndexMirror`, `loadVectorCandidateEntriesAt`, `writeDeliveryEventOnHandle`, `recordTokenUse`, `tokensBySession`). No behaviour change.

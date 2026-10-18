@@ -9,7 +9,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/open.js';
+import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
 import {
   createMemory,
   deriveHalfLife,
@@ -25,7 +25,7 @@ import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
 import { openIncident, resolveOpenIncident } from '../../src/objects/incidents.js';
 import { saveCustomerNote } from '../../src/objects/customer-notes.js';
 import { supersede, adminActor } from '../../src/api/index.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { recordStatements, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { allocatedBytes } from '../_helpers/allocated-bytes.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

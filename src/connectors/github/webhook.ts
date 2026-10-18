@@ -24,7 +24,7 @@ import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import type { Context } from '../../api/index.js';
 import type { HippoConfig } from '../../core/config.js';
 import type { HippoStore } from '../../store/index.js';
-import { resolveTenantId } from '../../store/tenant.js';
+import { resolveTenantId } from '../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,

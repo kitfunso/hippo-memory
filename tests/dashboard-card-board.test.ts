@@ -9,7 +9,7 @@ import { connect } from 'node:net';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
-import { resolveTenantId } from '../src/store/tenant.js';
+import { resolveTenantId } from '../src/store/sqlite/tenant.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
 import { runCliOut } from './_helpers/run-cli-as.js';

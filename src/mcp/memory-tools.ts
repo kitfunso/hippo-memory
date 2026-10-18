@@ -1,7 +1,7 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
 import { hasGroup } from '../store/index.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { resolveTenantId } from '../store/index.js';
 import { startAutoSleepIfDue } from '../api/sleep/auto-sleep.js';
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../api/index.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';

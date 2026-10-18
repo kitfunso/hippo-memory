@@ -11,7 +11,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from '../../src/core/memory.js';
-import { insertDormantRow } from '../../src/store/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

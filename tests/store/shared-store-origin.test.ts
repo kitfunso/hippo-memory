@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { stampOriginProjectForImport } from '../../src/store/entry-row.js';
+import { stampOriginProjectForImport } from '../../src/store/sqlite/entry-row.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { shareMemory } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';

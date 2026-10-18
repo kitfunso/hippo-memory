@@ -4,8 +4,8 @@ import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb 
 import { reproveStoreSchema } from '../../db/connect.js';
 import { openHippoDbWithFacts } from '../../db/open.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
-import { ensureMirrorDirectories, syncMirrorFiles } from '../mirrors.js';
-import { bootstrapLegacyStore, type Handles, recordHalfLifeBaseForNewStore, type StoreFiles } from '../open.js';
+import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
+import { bootstrapLegacyStore, type Handles, recordHalfLifeBaseForNewStore, type StoreFiles } from './open.js';
 
 export function initStore(hippoRoot: string): void {
   reproveStoreSchema(hippoRoot);

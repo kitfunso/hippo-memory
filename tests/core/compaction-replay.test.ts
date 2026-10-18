@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { replayCompactions, saveCompaction } from '../../src/capture/compaction-record.js';
-import { compactionByRequest, saveItems } from '../../src/store/compactions-record.js';
+import { compactionByRequest, saveItems } from '../../src/store/sqlite/compactions-record.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {

@@ -1,8 +1,7 @@
 // Predictions answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { auditHighIdAt } from '../../src/store/key-audit.js';
+import { auditHighId } from '../_helpers/root-forms.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/store/port.js';
 import { predictionMirror } from '../../src/core/prediction.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
@@ -132,12 +131,7 @@ const REMEMBERED = { kind: 'distilled', scope: null };
 
 beforeAll(async () => {
   fixture = seedTwoTenants();
-  const db = openHippoDb(fixture.dir);
-  try {
-    nextAuditId = auditHighIdAt(db) + 1;
-  } finally {
-    closeHippoDb(db);
-  }
+  nextAuditId = auditHighId(fixture.dir) + 1;
   baseline = await conforms([]);
 });
 

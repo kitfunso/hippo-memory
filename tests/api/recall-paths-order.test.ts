@@ -11,7 +11,7 @@ import type { CliCoreRecall } from '../../src/api/recall/types.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { isJsonNumber } from '../../src/util/json.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

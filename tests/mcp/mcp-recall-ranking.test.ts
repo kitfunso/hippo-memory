@@ -11,7 +11,7 @@ import {
   type McpContext,
   type McpResponse,
 } from '../../src/mcp/server.js';
-import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';

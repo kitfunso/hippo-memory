@@ -6,7 +6,7 @@ import {
   type GraphQueueItem,
   type GraphQueueStatus,
   type QueueRow,
-} from '../../src/store/graph-rows.js';
+} from '../../src/store/sqlite/graph-rows.js';
 
 export function loadExtractionQueue(
   hippoRoot: string,

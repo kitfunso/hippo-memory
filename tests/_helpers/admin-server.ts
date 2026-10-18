@@ -1,8 +1,8 @@
 // A keyless local caller is always a member, so a test that needs host admin mints a key and sends it.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { createApiKey } from '../../src/store/auth.js';
-import { resolveTenantId } from '../../src/store/tenant.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { resolveTenantId } from '../../src/store/sqlite/tenant.js';
 
 type ServeOpts = Parameters<typeof serve>[0];
 

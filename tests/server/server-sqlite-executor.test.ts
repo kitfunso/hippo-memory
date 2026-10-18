@@ -7,7 +7,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { predictionMirror } from '../../src/core/prediction.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
-import { sqlitePredictions } from '../../src/store/sqlite/predictions-group.js';
+import { sqlitePredictions } from '../../src/store/sqlite/predictions.js';
 import { served } from '../../src/store/sqlite/served.js';
 import type { Predictions } from '../../src/store/port.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

@@ -1,9 +1,9 @@
 // A store other than hippo.db for the KeyAudit group: it copies api_keys and audit_log out of hippo.db once, then keeps
 // both in memory and answers with what hippo-memory/store-kit exports, so a conformance test shows that is all another store needs.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { listAuditEventsAfter } from '../../src/store/audit.js';
-import { readApiKeyRecord } from '../../src/store/auth.js';
-import { auditHighIdAt } from '../../src/store/key-audit.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { readApiKeyRecord } from '../../src/store/sqlite/auth.js';
+import { auditHighId } from './root-forms.js';
 import { NotFoundError } from '../../src/server.js';
 import {
   type ApiKeyRecord,
@@ -37,7 +37,7 @@ function copyRows(hippoRoot: string): CopiedRows {
         return record ? [[key_id, record]] : [];
       }),
     );
-    return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighIdAt(db) };
+    return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighId(hippoRoot) };
   } finally {
     closeHippoDb(db);
   }

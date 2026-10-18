@@ -462,7 +462,7 @@ describe('check-store-port.mjs', () => {
 
   it('fails and names a src/store file that runs no SQL, and passes hippo.db definition files, listed files and files that touch hippo.db', () => {
     const files = {
-      'src/store/rows.ts': 'export interface Row { id: string }\n',
+      'src/store/index.ts': 'export interface Row { id: string }\n',
       'src/store/sqlite/plumbing.ts': 'export const a = 1;\n',
       'src/store/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
       'src/store/opens.ts': 'export const g = (r: string) => onHandle(r, () => 1);\n',
@@ -480,7 +480,7 @@ describe('check-store-port.mjs', () => {
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('storeFilesWithoutSql: 1 -> 2');
       expect(r.stderr).toContain('src/store/scope.ts: unlisted -> under src/store, runs no SQL');
-      for (const quiet of ['rows.ts', 'plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) {
+      for (const quiet of ['index.ts', 'plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) {
         expect(r.stderr).not.toContain(quiet);
       }
       expect(run('--update').status).toBe(1);
@@ -646,6 +646,28 @@ describe('check-store-port.mjs', () => {
     withFixture({ 'src/store/search-rows.ts': EXCEPTION }, null, ({ run }) => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
+    });
+  });
+
+  it('fails and names a file directly in src/store besides the port, its entry and search-rows.ts', () => {
+    const kept = {
+      'src/store/port.ts': 'export type A = 1;\n',
+      'src/store/port-groups.ts': 'export type B = 2;\n',
+      'src/store/index.ts': 'export type C = 3;\n',
+      'src/store/search-rows.ts': EXCEPTION,
+      'src/store/port/g.ts': 'export type E = 4;\n',
+      'src/store/sqlite/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
+    };
+    withFixture(kept, null, ({ run }) => {
+      const r = run();
+      expect(r.status, r.stderr).toBe(0);
+    });
+    const stray = { 'src/store/graph-apply.ts': "export const g = (db: any) => db.prepare('SELECT 2').get();\n" };
+    withFixture({ ...kept, ...stray }, null, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('  src/store/graph-apply.ts');
+      for (const file of Object.keys(kept)) expect(r.stderr).not.toContain(`  ${file}`);
     });
   });
 

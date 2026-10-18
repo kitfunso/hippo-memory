@@ -9,7 +9,7 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
-import { flushStatsMirrors } from '../../src/store/mirrors.js';
+import { flushStatsMirrors } from '../../src/store/sqlite/mirrors.js';
 import {
   pushGoal,
   closePrediction,

@@ -13,7 +13,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import type { SpoolFs } from '../../src/capture/compaction-spool.js';
-import { startCompaction } from '../../src/store/compactions-record.js';
+import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import {

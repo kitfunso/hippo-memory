@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { appendAuditEvent, appendAuditEventsAt, queryAuditEvents } from '../../src/store/audit.js';
+import { appendAuditEvent, appendAuditEventsAt, queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';

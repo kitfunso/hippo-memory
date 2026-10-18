@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { conflictResolve, type ResolveMemoryConflictResult } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -13,7 +13,7 @@ import type { RerankStep } from '../../src/core/search-types.js';
 import { createMemory as createDefaultMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { writeGoalRecallLog } from '../../src/store/goals.js';
+import { writeGoalRecallLog } from '../../src/store/sqlite/goals.js';
 import type { GoalStackBoostOptions } from '../../src/search/goal-boost.js';
 import { sessionGoalBoost } from '../_helpers/session-goal-boost.js';
 import { remember } from '../../src/api/index.js';

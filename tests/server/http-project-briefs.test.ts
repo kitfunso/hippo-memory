@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { ProjectBrief } from '../../src/objects/project-briefs.js';
 import { makeRoot } from '../_helpers/make-root.js';

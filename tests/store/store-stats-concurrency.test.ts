@@ -1,6 +1,6 @@
 // updateStats read-modify-wrote all three meta counters with no transaction and
 // wrote all three back, so concurrent writers lost increments and clobbered
-// counters they had not touched (store/index-and-stats.ts atomic-increment fix).
+// counters they had not touched (store/sqlite/index-and-stats.ts atomic-increment fix).
 import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +15,7 @@ let root: string;
 // The workers must exercise the shipped updateStatsAt on the shipped opener, not a copy of them, so they
 // import the build output.
 const DIST_STORE = join(import.meta.dirname, '..', '..', 'dist', 'store');
-const STORE_URL = pathToFileURL(join(DIST_STORE, 'index-and-stats.js')).href;
+const STORE_URL = pathToFileURL(join(DIST_STORE, 'sqlite', 'index-and-stats.js')).href;
 const HANDLES_URL = pathToFileURL(join(DIST_STORE, 'sqlite', 'handles.js')).href;
 
 function workerScript(hippoRoot: string, field: string, iterations: number): string {

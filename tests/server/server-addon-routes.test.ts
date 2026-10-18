@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { HttpError, serve, type AddonCall, type AddonRoute, type ServerHandle } from '../../src/server.js';

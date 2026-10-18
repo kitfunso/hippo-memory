@@ -17,7 +17,7 @@ import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
   CLEARED_ENV,

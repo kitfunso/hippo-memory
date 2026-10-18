@@ -21,7 +21,8 @@ import { join } from 'node:path';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/core/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 

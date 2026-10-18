@@ -107,7 +107,7 @@ describe('api.outcomeForLastRecall', () => {
       expect(result.applied).toBe(2);
 
       const { openHippoDb, closeHippoDb } = await import('../../src/db/index.js');
-      const { queryAuditEvents } = await import('../../src/store/audit.js');
+      const { queryAuditEvents } = await import('../../src/store/sqlite/audit.js');
       const db = openHippoDb(home);
       try {
         const events = queryAuditEvents(db, {

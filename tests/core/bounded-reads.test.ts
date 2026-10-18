@@ -10,7 +10,7 @@ import { rebuildDirtySummaries } from '../../src/consolidate/dag.js';
 import { memoryCountAll } from '../../src/api/memories/memories.js';
 import { adminActor } from '../../src/api/types.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { writeEntriesTogether, loadAllDirtySummaries, loadAllEntries } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';

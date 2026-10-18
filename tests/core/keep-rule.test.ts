@@ -12,7 +12,7 @@ import {
   canAutoDelete,
   type MemoryEntry,
 } from '../../src/core/memory.js';
-import { AUTO_DELETABLE } from '../../src/store/rule-sql.js';
+import { AUTO_DELETABLE } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
@@ -21,7 +21,7 @@ import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/
 import { NO_MERGE_TAGS } from '../../src/sharing/share.js';
 import { forget, dormantList, sleep, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,

@@ -1,6 +1,6 @@
 // A store other than hippo.db for the DagReads group: it copies the memory rows out of hippo.db once, then answers each read
 // from memory with the scope and admission rules hippo-memory/store-kit exports, so a conformance test shows another store can match hippo.db's SQL.
-import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   descendantAdmits,
@@ -11,7 +11,7 @@ import {
 } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import type { DagReads, SessionRawQuery } from '../../src/store/port.js';
-import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
+import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
 

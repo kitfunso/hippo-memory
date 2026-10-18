@@ -9,7 +9,7 @@ import { extractLessons, partitionLessons } from '../../src/learn/autolearn.js';
 import { contextGet } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { gatedWrite } from '../../src/store/gated-write.js';
+import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';

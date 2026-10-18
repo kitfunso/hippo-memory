@@ -4,16 +4,16 @@ import { auditWriteFailureCount } from '../../core/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
-import { loadStoredVectorViewsAt } from '../vector-index.js';
+import { loadStoredVectorViewsAt } from './vector-index.js';
 import { errorFields, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
-import { flushStatsMirrors } from '../mirrors.js';
+import { flushStatsMirrors } from './mirrors.js';
 import { encodeError } from './error-codec.js';
 import { sqliteSyncStore } from './store.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
-import { sqliteVectorReads } from './vector-reads-group.js';
+import { sqliteVectorReads } from './vector-reads.js';
 import {
   type Job,
   type OpPlace,

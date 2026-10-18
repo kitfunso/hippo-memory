@@ -2,12 +2,12 @@
 // and on hippo.db a write whose audit row fails keeps nothing.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, rmSync } from 'node:fs';
-import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { objectMirror } from '../../src/objects/lifecycle.js';
 import { sqliteStore } from '../../src/store/index.js';
-import { auditHighIdAt } from '../../src/store/key-audit.js';
+import { auditHighId } from '../_helpers/root-forms.js';
 import type {
   BriefReceipt,
   Incident,
@@ -331,12 +331,7 @@ function auditRowsAt(root: string): AuditEvent[] {
 
 beforeAll(async () => {
   fixture = seedTwoTenants();
-  const db = openHippoDb(fixture.dir);
-  try {
-    nextAuditId = auditHighIdAt(db) + 1;
-  } finally {
-    closeHippoDb(db);
-  }
+  nextAuditId = auditHighId(fixture.dir) + 1;
   baseline = await conforms([]);
 });
 

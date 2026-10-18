@@ -8,17 +8,17 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 const HAND_ROLLED =
   /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
 // The deny list lives with the JS predicates; the SQL that reads it lives with the other SQL twins.
-const SCOPE_MODULES = [join('core', 'recall-scope.ts'), join('store', 'rule-sql.ts')];
+const SCOPE_MODULES = [join('core', 'recall-scope.ts'), join('store', 'sqlite', 'rule-sql.ts')];
 const ALLOWED = new Set(SCOPE_MODULES);
 // Migrations stamp the legacy marker once, as data, and never read through it.
 const EXEMPT_DIR = `db${sep}migrations${sep}`;
 // Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
 const DOC_LINES = new Set([
   'api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */',
-  "store/handoffs.ts: // continuity excludes slack:private:* and 'unknown:legacy'.",
-  "store/sessions.ts: // continuity reads applies to slack:private:* and 'unknown:legacy' rows.",
-  'store/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies',
-  "store/search-rows.ts: * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot",
+  "store/sqlite/handoffs.ts: // continuity excludes slack:private:* and 'unknown:legacy'.",
+  "store/sqlite/sessions.ts: // continuity reads applies to slack:private:* and 'unknown:legacy' rows.",
+  'store/sqlite/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies',
+  "store/sqlite/search-rows.ts: * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot",
 ]);
 
 function hitsIn(file: string, text: string): string[] {
@@ -56,10 +56,12 @@ describe('scope SQL guard', () => {
       "// AND scope NOT LIKE '%:private:%'",
     ];
     for (const line of bad) expect(hitsIn('store/x.ts', line), line).toHaveLength(1);
-    expect(hitsIn(`store${sep}handoffs.ts`, "  // continuity excludes slack:private:* and 'unknown:legacy'.")).toEqual(
-      [],
+    expect(
+      hitsIn(`store${sep}sqlite${sep}handoffs.ts`, "  // continuity excludes slack:private:* and 'unknown:legacy'."),
+    ).toEqual([]);
+    expect(hitsIn(`store${sep}sqlite${sep}handoffs.ts`, "  // continuity excludes 'unknown:legacy' too.")).toHaveLength(
+      1,
     );
-    expect(hitsIn(`store${sep}handoffs.ts`, "  // continuity excludes 'unknown:legacy' too.")).toHaveLength(1);
   });
 
   it('every listed doc line still exists, so the list cannot hold a stale pass', () => {

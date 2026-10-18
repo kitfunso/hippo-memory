@@ -5,10 +5,10 @@ import { dirname, join } from 'node:path';
 import { forget, reject, dormantRestore, supersede } from '../../src/api/index.js';
 import { importForStore } from '../../src/agent-memories/sync.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
-import { insertDormantRow } from '../../src/store/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
-import { removeEntryMirrors } from '../../src/store/mirrors.js';
-import { deleteEntryRowInTx } from '../../src/store/entry-writes.js';
+import { removeEntryMirrors } from '../../src/store/sqlite/mirrors.js';
+import { deleteEntryRowInTx } from '../../src/store/sqlite/entry-writes.js';
 import {
   auditCount,
   auditTotal,

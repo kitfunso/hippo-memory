@@ -13,9 +13,9 @@ import {
 import { passesScopeFilterForRecall } from '../../src/core/recall-scope.js';
 import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/core/session-digest-row.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { loadAmbientCandidatesAt } from '../../src/store/candidates.js';
+import { loadAmbientCandidatesAt } from '../../src/store/sqlite/candidates.js';
 import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/store/port.js';
-import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
+import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { detectSecret } from '../../src/util/secret-detect.js';

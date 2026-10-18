@@ -19,7 +19,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { log } from '../../src/util/log.js';
 import { serve, clientIpForRateLimit, type ServerHandle } from '../../src/server.js';
 import type { IncomingMessage } from 'node:http';

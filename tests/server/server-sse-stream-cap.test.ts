@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';

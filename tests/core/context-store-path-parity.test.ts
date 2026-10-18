@@ -11,7 +11,7 @@ import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import type { HippoStore } from '../../src/store/index.js';
-import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
+import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
   CONTEXT_NOW,

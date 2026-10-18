@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import { handleAuth } from '../../src/cli/auth.js';
 import { handleGoal } from '../../src/cli/goals.js';
 import * as api from '../../src/api/index.js';
-import { verifyApiKeyCached } from '../../src/store/auth.js';
+import { verifyApiKeyCached } from '../../src/store/sqlite/auth.js';
 import { sqliteStore } from '../../src/store/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';

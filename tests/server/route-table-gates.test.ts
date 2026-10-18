@@ -4,7 +4,7 @@ import * as http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 interface Reply {

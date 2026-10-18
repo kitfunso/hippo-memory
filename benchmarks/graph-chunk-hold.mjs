@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/core/memory.js';
 import { initStore } from '../dist/entry/testing.js';
-import { upsertEntryRow } from '../dist/store/entry-row.js';
+import { upsertEntryRow } from '../dist/entry/testing.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { loadConfig } from '../dist/core/config.js';
 import { saveDecision } from '../dist/objects/decisions.js';

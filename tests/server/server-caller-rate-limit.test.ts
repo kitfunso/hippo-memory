@@ -8,7 +8,7 @@ import {
   createApiKey,
   revokeApiKey,
   type CreateApiKeyOptions,
-} from '../../src/store/auth.js';
+} from '../../src/store/sqlite/auth.js';
 import { serve, type AddonRoute, type ServeOpts } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';

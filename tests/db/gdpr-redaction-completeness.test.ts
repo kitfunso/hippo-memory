@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { remember, rawArchive, retrieve } from '../../src/api/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { recordStatements, countMatching } from '../_helpers/count-statements.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

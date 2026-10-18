@@ -4,13 +4,16 @@ import { CLI_ACTOR } from '../../src/core/actor.js';
 import type { Card, CardComment, CardRun } from '../../src/core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../../src/core/handoff.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { recordAuditEventsRowByRowAt } from '../../src/store/audit.js';
-import type { FailedAuditEvent } from '../../src/store/audit.js';
-import { githubEventRecordAt, markGitHubEventSeenAt } from '../../src/store/connectors/github.js';
-import type { GitHubEventLogEntry } from '../../src/store/connectors/github.js';
-import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/connectors/slack.js';
+import { recordAuditEventsRowByRowAt, type FailedAuditEvent } from '../../src/store/sqlite/audit.js';
+import {
+  githubEventRecordAt,
+  markGitHubEventSeenAt,
+  type GitHubEventLogEntry,
+} from '../../src/store/sqlite/connectors/github.js';
+import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/sqlite/connectors/slack.js';
 import { promote } from '../../src/api/memories/promote.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { resolveTenantId } from '../../src/store/sqlite/tenant.js';
 import { apiCtx } from './api-ctx.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
@@ -20,27 +23,15 @@ import {
   loadContextCandidatesAt,
   loadTextsHoldingWordsAt,
   tallySourcesAt,
-} from '../../src/store/candidates.js';
-import {
-  addCardCommentAt,
-  blockCardAt,
-  claimCardAt,
-  completeCardAt,
-  createCardAt,
-  heartbeatCardAt,
-  loadCardAt,
-  loadCardRunsAt,
-  reclaimExpiredCardsAt,
-  reviewCardAt,
-} from '../../src/store/cards.js';
-import { replaceDetectedConflictsAt } from '../../src/store/conflicts.js';
+} from '../../src/store/sqlite/candidates.js';
+import { replaceDetectedConflictsAt } from '../../src/store/sqlite/conflicts.js';
 import {
   commitInChunksAt,
   deleteEntriesOneByOneAt,
   memoriesBackingObjectsAt,
-} from '../../src/store/delete-and-batch.js';
+} from '../../src/store/sqlite/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../src/store/port/dormant.js';
-import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
+import { EVERY_SCOPE, listDormantRows } from '../../src/store/sqlite/dormant-rows.js';
 import {
   countSessionRawMemoriesAt,
   loadAllEntryIdsAt,
@@ -49,51 +40,41 @@ import {
   loadFreshRawMemoriesAt,
   loadSessionRawMemoriesAt,
   iterateEveryTenantEntriesAt,
-} from '../../src/store/entry-reads.js';
-import { writeEntriesTogetherAt } from '../../src/store/entry-writes.js';
+} from '../../src/store/sqlite/entry-reads.js';
+import { writeEntriesTogetherAt, writePromotedEntryAt } from '../../src/store/sqlite/entry-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/port/goals.js';
-import {
-  activeGoalsWithPoliciesAt,
-  completeGoalAt,
-  pushGoalAt,
-  resumeGoalAt,
-  suspendGoalAt,
-} from '../../src/store/goals.js';
+import { activeGoalsWithPoliciesAt } from '../../src/store/sqlite/goals.js';
 import {
   loadPendingExtractionTenantsAt,
   markGraphDirtyAt,
   markPendingProcessedUpToAt,
-} from '../../src/store/graph-queue.js';
-import {
-  loadEntitiesByIdsAt,
-  loadEntitiesByMemoryIdAt,
-  loadNeighborRelationsAt,
-  loadRelationsAmongAt,
-} from '../../src/store/graph-reads.js';
+} from '../../src/store/sqlite/graph-queue.js';
 import type { Entity, Relation } from '../../src/store/port/graph-reads.js';
-import type { HandoffFilter, SessionEndHandoffRequest } from '../../src/store/port/sessions.js';
+import type {
+  HandoffFilter,
+  SessionEndHandoffRequest,
+  SessionEvent,
+  TaskSnapshot,
+  WorkingMemoryItem,
+} from '../../src/store/port/sessions.js';
 import {
   loadHandoffByIdAt,
   loadLatestHandoffAt,
   stampHandoffOutcomeAt,
   writeSessionEndHandoffAt,
-} from '../../src/store/handoffs.js';
+} from '../../src/store/sqlite/handoffs.js';
 import {
   appendConsolidationRunAt,
   loadLastRecallAt,
   loadSessionDecayContextAt,
   saveIndexAt,
   updateStatsUnlessBusyAt,
-} from '../../src/store/index-and-stats.js';
-import { waitingOpener } from '../../src/store/open.js';
+  updateStatsAt,
+} from '../../src/store/sqlite/index-and-stats.js';
+import { waitingOpener, type StoreFiles } from '../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
-import { withUnmigratedDb } from '../../src/db/open.js';
 import type { RepairProtection } from '../../src/core/memory-audit.js';
-import { writePromotedEntryAt } from '../../src/store/entry-writes.js';
-import { updateStatsAt } from '../../src/store/index-and-stats.js';
-import { repairAutomaticMemoriesAt, repairQualityOnceAt } from '../../src/store/quality-repair.js';
 import type { QualityRepairResult } from '../../src/store/port/audit-maintenance.js';
-import type { StoreFiles } from '../../src/store/open.js';
 
 export {
   appendSessionEvent,
@@ -109,39 +90,22 @@ export {
   strengthenRetrieved,
   writeEntry,
 } from '../../src/store/sqlite/folder-forms.js';
-import type { ClosePredictionOptions, ListPredictionsOptions } from '../../src/store/predictions.js';
-import {
-  closePredictionAt,
-  computePredictionBaserateAt,
-  loadAllPredictionsAt,
-  loadOpenPredictionsAt,
-  loadPredictionByIdAt,
-  loadPredictionsByClassAt,
-} from '../../src/store/predictions.js';
-import type { HippoIndex } from '../../src/store/rows.js';
+import { computePredictionBaserateAt } from '../../src/store/sqlite/predictions.js';
+import type { HippoIndex } from '../../src/store/sqlite/rows.js';
 import type { MemoryConflict } from '../../src/store/port/conflicts.js';
-import type { SessionEvent, TaskSnapshot } from '../../src/store/port/sessions.js';
-import type { SqlFragment } from '../../src/store/rule-sql.js';
-import { loadRecallEntriesAt, loadSearchEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
-import { listApiKeyRows } from '../../src/store/auth.js';
+import type { SqlFragment } from '../../src/store/sqlite/rule-sql.js';
+import {
+  loadRecallEntriesAt,
+  loadSearchEntriesAt,
+  loadVectorCandidateEntriesAt,
+} from '../../src/store/sqlite/search-rows.js';
+import { listApiKeyRows } from '../../src/store/sqlite/auth.js';
 import type { ApiKeyListItem, ListApiKeysOpts } from '../../src/store/port/key-writes.js';
-import {
-  clearActiveTaskSnapshotAt,
-  closeTaskSnapshotsForSessionAt,
-  findPromotableSessionsAt,
-  listSessionEventsAt,
-  loadActiveTaskSnapshotAt,
-} from '../../src/store/sessions.js';
+import { findPromotableSessionsAt, listSessionEventsAt } from '../../src/store/sqlite/sessions.js';
+import { loadActiveTaskSnapshotAt } from '../../src/store/sqlite/task-snapshots.js';
 import { freshActiveSnapshot } from '../../src/core/session-snapshot.js';
-import {
-  applyRebuildResultAt,
-  loadAllDirtySummariesAt,
-  loadAllL2SummariesAt,
-  loadChildrenOfSummariesAt,
-  loadChildrenOfSummaryAt,
-} from '../../src/store/summaries.js';
 import type { ApiCall } from '../../src/core/transcript-calls.js';
-import { recordRereadsAt } from '../../src/store/token-ledger.js';
+import { recordRereadsAt } from '../../src/store/sqlite/token-ledger.js';
 import {
   loadStoredParticlesAt,
   loadStoredVectorsAt,
@@ -150,11 +114,9 @@ import {
   saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
-} from '../../src/store/vector-index.js';
-import type { WorkingMemoryItem } from '../../src/store/port/sessions.js';
-import { wmClearAt, wmPushAt, wmReadAt } from '../../src/store/working-memory.js';
+} from '../../src/store/sqlite/vector-index.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
-import { MAX_LIST_LIMIT } from '../../src/util/limits.js';
+import { MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT } from '../../src/util/limits.js';
 import type {
   AppendAuditOpts,
   HeldText,
@@ -181,7 +143,8 @@ import type {
   SessionDecayContext,
   RebuildPatch,
 } from '../../src/store/port/consolidation.js';
-import type { Prediction } from '../../src/store/port/predictions.js';
+import type { Prediction, PredictionClose } from '../../src/store/port/predictions.js';
+import type { ClosureState } from '../../src/core/prediction.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
 import type { StoredVectorSummary } from '../../src/store/port/embedding-index.js';
 
@@ -228,16 +191,16 @@ export function createCard(
   tenantId: string,
   input: { title: string; repo?: string; contract?: string; budget?: number; dependsOn?: string[] },
 ): Card {
-  return onHandle(hippoRoot, (db) => createCardAt(db, tenantId, input), openStore);
+  return sqliteSyncStore(hippoRoot).cards.create(tenantId, input);
 }
 
 export function loadCard(hippoRoot: string, tenantId: string, id: string): Card | null {
-  return onHandle(hippoRoot, (db) => loadCardAt(db, tenantId, id), openStore);
+  return sqliteSyncStore(hippoRoot).cards.load(tenantId, id);
 }
 
 export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): CardRun[] {
   assertTenantId('loadCardRuns', tenantId);
-  return onHandle(hippoRoot, (db) => loadCardRunsAt(db, tenantId, id), openStore);
+  return sqliteSyncStore(hippoRoot).cards.runs(tenantId, id);
 }
 
 export function claimCard(
@@ -247,11 +210,11 @@ export function claimCard(
   runtime: string,
   sessionId?: string,
 ): (Card & { runId: number }) | null {
-  return onHandle(hippoRoot, (db) => claimCardAt(db, tenantId, id, runtime, sessionId), openStore);
+  return sqliteSyncStore(hippoRoot).cards.claim(tenantId, id, runtime, sessionId);
 }
 
 export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, runId: number): Card | null {
-  return onHandle(hippoRoot, (db) => heartbeatCardAt(db, tenantId, id, runId), openStore);
+  return sqliteSyncStore(hippoRoot).cards.heartbeat(tenantId, id, runId);
 }
 
 export function blockCard(
@@ -261,11 +224,11 @@ export function blockCard(
   reason: string,
   runId?: number,
 ): Card | null {
-  return onHandle(hippoRoot, (db) => blockCardAt(db, tenantId, id, reason, runId), openStore);
+  return sqliteSyncStore(hippoRoot).cards.block(tenantId, id, reason, runId);
 }
 
 export function reviewCard(hippoRoot: string, tenantId: string, id: string, runId?: number): Card | null {
-  return onHandle(hippoRoot, (db) => reviewCardAt(db, tenantId, id, runId), openStore);
+  return sqliteSyncStore(hippoRoot).cards.review(tenantId, id, runId);
 }
 
 export function completeCard(
@@ -275,11 +238,11 @@ export function completeCard(
   outcome: HandoffOutcome,
   runId?: number,
 ): { card: Card; promotedChildren: string[] } | null {
-  return onHandle(hippoRoot, (db) => completeCardAt(db, tenantId, id, outcome, runId), openStore);
+  return sqliteSyncStore(hippoRoot).cards.complete(tenantId, id, outcome, runId);
 }
 
 export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string[] {
-  return onHandle(hippoRoot, (db) => reclaimExpiredCardsAt(db, tenantId), openStore);
+  return sqliteSyncStore(hippoRoot).cards.reclaimExpired(tenantId);
 }
 
 export function addCardComment(
@@ -289,7 +252,7 @@ export function addCardComment(
   author: string,
   body: string,
 ): CardComment {
-  return onHandle(hippoRoot, (db) => addCardCommentAt(db, tenantId, cardId, author, body), openStore);
+  return sqliteSyncStore(hippoRoot).cards.comment(tenantId, cardId, author, body);
 }
 
 export function replaceDetectedConflicts(
@@ -360,7 +323,7 @@ export function loadDormantMemories(
   opts: ListDormantOpts = {},
   admit?: SqlFragment,
 ): DormantMemory[] {
-  return onHandle(hippoRoot, (db) => loadDormantMemoriesAt(db, tenantId, opts, admit));
+  return onHandle(hippoRoot, (db) => listDormantRows(db, tenantId, opts, admit ?? EVERY_SCOPE));
 }
 
 export function loadEntriesByIds(hippoRoot: string, ids: readonly string[], tenantId?: string): MemoryEntry[] {
@@ -433,7 +396,7 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
 }
 
 export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
-  return onHandle(hippoRoot, (db) => pushGoalAt(db, opts));
+  return sqliteSyncStore(hippoRoot).goals.push(opts.tenantId, opts);
 }
 
 export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
@@ -441,15 +404,15 @@ export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsO
 }
 
 export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
-  return onHandle(hippoRoot, (db) => completeGoalAt(db, goalId, opts));
+  return sqliteSyncStore(hippoRoot).goals.complete(resolveTenantId({}), goalId, opts);
 }
 
 export function suspendGoal(hippoRoot: string, goalId: string): void {
-  return onHandle(hippoRoot, (db) => suspendGoalAt(db, goalId));
+  return sqliteSyncStore(hippoRoot).goals.suspend(resolveTenantId({}), goalId);
 }
 
 export function resumeGoal(hippoRoot: string, goalId: string): void {
-  return onHandle(hippoRoot, (db) => resumeGoalAt(db, goalId));
+  return sqliteSyncStore(hippoRoot).goals.resume(resolveTenantId({}), goalId);
 }
 
 export function markPendingProcessedUpTo(hippoRoot: string, tenantId: string, maxId: number): number {
@@ -461,7 +424,7 @@ export function loadPendingExtractionTenants(hippoRoot: string): { tenantId: str
 }
 
 export function loadEntitiesByMemoryId(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): Entity[] {
-  return onHandle(hippoRoot, (db) => loadEntitiesByMemoryIdAt(db, tenantId, memoryIds));
+  return sqliteSyncStore(hippoRoot).graphReads.entitiesForMemories(tenantId, memoryIds);
 }
 
 export function loadLatestHandoff(
@@ -522,23 +485,28 @@ export function closePrediction(
   hippoRoot: string,
   tenantId: string,
   id: number,
-  opts: ClosePredictionOptions,
+  close: PredictionClose,
   actor: string = CLI_ACTOR,
 ): Prediction {
-  return onHandle(hippoRoot, (db) => closePredictionAt(db, tenantId, id, opts, actor));
+  return sqliteSyncStore(hippoRoot).predictions.closePrediction(tenantId, id, close, actor);
 }
 
 export function loadPredictionById(hippoRoot: string, tenantId: string, id: number): Prediction | null {
-  return onHandle(hippoRoot, (db) => loadPredictionByIdAt(db, tenantId, id));
+  return sqliteSyncStore(hippoRoot).predictions.predictionById(tenantId, id);
 }
 
 export function loadPredictionsByClass(
   hippoRoot: string,
   tenantId: string,
   classTag: string,
-  opts: ListPredictionsOptions = {},
+  opts: { closureState?: ClosureState; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
-  return onHandle(hippoRoot, (db) => loadPredictionsByClassAt(db, tenantId, classTag, opts));
+  const { closureState, after } = opts;
+  const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
+  return sqliteSyncStore(hippoRoot).predictions.listPredictions(
+    tenantId,
+    closureState === undefined ? { classTag, limit, after } : { classTag, closureState, limit, after },
+  );
 }
 
 export function loadAllPredictions(
@@ -546,7 +514,10 @@ export function loadAllPredictions(
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
-  return onHandle(hippoRoot, (db) => loadAllPredictionsAt(db, tenantId, opts));
+  return sqliteSyncStore(hippoRoot).predictions.listPredictions(tenantId, {
+    limit: opts.limit ?? DEFAULT_LIST_LIMIT,
+    after: opts.after,
+  });
 }
 
 export function computePredictionBaserate(
@@ -564,7 +535,14 @@ export function loadOpenPredictions(
   tenantId: string,
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
-  return onHandle(hippoRoot, (db) => loadOpenPredictionsAt(db, tenantId, opts));
+  const { classTag, after } = opts;
+  const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
+  return sqliteSyncStore(hippoRoot).predictions.listPredictions(tenantId, {
+    classTag,
+    closureState: 'open',
+    limit,
+    after,
+  });
 }
 
 export function loadRecallEntries(
@@ -593,7 +571,7 @@ export function clearActiveTaskSnapshot(
   tenantId: string,
   clearedStatus: string = 'cleared',
 ): boolean {
-  return onHandle(hippoRoot, (db) => clearActiveTaskSnapshotAt(db, { hippoRoot }, tenantId, clearedStatus), openStore);
+  return sqliteSyncStore(hippoRoot).sessions.clearSnapshot(tenantId, clearedStatus);
 }
 
 export function closeTaskSnapshotsForSession(
@@ -603,7 +581,7 @@ export function closeTaskSnapshotsForSession(
   status: string = 'session-ended',
   key?: ContinuityKey,
 ): number {
-  return onHandle(hippoRoot, (db) => closeTaskSnapshotsForSessionAt(db, tenantId, sessionId, status, key), openStore);
+  return sqliteSyncStore(hippoRoot).sessions.closeSessionSnapshots(tenantId, sessionId, status, key ?? null);
 }
 
 export function listSessionEvents(
@@ -623,19 +601,19 @@ export function findPromotableSessions(
 }
 
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadAllL2SummariesAt(db), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.unprofiledTopicSummaries();
 }
 
 export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadAllDirtySummariesAt(db, limit), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
 }
 
 export function loadChildrenOfSummary(hippoRoot: string, summaryId: string, tenantId: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadChildrenOfSummaryAt(db, summaryId, tenantId), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.childrenOfSummary(summaryId, tenantId);
 }
 
 export function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
-  return onHandle(hippoRoot, (db) => applyRebuildResultAt(db, summary, patch), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.applyRebuild(summary, patch);
 }
 
 export function recordRereads(
@@ -691,7 +669,7 @@ export function wmPush(
     tenantId?: string;
   },
 ): number {
-  return onHandle(hippoRoot, (db) => wmPushAt(db, opts), openStore);
+  return sqliteSyncStore(hippoRoot).sessions.pushWorkingMemory(opts.tenantId ?? resolveTenantId({}), opts);
 }
 
 export function wmRead(
@@ -703,7 +681,7 @@ export function wmRead(
     tenantId?: string;
   },
 ): WorkingMemoryItem[] {
-  return onHandle(hippoRoot, (db) => wmReadAt(db, opts), openStore);
+  return sqliteSyncStore(hippoRoot).sessions.readWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
 }
 
 export function wmClear(
@@ -714,7 +692,11 @@ export function wmClear(
     tenantId?: string;
   },
 ): number {
-  return onHandle(hippoRoot, (db) => wmClearAt(db, opts), openStore);
+  return sqliteSyncStore(hippoRoot).sessions.clearWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
+}
+
+export function auditHighId(hippoRoot: string): number {
+  return sqliteSyncStore(hippoRoot).keyAudit.auditHighId();
 }
 
 export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
@@ -757,7 +739,7 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
 }
 
 export function loadEntitiesByIds(hippoRoot: string, tenantId: string, ids: readonly number[]): Entity[] {
-  return onHandle(hippoRoot, (db) => loadEntitiesByIdsAt(db, tenantId, ids));
+  return sqliteSyncStore(hippoRoot).graphReads.entitiesByIds(tenantId, ids);
 }
 
 export function loadNeighborRelations(
@@ -766,16 +748,7 @@ export function loadNeighborRelations(
   entityIds: readonly number[],
   opts: { limit?: number } = {},
 ): Relation[] {
-  return onHandle(hippoRoot, (db) => loadNeighborRelationsAt(db, tenantId, entityIds, opts));
-}
-
-export function loadRelationsAmong(
-  hippoRoot: string,
-  tenantId: string,
-  entityIds: number[],
-  opts: { limit?: number } = {},
-): Relation[] {
-  return onHandle(hippoRoot, (db) => loadRelationsAmongAt(db, tenantId, entityIds, opts));
+  return sqliteSyncStore(hippoRoot).graphReads.neighborRelations(tenantId, entityIds, { limit: opts.limit ?? 1000 });
 }
 
 export function loadVectorCandidateEntries(
@@ -788,13 +761,6 @@ export function loadVectorCandidateEntries(
 
 export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
   return onHandle(hippoRoot, (db) => loadStoredVectorsAt(db, ids));
-}
-
-export function loadChildrenOfSummaries(
-  hippoRoot: string,
-  summaries: ReadonlyArray<{ id: string; tenant_id: string }>,
-): Map<string, MemoryEntry[]> {
-  return onHandle(hippoRoot, (db) => loadChildrenOfSummariesAt(db, summaries), openStore);
 }
 
 /** Keys of every tenant under `hippoRoot` unless `opts.tenantId` names one. */
@@ -837,7 +803,11 @@ export function repairAutomaticMemories(
   files: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
 ): QualityRepairResult {
-  return withUnmigratedDb(files.hippoRoot, !opts.apply, (db) => repairAutomaticMemoriesAt(db, files, opts));
+  return sqliteSyncStore(files.hippoRoot).auditMaintenance.repairQuality(
+    opts.tenantId,
+    opts.apply ?? false,
+    opts.protect,
+  );
 }
 
 export function repairQualityOnce(
@@ -845,5 +815,5 @@ export function repairQualityOnce(
   tenantId: string,
   protect: RepairProtection,
 ): QualityRepairResult | null {
-  return withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnceAt(db, files, tenantId, protect));
+  return sqliteSyncStore(files.hippoRoot).auditMaintenance.repairQualityOnce(tenantId, protect);
 }

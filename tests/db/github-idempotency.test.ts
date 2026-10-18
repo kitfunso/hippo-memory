@@ -4,7 +4,7 @@ import {
   githubEventSeenAt as hasSeenKey,
   markGitHubEventSeenAt as markKeySeen,
   githubEventMemoryAt as lookupMemoryByKey,
-} from '../../src/store/connectors/github.js';
+} from '../../src/store/sqlite/connectors/github.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 describe('github idempotency', () => {

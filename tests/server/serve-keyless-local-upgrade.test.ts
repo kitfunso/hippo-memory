@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { HIPPO_BIN } from '../_helpers/hippo-bin.js';
 import { hippoOut, hippoRun } from '../_helpers/spawn-hippo.js';

@@ -12,7 +12,7 @@ import {
   getCurrentSchemaVersion,
 } from '../../src/db/index.js';
 import { embeddingInputText } from '../../src/embeddings/index-identity.js';
-import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { embedAll } from '../../src/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import {

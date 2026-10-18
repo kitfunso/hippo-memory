@@ -7,7 +7,7 @@ import {
   createApiKey,
   verifyApiKeyCached,
   type CreateApiKeyResult,
-} from '../../src/store/auth.js';
+} from '../../src/store/sqlite/auth.js';
 import { ownerOrSubject, type Actor } from '../../src/api/index.js';
 import {
   ownerOrSubject as exportedOwnerOrSubject,

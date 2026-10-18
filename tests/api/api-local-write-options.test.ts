@@ -6,7 +6,7 @@ import { rmSync } from 'node:fs';
 import { adminActor, remember, supersede } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';

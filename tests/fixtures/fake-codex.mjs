@@ -40,7 +40,7 @@ const write = (f, text) => {
 };
 // HOOKROW, HOOKROW_CHILD and HOOKROW_MEMGEN book one hippo hook injection in the cell's store under that thread's id.
 const ledger = /\bHOOKROW/.test(prompt)
-  ? { db: await import(new URL('../../dist/db/index.js', import.meta.url)), tokens: await import(new URL('../../dist/store/token-ledger.js', import.meta.url)) } : null;
+  ? { db: await import(new URL('../../dist/db/index.js', import.meta.url)), tokens: await import(new URL('../../dist/entry/testing.js', import.meta.url)) } : null;
 function hookRow(sessionId) {
   const db = ledger.db.openHippoDb(path.resolve('.hippo'));
   try {

@@ -14,9 +14,9 @@ import {
   rowToRelation,
   type EntityRow,
   type RelationRow,
-} from '../../src/store/graph-rows.js';
+} from '../../src/store/sqlite/graph-rows.js';
 import type { Entity, EntityType, Relation, StoredGraph } from '../../src/store/port/graph-reads.js';
-import { insertEntityRow, insertRelationRow } from '../../src/store/graph-writes.js';
+import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';

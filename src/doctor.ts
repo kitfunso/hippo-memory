@@ -15,7 +15,7 @@ import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
-import { resolveTenantId } from './store/tenant.js';
+import { resolveTenantId } from './store/index.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
 import { DAY_MS } from './util/time.js';

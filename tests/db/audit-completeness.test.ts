@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
-import { archiveRawMemory } from '../../src/store/raw-archive.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 

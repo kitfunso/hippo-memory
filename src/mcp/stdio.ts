@@ -14,7 +14,7 @@ import {
   type McpRequest,
   type McpResponse,
 } from './protocol.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { resolveTenantId } from '../store/index.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';

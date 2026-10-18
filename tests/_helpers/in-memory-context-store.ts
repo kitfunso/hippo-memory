@@ -1,6 +1,6 @@
 // A store other than hippo.db for the ContextReads group: it copies the rows contextGet reads out of hippo.db, then answers
 // each read from memory with the rules hippo-memory/store-kit exports, so a test shows another store can match hippo.db's SQL.
-import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/core/handoff.js';
 import {
@@ -23,8 +23,8 @@ import {
   type VectorReads,
 } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
-import { HANDOFF_COLUMNS } from '../../src/store/handoffs.js';
-import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
+import { HANDOFF_COLUMNS } from '../../src/store/sqlite/handoffs.js';
+import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
 import { computeSchemaFit } from '../../src/index.js';
 import { inMemoryVectorStore } from './in-memory-vector-store.js';

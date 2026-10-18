@@ -13,7 +13,7 @@ import { openIncident } from '../../src/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {

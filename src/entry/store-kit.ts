@@ -87,7 +87,7 @@ export {
 } from '../store/index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from '../core/memory.js';
-export { normalizeValueForRejection, rejectionDigest } from '../store/rejection.js';
+export { normalizeValueForRejection, rejectionDigest } from '../core/rejection-digest.js';
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule.
 export { heldTexts } from '../util/same-text.js';
 // An add-on's quality repair keeps the rows hippo.db's does.

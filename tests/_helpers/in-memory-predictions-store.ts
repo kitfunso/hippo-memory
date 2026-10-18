@@ -3,7 +3,7 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/server.js';
 import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import type { Predictions } from '../../src/store/port.js';
-import { predictionBaserateOf } from '../../src/store/predictions.js';
+import { predictionBaserateOf } from '../../src/store/sqlite/predictions.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
 import type { Prediction } from '../../src/store/port/predictions.js';

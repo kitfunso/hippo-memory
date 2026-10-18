@@ -5,7 +5,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { adminActor } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';

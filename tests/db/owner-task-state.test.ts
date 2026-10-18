@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { recordFailure } from '../../src/store/failure-log.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { SessionHandoff } from '../../src/core/handoff.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
@@ -192,18 +192,17 @@ describe('handoffs and failures keyed by owner and project', () => {
   });
 
   it('recordFailure stamps owner and project', () => {
-    withDb((db) =>
-      recordFailure(db, {
-        tenantId: T,
-        sessionId: 's1',
-        tool: 'Bash',
-        outcome: 'stored',
-        ownerSubject: 'alice',
-        originProject: 'p',
-        requestId: 'req-1',
-      }),
-    );
-    withDb((db) => recordFailure(db, { tenantId: T, sessionId: 's1', tool: 'Bash', outcome: 'stored' }));
+    const { failureLog } = sqliteSyncStore(home);
+    failureLog.record({
+      tenantId: T,
+      sessionId: 's1',
+      tool: 'Bash',
+      outcome: 'stored',
+      ownerSubject: 'alice',
+      originProject: 'p',
+      requestId: 'req-1',
+    });
+    failureLog.record({ tenantId: T, sessionId: 's1', tool: 'Bash', outcome: 'stored' });
     // SAFETY: the SELECT names exactly these three columns.
     const rows = withDb((db) =>
       db.prepare(`SELECT owner_subject, origin_project, request_id FROM failure_log ORDER BY id`).all(),

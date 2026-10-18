@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { sqliteDagReads } from '../../src/store/sqlite/dag-reads-group.js';
+import { sqliteDagReads } from '../../src/store/sqlite/dag-reads.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';

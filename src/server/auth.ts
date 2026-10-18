@@ -1,11 +1,11 @@
 // Bearer and loopback auth for the HTTP server.
 import { envAllowKeylessLocal, envRequireAuth } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
-import { resolveTenantId } from '../store/tenant.js';
+import { resolveTenantId } from '../store/index.js';
 import { sqliteReach } from '../store/sqlite/store.js';
 import { hasGroup } from '../store/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { verifyApiKeyCached } from '../store/auth.js';
+import { verifyApiKeyCached } from '../store/sqlite/auth.js';
 import { API_KEY_PREFIX } from '../core/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../api/index.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../util/http-util.js';

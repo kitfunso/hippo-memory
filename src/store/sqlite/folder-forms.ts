@@ -6,25 +6,26 @@ import type { SessionHandoff } from '../../core/handoff.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb } from '../../db/index.js';
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
-import { loadAmbientTalliesAt } from '../ambient.js';
-import { batchWriteAndDeleteAt } from '../delete-and-batch.js';
-import { loadAllEntriesAt, loadEntriesPageAt, readEntryAt } from '../entry-reads.js';
+import { loadAmbientTalliesAt } from './ambient.js';
+import { batchWriteAndDeleteAt } from './delete-and-batch.js';
+import { loadAllEntriesAt, loadEntriesPageAt, readEntryAt } from './entry-reads.js';
 import {
   strengthenRetrievedInOwnTx,
   warnStrengthenFailed,
   writeEntryAt,
   type WriteEntryOptions,
-} from '../entry-writes.js';
-import { loadEntitiesAt, loadRelationsAt } from '../graph-reads.js';
-import { saveSessionHandoffAt } from '../handoffs.js';
+} from './entry-writes.js';
+import { loadEntitiesAt, loadRelationsAt } from './graph-reads.js';
+import { saveSessionHandoffAt } from './handoffs.js';
 import type { DormantMove, EntryCursor } from '../port/consolidation.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import type { Entity, EntityType, Relation } from '../port/graph-reads.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
 import type { ContinuityKey } from '../port/types.js';
-import { appendSessionEventAt, saveActiveTaskSnapshotAt } from '../sessions.js';
-import { loadEmbeddingIndexAt } from '../vector-index.js';
+import { appendSessionEventAt } from './sessions.js';
+import { saveActiveTaskSnapshotAt } from './task-snapshots.js';
+import { loadEmbeddingIndexAt } from './vector-index.js';
 import { onHandle, openStore } from './handles.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */

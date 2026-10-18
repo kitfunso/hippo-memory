@@ -10,7 +10,7 @@ import {
   validateApiKey,
   verifyApiKeyCached,
   _readApiKeyVerifyStatsForTests,
-} from '../../src/store/auth.js';
+} from '../../src/store/sqlite/auth.js';
 import { mintApiKey } from '../../src/core/api-key.js';
 import {
   adminActor,

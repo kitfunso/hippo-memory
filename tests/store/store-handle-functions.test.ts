@@ -1,11 +1,12 @@
 // The store functions capture code calls with a folder and plain values: each opens its own handle on a real store.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { latestCompactionRows } from '../../src/store/compactions.js';
-import { failuresBySession } from '../../src/store/failure-log.js';
+import { latestCompactionRows } from '../../src/store/sqlite/compaction-rows.js';
+import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { Captures } from '../../src/store/port.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/core/rejection-digest.js';
 import { duplicateKey } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -51,9 +52,10 @@ describe('failure log functions', () => {
       sigHash: 'a',
       detailHash: 'b',
     });
-    expect(read((db) => failuresBySession(db, 'default', '1970-01-01T00:00:00.000Z')).map((r) => r.sessionId)).toEqual([
-      's1',
-    ]);
+    expect(read((db) => summarizeFailures(db, 'default', '1970-01-01T00:00:00.000Z'))).toMatchObject({
+      total: 1,
+      sessions: 1,
+    });
   });
 
   it('requestOutcome reads a request outcome and settleOutcome rewrites it', () => {

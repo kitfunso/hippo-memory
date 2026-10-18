@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
-import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
-import { lazyTombstoneChecks } from '../../src/store/tombstone-checks.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { rejectionDigest } from '../../src/core/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 
 const roots: string[] = [];
 const DIGEST = rejectionDigest('the staging password is hunter2');
@@ -54,10 +54,13 @@ const refusal = (targetId: string): AppendAuditOpts => ({
   metadata: { digest: DIGEST },
 });
 
-describe('lazyTombstoneChecks', () => {
+const tombstoneChecks = (root: string, dryRun: boolean) =>
+  sqliteSyncStore(root).localFiles.consolidation.tombstoneChecks(dryRun);
+
+describe('tombstoneChecks', () => {
   it('finds a tombstone only under the tenant that rejected the value, and writes the refusal row', () => {
     const root = storeWithTombstone();
-    const checks = lazyTombstoneChecks(handlesOf(root).open, false);
+    const checks = tombstoneChecks(root, false);
     try {
       expect(checks.find('ta', DIGEST)?.reason).toBe('leaked');
       expect(checks.find('tb', DIGEST)).toBeNull();
@@ -73,7 +76,7 @@ describe('lazyTombstoneChecks', () => {
 
   it('under a dry run finds nothing, writes nothing and never opens the store', () => {
     const root = storeWithTombstone();
-    const checks = lazyTombstoneChecks(handlesOf(path.join(root, 'no-store-here')).open, true);
+    const checks = tombstoneChecks(path.join(root, 'no-store-here'), true);
     expect(checks.find('ta', DIGEST)).toBeNull();
     checks.audit(refusal('m1'));
     checks.close();
@@ -82,7 +85,7 @@ describe('lazyTombstoneChecks', () => {
 
   it('an unused set of checks closes without ever opening the store', () => {
     const root = storeWithTombstone();
-    lazyTombstoneChecks(handlesOf(path.join(root, 'no-store-here')).open, false).close();
+    tombstoneChecks(path.join(root, 'no-store-here'), false).close();
     expect(fs.existsSync(path.join(root, 'no-store-here'))).toBe(false);
   });
 });

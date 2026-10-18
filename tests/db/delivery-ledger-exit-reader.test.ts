@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeDeliveryEventOnHandle } from '../../src/store/recall-trace.js';
+import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/recall-trace.js';
 import type {
   DeliveryCandidateInput,
   DeliveryEventInput,
@@ -17,7 +17,7 @@ import { realpathOrResolve } from '../../src/util/real-path.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { seed, verdictOf, writeHostTranscript, type ReadOptions, type Verdict } from '../_helpers/host-transcript.js';
 import { dispose, hippo, project, type Project } from '../_helpers/delivery-boundary.js';
-import { upsertEntryRow } from '../../src/store/entry-row.js';
+import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { fire } from '../_helpers/host-transcript.js';
 import { trySymlink } from '../_helpers/symlink.js';

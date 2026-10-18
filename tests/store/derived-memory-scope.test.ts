@@ -13,7 +13,7 @@ import { saveProjectBrief, briefFromReceipts } from '../../src/objects/project-b
 import { derivationScope, commonDerivationScope } from '../../src/core/recall-scope.js';
 import { placeholders } from '../../src/util/sql.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';

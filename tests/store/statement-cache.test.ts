@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { cachedStatement } from '../../src/store/statement-cache.js';
+import { cachedStatement } from '../../src/store/sqlite/statement-cache.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);

@@ -3,7 +3,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../src/core/search-types.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';

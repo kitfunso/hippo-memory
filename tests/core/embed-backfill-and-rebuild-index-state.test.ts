@@ -12,7 +12,7 @@ import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/embeddings/index-identity.js';
 import { embedAll, embedMemory } from '../../src/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { localIndex } from '../_helpers/cli-stores.js';
