@@ -331,7 +331,8 @@ function sqliteKeyWrites(on: OnHandle): Sync<KeyWrites> {
       on((db) => createKeyAt(db, mint));
     },
     createSelfApiKey: (mint) => on((db) => createSelfKeyAt(db, mint)),
-    listApiKeys: (query) => on((db) => listApiKeyRows(db, query)),
+    listApiKeys: ({ tenantId, ...query }) =>
+      on((db) => listApiKeyRows(db, { ...query, tenantId: tenantId ?? undefined })),
   };
 }
 

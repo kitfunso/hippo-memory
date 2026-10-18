@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authCreate, adminActor } from '../../src/api/index.js';
-import { listApiKeys } from '../../src/store/auth.js';
+import { listApiKeys } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 

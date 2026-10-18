@@ -34,7 +34,7 @@ async function logged<T>(what: string, fn: () => Promise<T>): Promise<T | null> 
 export async function preCompactForCaller(ctx: Context, req: CallerPreCompactRequest): Promise<CallerHookOutput> {
   assertTrigger(req.trigger);
   const state = checkedWorkingState(req.workingState);
-  const key = bindCaller(ctx, req.sessionId, req.project);
+  const key = await bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
   const start = {
     sessionId: req.sessionId,

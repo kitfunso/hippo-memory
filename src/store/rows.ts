@@ -175,7 +175,7 @@ export const MEMORY_SEARCH_COLUMNS = [
   ...MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`),
   'bm25(memories_fts) AS bm25_score',
 ].join(', ');
-/** Default candidate-pool size for `loadSearchEntries` when `limit` is undefined; `api.recall` imports it for
+/** Default candidate-pool size for `loadSearchEntriesAt` when `limit` is undefined; `api.recall` imports it for
  * `RecallResult.windowSize` so the two cannot drift. */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 

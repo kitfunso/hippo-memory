@@ -222,15 +222,6 @@ export function loadSearchEntriesAt(
   return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
 }
 
-export function loadSearchEntries(
-  hippoRoot: string,
-  query: string,
-  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId?: string,
-): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore);
-}
-
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
  * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
  * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */

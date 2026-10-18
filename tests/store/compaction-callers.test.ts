@@ -274,7 +274,7 @@ describe('preCompactForCaller', () => {
   });
 
   it('a busy store at startCompaction still returns the instruction (F8)', async () => {
-    bindSessionOwner(owned('alice'), 'sA');
+    await bindSessionOwner(owned('alice'), 'sA');
     expect(await whileLocked(() => preCompact(owned('alice')))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     expect(rowCounts()).toMatchObject({ compactions: 0, task_snapshots: 0 });
   });
@@ -385,7 +385,7 @@ describe('saveCompactionItemsForCaller', () => {
   });
 
   it('busy throws, no spool file', async () => {
-    bindSessionOwner(owned('alice'), 'sA');
+    await bindSessionOwner(owned('alice'), 'sA');
     const err = await whileLocked(() => caught(() => postCompact(owned('alice'))));
     expect(isStoreBusy(err)).toBe(true);
     expect(fs.existsSync(path.join(root, 'compactions-spool'))).toBe(false);
@@ -554,7 +554,7 @@ describe('a second owner on the same session', () => {
   ];
 
   it.each(calls)('%s: a second owner on the same session gets a 409 ConflictError', async (_name, call) => {
-    bindSessionOwner(owned('alice'), 'sA');
+    await bindSessionOwner(owned('alice'), 'sA');
     const err = await caught(() => call(owned('bob')));
     expect(err).toBeInstanceOf(ConflictError);
     expect(err).toMatchObject({ status: 409 });

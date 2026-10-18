@@ -53,7 +53,7 @@ export async function sessionEndHandoffForCaller(
 ): Promise<CallerSessionEndResult> {
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
-  const key = bindCaller(ctx, req.sessionId, req.project);
+  const key = await bindCaller(ctx, req.sessionId, req.project);
   const { sessions } = ctx.store;
   const handoff = await sessions.writeSessionEndHandoff(ctx.tenantId, {
     sessionId: req.sessionId,

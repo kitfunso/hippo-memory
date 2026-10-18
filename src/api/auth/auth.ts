@@ -1,7 +1,7 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
-import { DEFAULT_KEY_TTL_DAYS, listApiKeys, mintApiKey } from '../../store/auth.js';
+import { DEFAULT_KEY_TTL_DAYS, mintApiKey } from '../../store/auth.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { KeyMint, SelfKeyMint, HippoStore } from '../../store/index.js';
 import type { ApiKeyOwner } from '../../store/tenant-lookup.js';
@@ -176,9 +176,10 @@ export async function authListRows(ctx: Context, opts: KeyListOptions): Promise<
 
 /** Every tenant's keys in the store, live ones only unless
  * `active` is false; the host's own view, so the host admin only. */
-export function authListAllTenants(ctx: Context, active: boolean): ApiKeyListItem[] {
+export async function authListAllTenants(ctx: Context, active: boolean): Promise<ApiKeyListItem[]> {
   requireHostAdmin(ctx, "Listing every tenant's keys");
-  return listApiKeys(ctx.hippoRoot, { active });
+  const rows = await ctx.store.keyWrites.listApiKeys({ active, tenantId: null });
+  return rows.map((row) => row.key);
 }
 
 async function listRows(ctx: Context, store: HippoStore, opts: KeyListOptions): Promise<ApiKeyListRow[]> {

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
-import { loadSearchEntries } from '../../src/store/search-rows.js';
+import { loadSearchEntries } from '../_helpers/root-forms.js';
 import { flushStatsMirrors } from '../../src/store/mirrors.js';
 import { updateStats } from '../../src/store/index-and-stats.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';

@@ -88,7 +88,9 @@ import {
 } from '../../src/store/predictions.js';
 import type { HippoIndex, SessionEvent, TaskSnapshot } from '../../src/store/rows.js';
 import type { SqlFragment } from '../../src/store/rule-sql.js';
-import { loadRecallEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
+import { loadRecallEntriesAt, loadSearchEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
+import { listApiKeyRows } from '../../src/store/auth.js';
+import type { ApiKeyListItem, ListApiKeysOpts } from '../../src/store/port/key-writes.js';
 import {
   clearActiveTaskSnapshotAt,
   closeTaskSnapshotsForSessionAt,
@@ -695,6 +697,15 @@ export function loadChildrenOfSummaries(
   summaries: ReadonlyArray<{ id: string; tenant_id: string }>,
 ): Map<string, MemoryEntry[]> {
   return onHandle(hippoRoot, (db) => loadChildrenOfSummariesAt(db, summaries), openStore);
+}
+
+/** Keys of every tenant under `hippoRoot` unless `opts.tenantId` names one. */
+export function listApiKeys(hippoRoot: string, opts: ListApiKeysOpts): ApiKeyListItem[] {
+  return onHandle(hippoRoot, (db) => listApiKeyRows(db, opts).map((r) => r.key));
+}
+
+export function loadSearchEntries(hippoRoot: string, query: string, limit?: number, tenantId?: string): MemoryEntry[] {
+  return onHandle(hippoRoot, (db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore);
 }
 
 export function copyToGlobal(

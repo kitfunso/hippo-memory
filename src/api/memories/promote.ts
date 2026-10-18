@@ -1,7 +1,6 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
-import { stampOriginProject } from '../../store/entry-row.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { createSuccessor, type Layer, type MemoryEntry } from '../../core/memory.js';
 import { embedMemory } from '../../search/embed-memories.js';
@@ -67,15 +66,13 @@ export async function supersede(
   const store = ctx.store;
   const entryWrites = store.entryWrites;
   const [old] = await store.entriesByIds([oldId], ctx.tenantId);
-  const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
+  const successor = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
     tenantId: ctx.tenantId,
     baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
     layer: overrides.layer,
     tags: overrides.tags,
     pinned: overrides.pinned,
   });
-  // A store writes origin_project as given, so the served folder's fallback is stamped here.
-  const successor = stampOriginProject(ctx.hippoRoot, newEntry);
   await entryWrites.supersede({
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,

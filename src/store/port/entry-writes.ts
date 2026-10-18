@@ -35,9 +35,9 @@ export interface RawArchive extends EntryRemoval {
  * write's own transaction, a child row's change marks its level 2 or 3 summary parent dirty (one summary_marked_dirty
  * row on the flip), and the schema's rules hold. */
 export interface EntryWrites {
-  /** Upserts the row, its full-text row and one remember row ({kind, scope}) in the entry's tenant; an id held by
-   * another tenant rejects with ConflictError. Content from a tenant that tombstoned it rejects with RejectedValueError
-   * and writes one reject_refusal row after the rollback, best effort. */
+  /** Upserts the row, its full-text row and one remember row ({kind, scope}) in the entry's tenant; an undefined
+   * origin_project takes the store's fallback. An id another tenant holds rejects with ConflictError. Content the
+   * tenant tombstoned rejects with RejectedValueError; one reject_refusal row follows the rollback, best effort. */
   writeEntry(write: EntryWrite): Promise<void>;
   /** Per id in order, a row of the tenant within reach gets `entryAfterOutcome` (rewrite as writeEntry does) and one
    * outcome row ({good}); other ids skipped. Each read holds the row lock to commit (SELECT ... FOR UPDATE), so a

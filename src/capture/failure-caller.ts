@@ -79,7 +79,7 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
 
 export async function captureFailureForCaller(ctx: Context, req: CallerFailureRequest): Promise<CallerFailureResult> {
   const failure = checkedFailure(req);
-  const key = bindCaller(ctx, req.sessionId, req.project);
+  const key = await bindCaller(ctx, req.sessionId, req.project);
   const earlier = await ctx.store.failureLog.requestOutcome(ctx.tenantId, req.requestId, req.sessionId);
   // A retry after a lost reply gets the first answer and writes
   // nothing; one whose store failed tries the store again.

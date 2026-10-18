@@ -1,13 +1,13 @@
 import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { keysetAfter } from '../util/keyset.js';
 import type { HippoStore } from './index.js';
 import { DAY_MS } from '../util/time.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../util/version.js';
 import type { ApiKeyRecord } from './port/types.js';
-import type { ApiKeyListRow, ApiKeyListItem, ListApiKeysOpts, NewApiKey } from './port/key-writes.js';
+import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from './port/key-writes.js';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';
@@ -427,16 +427,6 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
       expiresAt: r.expires_at, ownerSubject: r.owner_subject,
     },
   }));
-}
-
-/** Keys of every tenant under `hippoRoot` unless `opts.tenantId` names one. */
-export function listApiKeys(hippoRoot: string, opts: ListApiKeysOpts): ApiKeyListItem[] {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return listApiKeyRows(db, opts).map(r => r.key);
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 /** Ids of the unrevoked, unexpired keys `ownerSubject` minted in `tenantId`, oldest first. */

@@ -1,6 +1,5 @@
 // Write path: remember stores one memory after secret vetting and, for untrusted content, the instruction check.
 
-import { stampOriginProject } from '../../store/entry-row.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../store/port.js';
 import { detectInstruction } from '../instruction-detect.js';
 import { quarantineScopeFor } from '../../trust/quarantine.js';
@@ -182,8 +181,7 @@ export async function remember(ctx: Context, opts: RememberOptions): Promise<Rem
   const store = ctx.store;
   const entryWrites = store.entryWrites;
   const prepared = prepareRemember(ctx, opts);
-  // A store writes origin_project as given, so the served folder's fallback is stamped here.
-  const write = { entry: stampOriginProject(ctx.hippoRoot, prepared.entry), actor: ctx.actor.subject };
+  const write = { entry: prepared.entry, actor: ctx.actor.subject };
   if (opts.untrusted !== true && opts.event === undefined) {
     await entryWrites.writeEntry(write);
     return rememberResult(ctx, prepared);

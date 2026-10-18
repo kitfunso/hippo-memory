@@ -475,7 +475,3 @@ export function sessionOwnerOrBindAt(db: DatabaseSyncLike, binding: SessionOwner
   // A bound session is the common case after the first prompt, so it must not take the write lock.
   return selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding);
 }
-
-export function sessionOwnerOrBind(hippoRoot: string, binding: SessionOwnerBinding): string | null {
-  return onHandle(hippoRoot, (db) => sessionOwnerOrBindAt(db, binding));
-}
