@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { routeLabel } from '../../src/server/route-table.js';
+import { HOST_ROUTES, routeLabel } from '../../src/server/route-table.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -16,8 +16,8 @@ afterEach(() => {
 
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
-// The /v1 rows come from the live table; these routes are answered inline in boot.ts's handleRequest, so no table names them.
-const INLINE_ROUTES: readonly string[] = ['GET /health', 'GET /ready', 'POST /mcp', 'GET /mcp/stream'];
+// The /v1 rows come from the live table; the routes outside it come from HOST_ROUTES, which boot.ts dispatches.
+const INLINE_ROUTES: readonly string[] = Object.values(HOST_ROUTES).map(({ method, path }) => `${method} ${path}`);
 
 // Rows the old source-text parse found in the table.
 const OLD_PARSED_V1_COUNT = 62;
@@ -140,10 +140,11 @@ describe('server Bearer lockdown', () => {
   });
 
   // Source text is the only way to see an inline route nobody listed, since no request names a path the table lacks.
-  it('every inline method-check in boot.ts handleRequest is a listed inline route; the public webhooks live in the table', () => {
+  it('boot.ts checks no method inline and dispatches each HOST_ROUTES entry once; the public webhooks live in the table', () => {
     const boot = readFileSync(join(repoRoot, 'src/server/boot.ts'), 'utf8');
-    const inlineChecks = (boot.slice(boot.indexOf('async function handleRequest')).match(/^\s*if \(method === '/gm) ?? []).length;
-    expect(inlineChecks).toBe(INLINE_ROUTES.length);
+    expect(boot.match(/^\s*if \(method === '/gm) ?? []).toEqual([]);
+    expect((boot.match(/dispatchHostRoute\(/g) ?? []).length).toBe(INLINE_ROUTES.length);
+    expect([...INLINE_ROUTES].sort()).toEqual(['GET /health', 'GET /mcp/stream', 'GET /ready', 'POST /mcp']);
   });
 
   it('the live /v1 table is at least as large as the 62 rows the old source parse found', () => {
