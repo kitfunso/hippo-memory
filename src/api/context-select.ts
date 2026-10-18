@@ -1,4 +1,4 @@
-// getContext's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
+// contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
 import { recallScopeFilter } from '../core/recall-scope.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
@@ -33,13 +33,13 @@ import type { AppendAuditOpts } from '../store/port/types.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
-/** One store getContext reads rows from: its base search and its context reads. */
+/** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {
   readonly store: HippoStore;
   readonly reads: ContextReads;
 }
 
-/** What getContext resolved from opts and config before it read a row. */
+/** What contextGet resolved from opts and config before it read a row. */
 export interface ContextPlan {
   /** The served store, else hippo.db under the root. */
   local: ContextSource;

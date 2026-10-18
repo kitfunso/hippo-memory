@@ -16,6 +16,7 @@ import {
   type ProjectAgg,
   type Snapshot,
 } from './dashboard-snapshot.js';
+import { AT_RISK_BELOW, STRONG_FROM } from '../core/strength-bands.js';
 import { chunked } from '../util/chunked.js';
 import { pct, plural, round1 } from '../util/format.js';
 import type { MemoryQuery, SortDir, SortKey } from './dashboard-params.js';
@@ -103,7 +104,7 @@ function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
     snap.nowMs,
   );
   const atRisk = projects.reduce((sum, p) => sum + p.summary.atRisk, 0);
-  const weakNow = snap.facts.reduce((sum, f) => sum + (f.strength < 0.2 ? 1 : 0), 0);
+  const weakNow = snap.facts.reduce((sum, f) => sum + (f.strength < AT_RISK_BELOW ? 1 : 0), 0);
   const withConflicts = projects.filter((p) => p.summary.openConflicts > 0).length;
   return [
     {
@@ -248,7 +249,7 @@ function sortedMembers(snap: Snapshot, project: ProjectAgg, sort: SortKey, dir: 
 }
 
 function bucket(value: number): 0 | 1 | 2 {
-  return value >= 0.5 ? 0 : value >= 0.2 ? 1 : 2;
+  return value >= STRONG_FROM ? 0 : value >= AT_RISK_BELOW ? 1 : 2;
 }
 
 function holdsText(row: DashboardText, needle: string): boolean {

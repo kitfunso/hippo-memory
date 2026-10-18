@@ -183,7 +183,7 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
 // -----------------------------------------------------------------------
 // Bonus (beyond the plan's 8 enumerated tests): end-to-end proof that the
 // `hippo context` CLI dispatch itself -- isTTY-guarded stdin parse ->
-// payload.session_id -> ContextOptions.currentSessionId -> api.getContext ->
+// payload.session_id -> ContextOptions.currentSessionId -> api.contextGet ->
 // loadFreshActiveTaskSnapshot -- is wired correctly, not just the
 // underlying store function in isolation (tests 1-5).
 // -----------------------------------------------------------------------

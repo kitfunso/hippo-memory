@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import { embedCoverage, embedMissingMemories } from '../api/embeddings.js';
+import { embedCoverage, memoryEmbedMissing } from '../api/embeddings.js';
 import { captureError, runWatched, runWatchedLine } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
@@ -16,7 +16,7 @@ import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
 import * as api from '../api/index.js';
-import { getMemory, listMemories } from '../api/memories/memories.js';
+import { memoryGet, memoryList } from '../api/memories/memories.js';
 import * as client from './client.js';
 import {
   cliApiContext,
@@ -185,7 +185,7 @@ function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): v
 /** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it
  * settles, and awaiting would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
 function backfillVectors(ctx: CliContext, embedCommand: string): void {
-  void embedMissingMemories(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
+  void memoryEmbedMissing(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
 
 function warnRedacted(count: number | undefined): void {
@@ -476,7 +476,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
       console.log(`Shared [${result.id}] to global store.`);
       console.log(`  Source: ${result.source}`);
     } else {
-      const entry = await getMemory(ctx, shareId);
+      const entry = await memoryGet(ctx, shareId);
       if (entry) {
         const score = transferScore(entry);
         console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);
@@ -513,7 +513,7 @@ export async function handleExport({ hippoRoot, tenantId, args, flags }: Command
   requireInit(hippoRoot);
   const format = stringFlagOrExit(flags, 'format') || 'json';
   const outputPath = args[0] || null;
-  const entries = await listMemories(cliApiContext(hippoRoot, tenantId));
+  const entries = await memoryList(cliApiContext(hippoRoot, tenantId));
 
   let output: string;
   if (format === 'markdown' || format === 'md') {

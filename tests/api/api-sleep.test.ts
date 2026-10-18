@@ -22,7 +22,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
-import { remember, sleep, getContext } from '../../src/api/index.js';
+import { remember, sleep, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -66,7 +66,7 @@ describe('api.sleep', () => {
 
       expect(result.dryRun).toBe(true);
       expect(result.removed).toBe(0);
-      expect((await getContext(ctx, { currentProject: cwdProject(), budget: 1500 })).entries).toHaveLength(1);
+      expect((await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 })).entries).toHaveLength(1);
       // H10: the preview reports what a real sleep would dedupe and audit.
       expect(result.deduped).toBeUndefined();
       expect(result.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });

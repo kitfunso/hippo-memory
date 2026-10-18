@@ -1,5 +1,6 @@
 // The git layout of a project root, which Claude Code, Gemini and Copilot use to name a project's memory folder.
 import { spawnSync } from 'node:child_process';
+import { GIT_CALL_TIMEOUT_MS } from '../util/time.js';
 
 export interface GitLayout {
   readonly top: string;
@@ -12,7 +13,7 @@ export function gitLayout(projectRoot: string): GitLayout | null {
   const git = spawnSync(
     'git',
     ['rev-parse', '--path-format=absolute', '--show-toplevel', '--absolute-git-dir', '--git-common-dir'],
-    { cwd: projectRoot, encoding: 'utf8', timeout: 10000, windowsHide: true },
+    { cwd: projectRoot, encoding: 'utf8', timeout: GIT_CALL_TIMEOUT_MS, windowsHide: true },
   );
   if (git.status !== 0) return null;
   const [top, gitDir, common] = git.stdout.trim().split(/\r?\n/);

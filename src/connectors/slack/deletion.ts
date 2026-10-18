@@ -1,4 +1,4 @@
-import { archiveRaw, type Context } from '../../api/index.js';
+import { rawArchive, type Context } from '../../api/index.js';
 import type { ConnectorEvent } from '../../store/port.js';
 
 export interface DeletionInput {
@@ -34,7 +34,7 @@ export async function handleMessageDeleted(ctx: Context, input: DeletionInput): 
     await events.markEventSeen(event);
     return { status: 'not_found', memoryId: null };
   }
-  await archiveRaw(ctx, memoryId, `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`, {
+  await rawArchive(ctx, memoryId, `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`, {
     event,
   });
   return { status: 'archived', memoryId };

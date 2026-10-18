@@ -10,10 +10,10 @@ import {
   auditMemoryQuality,
   CLI_LEARN,
   learn,
-  pruneAuditLog,
-  removeAuditErrors,
-  repairMemoryQuality,
-  repairMemoryQualityOnce,
+  auditPrune,
+  auditRemoveErrors,
+  memoryQualityRepair,
+  memoryQualityRepairOnce,
 } from '../../src/api/index.js';
 import { sleep } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
@@ -76,9 +76,9 @@ describe.each([
       const audit = await auditMemoryQuality(ctx);
       const errors = audit.issues.filter((issue) => issue.severity === 'error');
       expect(errors.map((issue) => issue.memoryId)).toEqual([short.id]);
-      expect(await removeAuditErrors(ctx, 'audit --fix', errors)).toEqual([short.id]);
-      expect((await pruneAuditLog(ctx, { olderThanDays: 30, dryRun: true })).dryRun).toBe(true);
-      expect((await repairMemoryQuality(ctx, false)).total).toBe(1);
+      expect(await auditRemoveErrors(ctx, 'audit --fix', errors)).toEqual([short.id]);
+      expect((await auditPrune(ctx, { olderThanDays: 30, dryRun: true })).dryRun).toBe(true);
+      expect((await memoryQualityRepair(ctx, false)).total).toBe(1);
 
       const learned = await learn(ctx, { repoPath: repoWithOneFix(root), days: 7, profile: CLI_LEARN });
       expect(learned).toMatchObject({ status: 'scanned', added: 1 });
@@ -98,16 +98,16 @@ describe.each([
       const pinned = createMemory('Found local migration files to be', { ...automatic, pinned: true });
       for (const entry of [bad, pinned]) writeEntry(root, entry);
 
-      expect((await repairMemoryQuality(ctx, false)).issues).toEqual(
+      expect((await memoryQualityRepair(ctx, false)).issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: bad.id, disposition: 'set-aside' }),
           expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
         ]),
       );
-      expect((await repairMemoryQuality(ctx, true)).appliedIds).toEqual([bad.id]);
+      expect((await memoryQualityRepair(ctx, true)).appliedIds).toEqual([bad.id]);
       expect(loadAllEntries(root, 'default').map((e) => e.id)).toEqual([pinned.id]);
-      expect(await repairMemoryQualityOnce(ctx)).toMatchObject({ supported: true, appliedIds: [] });
-      expect(await repairMemoryQualityOnce(ctx)).toBeNull();
+      expect(await memoryQualityRepairOnce(ctx)).toMatchObject({ supported: true, appliedIds: [] });
+      expect(await memoryQualityRepairOnce(ctx)).toBeNull();
     } finally {
       await store.close();
     }

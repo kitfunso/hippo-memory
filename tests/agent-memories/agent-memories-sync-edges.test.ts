@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { forget, reject, restoreDormant, supersede } from '../../src/api/index.js';
+import { forget, reject, dormantRestore, supersede } from '../../src/api/index.js';
 import { importForStore } from '../../src/agent-memories/sync.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
@@ -93,7 +93,7 @@ describe('agent memory sync: the Added list', () => {
 
   it('a restored set-aside row is left alone while the note stays gone', async () => {
     const id = importThenDelete();
-    await restoreDormant(ctxFor(w.local), id);
+    await dormantRestore(ctxFor(w.local), id);
 
     for (let i = 0; i < 2; i++) {
       expect(claude(sync())).toMatchObject({ setAside: 0, untagged: 0, retagged: 0, imported: 0 });
@@ -137,7 +137,7 @@ describe('agent memory sync: the Added list', () => {
     const a = importThenDelete();
     note(dir, 'deploy.md', B);
     expect(claude(sync()).imported).toBe(1);
-    await restoreDormant(ctxFor(w.local), a);
+    await dormantRestore(ctxFor(w.local), a);
 
     for (let i = 0; i < 2; i++) {
       expect(claude(sync())).toMatchObject({ unchanged: 1, setAside: 0, replaced: 0, imported: 0 });

@@ -8,7 +8,7 @@ import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb } from '../../src/db/index.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../../src/consolidate/dag.js';
-import { countAllMemories } from '../../src/api/memories/memories.js';
+import { memoryCountAll } from '../../src/api/memories/memories.js';
 import { adminActor } from '../../src/api/types.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
@@ -133,7 +133,7 @@ describe('rebuildDirtySummaries', () => {
   });
 });
 
-describe('countAllMemories', () => {
+describe('memoryCountAll', () => {
   it("counts every tenant's rows without reading them", async () => {
     const read: number[] = [];
     for (const n of [10, 200]) {
@@ -146,7 +146,7 @@ describe('countAllMemories', () => {
         store: sqliteStore(root),
         config: loadConfig(root),
       };
-      const { result, rowsRead } = await recordStatementsAsync(() => countAllMemories(ctx));
+      const { result, rowsRead } = await recordStatementsAsync(() => memoryCountAll(ctx));
       expect(result).toBe(n + 1);
       read.push(rowsRead);
     }

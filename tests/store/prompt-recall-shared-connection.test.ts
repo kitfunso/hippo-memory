@@ -1,4 +1,4 @@
-// Z1's prompt-recall FTS query reopened the store getContext's ambient
+// Z1's prompt-recall FTS query reopened the store contextGet's ambient
 // load had just opened and closed. Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -8,7 +8,7 @@ import { createRequire } from 'module';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -80,7 +80,7 @@ describe('prompt recall reuses the ambient load connection', () => {
       return originalPrepare.apply(this, args);
     });
     try {
-      await getContext(ctx, {
+      await contextGet(ctx, {
         pinnedOnly: true,
         includeRecent: 5,
         currentProject: PROJECT,

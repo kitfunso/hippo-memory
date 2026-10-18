@@ -11,7 +11,7 @@ import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
 import { initMemoryStore } from '../api/store-init.js';
 import { isInitialized } from '../core/project-identity.js';
-import { listMemories } from '../api/memories/memories.js';
+import { memoryList } from '../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
@@ -149,7 +149,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = await listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
+    const entries = await memoryList(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
     console.log(
       `  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} ` +
         `memories${added > 0 ? ` (+${added} from git)` : ''}`,

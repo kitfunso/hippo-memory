@@ -223,7 +223,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   it('a deleted quarantined memory drops out of the pending queue but keeps its history', async () => {
     const ctx = adminCtx(home);
     expect((await api.quarantineList(ctx, { status: 'pending' })).map((r) => r.id)).toContain(id);
-    await api.archiveRaw(ctx, id, 'slack message_deleted');
+    await api.rawArchive(ctx, id, 'slack message_deleted');
     expect((await api.quarantineList(ctx, { status: 'pending' })).map((r) => r.id)).not.toContain(id);
     expect(quarantineRow(home, id)?.status).toBe('pending');
   });

@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveRaw, remember, type Actor, type RememberOptions } from '../../src/api/index.js';
+import { rawArchive, remember, type Actor, type RememberOptions } from '../../src/api/index.js';
 import { issueCommentEventToRememberOpts, issueEventToRememberOpts } from '../../src/connectors/github/transform.js';
 import { messageToRememberOpts } from '../../src/connectors/slack/transform.js';
 import { withSqliteBlocked } from '../../src/db/index.js';
@@ -97,7 +97,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       expect(redelivered.duplicate).toEqual({ memoryId: message.id });
       const opened = await remember(ctx, ingestOpts(issue, issueEvent));
       expect([message.duplicate, opened.duplicate, opened.quarantined]).toEqual([undefined, undefined, undefined]);
-      const deleted = await archiveRaw(ctx, message.id, 'source_deleted:slack:T1:C1:1700.000001', {
+      const deleted = await rawArchive(ctx, message.id, 'source_deleted:slack:T1:C1:1700.000001', {
         event: { connector: 'slack', eventId: 'Ev_deleted' },
       });
       expect(deleted).toEqual({ ok: true, archivedAt: NOW });

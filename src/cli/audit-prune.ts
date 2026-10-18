@@ -1,4 +1,4 @@
-// The `--older-than` flag of `hippo audit prune`; the prune itself is api.pruneAuditLog.
+// The `--older-than` flag of `hippo audit prune`; the prune itself is api.auditPrune.
 
 /** Parse `--older-than`: bare integer days (`30`) or with a `d` suffix (`30d`); throws on any other format. */
 export function parseOlderThanFlag(raw: string): number {

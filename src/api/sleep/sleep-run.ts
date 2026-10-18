@@ -10,7 +10,7 @@ import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js'
 import type { MemoryEntry } from '../../core/memory.js';
 import type { Context, ContextWith } from '../types.js';
 import type { Consolidation, LocalFiles, StoreWith } from '../../store/port.js';
-import { removeAuditErrors } from '../auth/audit.js';
+import { auditRemoveErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
 import type { EntryCursor } from '../../store/port/consolidation.js';
@@ -212,7 +212,7 @@ async function runQualityAudit(ctx: Context, phases: SleepPhases, options: Quali
   if (issues.length === 0) return 0;
   const errors = issues.filter((i) => i.severity === 'error');
   const warnings = issues.filter((i) => i.severity === 'warning');
-  const gone = dryRun ? errors.map((issue) => issue.memoryId) : await removeAuditErrors(ctx, 'sleep-audit', errors);
+  const gone = dryRun ? errors.map((issue) => issue.memoryId) : await auditRemoveErrors(ctx, 'sleep-audit', errors);
   if (gone.length > 0 || warnings.length > 0) {
     result.audit = {
       errorsRemoved: gone.length,

@@ -34,7 +34,7 @@ import {
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import { continuityTexts } from './print.js';
 import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, inPilotHoldout } from './hook-runtime.js';
 
 async function cmdContext(
@@ -94,7 +94,7 @@ function contextGate(
   rec: DeliveryRecorder | null,
 ): ContextGate | null {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
-  // and api.getContext falls back to global-only.
+  // and api.contextGet falls back to global-only.
   const pinnedOnly = flagIsTrue(flags, 'pinned-only');
   if (!pinnedOnly) {
     requireInit(hippoRoot);
@@ -130,7 +130,7 @@ async function renderContext(
   const { pinnedOnly, session, budget } = gate;
   const { ledgerSessionId, payloadSessionId } = session;
 
-  // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
+  // --auto shells out to git, so it stays CLI-side; api.contextGet stays host-agnostic and falls back to '*'.
   const query = contextQuery(args, flags);
 
   const ctx = cliApiContext(hippoRoot, resolvedTenant);
@@ -138,7 +138,7 @@ async function renderContext(
   const framing = stringFlagOrExit(flags, 'framing') ?? 'observe';
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
 
-  const result = await api.getContext(ctx, opts);
+  const result = await api.contextGet(ctx, opts);
   if (!hasContextData(result)) {
     rec?.delivered({ state: 'empty' });
     return;
@@ -185,7 +185,7 @@ interface ContextSession {
 
 function resolveContextSession(stdinText: string | undefined): ContextSession {
   // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then hostSessionId();
-  // absent both, api.getContext applies the pure freshness bound.
+  // absent both, api.contextGet applies the pure freshness bound.
   const payload = readHookPayload(stdinText);
   let payloadSessionId = payload.sessionId;
   const currentSessionId = payloadSessionId ?? hostSessionId();
@@ -279,24 +279,13 @@ function renderContextMarkdown(view: ContextView): void {
   // Cross-project inclusions get their own section so they never masquerade as project memory.
   const renderItems = toRenderItems(result.entries.filter((r) => r.category !== 'cross-project'));
   const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
-  const text = settleTokens((t) =>
-    captureConsole(() => {
-      if (result.activeSnapshot) {
-        printActiveTaskSnapshot(result.activeSnapshot);
-      }
-      if (result.sessionHandoff) {
-        printHandoff(result.sessionHandoff);
-      }
-      if (result.recentEvents && result.recentEvents.length > 0) {
-        printSessionEvents(result.recentEvents);
-      }
-      if (renderItems.length > 0) for (const line of contextBlockLines(renderItems, t, framing)) console.log(line);
-      printCrossProjectSection(crossEntries);
-      if (result.ambientState) {
-        console.log(`\n${renderAmbientSummary(result.ambientState)}`);
-      }
-    }),
-  );
+  const text = settleTokens((t) => {
+    const lines = continuityTexts(result.activeSnapshot, result.sessionHandoff, result.recentEvents);
+    if (renderItems.length > 0) lines.push(...contextBlockLines(renderItems, t, framing));
+    lines.push(...crossProjectLines(crossEntries));
+    if (result.ambientState) lines.push(`\n${renderAmbientSummary(result.ambientState)}`);
+    return lines.join('\n');
+  });
   if (text.length > 0) console.log(text);
   rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
   bookLedgerTurn(
@@ -315,10 +304,6 @@ function renderContextMarkdown(view: ContextView): void {
     },
     view.reach,
   );
-}
-
-function printCrossProjectSection(items: api.ContextResultEntry[]): void {
-  for (const line of crossProjectLines(items)) console.log(line);
 }
 
 export async function handleContext({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
