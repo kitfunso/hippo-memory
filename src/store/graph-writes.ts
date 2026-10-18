@@ -4,6 +4,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
+import { cachedStatement } from './statement-cache.js';
 import {
   GRAPH_ENTITY_TYPES,
   GRAPH_RELATION_TYPES,
@@ -15,7 +16,6 @@ import {
   rowToEntity,
   rowToRelation,
   ENTITY_COLS,
-  RELATION_COLS,
 } from './graph-rows.js';
 import type { SourceObjectRef } from './port/graph-rebuild.js';
 import type { EntityType, RelationType, SourceKind, SourceObjectType, Entity, Relation } from './port/graph-reads.js';
@@ -76,7 +76,7 @@ function checkSourceMemory(
   if (memoryId != null) {
     // SAFETY: row's shape matches the two columns (kind, tenant_id) named in
     // the SELECT above.
-    const row = db.prepare(`SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
+    const row = cachedStatement(db, `SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
       | { kind: string; tenant_id: string }
       | undefined;
     if (!row) {
@@ -114,9 +114,10 @@ function assertSourceObjectUsable(
     }
     // `table` is a fixed SOURCE_OBJECT_TABLE value (never user-supplied), so interpolation is safe; `id`/`tenant_id`
     // stay parametrized. SAFETY: row's shape matches the single `status` column named in the SELECT above.
-    const row = db
-      .prepare(`SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`)
-      .get(sourceObject.id, tenantId) as { status: string } | undefined;
+    const row = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
+      sourceObject.id,
+      tenantId,
+    ) as { status: string } | undefined;
     if (!row) {
       throw new Error(`${label}: source ${sourceObject.type} ${sourceObject.id} not found for tenant ${tenantId}`);
     }
@@ -149,27 +150,26 @@ export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: In
     sourceObject,
     'insertEntity',
   );
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
     INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id,
     created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `,
-    )
-    .run(
-      tenantId,
-      opts.entityType,
-      name,
-      effectiveMemoryId,
-      sourceKind,
-      sourceObject?.type ?? null,
-      sourceObject?.id ?? null,
-      now,
-    );
+  ).run(
+    tenantId,
+    opts.entityType,
+    name,
+    effectiveMemoryId,
+    sourceKind,
+    sourceObject?.type ?? null,
+    sourceObject?.id ?? null,
+    now,
+  );
   const id = Number(result.lastInsertRowid ?? 0);
   // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
-  const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
+  const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
   if (!row) throw new Error('insertEntity: failed to reload inserted entity');
   return rowToEntity(row);
 }
@@ -194,9 +194,10 @@ export function updateEntityRow(
   assertTenantId('updateEntity', tenantId);
   const name = checkedName('updateEntity', opts.name);
   // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
-  const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
-    | EntityRow
-    | undefined;
+  const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(
+    id,
+    tenantId,
+  ) as EntityRow | undefined;
   if (!row) return null;
   const entity = rowToEntity(row);
   const sourceObject =
@@ -204,13 +205,10 @@ export function updateEntityRow(
       ? null
       : { type: entity.sourceObjectType, id: entity.sourceObjectId };
   const resolved = resolveConsolidatedSource(db, tenantId, opts.memoryId ?? null, sourceObject, 'updateEntity');
-  db.prepare(`UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`).run(
-    name,
-    resolved.memoryId,
-    resolved.sourceKind,
-    id,
-    tenantId,
-  );
+  cachedStatement(
+    db,
+    `UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`,
+  ).run(name, resolved.memoryId, resolved.sourceKind, id, tenantId);
   return { ...entity, name, memoryId: resolved.memoryId, sourceKind: resolved.sourceKind };
 }
 
@@ -221,7 +219,9 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
   ] as const) {
     // SAFETY: ent's shape matches the single `tenant_id` column named in
     // the SELECT above.
-    const ent = db.prepare(`SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as { tenant_id: string } | undefined;
+    const ent = cachedStatement(db, `SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as
+      | { tenant_id: string }
+      | undefined;
     if (!ent) throw new Error(`insertRelation: ${role}_entity ${eid} not found`);
     if (ent.tenant_id !== tenantId) {
       throw new Error(`insertRelation: ${role}_entity ${eid} belongs to another tenant (no cross-tenant edges)`);
@@ -230,7 +230,7 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
 }
 
 /** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated
- * memory. */
+ * memory. The schema trigger checks each endpoint once; only a refused insert reads them, to say which one failed. */
 export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): Relation {
   assertTenantId('insertRelation', tenantId);
   if (!GRAPH_RELATION_TYPES.has(opts.relType)) {
@@ -238,41 +238,55 @@ export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: 
       `insertRelation: relType must be one of ${Array.from(GRAPH_RELATION_TYPES).join('|')}; got ${opts.relType}`,
     );
   }
-  const now = new Date().toISOString();
-  const memoryId = opts.memoryId ?? null;
-  const sourceObject = opts.sourceObject ?? null;
-  assertEndpointsInTenant(db, tenantId, opts);
-  const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(
+  const row: Omit<RelationRow, 'id'> = {
+    tenant_id: tenantId,
+    from_entity_id: opts.fromEntityId,
+    to_entity_id: opts.toEntityId,
+    rel_type: opts.relType,
+    ...relationSource(db, tenantId, opts),
+    source_object_type: opts.sourceObject?.type ?? null,
+    source_object_id: opts.sourceObject?.id ?? null,
+    created_at: new Date().toISOString(),
+  };
+  const insert = cachedStatement(
+    db,
+    `INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, ` +
+      `source_object_type, source_object_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  let id: number;
+  try {
+    const { lastInsertRowid } = insert.run(
+      row.tenant_id,
+      row.from_entity_id,
+      row.to_entity_id,
+      row.rel_type,
+      row.memory_id,
+      row.source_kind,
+      row.source_object_type,
+      row.source_object_id,
+      row.created_at,
+    );
+    id = Number(lastInsertRowid ?? 0);
+  } catch (error) {
+    assertEndpointsInTenant(db, tenantId, opts);
+    throw error;
+  }
+  return rowToRelation({ id, ...row });
+}
+
+function relationSource(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  opts: InsertRelationOptions,
+): Pick<RelationRow, 'memory_id' | 'source_kind'> {
+  const resolved = resolveConsolidatedSource(
     db,
     tenantId,
-    memoryId,
-    sourceObject,
+    opts.memoryId ?? null,
+    opts.sourceObject ?? null,
     'insertRelation',
   );
-  const result = db
-    .prepare(
-      `
-    INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type,
-    source_object_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-    )
-    .run(
-      tenantId,
-      opts.fromEntityId,
-      opts.toEntityId,
-      opts.relType,
-      effectiveMemoryId,
-      sourceKind,
-      sourceObject?.type ?? null,
-      sourceObject?.id ?? null,
-      now,
-    );
-  const id = Number(result.lastInsertRowid ?? 0);
-  // SAFETY: row's shape matches the columns named in RELATION_COLS above.
-  const row = db.prepare(`SELECT ${RELATION_COLS} FROM relations WHERE id = ?`).get(id) as RelationRow | undefined;
-  if (!row) throw new Error('insertRelation: failed to reload inserted relation');
-  return rowToRelation(row);
+  return { memory_id: resolved.memoryId, source_kind: resolved.sourceKind };
 }
 
 /** The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph
@@ -281,9 +295,10 @@ export function objectInForce(db: DatabaseSyncLike, tenantId: string, ref: Sourc
   // `table` comes from the fixed SOURCE_OBJECT_TABLE map, never from input.
   const table = SOURCE_OBJECT_TABLE[ref.type];
   // SAFETY: row's shape matches the single `status` column named in the SELECT.
-  const row = db.prepare(`SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(ref.id, tenantId) as
-    | { status: string }
-    | undefined;
+  const row = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
+    ref.id,
+    tenantId,
+  ) as { status: string } | undefined;
   return row?.status === 'active' || row?.status === 'superseded';
 }
 
@@ -295,12 +310,11 @@ export function entityIdBySource(
   sourceObject: SourceObjectRef,
 ): number | undefined {
   // SAFETY: row's shape matches the single `id` column named in the SELECT.
-  const row = db
-    .prepare(
-      `SELECT id FROM entities WHERE tenant_id = ? AND entity_type = ? AND source_object_type = ? AND ` +
-        `source_object_id = ? ORDER BY id LIMIT 1`,
-    )
-    .get(tenantId, entityType, sourceObject.type, sourceObject.id) as { id: number } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT id FROM entities WHERE tenant_id = ? AND entity_type = ? AND source_object_type = ? AND ` +
+      `source_object_id = ? ORDER BY id LIMIT 1`,
+  ).get(tenantId, entityType, sourceObject.type, sourceObject.id) as { id: number } | undefined;
   return row?.id;
 }
 
@@ -312,21 +326,20 @@ export function relationPresent(
   relType: RelationType,
 ): boolean {
   // SAFETY: row's shape matches the single aliased column named in the SELECT.
-  const present = db
-    .prepare(
-      `SELECT 1 AS hit FROM relations WHERE tenant_id = ? AND from_entity_id = ? AND to_entity_id = ? AND rel_type = ` +
-        `? LIMIT 1`,
-    )
-    .get(tenantId, fromEntityId, toEntityId, relType) as { hit: number } | undefined;
+  const present = cachedStatement(
+    db,
+    `SELECT 1 AS hit FROM relations WHERE tenant_id = ? AND from_entity_id = ? AND to_entity_id = ? AND rel_type = ` +
+      `? LIMIT 1`,
+  ).get(tenantId, fromEntityId, toEntityId, relType) as { hit: number } | undefined;
   return present !== undefined;
 }
 
 export function deleteEntityRow(db: DatabaseSyncLike, tenantId: string, id: number): void {
-  db.prepare(`DELETE FROM entities WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
+  cachedStatement(db, `DELETE FROM entities WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
 }
 
 export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: number): void {
-  db.prepare(`DELETE FROM relations WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
+  cachedStatement(db, `DELETE FROM relations WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
 }
 
 /** Runs one tenant's graph writes in `fn` on `db` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
