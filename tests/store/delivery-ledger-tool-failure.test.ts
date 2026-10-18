@@ -630,7 +630,7 @@ describe('controls', () => {
       });
     }
     const away = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', {
-      origin_project: 'some-other-project',
+      originProject: 'some-other-project',
       created: '2026-07-01T00:00:00.000Z',
     });
     const pin = String(rows('SELECT id FROM memories WHERE pinned = 1')[0].id);

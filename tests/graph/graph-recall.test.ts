@@ -175,7 +175,7 @@ describe('graph-recall engine', () => {
     const a = mem(home, T, 'active head decision');
     const old = mem(home, T, 'older superseded predecessor');
     // Mark `old` superseded (point it at `a`).
-    old.superseded_by = a.id;
+    old.supersededBy = a.id;
     writeEntry(home, old, { actor: 'test' });
     const ea = ent(home, T, a, 'A');
     const eo = ent(home, T, old, 'OLD');
@@ -254,11 +254,11 @@ describe('graph-recall engine', () => {
   it('asOf applies the FULL bi-temporal rule: a superseded reached row is dropped once its successor was valid as-of', async () => {
     const seed = mem(home, T, 'current head decision');
     const pred = mem(home, T, 'the predecessor decision lineage');
-    pred.valid_from = '2020-01-01T00:00:00.000Z';
-    pred.superseded_by = seed.id;
+    pred.validFrom = '2020-01-01T00:00:00.000Z';
+    pred.supersededBy = seed.id;
     writeEntry(home, pred, { actor: 'test' });
     // seed (the successor) became valid 2021-01-01.
-    seed.valid_from = '2021-01-01T00:00:00.000Z';
+    seed.validFrom = '2021-01-01T00:00:00.000Z';
     writeEntry(home, seed, { actor: 'test' });
     const es = ent(home, T, seed, 'S');
     const ep = ent(home, T, pred, 'P');

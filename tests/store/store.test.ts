@@ -60,11 +60,11 @@ describe('store initialization', () => {
     expect(alpha).not.toBeNull();
     expect(alpha!.content).toContain('Legacy markdown alpha memory');
     expect(alpha!.tags).toEqual(['legacy', 'block-list', 'migration']);
-    expect(alpha!.conflicts_with).toEqual(['mem_legacy_beta']);
+    expect(alpha!.conflictsWith).toEqual(['mem_legacy_beta']);
 
     expect(beta).not.toBeNull();
     expect(beta!.tags).toEqual(['legacy', 'semantic', 'fixture']);
-    expect(beta!.conflicts_with).toEqual(['mem_legacy_alpha']);
+    expect(beta!.conflictsWith).toEqual(['mem_legacy_alpha']);
     expect(beta!.pinned).toBe(true);
 
     expect(loadLastRecall(tmpDir).last_retrieval_ids).toEqual(['mem_legacy_alpha', 'mem_legacy_beta']);
@@ -144,12 +144,12 @@ describe('remember + recall round-trip', () => {
     initStore(tmpDir);
 
     const entry = createMemory('test memory');
-    const custom = { ...entry, retrieval_count: 7, half_life_days: 14, strength: 0.7654 };
+    const custom = { ...entry, retrievalCount: 7, halfLifeDays: 14, strength: 0.7654 };
     writeEntry(tmpDir, custom);
 
     const loaded = readEntry(tmpDir, entry.id);
-    expect(loaded!.retrieval_count).toBe(7);
-    expect(loaded!.half_life_days).toBe(14);
+    expect(loaded!.retrievalCount).toBe(7);
+    expect(loaded!.halfLifeDays).toBe(14);
     expect(loaded!.strength).toBeCloseTo(0.7654, 3);
   });
 

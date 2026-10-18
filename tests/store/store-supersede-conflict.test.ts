@@ -22,6 +22,6 @@ describe('store supersede', () => {
     const first = supersedeNow(ctx, old.id, 'the deploy runs on Wednesdays');
     expect(() => supersedeNow(ctx, old.id, 'the deploy runs on Thursdays')).toThrow(ConflictError);
 
-    expect(readEntry(root, old.id, 'default')?.superseded_by).toBe(first);
+    expect(readEntry(root, old.id, 'default')?.supersededBy).toBe(first);
   });
 });

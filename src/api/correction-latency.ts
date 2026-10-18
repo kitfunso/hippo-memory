@@ -41,15 +41,15 @@ export function buildCorrectionLatency(entries: MemoryEntry[]): CorrectionLatenc
 
   const pairs: CorrectionPair[] = [];
   for (const oldEntry of entries) {
-    if (!oldEntry.superseded_by) continue;
-    const newEntry = byId.get(oldEntry.superseded_by);
+    if (!oldEntry.supersededBy) continue;
+    const newEntry = byId.get(oldEntry.supersededBy);
     if (!newEntry) continue;
 
     const correctedAt = newEntry.created;
     let observedAt = newEntry.created;
     let via: CorrectionPair['via'] = 'manual';
-    if (newEntry.extracted_from) {
-      const source = byId.get(newEntry.extracted_from);
+    if (newEntry.extractedFrom) {
+      const source = byId.get(newEntry.extractedFrom);
       if (source) {
         observedAt = source.created;
         via = 'extraction';

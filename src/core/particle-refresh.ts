@@ -20,8 +20,8 @@ export function refreshParticleProperties(
     const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
     const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
 
-    p.mass = computeMass(strength, entry.retrieval_count);
-    p.charge = computeCharge(entry.emotional_valence);
+    p.mass = computeMass(strength, entry.retrievalCount);
+    p.charge = computeCharge(entry.emotionalValence);
     p.temperature = computeTemperature(ageDays, 1.0);
   }
 }

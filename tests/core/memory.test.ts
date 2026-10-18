@@ -23,7 +23,7 @@ describe('Strength formula', () => {
     const entry = createMemory7('pinned fact', { pinned: true });
     const oldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // 1 year ago
     // Manually age it
-    const aged = { ...entry, last_retrieved: oldDate.toISOString() };
+    const aged = { ...entry, lastRetrieved: oldDate.toISOString() };
     expect(calculateStrength(aged)).toBe(1.0);
   });
 
@@ -33,7 +33,7 @@ describe('Strength formula', () => {
 
     // Simulate 7 days passing (one full half-life for default)
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const aged = { ...entry, last_retrieved: sevenDaysAgo.toISOString() };
+    const aged = { ...entry, lastRetrieved: sevenDaysAgo.toISOString() };
 
     const s = calculateStrength(aged, now);
     // At half-life, base decay = 0.5; with retrieval_count=0 and neutral valence:
@@ -48,8 +48,8 @@ describe('Strength formula', () => {
     const oldDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000); // 2 weeks ago
 
     const entry1 = createMemory7('memory A', { layer: Layer.Episodic });
-    const e1 = { ...entry1, last_retrieved: now.toISOString(), retrieval_count: 5 };
-    const e2 = { ...entry1, last_retrieved: oldDate.toISOString(), retrieval_count: 0 };
+    const e1 = { ...entry1, lastRetrieved: now.toISOString(), retrievalCount: 5 };
+    const e2 = { ...entry1, lastRetrieved: oldDate.toISOString(), retrievalCount: 0 };
 
     expect(calculateStrength(e1, now)).toBeGreaterThan(calculateStrength(e2, now));
   });
@@ -58,7 +58,7 @@ describe('Strength formula', () => {
     const errorMem = createMemory7('cache failure', { tags: ['error'] });
     const neutralMem = createMemory7('some info');
 
-    expect(errorMem.half_life_days).toBeGreaterThan(neutralMem.half_life_days);
+    expect(errorMem.halfLifeDays).toBeGreaterThan(neutralMem.halfLifeDays);
   });
 
   it('emotional multiplier boosts strength for critical memories', () => {
@@ -69,8 +69,8 @@ describe('Strength formula', () => {
     const critical = createMemory7('critical failure', { emotionalValence: 'critical' });
     const neutral = createMemory7('neutral note', { emotionalValence: 'neutral' });
 
-    const crit = { ...critical, last_retrieved: tenDaysAgo };
-    const neut = { ...neutral, last_retrieved: tenDaysAgo };
+    const crit = { ...critical, lastRetrieved: tenDaysAgo };
+    const neut = { ...neutral, lastRetrieved: tenDaysAgo };
 
     // Both have same decay, but critical has 2x emotional multiplier
     expect(calculateStrength(crit, now)).toBeGreaterThan(calculateStrength(neut, now));
@@ -88,33 +88,33 @@ describe('applyOutcome', () => {
   it('positive outcome increments outcome_positive counter', () => {
     const entry = createMemory7('some memory');
     const updated = applyOutcome(entry, true);
-    expect(updated.outcome_positive).toBe(1);
-    expect(updated.outcome_negative).toBe(0);
-    expect(updated.outcome_score).toBe(1);
+    expect(updated.outcomePositive).toBe(1);
+    expect(updated.outcomeNegative).toBe(0);
+    expect(updated.outcomeScore).toBe(1);
   });
 
   it('negative outcome increments outcome_negative counter', () => {
     const entry = createMemory7('some memory');
     const updated = applyOutcome(entry, false);
-    expect(updated.outcome_positive).toBe(0);
-    expect(updated.outcome_negative).toBe(1);
-    expect(updated.outcome_score).toBe(-1);
+    expect(updated.outcomePositive).toBe(0);
+    expect(updated.outcomeNegative).toBe(1);
+    expect(updated.outcomeScore).toBe(-1);
   });
 
   it('does not mutate half_life_days (reward factor is dynamic)', () => {
     const entry = createMemory7('some memory');
-    const before = entry.half_life_days;
+    const before = entry.halfLifeDays;
     const afterGood = applyOutcome(entry, true);
-    expect(afterGood.half_life_days).toBe(before);
+    expect(afterGood.halfLifeDays).toBe(before);
     const afterBad = applyOutcome(entry, false);
-    expect(afterBad.half_life_days).toBe(before);
+    expect(afterBad.halfLifeDays).toBe(before);
   });
 
   it('cumulative positive outcomes increase strength via reward factor', () => {
     const now = new Date();
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const entry = createMemory7('useful memory');
-    const aged = { ...entry, last_retrieved: tenDaysAgo };
+    const aged = { ...entry, lastRetrieved: tenDaysAgo };
 
     // Apply 5 positive outcomes
     let current = aged;
@@ -130,7 +130,7 @@ describe('applyOutcome', () => {
     const now = new Date();
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const entry = createMemory7('bad memory');
-    const aged = { ...entry, last_retrieved: tenDaysAgo };
+    const aged = { ...entry, lastRetrieved: tenDaysAgo };
 
     // Apply 3 negative outcomes
     let current = aged;
@@ -150,7 +150,7 @@ describe('calculateRewardFactor', () => {
 
   it('returns > 1.0 with net positive outcomes', () => {
     const entry = createMemory7('good');
-    const updated = { ...entry, outcome_positive: 5, outcome_negative: 0 };
+    const updated = { ...entry, outcomePositive: 5, outcomeNegative: 0 };
     const rf = calculateRewardFactor(updated);
     expect(rf).toBeGreaterThan(1.0);
     // 1 + 0.5 * (5 / 6) ≈ 1.417
@@ -159,7 +159,7 @@ describe('calculateRewardFactor', () => {
 
   it('returns < 1.0 with net negative outcomes', () => {
     const entry = createMemory7('bad');
-    const updated = { ...entry, outcome_positive: 0, outcome_negative: 3 };
+    const updated = { ...entry, outcomePositive: 0, outcomeNegative: 3 };
     const rf = calculateRewardFactor(updated);
     expect(rf).toBeLessThan(1.0);
     // 1 + 0.5 * (-3 / 4) = 0.625
@@ -168,7 +168,7 @@ describe('calculateRewardFactor', () => {
 
   it('converges toward 1.0 with mixed outcomes', () => {
     const entry = createMemory7('mixed');
-    const updated = { ...entry, outcome_positive: 3, outcome_negative: 3 };
+    const updated = { ...entry, outcomePositive: 3, outcomeNegative: 3 };
     const rf = calculateRewardFactor(updated);
     // 1 + 0.5 * (0 / 7) = 1.0
     expect(rf).toBe(1.0);
@@ -176,8 +176,8 @@ describe('calculateRewardFactor', () => {
 
   it('is bounded between 0.5 and 1.5', () => {
     const entry = createMemory7('extreme');
-    const allGood = { ...entry, outcome_positive: 1000, outcome_negative: 0 };
-    const allBad = { ...entry, outcome_positive: 0, outcome_negative: 1000 };
+    const allGood = { ...entry, outcomePositive: 1000, outcomeNegative: 0 };
+    const allBad = { ...entry, outcomePositive: 0, outcomeNegative: 1000 };
     expect(calculateRewardFactor(allGood)).toBeLessThanOrEqual(1.5);
     expect(calculateRewardFactor(allBad)).toBeGreaterThanOrEqual(0.5);
   });
@@ -189,7 +189,7 @@ describe('Decay basis modes', () => {
 
   function makeAged() {
     const entry = createMemory7('test memory');
-    return { ...entry, last_retrieved: sevenDaysAgo.toISOString() };
+    return { ...entry, lastRetrieved: sevenDaysAgo.toISOString() };
   }
 
   it('clock mode: decays by wall-clock time (default)', () => {
@@ -280,8 +280,8 @@ describe('Layer.Trace', () => {
 describe('MemoryEntry trace fields', () => {
   it('defaults trace_outcome and source_session_id to null for non-trace entries', () => {
     const m = createMemory7('plain memory content', { layer: Layer.Episodic });
-    expect(m.trace_outcome).toBeNull();
-    expect(m.source_session_id).toBeNull();
+    expect(m.traceOutcome).toBeNull();
+    expect(m.sourceSessionId).toBeNull();
   });
 
   it('accepts trace_outcome when explicitly provided', () => {
@@ -289,7 +289,7 @@ describe('MemoryEntry trace fields', () => {
       layer: Layer.Trace,
       traceOutcome: 'success',
     });
-    expect(m.trace_outcome).toBe('success');
+    expect(m.traceOutcome).toBe('success');
   });
 
   it('accepts source_session_id on auto-promoted traces', () => {
@@ -298,7 +298,7 @@ describe('MemoryEntry trace fields', () => {
       traceOutcome: 'success',
       sourceSessionId: 'sess-abc-123',
     });
-    expect(m.source_session_id).toBe('sess-abc-123');
+    expect(m.sourceSessionId).toBe('sess-abc-123');
   });
 
   it('rejects invalid trace_outcome values', () => {
@@ -326,21 +326,21 @@ describe('strengthSql parity', () => {
     const row = (id: string, days: number, extra: Partial<MemoryEntry> = {}) => ({
       ...createMemory7(`parity ${id}`),
       id,
-      last_retrieved: at(days),
+      lastRetrieved: at(days),
       ...extra,
     });
     const entries = [
       row('pinned-old', 400, { pinned: true }),
       row('never-retrieved', 0),
       row('old', 90),
-      row('fresh', 1, { retrieval_count: 3 }),
-      row('zero-count', 14, { retrieval_count: 0 }),
-      row('high-count', 14, { retrieval_count: 500 }),
-      row('rewarded', 20, { outcome_positive: 6, outcome_negative: 1 }),
-      row('wrong', 5, { outcome_negative: 4 }),
-      row('short-half-life', 6, { half_life_days: 2 }),
+      row('fresh', 1, { retrievalCount: 3 }),
+      row('zero-count', 14, { retrievalCount: 0 }),
+      row('high-count', 14, { retrievalCount: 500 }),
+      row('rewarded', 20, { outcomePositive: 6, outcomeNegative: 1 }),
+      row('wrong', 5, { outcomeNegative: 4 }),
+      row('short-half-life', 6, { halfLifeDays: 2 }),
       ...(['neutral', 'positive', 'negative', 'critical'] as const).map((v) =>
-        row(`valence-${v}`, 10, { emotional_valence: v }),
+        row(`valence-${v}`, 10, { emotionalValence: v }),
       ),
     ];
     const home = makeRoot('strength-parity');

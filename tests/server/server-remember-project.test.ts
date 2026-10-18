@@ -53,7 +53,7 @@ async function post(h: ServerHandle, body: Record<string, JsonValue>): Promise<{
 async function originAfterPost(h: ServerHandle, body: Record<string, JsonValue>): Promise<string | null | undefined> {
   const { status, id } = await post(h, body);
   expect(status).toBe(200);
-  return readEntry(store, id ?? '')?.origin_project;
+  return readEntry(store, id ?? '')?.originProject;
 }
 
 async function hookText(project: string): Promise<string> {

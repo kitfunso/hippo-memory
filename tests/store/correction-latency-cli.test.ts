@@ -27,8 +27,8 @@ async function runHippo(args: string[]): Promise<RunResult> {
 
 function withCreated<T extends MemoryEntry>(entry: T, iso: string): T {
   entry.created = iso;
-  entry.valid_from = iso;
-  entry.last_retrieved = iso;
+  entry.validFrom = iso;
+  entry.lastRetrieved = iso;
   return entry;
 }
 
@@ -67,7 +67,7 @@ describe('hippo correction-latency CLI', () => {
       createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extractedFrom: raw.id }),
       '2026-04-01T10:30:00.000Z',
     );
-    oldFact.superseded_by = newFact.id;
+    oldFact.supersededBy = newFact.id;
 
     writeEntry(hippoDir, oldFact);
     writeEntry(hippoDir, newFact);
@@ -95,7 +95,7 @@ describe('hippo correction-latency CLI', () => {
       createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       '2026-04-01T10:30:00.000Z',
     );
-    oldFact.superseded_by = newFact.id;
+    oldFact.supersededBy = newFact.id;
 
     writeEntry(hippoDir, oldFact);
     writeEntry(hippoDir, newFact);

@@ -62,7 +62,7 @@ function layouts(flagged: boolean): readonly Layout[] {
 }
 
 function originOf(store: string, id: string): string | null | undefined {
-  return readEntry(store, id)?.origin_project;
+  return readEntry(store, id)?.originProject;
 }
 
 describe('shared store origin stamp', () => {
@@ -84,7 +84,7 @@ describe('shared store origin stamp', () => {
 
   it('a flagged store keeps an explicit origin', () => {
     for (const { store } of layouts(true)) {
-      const entry = { ...createMemory('the billing queue drains before a migration'), origin_project: 'acme/app' };
+      const entry = { ...createMemory('the billing queue drains before a migration'), originProject: 'acme/app' };
       writeEntry(store, entry);
       expect(originOf(store, entry.id)).toBe('acme/app');
     }
@@ -94,21 +94,21 @@ describe('shared store origin stamp', () => {
     for (const { store } of layouts(true)) {
       batchWriteAndDelete(store, [createMemory('a consolidated summary of the release notes')], []);
       const [entry] = loadAllEntries(store, 'default');
-      expect(entry?.origin_project).toBeNull();
+      expect(entry?.originProject).toBeNull();
     }
   });
 
   it('the import stamp gives NULL with no source evidence and keeps the source evidence', () => {
     for (const { store } of layouts(true)) {
-      expect(stampOriginProjectForImport(store, createMemory('an imported row')).origin_project).toBeNull();
+      expect(stampOriginProjectForImport(store, createMemory('an imported row')).originProject).toBeNull();
       const shared = createMemory('an imported shared row', { source: 'shared:proj:2026-01-01T00:00:00Z' });
-      expect(stampOriginProjectForImport(store, shared).origin_project).toBe('proj');
+      expect(stampOriginProjectForImport(store, shared).originProject).toBe('proj');
     }
   });
 
   it('a NULL row from a flagged store stays NULL in the global copy, labelled shared::', async () => {
     for (const { store } of layouts(true)) {
-      const entry = { ...createMemory('the handbook lives in the wiki under ops'), origin_project: null };
+      const entry = { ...createMemory('the handbook lives in the wiki under ops'), originProject: null };
       writeEntry(store, entry);
       const promoted = await copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBeNull();
@@ -127,7 +127,7 @@ describe('shared store origin stamp', () => {
 
   it('a NULL row from an unflagged store gets the folder stamp and the folder label in the global copy', async () => {
     for (const { store, folderStamp } of layouts(false)) {
-      const entry = { ...createMemory('the handbook lives in the wiki under ops'), origin_project: null };
+      const entry = { ...createMemory('the handbook lives in the wiki under ops'), originProject: null };
       writeEntry(store, entry);
       const promoted = await copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBe(folderStamp);
@@ -139,13 +139,13 @@ describe('shared store origin stamp', () => {
       });
       const label = folderStamp === '' ? path.basename(path.dirname(store)) : folderStamp;
       expect(shared?.source.startsWith(`shared:${label}:`)).toBe(true);
-      expect(shared?.origin_project).toBe(folderStamp);
+      expect(shared?.originProject).toBe(folderStamp);
     }
   });
 
   it('hippo sync refuses a flagged store and copies nothing', () => {
     initStore(getGlobalRoot());
-    writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), origin_project: '' });
+    writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(true)) {
       expect(() => syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toThrow(BadRequestError);
       expect(loadAllEntries(store, 'default')).toHaveLength(0);
@@ -154,7 +154,7 @@ describe('shared store origin stamp', () => {
 
   it('hippo sync into an unflagged store copies as before', () => {
     initStore(getGlobalRoot());
-    writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), origin_project: '' });
+    writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(false)) {
       expect(syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toBe(1);
       expect(loadAllEntries(store, 'default')).toHaveLength(1);
@@ -163,7 +163,7 @@ describe('shared store origin stamp', () => {
 
   it('a flagged NULL row comes back NULL when the emptied store opens and reads its markdown mirror', () => {
     for (const { store } of layouts(true)) {
-      const entry = { ...createMemory('the on-call rota changes on mondays'), origin_project: null };
+      const entry = { ...createMemory('the on-call rota changes on mondays'), originProject: null };
       writeEntry(store, entry);
       const db = openHippoDb(store);
       try {
@@ -190,7 +190,7 @@ function storeWithFoldableTag(flagged: boolean): TaggedStore {
   fs.writeFileSync(path.join(folder, '.hippo-project.json'), JSON.stringify({ id: 'server-id' }));
   initStore(store);
   if (flagged) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
-  const entry = { ...createMemory('the member checkout is also called hippo-team'), origin_project: 'hippo-team' };
+  const entry = { ...createMemory('the member checkout is also called hippo-team'), originProject: 'hippo-team' };
   writeEntry(store, entry);
   return { store, id: entry.id };
 }
@@ -229,7 +229,7 @@ function compact(store: string, cwd: string | null): void {
 const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>
   loadAllEntries(store, 'default')
     .filter((e) => e.tags.includes(COMPACTION_MEMORY_TAG))
-    .map((e) => e.origin_project);
+    .map((e) => e.originProject);
 
 describe('compaction items', () => {
   it("take the session folder's project on a flagged store", () => {

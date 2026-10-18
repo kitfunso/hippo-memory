@@ -107,7 +107,7 @@ beforeAll(async () => {
   seeded = rows.map(([tenantId, content]) => ({
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId }),
     created: SEEDED_AT,
-    last_retrieved: SEEDED_AT,
+    lastRetrieved: SEEDED_AT,
   }));
   for (const entry of seeded) writeEntry(fixture.dir, entry);
   oldIndexed = copyOf();
@@ -197,7 +197,7 @@ describe('embedAll with a store', () => {
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
       await memory.store.vectorWrites.writeVectors({
-        tenantId: first.tenant_id,
+        tenantId: first.tenantId,
         model: other,
         replaceIndex: true,
         rows: [{ memoryId: first.id, vector: [1, 0] }],

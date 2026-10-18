@@ -90,7 +90,7 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     const root = newRoot();
     const object = await save(root);
     const backing = readEntry(root, object.memoryId!)!;
-    const copy = { ...createMemory(backing.content), strength: 1, retrieval_count: 9 };
+    const copy = { ...createMemory(backing.content), strength: 1, retrievalCount: 9 };
     writeEntry(root, copy);
     run(root, `UPDATE memories SET strength = 0.2 WHERE id = ?`, backing.id);
 

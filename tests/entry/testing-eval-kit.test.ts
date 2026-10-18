@@ -21,7 +21,7 @@ describe('the hippo-memory/testing eval kit', () => {
     writeEntry(root, mine);
     writeEntry(root, theirs);
 
-    const rows = loadAllEntries(root).map((e) => [e.id, e.tenant_id]);
+    const rows = loadAllEntries(root).map((e) => [e.id, e.tenantId]);
     expect(rows).toEqual(
       expect.arrayContaining([
         [mine.id, 'default'],

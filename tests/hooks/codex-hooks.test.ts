@@ -440,7 +440,7 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       pinned: true,
     });
-    entry.origin_project = '';
+    entry.originProject = '';
     writeEntry(globalStore, entry);
     const foreignFolder = path.join(m.root, 'other-project');
     fs.mkdirSync(foreignFolder);

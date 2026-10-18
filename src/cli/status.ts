@@ -162,7 +162,7 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
 
   const now = evalNow();
   const currentStrength = calculateStrength(entry, now, { ablation: strengthAblation() });
-  const lastRetrieved = new Date(entry.last_retrieved);
+  const lastRetrieved = new Date(entry.lastRetrieved);
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
@@ -175,21 +175,21 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   const effective = effectiveConfidence !== entry.confidence ? ` (effective: ${effectiveConfidence})` : '';
   console.log(`Confidence:       ${entry.confidence}${effective}`);
   console.log(`Created:          ${entry.created} (${fmt(ageDays, 1)}d ago)`);
-  console.log(`Last retrieved:   ${entry.last_retrieved} (${fmt(daysSince, 1)}d ago)`);
-  console.log(`Retrieval count:  ${entry.retrieval_count}`);
+  console.log(`Last retrieved:   ${entry.lastRetrieved} (${fmt(daysSince, 1)}d ago)`);
+  console.log(`Retrieval count:  ${entry.retrievalCount}`);
   console.log(`Strength (live):  ${fmt(currentStrength)} (stored: ${fmt(entry.strength)})`);
-  console.log(`Half-life:        ${entry.half_life_days}d`);
-  console.log(`Emotional:        ${entry.emotional_valence}`);
-  console.log(`Schema fit:       ${entry.schema_fit}`);
+  console.log(`Half-life:        ${entry.halfLifeDays}d`);
+  console.log(`Emotional:        ${entry.emotionalValence}`);
+  console.log(`Schema fit:       ${entry.schemaFit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
   const rewardFactor = calculateRewardFactor(entry, strengthAblation());
-  const pos = entry.outcome_positive ?? 0;
-  const neg = entry.outcome_negative ?? 0;
+  const pos = entry.outcomePositive ?? 0;
+  const neg = entry.outcomeNegative ?? 0;
   const outcomeLabel = pos === 0 && neg === 0 ? 'none' : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
   console.log(`Outcomes:         ${outcomeLabel}`);
-  if (entry.conflicts_with.length > 0) {
-    console.log(`Conflicts with:   ${entry.conflicts_with.join(', ')}`);
+  if (entry.conflictsWith.length > 0) {
+    console.log(`Conflicts with:   ${entry.conflictsWith.join(', ')}`);
   }
   console.log('');
   console.log('Content:');
@@ -307,7 +307,7 @@ export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: Co
     if (report.extractionCount === 0 && report.manualCount > 0) {
       console.log(`\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`);
       console.log(
-        `To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`,
+        `To measure latency, route corrections through extraction (set new.extractedFrom to the raw receipt).`,
       );
     }
   }

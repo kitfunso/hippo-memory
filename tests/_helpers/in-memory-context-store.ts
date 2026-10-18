@@ -156,11 +156,11 @@ function utcDates(e: MemoryEntry): MemoryEntry {
     const ms = sqliteMs(t);
     return ms === null ? t : new Date(ms).toISOString();
   };
-  return { ...e, created: iso(e.created), last_retrieved: iso(e.last_retrieved) };
+  return { ...e, created: iso(e.created), lastRetrieved: iso(e.lastRetrieved) };
 }
 
 function inOrigins(e: MemoryEntry, origins: RecentOrigins): boolean {
-  const origin = e.origin_project ?? null;
+  const origin = e.originProject ?? null;
   return origin === '' ? origins.userGlobal : origin !== null && origins.names.includes(origin);
 }
 

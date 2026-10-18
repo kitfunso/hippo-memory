@@ -191,7 +191,7 @@ function dagSummaryEntry(): MemoryEntry {
 function dagEntries(): MemoryEntry[] {
   const children = dagChildEntries();
   const summary = dagSummaryEntry();
-  for (const child of children) child.dag_parent_id = summary.id;
+  for (const child of children) child.dagParentId = summary.id;
   return [...children, summary];
 }
 

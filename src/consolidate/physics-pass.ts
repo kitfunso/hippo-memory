@@ -48,10 +48,10 @@ function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
 }
 
 /** Each survivor's last recall, read only when the cap applies. */
-function recallTimes(run: SleepRun, capped: boolean): Map<string, Pick<MemoryEntry, 'last_retrieved'>> {
-  const times = new Map<string, Pick<MemoryEntry, 'last_retrieved'>>();
+function recallTimes(run: SleepRun, capped: boolean): Map<string, Pick<MemoryEntry, 'lastRetrieved'>> {
+  const times = new Map<string, Pick<MemoryEntry, 'lastRetrieved'>>();
   if (!capped) return times;
-  for (const e of run.survivors.rows()) times.set(e.id, { last_retrieved: e.last_retrieved });
+  for (const e of run.survivors.rows()) times.set(e.id, { lastRetrieved: e.lastRetrieved });
   return times;
 }
 
@@ -60,11 +60,11 @@ function recallTimes(run: SleepRun, capped: boolean): Map<string, Pick<MemoryEnt
  * breaks ties), then particles with no survivor. */
 export function particlesToSimulate(
   stored: readonly string[],
-  entries: ReadonlyMap<string, Pick<MemoryEntry, 'last_retrieved'>>,
+  entries: ReadonlyMap<string, Pick<MemoryEntry, 'lastRetrieved'>>,
   max: number = SLEEP_PHYSICS_MAX_PARTICLES,
 ): readonly string[] {
   if (stored.length <= max) return stored;
-  const recalled = (id: string): string => entries.get(id)?.last_retrieved ?? '';
+  const recalled = (id: string): string => entries.get(id)?.lastRetrieved ?? '';
   const ranked = [...stored].sort((a, b) => {
     const [ra, rb] = [recalled(a), recalled(b)];
     if (ra !== rb) return ra < rb ? 1 : -1;
@@ -81,8 +81,8 @@ function survivorForces(run: SleepRun, entries: ReadonlyMap<string, MemoryEntry>
   const conflictPairs = new Map<string, Set<string>>();
   const halfLives = new Map<string, number>();
   for (const entry of entries.values()) {
-    if (entry.conflicts_with.length > 0) conflictPairs.set(entry.id, new Set(entry.conflicts_with));
-    halfLives.set(entry.id, entry.half_life_days);
+    if (entry.conflictsWith.length > 0) conflictPairs.set(entry.id, new Set(entry.conflictsWith));
+    halfLives.set(entry.id, entry.halfLifeDays);
   }
   return {
     conflictPairs,

@@ -51,7 +51,7 @@ function removeHolders(
 ): Omit<AppliedRejection, 'digest' | 'content'> {
   const { tenantId, actor, reason } = rejection;
   const rows = [...tx.rows.values()]
-    .filter((e) => e.tenant_id === tenantId && rejection.inReach(e.scope))
+    .filter((e) => e.tenantId === tenantId && rejection.inReach(e.scope))
     .sort(byCreated);
   const direct = rows.filter((e) => holds(e.content));
   const merged = rows.filter((e) => !holds(e.content) && heldTexts(e).some(holds));
@@ -60,7 +60,7 @@ function removeHolders(
   const successorIds: string[] = [];
   const remove = (row: MemoryEntry): void => {
     tx.rows.delete(row.id);
-    if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, tenantId, actor);
+    if (row.dagParentId) markParentDirty(tx, row.dagParentId, tenantId, actor);
   };
   for (const row of direct) {
     if (row.kind === 'raw') {
@@ -75,9 +75,9 @@ function removeHolders(
     remove(row);
     removedIds.push(row.id);
     if (!successor) continue;
-    tx.rows.set(successor.id, { ...structuredClone(successor), summary_dirty: false });
+    tx.rows.set(successor.id, { ...structuredClone(successor), summaryDirty: false });
     tx.audit.push({
-      tenantId: successor.tenant_id,
+      tenantId: successor.tenantId,
       actor,
       op: 'remember',
       targetId: successor.id,
@@ -96,7 +96,7 @@ function rejectionsOn(base: InMemoryEntryWritesStore, rows: RejectedValueRow[]):
       const { tenantId, actor, reason, memoryId } = rejection;
       const source = memoryId === undefined ? undefined : base.rowById(memoryId);
       const content = rejection.textOf(
-        source && { content: source.content, tenant_id: source.tenant_id, scope: source.scope ?? null },
+        source && { content: source.content, tenant_id: source.tenantId, scope: source.scope ?? null },
       );
       const digest = rejectionDigest(content);
       const removal = await base.stage(actor, (tx) => {
@@ -147,7 +147,7 @@ function rejectionsOn(base: InMemoryEntryWritesStore, rows: RejectedValueRow[]):
         const digest = rejectionDigest(content);
         if (!base.tombstones.has(tombstoneKey(tenantId, digest))) return false;
         const stored = base.rowById(entryId);
-        return stored === undefined || stored.tenant_id !== tenantId || rejectionDigest(stored.content) !== digest;
+        return stored === undefined || stored.tenantId !== tenantId || rejectionDigest(stored.content) !== digest;
       });
     },
   };

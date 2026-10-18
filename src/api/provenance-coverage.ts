@@ -17,7 +17,7 @@ export function buildProvenanceCoverage(entries: MemoryEntry[]): ProvenanceCover
   for (const e of raws) {
     const missing: ('owner' | 'artifact_ref')[] = [];
     if (!e.owner) missing.push('owner');
-    if (!e.artifact_ref) missing.push('artifact_ref');
+    if (!e.artifactRef) missing.push('artifact_ref');
     if (missing.length > 0) gaps.push({ id: e.id, missing });
   }
   const rawWithEnvelope = raws.length - gaps.length;

@@ -34,7 +34,7 @@ function write(root: string, rows: readonly MemoryEntry[]): void {
 
 const row = (content: string, i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { layer: Layer.Semantic }),
-  origin_project: '',
+  originProject: '',
   created: at(i),
   ...extra,
 });
@@ -44,12 +44,12 @@ function seed(): MemoryEntry[] {
   const g = [
     row('Shared lesson zero about release tags', 0),
     row('Shared lesson one about caching', 1),
-    row('Shared lesson two about retries', 2, { tenant_id: 'acme' }),
+    row('Shared lesson two about retries', 2, { tenantId: 'acme' }),
     row('Shared lesson three imported from a note', 3, { source: 'agent-memory:claude-code:p-1/three.md#a' }),
     row('Shared lesson four about backups', 4),
     row('Shared lesson four about backups', 5),
     row('aws creds AKIAIOSFODNN7EXAMPLE for the deploy user', 6),
-    row('Shared lesson seven from another project', 7, { origin_project: 'other-project' }),
+    row('Shared lesson seven from another project', 7, { originProject: 'other-project' }),
     row('Shared lesson eight  about   spacing', 8),
     row('Shared lesson nine held in a local merge', 9),
   ];

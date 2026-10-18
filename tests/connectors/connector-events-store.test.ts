@@ -150,7 +150,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
       expect(noted).toEqual({ status: 'ingested', memoryId: expect.any(String) });
       expect(await comment('d-2')).toEqual({ status: 'duplicate', memoryId: noted.memoryId });
       const held = await memory.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A);
-      expect(new Map(held.map((r) => [r.id, [r.kind, r.artifact_ref]]))).toEqual(
+      expect(new Map(held.map((r) => [r.id, [r.kind, r.artifactRef]]))).toEqual(
         new Map([
           [stored.memoryId, ['raw', MESSAGE_REF]],
           [noted.memoryId, ['raw', COMMENT_REF]],

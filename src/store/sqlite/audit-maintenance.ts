@@ -118,10 +118,11 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
 function previewIssue(row: PreviewRow): QualityRepairIssue[] {
   const tags = parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' });
   const reason = previewDefect({
-    ...row,
+    content: row.content,
     source: row.source ?? '',
     confidence: row.confidence ?? 'observed',
-    dag_level: row.dag_level ?? 0,
+    extractedFrom: row.extracted_from,
+    dagLevel: row.dag_level ?? 0,
     tags,
   });
   return reason === null
@@ -166,7 +167,7 @@ function plannedResult(db: DatabaseSyncLike, root: string, run: RepairRun): Qual
 // refuse a person's copy.
 function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, now: Date, backup: string): boolean {
   const actor = 'quality-repair';
-  const removed = deleteEntryCore(db, entry.id, entry.tenant_id, { actor, automatic: true, suppressForgetAudit: true });
+  const removed = deleteEntryCore(db, entry.id, entry.tenantId, { actor, automatic: true, suppressForgetAudit: true });
   if (removed === null) return false;
   insertDormantRow(db, {
     entry,
@@ -178,7 +179,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
     throw new Error(`Quality repair could not remove the full-text row for ${entry.id}`);
   }
   appendAuditEvent(db, {
-    tenantId: entry.tenant_id,
+    tenantId: entry.tenantId,
     actor,
     op: 'quality_repair',
     targetId: entry.id,

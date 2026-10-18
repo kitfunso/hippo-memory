@@ -148,11 +148,11 @@ describe('live population', () => {
     seed(store.hippoRoot, 'live one');
     seed(store.hippoRoot, 'live two', { layer: Layer.Trace });
     const successor = seed(store.hippoRoot, 'the replacement');
-    seed(store.hippoRoot, 'replaced', { kind: 'superseded', superseded_by: successor.id });
+    seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: successor.id });
     seed(store.hippoRoot, 'archived row', { kind: 'archived' });
     seed(store.hippoRoot, 'quarantined row', { scope: quarantineScopeFor(null) });
     // Quarantine wins over superseded, so this row is counted once, as quarantined.
-    seed(store.hippoRoot, 'both', { kind: 'superseded', superseded_by: successor.id, scope: quarantineScopeFor('x') });
+    seed(store.hippoRoot, 'both', { kind: 'superseded', supersededBy: successor.id, scope: quarantineScopeFor('x') });
 
     const overview = buildOverview(service.get('default'));
 

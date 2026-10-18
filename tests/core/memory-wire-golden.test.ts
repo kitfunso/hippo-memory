@@ -31,8 +31,8 @@ function seed(): void {
   const db = openHippoDb(root);
   try {
     db.prepare('UPDATE memories SET summary_dirty = 1, last_rebuilt_at = ?, rebuild_count = ? WHERE id = ?').run(
-      entry.last_rebuilt_at ?? null,
-      entry.rebuild_count ?? 0,
+      entry.lastRebuiltAt ?? null,
+      entry.rebuildCount ?? 0,
       entry.id,
     );
   } finally {
@@ -77,14 +77,14 @@ describe('memory wire goldens', () => {
     // The mirror carries no DAG cache and no search score, so those read back absent.
     const expected: MemoryEntry = {
       ...everyFieldEntry(),
-      descendant_count: undefined,
-      earliest_at: undefined,
-      latest_at: undefined,
-      summary_dirty: undefined,
-      last_rebuilt_at: undefined,
-      rebuild_count: undefined,
-      dag_level_3_built_at: undefined,
-      bm25_score: undefined,
+      descendantCount: undefined,
+      earliestAt: undefined,
+      latestAt: undefined,
+      summaryDirty: undefined,
+      lastRebuiltAt: undefined,
+      rebuildCount: undefined,
+      dagLevel3BuiltAt: undefined,
+      bm25Score: undefined,
     };
     expect(deserializeEntry(file)).toEqual(expected);
   });

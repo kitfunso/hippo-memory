@@ -126,14 +126,14 @@ function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string, tenant
  * `${tenantId}\u0000${summaryId}`, each list in created order. */
 function loadChildrenOfSummariesAt(
   db: DatabaseSyncLike,
-  summaries: ReadonlyArray<{ id: string; tenant_id: string }>,
+  summaries: ReadonlyArray<{ id: string; tenantId: string }>,
 ): Map<string, MemoryEntry[]> {
   const byTenant = new Map<string, string[]>();
   for (const s of summaries) {
-    assertTenantId('loadChildrenOfSummaries', s.tenant_id);
-    const ids = byTenant.get(s.tenant_id) ?? [];
+    assertTenantId('loadChildrenOfSummaries', s.tenantId);
+    const ids = byTenant.get(s.tenantId) ?? [];
     ids.push(s.id);
-    byTenant.set(s.tenant_id, ids);
+    byTenant.set(s.tenantId, ids);
   }
   const out = new Map<string, MemoryEntry[]>();
   for (const [tenantId, ids] of byTenant) {
@@ -151,7 +151,7 @@ function loadChildrenOfSummariesAt(
       `)
         .all(...slice, tenantId) as MemoryRow[];
       for (const entry of rows.map(rowToEntry)) {
-        const key = childrenKey(tenantId, entry.dag_parent_id ?? '');
+        const key = childrenKey(tenantId, entry.dagParentId ?? '');
         const list = out.get(key);
         if (list) list.push(entry);
         else out.set(key, [entry]);
@@ -170,7 +170,7 @@ function childrenKey(tenantId: string, summaryId: string): string {
  * a concurrent race-loser a no-op. Returns `{ changed, refused }`: `refused` only when a tombstone hit suppressed the
  * content write while the metadata UPDATE still landed. */
 function applyRebuildResultAt(db: DatabaseSyncLike, summary: MemoryEntry, patch: RebuildPatch) {
-  assertTenantId('applyRebuildResult', summary.tenant_id);
+  assertTenantId('applyRebuildResult', summary.tenantId);
   return withWriteScope(db, 'rebuild_summary', () => applyRebuildInSavepoint(db, summary, patch));
 }
 
@@ -205,7 +205,7 @@ function applyRebuildInSavepoint(db: DatabaseSyncLike, summary: MemoryEntry, pat
   // Check tombstones before choosing the UPDATE: this direct UPDATE bypasses upsertEntryRow's guard, and
   // a deterministic rebuild would otherwise re-assert a rejected value every sleep cycle.
   const tombstone = patch.bumpRebuildCount
-    ? findRejectedValue(db, summary.tenant_id, rejectionDigest(patch.content))
+    ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
     : null;
   // On a tombstone hit, write no content: take the zero-child metadata-only path
   // (descendant_count/earliest_at/latest_at, summary_dirty cleared, no rebuild_count bump). Clearing dirty is
@@ -222,11 +222,11 @@ function applyRebuildInSavepoint(db: DatabaseSyncLike, summary: MemoryEntry, pat
           patch.latest_at,
           nowIso,
           summary.id,
-          summary.tenant_id,
+          summary.tenantId,
         )
     : db
         .prepare(REBUILD_METADATA_SQL)
-        .run(patch.descendant_count, patch.earliest_at, patch.latest_at, summary.id, summary.tenant_id);
+        .run(patch.descendant_count, patch.earliest_at, patch.latest_at, summary.id, summary.tenantId);
 
   // `changed` means THIS call's UPDATE hit a row, so a refusal still settles the cycle (false would retry
   // the doomed rebuild forever); `refused` lets the caller count it as refused rather than rebuilt.
@@ -253,7 +253,7 @@ function auditRefusedRebuild(
     targetId: summary.id,
     metadata: { digest: tombstone.digest, reason: tombstone.reason },
     actor: patch.actor,
-    tenantId: summary.tenant_id,
+    tenantId: summary.tenantId,
   });
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
@@ -273,12 +273,12 @@ function syncRebuiltSummary(
   const patchedEntry: MemoryEntry = {
     ...summary,
     content: applyContentWrite ? patch.content : summary.content,
-    descendant_count: patch.descendant_count,
-    earliest_at: patch.earliest_at,
-    latest_at: patch.latest_at,
-    summary_dirty: false,
-    last_rebuilt_at: applyContentWrite ? nowIso : summary.last_rebuilt_at,
-    rebuild_count: applyContentWrite ? (summary.rebuild_count ?? 0) + 1 : summary.rebuild_count,
+    descendantCount: patch.descendant_count,
+    earliestAt: patch.earliest_at,
+    latestAt: patch.latest_at,
+    summaryDirty: false,
+    lastRebuiltAt: applyContentWrite ? nowIso : summary.lastRebuiltAt,
+    rebuildCount: applyContentWrite ? (summary.rebuildCount ?? 0) + 1 : summary.rebuildCount,
   };
   syncFtsRow(db, patchedEntry);
 
@@ -286,13 +286,13 @@ function syncRebuiltSummary(
     targetId: summary.id,
     metadata: {
       // Actual level from the summary in scope, never hardcoded: L2 -> 2, L3 -> 3.
-      dag_level: summary.dag_level,
+      dag_level: summary.dagLevel,
       source: 'E3-rebuild',
       zero_children: patch.zeroChildren,
       descendant_count: patch.descendant_count,
     },
     actor: patch.actor,
-    tenantId: summary.tenant_id,
+    tenantId: summary.tenantId,
   });
 }
 
@@ -502,7 +502,7 @@ function summaryOps(on: OnHandle): SummaryOps {
     childrenOfSummary: (summaryId, tenantId) => on((db) => loadChildrenOfSummaryAt(db, summaryId, tenantId), openStore),
     childrenOfSummaries(summaries) {
       const byParent = on((db) => loadChildrenOfSummariesAt(db, summaries), openStore);
-      return (summary) => byParent.get(childrenKey(summary.tenant_id, summary.id)) ?? [];
+      return (summary) => byParent.get(childrenKey(summary.tenantId, summary.id)) ?? [];
     },
     applyRebuild: (summary, patch) => on((db) => applyRebuildResultAt(db, summary, patch), openStore),
     clearSummaryDirty: (summaryId, tenantId, actor, source) =>

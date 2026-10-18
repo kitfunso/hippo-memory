@@ -242,7 +242,7 @@ const mirrorViews =
   async (_g, store) =>
     (await store.entriesByIds(mirrorIds, tenantId)).map((e) => ({
       id: e.id,
-      tenantId: e.tenant_id,
+      tenantId: e.tenantId,
       content: e.content,
       tags: e.tags,
     }));

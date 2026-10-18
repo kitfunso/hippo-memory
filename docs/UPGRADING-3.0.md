@@ -1,11 +1,12 @@
 # Upgrading to 3.0
 
-hippo 3.0 removes names that 2.1 marked `@deprecated` and the raw store functions from the package root, and a store you build on `hippo-memory/store-kit` must set every store group but four. Nothing else changes: an entry keeps its field names, hippo.db keeps its columns and files on disk keep their format. HTTP and MCP answers keep their shape.
+hippo 3.0 removes names that 2.1 marked `@deprecated` and the raw store functions from the package root, and a store you build on `hippo-memory/store-kit` must set every store group but four. A `MemoryEntry` now names its fields in camelCase; [MemoryEntry field names](#memoryentry-field-names) lists each one. Nothing else changes: hippo.db keeps its columns, and files on disk keep their format. Export JSON, HTTP and MCP answers keep their shape.
 
 | Removed in 3.0 | Use instead |
 | --- | --- |
 | `openHippoDb`, `openHippoDbReadOnly`, `closeHippoDb` and the `DatabaseSyncLike` type on the package root. | `sqliteStore(hippoRoot)` from `hippo-memory/store-kit`. No package entry hands out a raw SQLite handle. |
-| The snake_case option keys of `createMemory`: `emotional_valence`, `schema_fit`, `trace_outcome`, `source_session_id`, `valid_from`, `extracted_from`, `dag_level`, `dag_parent_id` and `artifact_ref`. | The camelCase keys 2.1 added: `emotionalValence`, `schemaFit`, `traceOutcome`, `sourceSessionId`, `validFrom`, `extractedFrom`, `dagLevel`, `dagParentId` and `artifactRef`. A snake_case key is now a type error and is ignored at run time. The entry that comes back keeps its snake_case field names. |
+| The snake_case option keys of `createMemory`: `emotional_valence`, `schema_fit`, `trace_outcome`, `source_session_id`, `valid_from`, `extracted_from`, `dag_level`, `dag_parent_id` and `artifact_ref`. | The camelCase keys 2.1 added: `emotionalValence`, `schemaFit`, `traceOutcome`, `sourceSessionId`, `validFrom`, `extractedFrom`, `dagLevel`, `dagParentId` and `artifactRef`. A snake_case key is now a type error and is ignored at run time. The entry that comes back names its fields in camelCase too (next row). |
+| The snake_case field names of `MemoryEntry`, such as `entry.tenant_id`, `entry.last_retrieved` and `entry.superseded_by`. | The camelCase names in [MemoryEntry field names](#memoryentry-field-names), such as `entry.tenantId`. Files and wire formats keep their snake_case keys: `hippo export`, the markdown mirrors, dormant snapshots, `hippo trace --json`, `hippo recall --json` and the HTTP and MCP answers read as before. A store write of an entry with `tenant_id` and no `tenantId` throws `TypeError: tenant_id was renamed to tenantId in 3.0`, so a 2.x caller's row cannot land in the default tenant. An eval script that reads snake_case keys can import the `*Wire` forms from `hippo-memory/testing`, such as `loadAllEntriesWire`; they take and return `MemoryWire`, the snake_case shape. |
 | `physicsSearch` on the package root. | `physicsSearch` from `hippo-memory/store-kit`, with the same signature. To rank recall by physics without calling it, set `physics.enabled` to `'auto'` or `true` in config. |
 | A `HippoStore` could leave any store group unset, and each route or MCP tool that named a missing group answered 501. | Set every group. Only `localFiles`, `vectorViews`, `readiness` and `lastRecall` may stay unset; a store without any other group is now a type error. A store that serves only some groups can spread `sqliteStore(hippoRoot)` and replace the groups it serves: under `serve()` the rest reach a fenced hippo.db and answer 501 `store_not_ported`, as before. A route or tool that needs one of the four optional groups still answers 501 on a store without it. |
 | `narrowStore`, `StoreWith<G>` and `ContextWith<G>` from `hippo-memory/store-kit`. | `HippoStore` in place of `StoreWith<G>`, and `Context` (from `hippo-memory/server`) in place of `ContextWith<G>`. Drop each `narrowStore` call: every required group is already set. For one of the four optional groups, call `requireGroup(store, group)`, which returns the group or throws `StoreNotPortedError`, a 501. |
@@ -72,3 +73,37 @@ hippo 3.0 removes names that 2.1 marked `@deprecated` and the raw store function
 | Store methods whose tenant could be left out (undefined) or sent as null, which then read every tenant: `entriesByIds`, `freshRawEntries`, `learning.readEntry` and `learning.entriesMentioning`, `captures.textsHolding`, the `sharing` reads (`entriesPage`, `entriesWithSignals`, `textKeysPage`, `textKeysHolding`, `sourceTallies`, `searchEntries` and `recallEntries`' options), `reports.entriesPage`, `Conflicts.list`, `auditEventsAfter`, `listApiKeys`, `nearestEntries`' and `entriesWithoutVector`'s specs, and the recall search and strengthen options. | Each one names its tenant. Where hippo reads every tenant (sleep's maintenance passes, global sync, `hippo peers --all-tenants`, `hippo auth list` and the host admin's lists), it passes `ALL_TENANTS`, a symbol that `hippo-memory/store-kit` exports with the `TenantId` type: answer every tenant's rows for it, as you did for a missing tenant. `freshRawEntries`, `learning.readEntry`, `learning.entriesMentioning` and the recall search and strengthen options take a tenant string and never get `ALL_TENANTS`. `localFiles.compactionHooks`' `start`, `save` and `replay` and the agent import's `open` and `openStandIn` now take the caller's tenant in place of reading `HIPPO_TENANT`. `sqliteStore` already does all of this. |
 | `consolidate(target, options)` on the package root wrote its consolidation trace rows as the tenant `HIPPO_TENANT` named. | It writes them as `options.tenantId`, the default tenant when unset. Pass the tenant to keep the old owner. `hippo sleep` and `serve()` pass theirs. |
 | The importers on the package root (`importEntries`, `importChatGPT`, `importClaude`, `importCursor`, `importGenericFile` and `importMarkdown`), called without `tenantId`, checked each chunk for a duplicate against every tenant's rows while writing to the default tenant. | Without `tenantId` they check the default tenant's rows, where they write; `global: true` still checks every tenant's. `hippo import` now passes the CLI's tenant, so under `HIPPO_TENANT` it writes and checks as that tenant. |
+
+## MemoryEntry field names
+
+These 27 fields of `MemoryEntry` are renamed in 3.0. The other fields keep their names. The snake_case names stay the keys of every file and wire format.
+
+| 2.x field | 3.0 field |
+| --- | --- |
+| `last_retrieved` | `lastRetrieved` |
+| `retrieval_count` | `retrievalCount` |
+| `half_life_days` | `halfLifeDays` |
+| `emotional_valence` | `emotionalValence` |
+| `schema_fit` | `schemaFit` |
+| `outcome_score` | `outcomeScore` |
+| `outcome_positive` | `outcomePositive` |
+| `outcome_negative` | `outcomeNegative` |
+| `conflicts_with` | `conflictsWith` |
+| `trace_outcome` | `traceOutcome` |
+| `source_session_id` | `sourceSessionId` |
+| `valid_from` | `validFrom` |
+| `superseded_by` | `supersededBy` |
+| `extracted_from` | `extractedFrom` |
+| `dag_level` | `dagLevel` |
+| `dag_parent_id` | `dagParentId` |
+| `descendant_count` | `descendantCount` |
+| `earliest_at` | `earliestAt` |
+| `latest_at` | `latestAt` |
+| `summary_dirty` | `summaryDirty` |
+| `last_rebuilt_at` | `lastRebuiltAt` |
+| `rebuild_count` | `rebuildCount` |
+| `dag_level_3_built_at` | `dagLevel3BuiltAt` |
+| `artifact_ref` | `artifactRef` |
+| `tenant_id` | `tenantId` |
+| `origin_project` | `originProject` |
+| `bm25_score` | `bm25Score` |

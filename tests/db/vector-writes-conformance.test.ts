@@ -52,7 +52,7 @@ function memory(id: string, tenantId: string, day: number, extra: Partial<Memory
     ...createMemory(`vector conformance row ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId }),
     id,
     created,
-    last_retrieved: created,
+    lastRetrieved: created,
     strength: 1,
     ...extra,
   };

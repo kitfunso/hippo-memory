@@ -5,7 +5,7 @@ import { computeSalience } from '../../src/core/salience.js';
 
 function mem(content: string, opts: { tags?: string[]; emotional_valence?: EmotionalValence } = {}): MemoryEntry {
   const entry = createMemory(content, { tags: opts.tags ?? [] });
-  if (opts.emotional_valence) entry.emotional_valence = opts.emotional_valence;
+  if (opts.emotional_valence) entry.emotionalValence = opts.emotional_valence;
   return entry;
 }
 

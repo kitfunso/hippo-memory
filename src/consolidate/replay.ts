@@ -27,8 +27,8 @@ const STRENGTH_FLOOR = 0.1;
  * Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry and current time.
  */
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
-  const pos = entry.outcome_positive ?? 0;
-  const neg = entry.outcome_negative ?? 0;
+  const pos = entry.outcomePositive ?? 0;
+  const neg = entry.outcomeNegative ?? 0;
   // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still eligible, just
   // unlikely).
   // The clamp is required because sampleForReplay needs all weights positive.
@@ -36,13 +36,13 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
     : Math.max(REWARD_FLOOR, 1 + pos * REWARD_POSITIVE_GAIN + (pos - neg) * REWARD_NET_GAIN);
 
-  const valence = VALENCE_WEIGHT[entry.emotional_valence] ?? 1.0;
+  const valence = VALENCE_WEIGHT[entry.emotionalValence] ?? 1.0;
 
   // Under-rehearsed memories benefit most from replay.
-  const underRehearsed = 1 / (1 + (entry.retrieval_count ?? 0));
+  const underRehearsed = 1 / (1 + (entry.retrievalCount ?? 0));
 
   // Idle-time boost: memories that haven't been touched recently need rehearsal more.
-  const lastRetrieved = new Date(entry.last_retrieved);
+  const lastRetrieved = new Date(entry.lastRetrieved);
   const deltaMs = now.getTime() - lastRetrieved.getTime();
   const ageHours = Number.isFinite(deltaMs) ? Math.max(0, deltaMs / HOUR_MS) : 0;
   const idleBoost = 1 + Math.log1p(ageHours) * IDLE_BOOST_GAIN;

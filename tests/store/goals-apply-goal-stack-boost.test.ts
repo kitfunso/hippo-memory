@@ -53,36 +53,36 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
     return {
       id,
       created: now,
-      last_retrieved: now,
-      retrieval_count: 0,
+      lastRetrieved: now,
+      retrievalCount: 0,
       strength,
-      half_life_days: 90,
+      halfLifeDays: 90,
       layer: Layer.Episodic,
       tags,
-      emotional_valence: 'neutral',
-      schema_fit: 0.5,
+      emotionalValence: 'neutral',
+      schemaFit: 0.5,
       source: 'test',
-      outcome_score: null,
-      outcome_positive: 0,
-      outcome_negative: 0,
-      conflicts_with: [],
+      outcomeScore: null,
+      outcomePositive: 0,
+      outcomeNegative: 0,
+      conflictsWith: [],
       pinned: false,
       confidence: 'observed',
       content: `c-${id}`,
       parents: [],
       starred: false,
-      trace_outcome: null,
-      source_session_id: null,
-      valid_from: now,
-      superseded_by: null,
-      extracted_from: null,
-      dag_level: 0,
-      dag_parent_id: null,
+      traceOutcome: null,
+      sourceSessionId: null,
+      validFrom: now,
+      supersededBy: null,
+      extractedFrom: null,
+      dagLevel: 0,
+      dagParentId: null,
       kind: 'raw',
       scope: null,
       owner: null,
-      artifact_ref: null,
-      tenant_id: 'default',
+      artifactRef: null,
+      tenantId: 'default',
     };
   }
 
@@ -173,7 +173,7 @@ describe('the session goal boost policy branches', () => {
 
   function stored(content: string, tags: string[], schemaFit?: number): MemoryEntry {
     const e = createDefaultMemory(content, { tags, layer: Layer.Episodic });
-    if (schemaFit !== undefined) e.schema_fit = schemaFit;
+    if (schemaFit !== undefined) e.schemaFit = schemaFit;
     writeEntry(root, e);
     return e;
   }

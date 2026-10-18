@@ -55,7 +55,7 @@ export interface EntrySignals {
 
 export interface EntryTextKey {
   id: string;
-  tenant_id: string;
+  tenantId: string;
   content: string;
   source: string;
 }

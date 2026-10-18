@@ -40,7 +40,7 @@ let minute = 0;
 function row(tenantId: string, id: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   minute += 1;
   const created = new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
-  return seeded(content, id, created, { tenant_id: tenantId, origin_project: 'proj', ...extra });
+  return seeded(content, id, created, { tenantId: tenantId, originProject: 'proj', ...extra });
 }
 
 /** Every scope crossed with every origin, then each edge the old callbacks tested one by one. */
@@ -49,7 +49,7 @@ function ambientRows(tenantId: string, p: string): MemoryEntry[] {
     ORIGINS.map((origin, o) =>
       row(tenantId, `${p}_s${s}_o${o}`, `rollout note ${s} ${o} about the queue workers`, {
         scope,
-        origin_project: origin,
+        originProject: origin,
       }),
     ),
   );
@@ -60,55 +60,55 @@ function ambientRows(tenantId: string, p: string): MemoryEntry[] {
     ),
     row(tenantId, `${p}_pin_junk`, 'okay', { pinned: true }),
     row(tenantId, `${p}_junk`, 'wip'),
-    row(tenantId, `${p}_junk_other`, 'done', { origin_project: 'other' }),
-    row(tenantId, `${p}_old`, 'rollout target was the old staging cluster', { superseded_by: `${p}_s0_o0` }),
+    row(tenantId, `${p}_junk_other`, 'done', { originProject: 'other' }),
+    row(tenantId, `${p}_old`, 'rollout target was the old staging cluster', { supersededBy: `${p}_s0_o0` }),
     ...ORIGINS.map((origin, o) =>
       row(tenantId, `${p}_secret_o${o}`, `vault path ${o} lives in the ops runbook`, {
-        origin_project: origin,
+        originProject: origin,
         tags: ['secret'],
       }),
     ),
     row(tenantId, `${p}_alias_secret`, 'alias vault path lives in the ops runbook', {
-      origin_project: 'proj-alias',
+      originProject: 'proj-alias',
       tags: ['password'],
     }),
     row(tenantId, `${p}_compact_own`, 'compaction item about the deploy queue order', {
-      source_session_id: 'sess-own',
+      sourceSessionId: 'sess-own',
       tags: [COMPACTION_MEMORY_TAG],
     }),
     row(tenantId, `${p}_compact_else`, 'compaction item from another session on the queue', {
-      source_session_id: 'sess-else',
+      sourceSessionId: 'sess-else',
       tags: [COMPACTION_MEMORY_TAG],
     }),
     row(tenantId, `${p}_digest`, 'session digest: moved the queue workers to the new pool', {
       source: SESSION_DIGEST_TAG,
-      source_session_id: 'sess-handoff',
+      sourceSessionId: 'sess-handoff',
       tags: [SESSION_DIGEST_TAG],
     }),
     row(tenantId, `${p}_digest_fact`, 'fact from the digest about the new worker pool', {
       source: SESSION_DIGEST_TAG,
-      source_session_id: 'sess-handoff',
+      sourceSessionId: 'sess-handoff',
       tags: [SESSION_DIGEST_TAG],
-      extracted_from: `${p}_digest`,
+      extractedFrom: `${p}_digest`,
     }),
     row(tenantId, `${p}_digest_else`, 'session digest of another session on the pool', {
       source: SESSION_DIGEST_TAG,
-      source_session_id: 'sess-else',
+      sourceSessionId: 'sess-else',
       tags: [SESSION_DIGEST_TAG],
     }),
   ];
 }
 
 const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}): Partial<MemoryEntry> => ({
-  dag_parent_id: parent,
-  dag_level: level,
+  dagParentId: parent,
+  dagLevel: level,
   ...extra,
 });
 
 /** Summary trees whose children carry every scope and origin, a refused child with rows under it, and a leaf summary. */
 function dagRows(tenantId: string, p: string): MemoryEntry[] {
   return [
-    row(tenantId, `${p}_profile`, 'profile over the rollout summaries', { dag_level: 3 }),
+    row(tenantId, `${p}_profile`, 'profile over the rollout summaries', { dagLevel: 3 }),
     row(tenantId, `${p}_sum`, 'summary of the rollout week', under(`${p}_profile`, 2)),
     row(
       tenantId,
@@ -122,7 +122,7 @@ function dagRows(tenantId: string, p: string): MemoryEntry[] {
           tenantId,
           `${p}_fact_s${s}_o${o}`,
           `fact ${s} ${o} under the rollout summary`,
-          under(`${p}_sum`, 1, { scope, origin_project: origin }),
+          under(`${p}_sum`, 1, { scope, originProject: origin }),
         ),
       ),
     ),
@@ -139,23 +139,23 @@ function dagRows(tenantId: string, p: string): MemoryEntry[] {
 function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: MemoryEntry) => boolean {
   const secretAdmit = (e: MemoryEntry): boolean => {
     if (!detectSecret(e).flagged) return true;
-    const origin = e.origin_project;
+    const origin = e.originProject;
     if (origin === undefined || origin === null || origin === '') return false;
     return projectNames(a.currentProject).includes(origin);
   };
   const ambientAdmit = (e: MemoryEntry): boolean => {
-    if (a.handoffSessionId !== undefined && e.source_session_id === a.handoffSessionId && isSessionDigestRow(e)) {
+    if (a.handoffSessionId !== undefined && e.sourceSessionId === a.handoffSessionId && isSessionDigestRow(e)) {
       return false;
     }
     if (!secretAdmit(e)) return false;
     if (!passesScopeFilterForRecall(e.scope ?? null, a.exactScope, a.ownScope)) return false;
     if (a.includeCrossProject) return true;
-    return classifyOriginProject(e.origin_project, a.currentProject) !== 'cross-project';
+    return classifyOriginProject(e.originProject, a.currentProject) !== 'cross-project';
   };
   const ownSessionId = a.ownSessionId || '';
   const isOwnCompactionItem = (e: MemoryEntry): boolean =>
-    ownSessionId !== '' && e.source_session_id === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG);
-  const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
+    ownSessionId !== '' && e.sourceSessionId === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG);
+  const admit = (e: MemoryEntry): boolean => !e.supersededBy && !isOwnCompactionItem(e) && ambientAdmit(e);
   return (e) => {
     if (!admit(e)) {
       refused.push({ id: e.id, reason: 'admission' });
@@ -171,8 +171,8 @@ function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: Mem
 function oldDrillAdmit(a: DescendantAdmission, summaryId: string): (row: MemoryEntry) => boolean {
   const readable = (row: MemoryEntry): boolean =>
     passesScopeFilterForRecall(row.scope ?? null, undefined, a.ownScope) &&
-    (!a.project || classifyOriginProject(row.origin_project, a.project) !== 'cross-project');
-  return (row) => readable(row) && (row.id !== summaryId || (row.dag_level ?? 0) >= DAG_LEVEL.topic);
+    (!a.project || classifyOriginProject(row.originProject, a.project) !== 'cross-project');
+  return (row) => readable(row) && (row.id !== summaryId || (row.dagLevel ?? 0) >= DAG_LEVEL.topic);
 }
 
 const AMBIENT: readonly AmbientAdmission[] = [
@@ -216,7 +216,7 @@ function onDb<T>(run: (db: ReturnType<typeof openHippoDb>) => T): T {
 
 /** The walk summaryWithDescendants documents, with the old callback as its admit. */
 function oldWalk(tenantId: string, id: string, depth: number, admit: (row: MemoryEntry) => boolean): string[][] | null {
-  const mine = rows.filter((r) => r.tenant_id === tenantId);
+  const mine = rows.filter((r) => r.tenantId === tenantId);
   const summary = mine.find((r) => r.id === id);
   if (!summary) return null;
   const levels: string[][] = [];
@@ -225,7 +225,7 @@ function oldWalk(tenantId: string, id: string, depth: number, admit: (row: Memor
   while (levels.length < depth && parents.length > 0) {
     const level = parents.flatMap((parent) =>
       mine
-        .filter((r) => r.dag_parent_id === parent && !seen.has(r.id) && admit(r))
+        .filter((r) => r.dagParentId === parent && !seen.has(r.id) && admit(r))
         .sort((x, y) => x.created.localeCompare(y.created) || x.id.localeCompare(y.id)),
     );
     if (level.length === 0) break;

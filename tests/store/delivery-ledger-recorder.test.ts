@@ -33,7 +33,7 @@ let ctx: FullContext;
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = {
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    origin_project: PROJECT,
+    originProject: PROJECT,
     ...extra,
   };
   writeEntry(root, entry);
@@ -235,7 +235,7 @@ describe('rejection reasons', () => {
   it('scope and quality at eligibility, for prompt-recall candidates the loader returned', async () => {
     configure({ promptRecall: true });
     const foreign = seed(local, 'the postgres migration rollback plan for the billing service', {
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     });
     const junk = seed(local, 'postgres');
     const event = await observed();
@@ -281,7 +281,7 @@ describe('rejection reasons', () => {
       });
     }
     for (let i = 0; i < 3; i++) {
-      seed(local, `other project note ${i}: the billing export runs every night at two`, { origin_project: 'proj-b' });
+      seed(local, `other project note ${i}: the billing export runs every night at two`, { originProject: 'proj-b' });
     }
     const event = await observed({ ...baseOpts, includeRecent: 2 });
     expect([event.consideredCount, event.selectedCount, event.rejectedCount, event.rejectedUnlisted]).toEqual([

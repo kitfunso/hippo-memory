@@ -374,7 +374,7 @@ describe('forget and supersede still work on a kept row', () => {
 
     const result = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
-    expect(readEntry(root, kept.id)?.superseded_by).toBe(result.newId);
+    expect(readEntry(root, kept.id)?.supersededBy).toBe(result.newId);
     expect(readEntry(root, result.newId)?.content).toBe('the release train leaves on tuesdays now');
   });
 

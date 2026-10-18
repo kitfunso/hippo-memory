@@ -138,11 +138,11 @@ export interface RepairDefect {
 
 /** The rows quality repair judges: a superseded or archived row is already out of recall. */
 export function isRepairCandidate(entry: MemoryEntry): boolean {
-  return !entry.superseded_by && entry.kind !== 'archived';
+  return !entry.supersededBy && entry.kind !== 'archived';
 }
 
 function structured(entry: MemoryEntry): boolean {
-  return entry.trace_outcome !== null || entry.tags.includes('session-digest') || entry.source === 'auto-promote';
+  return entry.traceOutcome !== null || entry.tags.includes('session-digest') || entry.source === 'auto-promote';
 }
 
 /** A parent that is gone says nothing about who wrote it, so it counts as a person's. */

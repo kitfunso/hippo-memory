@@ -25,11 +25,11 @@ function mem(
     layer: opts.layer ?? Layer.Episodic,
     tags: opts.tags ?? [],
   });
-  if (opts.emotional_valence) entry.emotional_valence = opts.emotional_valence;
+  if (opts.emotional_valence) entry.emotionalValence = opts.emotional_valence;
   if (opts.created) entry.created = opts.created;
-  if (opts.schema_fit !== undefined) entry.schema_fit = opts.schema_fit;
-  if (opts.extracted_from) entry.extracted_from = opts.extracted_from;
-  if (opts.dag_level !== undefined) entry.dag_level = opts.dag_level;
+  if (opts.schema_fit !== undefined) entry.schemaFit = opts.schema_fit;
+  if (opts.extracted_from) entry.extractedFrom = opts.extracted_from;
+  if (opts.dag_level !== undefined) entry.dagLevel = opts.dag_level;
   return entry;
 }
 
@@ -118,7 +118,7 @@ describe('computeAmbientState', () => {
       mem('Active', { tags: ['a'] }),
       (() => {
         const e = mem('Old', { tags: ['b'] });
-        e.superseded_by = 'xxx';
+        e.supersededBy = 'xxx';
         return e;
       })(),
     ];

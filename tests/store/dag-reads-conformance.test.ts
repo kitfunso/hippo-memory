@@ -32,25 +32,25 @@ const at = (minute: number): string => `2026-03-01T10:${String(minute).padStart(
 
 function row(tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   return seeded(`${id} holds a note about the rollout`, id, at(minute), {
-    tenant_id: tenantId,
-    origin_project: 'proj',
+    tenantId: tenantId,
+    originProject: 'proj',
     ...extra,
   });
 }
 
 const raw = (tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry =>
-  row(tenantId, id, minute, { kind: 'raw', source_session_id: SESSION, ...extra });
+  row(tenantId, id, minute, { kind: 'raw', sourceSessionId: SESSION, ...extra });
 
 const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}): Partial<MemoryEntry> => ({
-  dag_parent_id: parent,
-  dag_level: level,
+  dagParentId: parent,
+  dagLevel: level,
   ...extra,
 });
 
 /** One session in both tenants with every scope, origin and supersede edge, and summary trees three levels deep, one of them a loop. */
 function dagRows(): MemoryEntry[] {
   return [
-    ...[0, 1, 2].map((i) => raw(TENANT_A, `raw_a_${i}`, i, { dag_parent_id: 'sum_a' })),
+    ...[0, 1, 2].map((i) => raw(TENANT_A, `raw_a_${i}`, i, { dagParentId: 'sum_a' })),
     ...[3, 4, 5].map((i) => raw(TENANT_A, `raw_a_${i}`, i)),
     raw(TENANT_A, 'raw_a_tie_x', 6),
     raw(TENANT_A, 'raw_a_tie_y', 6),
@@ -58,18 +58,18 @@ function dagRows(): MemoryEntry[] {
     raw(TENANT_A, 'raw_a_alice', 8, { scope: OWN }),
     raw(TENANT_A, 'raw_a_legacy', 9, { scope: 'unknown:legacy' }),
     raw(TENANT_A, 'raw_a_team', 10, { scope: 'team:eng' }),
-    raw(TENANT_A, 'raw_a_other', 11, { origin_project: 'other' }),
-    raw(TENANT_A, 'raw_a_global', 12, { origin_project: '' }),
-    raw(TENANT_A, 'raw_a_no_origin', 13, { origin_project: null }),
-    raw(TENANT_A, 'raw_a_superseded', 14, { superseded_by: 'raw_a_5' }),
-    row(TENANT_A, 'note_a_distilled', 15, { source_session_id: SESSION }),
-    raw(TENANT_A, 'raw_a_solo', 16, { source_session_id: 'sess-one' }),
+    raw(TENANT_A, 'raw_a_other', 11, { originProject: 'other' }),
+    raw(TENANT_A, 'raw_a_global', 12, { originProject: '' }),
+    raw(TENANT_A, 'raw_a_no_origin', 13, { originProject: null }),
+    raw(TENANT_A, 'raw_a_superseded', 14, { supersededBy: 'raw_a_5' }),
+    row(TENANT_A, 'note_a_distilled', 15, { sourceSessionId: SESSION }),
+    raw(TENANT_A, 'raw_a_solo', 16, { sourceSessionId: 'sess-one' }),
     raw(TENANT_B, 'raw_b_0', 3),
     raw(TENANT_B, 'raw_b_1', 4),
-    row(TENANT_A, 'profile_a', 30, { dag_level: 3 }),
+    row(TENANT_A, 'profile_a', 30, { dagLevel: 3 }),
     row(TENANT_A, 'sum_a2', 19, under('profile_a', 2)),
     row(TENANT_A, 'sum_a', 20, under('profile_a', 2)),
-    row(TENANT_A, 'sum_a_empty', 31, { dag_level: 2 }),
+    row(TENANT_A, 'sum_a_empty', 31, { dagLevel: 2 }),
     row(TENANT_A, 'fact_a2_0', 21, under('sum_a2', 1)),
     row(TENANT_A, 'fact_a_0', 21, under('sum_a', 1)),
     row(TENANT_A, 'fact_a_1', 22, under('sum_a', 1)),
@@ -82,7 +82,7 @@ function dagRows(): MemoryEntry[] {
     row(TENANT_A, 'leaf_a_under_private', 28, under('fact_a_private', 0)),
     row(TENANT_A, 'loop_a', 40, under('loop_b', 2)),
     row(TENANT_A, 'loop_b', 41, under('loop_a', 2)),
-    row(TENANT_B, 'sum_b', 20, { dag_level: 2 }),
+    row(TENANT_B, 'sum_b', 20, { dagLevel: 2 }),
     row(TENANT_B, 'fact_b_0', 21, under('sum_b', 1)),
   ];
 }

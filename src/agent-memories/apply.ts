@@ -113,7 +113,7 @@ class ContainerRun {
       if (item === undefined) continue;
       const source = itemSource(this.w.prefix, key, item.text);
       for (const row of rows) {
-        if (this.tx.renameSource(row.tenant_id, row.id, row.source, source) === 0) continue;
+        if (this.tx.renameSource(row.tenantId, row.id, row.source, source) === 0) continue;
         this.tally.adopted++;
         this.mirror.push({ ...row, source });
       }
@@ -129,11 +129,11 @@ class ContainerRun {
     let moved = 0;
     for (const row of this.tx.liveBySourcePrefix(this.s.tenantId, old)) {
       const source = this.w.prefix + row.source.slice(old.length);
-      if (this.tx.renameSourceAndOrigin(row.tenant_id, row.id, { from: row.source, to: source, origin }) === 0) {
+      if (this.tx.renameSourceAndOrigin(row.tenantId, row.id, { from: row.source, to: source, origin }) === 0) {
         continue;
       }
       moved++;
-      this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
+      this.mirror.push({ ...row, source, originProject: origin ?? row.originProject });
     }
     this.tally.renamed += moved;
     if (moved === 0 && (this.w.container.items.length === 0 || this.holdsLive(this.w.prefix))) {
@@ -144,7 +144,7 @@ class ContainerRun {
       this.tx.replaceDormant(this.s.tenantId, snap.entry.id, {
         ...snap.entry,
         source,
-        origin_project: origin ?? snap.entry.origin_project,
+        originProject: origin ?? snap.entry.originProject,
       });
     }
   }
@@ -184,7 +184,7 @@ class ContainerRun {
     if (!needed) return [];
     return this.tx
       .dormantBySourcePrefix(this.s.tenantId, this.w.prefix)
-      .filter((snap) => !snap.entry.superseded_by)
+      .filter((snap) => !snap.entry.supersededBy)
       .map((snap) => ({
         id: snap.entry.id,
         ...splitSource(snap.entry.source, this.w.prefix),
@@ -201,16 +201,16 @@ class ContainerRun {
 
   /** api.supersede's steps on this transaction; false when another writer superseded the row first. */
   private supersede(old: MemoryEntry, newId: string): boolean {
-    if (!this.tx.supersede(old.tenant_id, old.id, newId)) return false;
-    if (old.dag_parent_id) this.tx.markSummaryDirty(old.dag_parent_id, old.tenant_id, SYNC_ACTOR);
+    if (!this.tx.supersede(old.tenantId, old.id, newId)) return false;
+    if (old.dagParentId) this.tx.markSummaryDirty(old.dagParentId, old.tenantId, SYNC_ACTOR);
     this.tx.appendAudit({
-      tenantId: old.tenant_id,
+      tenantId: old.tenantId,
       actor: SYNC_ACTOR,
       op: 'supersede',
       targetId: old.id,
       metadata: { newId },
     });
-    this.mirror.push({ ...old, superseded_by: newId });
+    this.mirror.push({ ...old, supersededBy: newId });
     return true;
   }
 
@@ -236,7 +236,7 @@ class ContainerRun {
       ? new Date(Math.min(item.updatedAt, Date.parse(base.created))).toISOString()
       : base.created;
     const origin = this.s.originProject === undefined ? {} : { origin_project: this.s.originProject };
-    return this.tx.stampOrigin({ ...base, created, valid_from: created, ...origin });
+    return this.tx.stampOrigin({ ...base, created, validFrom: created, ...origin });
   }
 
   private gated(entry: MemoryEntry): boolean {
@@ -263,7 +263,7 @@ class ContainerRun {
       ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: this.s.baseHalfLifeDays }),
       ...snap.entry,
       tags: [...tags, this.tag],
-      last_retrieved: now.toISOString(),
+      lastRetrieved: now.toISOString(),
     };
     if (
       !this.gated(

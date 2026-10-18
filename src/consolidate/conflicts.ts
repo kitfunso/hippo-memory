@@ -143,9 +143,9 @@ export function detectConflicts(
       !isQuarantineScope(entry.scope ?? null) &&
       (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD);
     if (!live) continue;
-    const places = byTenant.get(entry.tenant_id);
+    const places = byTenant.get(entry.tenantId);
     if (places) places.push(ids.length);
-    else byTenant.set(entry.tenant_id, [ids.length]);
+    else byTenant.set(entry.tenantId, [ids.length]);
     ids.push(entry.id);
     if (!pagesOf) held.push(entry);
   }
@@ -166,8 +166,8 @@ interface ConflictRow {
   /** Extracted facts and session digests restate other rows, so they are never one side of a conflict. */
   restated: boolean;
   scope: MemoryEntry['scope'];
-  tenant_id: string;
-  origin_project: MemoryEntry['origin_project'];
+  tenantId: string;
+  originProject: MemoryEntry['originProject'];
   profile: ConflictProfile;
 }
 
@@ -176,11 +176,11 @@ function conflictRow(place: number, e: MemoryEntry): ConflictRow {
     place,
     id: e.id,
     trace: e.layer === Layer.Trace,
-    superseded: Boolean(e.superseded_by),
+    superseded: Boolean(e.supersededBy),
     restated: e.tags.includes('extracted') || e.tags.includes('session-digest'),
     scope: e.scope,
-    tenant_id: e.tenant_id,
-    origin_project: e.origin_project,
+    tenantId: e.tenantId,
+    originProject: e.originProject,
     profile: conflictProfile(e.content),
   };
 }
@@ -217,15 +217,15 @@ function tenantConflicts(rows: readonly ConflictRow[]): Array<readonly [number, 
   return found;
 }
 
-type RecallFields = Pick<MemoryEntry, 'scope' | 'tenant_id' | 'origin_project'>;
+type RecallFields = Pick<MemoryEntry, 'scope' | 'tenantId' | 'originProject'>;
 
 /** One project's ambient context can show both: same tenant, and the same project or a user-global row beside a
  * project's. */
 function recalledTogether(a: RecallFields, b: RecallFields): boolean {
   // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
   if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
-  if (a.tenant_id !== b.tenant_id) return false;
-  const [x, y] = [a.origin_project ?? null, b.origin_project ?? null];
+  if (a.tenantId !== b.tenantId) return false;
+  const [x, y] = [a.originProject ?? null, b.originProject ?? null];
   return x === y || (x === '' && y !== null) || (y === '' && x !== null);
 }
 

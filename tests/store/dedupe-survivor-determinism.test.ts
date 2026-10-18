@@ -375,7 +375,7 @@ describe('dedupe survivor determinism', () => {
     });
     const stale = {
       ...createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic }),
-      superseded_by: successor.id,
+      supersededBy: successor.id,
       kind: 'superseded' as const,
     };
     const current = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });

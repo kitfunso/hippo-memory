@@ -259,7 +259,7 @@ describe('hippo import --agents', () => {
     const byText = new Map(
       loadAllEntries(b.global, 'default')
         .filter((e) => e.source?.startsWith('agent-memory:'))
-        .map((e) => [e.content, e.origin_project]),
+        .map((e) => [e.content, e.originProject]),
     );
     expect(byText.get(PROJECT_NOTE)).toBe(deriveOriginProject(b.project));
     expect(byText.get(USER_NOTE)).toBe('');
@@ -288,7 +288,7 @@ describe('hooks in a folder without a store', () => {
     expect(rows.map((e) => e.content)).toEqual([transcriptNote]);
     const origin = deriveOriginProject(b.project);
     expect(origin).not.toBe('');
-    expect(rows[0].origin_project).toBe(origin);
+    expect(rows[0].originProject).toBe(origin);
   });
 
   it('session end imports the project and transcript notes with the project as origin, then the user pass', async () => {
@@ -308,7 +308,7 @@ describe('hooks in a folder without a store', () => {
 
     const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
     const origin = deriveOriginProject(b.project);
-    const byText = new Map(rows.map((e) => [e.content, e.origin_project]));
+    const byText = new Map(rows.map((e) => [e.content, e.originProject]));
     expect([...byText.keys()].sort()).toEqual([PROJECT_NOTE, USER_NOTE, transcriptNote].sort());
     expect(byText.get(PROJECT_NOTE)).toBe(origin);
     expect(byText.get(transcriptNote)).toBe(origin);
@@ -333,7 +333,7 @@ describe('hooks in a folder without a store', () => {
     const origins = (): string[] =>
       (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : [])
         .filter((e) => e.content === PROJECT_NOTE)
-        .map((e) => e.origin_project ?? '')
+        .map((e) => e.originProject ?? '')
         .sort();
     expect(origins()).toEqual([main]);
 
@@ -349,7 +349,7 @@ describe('hooks in a folder without a store', () => {
     await hippo(b, plain, ['import', '--agents']);
     const globalRows = (): MemoryEntryRow[] =>
       (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : []).filter((e) => e.content === PROJECT_NOTE);
-    expect(globalRows().map((e) => e.origin_project)).toEqual(['']);
+    expect(globalRows().map((e) => e.originProject)).toEqual(['']);
 
     await hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);
     expect(imported(join(plain, '.hippo'))).toEqual([PROJECT_NOTE]);

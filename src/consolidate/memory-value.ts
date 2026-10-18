@@ -53,14 +53,14 @@ export interface MvFeatureVector {
  */
 export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
-  const pos = entry.outcome_positive ?? 0;
-  const neg = entry.outcome_negative ?? 0;
+  const pos = entry.outcomePositive ?? 0;
+  const neg = entry.outcomeNegative ?? 0;
   return {
     age_days: ageDays,
-    half_life_days: entry.half_life_days,
+    half_life_days: entry.halfLifeDays,
     // clock-basis, never the production decay basis — see doc comment above
     strength: calculateStrength(entry, now, { ablation: strengthAblation() }),
-    retrieval_count: entry.retrieval_count,
+    retrieval_count: entry.retrievalCount,
     outcome_positive: pos,
     outcome_negative: neg,
     outcome_ratio: (pos - neg) / (pos + neg + 1), // same formula as extract.mjs / calculateRewardFactor's ratio term
@@ -209,7 +209,7 @@ export interface MvCandidate {
 /** The candidate `entry` ranks as; pinned entries never compete for rescue (never condemned). */
 export function mvCandidate(entry: MemoryEntry, now: Date): MvCandidate {
   // Default an undefined tenantId as dag.ts:341 does: keying it "undefined" would split it into its own tenant.
-  return { id: entry.id, tenantId: entry.tenant_id ?? DEFAULT_TENANT_ID, features: computeMvFeatures(entry, now) };
+  return { id: entry.id, tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, features: computeMvFeatures(entry, now) };
 }
 
 /** rankNonPinnedByTenant over compact candidates, for the `wanted` ids and every non-finite one; `read` returns the

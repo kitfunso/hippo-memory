@@ -59,10 +59,10 @@ export function makeStore(prefix: string): TmpStore {
 export function seed(hippoRoot: string, content: string, over: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry: MemoryEntry = {
     ...createMemory(content, { tags: [] }),
-    origin_project: 'alpha',
-    half_life_days: 100,
+    originProject: 'alpha',
+    halfLifeDays: 100,
     created: isoAgo(5),
-    last_retrieved: isoAgo(5),
+    lastRetrieved: isoAgo(5),
     ...over,
   };
   writeEntry(hippoRoot, entry);

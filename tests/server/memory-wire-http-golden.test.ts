@@ -19,7 +19,7 @@ beforeEach(async () => {
   _resetAblationCacheForTests();
   __resetSessionRecallHistoryHttp();
   const home = makeRoot('wire-http-golden');
-  writeEntry(home, { ...recallableEntry(), tenant_id: DEFAULT_TENANT_ID });
+  writeEntry(home, { ...recallableEntry(), tenantId: DEFAULT_TENANT_ID });
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 

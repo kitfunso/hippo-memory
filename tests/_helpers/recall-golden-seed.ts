@@ -118,8 +118,8 @@ export function seeded(
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...opts }),
     id,
     created,
-    last_retrieved: created,
-    valid_from: created,
+    lastRetrieved: created,
+    validFrom: created,
     strength: 1,
     ...extra,
   };
@@ -158,14 +158,14 @@ function seedLocal(root: string): string {
       { scope: 'slack:private:C1' },
     ),
     seeded('deploy target was the old staging cluster', 'mem_p_old', '2026-01-02T00:00:00.000Z', {
-      superseded_by: 'mem_p_new',
+      supersededBy: 'mem_p_new',
     }),
     seeded('deploy target is the new staging cluster in eu west', 'mem_p_new', '2026-01-25T00:00:00.000Z'),
     seeded(
       'deploy goal work: migrate the rollout scripts to the new runner',
       'mem_p_goal',
       '2026-01-15T00:00:00.000Z',
-      { retrieval_count: 3 },
+      { retrievalCount: 3 },
       { tags: ['goal-alpha'] },
     ),
     seeded(
@@ -208,23 +208,23 @@ export function seedPortBranches(root: string): void {
     'rollout summary for the nightly batch move',
     'mem_x_summary',
     '2026-01-08T00:00:00.000Z',
-    { dag_level: 2 },
+    { dagLevel: 2 },
     { layer: Layer.Semantic, tags: ['dag-summary'] },
   );
   const rows = [
     summary,
     seeded('deploy batch child one moved the cron', 'mem_x_child1', '2026-01-03T00:00:00.000Z', {
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     }),
     seeded('deploy batch child two moved the queue', 'mem_x_child2', '2026-01-04T00:00:00.000Z', {
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     }),
     seeded('café opening hours for the team lunch', 'mem_x_cafe', '2026-01-06T00:00:00.000Z'),
     seeded('raw capture of the deploy window from the golden session', 'mem_x_raw', '2026-01-24T00:00:00.000Z', {
       kind: 'raw',
-      source_session_id: SESSION,
+      sourceSessionId: SESSION,
     }),
   ];
   for (const row of rows) writeEntry(root, row);

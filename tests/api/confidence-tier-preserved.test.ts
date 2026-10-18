@@ -25,8 +25,8 @@ function agedEntry(overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       confidence: overrides.confidence,
     }),
-    last_retrieved: old,
-    half_life_days: 3650, // survives DECAY_THRESHOLD so it stays a survivor
+    lastRetrieved: old,
+    halfLifeDays: 3650, // survives DECAY_THRESHOLD so it stays a survivor
     ...overrides,
   };
 }
@@ -69,7 +69,7 @@ describe('confidence tier survives sleep', () => {
     const now = new Date();
     const aged = agedEntry({ confidence: 'observed' });
     const marked = agedEntry({ confidence: 'stale' });
-    const fresh = { ...agedEntry({ confidence: 'observed' }), last_retrieved: now.toISOString() };
+    const fresh = { ...agedEntry({ confidence: 'observed' }), lastRetrieved: now.toISOString() };
 
     const picked = sampleForReplay([aged, marked, fresh], 3, now, 42);
     expect(picked).toEqual([fresh.id]);

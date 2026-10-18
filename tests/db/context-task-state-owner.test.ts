@@ -91,7 +91,7 @@ describe('task state on a shared store', () => {
   });
 
   it('prompt hook context keyed the same way', async () => {
-    writeEntry(home, { ...createMemory('PINNED: always check the rollback plan'), pinned: true, origin_project: 'p' });
+    writeEntry(home, { ...createMemory('PINNED: always check the rollback plan'), pinned: true, originProject: 'p' });
     seedTwoOwners();
     const forB = await promptHookContext(ctx('bob'), { sessionId: 'sb2', project: P });
     expect(forB.stdout).toContain('bob task');

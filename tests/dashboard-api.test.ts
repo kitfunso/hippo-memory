@@ -46,7 +46,7 @@ beforeAll(async () => {
   seed(store.hippoRoot, 'semantic fact', { layer: Layer.Semantic });
   seed(store.hippoRoot, 'buffer fact', { layer: Layer.Buffer });
   longId = seed(store.hippoRoot, LONG_TEXT).id;
-  seed(store.hippoRoot, 'beta only', { origin_project: 'beta' });
+  seed(store.hippoRoot, 'beta only', { originProject: 'beta' });
   dash = await startDashboard(store.hippoRoot);
 });
 
@@ -101,9 +101,9 @@ describe('overview and project', () => {
   it('switches a project over 4,000 memories to a density grid', () => {
     const entries = Array.from({ length: 4_001 }, (_, i) => ({
       ...createMemory(`bulk ${i}`, { tags: [] }),
-      origin_project: 'big',
+      originProject: 'big',
       created: isoAgo(i % 300),
-      last_retrieved: isoAgo(i % 300),
+      lastRetrieved: isoAgo(i % 300),
     }));
     const rows = entries.map((e) => asDashboardRow(e));
     const snap = buildSnapshot({
@@ -140,9 +140,9 @@ describe('KPI series', () => {
   };
   const aged = (days: number, project: string): MemoryEntry => ({
     ...createMemory(`aged ${days}`, { tags: [] }),
-    origin_project: project,
+    originProject: project,
     created: isoAgo(days),
-    last_retrieved: isoAgo(days),
+    lastRetrieved: isoAgo(days),
   });
 
   it('sends 91 cumulative points whose first-to-last difference counts memories created inside the window', () => {

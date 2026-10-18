@@ -106,12 +106,12 @@ function condemnedEntry(
   const overridden: MemoryEntry = {
     ...base,
     created,
-    last_retrieved: created,
-    valid_from: created,
-    half_life_days: 1,
-    retrieval_count: 0,
-    outcome_positive: 0,
-    outcome_negative: 0,
+    lastRetrieved: created,
+    validFrom: created,
+    halfLifeDays: 1,
+    retrievalCount: 0,
+    outcomePositive: 0,
+    outcomeNegative: 0,
     pinned: false,
   };
   // T5 fix (AT1 in-suite flake): single-source the stored `strength` to the
@@ -157,26 +157,26 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
         ...createMemory('a much longer memory entry with considerably more words describing something in detail', {
           layer: Layer.Semantic,
         }),
-        retrieval_count: 7,
-        outcome_positive: 3,
-        outcome_negative: 1,
+        retrievalCount: 7,
+        outcomePositive: 3,
+        outcomeNegative: 1,
       },
       {
         ...createMemory('bravo second memory entry', { layer: Layer.Trace }),
-        retrieval_count: 0,
-        outcome_positive: 0,
-        outcome_negative: 5,
-        half_life_days: 21,
+        retrievalCount: 0,
+        outcomePositive: 0,
+        outcomeNegative: 5,
+        halfLifeDays: 21,
       },
       {
         ...createMemory('charlie a pinned rule that never decays', { pinned: true }),
-        retrieval_count: 2,
+        retrievalCount: 2,
       },
       {
         ...createMemory('delta an ancient entry', { layer: Layer.Buffer }),
         created: ancientDate(400),
-        last_retrieved: ancientDate(200),
-        half_life_days: 3,
+        lastRetrieved: ancientDate(200),
+        halfLifeDays: 3,
       },
     ];
     for (const e of built) writeEntry(dir, e);
@@ -212,10 +212,10 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
       }),
     ].map((e, i) => ({
       ...e,
-      retrieval_count: i,
-      outcome_positive: i % 2,
-      outcome_negative: (i + 1) % 3,
-      half_life_days: 7 + i,
+      retrievalCount: i,
+      outcomePositive: i % 2,
+      outcomeNegative: (i + 1) % 3,
+      halfLifeDays: 7 + i,
     }));
     for (const e of built) writeEntry(dir, e);
     const loaded = loadEveryTenantEntries(dir);
@@ -332,8 +332,8 @@ describe('(d) flag-off byte-identical', () => {
       built.push({
         ...createMemory(`${tenantId} pinned rule`, { pinned: true, layer: Layer.Semantic, tenantId }),
         created: ancientDate(3650),
-        last_retrieved: ancientDate(3650),
-        half_life_days: 1,
+        lastRetrieved: ancientDate(3650),
+        halfLifeDays: 1,
       });
     }
     expect(built.length).toBeGreaterThanOrEqual(40); // 3 tenants * (10 + 3 + 1) = 42
@@ -466,7 +466,7 @@ describe('(e) rescue semantics', () => {
       expect(refreshed!.confidence).toBe('observed');
       expect(resolveConfidence(refreshed!, NOW)).toBe('stale');
       // D1 still holds: no half-life edits, no rank-derived writes.
-      expect(refreshed!.half_life_days).toBe(orig.half_life_days);
+      expect(refreshed!.halfLifeDays).toBe(orig.halfLifeDays);
     }
   });
 
@@ -579,8 +579,8 @@ describe('(f) pinned exemption unchanged', () => {
     const entry = {
       ...createMemory('permanent pinned rule that must never decay', { pinned: true }),
       created: ancientDate(3650),
-      last_retrieved: ancientDate(3650),
-      half_life_days: 1,
+      lastRetrieved: ancientDate(3650),
+      halfLifeDays: 1,
     };
     writeEntry(dir, entry);
 
@@ -722,20 +722,20 @@ describe('(h) scale characterization', () => {
                   : layerRoll < 0.98
                     ? Layer.Buffer
                     : Layer.Episodic;
-          const retrieval_count = Math.floor(rand() * 10);
-          const outcome_positive = Math.floor(rand() * 5);
-          const outcome_negative = Math.floor(rand() * 5);
+          const retrievalCount = Math.floor(rand() * 10);
+          const outcomePositive = Math.floor(rand() * 5);
+          const outcomeNegative = Math.floor(rand() * 5);
           const ageDays = isCondemned ? 200 + Math.floor(rand() * 3000) : Math.floor(rand() * 5);
-          const half_life_days = isCondemned ? 1 : 7 + Math.floor(rand() * 20);
+          const halfLifeDays = isCondemned ? 1 : 7 + Math.floor(rand() * 20);
           const created = new Date(NOW.getTime() - ageDays * 24 * 60 * 60 * 1000).toISOString();
           out.push({
             ...createMemory(content, { layer, tenantId }),
             created,
-            last_retrieved: created,
-            half_life_days,
-            retrieval_count,
-            outcome_positive,
-            outcome_negative,
+            lastRetrieved: created,
+            halfLifeDays,
+            retrievalCount,
+            outcomePositive,
+            outcomeNegative,
             pinned: false,
           });
         }
@@ -778,11 +778,11 @@ describe('(h) scale characterization', () => {
     // rescue outcomes for its condemned entries must be unchanged. ---
     const tenantAId = TENANTS[0];
     const tenantBId = TENANTS[1];
-    const tenantBIds = new Set(loaded.filter((e) => e.tenant_id === tenantBId).map((e) => e.id));
+    const tenantBIds = new Set(loaded.filter((e) => e.tenantId === tenantBId).map((e) => e.id));
     const dropCount = Math.floor(tenantBIds.size * 0.4);
     let dropped = 0;
     const mutated = loaded.filter((e) => {
-      if (e.tenant_id === tenantBId && dropped < dropCount) {
+      if (e.tenantId === tenantBId && dropped < dropCount) {
         dropped++;
         return false;
       }
@@ -793,7 +793,7 @@ describe('(h) scale characterization', () => {
     const rescuedAfterMutation = rescueSet(mutated, condemnedIds, NOW);
     const tenantACondemned = [...condemnedIds].filter((id) => {
       const e = loaded.find((x) => x.id === id);
-      return e?.tenant_id === tenantAId;
+      return e?.tenantId === tenantAId;
     });
     expect(tenantACondemned).toHaveLength(106);
     for (const id of tenantACondemned) {
@@ -804,7 +804,7 @@ describe('(h) scale characterization', () => {
     const rescueRate = rescued1.size / condemnedIds.size;
     const perTenant: Record<string, { condemned: number; rescued: number }> = {};
     for (const tenantId of TENANTS) {
-      const tCondemned = [...condemnedIds].filter((id) => loaded.find((x) => x.id === id)?.tenant_id === tenantId);
+      const tCondemned = [...condemnedIds].filter((id) => loaded.find((x) => x.id === id)?.tenantId === tenantId);
       const tRescued = tCondemned.filter((id) => rescued1.has(id));
       perTenant[tenantId] = { condemned: tCondemned.length, rescued: tRescued.length };
     }
@@ -856,7 +856,7 @@ describe('(h) scale characterization', () => {
     expect(dropCount).toBe(280);
     let droppedForMutated = 0;
     const seedForMutated = loaded.filter((e) => {
-      if (e.tenant_id === tenantBId && droppedForMutated < dropCount) {
+      if (e.tenantId === tenantBId && droppedForMutated < dropCount) {
         droppedForMutated++;
         return false;
       }

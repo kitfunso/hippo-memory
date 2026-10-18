@@ -61,7 +61,7 @@ describe('resolveConflict', () => {
 
     // Loser's half-life should be halved
     const after = readEntry(tmpDir, bId)!;
-    expect(after.half_life_days).toBe(Math.max(1, before.half_life_days / 2));
+    expect(after.halfLifeDays).toBe(Math.max(1, before.halfLifeDays / 2));
 
     // Conflict should be resolved
     const openConflicts = listMemoryConflicts(tmpDir, 'open');
@@ -90,13 +90,13 @@ describe('resolveConflict', () => {
 
     // Before resolve, both should have conflicts_with set
     const aBefore = readEntry(tmpDir, aId)!;
-    expect(aBefore.conflicts_with).toContain(bId);
+    expect(aBefore.conflictsWith).toContain(bId);
 
     await resolve(conflictId, aId);
 
     // After resolve, winner should not reference the loser
     const aAfter = readEntry(tmpDir, aId)!;
-    expect(aAfter.conflicts_with).not.toContain(bId);
+    expect(aAfter.conflictsWith).not.toContain(bId);
   });
 
   it('still cleans the other side when a side has malformed conflicts_with_json', async () => {
@@ -110,8 +110,8 @@ describe('resolveConflict', () => {
 
     await expect(resolve(conflictId, aId)).resolves.toEqual({ conflictId, keptId: aId, loserId: bId });
 
-    expect(readEntry(tmpDir, bId)!.conflicts_with).not.toContain(aId);
-    expect(readEntry(tmpDir, aId)!.conflicts_with).toEqual([]);
+    expect(readEntry(tmpDir, bId)!.conflictsWith).not.toContain(aId);
+    expect(readEntry(tmpDir, aId)!.conflictsWith).toEqual([]);
   });
 
   it('answers not-found for an unknown conflict id from one read by id, with no list read', async () => {
@@ -206,7 +206,7 @@ describe('resolveConflict', () => {
 
     // A should be weakened
     const aAfter = readEntry(tmpDir, aId)!;
-    expect(aAfter.half_life_days).toBeLessThan(7); // default is 7
+    expect(aAfter.halfLifeDays).toBeLessThan(7); // default is 7
   });
 });
 
@@ -353,10 +353,10 @@ describe('conflict tenant isolation', () => {
     replaceDetectedConflicts(tmpDir, [
       { memory_a_id: a.id, memory_b_id: b.id, reason: 'same-tenant at first', score: 0.8 },
     ]);
-    expect(readEntry(tmpDir, a.id)!.conflicts_with).toContain(b.id);
+    expect(readEntry(tmpDir, a.id)!.conflictsWith).toContain(b.id);
 
     // Re-home b to tenant-b — the (a, b) conflict row is now cross-tenant.
-    writeEntry(tmpDir, { ...b, tenant_id: 'tenant-b' });
+    writeEntry(tmpDir, { ...b, tenantId: 'tenant-b' });
 
     // Re-run detection passing the same pair, so the row stays open and the
     // refMap rebuild — not the resolve-stale path — is what must exclude it.
@@ -365,6 +365,6 @@ describe('conflict tenant isolation', () => {
     ]);
 
     // a's conflicts_with must no longer carry b's id.
-    expect(readEntry(tmpDir, a.id)!.conflicts_with).not.toContain(b.id);
+    expect(readEntry(tmpDir, a.id)!.conflictsWith).not.toContain(b.id);
   });
 });

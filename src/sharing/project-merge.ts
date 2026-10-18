@@ -80,7 +80,7 @@ function copiesByOrigin(imports: Iterable<MemoryEntry>): Map<string | null, numb
   const holders = new Map<string, Map<string | null, number>>();
   for (const e of imports) {
     const key = duplicateKey(e.content);
-    const origin = e.origin_project ?? null;
+    const origin = e.originProject ?? null;
     const byOrigin = holders.get(key) ?? new Map<string | null, number>();
     holders.set(key, byOrigin.set(origin, (byOrigin.get(origin) ?? 0) + 1));
   }
@@ -146,8 +146,8 @@ function foldInTx(tx: ProjectTagWrites, from: string, into: string): Omit<MergeR
   // A row set aside sits at or before the page cursor, so the write never moves a row the walk has yet to read.
   for (const row of tx.entriesFromOrigin({ origin: from })) {
     const tag = toolTag(row.source);
-    const copy = isImport(row) && !row.superseded_by && row.kind !== 'raw' && tag !== null && held.has(noteKey(row));
-    if (copy && tx.setAside(tag, { ...row, origin_project: into }, 'project-merge').kind === 'dormant') {
+    const copy = isImport(row) && !row.supersededBy && row.kind !== 'raw' && tag !== null && held.has(noteKey(row));
+    if (copy && tx.setAside(tag, { ...row, originProject: into }, 'project-merge').kind === 'dormant') {
       setAside.push(row.id);
     } else restamped.push(row.id);
   }
@@ -156,7 +156,7 @@ function foldInTx(tx: ProjectTagWrites, from: string, into: string): Omit<MergeR
   const dormantRestamped: string[] = [];
   for (const snap of tx.dormantFromOrigin(from)) {
     if (gone.has(snap.entry.id)) continue;
-    tx.replaceDormant(snap.entry.id, { ...snap.entry, origin_project: into });
+    tx.replaceDormant(snap.entry.id, { ...snap.entry, originProject: into });
     dormantRestamped.push(snap.entry.id);
   }
   const compactions = tx.restampCompactions(from, into);
@@ -176,11 +176,11 @@ function noteKey(entry: MemoryEntry): string {
 function importCopies(store: ProjectTagReads): MemoryEntry[] {
   const userGlobal = new Set<string>();
   for (const e of store.liveEntriesBySourcePrefix(AGENT_MEMORY_SOURCE_PREFIX)) {
-    if (e.origin_project === '') userGlobal.add(duplicateKey(e.content));
+    if (e.originProject === '') userGlobal.add(duplicateKey(e.content));
   }
   const copies: MemoryEntry[] = [];
   for (const e of store.liveEntriesBySourcePrefix(AGENT_MEMORY_SOURCE_PREFIX)) {
-    const movable = e.origin_project && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null;
+    const movable = e.originProject && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null;
     if (movable && userGlobal.has(duplicateKey(e.content))) copies.push(e);
   }
   return copies;
@@ -205,7 +205,7 @@ function strayImports(store: ProjectTagReads, hippoRoot: string): MemoryEntry[] 
   const tool = toolSourcePrefix('claude-code');
   const kept = (e: MemoryEntry): boolean => e.kind !== 'raw' && !e.pinned;
   const origins = new Set<string>();
-  for (const e of store.liveEntriesBySourcePrefix(tool)) if (kept(e)) origins.add(e.origin_project ?? '');
+  for (const e of store.liveEntriesBySourcePrefix(tool)) if (kept(e)) origins.add(e.originProject ?? '');
   const edges = foldEdges(store);
   const right = new Set<string>();
   const wrong = new Set<string>();
@@ -310,8 +310,8 @@ function planUserGlobalRepair(
   const live = store.entriesByIds(parentIds);
   // A live row outranks a snapshot under its id, so only the parents with no live row are looked up dormant.
   const dormant = store.dormantByIds(parentIds.filter((id) => !live.has(id)));
-  const origins = new Map<string, string | null>([...dormant].map(([id, s]) => [id, after(s.entry.origin_project)]));
-  for (const [id, e] of live) origins.set(id, after(e.origin_project));
+  const origins = new Map<string, string | null>([...dormant].map(([id, s]) => [id, after(s.entry.originProject)]));
+  for (const [id, e] of live) origins.set(id, after(e.originProject));
   const toProject: Array<{ id: string; origin: string }> = [];
   const setAside: string[] = [];
   const untraced: string[] = [];

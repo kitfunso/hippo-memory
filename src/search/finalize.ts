@@ -10,9 +10,9 @@ export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
   const deduped: SearchResult[] = [];
   for (const result of scored) {
     const entry = result.entry;
-    if (entry.extracted_from) {
-      seenExtractedFrom.add(entry.extracted_from);
-      const sourceIdx = deduped.findIndex((d) => d.entry.id === entry.extracted_from);
+    if (entry.extractedFrom) {
+      seenExtractedFrom.add(entry.extractedFrom);
+      const sourceIdx = deduped.findIndex((d) => d.entry.id === entry.extractedFrom);
       if (sourceIdx >= 0) deduped.splice(sourceIdx, 1);
       deduped.push(result);
     } else if (!seenExtractedFrom.has(entry.id)) {
@@ -28,10 +28,10 @@ const DAG_CHILD_SCORE_FACTOR = 0.9;
 export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): SearchResult[] {
   const summaryIds = results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id);
   if (summaryIds.length === 0) return results;
-  const children = pool.filter((e) => e.dag_parent_id && summaryIds.includes(e.dag_parent_id));
+  const children = pool.filter((e) => e.dagParentId && summaryIds.includes(e.dagParentId));
   for (const child of children) {
     if (results.some((r) => r.entry.id === child.id)) continue;
-    const parentResult = results.find((r) => r.entry.id === child.dag_parent_id);
+    const parentResult = results.find((r) => r.entry.id === child.dagParentId);
     const childScore = parentResult ? parentResult.score * DAG_CHILD_SCORE_FACTOR * churnStaleFactor(child) : 0;
     results.push({ entry: child, score: childScore, bm25: 0, cosine: 0, tokens: estimateTokens(child.content) });
   }

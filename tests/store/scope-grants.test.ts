@@ -339,7 +339,7 @@ describe("supersede keeps the old row's scope", () => {
     });
 
     const refreshed = readEntry(hippoDir, old.id, 'default');
-    const successor = refreshed?.superseded_by ? readEntry(hippoDir, refreshed.superseded_by, 'default') : null;
+    const successor = refreshed?.supersededBy ? readEntry(hippoDir, refreshed.supersededBy, 'default') : null;
     expect(successor?.scope).toBe(PRIVATE_SCOPE);
   });
 });

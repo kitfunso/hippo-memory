@@ -79,7 +79,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
       ...createMemory('ADMITTED-ROW stays visible in the landscape summary', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       }),
-      origin_project: 'proj-a',
+      originProject: 'proj-a',
     };
     writeEntry(projA, admitted);
 
@@ -87,7 +87,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
       ...createMemory('CROSS-PROJECT-ROW belongs to a different project entirely', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       }),
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     };
     writeEntry(projA, crossProjectRow);
 
@@ -96,7 +96,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         scope: 'slack:private:C123',
       }),
-      origin_project: 'proj-a',
+      originProject: 'proj-a',
     };
     writeEntry(projA, privateScopeRow);
 
@@ -134,7 +134,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     // strength decays to near zero.
     const aged = {
       ...createMemory('AGED-ROW decayed far past its half-life', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      origin_project: 'proj-a',
+      originProject: 'proj-a',
     };
     writeEntry(projA, aged);
 

@@ -29,7 +29,7 @@ let ctx: FullContext;
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
   const entry = {
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    origin_project: PROJECT,
+    originProject: PROJECT,
     ...extra,
   };
   writeEntry(root, entry);
@@ -97,7 +97,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 50; i++) {
         seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
-          origin_project: 'proj-b',
+          originProject: 'proj-b',
           created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
         });
       }
@@ -114,7 +114,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   it('never returns a superseded row, however new it is', async () => {
     const superseded = seed(local, 'the superseded row is the newest thing in the store', {
       created: '2026-08-01T00:00:00.000Z',
-      superseded_by: 'some-newer-id',
+      supersededBy: 'some-newer-id',
       pinned: true,
     });
     seed(local, 'an ordinary current row that keeps the store non-empty', {
@@ -380,7 +380,7 @@ describe('loadAmbientCandidates', () => {
   it("finds the caller's older rows behind a full window of other projects without reading the corpus", async () => {
     const mine = Array.from({ length: 5 }, (_, i) => ({
       ...createMemory(`an older row of the caller ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      origin_project: PROJECT,
+      originProject: PROJECT,
       created: new Date(Date.UTC(2026, 5, 1, i)).toISOString(),
     }));
     await withSharedStoreHandles(() => {
@@ -388,15 +388,15 @@ describe('loadAmbientCandidates', () => {
       for (let i = 0; i < 100; i++) {
         writeEntry(local, {
           ...createMemory(`a newer row of another project ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-          origin_project: 'proj-b',
+          originProject: 'proj-b',
           created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
         });
       }
     });
     let admitted = 0;
-    const admit = (e: { origin_project?: string | null }): boolean => {
+    const admit = (e: { originProject?: string | null }): boolean => {
       admitted++;
-      return e.origin_project === PROJECT;
+      return e.originProject === PROJECT;
     };
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 5, admit, undefined, {

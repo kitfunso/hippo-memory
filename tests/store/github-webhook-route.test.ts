@@ -172,7 +172,7 @@ describe('POST /v1/connectors/github/events', () => {
     const entries = loadAllEntries(root, 'default');
     const ghRow = entries.find((e) => e.tags.includes('source:github') && e.kind === 'raw');
     expect(ghRow).toBeDefined();
-    expect(ghRow!.artifact_ref).toBe('github://acme/repo/issue/42');
+    expect(ghRow!.artifactRef).toBe('github://acme/repo/issue/42');
   });
 
   it('2. valid signature + issue_comment.created → 200, memory ingested', async () => {
@@ -180,7 +180,7 @@ describe('POST /v1/connectors/github/events', () => {
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issue_comment', 'd-2'));
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
-    const ghRow = entries.find((e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999');
+    const ghRow = entries.find((e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/42/comment/999');
     expect(ghRow).toBeDefined();
   });
 
@@ -189,7 +189,7 @@ describe('POST /v1/connectors/github/events', () => {
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'pull_request', 'd-3'));
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
-    const ghRow = entries.find((e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/pull/7');
+    const ghRow = entries.find((e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/pull/7');
     expect(ghRow).toBeDefined();
   });
 
@@ -199,7 +199,7 @@ describe('POST /v1/connectors/github/events', () => {
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
     const ghRow = entries.find(
-      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/pull/7/review_comment/12345',
+      (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/pull/7/review_comment/12345',
     );
     expect(ghRow).toBeDefined();
   });
@@ -254,7 +254,7 @@ describe('POST /v1/connectors/github/events', () => {
     const createRes = await postWebhook(handle.port, createBody, defaultHeaders(createBody, 'issue_comment', 'd-9a'));
     expect(createRes.status).toBe(200);
     const beforeRaws = loadAllEntries(root, 'default').filter(
-      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999',
+      (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/42/comment/999',
     );
     expect(beforeRaws.length).toBe(1);
 
@@ -267,7 +267,7 @@ describe('POST /v1/connectors/github/events', () => {
     expect(json.archivedCount).toBe(1);
 
     const afterRaws = loadAllEntries(root, 'default').filter(
-      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999',
+      (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/42/comment/999',
     );
     expect(afterRaws.length).toBe(0);
   });
@@ -394,7 +394,7 @@ describe('POST /v1/connectors/github/events', () => {
     expect(['duplicate', 'skipped_duplicate']).toContain(j2.status);
 
     const rows = loadAllEntries(root, 'default').filter(
-      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42',
+      (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/42',
     );
     expect(rows.length).toBe(1);
   });
@@ -402,7 +402,7 @@ describe('POST /v1/connectors/github/events', () => {
   it('14b. a signed delivery sent again under the same X-GitHub-Delivery is refused with 409; a new id passes', async () => {
     const issueRows = () =>
       loadAllEntries(root, 'default').filter(
-        (e) => e.kind === 'raw' && e.artifact_ref?.startsWith('github://acme/repo/issue/'),
+        (e) => e.kind === 'raw' && e.artifactRef?.startsWith('github://acme/repo/issue/'),
       );
     const first = issueBody({ number: 50 });
     expect((await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'))).status).toBe(200);
@@ -414,7 +414,7 @@ describe('POST /v1/connectors/github/events', () => {
     });
     const other = issueBody({ number: 51 });
     expect((await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay'))).status).toBe(409);
-    expect(issueRows().map((e) => e.artifact_ref)).toEqual(['github://acme/repo/issue/50']);
+    expect(issueRows().map((e) => e.artifactRef)).toEqual(['github://acme/repo/issue/50']);
 
     const fresh = await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay-next'));
     expect({ status: fresh.status, status_field: (await jsonAs<{ status: string }>(fresh)).status }).toEqual({
@@ -423,7 +423,7 @@ describe('POST /v1/connectors/github/events', () => {
     });
     expect(
       issueRows()
-        .map((e) => e.artifact_ref)
+        .map((e) => e.artifactRef)
         .sort(),
     ).toEqual(['github://acme/repo/issue/50', 'github://acme/repo/issue/51']);
   });
@@ -431,7 +431,7 @@ describe('POST /v1/connectors/github/events', () => {
   it('14d. the same delivery replayed after a restart, which forgets every claimed id, is a stored duplicate with no new rows', async () => {
     const issueRows = () =>
       loadAllEntries(root, 'default').filter(
-        (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/53',
+        (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/53',
       );
     const body = issueBody({ number: 53 });
     expect(
@@ -515,7 +515,7 @@ describe('POST /v1/connectors/github/events', () => {
       closeHippoDb(db);
     }
     const issueRows = loadAllEntries(root, 'default').filter(
-      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42',
+      (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/42',
     );
     expect(issueRows.length).toBe(1);
   });
@@ -523,7 +523,7 @@ describe('POST /v1/connectors/github/events', () => {
   it('17. pull_request_review_comment.deleted → archives the previously-ingested review comment', async () => {
     const artifactRef = 'github://acme/repo/pull/7/review_comment/12345';
     const liveRaws = () =>
-      loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
+      loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
     const createBody = prReviewCommentBody('created');
     const createRes = await postWebhook(
       handle.port,

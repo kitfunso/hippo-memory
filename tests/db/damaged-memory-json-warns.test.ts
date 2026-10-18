@@ -88,7 +88,7 @@ describe('a memory row with a damaged JSON column', () => {
 
     const read = loadAllEntries(root, 'default');
 
-    expect(read.map((e) => [e.conflicts_with, e.parents, e.tags])).toEqual([
+    expect(read.map((e) => [e.conflictsWith, e.parents, e.tags])).toEqual([
       [[], [], []],
       [[], [], []],
     ]);

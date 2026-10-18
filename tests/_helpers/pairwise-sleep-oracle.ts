@@ -141,7 +141,7 @@ export function pairwiseDetectConflicts(
   for (let i = 0; i < survivors.length; i++) {
     for (let j = i + 1; j < survivors.length; j++) {
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
-      if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
+      if (survivors[i].supersededBy || survivors[j].supersededBy) continue;
       if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) {
         continue;
       }

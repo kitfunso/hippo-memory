@@ -195,7 +195,7 @@ describe('MCP hippo_remember', () => {
     // SAFETY: a tools/call reply carries result.content[0].text.
     const text = (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;
     const [row] = loadAllEntries(root, 'default');
-    expect(text).toBe(`Remembered [${row!.id}] (half-life: ${row!.half_life_days}d, tags: ops)`);
+    expect(text).toBe(`Remembered [${row!.id}] (half-life: ${row!.halfLifeDays}d, tags: ops)`);
     expect(reads).not.toHaveBeenCalled();
   });
 });

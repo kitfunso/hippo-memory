@@ -734,7 +734,7 @@ describe('Decay mechanics', () => {
     initStore(tmpDir); // already init, no-op if exists
     const entry = createMemory7('temporary note');
     const fourteenDaysAgo = daysAgo(14);
-    const aged: MemoryEntry = { ...entry, last_retrieved: fourteenDaysAgo };
+    const aged: MemoryEntry = { ...entry, lastRetrieved: fourteenDaysAgo };
 
     const s = calculateStrength(aged, new Date());
     // At 14 days = 2 half-lives: decay = 0.5^2 = 0.25; retrieval_boost=1; emotional=1.0 -> s ≈ 0.25
@@ -748,8 +748,8 @@ describe('Decay mechanics', () => {
     const errorMem = createMemory7('cache failure lesson', { tags: ['error'] });
     const neutralMem = createMemory7('cache failure lesson', { tags: [] });
 
-    const agedError: MemoryEntry = { ...errorMem, last_retrieved: sevenDaysAgo };
-    const agedNeutral: MemoryEntry = { ...neutralMem, last_retrieved: sevenDaysAgo };
+    const agedError: MemoryEntry = { ...errorMem, lastRetrieved: sevenDaysAgo };
+    const agedNeutral: MemoryEntry = { ...neutralMem, lastRetrieved: sevenDaysAgo };
 
     const sError = calculateStrength(agedError, now);
     const sNeutral = calculateStrength(agedNeutral, now);
@@ -767,8 +767,8 @@ describe('Retrieval strengthening', () => {
 
     let recalled = createMemory7('recalled memory about deployment');
     // Write to store so markRetrieved can use
-    recalled = { ...recalled, last_retrieved: sevenDaysAgo.toISOString() };
-    const originalHalfLife = recalled.half_life_days;
+    recalled = { ...recalled, lastRetrieved: sevenDaysAgo.toISOString() };
+    const originalHalfLife = recalled.halfLifeDays;
 
     // Simulate 5 retrievals
     const retrieved = markRetrieved(
@@ -778,13 +778,13 @@ describe('Retrieval strengthening', () => {
     const finalEntry = retrieved[0];
 
     // 5 retrievals = +2 days each = +10 days to half_life
-    expect(finalEntry.half_life_days).toBe(originalHalfLife + 10);
+    expect(finalEntry.halfLifeDays).toBe(originalHalfLife + 10);
 
     // Compare strength against a same-age unrecalled peer
     const unrecalled: MemoryEntry = {
       ...recalled,
-      retrieval_count: 0,
-      half_life_days: originalHalfLife,
+      retrievalCount: 0,
+      halfLifeDays: originalHalfLife,
     };
     expect(calculateStrength(finalEntry, now)).toBeGreaterThan(calculateStrength(unrecalled, now));
   });
@@ -795,7 +795,7 @@ describe('Error priority', () => {
     const errorMem = createMemory7('same content here', { tags: ['error'] });
     const neutralMem = createMemory7('same content here', { tags: [] });
     // error tag -> half_life * 2
-    expect(errorMem.half_life_days).toBe(neutralMem.half_life_days * 2);
+    expect(errorMem.halfLifeDays).toBe(neutralMem.halfLifeDays * 2);
   });
 
   it('after 7 days, error-tagged strength > neutral strength', () => {
@@ -805,8 +805,8 @@ describe('Error priority', () => {
     const errorMem = createMemory7('rule violation', { tags: ['error'] });
     const neutralMem = createMemory7('rule violation', { tags: [] });
 
-    const agedE: MemoryEntry = { ...errorMem, last_retrieved: sevenDaysAgo };
-    const agedN: MemoryEntry = { ...neutralMem, last_retrieved: sevenDaysAgo };
+    const agedE: MemoryEntry = { ...errorMem, lastRetrieved: sevenDaysAgo };
+    const agedN: MemoryEntry = { ...neutralMem, lastRetrieved: sevenDaysAgo };
 
     // error: half_life=14d, multiplier=1.5 -> decay=0.5^(7/14)=0.707, s=0.707*1.5=1.06 -> clamped to 1
     // neutral: half_life=7d, multiplier=1.0 -> decay=0.5^(7/7)=0.5, s=0.5
@@ -818,19 +818,19 @@ describe('Outcome feedback', () => {
   it('--good increments outcome_positive counter', () => {
     const entry = createMemory7('some lesson');
     const updated = applyOutcome(entry, true);
-    expect(updated.outcome_positive).toBe(1);
-    expect(updated.outcome_negative).toBe(0);
-    expect(updated.outcome_score).toBe(1);
-    expect(updated.half_life_days).toBe(entry.half_life_days);
+    expect(updated.outcomePositive).toBe(1);
+    expect(updated.outcomeNegative).toBe(0);
+    expect(updated.outcomeScore).toBe(1);
+    expect(updated.halfLifeDays).toBe(entry.halfLifeDays);
   });
 
   it('--bad increments outcome_negative counter', () => {
     const entry = createMemory7('some lesson');
     const updated = applyOutcome(entry, false);
-    expect(updated.outcome_positive).toBe(0);
-    expect(updated.outcome_negative).toBe(1);
-    expect(updated.outcome_score).toBe(-1);
-    expect(updated.half_life_days).toBe(entry.half_life_days);
+    expect(updated.outcomePositive).toBe(0);
+    expect(updated.outcomeNegative).toBe(1);
+    expect(updated.outcomeScore).toBe(-1);
+    expect(updated.halfLifeDays).toBe(entry.halfLifeDays);
   });
 });
 

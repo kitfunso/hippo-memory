@@ -93,7 +93,7 @@ describe('mark wrong', () => {
 
     expect(reply.status).toBe(200);
     expect(parse<MemoryDetail>(reply).wrong).toBe(true);
-    expect(row(target.id).outcome_negative).toBe(1);
+    expect(row(target.id).outcomeNegative).toBe(1);
     expect(lastAudit()).toEqual({ actor: 'dashboard', op: 'outcome' });
   });
 });
@@ -108,8 +108,8 @@ describe('resolve conflict', () => {
 
     expect(reply.status).toBe(200);
     expect(parse<ResolveResult>(reply)).toEqual({ ok: true, conflictId: id, keptId: keep.id, weakenedId: lose.id });
-    expect(row(keep.id).half_life_days).toBe(keep.half_life_days);
-    expect(row(lose.id).half_life_days).toBe(lose.half_life_days / 2);
+    expect(row(keep.id).halfLifeDays).toBe(keep.halfLifeDays);
+    expect(row(lose.id).halfLifeDays).toBe(lose.halfLifeDays / 2);
     expect(listMemoryConflicts(store.hippoRoot, '*', 'default')[0].status).toBe('resolved');
   });
 
@@ -121,7 +121,7 @@ describe('resolve conflict', () => {
 
     const outside = await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: other.id });
     expect(outside.status).toBe(400);
-    expect(row(b.id).half_life_days).toBe(b.half_life_days);
+    expect(row(b.id).halfLifeDays).toBe(b.halfLifeDays);
 
     expect((await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: a.id })).status).toBe(200);
     const again = await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: a.id });
@@ -156,8 +156,8 @@ describe('forget', () => {
 
 describe('another tenant and not-live rows', () => {
   it('answers 404 and changes nothing for every action on another tenant id', async () => {
-    const foreign = seed(store.hippoRoot, 'tenant b row', { tenant_id: 'tenant_b' });
-    const foreign2 = seed(store.hippoRoot, 'tenant b other row', { tenant_id: 'tenant_b' });
+    const foreign = seed(store.hippoRoot, 'tenant b row', { tenantId: 'tenant_b' });
+    const foreign2 = seed(store.hippoRoot, 'tenant b other row', { tenantId: 'tenant_b' });
     const conflictId = openConflict(foreign.id, foreign2.id, 'tenant b conflict', 'tenant_b');
 
     expect((await get(dash.port, `/api/memory/${foreign.id}`)).status).toBe(404);
@@ -168,14 +168,14 @@ describe('another tenant and not-live rows', () => {
 
     const after = row(foreign.id);
     expect(after.pinned).toBe(false);
-    expect(after.outcome_negative).toBe(0);
-    expect(after.half_life_days).toBe(foreign.half_life_days);
+    expect(after.outcomeNegative).toBe(0);
+    expect(after.halfLifeDays).toBe(foreign.halfLifeDays);
   });
 
   it('answers 404 and changes nothing on a quarantined and on a superseded id', async () => {
     const successor = seed(store.hippoRoot, 'the replacement');
     const quarantined = seed(store.hippoRoot, 'pending review', { scope: quarantineScopeFor(null) });
-    const superseded = seed(store.hippoRoot, 'replaced', { kind: 'superseded', superseded_by: successor.id });
+    const superseded = seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: successor.id });
 
     for (const target of [quarantined, superseded]) {
       expect((await get(dash.port, `/api/memory/${target.id}`)).status).toBe(404);
@@ -184,7 +184,7 @@ describe('another tenant and not-live rows', () => {
       expect((await postJson(dash.port, `/api/memory/${target.id}/forget`)).status).toBe(404);
       const after = row(target.id);
       expect(after.pinned).toBe(false);
-      expect(after.outcome_negative).toBe(0);
+      expect(after.outcomeNegative).toBe(0);
     }
   });
 
@@ -199,8 +199,8 @@ describe('another tenant and not-live rows', () => {
     expect(detail.body).not.toContain('hidden quarantined claim');
 
     expect((await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: live.id })).status).toBe(404);
-    expect(row(live.id).half_life_days).toBe(live.half_life_days);
-    expect(row(secret.id).half_life_days).toBe(secret.half_life_days);
+    expect(row(live.id).halfLifeDays).toBe(live.halfLifeDays);
+    expect(row(secret.id).halfLifeDays).toBe(secret.halfLifeDays);
   });
 });
 

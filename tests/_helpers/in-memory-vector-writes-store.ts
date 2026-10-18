@@ -126,7 +126,7 @@ export function inMemoryVectorWritesStore(hippoRoot: string): InMemoryVectorWrit
           (id) =>
             id > afterId &&
             vectors.get(id)?.model !== model &&
-            (tenantId === ALL_TENANTS || entries.get(id)?.tenant_id === tenantId),
+            (tenantId === ALL_TENANTS || entries.get(id)?.tenantId === tenantId),
         );
       return ids.slice(0, Math.max(1, Math.min(limit, 500))).flatMap((id) => {
         const entry = entries.get(id);
@@ -137,8 +137,7 @@ export function inMemoryVectorWritesStore(hippoRoot: string): InMemoryVectorWrit
       const replaces = replacesIndex(indexState(), model);
       if (replaces && !replaceIndex) return { written: 0, modelMismatch: true };
       const writable = rows.filter(
-        (r) =>
-          entries.get(r.memoryId)?.tenant_id === tenantId && r.vector.length > 0 && r.vector.every(Number.isFinite),
+        (r) => entries.get(r.memoryId)?.tenantId === tenantId && r.vector.length > 0 && r.vector.every(Number.isFinite),
       );
       if (writable.length === 0) return { written: 0, modelMismatch: false };
       if (replaces) {

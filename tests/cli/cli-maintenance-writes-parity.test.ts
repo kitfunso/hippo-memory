@@ -144,7 +144,7 @@ function seedForSleep(s: Store): void {
     '2026-01-21T00:00:00.000Z',
     'the checkout page caches the cart total for sixty seconds',
     { tags: ['web'] },
-    { origin_project: 'web' },
+    { originProject: 'web' },
   );
   s.seedAged('mem_sleep_short', '2026-01-22T00:00:00.000Z', 'too small');
   s.seedAged('mem_sleep_noise', '2026-01-23T00:00:00.000Z', 'Merge branch feature/billing into main');
@@ -275,7 +275,7 @@ describe('hippo projects (built CLI, no server)', () => {
   it('lists two project names, and previews a merge and a repair', async () => {
     const s = new Store({ spawned: true });
     s.seed(CLEAN);
-    s.seed('the checkout page caches the cart total for sixty seconds', {}, { origin_project: 'web' });
+    s.seed('the checkout page caches the cart total for sixty seconds', {}, { originProject: 'web' });
     s.settle();
     await s.run('projects');
     await s.run('projects', '--json');

@@ -56,12 +56,12 @@ let handle: ServerHandle | null = null;
 async function start(flagged: boolean, extra: Record<string, boolean> = {}): Promise<ServerHandle> {
   const config = flagged ? { ...extra, sharedStore: true } : extra;
   home = makeRoot('shared-ctx', Object.keys(config).length > 0 ? { config } : {});
-  writeEntry(home, { ...createMemory(ROWS.acme), origin_project: 'acme/app' });
-  writeEntry(home, { ...createMemory(ROWS.alias), origin_project: 'app' });
-  writeEntry(home, { ...createMemory(ROWS.beta), origin_project: 'beta' });
-  writeEntry(home, { ...createMemory(ROWS.none), origin_project: null });
+  writeEntry(home, { ...createMemory(ROWS.acme), originProject: 'acme/app' });
+  writeEntry(home, { ...createMemory(ROWS.alias), originProject: 'app' });
+  writeEntry(home, { ...createMemory(ROWS.beta), originProject: 'beta' });
+  writeEntry(home, { ...createMemory(ROWS.none), originProject: null });
   initStore(globalHome);
-  writeEntry(globalHome, { ...createMemory(ROWS.global), origin_project: '' });
+  writeEntry(globalHome, { ...createMemory(ROWS.global), originProject: '' });
   handle = await serve({ hippoRoot: home, port: 0 });
   return handle;
 }

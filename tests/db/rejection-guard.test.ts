@@ -73,9 +73,9 @@ describe('rejection guard', () => {
     // content must not be refused.
     reject(home, 'boosted fact', 'created after the row existed');
 
-    const boosted = { ...entry, retrieval_count: entry.retrieval_count + 1 };
+    const boosted = { ...entry, retrievalCount: entry.retrievalCount + 1 };
     expect(() => writeEntry(home, boosted)).not.toThrow();
-    expect(readEntry(home, entry.id)!.retrieval_count).toBe(entry.retrieval_count + 1);
+    expect(readEntry(home, entry.id)!.retrievalCount).toBe(entry.retrievalCount + 1);
   });
 
   it('batchWriteAndDelete probes for a rejected value in-transaction and skips a re-persist that races a reject, instead of resurrecting it', () => {
@@ -91,7 +91,7 @@ describe('rejection guard', () => {
     // This is the exact race the producer-side check alone cannot close:
     // the producer runs on a different connection before this transaction
     // opens.
-    const queuedRePersist = { ...entry, retrieval_count: entry.retrieval_count + 1 };
+    const queuedRePersist = { ...entry, retrievalCount: entry.retrievalCount + 1 };
 
     // The race: remove the row and tombstone its digest — exactly what
     // `hippo reject` does (reject-flow.ts), done here directly at the
@@ -186,9 +186,9 @@ describe('rejection guard', () => {
 
     const after = readEntry(home, summary.id)!;
     expect(after.content).toBe('old summary content');
-    expect(after.summary_dirty).toBe(false);
-    expect(after.rebuild_count).toBe(0);
-    expect(after.descendant_count).toBe(3); // metadata DID apply
+    expect(after.summaryDirty).toBe(false);
+    expect(after.rebuildCount).toBe(0);
+    expect(after.descendantCount).toBe(3); // metadata DID apply
 
     const db = openHippoDb(home);
     try {
@@ -230,7 +230,7 @@ describe('rejection guard', () => {
     const home = makeRoot('rejection');
     // Content lives quietly in tenant A — never rejected there.
     const entry = createMemory('shared content across a tenant move', { layer: Layer.Episodic });
-    entry.tenant_id = 'tenant-a';
+    entry.tenantId = 'tenant-a';
     writeEntry(home, entry);
     expect(readEntry(home, entry.id, 'tenant-a')).not.toBeNull();
 
@@ -250,7 +250,7 @@ describe('rejection guard', () => {
     }
 
     // Same id, SAME content — only tenantId changes A -> B.
-    const moved = { ...entry, tenant_id: 'tenant-b' };
+    const moved = { ...entry, tenantId: 'tenant-b' };
     expect(() => writeEntry(home, moved)).toThrow(RejectedValueError);
 
     // The row stays in tenant A, untouched.

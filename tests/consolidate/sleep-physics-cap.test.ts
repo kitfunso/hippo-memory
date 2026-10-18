@@ -84,7 +84,7 @@ describe('sleep physics cap', () => {
     const older = '2026-01-01T00:00:00.000Z';
     const entries: MemoryEntry[] = Array.from({ length: STORED }, (_, i) => ({
       ...createMemory(`fact number ${i} about service ${i * 7919} in region ${i % 13}`, { layer: Layer.Semantic }),
-      last_retrieved: i < STORED - CAP ? older : recent,
+      lastRetrieved: i < STORED - CAP ? older : recent,
     }));
     writeEntriesTogether(root, entries);
     const db = openHippoDb(root);
@@ -121,7 +121,7 @@ describe('sleep physics cap', () => {
 
   it('keeps load order and every particle under the cap, and breaks recall ties by memory id past it', () => {
     const stored = ['c', 'a', 'd', 'b'];
-    const at = (id: string, lastRetrieved: string) => [id, { last_retrieved: lastRetrieved }] as const;
+    const at = (id: string, lastRetrieved: string) => [id, { lastRetrieved }] as const;
     const entries = new Map([at('a', '2026-01-01'), at('b', '2026-01-03'), at('c', '2026-01-01')]);
 
     expect(particlesToSimulate(stored, entries, 4)).toBe(stored);

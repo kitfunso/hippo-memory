@@ -114,7 +114,7 @@ describe('hippo trace record', () => {
     const entries = loadAllEntries(hippoDir, 'default');
     const traces = entries.filter((e) => e.layer === 'trace');
     expect(traces).toHaveLength(1);
-    expect(traces[0].trace_outcome).toBe('success');
+    expect(traces[0].traceOutcome).toBe('success');
     expect(traces[0].content).toContain('fix failing test suite');
     expect(traces[0].content).toContain('assertion error');
     expect(traces[0].content).toContain('test passed');
@@ -143,7 +143,7 @@ describe('hippo trace <id>', () => {
     // 123 days is no base times a write-time multiplier, like a half-life that recalls stretched.
     const entry = {
       ...createMemory('the release checklist lives in docs/release.md', { baseHalfLifeDays: 365 }),
-      half_life_days: 123,
+      halfLifeDays: 123,
     };
     writeEntry(hippoDir, entry);
 

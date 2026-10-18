@@ -53,8 +53,8 @@ describe('dashboard snapshot', () => {
   it('groups by origin project, with Global for an empty origin and Unassigned for null', () => {
     seed(store.hippoRoot, 'alpha one');
     seed(store.hippoRoot, 'alpha two');
-    seed(store.hippoRoot, 'global one', { origin_project: '' });
-    seed(store.hippoRoot, 'unassigned one', { origin_project: null });
+    seed(store.hippoRoot, 'global one', { originProject: '' });
+    seed(store.hippoRoot, 'unassigned one', { originProject: null });
 
     const snap = snapshot();
 
@@ -95,7 +95,7 @@ describe('dashboard snapshot', () => {
   it('counts only open conflicts whose members are both live', () => {
     const a1 = seed(store.hippoRoot, 'deploy target is fly');
     const a2 = seed(store.hippoRoot, 'deploy target is render');
-    const b1 = seed(store.hippoRoot, 'build tool is webpack', { origin_project: 'beta' });
+    const b1 = seed(store.hippoRoot, 'build tool is webpack', { originProject: 'beta' });
     const q = seed(store.hippoRoot, 'quarantined claim', { scope: quarantineScopeFor(null) });
     const r1 = seed(store.hippoRoot, 'region is eu');
     const r2 = seed(store.hippoRoot, 'region is us');
@@ -126,7 +126,7 @@ describe('dashboard snapshot', () => {
     const two = seed(store.hippoRoot, 'embedded two');
     seed(store.hippoRoot, 'not embedded');
     seed(store.hippoRoot, 'also not embedded');
-    const old = seed(store.hippoRoot, 'replaced', { kind: 'superseded', superseded_by: one.id });
+    const old = seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: one.id });
     // memory_vectors has no foreign key, so a vector for a superseded or deleted memory must not count.
     embed(store.hippoRoot, [one.id, two.id, old.id, 'orphan-id']);
 
@@ -140,22 +140,22 @@ describe('dashboard snapshot', () => {
     const root = store.hippoRoot;
     const pinned = seed(root, 'pinned with tags', { pinned: true, tags: ['Deploy', 'error'], confidence: 'verified' });
     const wrong = seed(root, 'marked wrong twice', {
-      outcome_negative: 2,
-      emotional_valence: 'negative',
-      retrieval_count: 7,
+      outcomeNegative: 2,
+      emotionalValence: 'negative',
+      retrievalCount: 7,
     });
-    seed(root, 'raw global row', { kind: 'raw', origin_project: '', layer: Layer.Buffer, ...AT_RISK });
-    seed(root, 'unassigned and long unused', { origin_project: null, ...FADING });
+    seed(root, 'raw global row', { kind: 'raw', originProject: '', layer: Layer.Buffer, ...AT_RISK });
+    seed(root, 'unassigned and long unused', { originProject: null, ...FADING });
     // The prefix test is exact, so a scope that differs only in case stays live.
-    seed(root, 'scope that only looks quarantined', { scope: 'Quarantine:private:team', origin_project: 'beta' });
-    seed(root, 'x'.repeat(300), { origin_project: 'beta', layer: Layer.Semantic });
-    seed(root, 'replaced by the pinned one', { superseded_by: pinned.id });
+    seed(root, 'scope that only looks quarantined', { scope: 'Quarantine:private:team', originProject: 'beta' });
+    seed(root, 'x'.repeat(300), { originProject: 'beta', layer: Layer.Semantic });
+    seed(root, 'replaced by the pinned one', { supersededBy: pinned.id });
     seed(root, 'superseded by kind alone', { kind: 'superseded' });
-    seed(root, 'archived and replaced', { kind: 'archived', superseded_by: wrong.id });
+    seed(root, 'archived and replaced', { kind: 'archived', supersededBy: wrong.id });
     seed(root, 'archived', { kind: 'archived' });
     seed(root, 'quarantined', { scope: quarantineScopeFor('team:eng') });
     seed(root, 'quarantined and archived', { scope: quarantineScopeFor(null), kind: 'archived' });
-    seed(root, 'another tenant', { tenant_id: 'other' });
+    seed(root, 'another tenant', { tenantId: 'other' });
     replaceDetectedConflicts(root, [
       { memory_a_id: pinned.id, memory_b_id: wrong.id, reason: 'inside alpha', score: 0.9 },
     ]);
@@ -203,7 +203,7 @@ describe('dashboard snapshot', () => {
       }
     };
     const before = rowsRead();
-    const other = seed(root, 'another tenant', { tenant_id: 'other' });
+    const other = seed(root, 'another tenant', { tenantId: 'other' });
     embed(root, [other.id, ...Array.from({ length: 40 }, (_, i) => `orphan-${i}`)]);
     expect(rowsRead()).toBe(before);
   });
@@ -212,7 +212,7 @@ describe('dashboard snapshot', () => {
     const root = store.hippoRoot;
     const live = seed(root, 'embedded live');
     const plain = seed(root, 'not embedded');
-    const replaced = seed(root, 'embedded but replaced', { superseded_by: live.id });
+    const replaced = seed(root, 'embedded but replaced', { supersededBy: live.id });
     embed(root, [live.id, replaced.id, 'orphan-id']);
     const ids = [live.id, plain.id, replaced.id];
     const service = snapshotsOf(root, () => NOW);

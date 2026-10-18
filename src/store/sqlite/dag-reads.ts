@@ -204,7 +204,7 @@ function summaryWithDescendantsAt(
   const summary = selectEntriesByIds(db, [id], tenantId).get(id);
   if (!summary) return null;
   const readable = (row: DescendantOrigin): boolean => descendantAdmits(row, admit);
-  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dag_level ?? 0) >= minSummaryLevel);
+  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
   if (page) return pagedDescendants(db, { tenantId, summary, depth, rows: page.rows, admit: readable }, walked);
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([id]);

@@ -96,17 +96,17 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
         layer: [Layer.Episodic, Layer.Semantic, Layer.Buffer][i % 3],
       }),
       created,
-      last_retrieved: new Date(Date.parse(created) + (i % 4) * 86400000).toISOString(),
-      half_life_days: [0, 1, 7, 30][i % 4],
-      retrieval_count: i % 5,
-      emotional_valence: VALENCES[i % 4],
-      outcome_positive: i % 3,
-      outcome_negative: i % 7 === 0 ? 6 : i % 2,
-      schema_fit: (i % 10) / 10,
-      conflicts_with: i % 6 === 0 ? ['a', 'b'] : [],
-      extracted_from: i % 4 === 1 ? 'src' : null,
-      dag_level: i % 9 === 0 ? 2 : 0,
-      superseded_by: i % 13 === 5 ? 'other' : null,
+      lastRetrieved: new Date(Date.parse(created) + (i % 4) * 86400000).toISOString(),
+      halfLifeDays: [0, 1, 7, 30][i % 4],
+      retrievalCount: i % 5,
+      emotionalValence: VALENCES[i % 4],
+      outcomePositive: i % 3,
+      outcomeNegative: i % 7 === 0 ? 6 : i % 2,
+      schemaFit: (i % 10) / 10,
+      conflictsWith: i % 6 === 0 ? ['a', 'b'] : [],
+      extractedFrom: i % 4 === 1 ? 'src' : null,
+      dagLevel: i % 9 === 0 ? 2 : 0,
+      supersededBy: i % 13 === 5 ? 'other' : null,
     };
   }
 
@@ -137,7 +137,7 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
 
     const sql = loadAmbientTallies(store, 'default', { currentProject: [], now: NOW });
     const js = tallyAmbientEntries(
-      loadAllEntries(store, 'default').filter((e) => !e.superseded_by),
+      loadAllEntries(store, 'default').filter((e) => !e.supersededBy),
       NOW,
     );
 

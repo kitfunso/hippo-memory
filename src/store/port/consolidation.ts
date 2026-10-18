@@ -85,8 +85,8 @@ export interface Consolidation {
   childrenOfSummary(summaryId: string, tenantId: string): MemoryEntry[];
   /** One read of the children of every summary given, looked up per summary. */
   childrenOfSummaries(
-    summaries: ReadonlyArray<{ id: string; tenant_id: string }>,
-  ): (summary: { id: string; tenant_id: string }) => MemoryEntry[];
+    summaries: ReadonlyArray<{ id: string; tenantId: string }>,
+  ): (summary: { id: string; tenantId: string }) => MemoryEntry[];
   /** Applies a rebuilt summary while it is still dirty; `refused` when its new content is tombstoned. */
   applyRebuild(summary: MemoryEntry, patch: RebuildPatch): { changed: boolean; refused: boolean };
   /** Clears the dirty mark a fresh summary got from its own child links. */

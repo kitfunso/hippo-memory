@@ -35,7 +35,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
     tags: opts.tags ?? [],
   });
 }
@@ -104,8 +104,8 @@ describe('fresh-tail recall', () => {
   });
 
   it('5. fresh-tail respects tenant isolation', async () => {
-    writeEntry(root, makeRaw('default tenant row', { tenant_id: 'default' }));
-    writeEntry(root, makeRaw('other tenant row', { tenant_id: 'other' }));
+    writeEntry(root, makeRaw('default tenant row', { tenantId: 'default' }));
+    writeEntry(root, makeRaw('other tenant row', { tenantId: 'other' }));
     const r = await retrieve(ctxFor(root, 'default'), {
       query: 'unmatched',
       window: { freshTailCount: 10 },
@@ -139,7 +139,7 @@ describe('fresh-tail recall', () => {
   it("7. fresh-tail drops another project's row a store handed back despite the origins", async () => {
     const [mine, theirs, global] = ['proj-a', 'proj-b', ''].map((origin) => ({
       ...makeRaw(`raw row from ${origin || 'no project'}`),
-      origin_project: origin,
+      originProject: origin,
     }));
     const store: HippoStore = { ...sqliteStore(root), freshRawEntries: async () => [mine!, theirs!, global!] };
     const r = await retrieve(

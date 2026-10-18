@@ -391,7 +391,7 @@ const ACTOR = 'reads-on-readers';
 const PROMOTED = {
   ...createMemory('promoted note on the rollout', { tenantId: TENANT }),
   id: 'g_promoted',
-  origin_project: 'golden',
+  originProject: 'golden',
 };
 
 const finishRecall: Call<void> = (s, seed) =>

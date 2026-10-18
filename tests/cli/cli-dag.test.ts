@@ -34,11 +34,11 @@ describe('hippo dag', () => {
 
   it('counts rows per DAG level and the level-1 facts with no parent', async () => {
     const store = path.join(hippoRoot, '.hippo');
-    const row = (content: string, dag_level: number, dag_parent_id?: string) => {
+    const row = (content: string, dagLevel: number, dagParentId?: string) => {
       const entry = createMemory(content, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        dagLevel: dag_level,
-        dagParentId: dag_parent_id,
+        dagLevel,
+        dagParentId,
       });
       writeEntry(store, entry);
       return entry.id;

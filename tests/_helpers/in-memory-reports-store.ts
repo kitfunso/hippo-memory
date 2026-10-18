@@ -55,7 +55,7 @@ function copyState(hippoRoot: string): CopiedState {
 }
 
 const cmp = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
-const superseded = (e: MemoryEntry): boolean => e.superseded_by != null && e.superseded_by !== '';
+const superseded = (e: MemoryEntry): boolean => e.supersededBy != null && e.supersededBy !== '';
 
 function statusCountsOf(
   rows: readonly MemoryEntry[],
@@ -87,9 +87,9 @@ function statusCountsOf(
 }
 
 function correctionRows(rows: readonly MemoryEntry[]): MemoryEntry[] {
-  const successors = new Set(rows.filter(superseded).map((e) => e.superseded_by));
+  const successors = new Set(rows.filter(superseded).map((e) => e.supersededBy));
   const sources = new Set(
-    rows.filter((e) => successors.has(e.id) && e.extracted_from != null).map((e) => e.extracted_from),
+    rows.filter((e) => successors.has(e.id) && e.extractedFrom != null).map((e) => e.extractedFrom),
   );
   return rows.filter((e) => superseded(e) || successors.has(e.id) || sources.has(e.id));
 }
@@ -117,7 +117,7 @@ export function inMemoryReportsStore(hippoRoot: string): StoreSide {
       const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
       const lastRun = state.runs.reduce((last, r) => (r.timestamp > last ? r.timestamp : last), '');
       const floor = lastRun > dayAgo ? lastRun : dayAgo;
-      return base.allRows().filter((e) => e.tenant_id === tenantId && e.created > floor).length;
+      return base.allRows().filter((e) => e.tenantId === tenantId && e.created > floor).length;
     },
   };
   return { store: { ...base.store, reports }, auditRows: base.auditRows };

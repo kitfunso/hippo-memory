@@ -152,10 +152,10 @@ describe('drillDown', () => {
   it('reads one query per DAG level, not one per parent', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-drill');
-      const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
-      const mids = rows(n, 'mid', { dag_level: 1, dag_parent_id: summary.id });
+      const summary = memory('summary of the zephyrine cache work', { dagLevel: 2, layer: Layer.Semantic });
+      const mids = rows(n, 'mid', { dagLevel: 1, dagParentId: summary.id });
       const leaves = mids.map((m, i) =>
-        memory(`leaf ${i} under the zephyrine cache`, { dag_level: 0, dag_parent_id: m.id }),
+        memory(`leaf ${i} under the zephyrine cache`, { dagLevel: 0, dagParentId: m.id }),
       );
       seed(ctxFor(root), [summary, ...mids, ...leaves]);
       const { result, statements } = await recordStatementsAsync(() =>
@@ -171,12 +171,12 @@ describe('drillDown', () => {
     const read: number[] = [];
     for (const n of SIZES) {
       const root = freshRoot('qc-drill-page');
-      const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
+      const summary = memory('summary of the zephyrine cache work', { dagLevel: 2, layer: Layer.Semantic });
       // Newest first on disk, so the page is the oldest five only if the read sorts by created.
       const children = Array.from({ length: n }, (_, i) =>
         memory(`child ${i} of the zephyrine cache`, {
-          dag_level: 1,
-          dag_parent_id: summary.id,
+          dagLevel: 1,
+          dagParentId: summary.id,
           created: new Date(Date.UTC(2026, 0, 1, 0, 0, n - i)).toISOString(),
         }),
       );
@@ -197,12 +197,12 @@ describe('drillDown', () => {
 
   it('finds children through the parent index, with a page and without one', async () => {
     const root = freshRoot('qc-drill-plan');
-    const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
-    const mids = rows(3, 'mid', { dag_level: 1, dag_parent_id: summary.id });
+    const summary = memory('summary of the zephyrine cache work', { dagLevel: 2, layer: Layer.Semantic });
+    const mids = rows(3, 'mid', { dagLevel: 1, dagParentId: summary.id });
     seed(ctxFor(root), [
       summary,
       ...mids,
-      ...mids.map((m, i) => memory(`leaf ${i}`, { dag_level: 0, dag_parent_id: m.id })),
+      ...mids.map((m, i) => memory(`leaf ${i}`, { dagLevel: 0, dagParentId: m.id })),
     ]);
     const { statements } = await recordStatementsAsync(async () => {
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: 4 });
@@ -320,7 +320,7 @@ describe('detectChurnStale', () => {
       const root = freshRoot('qc-churn');
       seed(
         ctxFor(root),
-        rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', origin_project: 'qcproj' }),
+        rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', originProject: 'qcproj' }),
       );
       const { result, statements } = recordStatements(() =>
         detectChurnStale(sqliteSyncStore(root).localFiles.learning, repo, {
@@ -408,8 +408,8 @@ describe('strengthenRetrieved', () => {
       ...strengthenRetrieved(root, [entry.id, entry.id], { tenantId: 'default', recallBoostAblated: false }),
     ]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);
-    expect(after?.retrieval_count).toBe(entry.retrieval_count + 1);
-    expect(after?.half_life_days).toBe(entry.half_life_days + 2);
+    expect(after?.retrievalCount).toBe(entry.retrievalCount + 1);
+    expect(after?.halfLifeDays).toBe(entry.halfLifeDays + 2);
   });
 });
 
@@ -493,8 +493,8 @@ describe('learn', () => {
     // Each lesson names the quuxlib client, so the second and third also weaken the lessons before them.
     expect(result.invalidations.map((i) => i.count)).toEqual([2, 3, 4]);
     const lessons = loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source);
-    const base = lessons.find((e) => !e.tags.includes('invalidated'))?.half_life_days ?? 0;
-    expect(lessons.map((e) => e.half_life_days).sort((a, b) => a - b)).toEqual([
+    const base = lessons.find((e) => !e.tags.includes('invalidated'))?.halfLifeDays ?? 0;
+    expect(lessons.map((e) => e.halfLifeDays).sort((a, b) => a - b)).toEqual([
       Math.floor(Math.floor(base / 2) / 2),
       Math.floor(base / 2),
       base,
@@ -618,7 +618,7 @@ describe('outcome with a repeated id', () => {
     const [entry] = rows(1, 'repeat');
     seed(ctxFor(root), [entry]);
     expect((await outcome(ctxFor(root), [entry.id, entry.id], false)).applied).toBe(2);
-    expect(readEntry(root, entry.id)?.outcome_negative).toBe(2);
+    expect(readEntry(root, entry.id)?.outcomeNegative).toBe(2);
   });
 });
 
@@ -627,7 +627,7 @@ describe('buildDag', () => {
     const work: number[][] = [];
     for (const n of SIZES) {
       const root = freshRoot('qc-dag-link');
-      const facts = rows(n, 'fact', { tags: ['extracted', 'speaker:alice'], dag_level: 1 });
+      const facts = rows(n, 'fact', { tags: ['extracted', 'speaker:alice'], dagLevel: 1 });
       seed(ctxFor(root), facts);
       const mirrorsRewritten = ageMirrors(root);
       const fetcher: typeof fetch = async () =>
@@ -644,8 +644,8 @@ describe('buildDag', () => {
       );
       expect(result).toMatchObject({ summariesCreated: 1, factsLinked: n });
       const stored = loadAllEntries(root, 'default');
-      const parentId = stored.find((e) => e.dag_level === 2)?.id;
-      expect(stored.filter((e) => e.dag_parent_id === parentId)).toHaveLength(n);
+      const parentId = stored.find((e) => e.dagLevel === 2)?.id;
+      expect(stored.filter((e) => e.dagParentId === parentId)).toHaveLength(n);
       expect(mirrorsRewritten()).toBe(n);
       const db = openStore(root);
       try {
@@ -721,11 +721,11 @@ describe('hippo_status', () => {
       const root = freshRoot('qc-status');
       const own = [
         ...rows(n - 3, 'status'),
-        memory('status row long faded', { last_retrieved: '2020-01-01T00:00:00.000Z', half_life_days: 1 }),
+        memory('status row long faded', { lastRetrieved: '2020-01-01T00:00:00.000Z', halfLifeDays: 1 }),
         memory('status row pinned', { pinned: true, tags: ['errors-seen'] }),
         memory('status row tagged as an error', { tags: ['deploy', 'error'] }),
       ];
-      const elsewhere = rows(2, 'elsewhere', { tenant_id: 'other' });
+      const elsewhere = rows(2, 'elsewhere', { tenantId: 'other' });
       seed(ctxFor(root), [...own, ...elsewhere]);
       replaceDetectedConflicts(root, [
         { memory_a_id: own[0].id, memory_b_id: own[1].id, reason: 'own pair', score: 0.9 },

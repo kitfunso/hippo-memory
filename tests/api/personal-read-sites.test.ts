@@ -171,8 +171,8 @@ describe('deny-only read sites', () => {
       'The release script must run from the repo root because it reads the env file by a relative path.',
       'Integration tests need the local Postgres container started before the suite or every case times out.',
     ];
-    writeEntry(root, { ...mem(items[0], { scope: OWN_A }), origin_project: 'acme/app' });
-    writeEntry(root, { ...mem(items[1], {}), origin_project: 'acme/app' });
+    writeEntry(root, { ...mem(items[0], { scope: OWN_A }), originProject: 'acme/app' });
+    writeEntry(root, { ...mem(items[1], {}), originProject: 'acme/app' });
     const ctx: ItemContext = {
       tenantId: T,
       recordId: null,

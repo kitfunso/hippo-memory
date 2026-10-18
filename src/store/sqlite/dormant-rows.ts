@@ -37,7 +37,7 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
       strength = excluded.strength,
       dormant_at = excluded.dormant_at
   `).run(
-    move.entry.tenant_id,
+    move.entry.tenantId,
     move.entry.id,
     move.entry.content,
     JSON.stringify(toWire(move.entry)),
@@ -69,7 +69,7 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
     // SAFETY: entry_json came from JSON.stringify of a MemoryWire, or of a 1.x entry; the id, tenant and content checks
     // below reject a row edited out of shape.
     const entry = toCurrentEntry(JSON.parse(row.entry_json) as StoredSnapshot);
-    if (entry.id !== row.id || entry.tenant_id !== row.tenant_id || entry.content !== row.content) {
+    if (entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
       warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'wrong shape');
       return null;
     }
@@ -169,7 +169,7 @@ export function dormantSnapshotsFromOrigin(db: DatabaseSyncLike, tenantId: strin
       WHERE tenant_id = ?
         AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.origin_project') END = ?`,
   ).all(tenantId, origin) as DormantRow[];
-  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => s.entry.origin_project === origin);
+  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => s.entry.originProject === origin);
 }
 
 function toSnapshot(row: DormantRow): DormantSnapshot | null {

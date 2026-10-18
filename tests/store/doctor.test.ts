@@ -432,14 +432,14 @@ describe('hippo doctor', () => {
     initStore(global);
     const parent = {
       ...createMemory('the proj-b deploy needs the staging VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     };
     writeEntry(global, parent);
     writeEntry(global, {
       ...createMemory('merged: the proj-b deploy needs the VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       source: 'consolidation',
       parents: [parent.id],
-      origin_project: '',
+      originProject: '',
     });
 
     expect(

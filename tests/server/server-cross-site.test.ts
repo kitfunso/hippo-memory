@@ -44,7 +44,7 @@ afterEach(async () => {
 describe('API server loopback fallback', () => {
   it('refuses a cross-site read and leaves the row unread', async () => {
     expect(await send('GET', '/v1/memories?q=deploy', { 'sec-fetch-site': 'cross-site' })).toBe(403);
-    expect(readEntry(home, id)!.retrieval_count).toBe(0);
+    expect(readEntry(home, id)!.retrievalCount).toBe(0);
   });
 
   it('refuses a cross-origin sleep', async () => {

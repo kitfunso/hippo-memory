@@ -530,7 +530,7 @@ export async function handleExport({ hippoRoot, tenantId, args, flags }: Command
           `created: ${e.created}`,
           `tags: ${e.tags.join(', ')}`,
           `confidence: ${e.confidence}`,
-          `half_life: ${e.half_life_days}d`,
+          `half_life: ${e.halfLifeDays}d`,
           `strength: ${e.strength.toFixed(2)}`,
         ].join(' | ');
         return `### ${e.id}\n\n${e.content}\n\n_${meta}_`;

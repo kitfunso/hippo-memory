@@ -32,8 +32,8 @@ describe('strengthenRetrieved', () => {
     expect([...found]).toEqual([e.id]);
     const after = readEntry(root, e.id)!;
     expect(after.tags).toEqual(['edited-meanwhile']);
-    expect(after.retrieval_count).toBe(returned.retrieval_count + 1);
-    expect(after.half_life_days).toBe(returned.half_life_days + 2);
+    expect(after.retrievalCount).toBe(returned.retrievalCount + 1);
+    expect(after.halfLifeDays).toBe(returned.halfLifeDays + 2);
   });
 
   it('leaves a row in another tenant alone', () => {
@@ -44,7 +44,7 @@ describe('strengthenRetrieved', () => {
     expect(strengthenRetrieved(root, [e.id], { tenantId: 'some-other-tenant', recallBoostAblated: false }).size).toBe(
       0,
     );
-    expect(readEntry(root, e.id)!.retrieval_count).toBe(0);
+    expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
   });
 
   it('changes nothing when the caller passes the recall-boost ablation switch', () => {
@@ -53,7 +53,7 @@ describe('strengthenRetrieved', () => {
     writeEntry(root, e);
 
     expect(strengthenRetrieved(root, [e.id], { tenantId: 'default', recallBoostAblated: true }).size).toBe(0);
-    expect(readEntry(root, e.id)!.retrieval_count).toBe(0);
+    expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
   });
 
   it('logs one line and never throws when the store cannot be opened', () => {
