@@ -7,7 +7,10 @@ import { errorMessage, log, errorFields } from '../util/log.js';
 
 /** Where a `.git` file points: its own git dir, and the shared one when that dir names a `commondir` (a linked
  * worktree); null when the file names no git dir. */
-export function readGitFilePointer(gitRoot: string, pointer: string): { linkDir: string; commonDir: string | null } | null {
+export function readGitFilePointer(
+  gitRoot: string,
+  pointer: string,
+): { linkDir: string; commonDir: string | null } | null {
   const gitDir = /^gitdir:\s*(.+)$/m.exec(pointer)?.[1]?.trim();
   if (!gitDir) return null;
   const linkDir = path.resolve(gitRoot, gitDir);

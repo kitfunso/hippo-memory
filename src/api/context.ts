@@ -302,7 +302,9 @@ function promptRecallRequest(opts: ContextOptions, plan: ContextPlan): AmbientRe
   return promptRecallTerms.length > 0
     ? {
         terms: promptRecallTerms,
-        limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, DEFAULT_CONFIG.pinnedInject.promptRecallCandidates, 1)),
+        limit: Math.floor(
+          finiteOr(pinnedInject.promptRecallCandidates, DEFAULT_CONFIG.pinnedInject.promptRecallCandidates, 1),
+        ),
         ownScope: plan.ownScope,
       }
     : undefined;

@@ -114,7 +114,9 @@ async function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
   try {
     text = await readBody(req, { maxBytes: BODY_DRAIN_MAX_BYTES });
   } catch (err) {
-    if (err instanceof BodyTooLargeError) throw new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`);
+    if (err instanceof BodyTooLargeError) {
+      throw new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`);
+    }
     throw err;
   }
   if (Buffer.byteLength(text) > BODY_MAX_BYTES) throw new ParamError(`Body must be at most ${BODY_MAX_BYTES} bytes`);
