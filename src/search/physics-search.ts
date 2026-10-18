@@ -4,6 +4,7 @@ import { evalNow, isRecallBoostAblated, strengthAblation } from '../core/ablatio
 import { indexedModel, indexNeedsRebuild } from '../embeddings/index-identity.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
+import type { RuntimeSettings } from '../core/config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { compareScoredResults } from '../core/compare.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -36,7 +37,7 @@ export interface PhysicsSearchOptions {
   explain?: boolean;
   minResults?: number;
   cost?: ResultCost;
-  /** Active scope for scope-boost scoring. Auto-detected if not provided. */
+  /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
   /** Include superseded memories; must reach the inner hybrid filter or `recall --include-superseded` rows drop out
    * here. */
@@ -51,6 +52,8 @@ export interface PhysicsSearchOptions {
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors and particles are read; hippo.db under `hippoRoot` when unset. */
   store?: HippoStore;
+  /** The root's environment settings, as hybridSearch takes them. */
+  runtime?: RuntimeSettings;
 }
 
 /** physicsSearch's options once the caller names its store; the folder fields belong to the published wrapper. */
@@ -91,7 +94,7 @@ export async function physicsSearch(
   if (options.asOf) return hybridSearch(query, entries, hybrid);
 
   // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a second time.
-  const queryEmbedDeadline = startQueryEmbedDeadline();
+  const queryEmbedDeadline = startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs);
   const queryVector = await physicsQueryVector(query, source, queryEmbedDeadline, options.queryEmbedding);
   if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
   const pool = currentEntries(

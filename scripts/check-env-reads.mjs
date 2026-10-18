@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Fails when a src/ file other than src/util/env.ts touches process.env: configuration read ad hoc across the tree has
-// no single place that lists the variables, their defaults and their parsing rules.
+// Fails when a src/ file other than src/util/env.ts touches process.env, or when a module outside the composition roots
+// and adapters imports util/env.ts: the roots read the environment once and pass settings down.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, posix, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFacts } from './lib/ts-facts.mjs';
 
@@ -11,6 +11,25 @@ import { readFacts } from './lib/ts-facts.mjs';
 export const ALLOWED = {
   'util/env.ts': 'the typed accessor module every other file reads through',
 };
+
+/** Files that may import util/env.ts, each with its reason. */
+export const ENV_READERS = [
+  [/^cli(?:\.ts$|\/)/, 'the CLI composition root'],
+  [/^server\//, 'the HTTP server composition root'],
+  [/^mcp\//, 'the stdio MCP composition root'],
+  [/^hooks\//, 'the hook entry points the CLI root runs'],
+  [/^support-bundle\.ts$/, 'reports which variables are set'],
+  [/^(?:rerankers|embeddings)\//, 'adapters: their own endpoint, key, model and timeout'],
+  [/^connectors\/[^/]+\/webhook\.ts$/, 'webhook adapters: their own signing secrets and unknown-tenant escape hatch'],
+  [/^core\/ablation\.ts$/, 'the eval-only HIPPO_ABLATE_* and HIPPO_FAKE_NOW switches'],
+  [/^util\/anthropic-messages\.ts$/, 'the Anthropic adapter: its own key and timeout'],
+  [/^util\/log\.ts$/, 'the log sink: its own level and format'],
+  [/^util\/spawn-argv\.ts$/, 'the process adapter: PATH and PATHEXT'],
+  [/^util\/agent-homes\.ts$/, 'machine locations: home folders and HIPPO_HOME'],
+];
+
+// Lane L2a moves the tenant default and HIPPO_TENANT out of util/env.ts and deletes this set.
+export const TENANT_NAMES = new Set(['DEFAULT_TENANT_ID', 'envTenant']);
 
 /**
  * Returns the 1-based line numbers in a source text that touch process.env.
@@ -48,17 +67,49 @@ export function findEnvReads(srcDir, allowed = ALLOWED) {
     .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
 }
 
+/** The lines of `file` (a path under src) that import util/env.ts for more than the tenant names. */
+export function envImportLines(file, text, tenantNames = TENANT_NAMES) {
+  if (!text.includes('env')) return [];
+  const isEnv = (spec) =>
+    spec.startsWith('.') && posix.normalize(posix.join(posix.dirname(file), spec)).replace(/\.js$/, '') === 'util/env';
+  return readFacts(text, file, ['imports', 'dynamic'])
+    .imports.filter((i) => isEnv(i.spec) && !i.names.every((n) => tenantNames.has(n)))
+    .map((i) => i.line);
+}
+
+/** Every util/env.ts import in srcDir outside the files `readers` names. */
+export function findEnvImports(srcDir, readers = ENV_READERS) {
+  const root = resolve(srcDir);
+  return listSourceFiles(root)
+    .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
+    .filter(([file]) => file !== 'util/env.ts' && !readers.some(([pattern]) => pattern.test(file)))
+    .flatMap(([file, p]) => envImportLines(file, readFileSync(p, 'utf8')).map((line) => ({ file, line })))
+    .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+}
+
+function report(srcDir, hits, what, fix) {
+  if (hits.length === 0) return true;
+  console.error(`\n${hits.length} ${what}:`);
+  for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}`);
+  console.error(`\nFix: ${fix}\n`);
+  return false;
+}
+
 // Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const srcDir = process.argv[2] ?? 'src';
-  const hits = findEnvReads(srcDir);
-  if (hits.length > 0) {
-    console.error(`\n${hits.length} process.env access(es) in ${srcDir}/ outside util/env.ts:`);
-    for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}`);
-    console.error(
-      '\nFix: add a typed accessor to src/util/env.ts and call it, or add the file to ALLOWED in this script with a reason.\n',
-    );
-    process.exit(1);
-  }
-  console.log(`process.env is read only through ${srcDir}/util/env.ts. OK.`);
+  const readsOk = report(
+    srcDir,
+    findEnvReads(srcDir),
+    `process.env access(es) in ${srcDir}/ outside util/env.ts`,
+    'add a typed accessor to src/util/env.ts and call it, or add the file to ALLOWED in this script with a reason.',
+  );
+  const importsOk = report(
+    srcDir,
+    findEnvImports(srcDir),
+    `util/env.ts import(s) in ${srcDir}/ outside the composition roots and adapters`,
+    'read the variable in a root (src/cli, src/server, src/mcp) and pass the value down as a parameter or config.',
+  );
+  if (!readsOk || !importsOk) process.exit(1);
+  console.log(`process.env is read only through ${srcDir}/util/env.ts, and only roots and adapters import it. OK.`);
 }

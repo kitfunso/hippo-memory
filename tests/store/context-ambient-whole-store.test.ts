@@ -8,6 +8,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
   Layer,
   _resetLossAversionRatioCacheForTests,
+  setLossAversionRatio,
   type EmotionalValence,
   type MemoryEntry,
 } from '../../src/core/memory.js';
@@ -118,11 +119,11 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     ['default flags', {}],
     ['decay ablated', { HIPPO_ABLATE_DECAY: '1' }],
     ['recall boost ablated', { HIPPO_ABLATE_RECALL_BOOST: '1' }],
-    ['outcome ablated, loss aversion 1.5', { HIPPO_ABLATE_OUTCOME: '1', HIPPO_LOSS_AVERSION_RATIO: '1.5' }],
-  ])('%s', (_label, env: Record<string, string>) => {
+    ['outcome ablated, loss aversion 1.5', { HIPPO_ABLATE_OUTCOME: '1' }, '1.5'],
+  ])('%s', (_label, env: Record<string, string>, lossAversionRatio?: string) => {
     for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
     _resetAblationCacheForTests();
-    _resetLossAversionRatioCacheForTests();
+    setLossAversionRatio(lossAversionRatio);
     for (let i = 0; i < 60; i++) writeEntry(store, row(i));
     const db = openHippoDb(store);
     try {

@@ -31,6 +31,7 @@ export function multihopSearch(
     cost?: ResultCost;
     includeSuperseded?: boolean;
     asOf?: string;
+    scope?: string | null;
   } = {},
 ): SearchResult[] {
   const budget = options.budget ?? DEFAULT_RECALL_BUDGET;

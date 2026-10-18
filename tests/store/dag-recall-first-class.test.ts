@@ -24,6 +24,7 @@ import type { PhysicsParticle } from '../../src/core/physics.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { envRuntimeSettings } from '../../src/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -99,7 +100,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     vi.stubEnv('HIPPO_SUMMARY_DEBOOST', '0.5');
     const summary = makeL2Summary('env-deboost test summary');
     writeEntry(hippoRoot, summary);
-    const results = await hybridSearch('env-deboost', [summary], { explain: true });
+    const results = await hybridSearch('env-deboost', [summary], { explain: true, runtime: envRuntimeSettings() });
     expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.5);
   });
 
@@ -109,7 +110,7 @@ describe('first-class DAG recall (scoring layer)', () => {
 
     for (const bad of ['2.0', '0.0', 'NaN', '-0.5', 'garbage']) {
       vi.stubEnv('HIPPO_SUMMARY_DEBOOST', bad);
-      const results = await hybridSearch('out-of-range', [summary], { explain: true });
+      const results = await hybridSearch('out-of-range', [summary], { explain: true, runtime: envRuntimeSettings() });
       expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.85);
     }
   });

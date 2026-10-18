@@ -1,9 +1,9 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
+import { envActiveScope } from '../util/env.js';
 import { confidenceFacets } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { dropHeldCopies } from '../util/same-text.js';
-import { detectScope } from '../core/active-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { cliRecallOrigin, scopeHiddenCount } from '../api/recall/rows.js';
@@ -61,7 +61,7 @@ async function cmdExplain(hippoRoot: string, tenantId: string, query: string, fl
   const ctx = cliApiContext(hippoRoot, tenantId);
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
-  const activeScope = explicitScope || detectScope();
+  const activeScope = explicitScope || envActiveScope();
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
   const origin = cliRecallOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   const explainGlobalOn = origin.globalOn;

@@ -13,6 +13,8 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { rebuildDirtySummaries, buildDag } from '../../src/consolidate/dag.js';
 import * as dagModule from '../../src/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
+import { configReader } from '../../src/core/config.js';
+import { envRuntimeSettings } from '../../src/util/env.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../../src/store/rejection.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -729,7 +731,8 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       ];
       for (const [index, [raw, expected]] of table.entries()) {
         vi.stubEnv('HIPPO_DAG_REBUILD_CAP', raw);
-        const result = await consolidate(hippoRoot);
+        // A root's config, so the raw value takes the path the CLI and server give it.
+        const result = await consolidate(hippoRoot, { config: configReader(envRuntimeSettings)(hippoRoot) });
         expect(rebuildSpy).toHaveBeenCalledTimes(index + 1);
         expect(rebuildSpy.mock.calls[index][1].cap).toBe(expected);
         if (index === 0) {

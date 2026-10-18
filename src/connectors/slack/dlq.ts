@@ -30,6 +30,8 @@ export interface ReplayDlqOptions {
   now?: number;
   /** Skew window override for tests. */
   skewSeconds?: number;
+  /** The SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK escape hatch, as the CLI read it. */
+  allowUnknownTeamFallback?: boolean;
 }
 
 /** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
@@ -45,7 +47,7 @@ export async function replayDlqEntry(
       refuseSignature: (row) => refuseSignature(row, opts),
       isEnvelope: isSlackEventEnvelope,
       notEnvelope: 'not an event_callback envelope',
-      reingest: (_row, envelope) => reingest(ctx, envelope),
+      reingest: (_row, envelope) => reingest(ctx, envelope, opts.allowUnknownTeamFallback === true),
     },
     ctx.store,
     id,
@@ -81,8 +83,9 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 async function reingest(
   { hippoRoot, store, config }: Pick<Context, 'hippoRoot' | 'store' | 'config'>,
   envelope: JsonValue & SlackEventEnvelope,
+  allowUnknownTeamFallback: boolean,
 ): Promise<Reingest> {
-  const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id);
+  const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id, allowUnknownTeamFallback);
   if (!tenantId) return { ok: false, status: 'unroutable', reason: `team_id ${envelope.team_id} still unroutable` };
   const inner = envelope.event;
   if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };

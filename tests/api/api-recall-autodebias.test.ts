@@ -127,10 +127,11 @@ describe('api.recall planningFallacyHint', () => {
     expect(result.planningFallacyHint).toBeUndefined();
   });
 
-  it('absent under HIPPO_AUTODEBIAS=off even when conditions otherwise met', async () => {
+  it('absent when the root turned autodebias off (HIPPO_AUTODEBIAS=off) even when conditions otherwise met', async () => {
     seedMigrationEffortBaserate(root);
-    vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
-    const result = await retrieve(ctxFor(root), { query: 'migration effort will take 3 days' });
+    const ctx = ctxFor(root);
+    const off = { ...ctx, config: { ...ctx.config, runtime: { autodebias: false } } };
+    const result = await retrieve(off, { query: 'migration effort will take 3 days' });
     expect(result.planningFallacyHint).toBeUndefined();
     // No audit fires either — off short-circuits before the regex gate.
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(0);

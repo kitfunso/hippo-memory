@@ -1,5 +1,4 @@
-import { envHomeDir, processEnv } from '../util/env.js';
-import { claudeConfigDir } from '../util/agent-homes.js';
+import { claudeConfigDir, claudeHomeIsSet } from '../util/agent-homes.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue, readSessionEnd } from '../core/capture-contract.js';
@@ -229,7 +228,7 @@ export function resolveLastSessionTranscript(
 
   if (!opts.mayScan) return null;
   // With no home set, os.homedir() would send the scan into the real profile's transcripts.
-  if (!processEnv().CLAUDE_CONFIG_DIR && !envHomeDir()) return null;
+  if (!claudeHomeIsSet()) return null;
 
   const projectsDir = path.join(claudeConfigDir(), 'projects');
   if (!fs.existsSync(projectsDir)) return null;

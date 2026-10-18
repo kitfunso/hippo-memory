@@ -69,6 +69,11 @@ export interface EmbeddingProvider {
   embed(texts: string[], role?: EmbeddingRole, call?: EmbedCallOptions): Promise<number[][]>;
 }
 
+/** True when the provider names a key variable that is unset or blank; the adapter reads its own key. */
+export function apiKeyMissing(provider: Pick<EmbeddingProvider, 'keyEnv'>): boolean {
+  return !!provider.keyEnv && !envByName(provider.keyEnv)?.trim();
+}
+
 class LocalEmbeddingProvider implements EmbeddingProvider {
   readonly kind = 'local' as const;
   constructor(

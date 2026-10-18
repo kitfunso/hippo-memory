@@ -41,7 +41,8 @@ import {
   uninstallCopilot,
 } from '../hooks/copilot.js';
 import { isInitialized } from '../core/project-identity.js';
-import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
+import { importUserMemories } from '../agent-memories/sync.js';
+import { currentMachine } from '../util/agent-homes.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { cliLocalFiles, cliSyncOptions } from './api-context.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';

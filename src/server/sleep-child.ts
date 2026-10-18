@@ -3,9 +3,11 @@
 import { sleep } from '../api/sleep/sleep.js';
 import { runConsolidation } from '../consolidate/sleep.js';
 import { isStoreBusy } from '../store/port.js';
-import { loadConfig } from '../core/config.js';
+import { configReader } from '../core/config.js';
+import { setLossAversionRatio } from '../core/memory.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
 import { sqliteReach, sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
+import { envLossAversionRatio, envRuntimeSettings } from '../util/env.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
 import type { SleepResult } from '../api/sleep/sleep.js';
@@ -13,6 +15,8 @@ import { contextReach } from '../api/types.js';
 import type { ConsolidationResult } from '../consolidate/run.js';
 
 type JobResult = SleepResult | ConsolidationResult;
+
+const loadConfig = configReader(envRuntimeSettings);
 
 function failed<E>(err: E): SleepReply<never> {
   return {
@@ -44,6 +48,7 @@ function sendReply(reply: SleepReply<JobResult>): Promise<number> {
 process.once('message', (message) => {
   // SAFETY: sleep-offload.ts is the only writer on this channel and sends exactly one SleepJob.
   const job = message as SleepJob;
+  setLossAversionRatio(envLossAversionRatio());
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
       ? runConsolidation(sqliteSyncStore(job.hippoRoot).localFiles, { config: loadConfig(job.hippoRoot) })

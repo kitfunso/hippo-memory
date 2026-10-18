@@ -1,9 +1,8 @@
 // The `hippo recall` verb; main() loads it lazily from the command table.
 
-import { envHippoSessionId } from '../util/env.js';
+import { envActiveScope, envHippoSessionId } from '../util/env.js';
 import { Layer } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
-import { detectScope } from '../core/active-scope.js';
 import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import * as api from '../api/index.js';
@@ -237,7 +236,7 @@ function parseRecallOptions(ctx: api.Context, flags: CliFlags) {
   const asOf = parseAsOfFlag(flags);
   // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
-  const setting = cliRecallSetting(ctx, explicitScope || detectScope());
+  const setting = cliRecallSetting(ctx, explicitScope || envActiveScope());
   const config = cliConfig(ctx.hippoRoot);
   const minResults = numberFlag(flags, 'min-results');
   const graphStream = flagIsTrue(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
@@ -320,12 +319,12 @@ interface RankedRecall extends PricedEntries {
 }
 
 /** Each pipeline computes its hints over the list it returns, so they follow the list as it shrinks. */
-function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank']) {
+function recallHinter(ctx: api.Context, query: string, o: RecallOptions, rank: RankedRecall['rank']) {
   const { tenantId, sessionId } = o;
   // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
-  const anchorRing = sessionRing('cli', tenantId, sessionId);
+  const anchorRing = sessionRing(ctx.config, 'cli', tenantId, sessionId);
   const queryHash = hashQueryText(query);
-  const pool = availabilityPool(() => [...rank.localEntries, ...rank.globalEntries]);
+  const pool = availabilityPool(ctx.config, () => [...rank.localEntries, ...rank.globalEntries]);
   const hintsFor = (list: SearchResult[], held: number) => {
     const { anchoring, availability } = detectRecallHints({ list, pool, anchorRing, queryHash });
     const summary = suppressionSummary(
@@ -414,6 +413,7 @@ function renderWithinBudget(
 
 /** Pays the continuity sections and the plan hint first, then fits the memories into what is left. */
 function fitRecallBlock(
+  ctx: api.Context,
   query: string,
   o: RecallOptions,
   ranked: RankedRecall,
@@ -439,7 +439,7 @@ function fitRecallBlock(
   // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
   const floor = o.minResults ?? 1;
   const fitted = fitRecallRows(ranked.rank.results, left, floor, ranked.printCost);
-  const { anchorRing, hintsFor } = recallHinter(query, o, ranked.rank);
+  const { anchorRing, hintsFor } = recallHinter(ctx, query, o, ranked.rank);
   const view: RecallRenderView = {
     query,
     showWhy: o.showWhy,
@@ -475,10 +475,11 @@ async function presentRecall(
 ) {
   // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
   const loaded = await loadCliRecallContinuity(ctx, o.setting, o.includeContinuity);
-  const fit = fitRecallBlock(query, o, ranked, loaded, planning);
+  const fit = fitRecallBlock(ctx, query, o, ranked, loaded, planning);
   const { results, hints } = fit;
   const text = recallOutput(query, o, fit, ranked.isGlobal);
   const audit = shownRecallRows(
+    ctx.config,
     { tenantId: o.tenantId, actor: CLI_ACTOR },
     {
       query,

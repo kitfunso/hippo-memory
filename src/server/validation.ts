@@ -1,7 +1,8 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOptions } from '../api/index.js';
-import { HttpError, MAX_BODY_BYTES, readBody } from '../util/http-util.js';
+import { envBodyTimeoutMs } from '../util/env.js';
+import { bodyDeadlineMs, HttpError, MAX_BODY_BYTES, readBody } from '../util/http-util.js';
 import { DEFAULT_LIST_LIMIT, MAX_ID_LEN, MAX_LIST_LIMIT, resolveListLimit } from '../util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
@@ -39,7 +40,7 @@ export function parseListLimit(
 /** `_authed` is proof the caller passed auth, so a full-size body is read only for
  * an authenticated caller; the key mint reads under its own small cap. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
-  return parseJsonObjectText(await readBody(req));
+  return parseJsonObjectText(await readBody(req, { deadlineMs: bodyDeadlineMs(envBodyTimeoutMs()) }));
 }
 
 export function parseJsonObjectText(raw: string): Record<string, JsonValue> {

@@ -8,14 +8,14 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import { adminActor, type Context } from '../api/index.js';
 import { memoryGet } from '../api/memories/memories.js';
 import { cardDetail, cardList } from '../api/objects/cards.js';
-import { cliStore } from '../cli/api-context.js';
+import { cliConfig, cliStore } from '../cli/api-context.js';
 import { evalNow } from '../core/ablation.js';
-import { loadConfig } from '../core/config.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
 import { envTenant } from '../util/env.js';
 import {
   BodyTimeoutError,
   BodyTooLargeError,
+  bodyDeadlineMs,
   closeAfterReply,
   isCrossSite,
   LOOPBACK_HOST_HEADER,
@@ -75,10 +75,10 @@ function notFoundJson(res: http.ServerResponse): void {
 class BodyDrainExceeded extends ParamError {}
 
 // Past the cap it keeps draining so the socket stays usable, up to a ceiling, then refuses.
-async function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
+async function readActionBody(req: http.IncomingMessage, deadlineMs: number): Promise<ActionBody> {
   let text: string;
   try {
-    text = await readBody(req, { maxBytes: BODY_DRAIN_MAX_BYTES });
+    text = await readBody(req, { maxBytes: BODY_DRAIN_MAX_BYTES, deadlineMs });
   } catch (err) {
     if (err instanceof BodyTooLargeError) {
       throw new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`);
@@ -96,6 +96,7 @@ interface DashboardRoot {
   readonly context: () => Context;
   readonly snapshots: SnapshotService;
   readonly now: () => number;
+  readonly bodyDeadlineMs: number;
   /** Closes the snapshot cache and the store. */
   readonly release: () => void;
 }
@@ -181,7 +182,7 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
     req.resume();
     return true;
   }
-  const body = await readActionBody(req);
+  const body = await readActionBody(req, ctx.bodyDeadlineMs);
   const context = ctx.context();
   const { tenantId } = context;
   const result = await action(context, body);
@@ -413,6 +414,8 @@ interface DashboardOptions {
   readonly now?: () => number;
   readonly cacheClock?: () => number;
   readonly handleSignals?: boolean;
+  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; 30 s when unset. */
+  readonly bodyDeadlineMs?: number;
 }
 
 /** The composition root: one store, built as the CLI builds it, a Context per request with the actor every write
@@ -425,12 +428,13 @@ function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): Dashboard
     store,
     now,
     snapshots,
+    bodyDeadlineMs: bodyDeadlineMs(opts.bodyDeadlineMs),
     context: () => ({
       hippoRoot,
       tenantId: envTenant(),
       actor: adminActor(DASHBOARD_ACTOR),
       store,
-      config: loadConfig(hippoRoot),
+      config: cliConfig(hippoRoot),
     }),
     release: () => {
       snapshots.close();

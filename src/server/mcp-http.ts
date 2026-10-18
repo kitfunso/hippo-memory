@@ -1,10 +1,10 @@
 // MCP over HTTP: POST /mcp and the GET /mcp/stream SSE keepalive.
-import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../util/env.js';
+import { envBodyTimeoutMs, envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../util/env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../api/index.js';
 import { sharedStoreOf } from '../api/types.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
-import { HttpError, readBody, sendJson } from '../util/http-util.js';
+import { bodyDeadlineMs, HttpError, readBody, sendJson } from '../util/http-util.js';
 import { errorFields, log } from '../util/log.js';
 import { callName } from '../mcp/protocol.js';
 import { assertCallerProject } from '../core/project-identity.js';
@@ -104,7 +104,7 @@ export async function handleMcpPost(
   const ctx = await buildContextWithAuth(req, opts);
   noteAccess(req, { tenant: ctx.tenantId });
   const project = callerProjectFromHeaders(req, sharedStoreOf(ctx));
-  const raw = await readBody(req);
+  const raw = await readBody(req, { deadlineMs: bodyDeadlineMs(envBodyTimeoutMs()) });
   let mcpReq: JsonValue;
   try {
     mcpReq = JSON.parse(raw);

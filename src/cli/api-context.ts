@@ -1,7 +1,8 @@
 import { adminActor } from '../api/index.js';
 import { contextReach, type ContextReach, type ContextWith, type GlobalInReach } from '../api/types.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
-import type { Machine, SyncOptions } from '../agent-memories/sync.js';
+import type { SyncOptions } from '../agent-memories/sync.js';
+import type { Machine } from '../util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { configReader, type ConfigReader } from '../core/config.js';
 import { runConsolidation } from '../consolidate/sleep.js';
@@ -18,10 +19,11 @@ import {
   sqliteSyncStore,
 } from '../store/sqlite/store.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import { envRuntimeSettings } from '../util/env.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an
  * unchanged config.json once. */
-export const cliConfig: ConfigReader = configReader();
+export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {

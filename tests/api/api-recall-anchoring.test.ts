@@ -4,7 +4,7 @@
  * Asserts:
  * - api.recall populates RecallResult.anchoringHint when opts.recallHistory
  *   is passed AND R1 or R2 conditions are met against the just-computed top-1
- * - HIPPO_ANCHORING=off short-circuits (returns no hint regardless)
+ * - config.runtime.anchoringHint false (HIPPO_ANCHORING=off at the root) short-circuits (returns no hint regardless)
  * - api.recall is PURE: calling twice with same opts.recallHistory returns
  *   identical results (return-value purity; audit_log delta is expected)
  * - suppressedByInterference increments on R2 fire (lights up the placeholder
@@ -100,14 +100,17 @@ describe('api.recall anchoringHint', () => {
     expect(result.anchoringHint).toBeUndefined();
   });
 
-  it('absent when HIPPO_ANCHORING=off even with valid snapshot', async () => {
+  it('absent when the root turned anchoring off (HIPPO_ANCHORING=off) even with valid snapshot', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
-    vi.stubEnv('HIPPO_ANCHORING', 'off');
-    const result = await retrieve(ctxFor(root), {
-      query: 'frobnicate baz quux',
-      hints: { recallHistory: snapshot },
-    });
+    const ctx = ctxFor(root);
+    const result = await retrieve(
+      { ...ctx, config: { ...ctx.config, runtime: { anchoringHint: false } } },
+      {
+        query: 'frobnicate baz quux',
+        hints: { recallHistory: snapshot },
+      },
+    );
     expect(result.anchoringHint).toBeUndefined();
   });
 

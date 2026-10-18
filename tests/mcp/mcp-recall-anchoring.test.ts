@@ -22,7 +22,8 @@ import {
 } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+// The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
+import { cliConfig } from '../../src/cli/api-context.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {
@@ -96,7 +97,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(home),
-      config: loadConfig(home),
+      config: cliConfig(home),
     };
     // Three recalls with DIFFERENT queries on the same session — same top
     // memory should win each time and trigger R2 on the 3rd.
@@ -123,7 +124,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(home),
-      config: loadConfig(home),
+      config: cliConfig(home),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     const text = extractText(res);
@@ -138,7 +139,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(home),
-      config: loadConfig(home),
+      config: cliConfig(home),
     };
     expect(countAuditOps(home, 'recall_anchor_skipped_no_session')).toBe(0);
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux' }, ctx);
@@ -154,7 +155,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(home),
-      config: loadConfig(home),
+      config: cliConfig(home),
     };
     // Repeat 3 distinct queries — would normally fire R2.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);

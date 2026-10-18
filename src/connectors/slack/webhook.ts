@@ -1,4 +1,8 @@
-import { envSlackSigningSecret, envSlackSigningSecretPrevious } from '../../util/env.js';
+import {
+  envSlackAllowUnknownTeamFallback,
+  envSlackSigningSecret,
+  envSlackSigningSecretPrevious,
+} from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
@@ -157,7 +161,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
-    resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id);
+    resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id, envSlackAllowUnknownTeamFallback());
     if (resolvedTenant === null) {
       await parkAndAck(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'
@@ -193,7 +197,10 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
 async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
   // Attribute the parse failure to the originating workspace via the regex-extracted
   // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
-  const parseFailTenant = teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw) : null;
+  const parseFailTenant =
+    teamIdFromRaw !== null
+      ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw, envSlackAllowUnknownTeamFallback())
+      : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel
     teamId: teamIdFromRaw,

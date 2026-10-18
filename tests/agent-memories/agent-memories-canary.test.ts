@@ -25,7 +25,8 @@ import { initStore } from '../../src/store/sqlite/handles.js';
 
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
-const { importForStore, importAtSessionEnd, currentMachine } = await import(syncUrl);
+const { importForStore, importAtSessionEnd } = await import(syncUrl);
+const { currentMachine } = await import(new URL('../util/agent-homes.js', syncUrl).href);
 const { homedir } = await import('node:os');
 const { loadConfig } = await import(new URL('../core/config.js', syncUrl).href);
 const { sqliteAgentImport } = await import(new URL('../store/sqlite/agent-import.js', syncUrl).href);

@@ -277,6 +277,8 @@ export interface WorkerInit {
   /** One shared integer the writer sets to a job's id before that job may commit; the server thread reads it when the
    * job passes its deadline. */
   readonly commitFlag?: SharedArrayBuffer;
+  /** The ratio the parent's root set: a thread has its own copy of core/memory's setting. */
+  readonly lossAversionRatio?: number;
 }
 
 export interface Job {

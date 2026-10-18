@@ -1,6 +1,7 @@
 // The deadline of a served request: past it the caller gets a 504 and the request's abort signal fires, whatever the
 // handler is still waiting on.
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { envRequestDeadlineMs } from '../util/env.js';
 import { RequestDeadline, requestDeadlineMs } from '../util/request-scope.js';
 
 // Each has a deadline of its own kind: sleep stops its child process, and the stream is meant to stay open.
@@ -21,7 +22,7 @@ export function isAbandoned(res: ServerResponse): boolean {
 
 /** The deadline of `req`, for every /v1 and /mcp route but the two exempt ones. */
 export function requestDeadlineFor(req: IncomingMessage): RequestDeadline | undefined {
-  const ms = requestDeadlineMs();
+  const ms = requestDeadlineMs(envRequestDeadlineMs());
   const path = (req.url ?? '/').split('?')[0] ?? '/';
   if (ms === 0 || EXEMPT.has(`${req.method ?? 'GET'} ${path}`)) return undefined;
   return path.startsWith('/v1/') || path === '/mcp' ? new RequestDeadline(Date.now() + ms) : undefined;

@@ -21,6 +21,7 @@ import { retrieve, RecallContractError } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { envRuntimeSettings } from '../../src/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -33,8 +34,10 @@ function safeRmSync(p: string): void {
     /* best-effort */
   }
 }
+// The settings a root reads per request, so each case's stubbed variable reaches recall as it does in production.
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
-  return apiCtx(root, tenantId, { subject: 'test:f5-policy', role: 'admin' });
+  const ctx = apiCtx(root, tenantId, { subject: 'test:f5-policy', role: 'admin' });
+  return { ...ctx, config: { ...ctx.config, runtime: envRuntimeSettings() } };
 }
 function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {

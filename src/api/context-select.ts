@@ -455,6 +455,7 @@ async function searchBothStores(
       minResults,
       cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
       scope: plan.activeScope,
+      runtime: ctx.config.runtime,
     },
   );
   return merged.map((r) => ({
@@ -507,6 +508,7 @@ async function searchLocalRows(
       minResults,
       cost: localCost,
       scope: plan.activeScope,
+      runtime: ctx.config.runtime,
       vectorCandidates,
     },
   );

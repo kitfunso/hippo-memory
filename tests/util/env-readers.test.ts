@@ -1,8 +1,6 @@
 /** src/util/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  envAnchoringOff,
-  envAvailabilityOff,
   envClaudeCodeSessionId,
   envHealthProbeMs,
   envHippoSessionId,
@@ -10,8 +8,8 @@ import {
   envMcpSseHeartbeatMs,
   envMcpSseMaxAgeSec,
   envModelCache,
-  envQueryEmbedTimeoutMs,
   envRequireServer,
+  envRuntimeSettings,
   envTypesafeApiKey,
 } from '../../src/util/env.js';
 
@@ -25,7 +23,7 @@ describe('timeouts', () => {
     ['MCP_SSE_MAX_AGE_SEC', envMcpSseMaxAgeSec],
     ['HIPPO_LLM_RERANKER_TIMEOUT_MS', envLlmRerankerTimeoutMs],
     ['HIPPO_HEALTH_PROBE_MS', envHealthProbeMs],
-    ['HIPPO_QUERY_EMBED_TIMEOUT_MS', envQueryEmbedTimeoutMs],
+    ['HIPPO_QUERY_EMBED_TIMEOUT_MS', () => envRuntimeSettings().queryEmbedTimeoutMs],
   ];
   it.each(readers)('%s drops a negative or zero value so the caller default applies', (name, read) => {
     for (const bad of ['-5', '0', 'soon', '']) {
@@ -56,8 +54,8 @@ describe('HIPPO_REQUIRE_SERVER', () => {
 
 describe('HIPPO_ANCHORING and HIPPO_AVAILABILITY', () => {
   it.each([
-    ['HIPPO_ANCHORING', envAnchoringOff],
-    ['HIPPO_AVAILABILITY', envAvailabilityOff],
+    ['HIPPO_ANCHORING', () => envRuntimeSettings().anchoringHint === false],
+    ['HIPPO_AVAILABILITY', () => envRuntimeSettings().availabilityHint === false],
   ] as const)('%s switches the hint off only for an off spelling', (name, off) => {
     vi.stubEnv(name, undefined);
     expect(off()).toBe(false);

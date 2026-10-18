@@ -3,6 +3,7 @@
 import { compareScoresDesc } from '../core/compare.js';
 import * as fs from 'fs';
 import { MemoryEntry } from '../core/memory.js';
+import type { RuntimeSettings } from '../core/config.js';
 import type { FolderStore } from '../store/port.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter, recallScopeFilter } from '../core/recall-scope.js';
 import { hybridSearch, vectorSourceOf } from '../search/hybrid.js';
@@ -38,8 +39,10 @@ export interface HybridSearchOptions extends SearchOptions {
   /** Multiplier applied to local-store scores when merging with global.
    *  Defaults to 1.2. Use 1.0 to remove the local bias for eval comparisons. */
   localBump?: number;
-  /** Active scope for scope-boost scoring. Auto-detected if not provided. */
+  /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
+  /** The root's environment settings: scope, summary deboost and query-embedding budget, when the call sets none. */
+  runtime?: RuntimeSettings;
   /** Include superseded memories in results. Default false. */
   includeSuperseded?: boolean;
   /** Filter to memories current at this ISO date string. */
@@ -47,7 +50,7 @@ export interface HybridSearchOptions extends SearchOptions {
   /** Budget cost per result, spent the same way in each store and in the merged list. */
   cost?: ResultCost;
   /** Propagated to underlying hybridSearch calls.
-   *  Per-call > env HIPPO_SUMMARY_DEBOOST > 0.85 default. */
+   *  Per-call > the root's HIPPO_SUMMARY_DEBOOST > 0.85 default. */
   summaryDeboost?: number;
   /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
@@ -200,8 +203,9 @@ export async function rankBothStores(
     asOf,
     summaryDeboost,
     summaryFreshness,
+    runtime: options.runtime,
     vectorCandidates,
-    queryEmbedDeadline: startQueryEmbedDeadline(),
+    queryEmbedDeadline: startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs),
   };
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
   const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });

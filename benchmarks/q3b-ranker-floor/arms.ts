@@ -5,7 +5,7 @@ import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/cli/flag-values.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { getReranker } from '../../dist/rerankers/index.js';
-import { detectScope } from '../../dist/core/active-scope.js';
+import { envActiveScope as detectScope } from '../../dist/util/env.js';
 import type { SearchResult } from '../../dist/core/search-types.js';
 import { getGlobalRoot } from '../../dist/sharing/global-store.js';
 import { getHippoRoot, isInitialized } from '../../dist/core/project-identity.js';

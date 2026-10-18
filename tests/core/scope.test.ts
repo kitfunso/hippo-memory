@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { detectScope, scopeMatch } from '../../src/core/active-scope.js';
+import { scopeMatch } from '../../src/core/active-scope.js';
+import { envActiveScope } from '../../src/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -9,7 +10,7 @@ function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
 }
 
-describe('detectScope', () => {
+describe('envActiveScope', () => {
   const savedEnv: Record<string, string | undefined> = {};
 
   beforeEach(() => {
@@ -29,10 +30,10 @@ describe('detectScope', () => {
   });
 
   it('returns null when no env vars set and on default branch', () => {
-    // In CI/test, we're typically on master/main — detectScope should return null
+    // In CI/test, we are typically on master/main, so envActiveScope should return null
     // or a feature branch name. We can only guarantee null when all env vars are clear
     // and we mock the git call. For unit purity, just verify env var priority.
-    const result = detectScope();
+    const result = envActiveScope();
     // If we're on master/main/develop/dev, result is null.
     // If on a feature branch, result is the branch name. Both are valid.
     expect(result === null || isString(result)).toBe(true);
@@ -40,34 +41,34 @@ describe('detectScope', () => {
 
   it('returns HIPPO_SCOPE when set', () => {
     vi.stubEnv('HIPPO_SCOPE', 'plan-eng-review');
-    expect(detectScope()).toBe('plan-eng-review');
+    expect(envActiveScope()).toBe('plan-eng-review');
   });
 
   it('trims HIPPO_SCOPE whitespace', () => {
     vi.stubEnv('HIPPO_SCOPE', '  qa  ');
-    expect(detectScope()).toBe('qa');
+    expect(envActiveScope()).toBe('qa');
   });
 
   it('returns GSTACK_SKILL when set and no HIPPO_SCOPE', () => {
     vi.stubEnv('GSTACK_SKILL', 'design-review');
-    expect(detectScope()).toBe('design-review');
+    expect(envActiveScope()).toBe('design-review');
   });
 
   it('HIPPO_SCOPE takes priority over GSTACK_SKILL', () => {
     vi.stubEnv('HIPPO_SCOPE', 'explicit-scope');
     vi.stubEnv('GSTACK_SKILL', 'gstack-scope');
-    expect(detectScope()).toBe('explicit-scope');
+    expect(envActiveScope()).toBe('explicit-scope');
   });
 
   it('returns OPENCLAW_SKILL when set and no higher-priority vars', () => {
     vi.stubEnv('OPENCLAW_SKILL', 'oc-skill');
-    expect(detectScope()).toBe('oc-skill');
+    expect(envActiveScope()).toBe('oc-skill');
   });
 
   it('ignores empty/whitespace-only env vars', () => {
     vi.stubEnv('HIPPO_SCOPE', '   ');
     vi.stubEnv('GSTACK_SKILL', '');
-    const result = detectScope();
+    const result = envActiveScope();
     // Should fall through to git branch or null
     expect(result !== '   ' && result !== '').toBe(true);
   });

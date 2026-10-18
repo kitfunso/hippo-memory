@@ -17,7 +17,8 @@ import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/core/config.js';
+// The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
+import { cliConfig } from '../../src/cli/api-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -86,7 +87,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(home),
-      config: loadConfig(home),
+      config: cliConfig(home),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
@@ -106,7 +107,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(home),
-      config: loadConfig(home),
+      config: cliConfig(home),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'show me the auth flow' }, ctx);
     const text = extractText(res);
@@ -123,7 +124,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(home),
-      config: loadConfig(home),
+      config: cliConfig(home),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);

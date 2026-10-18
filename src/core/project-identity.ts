@@ -1,4 +1,3 @@
-import { envHippoHome, envXdgDataHome } from '../util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -8,6 +7,7 @@ import { MAX_ID_LEN } from '../util/limits.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { originRemoteId, projectFileId, readGitFilePointer } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';
+import { hippoHomeDir } from '../util/agent-homes.js';
 import { placeholders } from '../util/sql.js';
 
 /** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means
@@ -274,11 +274,7 @@ export function classifyOriginProject(
  * (sharing/global-store.ts) returns it.
  * Leaf module so store migrations can use it without importing sharing/ (store cycle). */
 export function resolveGlobalRootDir(): string {
-  const hippoHome = envHippoHome();
-  if (hippoHome) return hippoHome;
-  const xdgData = envXdgDataHome();
-  if (xdgData) return path.join(xdgData, 'hippo');
-  return path.join(os.homedir(), '.hippo');
+  return hippoHomeDir();
 }
 
 /** True when `p` IS the global store root, so a global store whose parent chain contains `.git`/`.hippo` (git-managed
