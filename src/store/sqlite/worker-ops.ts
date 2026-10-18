@@ -5,8 +5,12 @@ import type { WireError } from './error-codec.js';
 /** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every write. */
 export type OpMode = 'read' | 'write';
 
+/** Where the executor sends a call: by its mode, or 'pinned-read' for a read only the first reader runs, since that
+ * thread alone holds the store's vector graph and a second copy would double its memory. */
+export type OpRoute = OpMode | 'pinned-read';
+
 /** 'server' keeps a method on the calling thread: it takes a function, and a function cannot be copied to a thread. */
-export type OpPlace = OpMode | 'server';
+export type OpPlace = OpRoute | 'server';
 
 export type OpPlaces<G> = { readonly [M in keyof G]: OpPlace };
 
@@ -32,7 +36,7 @@ export const WORKER_OPS = {
   vectors: {
     embeddingIndexState: 'read',
     storedVectors: 'read',
-    nearestEntries: 'read',
+    nearestEntries: 'pinned-read',
     physicsParticles: 'read',
   },
   vectorViews: {
@@ -256,6 +260,10 @@ export interface WorkerInit {
   readonly mode: OpMode;
   /** Lock wait of the thread's connection. */
   readonly busyWaitMs: number;
+  /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph it holds. */
+  readonly pinned?: boolean;
+  /** Stored vectors a store holds before the pinned reader builds its graph; 20,000 when omitted. */
+  readonly vectorGraphThreshold?: number | undefined;
   /** One shared integer the writer sets to a job's id before that job may commit; the server thread reads it when the
    * job passes its deadline. */
   readonly commitFlag?: SharedArrayBuffer;
