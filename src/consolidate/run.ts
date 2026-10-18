@@ -4,7 +4,8 @@ import type { Learning } from '../store/port/learning.js';
 import type { TombstoneChecks } from '../store/tombstone-checks.js';
 import { loadConfig } from '../core/config.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
-import type { DormantMove } from '../store/port/consolidation.js';
+import type { DormantMove, StrengthRefresh } from '../store/port/consolidation.js';
+import type { SleepRows, Survivors } from './survivors.js';
 
 export interface ConsolidationResult {
   decayed: number;
@@ -70,17 +71,20 @@ export interface SleepRun {
   config: ReturnType<typeof loadConfig>;
   decayOpts: DecayOptions;
   result: ConsolidationResult;
-  all: MemoryEntry[];
+  rows: SleepRows;
   retirable: (entry: MemoryEntry) => boolean;
   /**
    * Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both check tombstones
    * here first.
    */
   tombstones: TombstoneChecks;
-  survivors: MemoryEntry[];
+  survivors: Survivors;
+  pendingRefreshes: StrengthRefresh[];
   pendingWrites: MemoryEntry[];
   pendingDeletes: string[];
   pendingDormant: DormantMove[];
+  /** The DAG parent of each loaded row that has one, for the flush's family units. */
+  parentOf: Map<string, string>;
   units: string[][];
 }
 

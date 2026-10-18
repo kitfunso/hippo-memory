@@ -57,6 +57,9 @@ function randomEntries(rnd: () => number, n: number): MemoryEntry[] {
   });
 }
 
+/** The merge pass's partners over each text's token set, as sleep builds them. */
+const mergePartnersOf = (texts: readonly string[]) => mergePartners(texts.map((t) => new Set(tokenize(t))));
+
 const cases = SIZES.flatMap((n) => Array.from({ length: SEEDS_PER_SIZE }, (_, s) => ({ n, seed: n * 101 + s })));
 
 describe('sleep overlap index matches the pairwise passes', () => {
@@ -70,7 +73,7 @@ describe('sleep overlap index matches the pairwise passes', () => {
   it.each(cases)('merge partners match for $n memories (seed $seed)', ({ n, seed }) => {
     // Sleep only offers texts with at least one token to the merge pass.
     const texts = randomTexts(mulberry32(seed), n).filter((t) => tokenize(t).length > 0);
-    const partnersOf = mergePartners(texts);
+    const partnersOf = mergePartnersOf(texts);
     expect(texts.map((_, i) => partnersOf(i))).toEqual(pairwiseMergePartners(texts));
   });
 
@@ -80,9 +83,9 @@ describe('sleep overlap index matches the pairwise passes', () => {
     const onMerge = [[...shared, 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'].join(' '), [...shared, 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7'].join(' ')];
     const underMerge = [onMerge[0], onMerge[1].replace('gg', 'q8')];
     for (const texts of [onMerge, underMerge]) {
-      expect(texts.map((_, i) => mergePartners(texts)(i))).toEqual(pairwiseMergePartners(texts));
+      expect(texts.map((_, i) => mergePartnersOf(texts)(i))).toEqual(pairwiseMergePartners(texts));
     }
-    expect(mergePartners(onMerge)(0)).toEqual([1]);
+    expect(mergePartnersOf(onMerge)(0)).toEqual([1]);
 
     // 3 shared of 6 distinct tokens is a Jaccard of exactly 0.5.
     const onConflict = ['always alpha beta gamma', 'never alpha beta gamma zeta', 'never alpha beta gamma zeta eta'].map((text, k) => ({

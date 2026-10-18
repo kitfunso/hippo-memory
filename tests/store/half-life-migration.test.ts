@@ -15,7 +15,7 @@ import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
 import {
   createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, LEGACY_TYPED_HALF_LIFE, type CreateMemoryOptions,
 } from '../../src/core/memory.js';
-import { migrateDefaultHalfLife, planHalfLifeMigration } from '../../src/consolidate/half-life-migration.js';
+import { migrateDefaultHalfLife } from '../../src/consolidate/half-life-migration.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { consolidate } from '../../src/index.js';
@@ -171,7 +171,6 @@ describe('default half-life migration', () => {
     expect([...byContent(root).values()]).toEqual([7]);
     expect(local(root).halfLifeBase()).toBe(7);
     expect(migrateDefaultHalfLife(local(root), 7)).toMatchObject({ rescaled: 0 });
-    expect(planHalfLifeMigration(loadAllEntries(root, 'default'), 7, 7)).toEqual([]);
   });
 
   it('sleep moves a pre-1.46 store to the new default before decaying', async () => {

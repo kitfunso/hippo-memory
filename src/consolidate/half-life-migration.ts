@@ -5,7 +5,7 @@
  * records the base, so it runs once.
  */
 import { deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../core/memory.js';
-import type { HalfLifeRows } from '../store/half-life.js';
+import type { HalfLifeChange, HalfLifeRows } from '../store/half-life.js';
 import type { Consolidation } from '../store/port.js';
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set([
@@ -43,25 +43,25 @@ export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): num
   return Math.abs(bonus - 2 * k) < 1e-9 && k >= 0 && k <= entry.retrieval_count ? bonus : null;
 }
 
-/** The entries to rescale from `from` to `to`, as copies that keep their recall bonus. Pure. */
-export function planHalfLifeMigration(entries: readonly MemoryEntry[], from: number, to: number): MemoryEntry[] {
-  if (from === to) return [];
-  return entries.flatMap((e) => {
-    const bonus = halfLifeRecallBonus(e, deriveHalfLife(from, e));
-    return bonus === null ? [] : [{ ...e, half_life_days: deriveHalfLife(to, e) + bonus }];
-  });
+type MoveFields = HalfLifeFields & Pick<MemoryEntry, 'source'>;
+
+/** The half-life `e` moves to from base `from`, or null when it is not on that base. */
+function baseTarget(e: MoveFields, from: number, to: number): number | null {
+  if (from === to) return null;
+  const bonus = halfLifeRecallBonus(e, deriveHalfLife(from, e));
+  return bonus === null ? null : deriveHalfLife(to, e) + bonus;
 }
 
-/**
- * Memories of decisions, incidents and other objects still on the flat 90 days, as copies on `to` that keep their
- * recall bonus. Pure.
- */
-export function planTypedHalfLifeMigration(entries: readonly MemoryEntry[], to: number): MemoryEntry[] {
-  return entries.flatMap((e) => {
-    const bonus = TYPED_SOURCES.has(e.source) ? halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) : null;
-    const next = bonus === null ? e.half_life_days : deriveHalfLife(to, e) + bonus;
-    return next === e.half_life_days ? [] : [{ ...e, half_life_days: next }];
-  });
+/** True for an object's memory still on the flat 90 days. */
+function onTypedBase(e: MoveFields): boolean {
+  return TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null;
+}
+
+/** The half-life an object's memory moves to off the flat 90 days, or null when it stays. */
+function typedTarget(e: MoveFields, to: number): number | null {
+  const bonus = TYPED_SOURCES.has(e.source) ? halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) : null;
+  const next = bonus === null ? e.half_life_days : deriveHalfLife(to, e) + bonus;
+  return next === e.half_life_days ? null : next;
 }
 
 /**
@@ -75,15 +75,15 @@ export function migrateDefaultHalfLife(
 ): HalfLifeMigrationResult {
   const dryRun = opts.dryRun ?? false;
   const { from, outcome } = store.moveHalfLives(to, { dryRun, actor: opts.actor ?? 'system' }, (rows) => {
-    const { basePlan, typedPlan } = planMoves(rows, to);
+    const { basePlan, typedPlan, count } = planMoves(rows, to);
     const plan = [...basePlan, ...typedPlan];
     return {
       moves: [{ from: rows.from, to, entries: basePlan }, { from: LEGACY_TYPED_HALF_LIFE, to, entries: typedPlan }],
       outcome: {
         rescaled: basePlan.length,
         typed: typedPlan.length,
-        kept: rows.all.length - plan.length,
-        halfLives: new Map(plan.map((e) => [e.id, e.half_life_days]))
+        kept: count - plan.length,
+        halfLives: new Map(plan.map((e) => [e.id, e.halfLifeDays]))
       },
     };
   });
@@ -99,25 +99,48 @@ export function migrateDefaultHalfLife(
   };
 }
 
-/** The base move and the move of object memories, planned from one read of the store. Pure. */
+/** A row either move may change, kept in place of the row while the cursor runs. */
+interface Movable {
+  change: Omit<HalfLifeChange, 'halfLifeDays'>;
+  /** On the flat 90 days an object's writer gave, by source and recall bonus alone. */
+  typedBase: boolean;
+  base: number | null;
+  typed: number | null;
+}
+
+/** The base move and the move of object memories, planned from one pass over the rows. */
 function planMoves(rows: HalfLifeRows, to: number) {
-  const { all, typedPending } = rows;
+  const { typedPending } = rows;
   const objects = objectMemoryIds(rows.objectRows);
   const losers = conflictLosers(rows.conflictAudits, rows.resolvedConflicts);
-  const copies = new Set(all.flatMap((e) => (e.superseded_by ? [e.superseded_by] : [])));
+  // A supersede copy can come before its source, so routing waits for the pass to finish.
+  const copies = new Set<string>();
+  const movable: Movable[] = [];
+  let count = 0;
+  for (const e of rows.rows) {
+    count++;
+    if (e.superseded_by) copies.add(e.superseded_by);
+    const base = baseTarget(e, rows.from, to);
+    const typed = typedPending ? typedTarget(e, to) : null;
+    if (base === null && typed === null) continue;
+    const change = { id: e.id, tenantId: e.tenant_id, oldHalfLifeDays: e.half_life_days };
+    movable.push({ change, typedBase: onTypedBase(e), base, typed });
+  }
   // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the
   // source). Shape decides the rest.
-  const objectWritten = (e: MemoryEntry) =>
-    objects.all.has(e.id) ||
-    (!copies.has(e.id) && TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null);
-  const typedPlan = typedPending
-    ? planTypedHalfLifeMigration(
-        all.filter((e) => objectWritten(e) && !objects.retired.has(e.id) && !losers.has(e.id)),
-        to,
-      )
-    : [];
-  const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !objectWritten(e)) : all, rows.from, to);
-  return { basePlan, typedPlan };
+  const objectWritten = (m: Movable) => objects.all.has(m.change.id) || (!copies.has(m.change.id) && m.typedBase);
+  const basePlan: HalfLifeChange[] = [];
+  const typedPlan: HalfLifeChange[] = [];
+  for (const m of movable) {
+    const { id } = m.change;
+    if (typedPending && objectWritten(m)) {
+      const exempt = objects.retired.has(id) || losers.has(id);
+      if (m.typed !== null && !exempt) typedPlan.push({ ...m.change, halfLifeDays: m.typed });
+    } else if (m.base !== null) {
+      basePlan.push({ ...m.change, halfLifeDays: m.base });
+    }
+  }
+  return { basePlan, typedPlan, count };
 }
 
 /**

@@ -27,7 +27,7 @@ afterEach(() => {
 
 const withId = (id: string, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({ ...createMemory(`row ${id} text`), id, ...extra });
 const idsOf = (c: FlushComponent): string[] =>
-  [...new Set([...c.writes.map((e) => e.id), ...c.deletes, ...c.dormant.map((m) => m.entry.id)])].sort();
+  [...new Set([...c.refreshes.map((r) => r.id), ...c.writes.map((e) => e.id), ...c.deletes, ...c.dormant.map((m) => m.entry.id)])].sort();
 const moveOf = (entry: MemoryEntry) => ({ entry, strength: 0.01, reason: 'decay' as const, dormantAt: '2026-06-01T12:00:00.000Z' });
 
 describe('groupFlush', () => {
@@ -36,20 +36,22 @@ describe('groupFlush', () => {
     const demotedA = { ...decayA, half_life_days: 3 };
     const [R, S, M, B, D] = ['R', 'S', 'M', 'B', 'D'].map((id) => withId(id));
 
-    const components = groupFlush([decayA, S!, M!, demotedA, B!], [R!.id], [moveOf(D!)], [[R!.id, S!.id], [M!.id, S!.id, decayA.id, B!.id]]);
+    const ops = { refreshes: [{ id: 'E', strength: 0.5 }], writes: [decayA, S!, M!, demotedA, B!], deletes: [R!.id], dormant: [moveOf(D!)] };
+    const components = groupFlush(ops, [[R!.id, S!.id], [M!.id, S!.id, decayA.id, B!.id], ['E', 'D']]);
 
-    expect(components.map(idsOf)).toEqual([['A', 'B', 'M', 'R', 'S'], ['D']]);
-    expect(components[0]!.writes.map((e) => e.id)).toEqual(['A', 'S', 'M', 'B']);
-    expect(components[0]!.writes[0]).toBe(demotedA);
+    expect(components.map(idsOf)).toEqual([['D', 'E'], ['A', 'B', 'M', 'R', 'S']]);
+    expect(components[1]!.writes.map((e) => e.id)).toEqual(['A', 'S', 'M', 'B']);
+    expect(components[1]!.writes[0]).toBe(demotedA);
   });
 
   it('puts a child in its DAG parent\'s unit when the run removes the parent', () => {
     const parent = withId('P', { dag_level: 2 });
     const child = withId('C', { dag_parent_id: 'P' });
     const other = withId('O', { dag_parent_id: 'Q' });
-    const snapshot = new Map([child, other, parent].map((e) => [e.id, e]));
+    const loadedParent = new Map([['C', 'P'], ['O', 'Q'], ['K', 'P']]);
+    const ops = { refreshes: [{ id: 'K', strength: 0.5 }], writes: [other], deletes: [child.id], dormant: [moveOf(parent)] };
 
-    expect(familyUnits([other], [child.id], [moveOf(parent)], snapshot)).toEqual([['C', 'P']]);
+    expect(familyUnits(ops, (id) => loadedParent.get(id))).toEqual([['K', 'P'], ['C', 'P']]);
   });
 });
 
@@ -62,11 +64,12 @@ describe('commitInChunks', () => {
     for (const row of [...sources, ...retired]) writeEntry(root, row);
     const semantic = createMemory('merged text of five sources', { layer: Layer.Semantic, source: 'consolidation' });
     const largest: FlushComponent = {
+      refreshes: [],
       writes: [semantic, ...sources.map((e) => ({ ...e, half_life_days: 3 }))],
       deletes: retired.map((e) => e.id),
       dormant: [],
     };
-    const singles = Array.from({ length: 4 }, (_, i): FlushComponent => ({ writes: [createMemory(`single ${i} gamma${i}`)], deletes: [], dormant: [] }));
+    const singles = Array.from({ length: 4 }, (_, i): FlushComponent => ({ refreshes: [], writes: [createMemory(`single ${i} gamma${i}`)], deletes: [], dormant: [] }));
     // The flush reads the clock only at BEGIN and at each component boundary, so the test moves it per row op instead.
     let now = 0;
     const clock = () => now;

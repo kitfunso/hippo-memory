@@ -3,6 +3,7 @@ import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
+import type { DetectedConflict } from '../store/port/consolidation.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
 // on stopword-filtered tokens
@@ -27,58 +28,108 @@ const CONFLICT_STOPWORDS = new Set([
   'more','most','less','least','other','such','same','new','old','one','two',
 ]);
 
-/** Pairs of live non-semantic memories that contradict each other, in survivor order. */
+/** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
+type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]>;
+
+/** Pairs of live non-semantic memories that contradict each other, in survivor order. With `pagesOf`, the rows are read
+ * back one tenant at a time, as a pair never spans tenants, so only that tenant's profiles are held. */
 export function detectConflicts(
-  entries: MemoryEntry[],
+  entries: Iterable<MemoryEntry>,
   now: Date,
   decayOpts: DecayOptions = {},
   // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
   // without this bypass rescued entries would be silently re-excluded from conflict detection.
   rescuedIds: Set<string> = new Set(),
-): Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> {
-  const survivors = entries.filter(
-    (entry) =>
-      entry.layer !== Layer.Semantic
+  pagesOf?: PagesOf,
+): DetectedConflict[] {
+  const held: MemoryEntry[] = [];
+  const byTenant = new Map<string, number[]>();
+  const ids: string[] = [];
+  for (const entry of entries) {
+    const live = entry.layer !== Layer.Semantic
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
       && !isQuarantineScope(entry.scope ?? null)
-      && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
-  );
-  const detected: Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> = [];
-  const profiles = survivors.map((entry) => conflictProfile(entry.content));
-  const partnersOf = overlapPartners(
-    profiles.map((p) => p.distinct),
-    jaccardMinShared(CONFLICT_OVERLAP_THRESHOLD, CONFLICT_MIN_RARE_SHARED),
-  );
-
-  for (let i = 0; i < survivors.length; i++) {
-    for (const j of partnersOf(i)) {
-      // Traces are variants of each other, not contradictions: two strategies for the same task can both be valid,
-      // and conflict detection is for stated-rule disagreement, not strategy diversity.
-      if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
-      if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
-      if (!recalledTogether(survivors[i], survivors[j])) continue;
-      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) {
-        continue;
-      }
-      const reasonAndScore = describeConflict(profiles[i], profiles[j]);
-      if (!reasonAndScore) continue;
-      detected.push({
-        memory_a_id: survivors[i].id,
-        memory_b_id: survivors[j].id,
-        reason: reasonAndScore.reason,
-        score: reasonAndScore.score,
-      });
-    }
+      && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD);
+    if (!live) continue;
+    const places = byTenant.get(entry.tenant_id);
+    if (places) places.push(ids.length);
+    else byTenant.set(entry.tenant_id, [ids.length]);
+    ids.push(entry.id);
+    if (!pagesOf) held.push(entry);
   }
-
-  return detected;
+  const found: Array<readonly [number, number, DetectedConflict]> = [];
+  for (const places of byTenant.values()) {
+    const rows = pagesOf ? readPlaces(places, ids, pagesOf) : places.map((p) => conflictRow(p, held[p]));
+    found.push(...tenantConflicts(rows));
+  }
+  return found.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , conflict]) => conflict);
 }
 
-/**
- * One project's ambient context can show both: same tenant, and the same project or a user-global row beside a
- * project's.
- */
-function recalledTogether(a: MemoryEntry, b: MemoryEntry): boolean {
+/** What the pair checks read of one live row, and its place in survivor order. */
+interface ConflictRow {
+  place: number;
+  id: string;
+  trace: boolean;
+  superseded: boolean;
+  /** Extracted facts and session digests restate other rows, so they are never one side of a conflict. */
+  restated: boolean;
+  scope: MemoryEntry['scope'];
+  tenant_id: string;
+  origin_project: MemoryEntry['origin_project'];
+  profile: ConflictProfile;
+}
+
+function conflictRow(place: number, e: MemoryEntry): ConflictRow {
+  return {
+    place,
+    id: e.id,
+    trace: e.layer === Layer.Trace,
+    superseded: Boolean(e.superseded_by),
+    restated: e.tags.includes('extracted') || e.tags.includes('session-digest'),
+    scope: e.scope,
+    tenant_id: e.tenant_id,
+    origin_project: e.origin_project,
+    profile: conflictProfile(e.content),
+  };
+}
+
+function readPlaces(places: readonly number[], ids: readonly string[], pagesOf: PagesOf): ConflictRow[] {
+  const placeOf = new Map(places.map((p) => [ids[p], p]));
+  const rows: ConflictRow[] = [];
+  for (const page of pagesOf(places.map((p) => ids[p]))) {
+    for (const e of page) rows.push(conflictRow(placeOf.get(e.id)!, e));
+  }
+  return rows;
+}
+
+/** One tenant's conflicts, each with the survivor places of its two sides. */
+function tenantConflicts(rows: readonly ConflictRow[]): Array<readonly [number, number, DetectedConflict]> {
+  const partnersOf = overlapPartners(
+    rows.map((r) => r.profile.distinct),
+    jaccardMinShared(CONFLICT_OVERLAP_THRESHOLD, CONFLICT_MIN_RARE_SHARED),
+  );
+  const found: Array<readonly [number, number, DetectedConflict]> = [];
+  for (const [i, a] of rows.entries()) {
+    for (const j of partnersOf(i)) {
+      const b = rows[j];
+      // Traces are variants of each other, not contradictions: two strategies for the same task can both be valid,
+      // and conflict detection is for stated-rule disagreement, not strategy diversity.
+      if ((a.trace && b.trace) || a.superseded || b.superseded || !recalledTogether(a, b) || a.restated || b.restated) {
+        continue;
+      }
+      const reasonAndScore = describeConflict(a.profile, b.profile);
+      if (!reasonAndScore) continue;
+      found.push([a.place, b.place, { memory_a_id: a.id, memory_b_id: b.id, ...reasonAndScore }]);
+    }
+  }
+  return found;
+}
+
+type RecallFields = Pick<MemoryEntry, 'scope' | 'tenant_id' | 'origin_project'>;
+
+/** One project's ambient context can show both: same tenant, and the same project or a user-global row beside a
+ * project's. */
+function recalledTogether(a: RecallFields, b: RecallFields): boolean {
   // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
   if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
   if (a.tenant_id !== b.tenant_id) return false;
