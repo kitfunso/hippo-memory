@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Z0 Amendment 2 item 5, the blind seed rule: how many seeds the rule arms run after wave 1. It reads wave 1 only (seeds 1 to 3)
  * and prints seed counts, never a mean, estimate, sign or spread, so it cannot see the effect. Exit 0 on a result (a stop too), 1 on bad input.
- * A cap miss stops the run, or with --on-miss cap (round 2) runs that hypothesis at the cap. */
+ * A cap miss runs that hypothesis at the cap, or with --on-miss stop stops the run. */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -18,7 +18,7 @@ import { SEEDS, SEED_CAP, TARGET_Z, harmSizer, seedsNeeded } from './z0-size-sim
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SOURCES = ['scripts/token-eval/z0-seed-rule.mjs', 'scripts/token-eval/z0-size-sim.mjs'];
-const DEFAULTS = { minimumEffect: 0.15, targetZ: TARGET_Z, cap: SEED_CAP, onMiss: 'stop', power: 0.8, sims: 2_000, seed: 1, bound: 0.8 };
+const DEFAULTS = { minimumEffect: 0.15, targetZ: TARGET_Z, cap: SEED_CAP, onMiss: 'cap', power: 0.8, sims: 2_000, seed: 1, bound: 0.8 };
 const STOP_NOTE = 'the run stops after wave 1 and scores nothing; size the next run with z0-size.mjs on these records as calibration (prereg line 215)';
 const USAGE = 'usage: z0-seed-rule.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--drop-list FILE] '
   + '[--minimum-effect 0.15] [--target-z 3.5] [--cap 9] [--on-miss stop|cap] [--power 0.8] [--sims 2000] [--seed 1] [--bound 0.8] [--out FILE]';
@@ -114,7 +114,11 @@ export function seedRule(records, planCells, prices, opts) {
   return { seeds, perHypothesis, stop: false, reasons: short.map((s) => `${s}, so it runs at the cap`) };
 }
 
-const summary = (r) => (r.stop ? `stop: ${r.reasons.join('; ')}` : `seeds ${Object.entries(r.seeds).map(([arm, n]) => `${arm} ${n}`).join(', ')}`);
+function summary(r) {
+  if (r.stop) return `stop: ${r.reasons.join('; ')}`;
+  const seeds = `seeds ${Object.entries(r.seeds).map(([arm, n]) => `${arm} ${n}`).join(', ')}`;
+  return r.reasons.length === 0 ? seeds : `${seeds}; ${r.reasons.join('; ')}`;
+}
 
 /** @param {string[]} argv @param {string} [cwd] */
 export function runCli(argv, cwd = process.cwd()) {

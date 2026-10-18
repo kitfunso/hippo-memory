@@ -23,7 +23,7 @@ export const QUOTA_USD_PER_DAY = { 'claude-code': 300, codex: 100 };
 export const DEFAULTS = {
   repos: [5, 8, 10, 12, 15, 20], effects: [0.15, 0.2, 0.25], power: 0.8, sims: 2_000, seed: 1,
   searchSims: 200, maxFamilies: 60, maxFamiliesPerRepo: 4, maxNTasks: 600, spreadBound: 0.8,
-  seedCap: 9, targetZ: 3.5, onMiss: 'stop', levelSims: 20_000,
+  seedCap: 9, targetZ: 3.5, onMiss: 'cap', levelSims: 20_000,
 };
 const USAGE = 'usage: z0-size.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--drop-list FILE] '
   + '[--repos 5,8,10,12,15,20] [--effects 0.15,0.2,0.25] [--power 0.8] [--sims 2000] [--seed 1] '
@@ -341,13 +341,13 @@ export function sizeZ0(records, planCells, prices, opts) {
 const NOTES = [
   'Power runs through the analyzer\'s own fixed-repository t tests (family is the unit) at Holm\'s strictest level, 0.05/2 over H1 and H2 (prereg 209, Amendment 2); a win needs both codings.',
   'H3 is reported with no verdict, so it sets no size; set R is sized by H1 alone.',
-  'Seeds follow the blind rule: wave 1 runs 3 seeds, then the fewest up to seedCap whose predicted standard error is at most the minimum effect over targetZ, the larger of the two codings. A run the rule cannot size stops and counts as neither win nor tie, unless onMiss is cap: then it runs at seedCap.',
+  'Seeds follow the blind rule: wave 1 runs 3 seeds, then the fewest up to seedCap whose predicted standard error is at most the minimum effect over targetZ, the larger of the two codings. A run the rule cannot size runs at seedCap (onMiss cap, the default); with onMiss stop it stops and counts as neither win nor tie.',
   'A size passes at the calibration\'s point estimates. boundsPower repeats that size with every spread at its one-sided spreadBound upper bound, and choose prefers the rows that pass there.',
   'Set N\'s one-sided resolve share is taken at its exact one-sided spreadBound upper bound (Clopper-Pearson); resolve.oneSideEstimate is the point value.',
   'Families per repository are capped at maxFamiliesPerRepo. Each size is found by a search at searchSims, then confirmed at sims one size at a time; reported power is from the full sim count.',
   'Sessions count each record\'s first session plus its teach and correction resumes, at the rule\'s mean seeds; screen sessions are not counted. usageAtCap prices the rule\'s arms at seedCap.',
   'Days are list-price dollars of usage over the per-day quota; a quota marked "default assumption" is a placeholder, not a measurement.',
-  'level is the share of true-zero runs below Holm\'s strictest 0.025, at the chosen design under the seed rule at the bounds, 3 seeds, 2 seeds at the bounds and 0/1 values. Each cell is read against 0.025 plus 2 simulation errors of the runs it kept (the rule\'s cell drops the runs it stopped), and a cell with no run fails; held: false stops the freeze.',
+  'level is the share of true-zero runs below Holm\'s strictest 0.025, at the chosen design under the seed rule at the bounds, the seed rule at the point estimates, 3 seeds, 2 seeds at the bounds and 0/1 values. Each cell is read against 0.025 plus 2 simulation errors of the runs it kept (a rule cell drops the runs it stopped), and a cell with no run fails; held: false stops the freeze.',
 ];
 
 /** @param {string[]} argv @param {string} [cwd] */

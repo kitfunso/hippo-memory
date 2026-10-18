@@ -215,9 +215,9 @@ describe('Z0 sizing', () => {
     const design = { repos: 4, families: 3 };
     const flatLevel = levelCheck(flat, flat, design, 0.2, { sims: 30, seed: 1 });
     expect(flatLevel.cells.map((c) => `${c.name}/${c.coding}`)).toEqual(
-      ['rule at bounds', 'three seeds', 'two seeds at bounds', '0/1 values'].flatMap((n) => ['violation', 'excluded'].map((c) => `${n}/${c}`)));
-    expect(flatLevel.cells[2]!.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 30), 12);
-    for (const c of flatLevel.cells.slice(0, 6)) expect([c.level, c.runs]).toEqual([0, 30]);
+      ['rule at bounds', 'rule at point estimates', 'three seeds', 'two seeds at bounds', '0/1 values'].flatMap((n) => ['violation', 'excluded'].map((c) => `${n}/${c}`)));
+    expect(flatLevel.cells[4]!.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 30), 12);
+    for (const c of flatLevel.cells.slice(0, 8)) expect([c.level, c.runs]).toEqual([0, 30]);
     const noisy = both(spread(0.02, 0.02, 0.1));
     const level = levelCheck(noisy, noisy, design, 0.2, { sims: 60, seed: 2 });
     expect([true, false]).toContain(level.held);
@@ -229,11 +229,23 @@ describe('Z0 sizing', () => {
     expect([Number.isNaN(none.cells[0].level), none.held]).toEqual([true, false]);
     // A rule that stops some runs is judged on the runs it let go, so its bar is wider than the fixed-seed cells'.
     const some = levelCheck(both(spread(0.05, 0, 0.05)), both(spread(0.05, 0, 0.05)), { repos: 6, families: 3 }, 0.15, { sims: 40, seed: 1 });
-    const [ruled, fixed] = [some.cells[0]!, some.cells[2]!];
+    const [ruled, fixed] = [some.cells[0]!, some.cells[4]!];
     expect(ruled.runs > 0 && ruled.runs < 40).toBe(true);
     expect([ruled.stopShare, fixed.runs, fixed.stopShare]).toEqual([1 - ruled.runs / 40, 40, 0]);
     expect(ruled.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / ruled.runs), 12);
     expect(fixed.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 40), 12);
+  });
+
+  it('runs a cap miss at the cap in both rule cells of the level check under onMiss cap, and drops it under stop', () => {
+    const missing = both(spread(1, 0, 0.01));
+    const [design, sims] = [{ repos: 6, families: 3 }, 40];
+    const ruleCells = (onMiss: 'stop' | 'cap') => levelCheck(missing, missing, design, 0.15, { sims, seed: 1, onMiss })
+      .cells.filter((c) => c.name === 'rule at bounds' || c.name === 'rule at point estimates');
+    const capped = ruleCells('cap');
+    expect(capped.map((c) => `${c.name}/${c.coding}`)).toEqual(
+      ['rule at bounds', 'rule at point estimates'].flatMap((n) => ['violation', 'excluded'].map((c) => `${n}/${c}`)));
+    for (const c of capped) expect([c.runs, c.stopShare]).toEqual([sims, 0]);
+    for (const c of ruleCells('stop')) expect(c.runs).toBeLessThan(sims);
   });
 
   it('finds the smallest passing size by search, and the confirm step corrects a coarse start either way', () => {
@@ -244,14 +256,15 @@ describe('Z0 sizing', () => {
     expect(confirmSize((n) => n, passes, 6, 3)).toEqual({ n: null, result: 6 });
   });
 
-  it('reads --spread-bound and the seed flags, and no longer knows --repo-bound', () => {
+  it('reads --spread-bound and the seed flags, runs a cap miss at the cap unless told to stop, and no longer knows --repo-bound', () => {
     const base = ['--runs', 'r.jsonl', '--plan', 'p.json', '--prices', 'c.json'];
-    expect(parseArgs([...base, '--spread-bound', '0.7', '--seed-cap', '6', '--target-z', '3', '--max-families-per-repo', '3', '--level-sims', '50'])).toMatchObject({
-      spreadBound: 0.7, seedCap: 6, targetZ: 3, maxFamiliesPerRepo: 3, levelSims: 50,
+    expect(parseArgs([...base, '--spread-bound', '0.7', '--seed-cap', '6', '--target-z', '3', '--max-families-per-repo', '3', '--level-sims', '50', '--on-miss', 'stop'])).toMatchObject({
+      spreadBound: 0.7, seedCap: 6, targetZ: 3, maxFamiliesPerRepo: 3, levelSims: 50, onMiss: 'stop',
     });
-    expect(parseArgs(base)).toMatchObject({ spreadBound: 0.8, seedCap: 9, targetZ: 3.5, maxFamiliesPerRepo: 4, levelSims: 20_000, repos: [5, 8, 10, 12, 15, 20] });
+    expect(parseArgs(base)).toMatchObject({ spreadBound: 0.8, seedCap: 9, targetZ: 3.5, onMiss: 'cap', maxFamiliesPerRepo: 4, levelSims: 20_000, repos: [5, 8, 10, 12, 15, 20] });
     expect(runCli([...base, '--repo-bound', '0.8'])).toMatchObject({ code: 1, stderr: expect.stringContaining('unknown flag --repo-bound') });
-    for (const bad of [['--seed-cap', '2'], ['--max-families-per-repo', '1'], ['--target-z', '0'], ['--level-sims', '0'], ['--spread-bound', '1']]) {
+    expect(runCli([...base, '--on-miss', 'never'])).toMatchObject({ code: 1, stderr: expect.stringContaining('--on-miss must be one of stop, cap') });
+    for (const bad of [['--seed-cap', '2'], ['--max-families-per-repo', '1'], ['--target-z', '0'], ['--level-sims', '0'], ['--spread-bound', '1'], ['--on-miss', 'never']]) {
       expect(() => parseArgs([...base, ...bad])).toThrow(bad[0]!);
     }
   });
@@ -268,7 +281,7 @@ describe('Z0 sizing', () => {
     expect(res).toMatchObject({ code: 0, stderr: '' });
     const report = JSON.parse(fs.readFileSync(path.join(dir, 'size.json'), 'utf8'));
     expect(report.schema).toBe('z0-size/1');
-    expect(report.settings).toMatchObject({ firstWave: 3, seedCap: 9, targetZ: 3.5, spreadBound: 0.8, levelSims: 20, holmLevel: 0.025 });
+    expect(report.settings).toMatchObject({ firstWave: 3, seedCap: 9, targetZ: 3.5, onMiss: 'cap', spreadBound: 0.8, levelSims: 20, holmLevel: 0.025 });
     expect(report.settings.quota).toEqual({ 'claude-code': { usdPerDay: 250, source: 'flag' }, codex: { usdPerDay: 100, source: 'default assumption' } });
     expect(report.calibration.perRecord['A1/teach'].sessions).toBe(2);
     expect(report.calibration.perRecord['A1/apply'].sessions).toBe(1);
@@ -291,8 +304,8 @@ describe('Z0 sizing', () => {
         expect(chosen.days[tool]).toBeCloseTo(chosen.usd[tool] / report.settings.quota[tool].usdPerDay, 10);
         expect(chosen.daysAtCap[tool]).toBeCloseTo(chosen.usageAtCap.usd[tool] / report.settings.quota[tool].usdPerDay, 10);
       }
-      expect(level.H1.cells).toHaveLength(8);
-      expect(level.H2.cells).toHaveLength(8);
+      expect(level.H1.cells).toHaveLength(10);
+      expect(level.H2.cells).toHaveLength(10);
       expect([true, false]).toContain(level.held);
     }
     expect(res.stdout).toMatch(/^minimum effect 15 points: 5 repositories, set R 10 families.*H1 mean seeds 3\.0, level (held|FAILED)/);

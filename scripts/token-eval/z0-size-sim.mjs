@@ -249,7 +249,7 @@ function binaryRun(cal, design, rand) {
 }
 
 /** The level of the H1 or H2 test at a chosen design: the share of true-zero runs whose p is below Holm's strictest 0.025,
- * per coding, under the seed rule at the bounds, 3 and 2 fixed seeds, and 0/1 values. Stopped runs are left out of both counts.
+ * per coding, under the seed rule at the bounds and at the point estimates, 3 and 2 fixed seeds, and 0/1 values. Stopped runs are left out of both counts.
  * `held` is true when every level is at most 2 simulation errors of its own run count above 0.025; a cell with no run fails.
  * @param {Record<string, any>} calPoint @param {Record<string, any>} calUpper
  * @param {{repos: number, families: number}} design @param {number} m
@@ -259,6 +259,7 @@ export function levelCheck(calPoint, calUpper, design, m, opts) {
   const [three, two] = [{ ...design, seeds: SEEDS }, { ...design, seeds: 2 }];
   const cases = [
     ['rule at bounds', (rand) => analysed(repeatRun(calUpper, three, 0, rand, rule))],
+    ['rule at point estimates', (rand) => analysed(repeatRun(calPoint, three, 0, rand, rule))],
     ['three seeds', (rand) => analysed(repeatRun(calPoint, three, 0, rand))],
     ['two seeds at bounds', (rand) => analysed(repeatRun(calUpper, two, 0, rand))],
     ['0/1 values', (rand) => analysed({ units: binaryRun(calUpper, three, rand), seeds: SEEDS, stopped: false })],
@@ -266,7 +267,7 @@ export function levelCheck(calPoint, calUpper, design, m, opts) {
   const cells = cases.flatMap(([name, make]) => {
     const rand = seededRandom(cellSeed(opts.seed, 'level', opts.label ?? '', name, design.repos, design.families, m));
     const runs = Array.from({ length: opts.sims }, () => make(rand)).filter((r) => !r.stopped);
-    // The rule's cell keeps only the runs it let go, so its simulation error is from that count, not from sims.
+    // A rule cell keeps only the runs it let go, so its simulation error is from that count, not from sims.
     const ceiling = LEVEL + 2 * sd((LEVEL * (1 - LEVEL)) / runs.length);
     const stopShare = 1 - runs.length / opts.sims;
     return CODINGS.map((coding) => ({ name, coding, level: share(runs, (r) => r.est[coding].p < LEVEL), runs: runs.length, stopShare, ceiling }));
