@@ -1,0 +1,5 @@
+### Changed
+
+- **Rejecting a value no longer holds the write lock while it reads the tenant.** `hippo reject` and a resolved conflict commit the rejected value first, so every later write refuses it; they then look for the rows that hold it 500 at a time with no lock held, and remove them in one short transaction. If that last step fails, the value stays refused and rejecting it again removes the rows.
+- **Auto-share and quality repair read the store 500 rows at a time.** Sleep's auto-share pass, `hippo audit repair` and the one-time repair at sleep return the same rows as before without holding a whole tenant in memory; auto-share asks the global store only about rows that could hold each candidate's text.
+- **Graph rebuilds, churn tagging and small outcome writes do fixed work per batch.** A rebuild prepares each statement once per connection and checks each relation endpoint once, churn tagging commits its batch in one transaction, and an outcome that touches fewer than 64 memories no longer lists every markdown mirror.
