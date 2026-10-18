@@ -129,14 +129,15 @@ describe('resolveTenantForGitHub', () => {
   it('rule 6: escape hatch via env var, with mismatch -> returns env fallback', async () => {
     const db = openHippoDb(root);
     try {
-      vi.stubEnv('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK', '1');
       vi.stubEnv('HIPPO_TENANT', 'rollback-tenant');
       // Case 2: installation_id present but unknown.
       insertInstallation(db, '12345', 'tenant-alpha');
-      expect(await resolveTenantForGitHub(sqliteStore(root), { installationId: '99999' })).toBe('rollback-tenant');
+      expect(await resolveTenantForGitHub(sqliteStore(root), { installationId: '99999' }, true)).toBe(
+        'rollback-tenant',
+      );
       // Case 5: no installation_id, no repo match.
       expect(
-        await resolveTenantForGitHub(sqliteStore(root), { installationId: null, repoFullName: 'unknown/repo' }),
+        await resolveTenantForGitHub(sqliteStore(root), { installationId: null, repoFullName: 'unknown/repo' }, true),
       ).toBe('rollback-tenant');
     } finally {
       closeHippoDb(db);

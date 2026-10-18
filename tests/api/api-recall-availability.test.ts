@@ -97,10 +97,11 @@ describe('api.recall availabilityHint', () => {
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(1);
   });
 
-  it('HIPPO_AVAILABILITY=off suppresses the hint and the audit', async () => {
+  it('the root turning availability off (HIPPO_AVAILABILITY=off) suppresses the hint and the audit', async () => {
     seedFiringFixture(root);
-    vi.stubEnv('HIPPO_AVAILABILITY', 'off');
-    const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
+    const ctx = ctxFor(root);
+    const off = { ...ctx, config: { ...ctx.config, runtime: { availabilityHint: false } } };
+    const result = await retrieve(off, { query: QUERY, window: { limit: 4 } });
     expect(result.availabilityHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(0);
   });

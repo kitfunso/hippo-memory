@@ -7,7 +7,7 @@ import { containerId, containerPrefix } from '../agent-memories/source.js';
 import { foldEdges, foldedInto, type ProjectFold } from '../agent-memories/project-folds.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../core/agent-memory-tools.js';
 import { isSharedStore } from '../core/config.js';
-import { processEnv } from '../util/env.js';
+import { currentMachine } from '../util/agent-homes.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { isGlobalStoreRoot, projectNames, resolveProjectIdentity } from '../core/project-identity.js';
 import { duplicateKey } from '../util/same-text.js';
@@ -180,7 +180,7 @@ function importCopies(store: ProjectTagReads): MemoryEntry[] {
 function strayImports(store: ProjectTagReads, hippoRoot: string): MemoryEntry[] {
   const copies = importCopies(store);
   if (!isGlobalStoreRoot(hippoRoot)) return copies;
-  const machine = { platform: process.platform, env: processEnv() };
+  const machine = currentMachine();
   const { platform } = machine;
   const sessions = store.compactionTranscripts();
   const owners = new Map<string, Map<string, string[]>>();

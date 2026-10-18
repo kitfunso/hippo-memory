@@ -5,12 +5,8 @@ import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { consolidate } from '../../src/index.js';
-import {
-  importAtSessionEnd,
-  importForStore,
-  importProjectMemories,
-  type Machine,
-} from '../../src/agent-memories/sync.js';
+import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/agent-memories/sync.js';
+import type { Machine } from '../../src/util/agent-homes.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';

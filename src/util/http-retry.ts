@@ -2,7 +2,6 @@
  * connection where a replay is safe. */
 
 import { MINUTE_MS } from './time.js';
-import { envLlmTimeoutMs } from './env.js';
 import { errorCode, errorFields, log } from './log.js';
 
 export interface RetryPolicy {
@@ -34,16 +33,16 @@ const DEFAULT_BASE_DELAY_MS = 250;
 const DEFAULT_MAX_DELAY_MS = 8_000;
 const DEFAULT_LLM_TIMEOUT_MS = MINUTE_MS;
 
-/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; `HIPPO_LLM_TIMEOUT_MS`
- * overrides it. */
-export function llmTimeoutMs(): number {
-  return envLlmTimeoutMs() ?? DEFAULT_LLM_TIMEOUT_MS;
+/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; the Anthropic client passes
+ * `HIPPO_LLM_TIMEOUT_MS` as `configured`. */
+export function llmTimeoutMs(configured?: number): number {
+  return configured ?? DEFAULT_LLM_TIMEOUT_MS;
 }
 
 /** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures
  * would hold a sleep for 3x the timeout. */
-export function llmTotalMs(): number {
-  return 2 * llmTimeoutMs() + DEFAULT_MAX_DELAY_MS;
+export function llmTotalMs(timeoutMs: number = llmTimeoutMs()): number {
+  return 2 * timeoutMs + DEFAULT_MAX_DELAY_MS;
 }
 
 export function isRetryableStatus(status: number): boolean {

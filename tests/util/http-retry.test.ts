@@ -9,6 +9,7 @@ import {
   llmTotalMs,
   parseRetryAfterMs,
 } from '../../src/util/http-retry.js';
+import { envLlmTimeoutMs } from '../../src/util/env.js';
 import { classifyTransportFailure } from '../../src/cli/client.js';
 
 afterEach(() => {
@@ -415,17 +416,16 @@ describe('retry helpers', () => {
     expect(parseRetryAfterMs('soon', now)).toBeNull();
   });
 
-  it('takes the LLM timeout from HIPPO_LLM_TIMEOUT_MS and ignores junk', () => {
+  it('takes the LLM timeout the caller read from HIPPO_LLM_TIMEOUT_MS, and 60 s for junk or none', () => {
     expect(llmTimeoutMs()).toBe(60_000);
     vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '1500');
-    expect(llmTimeoutMs()).toBe(1500);
+    expect(llmTimeoutMs(envLlmTimeoutMs())).toBe(1500);
     vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', 'zero');
-    expect(llmTimeoutMs()).toBe(60_000);
+    expect(llmTimeoutMs(envLlmTimeoutMs())).toBe(60_000);
   });
 
   it('gives one LLM call, retries included, two attempts and the longest wait', () => {
     expect(llmTotalMs()).toBe(128_000);
-    vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '1500');
-    expect(llmTotalMs()).toBe(11_000);
+    expect(llmTotalMs(llmTimeoutMs(1500))).toBe(11_000);
   });
 });

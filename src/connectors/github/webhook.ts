@@ -1,4 +1,8 @@
-import { envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../../util/env.js';
+import {
+  envGitHubAllowUnknownInstallationFallback,
+  envGitHubWebhookSecret,
+  envGitHubWebhookSecretPrevious,
+} from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { DAY_MS } from '../../util/time.js';
 import { isWellFormedGitHubSignature, verifyGitHubSignature } from './signature.js';
@@ -156,7 +160,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
 
   // Tenant resolution. Fail closed on multi-tenant installs with unknown
   // routing - same policy as Slack.
-  const resolvedTenant = await resolveTenantForGitHub(d.store, routing);
+  const resolvedTenant = await resolveTenantForGitHub(d.store, routing, envGitHubAllowUnknownInstallationFallback());
   if (resolvedTenant === null) {
     await parkAndAck(d, {
       ...routing,

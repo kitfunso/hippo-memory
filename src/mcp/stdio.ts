@@ -1,6 +1,7 @@
 // Stdio transport: newline-delimited JSON-RPC frames in on stdin, replies out on stdout.
 
 import { exitAfterFlush, installCrashHandlers } from '../util/crash-handlers.js';
+import { envRequestDeadlineMs } from '../util/env.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { requestDeadlineMs } from '../util/request-scope.js';
 import { MAX_BODY_BYTES } from '../util/http-util.js';
@@ -104,7 +105,7 @@ const REQUEST_TIMEOUT_CODE = -32001;
 /** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and
  * says whether that answer went out, so a later reply is dropped. */
 function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortController): () => boolean {
-  const ms = requestDeadlineMs();
+  const ms = requestDeadlineMs(envRequestDeadlineMs());
   if (ms === 0) return () => false;
   let expired = false;
   const timer = setTimeout(() => {

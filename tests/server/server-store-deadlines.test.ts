@@ -238,8 +238,7 @@ describe("a store thread's queue", () => {
   it('refuses the call past HIPPO_STORE_QUEUE_MAX at once with the busy 503, and keeps the calls already waiting', async () => {
     const root = newRoot();
     deadline('0');
-    vi.stubEnv('HIPPO_STORE_QUEUE_MAX', '2');
-    const { store, sent } = patientStore(root);
+    const { store, sent } = patientStore(root, { queueMax: 2 });
     const server = await start(root, { store });
     expect((await save(server, 'warms the writer')).status).toBe(201);
     const before = await counts(server);

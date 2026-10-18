@@ -1,6 +1,6 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
-import { envAnthropicApiKey } from '../util/env.js';
+import { envActiveScope, envAnthropicApiKey } from '../util/env.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import * as fs from 'fs';
 import {
@@ -19,7 +19,6 @@ import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
 import { extractPathTags } from '../search/path-context.js';
-import { detectScope } from '../core/active-scope.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as client from './client.js';
@@ -60,7 +59,7 @@ function rememberTags(flags: CliFlags, cwd: string): RememberTags {
     if (!all.includes(pt)) all.push(pt);
   }
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
-  const activeScope = explicitScope || detectScope();
+  const activeScope = explicitScope || envActiveScope();
   if (activeScope) {
     const scopeTag = `scope:${activeScope}`;
     if (!all.includes(scopeTag)) all.push(scopeTag);

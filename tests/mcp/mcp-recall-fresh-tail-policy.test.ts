@@ -20,7 +20,9 @@ import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+// The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
+import { cliConfig } from '../../src/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -82,7 +84,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
           role: 'admin',
           hostAdmin: true,
           store: sqliteStore(home),
-          config: loadConfig(home),
+          config: cliConfig(home),
         },
       );
     } catch (err) {
@@ -119,7 +121,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
         role: 'admin',
         hostAdmin: true,
         store: sqliteStore(home),
-        config: loadConfig(home),
+        config: cliConfig(home),
       },
     );
     // SAFETY: hippo_recall's MCP tool result envelope always carries
@@ -157,7 +159,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
         role: 'admin',
         hostAdmin: true,
         store: sqliteStore(home),
-        config: loadConfig(home),
+        config: cliConfig(home),
       },
     );
     const r = res!;
@@ -199,7 +201,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
       hostAdmin: true,
       project: { name: 'acme', legacyName: 'acme' },
       store: sqliteStore(shared),
-      config: loadConfig(shared),
+      config: cliConfig(shared),
     };
     for (const args of [{ fresh_tail_count: 3 }, { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' }]) {
       // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.

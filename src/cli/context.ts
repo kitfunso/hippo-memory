@@ -1,10 +1,10 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
+import { envActiveScope } from '../util/env.js';
 import type { DeliveryRecorder } from '../api/delivery-recorder.js';
 import { isSubagentPayload } from '../util/hook-payload.js';
 import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../api/context-auto.js';
-import { detectScope } from '../core/active-scope.js';
 import { resolveProjectIdentity } from '../core/project-identity.js';
 import { bookLedgerTurn, ledgerReachOf } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
@@ -209,7 +209,7 @@ interface ContextOptsInput {
 function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOptions {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
   const ctxExplicitScope = stringFlagOrExit(flags, 'scope') ?? null;
-  const ctxActiveScope = ctxExplicitScope || detectScope();
+  const ctxActiveScope = ctxExplicitScope || envActiveScope();
   // --cross-project re-includes other-project memories, rendered under their own section.
   const crossProject = flagIsTrue(flags, 'cross-project');
   return {

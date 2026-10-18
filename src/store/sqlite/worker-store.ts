@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId, currentSignal } from '../../util/request-scope.js';
 import type { HippoStore, LocalFiles, Readiness, StoreGroups, VectorReads, StoreWith } from '../port.js';
-import { createSqliteExecutor, type SqliteExecutor } from './executor.js';
+import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
 import {
@@ -191,14 +191,14 @@ export interface GlobalStores {
 
 /** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server
  * thread; each is built at first use, since the global store can appear while the server runs. */
-export function globalStoresFor(served: HippoStore): GlobalStores {
+export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
   if (!runsOffLoop(served)) return { open: sqliteStore, close: async () => {} };
   const opened = new Map<string, StoreWith<'localFiles'>>();
   return {
     open(root) {
       const known = opened.get(root);
       if (known !== undefined) return known;
-      const made = workerSqliteStore(root);
+      const made = workerSqliteStore(root, createSqliteExecutor(root, executorOpts));
       opened.set(root, made);
       return made;
     },

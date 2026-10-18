@@ -8,7 +8,15 @@ import { estimateTokens } from '../../util/token-text.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from '../types.js';
-import { callerOf, hashQueryText, noteRecall, sessionRing, shownRecallRows, type RingBuffer } from './finish.js';
+import {
+  callerOf,
+  hashQueryText,
+  noteRecall,
+  sessionRing,
+  shownRecallRows,
+  type HintConfig,
+  type RingBuffer,
+} from './finish.js';
 import { lastRecalledIds } from './last-recalled.js';
 import { retrieveRanking } from './recall.js';
 import {
@@ -36,6 +44,7 @@ import type { RecallSuppressionSummary, ShowRanking } from './types.js';
 /** Builds the presenter that renders the list the tool
  * shows, parks the render in `out` and hands back its hint rows. */
 interface RecallPresenterOptions {
+  readonly config: HintConfig;
   readonly includeContinuity: boolean;
   readonly anchorRing: RingBuffer | null;
   readonly queryHash: number;
@@ -102,13 +111,13 @@ function fitToolRecall(
 }
 
 function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
-  const { includeContinuity, anchorRing, queryHash, out, hintRows } = options;
+  const { config, includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and
     // after the heading; one that does not fit is dropped whole.
     const purse = tokenPurse(budget - memoriesReserve(budget));
     const pays = (piece: string): boolean => purse.pays(estimateTokens(piece));
-    const hintPool = availabilityPool(() => pool);
+    const hintPool = availabilityPool(config, () => pool);
     const planPiece = planningSection(apiResult);
     const showPlan = planPiece !== '' && pays(planPiece);
     const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
@@ -167,7 +176,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
     boost: { sessionId },
   } = opts;
   const budget = req.budget ?? ctx.config.defaultBudget;
-  const anchorRing = sessionRing('mcp', ctx.tenantId, sessionId);
+  const anchorRing = sessionRing(ctx.config, 'mcp', ctx.tenantId, sessionId);
   const who = callerOf(ctx);
   const queryHash = hashQueryText(query);
   const out: RenderSlot = {};
@@ -182,12 +191,19 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
       hints: { suppressAvailabilityHint: true },
     },
     recallPresenter(budget, {
+      config: ctx.config,
       includeContinuity,
       anchorRing,
       queryHash,
       out,
       hintRows: ({ list, anchoring, availability }) =>
-        shownRecallRows(who, { query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability }),
+        shownRecallRows(ctx.config, who, {
+          query,
+          ring: anchorRing,
+          topId: list[0]?.entry.id ?? null,
+          anchoring,
+          availability,
+        }),
     }),
   );
   const { rendered } = out;

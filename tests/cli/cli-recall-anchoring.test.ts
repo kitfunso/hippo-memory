@@ -53,7 +53,7 @@ async function recallJson(query: string, flags: Flags = { 'session-id': 's1' }):
 }
 
 // Reads a ring through its production entry; an empty ring for a surface that never recalled.
-const history = (surface: 'cli' | 'mcp', tenant: string) => snapshotRing(sessionRing(surface, tenant, 's1')!);
+const history = (surface: 'cli' | 'mcp', tenant: string) => snapshotRing(sessionRing({}, surface, tenant, 's1')!);
 
 describe('hippo recall anchoring hint', () => {
   beforeEach(() => {

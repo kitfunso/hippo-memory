@@ -1,4 +1,4 @@
-import { envAutodebiasOff } from '../util/env.js';
+import type { RuntimeSettings } from '../core/config.js';
 import { detectForwardClaim, type ForwardClaimMatch } from '../learn/forward-claim-detector.js';
 import type { AppendAuditOpts, PlanningFallacyEvidence } from '../store/port/types.js';
 
@@ -56,9 +56,13 @@ export interface PlanningFallacyOutput {
 export type AutodebiasMode = 'off' | 'regex';
 
 export interface ComputePlanningFallacyHintOptions {
-  /** Override env; undefined reads process.env.HIPPO_AUTODEBIAS per call (so tests can toggle it).
-   *  'off' short-circuits to null before the regex gate. */
+  /** 'off' short-circuits to null before the regex gate; 'regex' when unset. */
   mode?: AutodebiasMode;
+}
+
+/** The mode the root's HIPPO_AUTODEBIAS sets: 'off' only when it was switched off. */
+export function autodebiasMode(runtime: RuntimeSettings | undefined): AutodebiasMode {
+  return runtime?.autodebias === false ? 'off' : 'regex';
 }
 
 /** The output a claim earns from its evidence, and the audit row that records the decision when there is one. */
@@ -72,10 +76,8 @@ export function detectPlanningClaim(
   queryText: string,
   opts: ComputePlanningFallacyHintOptions = {},
 ): ForwardClaimMatch | null {
-  // Env read FIRST so AUTODEBIAS=off pays zero regex cost; read per call so tests can toggle it without a module
-  // reload.
-  const mode: AutodebiasMode = opts.mode ?? (envAutodebiasOff() ? 'off' : 'regex');
-  if (mode === 'off') return null;
+  // Checked FIRST so AUTODEBIAS=off pays zero regex cost.
+  if ((opts.mode ?? 'regex') === 'off') return null;
   if (!queryText) return null;
   return detectForwardClaim(queryText);
 }

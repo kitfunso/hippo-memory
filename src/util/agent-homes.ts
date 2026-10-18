@@ -1,10 +1,36 @@
-// Where the agent tools keep their config and data, shared by the hook installers and the agent-memory readers.
+// Where hippo and the agent tools keep their config and data on this machine, shared by the store resolver, the hook
+// installers and the agent-memory readers: the one place home-folder variables are read.
 
 import * as os from 'os';
 import * as path from 'path';
-import { envHomeDir, processEnv } from './env.js';
+import { envHippoHome, envHomeDir, envXdgDataHome, processEnv } from './env.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
+
+/** Everything the agent-memory adapters may know about the machine; tests hand in a scratch one. */
+export interface Machine {
+  readonly home: string;
+  readonly env: Env;
+  readonly platform: NodeJS.Platform;
+}
+
+export function currentMachine(): Machine {
+  return { home: os.homedir(), env: processEnv(), platform: process.platform };
+}
+
+/** The global Hippo store directory: $HIPPO_HOME, else $XDG_DATA_HOME/hippo, else ~/.hippo. */
+export function hippoHomeDir(): string {
+  const hippoHome = envHippoHome();
+  if (hippoHome) return hippoHome;
+  const xdgData = envXdgDataHome();
+  if (xdgData) return path.join(xdgData, 'hippo');
+  return path.join(os.homedir(), '.hippo');
+}
+
+/** Whether CLAUDE_CONFIG_DIR or a home variable says where Claude Code's files are. */
+export function claudeHomeIsSet(): boolean {
+  return Boolean(processEnv().CLAUDE_CONFIG_DIR || envHomeDir());
+}
 
 const VSCODE_PRODUCTS = ['Code', 'Code - Insiders'] as const;
 

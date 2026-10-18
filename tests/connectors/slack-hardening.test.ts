@@ -104,7 +104,6 @@ describe('Slack hardening + migration v19', () => {
 
   // 4. Escape hatch SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1.
   it('resolveTenantForSlackTeam: escape hatch returns env tenant when both flag and workspaces non-empty', async () => {
-    const r1 = withEnv('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK', '1');
     const r2 = withEnv('HIPPO_TENANT', 'env-fallback');
     const db = openHippoDb(root);
     try {
@@ -113,11 +112,10 @@ describe('Slack hardening + migration v19', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBe('env-fallback');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', true)).toBe('env-fallback');
     } finally {
       closeHippoDb(db);
       r2();
-      r1();
     }
   });
 

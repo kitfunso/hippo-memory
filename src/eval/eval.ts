@@ -2,6 +2,7 @@
  *  It exists so MMR lambda, embedding weights and scoring tweaks are tuned against evidence instead of intuition. */
 
 import type { MemoryEntry } from '../core/memory.js';
+import type { RuntimeSettings } from '../core/config.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
 import type { VectorSource } from '../search/vector.js';
@@ -59,6 +60,8 @@ export interface RunEvalOptions {
   /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
   now?: Date;
+  /** The root's environment settings, which ranking reads as recall does. */
+  runtime?: RuntimeSettings;
 }
 
 /** Mean Reciprocal Rank for a single ranking given expected ids. */
@@ -152,6 +155,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
         mmr: options.mmr,
         mmrLambda: options.mmrLambda,
         localBump: options.localBump,
+        runtime: options.runtime,
       })
     : hybridSearch(query, entries, {
         budget,
@@ -160,6 +164,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
         embeddingWeight: options.embeddingWeight,
         mmr: options.mmr,
         mmrLambda: options.mmrLambda,
+        runtime: options.runtime,
       });
 }
 

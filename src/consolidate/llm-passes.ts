@@ -1,9 +1,8 @@
-import { envAnthropicApiKey, envDagRebuildCap } from '../util/env.js';
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../core/memory-quality.js';
-import { type AnthropicMessageFailure, isPermanentFailure } from '../util/anthropic-messages.js';
+import { type AnthropicMessageFailure, anthropicApiKey, isPermanentFailure } from '../util/anthropic-messages.js';
 
 // Bounds the LLM calls one sleep spends on extraction.
 const EXTRACTION_BATCH_LIMIT = 20;
@@ -15,7 +14,7 @@ const DEFAULT_DAG_REBUILD_CAP = 20;
 function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
   const { config, result } = run;
   // extraction.enabled=false is the opt-out for every LLM phase below, key or no key.
-  const apiKey = config.extraction.enabled !== false ? (envAnthropicApiKey() ?? '') : '';
+  const apiKey = config.extraction.enabled !== false ? (anthropicApiKey() ?? '') : '';
   const llmErrorsSeen = new Set<string>();
   const llmError =
     (phase: string) =>
@@ -145,12 +144,12 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
 
 // 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same apiKey/dryRun gate as
 // buildDag.
-// Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling 1000) prevents runaway LLM cost.
+// Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default 20, hard ceiling 1000), prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {
     const { rebuildDirtySummaries } = await import('./dag.js');
-    const rawCap = envDagRebuildCap();
+    const rawCap = run.config.runtime?.dagRebuildCap;
     const cap = rawCap !== undefined ? Math.min(rawCap, MAX_DAG_REBUILD_CAP) : DEFAULT_DAG_REBUILD_CAP;
     const rebuildResult = await rebuildDirtySummaries(run.store, {
       ...llmOpts,

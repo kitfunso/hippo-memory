@@ -87,6 +87,7 @@ async function runCorpusEval(
     mmrLambda: numberFlag(flags, 'mmr-lambda'),
     embeddingWeight: numberFlag(flags, 'embedding-weight'),
     localBump,
+    runtime: cliConfig(hippoRoot).runtime,
   });
 }
 

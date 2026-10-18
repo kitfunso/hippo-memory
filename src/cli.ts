@@ -2,7 +2,7 @@
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in cli/verbs.ts.
 // `hippo help` prints the verb list from that table, so no list is kept here.
 
-import { envSkipAutoIntegrations } from './util/env.js';
+import { envLossAversionRatio, envSkipAutoIntegrations, validateFlags } from './util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,8 @@ import { resolveTenantId } from './store/index.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { exitAfterFlush } from './util/crash-handlers.js';
-import { errorFields, errorMessage, isLevelEnabled, log, warnUnknownFlagValues } from './util/log.js';
+import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
+import { setLossAversionRatio } from './core/memory.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './store/port.js';
 import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
 import {
@@ -252,9 +253,17 @@ async function main(command: string, args: string[], flags: CliFlags, hippoRoot:
   await (spec.scoped ? (await import('./cli/api-context.js')).cliRequest(run) : run());
 }
 
+/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe side. */
+function warnUnknownFlagValues(): void {
+  for (const entry of validateFlags()) {
+    log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);
+  }
+}
+
 export async function runCli(argv: string[] = process.argv): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   warnUnknownFlagValues();
+  setLossAversionRatio(envLossAversionRatio());
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {

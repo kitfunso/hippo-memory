@@ -3,10 +3,10 @@
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../../core/audit-report.js';
+import { lossAversionRatio } from '../../core/memory.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
 import { StoreBusyError } from '../port.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
-import { envStoreQueueMax } from '../../util/env.js';
 import { DeadlineExceededError } from '../../util/http-util.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
@@ -45,7 +45,7 @@ export interface CallOptions {
 export interface ExecutorOptions {
   /** Lock wait of each thread's connection; defaults to the server's. */
   readonly busyWaitMs?: number;
-  /** Calls that may wait for one thread; defaults to HIPPO_STORE_QUEUE_MAX, else 256. */
+  /** Calls that may wait for one thread; the server passes HIPPO_STORE_QUEUE_MAX; defaults to 256. */
   readonly queueMax?: number;
   /** How long past its deadline a write may still report its own outcome; defaults to 2000 ms. */
   readonly writeGraceMs?: number;
@@ -136,7 +136,7 @@ class WorkerPool implements SqliteExecutor {
   constructor(hippoRoot: string, opts: ExecutorOptions) {
     this.#hippoRoot = hippoRoot;
     this.#busyWaitMs = opts.busyWaitMs ?? SERVER_DB_WAIT_MS;
-    this.#queueMax = opts.queueMax ?? envStoreQueueMax() ?? DEFAULT_QUEUE_MAX;
+    this.#queueMax = opts.queueMax ?? DEFAULT_QUEUE_MAX;
     this.#writeGraceMs = opts.writeGraceMs ?? DEFAULT_WRITE_GRACE_MS;
     this.#vectorGraphThreshold = opts.vectorGraphThreshold;
   }
@@ -355,6 +355,7 @@ class WorkerPool implements SqliteExecutor {
       hippoRoot: this.#hippoRoot,
       mode: lane.mode,
       busyWaitMs: this.#busyWaitMs,
+      lossAversionRatio: lossAversionRatio(),
       ...(shared && { commitFlag: shared }),
       ...(lane.pinned && { pinned: true, vectorGraphThreshold: this.#vectorGraphThreshold }),
     };

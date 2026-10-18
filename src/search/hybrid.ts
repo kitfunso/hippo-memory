@@ -1,10 +1,9 @@
 import type { MemoryEntry } from '../core/memory.js';
-import type { EmbeddingsConfig, HippoConfig } from '../core/config.js';
+import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../core/config.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
-import { detectScope } from '../core/active-scope.js';
 import { compareScoredResults } from '../core/compare.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
@@ -47,7 +46,7 @@ export interface HybridSearchOptions {
   minResults?: number;
   /** Budget cost per result; the caller that prints passes the cost of its printed text. */
   cost?: ResultCost;
-  /** Active scope for scope-boost scoring. Auto-detected if not provided. */
+  /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
   /** Include superseded memories in results. Default false. */
   includeSuperseded?: boolean;
@@ -58,7 +57,7 @@ export interface HybridSearchOptions {
   /** Options passed through to the reranker. */
   rerankerOptions?: RerankerOptions;
   /**
-   * Multiplier on DAG summary scores. Default 0.85 (env HIPPO_SUMMARY_DEBOOST overrides; per-call wins). 1.0 disables.
+   * Multiplier on DAG summary scores. Default 0.85 (`runtime.summaryDeboost` overrides; per-call wins). 1.0 disables.
    */
   summaryDeboost?: number;
   /** 1.05 micro-boost for summaries rebuilt within 7 days. Default true. */
@@ -79,6 +78,8 @@ export interface HybridSearchOptions {
   source?: VectorSource;
   /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
   queryEmbedDeadline?: AbortSignal;
+  /** The root's environment settings: the scope, summary deboost and query-embedding budget a call names none of. */
+  runtime?: RuntimeSettings;
 }
 
 /** hybridSearch's options once the caller names its stores; the folder fields belong to the published wrapper. */
@@ -153,7 +154,7 @@ function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, optio
   return {
     now,
     pathTags: extractPathTags(process.cwd()),
-    scope: options.scope !== undefined ? options.scope : detectScope(),
+    scope: options.scope !== undefined ? options.scope : (options.runtime?.activeScope ?? null),
     temporal: temporalContext(query, pool),
     outcome: true,
     summary: summaryScoring(options),

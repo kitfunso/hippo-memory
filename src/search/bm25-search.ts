@@ -3,7 +3,6 @@ import { estimateTokens } from '../util/token-text.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
-import { detectScope } from '../core/active-scope.js';
 import { compareScoredResults } from '../core/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
 import { currentEntries } from './as-of.js';
@@ -20,6 +19,8 @@ export interface SearchOptions {
   cost?: ResultCost;
   includeSuperseded?: boolean;
   asOf?: string;
+  /** Active scope for scope-boost scoring; none when unset. */
+  scope?: string | null;
 }
 
 type Corpus = ReturnType<typeof buildCorpus>;
@@ -50,7 +51,7 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
   const ctx: BoostContext = {
     now,
     pathTags: extractPathTags(process.cwd()),
-    scope: detectScope(),
+    scope: options.scope ?? null,
     temporal: temporalContext(query, pool),
     outcome: false,
     summary: NO_SUMMARY_SCORING,

@@ -4,7 +4,7 @@ import { isRecallBoostAblated } from '../../core/ablation.js';
 import { auditQueryFields } from '../../core/audit-report.js';
 import type { HippoStore, RecallWrites } from '../../store/port.js';
 import type { TokenSurface } from '../../store/port/token-ledger.js';
-import { envAnchoringOff, envAvailabilityOff } from '../../util/env.js';
+import type { HippoConfig } from '../../core/config.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
@@ -268,12 +268,14 @@ export function snapshotRing(ring: RingBuffer): RecallHistorySnapshot {
   return ring.snapshot();
 }
 
-/**
- * Whether a recall bias hint is enabled; reads env at call time, so `HIPPO_ANCHORING=off` or `HIPPO_AVAILABILITY=off`
- * disables only that kind.
- */
-export function biasHintEnabled(kind: 'anchoring' | 'availability'): boolean {
-  return kind === 'anchoring' ? !envAnchoringOff() : !envAvailabilityOff();
+/** The part of a config the hint switches read. */
+export type HintConfig = Pick<HippoConfig, 'runtime'>;
+
+/** Whether a recall bias hint is on: `HIPPO_ANCHORING=off` or `HIPPO_AVAILABILITY=off`, as the root read it into the
+ * config, turns off only that kind. */
+export function biasHintEnabled(config: HintConfig, kind: 'anchoring' | 'availability'): boolean {
+  const on = kind === 'anchoring' ? config.runtime?.anchoringHint : config.runtime?.availabilityHint;
+  return on !== false;
 }
 
 // entriesByIds reads at most this many ids a call.
@@ -299,11 +301,12 @@ const rings = {
 
 /** The session's ring, created on first use; null when anchoring is off or the call has no session. */
 export function sessionRing(
+  config: HintConfig,
   surface: RecallSurface,
   tenantId: string,
   sessionId: string | undefined,
 ): RingBuffer | null {
-  if (!biasHintEnabled('anchoring') || !sessionId) return null;
+  if (!biasHintEnabled(config, 'anchoring') || !sessionId) return null;
   return getOrCreateRing(rings[surface], buildSessionKey(tenantId, sessionId));
 }
 
@@ -365,8 +368,8 @@ export function recallAuditMetadata(query: string, results: number) {
  * No session means no ring; the row hashes with SHA-256/16, since hashQueryText is FNV-1a and easy to reverse on short
  * queries.
  */
-export function anchorSkippedRows(who: RecallAuditCaller, query: string): AppendAuditOpts[] {
-  if (!biasHintEnabled('anchoring')) return [];
+export function anchorSkippedRows(config: HintConfig, who: RecallAuditCaller, query: string): AppendAuditOpts[] {
+  if (!biasHintEnabled(config, 'anchoring')) return [];
   return [recallAuditRow(who, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query))];
 }
 
@@ -407,9 +410,9 @@ export interface ShownRecall {
 /**
  * The hint rows for a list a surface showed, so a surface on the store port can hand them to the recall's one write.
  */
-export function shownRecallRows(who: RecallAuditCaller, shown: ShownRecall): AppendAuditOpts[] {
+export function shownRecallRows(config: HintConfig, who: RecallAuditCaller, shown: ShownRecall): AppendAuditOpts[] {
   return [
-    ...(shown.ring ? [] : anchorSkippedRows(who, shown.query)),
+    ...(shown.ring ? [] : anchorSkippedRows(config, who, shown.query)),
     ...anchoringRows(who, shown.anchoring),
     ...availabilityRows(who, shown.availability),
   ];
@@ -450,9 +453,11 @@ export function recallLead(
   return {
     // Peeked, never created: a recall that then fails must not LRU-evict a live session.
     recallHistory:
-      sessionId && biasHintEnabled('anchoring') ? peekSessionRing(how.ring, ctx.tenantId, sessionId) : undefined,
+      sessionId && biasHintEnabled(ctx.config, 'anchoring')
+        ? peekSessionRing(how.ring, ctx.tenantId, sessionId)
+        : undefined,
     // Written first in the recall's own write, so a recall that fails leaves no row.
-    leadingAudit: sessionId ? [] : anchorSkippedRows(callerOf(ctx), query),
+    leadingAudit: sessionId ? [] : anchorSkippedRows(ctx.config, callerOf(ctx), query),
   };
 }
 
@@ -481,7 +486,7 @@ export async function recordShownRecall(
 ): Promise<void> {
   // A surface that only peeked has its ring created here, after the
   // write, so a recall that fails cannot LRU-evict a live session.
-  const ring = sessionRing(how.ring, ctx.tenantId, shown.sessionId);
+  const ring = sessionRing(ctx.config, how.ring, ctx.tenantId, shown.sessionId);
   if (ring) noteRecall(ring, shown.query, shown.topId, shown.anchoredOn);
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.
   if (shown.written && (how.stats === 'every' || shown.items > 0)) await store.bumpRecallStats(shown.items);

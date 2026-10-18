@@ -1,7 +1,7 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
 import { installCrashHandlers } from '../util/crash-handlers.js';
-import { envAllowKeylessLocal, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../util/env.js';
+import { envAllowKeylessLocal, envBodyTimeoutMs, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { flagIsTrue, stringFlagOrExit, type CommandContext, stringFlag, numberFlag } from './flag-values.js';
@@ -15,7 +15,7 @@ export async function handleDashboard({ hippoRoot, flags }: CommandContext): Pro
   requireInit(hippoRoot);
   const port = numberFlag(flags, 'port') ?? DEFAULT_DASHBOARD_PORT;
   const { serveDashboard } = await import('../dashboard/dashboard.js');
-  serveDashboard(hippoRoot, port, undefined, { handleSignals: true });
+  serveDashboard(hippoRoot, port, undefined, { handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() });
   // A later throw ends in one log line and exit 1, as it does for serve and mcp; a busy port is reported by the
   // dashboard itself.
   installCrashHandlers('dashboard');
