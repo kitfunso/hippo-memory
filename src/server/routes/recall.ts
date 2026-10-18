@@ -7,7 +7,7 @@ import {
   type AssembleOptions,
   drillDown,
   type DrillDownOptions,
-  getContext,
+  contextGet,
   recordTokens,
   retrieve,
 } from '../../api/index.js';
@@ -133,7 +133,7 @@ export async function handleDrillRecall(
 
 /**
  * A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none,
- * getContext refuses.
+ * contextGet refuses.
  */
 function contextReader(ctx: Context, query: URLSearchParams): ProjectRef {
   if (!sharedStoreOf(ctx)) return resolveProjectIdentity(dirname(resolve(ctx.hippoRoot)));
@@ -150,7 +150,7 @@ function contextReader(ctx: Context, query: URLSearchParams): ProjectRef {
 // 'recall' row.
 export async function handleGetContext({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
-  const result = await getContext(ctx, {
+  const result = await contextGet(ctx, {
     ...parsed,
     currentProject: contextReader(ctx, query),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print

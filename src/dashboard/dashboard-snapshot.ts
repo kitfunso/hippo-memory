@@ -10,6 +10,7 @@ import {
   type MemoryEntry,
   type StrengthInputs,
 } from '../core/memory.js';
+import { AT_RISK_BELOW, STRONG_FROM } from '../core/strength-bands.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import type {
   ConflictPair,
@@ -113,9 +114,9 @@ export function memoryFacts(
   const facets = confidenceFacets(entry, now);
   const band = entry.pinned
     ? BAND_PINNED
-    : strength30d < 0.2
+    : strength30d < AT_RISK_BELOW
       ? BAND_AT_RISK
-      : strength >= 0.5
+      : strength >= STRONG_FROM
         ? BAND_STRONG
         : BAND_FADING;
   return {

@@ -16,7 +16,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
@@ -307,19 +307,19 @@ describe('producer + sync vetoes (real stores)', () => {
     });
     const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
-    const base = await getContext(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
+    const base = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
     expect(base.entries).toHaveLength(0);
 
-    const cross = await getContext(ctx, { pinnedOnly: true, currentProject: 'proj-a', crossProject: true });
+    const cross = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-a', crossProject: true });
     expect(cross.entries).toHaveLength(0);
 
     fs.writeFileSync(path.join(projA, 'config.json'), JSON.stringify({ contextProjectIsolation: false }));
-    const legacyMode = await getContext(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
+    const legacyMode = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
     expect(legacyMode.entries).toHaveLength(0);
 
     // Inside the owning project the project-owned secret is ambient again;
     // the origin-less one stays out everywhere.
-    const owner = await getContext(ctx, { pinnedOnly: true, currentProject: 'proj-b' });
+    const owner = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-b' });
     expect(owner.entries.map((r) => r.entry.content)).toEqual([SECRET_ROW]);
   });
 });

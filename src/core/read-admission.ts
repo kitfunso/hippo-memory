@@ -42,7 +42,7 @@ function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean
   return projectNames(currentProject).includes(origin);
 }
 
-/** The ambient envelope getContext's pools and the two-store search share: handoff digest, secret, scope, origin. */
+/** The ambient envelope contextGet's pools and the two-store search share: handoff digest, secret, scope, origin. */
 export function ambientEnvelopeAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
   if (a.handoffSessionId !== undefined && e.source_session_id === a.handoffSessionId && isSessionDigestRow(e)) {
     return false;

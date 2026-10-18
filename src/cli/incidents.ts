@@ -6,7 +6,7 @@ import { objectsOf } from '../api/objects/objects.js';
 import type { Objects } from '../store/port.js';
 import { cliConfig, cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, type CliFlags, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
+import { nonEmptyStringFlag, type CliFlags, repeatedFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
 import { fail } from './exit.js';
@@ -90,17 +90,10 @@ async function incidentCreate(
     fail('       hippo incident close <id>');
   }
   const context = nonEmptyStringFlag(flags, 'context');
-  // --link is a repeatable flag (collected into an array by parseArgs). A
-  // single --link <id> yields a string; normalize both to string[].
-  const linkRaw = flags['link'];
-  let linkedMemoryIds: string[] | undefined;
-  if (Array.isArray(linkRaw)) {
-    linkedMemoryIds = linkRaw;
-  } else if (isStringFlag(linkRaw)) {
-    linkedMemoryIds = [linkRaw];
-  } else if (linkRaw === true) {
+  if (flags['link'] === true) {
     fail('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
   }
+  const linkedMemoryIds = repeatedFlag(flags, 'link');
 
   const incidentPathTags = extractPathTags(process.cwd());
   const created = await incidentsModule.openIncident(

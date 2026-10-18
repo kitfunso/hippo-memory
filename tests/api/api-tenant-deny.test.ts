@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { remember, forget, archiveRaw } from '../../src/api/index.js';
+import { remember, forget, rawArchive } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -13,20 +13,20 @@ function selectRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): 
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-// Regression: archiveRaw and forget previously looked up the target row by
+// Regression: rawArchive and forget previously looked up the target row by
 // id alone, with no tenant filter. A valid Bearer for tenant A could
 // archive or delete tenant B's row by guessing or leaking the id. Both
 // paths now pre-check tenant_id and throw a not-found error on mismatch
 // (same shape as the missing-row error, no info leak).
 
-describe('api tenant deny — archiveRaw and forget', () => {
+describe('api tenant deny - rawArchive and forget', () => {
   let home: string;
 
   beforeEach(() => {
     home = makeRoot('tenant-deny');
   });
 
-  it('archiveRaw refuses to archive a row that belongs to another tenant', async () => {
+  it('rawArchive refuses to archive a row that belongs to another tenant', async () => {
     // Tenant A creates a kind='raw' memory.
     const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'raw-row-from-alpha tenant-deny canary',
@@ -35,7 +35,7 @@ describe('api tenant deny — archiveRaw and forget', () => {
 
     // Tenant B (bravo) tries to archive it. Should fail with not-found.
     await expect(
-      archiveRaw(
+      rawArchive(
         apiCtx(home, 'bravo', { subject: 'api_key:bravo-key', role: 'admin' }),
         created.id,
         'cross-tenant probe',

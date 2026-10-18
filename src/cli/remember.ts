@@ -13,7 +13,7 @@ import {
   type MemoryEntry,
 } from '../core/memory.js';
 import * as api from '../api/index.js';
-import { getMemory, listMemoriesByIds } from '../api/memories/memories.js';
+import { memoryGet, memoryListByIds } from '../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -186,7 +186,7 @@ async function alreadySupersededLine(
   tenantId: string,
   conflict: ConflictError,
 ): Promise<string> {
-  const by = (await getMemory(cliApiContext(hippoRoot, tenantId), oldId))?.superseded_by;
+  const by = (await memoryGet(cliApiContext(hippoRoot, tenantId), oldId))?.superseded_by;
   return by
     ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.`
     : `Error: ${conflict.message}`;
@@ -291,11 +291,11 @@ async function cmdTrace(hippoRoot: string, tenantId: string, id: string, flags: 
   const asJson = boolFlag(flags, 'json');
 
   // Look in local store first, then global.
-  let entry = await getMemory(cliApiContext(hippoRoot, tenantId), id);
+  let entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
   let sourceLabel: 'local' | 'global' = 'local';
   const globalRoot = getGlobalRoot();
   if (!entry && isInitialized(globalRoot)) {
-    entry = await getMemory(cliApiContext(globalRoot, tenantId), id);
+    entry = await memoryGet(cliApiContext(globalRoot, tenantId), id);
     sourceLabel = 'global';
   }
   if (!entry) {
@@ -345,11 +345,11 @@ function traceStats(entry: MemoryEntry) {
 async function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry, id: string, tenantId: string) {
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
-  const local = parents.length === 0 ? [] : await listMemoriesByIds(cliApiContext(hippoRoot, tenantId), parents);
+  const local = parents.length === 0 ? [] : await memoryListByIds(cliApiContext(hippoRoot, tenantId), parents);
   const found = new Map(local.map((p) => [p.id, p]));
   const missing = parents.filter((pid) => !found.has(pid));
   if (missing.length > 0 && isInitialized(globalRoot)) {
-    for (const p of await listMemoriesByIds(cliApiContext(globalRoot, tenantId), missing)) found.set(p.id, p);
+    for (const p of await memoryListByIds(cliApiContext(globalRoot, tenantId), missing)) found.set(p.id, p);
   }
   const parentPreviews = parents.map((pid) => {
     const p = found.get(pid);
@@ -358,7 +358,7 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
 
   // Open conflicts involving this memory.
   const openIn = (root: string) =>
-    api.everyConflict((page) => api.listConflicts(cliApiContext(root, tenantId), 'open', {}, page));
+    api.conflictListAll((page) => api.conflictList(cliApiContext(root, tenantId), 'open', {}, page));
   const allConflicts = [...(await openIn(hippoRoot)), ...(isInitialized(globalRoot) ? await openIn(globalRoot) : [])];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
   return { parentPreviews, myConflicts };

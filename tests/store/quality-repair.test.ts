@@ -14,7 +14,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { mergedText } from '../../src/util/same-text.js';
-import { repairMemoryQuality, restoreDormant } from '../../src/api/index.js';
+import { memoryQualityRepair, dormantRestore } from '../../src/api/index.js';
 import { PROTECTED_ROWS as repairProtection } from '../../src/core/memory-audit.js';
 import type { RepairProtection } from '../../src/store/port/audit-maintenance.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
@@ -93,7 +93,7 @@ describe('recoverable automatic memory quality repair', () => {
     expect(withDb((db) => findRejectedValue(db, 'default', rejectionDigest(bad.content)))).toBeNull();
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null });
 
-    expect(await restoreDormant(ctx(), bad.id)).toMatchObject({
+    expect(await dormantRestore(ctx(), bad.id)).toMatchObject({
       id: bad.id,
       content: bad.content,
       retrieval_count: 7,
@@ -141,7 +141,7 @@ describe('recoverable automatic memory quality repair', () => {
     const content = 'bump build 78 for testflight deploy';
     const pinned = seed(content, { pinned: true });
     const plain = seed(content);
-    expect((await repairMemoryQuality(ctx(), false)).issues).toEqual(
+    expect((await memoryQualityRepair(ctx(), false)).issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
         expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),

@@ -1,4 +1,4 @@
-// Option and result shapes for getContext.
+// Option and result shapes for contextGet.
 
 import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import type { SessionHandoff } from '../core/handoff.js';
@@ -8,7 +8,7 @@ import type { AmbientState } from '../core/ambient.js';
 import type { ProjectRef } from '../core/project-identity.js';
 
 /**
- * Options for `getContext`: a budget-bounded bundle of recalled memories, active task snapshot, handoff and recent
+ * Options for `contextGet`: a budget-bounded bundle of recalled memories, active task snapshot, handoff and recent
  * events.
  * Rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) stay in the CLI, whose print helpers are
  * shared.

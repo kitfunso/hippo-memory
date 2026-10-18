@@ -1,6 +1,10 @@
 // The shared shape every agent adapter turns a host payload into, so capture code is written once for all runtimes.
 // Field meanings, statuses and how to add a runtime: docs/integrations/agent-inventory.md.
 
+import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+
+type JsonObject = { [key: string]: JsonValue };
+
 /** A host lifecycle moment hippo can capture from. */
 export type CaptureEvent =
   | 'prompt'
@@ -71,6 +75,37 @@ export function isObjectLike<T>(value: T): value is T & object {
 /** The hook runtimes a `--runtime` flag names; absent means Claude Code. */
 export type HookRuntime = 'claude-code' | 'copilot';
 
+/** True for no stdin or whitespace only. */
+function isBlank(stdinText: string | undefined): boolean {
+  return !stdinText || stdinText.trim() === '';
+}
+
+/** The JSON object in stdin, or null for blank, non-JSON, array and scalar text. */
+function parseObject(stdinText: string | undefined): JsonObject | null {
+  let payload: JsonValue | undefined;
+  try {
+    payload = JSON.parse((stdinText ?? '').trim());
+  } catch {
+    // Non-JSON stdin leaves payload undefined, which every reader's shape check rejects.
+  }
+  return isJsonObject(payload) ? payload : null;
+}
+
+/** A string field of a parsed payload; null when there is no payload, the key is absent or the value is no string. */
+function stringField(payload: JsonObject | null, key: string): string | null {
+  const value = payload?.[key];
+  return isJsonString(value) ? value : null;
+}
+
+function noPayloadInTime(label: string): CaptureReceipt<never> {
+  return { status: 'unavailable', reason: `no ${label} payload arrived before the stdin wait window closed` };
+}
+
+function manualRun(runtime: string, event: CaptureEvent): CaptureReceipt {
+  const input = { runtime, event, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null };
+  return { status: 'received', input };
+}
+
 /** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped
  * it to the same snake_case keys; only an empty stdin counts as a manual run. */
 export function readClaudeCodePreCompact(
@@ -78,28 +113,15 @@ export function readClaudeCodePreCompact(
   timedOut: boolean,
   runtime: HookRuntime = 'claude-code',
 ): CaptureReceipt {
-  const empty = !stdinText || stdinText.trim() === '';
-  if (timedOut && empty) {
-    return { status: 'unavailable', reason: 'no PreCompact payload arrived before the stdin wait window closed' };
-  }
-  const base = { runtime, event: 'pre-compact' as const };
-  if (empty) {
-    return {
-      status: 'received',
-      input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null },
-    };
-  }
-  let payload: unknown;
-  try {
-    payload = JSON.parse(stdinText.trim());
-  } catch {
-    // Non-JSON stdin leaves payload undefined, which the shape check rejects like an explicit null.
-  }
+  const empty = isBlank(stdinText);
+  if (timedOut && empty) return noPayloadInTime('PreCompact');
+  if (empty) return manualRun(runtime, 'pre-compact');
+  const payload = parseObject(stdinText);
+  const transcriptPath = stringField(payload, 'transcript_path');
   // A bad payload is skipped, never treated as manual: discovery could pick up another session's transcript.
-  if (!isObjectLike(payload) || !('transcript_path' in payload) || !isStringValue(payload.transcript_path)) {
+  if (transcriptPath === null) {
     return { status: 'skipped', reason: 'malformed or incomplete PreCompact payload (missing string transcript_path)' };
   }
-  const transcriptPath = payload.transcript_path;
   // Path shape only: CLAUDE_CONFIG_DIR can move the transcript root, and a same-user process can already read every
   // transcript.
   if (!/\.jsonl$/i.test(transcriptPath)) {
@@ -108,12 +130,13 @@ export function readClaudeCodePreCompact(
   return {
     status: 'received',
     input: {
-      ...base,
+      runtime,
+      event: 'pre-compact',
       manual: false,
-      sessionId: 'session_id' in payload && isStringValue(payload.session_id) ? payload.session_id : null,
-      cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
+      sessionId: stringField(payload, 'session_id'),
+      cwd: stringField(payload, 'cwd'),
       transcriptPath,
-      trigger: 'trigger' in payload && isStringValue(payload.trigger) ? payload.trigger : null,
+      trigger: stringField(payload, 'trigger'),
     },
   };
 }
@@ -123,39 +146,30 @@ export function readClaudeCodePreCompact(
  * snake_case keys.
  */
 export function readVscodeStop(stdinText: string | undefined, timedOut: boolean): CaptureReceipt {
-  if (!stdinText || stdinText.trim() === '') {
+  if (isBlank(stdinText)) {
     return timedOut
-      ? { status: 'unavailable', reason: 'no Stop payload arrived before the stdin wait window closed' }
+      ? noPayloadInTime('Stop')
       : { status: 'skipped', reason: 'no payload: turn capture runs only from a VS Code Stop hook' };
   }
-  let payload: unknown;
-  try {
-    payload = JSON.parse(stdinText.trim());
-  } catch {
-    // Non-JSON stdin leaves payload undefined, which the shape check rejects.
-  }
-  if (!isObjectLike(payload) || !('hook_event_name' in payload) || payload.hook_event_name !== 'Stop') {
+  const payload = parseObject(stdinText);
+  if (stringField(payload, 'hook_event_name') !== 'Stop') {
     return { status: 'skipped', reason: 'not a VS Code Stop payload (no snake_case hook_event_name "Stop")' };
   }
-  if (
-    !('transcript_path' in payload) ||
-    !isStringValue(payload.transcript_path) ||
-    !/\.jsonl$/i.test(payload.transcript_path)
-  ) {
+  const transcriptPath = stringField(payload, 'transcript_path');
+  if (transcriptPath === null || !/\.jsonl$/i.test(transcriptPath)) {
     return { status: 'skipped', reason: 'Stop payload names no .jsonl transcript_path' };
   }
-  if (!('session_id' in payload) || !isStringValue(payload.session_id) || payload.session_id === '') {
-    return { status: 'skipped', reason: 'Stop payload has no session_id' };
-  }
+  const sessionId = stringField(payload, 'session_id');
+  if (!sessionId) return { status: 'skipped', reason: 'Stop payload has no session_id' };
   return {
     status: 'received',
     input: {
       runtime: 'vscode',
       event: 'turn-end',
       manual: false,
-      sessionId: payload.session_id,
-      cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
-      transcriptPath: payload.transcript_path,
+      sessionId,
+      cwd: stringField(payload, 'cwd'),
+      transcriptPath,
       trigger: null,
     },
   };
@@ -166,37 +180,21 @@ export function readClaudeCodePostCompact(
   stdinText: string | undefined,
   timedOut: boolean,
 ): CaptureReceipt<PostCompactInput> {
-  const empty = !stdinText || stdinText.trim() === '';
-  if (timedOut && empty) {
-    return { status: 'unavailable', reason: 'no PostCompact payload arrived before the stdin wait window closed' };
-  }
-  let payload: unknown;
-  try {
-    payload = empty ? undefined : JSON.parse(stdinText.trim());
-  } catch {
-    // Non-JSON stdin leaves payload undefined, which the shape check rejects.
-  }
-  if (
-    !isObjectLike(payload) ||
-    !('session_id' in payload) ||
-    !isStringValue(payload.session_id) ||
-    payload.session_id === ''
-  ) {
-    return { status: 'skipped', reason: 'no PostCompact payload naming a session' };
-  }
+  if (timedOut && isBlank(stdinText)) return noPayloadInTime('PostCompact');
+  const payload = parseObject(stdinText);
+  const sessionId = stringField(payload, 'session_id');
+  if (!sessionId) return { status: 'skipped', reason: 'no PostCompact payload naming a session' };
   return {
     status: 'received',
     input: {
       runtime: 'claude-code',
       event: 'post-compact',
       manual: false,
-      sessionId: payload.session_id,
-      cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
-      transcriptPath:
-        'transcript_path' in payload && isStringValue(payload.transcript_path) ? payload.transcript_path : null,
-      trigger: 'trigger' in payload && isStringValue(payload.trigger) ? payload.trigger : null,
-      compactSummary:
-        'compact_summary' in payload && isStringValue(payload.compact_summary) ? payload.compact_summary : null,
+      sessionId,
+      cwd: stringField(payload, 'cwd'),
+      transcriptPath: stringField(payload, 'transcript_path'),
+      trigger: stringField(payload, 'trigger'),
+      compactSummary: stringField(payload, 'compact_summary'),
     },
   };
 }
@@ -208,43 +206,24 @@ export function readSessionEnd(
   timedOut: boolean,
   runtime: HookRuntime = 'claude-code',
 ): CaptureReceipt {
-  const empty = !stdinText || stdinText.trim() === '';
-  if (timedOut && empty) {
-    return { status: 'unavailable', reason: 'no SessionEnd payload arrived before the stdin wait window closed' };
-  }
-  const base = { runtime, event: 'session-end' as const };
-  if (empty) {
-    return {
-      status: 'received',
-      input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null },
-    };
-  }
-  let payload: unknown;
-  try {
-    payload = JSON.parse(stdinText.trim());
-  } catch {
-    // Non-JSON stdin leaves payload undefined, which the shape check rejects.
-  }
-  // Explicit array check: this reader has no required key to reject an array for it.
-  if (!isObjectLike(payload) || Array.isArray(payload)) {
+  const empty = isBlank(stdinText);
+  if (timedOut && empty) return noPayloadInTime('SessionEnd');
+  if (empty) return manualRun(runtime, 'session-end');
+  const payload = parseObject(stdinText);
+  if (!payload) {
     return { status: 'skipped', reason: 'malformed SessionEnd payload (not a JSON object)' };
   }
   return {
     status: 'received',
     input: {
-      ...base,
+      runtime,
+      event: 'session-end',
       manual: false,
-      sessionId:
-        'session_id' in payload && isStringValue(payload.session_id) && payload.session_id !== ''
-          ? payload.session_id
-          : null,
-      cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
-      transcriptPath:
-        'transcript_path' in payload && isStringValue(payload.transcript_path) && payload.transcript_path !== ''
-          ? payload.transcript_path
-          : null,
+      sessionId: stringField(payload, 'session_id') || null,
+      cwd: stringField(payload, 'cwd'),
+      transcriptPath: stringField(payload, 'transcript_path') || null,
       // Both hosts name a session end's trigger `reason`.
-      trigger: 'reason' in payload && isStringValue(payload.reason) ? payload.reason : null,
+      trigger: stringField(payload, 'reason'),
     },
   };
 }

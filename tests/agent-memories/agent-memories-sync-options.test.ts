@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { unlinkSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { summaryLine } from '../../src/agent-memories/report.js';
 import { importForStore, type Machine, type SyncOptions } from '../../src/agent-memories/sync.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
@@ -232,7 +232,7 @@ describe('agent memory sync: options, time and reporting', () => {
     }
     expect(claude(sync()).imported).toBe(40);
 
-    const result = await getContext(ctxFor(w.local), {
+    const result = await contextGet(ctxFor(w.local), {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: 'proj',

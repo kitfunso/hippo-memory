@@ -1,13 +1,18 @@
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 
+const SQLITE_BUSY = 5;
+const SQLITE_LOCKED = 6;
+// SQLITE_BUSY with extended code 2: a write on a read snapshot another writer has since moved past.
+const SQLITE_BUSY_SNAPSHOT = 517;
+
 function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
   return typeof cause === 'object' && cause !== null && 'errcode' in cause;
 }
 
 export function isSqliteBusy(cause: unknown): boolean {
   const code = carriesErrcode(cause) ? cause.errcode : undefined;
-  return code === 5 || code === 6 || code === 517;
+  return code === SQLITE_BUSY || code === SQLITE_LOCKED || code === SQLITE_BUSY_SNAPSHOT;
 }
 
 /** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */

@@ -10,7 +10,7 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listDormantSnapshots } from '../../src/store/dormant.js';
-import { listProjectNames, mergeProjectNames, repairProjectNames } from '../../src/api/objects/projects.js';
+import { projectNameList, projectNameMerge, projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -67,12 +67,12 @@ describe('hippo projects merge', () => {
     const other = row('an unrelated project memory', 'elsewhere');
     open();
 
-    const dry = mergeProjectNames(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: true });
+    const dry = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: true });
     expect(dry.setAside).toEqual([copy.id]);
     expect(byId().get(lesson.id)!.origin_project).toBe('repo-wt-a');
     expect(dry.backup).toBeNull();
 
-    const r = mergeProjectNames(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
+    const r = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
     const rows = byId();
     expect(rows.has(copy.id)).toBe(false);
     expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.origin_project).toBe('repo');
@@ -102,8 +102,8 @@ describe('hippo projects merge', () => {
 
   it('refuses user-global and unknown as either side', () => {
     open();
-    expect(() => mergeProjectNames(ctx(), { from: '', into: 'repo', dryRun: true })).toThrow(/user-global/);
-    expect(() => mergeProjectNames(ctx(), { from: 'repo-wt-a', into: ' ', dryRun: true })).toThrow(/user-global/);
+    expect(() => projectNameMerge(ctx(), { from: '', into: 'repo', dryRun: true })).toThrow(/user-global/);
+    expect(() => projectNameMerge(ctx(), { from: 'repo-wt-a', into: ' ', dryRun: true })).toThrow(/user-global/);
   });
 
   it('re-tags dormant rows and compaction records too, so a restore does not come back hidden', () => {
@@ -122,7 +122,7 @@ describe('hippo projects merge', () => {
       `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'repo-wt-a', 'auto', '/x', ?)`,
     ).run(T, new Date().toISOString());
 
-    const r = mergeProjectNames(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
+    const r = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
 
     expect(r.dormantRestamped).toEqual([faded.id]);
     expect(r.compactions).toBe(1);
@@ -144,10 +144,10 @@ describe('hippo projects repair', () => {
     const global = merged([g1.id]);
     open();
 
-    expect(repairProjectNames(ctx(), { dryRun: true }).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
+    expect(projectNameRepair(ctx(), { dryRun: true }).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
     expect(byId().get(one.id)!.origin_project).toBe('');
 
-    const r = repairProjectNames(ctx(), { dryRun: false });
+    const r = projectNameRepair(ctx(), { dryRun: false });
     const rows = byId();
     expect(rows.get(one.id)!.origin_project).toBe('proj-b');
     expect(rows.has(two.id)).toBe(false);
@@ -170,7 +170,7 @@ describe('hippo projects repair', () => {
     const aside = [merged([b1.id, c1.id]), merged([b2.id, c1.id])];
     open();
 
-    const r = repairProjectNames(ctx(), { dryRun: false });
+    const r = projectNameRepair(ctx(), { dryRun: false });
     const rows = byId();
     expect(r.toProject.map((p) => p.id).sort()).toEqual(tagged.map((e) => e.id).sort());
     expect(r.setAside.slice().sort()).toEqual(aside.map((e) => e.id).sort());
@@ -190,10 +190,10 @@ describe('hippo projects repair', () => {
     const saved = row('the home folder note every session can see', 'repo-wt-a');
     open();
 
-    expect([...repairProjectNames(ctx(), { dryRun: true }).copies].sort()).toEqual([copy.id, reflowed.id].sort());
+    expect([...projectNameRepair(ctx(), { dryRun: true }).copies].sort()).toEqual([copy.id, reflowed.id].sort());
     expect(byId().has(copy.id)).toBe(true);
 
-    const r = repairProjectNames(ctx(), { dryRun: false });
+    const r = projectNameRepair(ctx(), { dryRun: false });
     const rows = byId();
     expect([...r.copies].sort()).toEqual([copy.id, reflowed.id].sort());
     expect([rows.has(copy.id), rows.has(own.id), rows.has(saved.id)]).toEqual([false, true, true]);
@@ -220,9 +220,9 @@ describe('hippo projects repair', () => {
     compaction.run(T, 'c3', 'gone-name', join(home, 'removed'), new Date().toISOString());
     compaction.run(T, 'c4', 'repo', repo, new Date().toISOString());
     compaction.run(T, 'c5', 'hand-name', repo, new Date().toISOString());
-    mergeProjectNames(ctx(), { from: 'repo-wt-b', into: 'hand-name', dryRun: false });
+    projectNameMerge(ctx(), { from: 'repo-wt-b', into: 'hand-name', dryRun: false });
 
-    const r = repairProjectNames(ctx(), { dryRun: false });
+    const r = projectNameRepair(ctx(), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'old-name', into: 'repo' }]);
     expect(byId().get(lesson.id)!.origin_project).toBe('repo');
     expect(byId().get(kept.id)!.origin_project).toBe('gone-name');
@@ -244,11 +244,11 @@ describe('hippo projects repair', () => {
       source: 'consolidation',
       parents: [row('parent under b', 'b').id, row('parent under c', 'c').id],
     });
-    const dry = repairProjectNames(ctx(), { dryRun: true });
+    const dry = projectNameRepair(ctx(), { dryRun: true });
     expect(dry.folds).toEqual([{ from: 'b', into: 'c' }]);
     // Planned against the folded names, as apply sees them: both parents are under c.
     expect([dry.toProject, dry.setAside]).toEqual([[{ id: merged.id, origin: 'c' }], []]);
-    expect(repairProjectNames(ctx(), { dryRun: false }).toProject).toEqual(dry.toProject);
+    expect(projectNameRepair(ctx(), { dryRun: false }).toProject).toEqual(dry.toProject);
     expect(byId().get(lesson.id)!.origin_project).toBe('a');
   });
 
@@ -259,7 +259,7 @@ describe('hippo projects repair', () => {
     db.prepare(
       `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'old-name', 'auto', ?, ?)`,
     ).run(T, repo, new Date().toISOString());
-    expect(repairProjectNames(ctx(), { dryRun: true }).folds).toEqual([]);
+    expect(projectNameRepair(ctx(), { dryRun: true }).folds).toEqual([]);
   });
 });
 
@@ -271,7 +271,7 @@ describe('hippo projects list', () => {
     row('a saved lesson', 'repo-wt-a');
     open();
 
-    expect(listProjectNames(ctx()).find((p) => p.origin === 'repo-wt-a')).toMatchObject({
+    expect(projectNameList(ctx()).find((p) => p.origin === 'repo-wt-a')).toMatchObject({
       live: 3,
       imported: 2,
       copiesElsewhere: 1,

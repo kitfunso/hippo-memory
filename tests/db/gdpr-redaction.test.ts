@@ -7,7 +7,7 @@ import {
   getSchemaVersion,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { remember, archiveRaw, retrieve } from '../../src/api/index.js';
+import { remember, rawArchive, retrieve } from '../../src/api/index.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -38,7 +38,7 @@ interface ArchiveAuditMetadata {
 function parseJson<T>(text: string): T {
   // SAFETY: raw_archive.payload_json / audit_log.metadata_json in this
   // suite are always written by this codebase's own JSON.stringify calls
-  // (archiveRaw, the v20 redaction migration, or api.archiveRaw's audit
+  // (rawArchive, the v20 redaction migration, or api.rawArchive's audit
   // write), never externally supplied.
   return JSON.parse(text) as T;
 }
@@ -96,7 +96,7 @@ describe('GDPR Path A redaction + migration v20', () => {
       content: 'a-very-distinctive-secret-string-zylph123',
       kind: 'raw',
     });
-    await archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
+    await rawArchive(ctx, id, 'GDPR right-to-be-forgotten');
 
     const db = openHippoDb(root);
     try {
@@ -201,10 +201,10 @@ describe('GDPR Path A redaction + migration v20', () => {
     }
   });
 
-  it('5. audit row preserved: archiveRaw writes audit_log op=archive_raw even though raw_archive is gone', async () => {
+  it('5. audit row preserved: rawArchive writes audit_log op=archive_raw even though raw_archive is gone', async () => {
     const ctx: FullContext = apiCtx(root, 'tenant-B', { subject: 'user:42', role: 'admin' });
     const { id } = await remember(ctx, { content: 'audit-trail-content', kind: 'raw' });
-    await archiveRaw(ctx, id, 'compliance test');
+    await rawArchive(ctx, id, 'compliance test');
 
     const db = openHippoDb(root);
     try {
@@ -231,7 +231,7 @@ describe('GDPR Path A redaction + migration v20', () => {
     const before = await retrieve(ctx, { query: distinctive });
     expect(before.results.some((r) => r.id === id)).toBe(true);
 
-    await archiveRaw(ctx, id, 'right-to-be-forgotten');
+    await rawArchive(ctx, id, 'right-to-be-forgotten');
 
     // Post-condition: gone from recall.
     const after = await retrieve(ctx, { query: distinctive });

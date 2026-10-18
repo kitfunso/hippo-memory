@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Request-path work at 10,000 memories per store: getContext, the MCP tools that read whole stores, and the HTTP recall.
+// Request-path work at 10,000 memories per store: contextGet, the MCP tools that read whole stores, and the HTTP recall.
 // Fails when a request runs more statements, reads more rows or opens more stores than its ceiling; the time is printed and fails nothing. Run after `npm run build`:
 //   node scripts/check-request-path-timing.mjs [--memories 10000]
 import * as fs from 'node:fs';
@@ -35,7 +35,7 @@ const { writeEntryDbOnly } = await load('store/entry-writes.js');
 const { loadAmbientTallies } = await load('store/ambient.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/auth.js');
-const { getContext, adminActor } = await load('api/index.js');
+const { contextGet, adminActor } = await load('api/index.js');
 const { contextReach } = await load('api/types.js');
 const { loadConfig } = await load('core/config.js');
 const { handleMcpRequest } = await load('mcp/server.js');
@@ -215,16 +215,16 @@ const httpTool =
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
-  ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [330, 5335, 11]],
-  ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665, 16]],
+  ['contextGet, no query', () => contextGet(ctx, { currentProject: 'proj' }), [330, 5335, 11]],
+  ['contextGet, query', () => contextGet(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665, 16]],
   [
-    'getContext, pinned only',
-    () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }),
+    'contextGet, pinned only',
+    () => contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }),
     [42, 141, 5],
   ],
   [
-    'getContext, local query',
-    withoutGlobal((c) => getContext(c, { q: 'kafka redis', currentProject: 'proj' })),
+    'contextGet, local query',
+    withoutGlobal((c) => contextGet(c, { q: 'kafka redis', currentProject: 'proj' })),
     [325, 395, 10],
   ],
   [

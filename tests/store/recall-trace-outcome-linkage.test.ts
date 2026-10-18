@@ -93,7 +93,7 @@ describe('outcomeForLastRecall — no prior trace', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       const res = await remember(ctx, { content: 'no-trace-outcome-target' });
-      // Seed last_retrieval_ids directly WITHOUT ever calling recall()/getContext()
+      // Seed last_retrieval_ids directly WITHOUT ever calling recall()/contextGet()
       // — last_trace_id stays unset (fresh store, pre-v40-flow shape).
       const idx = loadLastRecall(home);
       idx.last_retrieval_ids = [res.id];

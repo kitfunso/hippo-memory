@@ -12,7 +12,7 @@ import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { retrieve, getContext } from '../../src/api/index.js';
+import { retrieve, contextGet } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -159,11 +159,11 @@ describe('hybrid recall candidates with stored vectors', () => {
     ).toEqual(EXPECTED.retrieveHybrid);
   });
 
-  it('getContext with a query and no global store', async () => {
+  it('contextGet with a query and no global store', async () => {
     const s = track(seed());
     withEmbeddings(s);
     vi.stubEnv('HIPPO_HOME', join(s.global, 'absent'));
-    const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), {
+    const res = await contextGet(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), {
       currentProject: cwdProject(),
       q: QUERY,
       budget: 100000,

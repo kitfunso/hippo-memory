@@ -2,8 +2,8 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, listOpenConflicts, type Actor } from '../../src/api/index.js';
-import { getMemoryStatus, getTouchableMemory } from '../../src/api/memories/memories.js';
+import { remember, conflictListOpen, type Actor } from '../../src/api/index.js';
+import { memoryStatusGet, memoryGetTouchable } from '../../src/api/memories/memories.js';
 import { NotFoundError } from '../../src/core/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -27,12 +27,12 @@ describe('api admin reads', () => {
     const team = (await remember(ctxFor(actorB), { content: 'deploy without --dry-run' })).id;
     replaceDetectedConflicts(root, [{ memory_a_id: personal, memory_b_id: team, reason: 'contradiction', score: 0.9 }]);
 
-    const status = await getMemoryStatus(ctxFor(actorA), new Date(), 0.1);
+    const status = await memoryStatusGet(ctxFor(actorA), new Date(), 0.1);
     expect(status.total).toBe(2);
     expect(status.openConflicts).toBe(1);
-    expect((await listOpenConflicts(ctxFor(actorA))).conflicts).toHaveLength(1);
-    expect((await listOpenConflicts(ctxFor(actorB))).conflicts).toHaveLength(0);
-    await expect(getTouchableMemory(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);
-    expect((await getTouchableMemory(ctxFor(actorA), personal))?.id).toBe(personal);
+    expect((await conflictListOpen(ctxFor(actorA))).conflicts).toHaveLength(1);
+    expect((await conflictListOpen(ctxFor(actorB))).conflicts).toHaveLength(0);
+    await expect(memoryGetTouchable(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);
+    expect((await memoryGetTouchable(ctxFor(actorA), personal))?.id).toBe(personal);
   });
 });

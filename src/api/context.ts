@@ -1,4 +1,4 @@
-// Ambient context injection: the admission policy and getContext.
+// Ambient context injection: the admission policy and contextGet.
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
@@ -138,7 +138,7 @@ interface TaskSections {
 /** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit
  * row for non-pinned, non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or recent
  * events. CLI rendering stays in `cli.ts`. */
-export async function getContext(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
+export async function contextGet(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
   if (budget <= 0) {
