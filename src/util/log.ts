@@ -56,7 +56,8 @@ function write(level: LogLevel, message: string, fields?: LogFields): void {
   process.stderr.write(`${format(level, message, stamped)}\n`);
 }
 
-// Some keys follow the data (one per damaged row and column), so the set of them stops growing here.
+// No key follows the data: each names a table, column, errno or site. The cap guards a call site that puts a per-row
+// value in its key, which would otherwise push every later failure class down to debug.
 const ONCE_KEY_CAP = 1_000;
 const onceKeys = new Set<string>();
 let onceCapReported = false;

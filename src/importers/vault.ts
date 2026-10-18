@@ -264,11 +264,10 @@ function readVaultNote(run: VaultImportRun, relpath: string): string | null {
   } catch (err) {
     // One unreadable note (gone since the listing, or a transient
     // IO error) must not abort the import; a re-run picks it up.
-    log.warnThenDebug(
-      `vault-note-skipped:${run.folderPath}`,
-      `vault note skipped: ${relpath}: ${errorMessage(err)}`,
-      errorFields(err),
-    );
+    log.warnThenDebug('vault-note-skipped', `vault note skipped: ${relpath}: ${errorMessage(err)}`, {
+      folder: run.folderPath,
+      ...errorFields(err),
+    });
     run.tally.skipped++;
     return null;
   }
