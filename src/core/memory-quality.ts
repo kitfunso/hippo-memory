@@ -81,7 +81,7 @@ function isRoutineReleaseActivity(text: string): boolean {
 }
 
 const TRAILING_MARK = /[.!?,;:\s]/;
-// Trims from the end in one pass: /[.!?,;:\s]+$/ restarts at every mark of a long run, so it is quadratic on stored text.
+// One pass from the end: /[.!?,;:\s]+$/ restarts at every mark of a long run, so it is quadratic on stored text.
 function bareText(text: string): string {
   let end = text.length;
   while (end > 0 && TRAILING_MARK.test(text[end - 1])) end--;
