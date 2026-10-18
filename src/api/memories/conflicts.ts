@@ -118,7 +118,7 @@ function loserFate(actor: Actor, loser: ConflictSide, opts: ResolveMemoryConflic
         `so its reason would show to everyone; resolve with forget instead`,
     );
   }
-  return { kind: 'reject', inReach: (scope) => canTouchScope(actor, scope) };
+  return { kind: 'reject', ownScope: personalScopeOf(actor) };
 }
 
 /** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:

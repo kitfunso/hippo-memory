@@ -99,8 +99,7 @@ export async function handlePromoteMemory(
   promoteMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(promoteMatch.id!, 'memory id');
-  // The row's storeReady already answered 501 for a store without hippo.db's files; this types what it proved.
-  const result = promote(needGroup(ctx, 'localFiles'), promoteMatch.id!);
+  const result = await promote(ctx, promoteMatch.id!);
   sendJson(res, 200, result);
   return;
 }

@@ -23,8 +23,8 @@ function globalContents(): string[] {
   return loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
 }
 
-function refusal(fn: () => void): BadRequestError {
-  try { fn(); } catch (e) { if (e instanceof BadRequestError) return e; throw e; }
+async function refusal(fn: () => Promise<MemoryEntry | null>): Promise<BadRequestError> {
+  try { await fn(); } catch (e) { if (e instanceof BadRequestError) return e; throw e; }
   throw new Error('expected a BadRequestError, got no throw');
 }
 
@@ -53,19 +53,19 @@ describe('share and promote refuse personal rows', () => {
     else vi.stubEnv('HIPPO_HOME', undefined);
   });
 
-  it('promote refuses a personal row with a 400 and the exact text; a team row still promotes', () => {
-    const err = refusal(() => copyToGlobal(hippoRoot, mine.id, { owner: 'alice' }));
+  it('promote refuses a personal row with a 400 and the exact text; a team row still promotes', async () => {
+    const err = await refusal(() => copyToGlobal(hippoRoot, mine.id, { owner: 'alice' }));
     expect(err.status).toBe(400);
     expect(err.message).toBe(`Refusing to promote ${mine.id}: it is a personal memory and stays with its owner on this server.`);
-    expect(copyToGlobal(hippoRoot, team.id).content).toBe(TEAM);
+    expect((await copyToGlobal(hippoRoot, team.id)).content).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
 
-  it('share refuses a personal row with a 400 and the exact text; a team row still shares', () => {
-    const err = refusal(() => shareMemory(...sharingStores(hippoRoot), mine.id));
+  it('share refuses a personal row with a 400 and the exact text; a team row still shares', async () => {
+    const err = await refusal(() => shareMemory(...sharingStores(hippoRoot), mine.id));
     expect(err.status).toBe(400);
     expect(err.message).toBe(`Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`);
-    expect(shareMemory(...sharingStores(hippoRoot), team.id)?.content).toBe(TEAM);
+    expect((await shareMemory(...sharingStores(hippoRoot), team.id))?.content).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
 

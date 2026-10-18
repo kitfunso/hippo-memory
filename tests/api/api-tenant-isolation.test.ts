@@ -53,12 +53,12 @@ describe('api tenant isolation', () => {
       { content: 'alpha-row promote-cross-tenant canary' },
     );
 
-    expect(() =>
+    await expect(
       promote(
         { hippoRoot: home, store: sqliteStore(home), config: loadConfig(home), tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
       ),
-    ).toThrow(/memory not found/i);
+    ).rejects.toThrow(/memory not found/i);
 
     // The original row must still exist on the local root, untouched.
     const db = openHippoDb(home);

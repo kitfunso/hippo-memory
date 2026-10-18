@@ -40,11 +40,11 @@ export interface ConflictSide {
 }
 
 /** What the api decided for the loser. `reject` also tombstones its value and removes the tenant's other rows holding
- * it that `inReach` admits; the store calls `inReach` inside its write. */
+ * it in a scope `ownScopeTouches(ownScope, scope)` admits, checked inside the store's write. */
 export type LoserFate =
   | { readonly kind: 'weaken' }
   | { readonly kind: 'remove' }
-  | { readonly kind: 'reject'; readonly inReach: (scope: string | null) => boolean };
+  | { readonly kind: 'reject'; readonly ownScope: string | null };
 
 export interface ConflictResolution {
   readonly conflictId: number;

@@ -2,7 +2,7 @@
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
 // (database openers outside the data layer, store branches in the API, routes that need hippo.db (storeReady 'localFiles' or sqliteOnly; sqliteOnly rows are counted apart too, and their list is pinned), twin
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
-// routesOnLoop counts the built-in routes whose SQLite work still runs on the server thread: V1_ROUTES rows and HOST_ROUTES entries without `loop: 'off'`, plus each MCP tool that POST /mcp runs on the server thread (on the localFiles group, or naming onServerThread). Add-on routes declare their own.
+// routesOnLoop counts the built-in routes whose SQLite work still runs on the server thread: V1_ROUTES rows and HOST_ROUTES entries without `loop: 'off'` (POST /mcp is one, so every MCP tool runs off it). Add-on routes declare their own.
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
@@ -10,6 +10,7 @@
 // buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
 // storeImportsInCli counts value imports of src/store or src/db in src/cli files other than the CLI's composition root.
 // groupChecksInApi counts requireGroup, hasGroup and storeWith calls in files that layers.json puts in the api or a domain layer.
+// portFunctionParams counts parameters of methods on port interfaces whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -22,7 +23,7 @@ const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onH
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
 const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesNeedingHippoDb', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
   'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'storeImportsInDomain', 'handleHoldersOutside', 'storeFilesWithoutSql',
-  'portImportsFromSql', 'buildsOutsideRoots', 'groupChecksInApi'];
+  'portImportsFromSql', 'buildsOutsideRoots', 'groupChecksInApi', 'portFunctionParams'];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // src/store files that run no SQL yet belong there: hippo.db's shapes, SQL text and plumbing. A path ending in / covers its folder.
@@ -234,6 +235,106 @@ function portSqlImports(file, sf) {
     .map((s) => `${file}:${lineOf(sf, s)}`);
 }
 
+// port-groups.ts holds the session and admin groups (conflicts, dormant), so it is a port file here too.
+const declaresPort = (f) => f === 'src/store/port.ts' || f.startsWith('src/store/port/') || f === 'src/store/port-groups.ts';
+const typeTables = new Map();
+
+/** The interfaces and type aliases a file declares, and the file and name each imported or re-exported name comes from. */
+function typeTable(file) {
+  if (typeTables.has(file)) return typeTables.get(file);
+  const sf = parse(file);
+  const decls = new Map();
+  const links = new Map();
+  for (const s of sf.statements) {
+    if (ts.isInterfaceDeclaration(s) || ts.isTypeAliasDeclaration(s)) decls.set(s.name.text, [...(decls.get(s.name.text) ?? []), s]);
+    const target = s.moduleSpecifier && ts.isStringLiteral(s.moduleSpecifier) ? resolveSpec(file, s.moduleSpecifier.text) : undefined;
+    const named = ts.isImportDeclaration(s) ? s.importClause?.namedBindings : ts.isExportDeclaration(s) ? s.exportClause : undefined;
+    if (target && named && (ts.isNamedImports(named) || ts.isNamedExports(named))) {
+      for (const e of named.elements) links.set(e.name.text, { file: target, name: (e.propertyName ?? e.name).text });
+    }
+  }
+  const table = { sf, decls, links };
+  typeTables.set(file, table);
+  return table;
+}
+
+/** The declarations `name` resolves to from `file`, following imports and re-exports into src; [] for a lib or generic name. */
+function declarationsOf(file, name, hops = 0) {
+  const { decls, links } = typeTable(file);
+  if (decls.has(name)) return decls.get(name).map((node) => ({ file, node }));
+  const link = links.get(name);
+  return link && hops < 10 ? declarationsOf(link.file, link.name, hops + 1) : [];
+}
+
+/** The first function a member list holds, as `.member` plus its path, or null. */
+function functionInMembers(file, members, seen) {
+  for (const m of members) {
+    if (ts.isMethodSignature(m)) return `.${m.name.getText()}`;
+    if (ts.isCallSignatureDeclaration(m) || ts.isConstructSignatureDeclaration(m)) return '';
+    const inner = ts.isPropertySignature(m) ? functionIn(file, m.type, seen) : null;
+    if (inner !== null) return `.${m.name.getText()}${inner}`;
+  }
+  return null;
+}
+
+/** The path to the first function a type holds ('' when it is one), or null when it is data. Lib and generic names are
+ * data; src interfaces and aliases are read through their members, unions, intersections, arrays and type arguments. */
+function functionIn(file, node, seen) {
+  if (!node) return null;
+  if (ts.isFunctionTypeNode(node) || ts.isConstructorTypeNode(node)) return '';
+  if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) return functionIn(file, node.type, seen);
+  if (ts.isArrayTypeNode(node)) return functionIn(file, node.elementType, seen);
+  if (ts.isTypeLiteralNode(node)) return functionInMembers(file, node.members, seen);
+  const parts = ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node) ? node.types
+    : ts.isTupleTypeNode(node) ? node.elements : ts.isTypeReferenceNode(node) ? node.typeArguments ?? [] : [];
+  for (const part of parts) {
+    const inner = functionIn(file, part, seen);
+    if (inner !== null) return inner;
+  }
+  if (!ts.isTypeReferenceNode(node) || !ts.isIdentifier(node.typeName)) return null;
+  for (const decl of declarationsOf(file, node.typeName.text)) {
+    const key = `${decl.file}#${node.typeName.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const inner = ts.isTypeAliasDeclaration(decl.node) ? functionIn(decl.file, decl.node.type, seen) : functionInDeclared(decl.file, decl.node, seen);
+    if (inner !== null) return inner;
+  }
+  return null;
+}
+
+/** An interface's own members, then each interface it extends. */
+function functionInDeclared(file, iface, seen) {
+  const own = functionInMembers(file, iface.members, seen);
+  if (own !== null) return own;
+  for (const clause of iface.heritageClauses ?? []) {
+    for (const base of clause.types) {
+      const inner = ts.isIdentifier(base.expression) ? functionIn(file, ts.factory.createTypeReferenceNode(base.expression.text, base.typeArguments), seen) : null;
+      if (inner !== null) return inner;
+    }
+  }
+  return null;
+}
+
+/** `file:line Owner.method(param.path)` for each parameter of a method on a port interface or object alias whose type holds a function. */
+function portFunctionParams(file) {
+  if (!declaresPort(file)) return [];
+  const { sf, decls } = typeTable(file);
+  const hits = [];
+  for (const [owner, nodes] of decls) {
+    for (const node of nodes) {
+      const members = ts.isInterfaceDeclaration(node) ? node.members : ts.isTypeLiteralNode(node.type) ? node.type.members : [];
+      for (const m of members) {
+        const fn = ts.isMethodSignature(m) ? m : ts.isPropertySignature(m) && m.type && ts.isFunctionTypeNode(m.type) ? m.type : undefined;
+        for (const p of fn?.parameters ?? []) {
+          const path = functionIn(file, p.type, new Set());
+          if (path !== null) hits.push(`${file}:${lineOf(sf, p)} ${owner}.${m.name.getText(sf)}(${p.name.getText(sf)}${path})`);
+        }
+      }
+    }
+  }
+  return hits;
+}
+
 /** Local names bound to a src/store or src/db export of a builder name, so a same-named local function never counts. */
 function builderNames(file, sf) {
   const names = new Set();
@@ -309,39 +410,6 @@ function hostRoutesOnLoop(sf) {
     const at = `line ${sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1}`;
     if (!ts.isPropertyAssignment(entry) || !ts.isObjectLiteralExpression(entry.initializer)) return routeFail(`HOST_ROUTES has a spread or non-object entry (${at})`);
     if (!entry.initializer.properties.some(isOffLoop)) onLoop++;
-  }
-  return onLoop;
-}
-
-const literalText = (node) => (node && ts.isStringLiteralLike(node) ? node.text : undefined);
-// null when the entry does not name the property, undefined when it names it with no string literal.
-const literalProp = (obj, name) => {
-  const p = propNamed(obj, name);
-  return p ? (ts.isPropertyAssignment(p) ? literalText(p.initializer) : undefined) : null;
-};
-
-/** Entries of src/mcp/request.ts TOOL_HANDLERS that POST /mcp runs on the server thread: on the localFiles group, as toolOn('localFiles', run) or
- *  { storeReady: 'localFiles', run }, or naming a non-empty onServerThread reason. */
-function mcpToolsOnLoop(sf) {
-  const file = 'src/mcp/request.ts';
-  const made = declaredValue(sf, 'TOOL_HANDLERS');
-  const entries = made && ts.isNewExpression(made) ? made.arguments?.[0] : undefined;
-  if (!entries || !ts.isArrayLiteralExpression(entries)) return routeFail('TOOL_HANDLERS is not declared as new Map([...]) of an array literal', file);
-  let onLoop = 0;
-  for (const entry of entries.elements) {
-    const value = ts.isArrayLiteralExpression(entry) ? entry.elements[1] : undefined;
-    let group;
-    let reason = null;
-    if (value && ts.isCallExpression(value) && value.expression.getText(sf) === 'toolOn') group = literalText(value.arguments[0]);
-    else if (value && ts.isObjectLiteralExpression(value)) {
-      group = literalProp(value, 'storeReady');
-      reason = literalProp(value, 'onServerThread');
-    }
-    if (group === undefined || reason === undefined || reason === '') {
-      const at = sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1;
-      return routeFail(`TOOL_HANDLERS has an entry that is not [name, toolOn(literal, run)] or [name, { run }] with literal fields (line ${at})`, file);
-    }
-    if (group === 'localFiles' || reason !== null) onLoop++;
   }
   return onLoop;
 }
@@ -440,7 +508,7 @@ function measure() {
   let sqliteOnlyRoutesList = [];
   const carrierFilesList = [];
   const storeFilesWithoutSqlList = [];
-  const sites = { portImportsFromSql: [], buildsOutsideRoots: [], groupChecksInApi: [] };
+  const sites = { portImportsFromSql: [], buildsOutsideRoots: [], groupChecksInApi: [], portFunctionParams: [] };
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const text = readFileSync(file, 'utf8');
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -473,9 +541,9 @@ function measure() {
       sqliteOnlyRoutesList = routes.sqliteOnly;
       out.routesOnLoop += routes.onLoop;
     }
-    if (file === 'src/mcp/request.ts') out.routesOnLoop += mcpToolsOnLoop(sf);
     sqliteLocalMethods.push(...localMethods(sf));
     sites.portImportsFromSql.push(...portSqlImports(file, sf));
+    sites.portFunctionParams.push(...portFunctionParams(file));
     if (buildsOutsideRootsHere(file)) sites.buildsOutsideRoots.push(...callsOf(file, sf, builderNames(file, sf)));
     if (checksGroupsHere(file)) sites.groupChecksInApi.push(...callsOf(file, sf, GROUP_CHECKS));
   }

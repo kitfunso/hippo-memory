@@ -1,5 +1,4 @@
-// The tenant lookup and global write behind `promote`, sync like the rest of LocalFiles so its audit row commits with
-// the copy.
+// The global write behind `promote`, which answers through a Promise so a served store runs it on its writer thread.
 
 import type { MemoryEntry } from '../../core/memory.js';
 
@@ -12,8 +11,6 @@ export interface PromotedCopy {
 }
 
 export interface Promotion {
-  /** The tenant and scope of the local memory, or undefined when no row has the id. */
-  reach(id: string): { tenantId: string; scope: string | null } | undefined;
   /** Writes `copy` into this store, the global one; the caller has already vetted, labelled and embeds it. */
-  writeCopy(copy: MemoryEntry, opts: PromotedCopy): void;
+  writeCopy(copy: MemoryEntry, opts: PromotedCopy): Promise<void>;
 }

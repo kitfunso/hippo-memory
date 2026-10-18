@@ -1,5 +1,5 @@
 // The store work of sharing between a project store and the operator's global store, kept apart from port.ts. Plain
-// return values, like the rest of LocalFiles; whole-row reads and single writes go through Learning.
+// return values, like the rest of LocalFiles, save sourceTallies, which hippo_peers reads on a served store's worker.
 import type { MemoryEntry } from '../../core/memory.js';
 import type { OriginFilter } from './types.js';
 
@@ -15,7 +15,7 @@ export interface Sharing {
    * many it wrote. */
   writeSkippingRejected(fill: (put: (entry: MemoryEntry) => boolean) => void): number;
   /** How many memories each source holds, of `tenantId` or of every tenant. */
-  sourceTallies(tenantId?: string): SourceTally[];
+  sourceTallies(tenantId?: string): Promise<SourceTally[]>;
   /** The lexical candidates for `query`, with no scope rule. */
   searchEntries(query: string, limit: number | undefined, tenantId: string | undefined): MemoryEntry[];
   /** The lexical candidates for `query` under recall's scope rules. */

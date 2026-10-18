@@ -1,5 +1,5 @@
 // The memory-quality audit rules: pure functions of a row, so any store can be audited by them.
-import { canAutoDelete, type MemoryEntry } from './memory.js';
+import { canAutoDelete, isKeptForGood, type MemoryEntry } from './memory.js';
 import {
   automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
 } from './memory-quality.js';
@@ -88,4 +88,34 @@ export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<strin
     issues,
     clean: entries.length - issues.length,
   };
+}
+
+/** Which rows quality repair keeps whatever their defect; data, so a store on a worker thread applies it in its own
+ * write. */
+export interface RepairProtection {
+  /** A person's pin, kept as 'pinned'. */
+  readonly pinned: boolean;
+  /** A raw receipt, kept as 'raw receipt'. */
+  readonly raw: boolean;
+  /** A note kept for good (canAutoDelete refuses it), kept as 'trusted imported note'. */
+  readonly trusted: boolean;
+  /** A row an object names, whose link repair could not restore, kept as 'backs an object'. */
+  readonly objectBacked: boolean;
+}
+
+/** What quality repair keeps whatever the defect: a person's pin, a raw receipt, a trusted imported note, and a row
+ * an object names, since the object's link could not be restored. */
+export const PROTECTED_ROWS: RepairProtection = { pinned: true, raw: true, trusted: true, objectBacked: true };
+
+/** Why repair must keep `entry` under `protection`, or undefined to let it go. */
+export function repairKeeps(
+  entry: MemoryEntry,
+  backsObject: boolean,
+  protection: RepairProtection,
+): string | undefined {
+  if (protection.pinned && entry.pinned) return 'pinned';
+  if (protection.raw && entry.kind === 'raw') return 'raw receipt';
+  if (protection.trusted && isKeptForGood(entry)) return 'trusted imported note';
+  if (protection.objectBacked && backsObject) return 'backs an object';
+  return undefined;
 }

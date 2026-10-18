@@ -15,7 +15,7 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { repairMemoryQuality, restoreDormant } from '../../src/api/index.js';
-import { repairProtection } from '../../src/api/auth/audit.js';
+import { PROTECTED_ROWS as repairProtection } from '../../src/core/memory-audit.js';
 import type { RepairProtection } from '../../src/store/port/audit-maintenance.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { importForStore } from '../../src/agent-memories/sync.js';
@@ -114,13 +114,13 @@ describe('recoverable automatic memory quality repair', () => {
       expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
     ]));
 
-    const held = run(false, (entry) => (entry.id === plain.id ? 'held by the caller' : undefined));
-    expect(held.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: plain.id, disposition: 'protected', protection: 'held by the caller' }),
+    const unpinned = run(false, { ...repairProtection, pinned: false });
+    expect(unpinned.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
       expect.objectContaining({ id: pinned.id, disposition: 'set-aside' }),
     ]));
 
-    const letGo = run(true, () => undefined);
+    const letGo = run(true, { pinned: false, raw: false, trusted: false, objectBacked: false });
     expect(letGo.appliedIds).toEqual([plain.id]);
     expect(letGo.warnings).toContain(`Kept ${pinned.id}: the store's delete guard protects it.`);
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toEqual([pinned.id]);

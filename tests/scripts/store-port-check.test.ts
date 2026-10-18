@@ -31,6 +31,7 @@ type Counts = {
   carrierFilesList: string[];
   storeFilesWithoutSql?: number;
   storeFilesWithoutSqlList?: string[];
+  portFunctionParams?: number;
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
 
@@ -156,7 +157,7 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it("counts routes on the loop: rows and host routes without `loop: 'off'` plus MCP tools on localFiles, and reads 0 with no route table", () => {
+  it("counts routes on the loop: rows and host routes without `loop: 'off'`, and reads 0 with no route table", () => {
     const rows = [
       "  { method: 'GET', path: '/a', handler: a },",
       "  { method: 'GET', path: '/b', storeReady: 'base', loop: 'off', handler: b },",
@@ -165,10 +166,9 @@ describe('check-store-port.mjs', () => {
       "  { method: 'GET', path: '/e', loop: 'on', handler: e },",
     ];
     const host = "const HOST_ROUTES = {\n  health: { method: 'GET', path: '/health', loop: 'off' },\n  mcp: { method: 'POST', path: '/mcp' },\n} as const;\n";
-    const tools = "const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([\n  ['a', { run: a }],\n  ['b', toolOn('localFiles', b)],\n  ['c', { storeReady: 'localFiles', run: c }],\n  ['d', toolOn('lastRecall', d)],\n  ['e', { run: e, onServerThread: 'takes a function' }],\n]);\n";
-    const files = { 'src/server/route-table.ts': `const V1_ROUTES: readonly Route[] = [\n${rows.join('\n')}\n];\n${host}`, 'src/mcp/request.ts': tools };
+    const files = { 'src/server/route-table.ts': `const V1_ROUTES: readonly Route[] = [\n${rows.join('\n')}\n];\n${host}` };
     withFixture(files, null, ({ run }) => {
-      expect(list(run).routesOnLoop).toBe('7');
+      expect(list(run).routesOnLoop).toBe('4');
     });
     withFixture({ 'src/a.ts': 'export const a = 1;\n' }, null, ({ run }) => {
       expect(list(run).routesOnLoop).toBe('0');
@@ -373,15 +373,11 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('exits 1 naming the table when HOST_ROUTES is missing or spread, or a TOOL_HANDLERS entry is no known literal form', () => {
+  it('exits 1 naming the table when HOST_ROUTES is missing or spread', () => {
     const v1 = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n];\n";
     const cases: [Record<string, string>, string][] = [
       [{ 'src/server/route-table.ts': v1 }, 'HOST_ROUTES'],
       [{ 'src/server/route-table.ts': `${v1}const HOST_ROUTES = { ...MORE };\n` }, 'HOST_ROUTES'],
-      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': 'const TOOL_HANDLERS = new Map(ENTRIES);\n' }, 'TOOL_HANDLERS'],
-      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': "const TOOL_HANDLERS = new Map([\n  ['a', entryFor('a')],\n]);\n" }, 'TOOL_HANDLERS'],
-      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': "const TOOL_HANDLERS = new Map([\n  ['a', { run: a, onServerThread: why }],\n]);\n" }, 'line 2'],
-      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': "const TOOL_HANDLERS = new Map([\n  ['a', { run: a, onServerThread: '' }],\n]);\n" }, 'line 2'],
     ];
     for (const [files, named] of cases) {
       withFixture(files, null, ({ run }) => {
@@ -510,6 +506,43 @@ describe('check-store-port.mjs', () => {
       expect(l.groupChecksInApi).toBe('3');
       expect(l['src/api/a.ts:1']).toBe('groupChecksInApi');
       expect(l['src/cli/c.ts:1']).toBeUndefined();
+    });
+  });
+
+  it('portFunctionParams counts a port method parameter that holds a function, through an alias, a union member, a property and an import', () => {
+    const files = {
+      'src/store/port.ts': [
+        "import type { Fate } from './port/fate.js';",
+        'export type Protect = (id: string) => string | undefined;',
+        'export interface Plain { readonly id: string; readonly at: Date }',
+        'export interface Group {',
+        '  visit(each: (row: Plain) => void): void;',
+        '  repair(tenantId: string, protect: Protect): void;',
+        '  resolve(fate: Fate): void;',
+        '  read(rows: readonly Plain[], opts: { readonly limit: number }): Promise<Plain[]>;',
+        '  run<T>(work: T): T;',
+        '}',
+      ].join('\n'),
+      'src/store/port/fate.ts': "export type Fate = { readonly kind: 'weaken' } | { readonly kind: 'reject'; readonly inReach: (scope: string) => boolean };\n",
+      'src/store/port-groups.ts': 'export interface Later { readonly every: { readonly on: { tick(): void } } }\nexport interface G { start(later: Later): void }\n',
+      'src/api/a.ts': 'export interface NotPort { visit(each: () => void): void }\n',
+    };
+    withFixture(files, null, ({ run }) => {
+      const l = list(run);
+      expect(l.portFunctionParams).toBe('4');
+      expect(l['src/store/port.ts:5 Group.visit(each)']).toBe('portFunctionParams');
+      expect(l['src/store/port.ts:6 Group.repair(protect)']).toBe('portFunctionParams');
+      expect(l['src/store/port.ts:7 Group.resolve(fate.inReach)']).toBe('portFunctionParams');
+      expect(l['src/store/port-groups.ts:2 G.start(later.every.on.tick)']).toBe('portFunctionParams');
+    });
+  });
+
+  it('portFunctionParams fails once a function parameter is added above the baseline', () => {
+    const files = { 'src/store/port.ts': 'export interface Group { visit(each: () => void): void }\n' };
+    withFixture(files, { portFunctionParams: 0 }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('portFunctionParams: 0 -> 1');
     });
   });
 

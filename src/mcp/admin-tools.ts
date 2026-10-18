@@ -100,10 +100,10 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
   const force = Boolean(args.force);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
   await getTouchableMemory(mcpApiContext(ctx), shareId);
-  // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's
+  // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's
   // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const local = { root: hippoRoot, store: storeWith(store, 'localFiles') };
-  const shared = shareMemory(local, globalTarget(ctx), shareId, { force, tenantId });
+  const shared = await shareMemory(local, globalTarget(ctx), shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
 }
@@ -115,9 +115,9 @@ function globalTarget(ctx: McpContext): ConfiguredFolder {
   return target;
 }
 
-export function runPeersTool({ ctx, tenantId }: ToolCall): string {
+export async function runPeersTool({ ctx, tenantId }: ToolCall): Promise<string> {
   // Tenant-scope peer discovery to the caller, as hippo_share does; undefined would list host-wide.
-  const peers = listPeers(globalTarget(ctx), tenantId);
+  const peers = await listPeers(globalTarget(ctx), tenantId);
   if (peers.length === 0) return 'No peers found.';
   return peers
     .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)

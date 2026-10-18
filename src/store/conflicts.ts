@@ -7,6 +7,7 @@ import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
+import { ownScopeTouches } from '../core/recall-scope.js';
 import type { StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { placeholders } from '../util/sql.js';
@@ -398,7 +399,7 @@ function removeConflictLoser(db: DatabaseSyncLike, tenantId: string, r: Conflict
   if (!loserRow) return removal;
   const who = { actor: r.actor, reason: r.reason };
   if (r.fate.kind === 'reject') {
-    removal.rejectedDigest = tombstoneLoserValue(db, r, r.fate.inReach, loserRow, who, removal);
+    removal.rejectedDigest = tombstoneLoserValue(db, r, r.fate.ownScope, loserRow, who, removal);
   }
   if (loserRow.kind === 'raw') {
     archiveRawMemory(db, loserId, { reason: r.reason, who: r.actor });
@@ -428,12 +429,12 @@ function recordRejectedLoserValue(
   });
 }
 
-/** Removes the live same-tenant rows `inReach` admits whose digest matches the rejected value into `removal`; `keep`
- * is spared. */
+/** Removes the live same-tenant rows `ownScope` may touch whose digest matches the rejected value into `removal`;
+ * `keep` is spared. */
 function removeDuplicatesOfRejectedValue(
   db: DatabaseSyncLike,
   r: ConflictResolution,
-  inReach: (scope: string | null) => boolean,
+  ownScope: string | null,
   loserRow: LoserRow,
   rejectedDigest: string,
   removal: LoserRemoval,
@@ -453,7 +454,7 @@ function removeDuplicatesOfRejectedValue(
   }>;
   const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
-    if (rejectionDigest(dup.content) !== rejectedDigest || !inReach(dup.scope)) continue;
+    if (rejectionDigest(dup.content) !== rejectedDigest || !ownScopeTouches(ownScope, dup.scope)) continue;
     dups.push({ id: dup.id, kind: dup.kind });
   }
   const { actor, reason } = r;
@@ -473,14 +474,14 @@ function removeDuplicatesOfRejectedValue(
 function tombstoneLoserValue(
   db: DatabaseSyncLike,
   r: ConflictResolution,
-  inReach: (scope: string | null) => boolean,
+  ownScope: string | null,
   loserRow: LoserRow,
   who: { actor: string; reason: string },
   removal: LoserRemoval,
 ): string {
   const rejectedDigest = rejectionDigest(loserRow.content);
   recordRejectedLoserValue(db, r, loserRow, rejectedDigest, who);
-  removeDuplicatesOfRejectedValue(db, r, inReach, loserRow, rejectedDigest, removal);
+  removeDuplicatesOfRejectedValue(db, r, ownScope, loserRow, rejectedDigest, removal);
   return rejectedDigest;
 }
 

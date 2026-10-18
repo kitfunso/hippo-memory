@@ -1,7 +1,6 @@
-import type { MemoryEntry } from '../../core/memory.js';
+import type { RepairProtection } from '../../core/memory-audit.js';
 
-/** Why repair must keep `entry`, or undefined to let it go; the store says whether an object names it. */
-export type RepairProtection = (entry: MemoryEntry, backsObject: boolean) => string | undefined;
+export type { RepairProtection };
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {
@@ -16,7 +15,8 @@ export interface AuditMaintenance {
   /** Counts (dryRun) or deletes the tenant's audit rows before
    * `cutoff`, then appends one audit_prune row; resolves to the count. */
   pruneAuditRows(prune: AuditPrune): Promise<number>;
-  /** A preview, or with `apply` the moves of certain defects `protect` lets go to dormant storage behind a backup. */
+  /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup; a row
+   * `repairKeeps(row, backsObject, protect)` names is kept, checked inside the repair's write. */
   repairQuality(tenantId: string, apply: boolean, protect: RepairProtection): Promise<QualityRepairResult>;
   /** repairQuality applied once per store; null once it ran there. */
   repairQualityOnce(tenantId: string, protect: RepairProtection): Promise<QualityRepairResult | null>;

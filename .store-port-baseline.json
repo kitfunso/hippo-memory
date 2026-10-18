@@ -4,7 +4,7 @@
   "storeBranches": 0,
   "routesNeedingHippoDb": 2,
   "sqliteOnlyRoutes": 0,
-  "routesOnLoop": 4,
+  "routesOnLoop": 0,
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,
@@ -16,6 +16,7 @@
   "portImportsFromSql": 0,
   "buildsOutsideRoots": 0,
   "groupChecksInApi": 0,
+  "portFunctionParams": 21,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts"
   ],

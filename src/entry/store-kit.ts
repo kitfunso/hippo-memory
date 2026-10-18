@@ -90,6 +90,8 @@ export { entryAfterOutcome } from '../core/memory.js';
 export { normalizeValueForRejection, rejectionDigest } from '../store/rejection.js';
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule.
 export { heldTexts } from '../util/same-text.js';
+// An add-on's quality repair keeps the rows hippo.db's does.
+export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../core/memory-audit.js';
 export { RejectedValueError } from '../core/api-errors.js';
 export { ownScopeTouches } from '../core/recall-scope.js';
 export type { KeysetPosition } from '../util/keyset.js';

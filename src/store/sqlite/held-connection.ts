@@ -84,11 +84,6 @@ export function offLoopFor(store: HippoStore): <T>(run: () => T) => T {
   return runsOffLoop(store) ? withSqliteOffLoop : (run) => run();
 }
 
-/** Runs `run` outside a `loop: 'off'` route's block, for work on hippo.db's local files, which run in process. */
-export function onServerThread<T>(run: () => T): T {
-  return outsideSqliteOffLoop(run);
-}
-
 // A plugin's resolver may read hippo.db through this package's synchronous functions, so it runs outside the block of a
 // `loop: 'off'` route.
 export function outsideRouteBlock<A extends readonly unknown[], R>(

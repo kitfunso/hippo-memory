@@ -64,8 +64,8 @@ describe('listPeers tenant scoping', () => {
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_c2', project: 'projectC', tenantId: 'globex' }));
   });
 
-  it('no tenantId arg: returns host-wide peers (back-compat)', () => {
-    const peers = listPeers(folderStore(globalRoot));
+  it('no tenantId arg: returns host-wide peers (back-compat)', async () => {
+    const peers = await listPeers(folderStore(globalRoot));
     const map = new Map(peers.map((p) => [p.project, p.count]));
     expect(map.get('projectA')).toBe(2);
     expect(map.get('projectB')).toBe(1);
@@ -73,8 +73,8 @@ describe('listPeers tenant scoping', () => {
     expect(peers).toHaveLength(3);
   });
 
-  it('tenantId=acme: filters to projects whose memories carry tenant_id=acme', () => {
-    const peers = listPeers(folderStore(globalRoot), 'acme');
+  it('tenantId=acme: filters to projects whose memories carry tenant_id=acme', async () => {
+    const peers = await listPeers(folderStore(globalRoot), 'acme');
     const map = new Map(peers.map((p) => [p.project, p.count]));
     expect(map.get('projectA')).toBe(2);
     expect(map.get('projectB')).toBe(1);
@@ -82,21 +82,21 @@ describe('listPeers tenant scoping', () => {
     expect(peers).toHaveLength(2);
   });
 
-  it('tenantId=globex: filters to projectC only', () => {
-    const peers = listPeers(folderStore(globalRoot), 'globex');
+  it('tenantId=globex: filters to projectC only', async () => {
+    const peers = await listPeers(folderStore(globalRoot), 'globex');
     expect(peers).toHaveLength(1);
     expect(peers[0]!.project).toBe('projectC');
     expect(peers[0]!.count).toBe(2);
   });
 
-  it('tenantId=unknown-tenant: returns empty array', () => {
-    const peers = listPeers(folderStore(globalRoot), 'never-existed');
+  it('tenantId=unknown-tenant: returns empty array', async () => {
+    const peers = await listPeers(folderStore(globalRoot), 'never-existed');
     expect(peers).toEqual([]);
   });
 
-  it('tenantId=undefined explicit: equivalent to omitting the arg', () => {
-    const a = listPeers(folderStore(globalRoot));
-    const b = listPeers(folderStore(globalRoot), undefined);
+  it('tenantId=undefined explicit: equivalent to omitting the arg', async () => {
+    const a = await listPeers(folderStore(globalRoot));
+    const b = await listPeers(folderStore(globalRoot), undefined);
     expect(b).toEqual(a);
   });
 });

@@ -187,12 +187,12 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     expect(readEntry(home, result.id, 'default')?.scope).toBeNull();
   });
 
-  it('shareMemory refuses a quarantined row even with force', () => {
-    expect(() => shareMemory(...sharingStores(home), id, { force: true })).toThrow(/quarantine/i);
+  it('shareMemory refuses a quarantined row even with force', async () => {
+    await expect(shareMemory(...sharingStores(home), id, { force: true })).rejects.toThrow(/quarantine/i);
   });
 
-  it('copyToGlobal refuses a quarantined row', () => {
-    expect(() => copyToGlobal(home, id)).toThrow(/quarantined/);
+  it('copyToGlobal refuses a quarantined row', async () => {
+    await expect(copyToGlobal(home, id)).rejects.toThrow(/quarantined/);
   });
 
   it('a deleted quarantined memory drops out of the pending queue but keeps its history', async () => {

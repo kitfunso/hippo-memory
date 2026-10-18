@@ -200,6 +200,26 @@ function nextTurn(): Promise<void> {
   return new Promise((resolve) => { setImmediate(resolve); });
 }
 
+/** Proposes a query's nearest rows from an index in memory; undefined when it cannot answer, so the caller scans. */
+export interface VectorIndex {
+  matches(
+    db: DatabaseSyncLike,
+    query: readonly number[],
+    k: number,
+    where: string,
+    params: readonly (string | number)[],
+  ): VectorMatch[] | undefined;
+}
+
+/** The admitted vectors of length `?` among `memories m` rows passing `where`, limited to `idCount` bound memory ids
+ * when given. The scan and the graph's read share it, so the graph can never admit a row the scan would not. */
+export function admittedVectorsSql(where: string, idCount = 0): string {
+  const among = idCount > 0 ? `v.memory_id IN (${placeholders(idCount)}) AND ` : '';
+  return `SELECT v.memory_id AS id, v.vector AS vector
+    FROM memory_vectors v JOIN memories m ON m.id = v.memory_id
+    WHERE ${among}v.dim = ?${where}`;
+}
+
 /** The `k` stored vectors closest to `query` among `memories m` rows passing `where` (SQL starting with ` AND`).
  *  Filters run before the cut, so rows a caller may not see can never push admitted rows out of the top k. */
 export async function topVectorMatches(
@@ -208,17 +228,19 @@ export async function topVectorMatches(
   k: number,
   where: string,
   params: readonly (string | number)[],
+  index?: VectorIndex,
 ): Promise<VectorMatch[]> {
   const best = bestMatches(query, k);
   if (!best) return [];
-  // SHORTCUT: brute-force cosine over every admitted vector, a chunk per event-loop turn; latency
-  // still grows with rows, fine to ~100k, and an ANN index (sqlite-vec, HNSW) is the upgrade.
+  // A served store of 20,000 or more vectors answers from the HNSW graph its store worker holds. The CLI, hooks and the
+  // sleep child live too short a time to build one, so they score every admitted vector, a chunk per event-loop turn.
+  const proposed = index?.matches(db, query, k, where, params);
+  if (proposed !== undefined) return proposed;
   // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
-  const rows = db.prepare(`
-    SELECT v.memory_id AS id, v.vector AS vector
-    FROM memory_vectors v JOIN memories m ON m.id = v.memory_id
-    WHERE v.dim = ?${where}
-  `).iterate(query.length, ...params) as Iterable<{ id: string; vector: Uint8Array }>;
+  const rows = db.prepare(admittedVectorsSql(where)).iterate(query.length, ...params) as Iterable<{
+    id: string;
+    vector: Uint8Array;
+  }>;
   const floats = new Float32Array(query.length);
   const bytes = new Uint8Array(floats.buffer);
   let scored = 0;

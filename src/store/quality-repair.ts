@@ -8,6 +8,7 @@ import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
 import { insertDormantRow, listDormantSnapshots } from './dormant.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
+import { repairKeeps } from '../core/memory-audit.js';
 import {
   assessAutomaticMemory,
   BUNDLE_HEADER,
@@ -105,7 +106,7 @@ function planRows(db: DatabaseSyncLike, { tenantId, protect }: RepairRun) {
   for (const entry of entries) {
     const issue = contentIssue(entry, rows);
     if (issue === null) continue;
-    const kept = protect(entry, backing.has(entry.id));
+    const kept = repairKeeps(entry, backing.has(entry.id), protect);
     issues.push(
       kept === undefined
         ? { id: entry.id, ...issue }

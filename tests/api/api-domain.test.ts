@@ -102,7 +102,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
       { content: 'promote-me-to-global' },
     );
 
-    const result = promote(apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin' }), id);
+    const result = await promote(apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin' }), id);
     expect(result.ok).toBe(true);
     expect(result.sourceId).toBe(id);
     expect(result.globalId).toMatch(/^g_/);
@@ -132,12 +132,12 @@ describe('api domain — recall/forget/promote/supersede', () => {
     ['secret', {}, 'service api key sk_vendor_deadbeef123456 for the ingest worker',
       (id: string) => `Refusing to promote ${id} to the global store: content matches secret material ` +
         `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`],
-  ] as const)('promote refuses a %s row with a 400 and its text, writing no copy and no promote row', (_kind, scope, content, text) => {
+  ] as const)('promote refuses a %s row with a 400 and its text, writing no copy and no promote row', async (_kind, scope, content, text) => {
     const row = createMemory(content, { tenantId: 'default', ...scope });
     writeEntry(home, row);
     const ctx = apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin', owner: 'alice' });
 
-    const err = (() => { try { promote(ctx, row.id); } catch (e) { return e; } })();
+    const err = await promote(ctx, row.id).catch((e: Error) => e);
 
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err).toMatchObject({ status: 400, message: text(row.id) });
