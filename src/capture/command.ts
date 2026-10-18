@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
-import { embedMemory } from '../search/embed-memories.js';
+import { embedMemoryDetached } from '../search/embed-memories.js';
 import type { FolderFiles, LocalFiles, Sync } from '../store/port.js';
 import type { Rejections } from '../store/port/rejections.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
@@ -254,7 +254,7 @@ export function captureExtractedItems(
   const outcomes = files.captures.write(items, keys, {
     actor: options.actor,
     lean: options.lean,
-    onCaptured: options.lean ? undefined : (entry) => void embedMemory(index, entry),
+    onCaptured: options.lean ? undefined : (entry) => embedMemoryDetached(index, entry),
   });
   for (const outcome of outcomes) tally[outcome]++;
   return tally;

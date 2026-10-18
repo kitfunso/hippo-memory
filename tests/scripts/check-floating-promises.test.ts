@@ -60,16 +60,27 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
     expect(hitsFor(body)).toEqual([{ line: 3, text: 'work();' }]);
   });
 
-  it('passes a .catch, a two-argument .then, a .finally after either, and void', () => {
+  it('passes a .catch, a two-argument .then and a .finally after either', () => {
     const body = [
       'async function work(): Promise<number> { return 1; }',
       'work().catch(() => 0);',
       'work().then(() => 0, () => 0);',
       'work().catch(() => 0).finally(() => {});',
       'work().then(() => 0, () => 0).then(() => 1);',
-      'void work();',
     ].join('\n');
     expect(hitsFor(body)).toEqual([]);
+  });
+
+  it('flags a void on a promise call, which only silences the lint rule, and passes a void on a handled one', () => {
+    const body = [
+      'async function work(): Promise<number> { return 1; }',
+      'void work();',
+      'void (async () => 1)();',
+      'void work().catch(() => 0);',
+      'void work;',
+      'void 0;',
+    ].join('\n');
+    expect(hitsFor(body).map((h) => h.line)).toEqual([2, 3]);
   });
 
   it('flags a one-argument .then or a .finally with no handler before it', () => {

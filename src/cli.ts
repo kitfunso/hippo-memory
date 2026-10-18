@@ -282,5 +282,9 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
 // bin/hippo.js calls runCli(); this keeps `node dist/cli.js` working while an import runs nothing.
 const entryPath = process.argv[1];
 if (entryPath && fs.existsSync(entryPath) && fs.realpathSync(entryPath) === fileURLToPath(import.meta.url)) {
-  void runCli();
+  // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the store root) lands here.
+  runCli().catch((err) => {
+    log.error('hippo: the command could not start', errorFields(err));
+    exitAfterFlush(1);
+  });
 }

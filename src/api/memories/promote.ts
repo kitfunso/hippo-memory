@@ -5,7 +5,7 @@ import type { ConnectorEvent } from '../../store/port.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../core/memory.js';
 import { fallbackOrigin } from '../../core/project-identity.js';
 import { detectSecret } from '../../util/secret-detect.js';
-import { embedMemory, folderIndex } from '../../search/embed-memories.js';
+import { embedMemoryDetached, folderIndex } from '../../search/embed-memories.js';
 import { sharedStoreOf, type Context } from '../types.js';
 import { canTouchScope, isPersonalScope, isQuarantineScope, personalScopeOf } from '../../core/recall-scope.js';
 
@@ -33,8 +33,8 @@ export async function promote(ctx: Context, id: string): Promise<PromoteResult> 
     sourceId: id,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
-  // A promote may create the global store, which only the write target names before it exists; this never rejects.
-  void embedMemory(folderIndex(target), globalEntry);
+  // A promote may create the global store, which only the write target names before it exists.
+  embedMemoryDetached(folderIndex(target), globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 
