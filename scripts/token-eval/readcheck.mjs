@@ -157,12 +157,24 @@ const UNRESOLVED = new Set([
   'ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP', 'EINVAL', 'ENAMETOOLONG', 'EBUSY', 'EIO', 'ENXIO', 'ENODEV', 'UNKNOWN', 'ERR_INVALID_ARG_VALUE',
 ]);
 
+let realpathNative = fs.realpathSync.native;
+
+/** Test seam in place of mocking node:fs (the lint bans module mocks); null puts the real call back. */
+export function __setRealpath(fn) {
+  realpathNative = fn ?? fs.realpathSync.native;
+}
+
+// A \\server\share path names another machine, never a run's dir, and realpath on it asks the network, whose errors (ECONNRESET) say nothing about the path.
+const OTHER_MACHINE = process.platform === 'win32' ? /^\\\\[^\\?.]/ : null;
+
 /** p with its deepest existing prefix resolved by the filesystem, so a short name or a link alias equals its target. */
 function realPath(p) {
   const tail = [];
-  for (let cur = path.resolve(p); ; cur = path.dirname(cur)) {
+  const abs = path.resolve(p);
+  if (OTHER_MACHINE?.test(abs)) return abs;
+  for (let cur = abs; ; cur = path.dirname(cur)) {
     try {
-      return path.join(fs.realpathSync.native(cur), ...tail);
+      return path.join(realpathNative(cur), ...tail);
     } catch (err) {
       if (!UNRESOLVED.has(err.code)) throw err;
     }

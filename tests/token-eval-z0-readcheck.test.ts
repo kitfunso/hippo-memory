@@ -1,9 +1,9 @@
 // Z0 G1 read check and delivery voids (prereg 113, 159-162) with the fake Claude Code: a session that read past its own memory is void.
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { symlinkSync, writeFileSync, rmSync, readdirSync, mkdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { symlinkSync, writeFileSync, rmSync, readdirSync, mkdirSync, realpathSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { resolveToken, foldPath, sessionVoid } from '../scripts/token-eval/readcheck.mjs';
+import { resolveToken, foldPath, sessionVoid, __setRealpath } from '../scripts/token-eval/readcheck.mjs';
 import { codexAdapter } from '../scripts/token-eval/codex-rollout.mjs';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
 import { __setSettleHook } from '../scripts/token-eval/runs.mjs';
@@ -183,6 +183,22 @@ describe('paths realpath cannot take', () => {
     // Listed, though stat on it fails, so existsSync says false.
     if (!readdirSync('C:/').includes('pagefile.sys')) t.skip();
     expect(foldPath('C:/pagefile.sys')).toBe('c:/pagefile.sys');
+  });
+
+  it.skipIf(process.platform !== 'win32')('a \\\\server\\share path folds without asking the network', () => {
+    // The network's own failure, as an agent's `\\ Remove ...` shell token once raised; a local or device path still reaches realpath.
+    __setRealpath((p) => {
+      if (/^\\\\[^\\?.]/.test(String(p))) throw Object.assign(new Error('connection reset by peer'), { code: 'ECONNRESET' });
+      return realpathSync.native(p);
+    });
+    try {
+      const unc = '\\\\ Remove \x08,,\\ Remove \\b,';
+      expect(foldPath(unc)).toBe(resolve(unc).replaceAll('\\', '/').toLowerCase());
+      expect(foldPath('\\\\no-such-host-z0\\share\\x')).toBe('//no-such-host-z0/share/x');
+      expect(foldPath('\\\\?\\C:\\Windows')).toBe('c:/windows');
+    } finally {
+      __setRealpath(null);
+    }
   });
 
   it('an overlong path in a tool call is a plain token, never a run fault', async () => {
