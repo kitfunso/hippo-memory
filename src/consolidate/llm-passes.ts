@@ -47,7 +47,7 @@ const dagStore = (run: SleepRun) => ({ consolidation: run.store });
 
 export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
   const llm = sleepLlm(run, fetcher);
-  // 1.6. Batch extraction — extract facts from episodic memories missing them
+  // 1.6. Batch extraction: extract facts from episodic memories missing them
   const batch = extractionBatch(run, llm.apiKey !== '' && !run.dryRun ? EXTRACTION_BATCH_LIMIT : 0);
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
