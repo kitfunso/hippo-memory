@@ -1,0 +1,209 @@
+{
+  "acceptanceFlips": 0,
+  "flippedLessons": [],
+  "g5": {
+    "folders": [
+      {
+        "file": "C:/z0-runs/scored/pilot/rf-r-a04/run/grading.json",
+        "sha256": "c6e9157a0fe7f2da486dbba507ffee37c26aea631c61583504fe9e24eeeb1f66",
+        "g5": {
+          "cells": 60,
+          "extraEnvKeys": [
+            "CLOUDFLARE_EMAIL_TOKEN",
+            "CODEMAGIC_AUTH_TOKEN",
+            "EFC_11636_1262719628",
+            "EFC_11636_1592913036",
+            "EFC_11636_2283032206",
+            "EFC_11636_2946480783",
+            "EFC_11636_3789132940",
+            "EFC_11636_4126798990",
+            "FPS_BROWSER_APP_PROFILE_STRING",
+            "FPS_BROWSER_USER_PROFILE_STRING",
+            "Z0_CONSOLE_KEY",
+            "Z0_SUB_TOKEN",
+            "Z0_SUB_TOKEN_2"
+          ],
+          "pass": "repro",
+          "readerEligible": 56,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 1,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 7
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/pilot/rf-r-a1/run/grading.json",
+        "sha256": "e631fdc515914454f9e9c3623d7b4454a3e9e15d6fdbf59f7a804f017d5f9e07",
+        "g5": {
+          "cells": 45,
+          "extraEnvKeys": [
+            "CLOUDFLARE_EMAIL_TOKEN",
+            "CODEMAGIC_AUTH_TOKEN",
+            "EFC_11636_1262719628",
+            "EFC_11636_1592913036",
+            "EFC_11636_2283032206",
+            "EFC_11636_2946480783",
+            "EFC_11636_3789132940",
+            "EFC_11636_4126798990",
+            "FPS_BROWSER_APP_PROFILE_STRING",
+            "FPS_BROWSER_USER_PROFILE_STRING",
+            "Z0_CONSOLE_KEY",
+            "Z0_SUB_TOKEN",
+            "Z0_SUB_TOKEN_2"
+          ],
+          "pass": "repro",
+          "readerEligible": 48,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 4
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/pilot/rf-x34/run/grading.json",
+        "sha256": "b4b416dfde84f93509ec645fdfc36d4f2864a6c23be71139a46ec34c12ba03c9",
+        "g5": {
+          "cells": 55,
+          "extraEnvKeys": [
+            "CLOUDFLARE_EMAIL_TOKEN",
+            "CODEMAGIC_AUTH_TOKEN",
+            "EFC_11636_1262719628",
+            "EFC_11636_1592913036",
+            "EFC_11636_2283032206",
+            "EFC_11636_2946480783",
+            "EFC_11636_3789132940",
+            "EFC_11636_4126798990",
+            "FPS_BROWSER_APP_PROFILE_STRING",
+            "FPS_BROWSER_USER_PROFILE_STRING",
+            "Z0_CONSOLE_KEY",
+            "Z0_SUB_TOKEN",
+            "Z0_SUB_TOKEN_2"
+          ],
+          "pass": "repro",
+          "readerEligible": 75,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 2,
+          "n": 7
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/pilot/rf-r-a2d/run/grading.json",
+        "sha256": "338cada6f5043889b3412083ebb38f7ea995452b9a379f4f812091fd1f023546",
+        "g5": {
+          "cells": 45,
+          "extraEnvKeys": [],
+          "pass": "repro",
+          "readerEligible": 43,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 4
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/pilot/rf-r-a5d/run/grading.json",
+        "sha256": "abec2ef5f55e206a62a6675db387cbf2730038ac8b85a65c42a6cec0d2e73c7b",
+        "g5": {
+          "cells": 44,
+          "extraEnvKeys": [],
+          "pass": "repro",
+          "readerEligible": 46,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 1,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 4
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/pilot/rf-x2d/run/grading.json",
+        "sha256": "5ea1bc183b3c9e07f2bb9b6cf49ff6be9022c9c60fa4baef90eb0f0879cba174",
+        "g5": {
+          "cells": 33,
+          "extraEnvKeys": [],
+          "pass": "repro",
+          "readerEligible": 45,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 4
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/pilot/rf-x1d/run/grading.json",
+        "sha256": "31ee06d170df60cf0d850b2277bf42daad2c3c73af10896d6f188adb456a8ba0",
+        "g5": {
+          "cells": 33,
+          "extraEnvKeys": [],
+          "pass": "repro",
+          "readerEligible": 45,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 1,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 4
+        }
+      }
+    ],
+    "pass": true
+  },
+  "readerSample": {
+    "disagreements": 2,
+    "n": 34
+  }
+}
