@@ -10,6 +10,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -25,7 +26,7 @@ async function callTool(
 ) {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } },
-    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot) },
+    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot), config: loadConfig(ctx.hippoRoot) },
   );
 }
 function extractText(res: McpResponse | null): string {
@@ -48,7 +49,7 @@ describe('mcp hippo_assemble', () => {
   it('hippo_assemble is in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
     );
     // SAFETY: tools/list always returns { tools: [...] } per the MCP protocol handler above.
     const listResult = res?.result as { tools?: Array<{ name?: string }> } | undefined;

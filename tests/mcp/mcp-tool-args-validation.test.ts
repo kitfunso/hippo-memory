@@ -6,6 +6,7 @@ import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { validateToolArgs, type ToolInputSchema } from '../../src/mcp/tool-args.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -36,7 +37,7 @@ describe('MCP tool argument validation', () => {
   async function call(name: string, args: Wire): Promise<ToolReply> {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
     );
     return reply(res);
   }

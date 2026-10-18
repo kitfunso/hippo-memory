@@ -4,7 +4,6 @@ import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import type { DormantMemory, ListDormantOpts } from '../../store/dormant.js';
 import { strengthAblation } from '../../core/ablation.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../../core/memory.js';
-import { configOf } from '../config-of.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 import type { Context } from '../types.js';
 import type { DormantSnapshot } from '../../store/port/agent-import.js';
@@ -42,7 +41,7 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
   // it carries.
   // The placeholder content only meets createMemory's minimum length, so a legacy row under 3 chars still restores.
   const revived: MemoryEntry = {
-    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays }),
+    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: ctx.config.defaultHalfLifeDays }),
     ...dormant.entry,
     last_retrieved: now.toISOString(),
   };

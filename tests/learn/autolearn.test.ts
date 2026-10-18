@@ -11,6 +11,7 @@ import { extractInvalidationTarget, invalidateMatching } from '../../src/learn/i
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -380,7 +381,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         method: 'tools/call',
         params: { name: 'hippo_learn', arguments: { days: 3650 } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) },
+      { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) },
     );
 
     // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/mcp/request.ts:173).

@@ -9,6 +9,7 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 let tmp: string;
 
@@ -26,7 +27,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
     const store = { ...sqliteStore(donor), localFiles: undefined };
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, { sessionId: 's1', project: { name: 'p', legacyName: 'p' }, payload: { prompt: 'hi' } });
     expect(out.stdout).toContain('rollback plan');
     expect(fs.existsSync(path.join(root, 'hippo.db'))).toBe(false);

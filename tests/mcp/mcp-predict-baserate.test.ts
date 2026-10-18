@@ -15,6 +15,7 @@ import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closePrediction } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -79,7 +80,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     const text = extractText(res);
 
@@ -100,7 +101,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     const text = extractText(res);
     expect(text).toContain('No closed predictions');
@@ -115,7 +116,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     expect(res?.result).toMatchObject({ isError: true });
     expect(extractText(res)).toContain('class_tag is required');
@@ -128,7 +129,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     const text = extractText(res);
     expect(text).toContain('No class_tag');

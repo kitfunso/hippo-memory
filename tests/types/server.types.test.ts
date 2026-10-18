@@ -4,8 +4,11 @@ import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
   BadRequestError, ConflictError, ForbiddenError, HttpError, NotFoundError, isReservedActor, serve,
-  type HippoStore, type ServeOpts, type ServerHandle,
+  type Context, type HippoStore, type ServeOpts, type ServerHandle,
 } from '../../src/server.js';
+import type { HippoConfig } from '../../src/entry/store-kit.js';
+
+declare const store: HippoStore;
 
 describe('hippo-memory/server entry types', () => {
   it('serve takes ServeOpts and resolves to a ServerHandle', () => {
@@ -38,6 +41,15 @@ describe('hippo-memory/server entry types', () => {
     expectTypeOf<ForbiddenError['status']>().toEqualTypeOf<403>();
     expectTypeOf<InstanceType<typeof HttpError>>().toMatchTypeOf<Error>();
     expect(new ConflictError('stale').status).toBe(409);
+  });
+
+  it('a Context carries the config its composition root loaded', () => {
+    expectTypeOf<Context['config']>().toEqualTypeOf<HippoConfig>();
+    typeOnly(() => {
+      // @ts-expect-error config is required: the api reads no config file of its own
+      const ctx: Context = { hippoRoot: '/tmp/root', tenantId: 't', actor: { subject: 'cli', role: 'admin' }, store };
+      expectTypeOf(ctx).toEqualTypeOf<Context>();
+    });
   });
 
   it('isReservedActor takes a subject string', () => {

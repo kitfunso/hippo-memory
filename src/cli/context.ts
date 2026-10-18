@@ -151,7 +151,7 @@ async function renderContext(
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
   const view: ContextView = {
-    hippoRoot,
+    config: ctx.config,
     tenantId: ctx.tenantId,
     ledgerSessionId,
     payloadSessionId,

@@ -18,6 +18,7 @@ import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import type { Context } from '../../api/index.js';
+import type { HippoConfig } from '../../core/config.js';
 import type { HippoStore } from '../../store/index.js';
 import { resolveTenantId } from '../../store/tenant.js';
 import {
@@ -44,7 +45,11 @@ async function readSignedBody(request: WebhookRequest, secret: string, sigStr: s
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
  *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature;
  *  409 on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
-export async function handleGitHubEventsWebhook(request: WebhookRequest, store: HippoStore): Promise<void> {
+export async function handleGitHubEventsWebhook(
+  request: WebhookRequest,
+  store: HippoStore,
+  config: HippoConfig,
+): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGitHubWebhookSecret();
@@ -77,6 +82,7 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store: 
     await routeSignedDelivery({
       hippoRoot: opts.hippoRoot,
       store,
+      config,
       res,
       rawBody,
       eventName,
@@ -107,6 +113,7 @@ type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
 interface SignedDelivery {
   hippoRoot: string;
   store: HippoStore;
+  config: HippoConfig;
   res: ServerResponse;
   rawBody: string;
   eventName: string | null;
@@ -165,6 +172,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     tenantId: resolvedTenant,
     actor: { subject: 'connector:github', role: 'admin' },
     store: d.store,
+    config: d.config,
   };
   if (await dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
 

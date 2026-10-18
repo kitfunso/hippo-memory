@@ -14,6 +14,7 @@ import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { writeEntriesTogether, loadAllDirtySummaries } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/open.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const roots: string[] = [];
 
@@ -115,7 +116,7 @@ describe('countAllMemories', () => {
     for (const n of [10, 200]) {
       const root = newRoot('bounded-count');
       writeEntriesTogether(root, [...padding(n), memory('acme row', { tenant_id: 'acme' })]);
-      const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count'), store: sqliteStore(root) };
+      const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count'), store: sqliteStore(root), config: loadConfig(root) };
       const { result, rowsRead } = await recordStatementsAsync(() => countAllMemories(ctx));
       expect(result).toBe(n + 1);
       read.push(rowsRead);

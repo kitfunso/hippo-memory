@@ -10,7 +10,6 @@ import { evalNow, strengthAblation } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore } from '../core/config.js';
-import { configOf } from './config-of.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import {
@@ -262,7 +261,7 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
   // excluded unless the caller asks for them (crossProject) or isolation is disabled.
-  const config = configOf(ctx);
+  const config = ctx.config;
   const isolationEnabled = config.contextProjectIsolation !== false;
   const currentProject =
     opts.currentProject ?? resolveProjectIdentity(process.cwd());

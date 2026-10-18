@@ -6,7 +6,7 @@ import { resolveTenantId } from '../store/tenant.js';
 import { sqliteReach } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../store/auth.js';
-import { type Actor, type Context, ownerOrSubject } from '../api/index.js';
+import { type Actor, type Context, contextReach, ownerOrSubject } from '../api/index.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { clientLimitKey } from './client-ip.js';
@@ -304,7 +304,7 @@ function keylessLocalActor(): Actor {
 
 function contextFor(id: BearerIdentity | null, opts: AuthOptions): Context {
   // Per request, never cached at serve: the global store can be created while the server runs.
-  const reach = sqliteReach(opts.hippoRoot, opts.store, undefined, opts.globalStores.open);
+  const reach = contextReach(sqliteReach(opts.hippoRoot, opts.store, undefined, opts.globalStores.open), loadConfig);
   // loadConfig caches by file mtime, so each request still sees an edit made while the server runs.
   const config = loadConfig(opts.hippoRoot);
   if (id !== null) {

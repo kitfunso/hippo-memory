@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
-import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { testReach } from '../_helpers/api-ctx.js';
+import { loadConfig } from '../../src/core/config.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
@@ -48,7 +50,7 @@ beforeEach(() => {
   const store = sqliteStore(root);
   ctx = {
     hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1', store,
-    reach: sqliteReach(root, store),
+    reach: testReach(root, store), config: loadConfig(root),
   };
 });
 

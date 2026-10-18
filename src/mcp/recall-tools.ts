@@ -9,7 +9,6 @@ import {
   drillDown as apiDrillDown,
   assemble as apiAssemble,
   getContext as apiGetContext,
-  type Context,
   type RecallOptions,
   type RecallSuppressionSummary,
 } from '../api/index.js';
@@ -28,7 +27,7 @@ import {
 } from '../api/recall/render.js';
 import { estimateTokens } from '../util/token-text.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../api/context-render.js';
-import { mcpActor, ownsServerCwd, type ToolCall } from './protocol.js';
+import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from './session-state.js';
 import {
   formatContinuityBlock,
@@ -172,24 +171,17 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
 }
 
 export async function runRecallTool(call: ToolCall): Promise<string> {
-  const { ctx, hippoRoot, config, tenantId, args, store } = call;
+  const { ctx, config, tenantId, args } = call;
   // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not passed on.
   const { opts: recallOpts } = parseRecallRequest(toolParams(args));
   const { query, window: { includeContinuity }, boost: { sessionId } } = recallOpts;
   const budget = Number(args.budget) || config.defaultBudget;
-  const apiCtx: Context = {
-    hippoRoot,
-    tenantId,
-    actor: mcpActor(ctx),
-    store,
-    reach: ctx?.reach,
-  };
   const anchorRing = sessionRing('mcp', tenantId, sessionId);
   const who = { tenantId, actor: ctx?.actor ?? 'mcp' };
   const queryHash = hashQueryText(query);
   const out: RenderSlot = {};
   // RecallContractError throws reach the MCP caller raw, as mcp-recall-fresh-tail-policy.test.ts pins.
-  await apiRetrieve(apiCtx, {
+  await apiRetrieve(mcpApiContext(ctx), {
     ...recallOpts,
     window: { ...recallOpts.window, limit: MCP_RECALL_LIMIT },
     mode: config.physics?.enabled !== false ? 'physics' : 'hybrid',
@@ -217,20 +209,12 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   return rendered.text;
 }
 
-export async function runAssembleTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall
-): Promise<string> {
+export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> {
   const sessionId = String(args.session_id || '');
   if (!sessionId) return 'No session_id provided.';
   const budget = Number(args.budget);
   const freshTailCount = Number(args.fresh_tail_count);
   const summarizeOlder = args.summarize_older !== false;
-  const apiCtx: Context = {
-    hippoRoot,
-    tenantId,
-    actor: mcpActor(ctx),
-    store,
-  };
   const explicitScope = isJsonString(args.scope) && args.scope.length > 0
     ? args.scope
     : undefined;
@@ -238,7 +222,7 @@ export async function runAssembleTool(
   if (Number.isFinite(budget) && budget > 0) assembleExtra.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
-  const r = await apiAssemble(apiCtx, sessionId, {
+  const r = await apiAssemble(mcpApiContext(ctx), sessionId, {
     summarizeOlder,
     project: ctx?.project,
     ...assembleExtra,
@@ -247,24 +231,19 @@ export async function runAssembleTool(
   return assembleText(r);
 }
 
-export async function runDrillTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
+export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
   const summaryId = String(args.summary_id || '');
   if (!summaryId) return 'No summary_id provided.';
   const limit = Number(args.limit);
   const budget = Number(args.budget);
   // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the cap.
   const depth = args.depth === undefined ? undefined : Number(args.depth);
-  const apiCtx: Context = {
-    hippoRoot,
-    tenantId,
-    actor: mcpActor(ctx),
-    store,
-  };
   const drillExtra: DrillDownExtraOptions = {};
   if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
   if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const r = await apiDrillDown(apiCtx, summaryId, { ...drillExtra, project: ctx?.project, cost: drillCost });
+  const opts = { ...drillExtra, project: ctx?.project, cost: drillCost };
+  const r = await apiDrillDown(mcpApiContext(ctx), summaryId, opts);
   if ('failure' in r) {
     // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
     // missing, because telling scope_blocked apart would leak private-row existence.
@@ -284,7 +263,7 @@ function localProject(hippoRoot: string, ownsCwd: boolean): ProjectIdentity {
 }
 
 export async function runContextTool(
-  { args, ctx, hippoRoot, config, tenantId, store }: ToolCall
+  { args, ctx, hippoRoot, config }: ToolCall
 ): Promise<string> {
   // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
   if ((ctx?.reach ? ctx.reach.shared : isSharedStore(hippoRoot)) && ctx?.project === undefined) {
@@ -296,7 +275,7 @@ export async function runContextTool(
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
   const ownsCwd = ownsServerCwd(ctx);
   const result = await apiGetContext(
-    { hippoRoot, tenantId, actor: mcpActor(ctx), store, reach: ctx?.reach },
+    mcpApiContext(ctx),
     {
       // The server's git state is no remote caller's, so a project
       // or remote caller gets rows by strength without a query.

@@ -4,7 +4,6 @@
 import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { type HippoConfig, isSharedStore } from '../core/config.js';
-import { configAtRoot } from './config-of.js';
 import {
   contextBlockLines,
   contextCost,
@@ -54,7 +53,7 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
     // The same store the token ledger writes to, so its config governs both.
     const reach = ledgerReachOf(ctx);
     const home = ledgerFiles(reach);
-    if (home === null || !configAtRoot(ctx, home.root).deliveryLedger.enabled) return null;
+    if (home === null || !home.config.deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
       ledger: home.files.ledger,
       storeHash: blockHash(realpathOrResolve(home.root)),
@@ -102,9 +101,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
 
 /** What one render needs once api.getContext has answered. */
 export interface ContextView {
-  readonly hippoRoot: string;
-  /** The caller's Context config, else the folder's config.json is read. */
-  readonly config?: HippoConfig;
+  readonly config: HippoConfig;
   readonly tenantId: string;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
@@ -247,11 +244,11 @@ function skipUnchangedStatic(
   recallBlock: string,
   staticCount: number,
 ): boolean {
-  const { hippoRoot, payloadSessionId, rec } = view;
+  const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
-  const injectCfg = configAtRoot(view, hippoRoot).pinnedInject;
+  const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
     ? injectCfg.refreshTurns
@@ -369,8 +366,8 @@ export async function promptHookContext(
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);
-  const armOpts = { reach, ownTenantOnly: true, config: ctx.config };
-  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, armOpts);
+  const armOpts = { reach, ownTenantOnly: true };
+  const arm = sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
   const result = await getContext(ctx, {
@@ -386,7 +383,7 @@ export async function promptHookContext(
   });
   const rendered = hasContextData(result)
     ? renderAdditionalContext({
-        hippoRoot: ctx.hippoRoot, config: ctx.config, tenantId: ctx.tenantId, ledgerSessionId,
+        config: ctx.config, tenantId: ctx.tenantId, ledgerSessionId,
         payloadSessionId: ledgerSessionId, pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, reach,
         printedHash: req.printedHash ?? null,
       })

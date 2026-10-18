@@ -18,6 +18,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { pushGoal } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 
 type HippoRecallToolArgs = {
   query: string;
@@ -69,7 +70,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
+    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
@@ -100,7 +101,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   });
 
   it('without session_id, no boost runs and goal_recall_log stays empty', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
+    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],

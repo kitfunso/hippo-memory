@@ -153,3 +153,5 @@ export { ftsTermParts, rarestFtsQuery } from '../core/prompt-recall.js';
 export { OTHER_STORE_MARKER } from '../db/index.js';
 // An add-on that serves a team store checks the flag before it starts.
 export { isSharedStore } from '../core/config.js';
+// A Context carries its store's config, so an integrator that builds one loads it here.
+export { loadConfig, type HippoConfig } from '../core/config.js';

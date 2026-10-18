@@ -3,7 +3,6 @@
 
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { embedAll, folderIndex } from '../search/embed-memories.js';
-import { configOf } from './config-of.js';
 import { requireHostAdmin, type ContextWith } from './types.js';
 
 type LocalContext = ContextWith<'localFiles'>;
@@ -12,7 +11,7 @@ type LocalContext = ContextWith<'localFiles'>;
 export async function embedMissingMemories(ctx: LocalContext, provider?: EmbeddingProvider): Promise<number> {
   requireHostAdmin(ctx, 'Embedding the store');
   const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store });
-  return embedAll(target, undefined, provider, configOf(ctx).embeddings);
+  return embedAll(target, undefined, provider, ctx.config.embeddings);
 }
 
 /** How many vectors the store holds, live memory or not. */

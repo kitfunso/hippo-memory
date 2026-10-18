@@ -16,6 +16,7 @@ import { ConflictError } from '../../src/core/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { loadConfig } from '../../src/core/config.js';
 
 /**
  * Typed wrapper around a single-row SQL lookup. Every call site below
@@ -54,7 +55,7 @@ describe('api tenant isolation', () => {
 
     expect(() =>
       promote(
-        { hippoRoot: home, store: sqliteStore(home), tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
+        { hippoRoot: home, store: sqliteStore(home), config: loadConfig(home), tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
       ),
     ).toThrow(/memory not found/i);

@@ -19,6 +19,7 @@ import { StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-worker-server.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(undoAll);
 
@@ -41,7 +42,7 @@ function rootWithConfig(label: string): string {
   return root;
 }
 
-const ctxOn = (root: string, store: HippoStore): Context => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('capability-test'), store });
+const ctxOn = (root: string, store: HippoStore): Context => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('capability-test'), store, config: loadConfig(root) });
 
 describe.each([
   ['sqliteStore', sqliteStore],
@@ -126,7 +127,7 @@ describe('MCP hippo_remember', () => {
     const reads = vi.spyOn(store, 'entriesByIds');
     const res: McpResponse | null = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: 'the deploy window opens at nine', tag: 'ops' } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store, autoSleep: false },
+      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store, autoSleep: false, config: loadConfig(root) },
     );
     // SAFETY: a tools/call reply carries result.content[0].text.
     const text = (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;

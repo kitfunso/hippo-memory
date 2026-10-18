@@ -22,6 +22,18 @@ export interface Actor {
   owner?: string; // the person behind the key; task state keys on it
 }
 
+/** The operator's global store in reach, with the config.json that ranks its rows and governs its ledger. */
+export interface GlobalInReach {
+  readonly root: string;
+  readonly store: HippoStore;
+  readonly config: HippoConfig;
+}
+
+/** A store reach as a composition root sets it: the global store carries its own config, so the api reads no file. */
+export interface ContextReach extends StoreReach {
+  readonly global?: GlobalInReach;
+}
+
 export interface Context {
   hippoRoot: string;
   tenantId: string;
@@ -29,9 +41,15 @@ export interface Context {
   /** Built by a composition root; every api function reads and writes storage only through it. */
   readonly store: HippoStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an integrator's store. */
-  reach?: StoreReach;
-  /** Set by a composition root per command or request; absent, the api reads the store's config.json. */
-  config?: HippoConfig;
+  reach?: ContextReach;
+  /** The store's config, loaded by the composition root once per command or request. */
+  readonly config: HippoConfig;
+}
+
+/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader. */
+export function contextReach(reach: StoreReach, configAt: (root: string) => HippoConfig): ContextReach {
+  const { global, ...rest } = reach;
+  return global === undefined ? rest : { ...rest, global: { ...global, config: configAt(global.root) } };
 }
 
 /** A context whose store sets the optional groups `G`: the surface proved them once, so the api checks nothing. */

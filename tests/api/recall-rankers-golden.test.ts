@@ -157,7 +157,7 @@ describe('recall ranker goldens', () => {
         boost: { sessionId: c.sessionId },
         cliCore: {
           rank: rankOpts(s, c),
-          sources: c.global ? { globalRoot: s.globalRoot, globalStore: sqliteStore(s.globalRoot) } : undefined,
+          sources: c.global ? { root: s.globalRoot, store: sqliteStore(s.globalRoot), config: loadConfig(s.globalRoot) } : undefined,
           show: (ranking) => {
             ranked = ranking.results.map((r) => stable(r.entry.id));
             return { results: ranking.results, audit: [], tokens: 0 };

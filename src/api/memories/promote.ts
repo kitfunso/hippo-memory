@@ -7,7 +7,6 @@ import { isSharedStore } from '../../core/config.js';
 import { fallbackOrigin } from '../../core/project-identity.js';
 import { detectSecret } from '../../util/secret-detect.js';
 import { embedMemory, folderIndex } from '../../search/embed-memories.js';
-import { configOf } from '../config-of.js';
 import type { Context, ContextWith } from '../types.js';
 import { canTouchScope, isPersonalScope, isQuarantineScope, personalScopeOf } from '../../core/recall-scope.js';
 
@@ -121,7 +120,7 @@ export async function supersede(
   const [old] = await store.entriesByIds([oldId], ctx.tenantId);
   const successor = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
     tenantId: ctx.tenantId,
-    baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
+    baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
     layer: overrides.layer,
     tags: overrides.tags,
     pinned: overrides.pinned,

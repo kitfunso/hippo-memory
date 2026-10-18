@@ -2,7 +2,6 @@
 
 import { currentSignal } from '../util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
-import { loadConfig } from '../core/config.js';
 import { hasGroup, type HippoStore, type OptionalGroup } from '../store/index.js';
 import { type TokenSurface } from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -11,7 +10,7 @@ import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall/request.js';
 import { recordTokens } from '../api/tokens.js';
 import {
-  mcpActor,
+  mcpApiContext,
   type McpContext,
   type McpRequest,
   type McpResponse,
@@ -43,8 +42,7 @@ const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
 export async function recordMcpTokens(toolName: string, output: string, ctx: McpContext): Promise<void> {
   const surface = MCP_TOKEN_SURFACES.get(toolName);
   if (!surface || !output) return;
-  const apiCtx = { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: mcpActor(ctx), store: ctx.store };
-  await recordTokens(apiCtx, surface, { items: 0, tokens: estimateTokens(output) });
+  await recordTokens(mcpApiContext(ctx), surface, { items: 0, tokens: estimateTokens(output) });
 }
 
 // ── Tool execution ──
@@ -97,8 +95,7 @@ function runsOn(store: HippoStore | undefined, toolName: string): boolean {
 async function executeTool(name: string, args: Record<string, JsonValue>, ctx: McpContext): Promise<string> {
   // The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host (the HTTP server's
   // Bearer, or the stdio host's folder walk and HIPPO_TENANT).
-  const { hippoRoot, tenantId } = ctx;
-  const config = loadConfig(hippoRoot);
+  const { hippoRoot, tenantId, config } = ctx;
 
   const run = TOOL_HANDLERS.get(name)?.run;
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table drifted apart.

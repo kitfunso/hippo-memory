@@ -8,7 +8,7 @@ import { detectScope } from '../core/active-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { cliRecallOrigin, scopeHiddenCount } from '../api/recall/rows.js';
-import { cliApiContext, cliLocalFiles } from './api-context.js';
+import { cliApiContext, cliLocalFiles, cliSecondStore } from './api-context.js';
 import type { LocalFiles } from '../store/port.js';
 import type { RankRecallResult } from '../api/recall/pipeline.js';
 import { printedTokens } from '../api/context-render.js';
@@ -89,7 +89,7 @@ async function cmdExplain(
           explicitScope, activeScope,
           search: { ...engine, multihop: false, explain: true },
         },
-        sources: explainGlobalOn ? { globalRoot, globalStore: cliApiContext(globalRoot, tenantId).store } : undefined,
+        sources: explainGlobalOn ? cliSecondStore(globalRoot) : undefined,
         inspect: (ranking) => { slot.rank = ranking; },
       },
     },

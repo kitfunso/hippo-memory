@@ -20,6 +20,7 @@ import { initProject, removeScratch, runHippo, scratch } from '../_helpers/compa
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const TEXTS = [
   'We decided to use pnpm for the billing service because the lockfile is pnpm-lock.yaml.',
@@ -47,7 +48,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): Context => ({ hippoRoot, store: sqliteStore(hippoRoot), tenantId, actor: { subject: ACTOR, role: 'member' } });
+const ctxFor = (hippoRoot: string, tenantId = 'default'): Context => ({ hippoRoot, store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot), tenantId, actor: { subject: ACTOR, role: 'member' } });
 const req = (texts: readonly string[], over: Partial<SessionCaptureRequest> = {}): SessionCaptureRequest =>
   ({ sessionId: 'sess-1', project: CALLER, texts, ...over });
 const contents = (hippoRoot: string, tenantId = 'default'): string[] => loadAllEntries(hippoRoot, tenantId).map((e) => e.content).sort();

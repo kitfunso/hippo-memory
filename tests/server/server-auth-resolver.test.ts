@@ -20,6 +20,7 @@ import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -422,7 +423,7 @@ describe('auth resolver and key routes', () => {
 describe('exported authRevoke for add-ons', () => {
   const ctx = (tenantId: string): Context => ({
     hippoRoot: home,
-    store: sqliteStore(home),
+    store: sqliteStore(home), config: loadConfig(home),
     tenantId,
     actor: { subject: 'system:addon:u1', role: 'admin', viaAuthResolver: true },
   });

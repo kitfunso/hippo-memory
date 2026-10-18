@@ -3,7 +3,6 @@
 // is a second step, which the caller runs after it has reported the write. Nothing here prints; the caller reports from
 // what comes back.
 
-import { configOf } from '../config-of.js';
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../core/memory.js';
 import { computeSalience, type SalienceResult } from '../../core/salience.js';
 import { embedMemory, folderIndex, type EmbedOutcome } from '../../search/embed-memories.js';
@@ -62,7 +61,7 @@ export type LocalRememberOutcome =
 /** The gate's verdict on one write, or null where it does not
  * judge: the store has it off, or the write is pinned or forced. */
 async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise<SalienceResult | null> {
-  const { salience } = configOf(ctx);
+  const { salience } = ctx.config;
   if (!salience.enabled || input.pinned || input.force) return null;
   // computeSalience compares against the last `recentWindow` rows only.
   const window = Math.trunc(salience.recentWindow);
@@ -88,7 +87,7 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
  * caller is not held for it; a row left out of the index is logged. */
 function indexInBackground(ctx: LocalContext, entry: MemoryEntry): Promise<EmbedOutcome> {
   const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store });
-  return embedMemory(target, entry, undefined, configOf(ctx).embeddings).then((outcome) => {
+  return embedMemory(target, entry, undefined, ctx.config.embeddings).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
         `memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`,
@@ -155,7 +154,7 @@ export async function extractRememberedFacts(
   entry: MemoryEntry,
   request: FactExtractionRequest,
 ): Promise<FactExtraction> {
-  const { extraction, defaultHalfLifeDays } = configOf(ctx);
+  const { extraction, defaultHalfLifeDays } = ctx.config;
   if (!request.requested && extraction.enabled !== true) return { status: 'off' };
   const { apiKey, fetcher } = request;
   if (!apiKey) return { status: 'no_key' };

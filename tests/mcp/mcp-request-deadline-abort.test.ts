@@ -5,13 +5,14 @@ import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { runWithRequestId } from '../../src/util/request-scope.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 let root: string;
 let ctx: McpContext;
 
 beforeEach(() => {
   root = makeRoot('mcp-abort');
-  ctx = { hippoRoot: root, tenantId: 'default', actor: 'test', role: 'admin', store: sqliteStore(root) };
+  ctx = { hippoRoot: root, tenantId: 'default', actor: 'test', role: 'admin', store: sqliteStore(root), config: loadConfig(root) };
 });
 
 const REMEMBER = { jsonrpc: '2.0' as const, id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: 'a fact that must not be stored' } } };

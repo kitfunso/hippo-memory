@@ -15,6 +15,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { folderFiles } from '../_helpers/cli-stores.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -65,7 +66,7 @@ describe('token ledger write failures', () => {
     writeEntry(root, createMemory('ledger probe note about deploys'));
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'deploys' } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) },
+      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) },
     );
     expect(res?.error).toBeUndefined();
     expect(JSON.stringify(res?.result)).toContain('ledger probe note');
@@ -105,7 +106,7 @@ describe('token ledger write failures', () => {
   it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
     const store = makeRoot('ledger-notadb', { init: false });
     const write = (): void => {
-      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: folderFiles(store) });
+      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: { ...folderFiles(store), config: DEFAULT_CONFIG } });
     };
     initStore(store);
     fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');

@@ -19,6 +19,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { countSessionRawMemories } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -167,7 +168,7 @@ describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
     );
     // SAFETY: tools/list's MCP result envelope always carries result.tools
     // with each tool's JSON-schema inputSchema.properties; McpResponse.result

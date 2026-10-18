@@ -89,6 +89,7 @@ function mcpContextFor(
     owner: ctx.actor.owner,
     clientKey,
     store: ctx.store,
+    config: ctx.config,
     reach: ctx.reach,
     autoSleep,
     autoSleepRunner: consolidateInChild,

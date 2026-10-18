@@ -8,6 +8,7 @@ import { strengthBucket } from '../../src/consolidate/dedupe.js';
 import { initStore } from '../../src/store/open.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -69,7 +70,7 @@ describe('package entry re-exports sleep', () => {
     vi.stubEnv('HIPPO_HOME', home);
     try {
       initStore(home);
-      const result = await entry.sleep({ hippoRoot: home, store: sqliteStore(home), tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
+      const result = await entry.sleep({ hippoRoot: home, store: sqliteStore(home), config: loadConfig(home), tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
       expect(result.dryRun).toBe(true);
       expect(result.active).toBe(0);
     } finally {
@@ -223,6 +224,7 @@ describe('published runtime exports', () => {
       float32ToBuffer ftsTermParts
       hasGroup heldTexts
       isSharedStore
+      loadConfig
       normalizeValueForRejection
       ownScopeTouches
       passesScopeFilterForRecall physicsSearch

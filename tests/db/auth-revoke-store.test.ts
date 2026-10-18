@@ -9,6 +9,7 @@ import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type Serv
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from '../_helpers/in-memory-key-audit-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 let fixture: TwoTenantFixture;
@@ -73,7 +74,7 @@ describe('authRevoke with ctx.store', () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryKeyAuditStore(copyOf());
     const { memberA } = fixture.keys;
-    expect(await authRevoke({ hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store }, memberA)).toEqual({ ok: true, revokedAt: NOW });
+    expect(await authRevoke({ hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) }, memberA)).toEqual({ ok: true, revokedAt: NOW });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect((await memory.store.findApiKey(memberA))?.revokedAt).toBe(NOW);
     expect(memory.auditRows().at(-1)).toMatchObject({ tenantId: TENANT_A, actor: 'cli', op: 'auth_revoke', targetId: memberA });
@@ -82,7 +83,7 @@ describe('authRevoke with ctx.store', () => {
   it("keeps hippo.db's checks: a member key revokes only itself, a foreign key is unknown", async () => {
     const memory = inMemoryKeyAuditStore(copyOf());
     const { adminA, memberA, memberB } = fixture.keys;
-    const member = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: { subject: `api_key:${memberA}`, role: 'member' as const }, store: memory.store };
+    const member = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: { subject: `api_key:${memberA}`, role: 'member' as const }, store: memory.store, config: DEFAULT_CONFIG };
     await expect(authRevoke(member, adminA)).rejects.toThrow(ForbiddenError);
     await expect(authRevoke({ ...member, actor: admin }, memberB)).rejects.toThrow(NotFoundError);
     expect(await authRevoke(member, memberA)).toEqual({ ok: true, revokedAt: NOW });

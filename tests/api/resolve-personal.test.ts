@@ -12,6 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const A_TEXT = 'always run the deploy script with --dry-run first';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -27,7 +28,7 @@ function ctxFor(actor: Actor): FullContext {
 }
 
 async function callTool(actor: Actor, name: string, args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role , store: sqliteStore(root) };
+  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role , store: sqliteStore(root), config: loadConfig(root) };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }

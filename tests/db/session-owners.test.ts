@@ -10,6 +10,7 @@ import { bindSessionOwner } from '../../src/server.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 interface StatementProto { readonly sourceSQL: string }
 type StatementGet = (this: StatementProto, ...params: string[]) => object | undefined;
@@ -28,7 +29,7 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 }
 
 function ctx(owner: string, tenantId = 'default'): Context {
-  return { hippoRoot: home, store: sqliteStore(home), tenantId, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } };
+  return { hippoRoot: home, store: sqliteStore(home), config: loadConfig(home), tenantId, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } };
 }
 
 function bindings(): Array<{ tenant_id: string; session_id: string; owner_subject: string; created_at: string }> {

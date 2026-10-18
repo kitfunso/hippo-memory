@@ -12,6 +12,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -127,7 +128,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
       encoding: 'utf-8',
     });
-    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(localRoot) };
+    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(localRoot), config: loadConfig(localRoot) };
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,

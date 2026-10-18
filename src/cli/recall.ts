@@ -41,7 +41,7 @@ import {
   recallJsonRow,
   type CliRecallRerankerPick,
 } from '../api/recall/rows.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliSecondStore } from './api-context.js';
 import { printError } from './output.js';
 import {
   parseLimitFlag,
@@ -252,9 +252,7 @@ async function cmdRecall(
       rank: rankOptions(query, flags, o, priced),
       // The global store is a second source for this surface alone, and never when it is the store being searched.
       sources:
-        globalRoot !== hippoRoot && priced.globalOn
-          ? { globalRoot, globalStore: cliApiContext(globalRoot, tenantId).store }
-          : undefined,
+        globalRoot !== hippoRoot && priced.globalOn ? cliSecondStore(globalRoot) : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
       lastRecall: ctx.store.lastRecall,

@@ -13,6 +13,7 @@ import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/a
 import { truncateCodePointSafe } from '../../src/util/transcript-tail.js';
 import { resolveTenantId } from '../../src/store/tenant.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 
 let s: Scratch;
 
@@ -85,7 +86,7 @@ describe('preCompactForCaller', () => {
     fs.mkdirSync(server, { recursive: true });
     initStore(server);
     fs.writeFileSync(path.join(server, 'config.json'), JSON.stringify({ sharedStore: true }));
-    const ctx: Context = { hippoRoot: server, store: sqliteStore(server), tenantId: 'acme', actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
+    const ctx: Context = { hippoRoot: server, store: sqliteStore(server), config: loadConfig(server), tenantId: 'acme', actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
     await preCompactForCaller(ctx, { sessionId: 's1', project: { name: 'proj', legacyName: 'proj' }, trigger: 'auto', workingState: transcriptWorkingState(transcript, () => {}) });
     const stored = loadActiveTaskSnapshot(server, 'acme', { owner: 'alice', project: ['proj'] });
 
