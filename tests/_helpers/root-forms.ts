@@ -45,7 +45,7 @@ import {
   countSessionRawMemoriesAt,
   loadAllEntryIdsAt,
   loadEntriesByIdsAt,
-  loadEntryTextKeysAt,
+  loadEntryTextKeysPageAt,
   loadEveryTenantEntriesAt,
   loadFreshRawMemoriesAt,
   loadSessionRawMemoriesAt,
@@ -150,6 +150,7 @@ import type {
 import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../src/store/port/sharing.js';
 import type {
   DetectedConflict,
+  EntryCursor,
   FlushComponent,
   LoadedRows,
   SessionDecayContext,
@@ -384,8 +385,21 @@ export function loadAllEntryIds(hippoRoot: string): string[] {
   return onHandle(hippoRoot, (db) => loadAllEntryIdsAt(db), openStore);
 }
 
-export function loadEntryTextKeys(hippoRoot: string, tenantId?: string): EntryTextKey[] {
-  return onHandle(hippoRoot, (db) => loadEntryTextKeysAt(db, tenantId), openStore);
+/** Every page of loadEntryTextKeysPageAt, `pageRows` at a time. */
+export function loadEntryTextKeys(hippoRoot: string, tenantId?: string, pageRows = 500): EntryTextKey[] {
+  return onHandle(
+    hippoRoot,
+    (db) => {
+      const keys: EntryTextKey[] = [];
+      for (let after: EntryCursor | null | undefined; after !== null;) {
+        const page = loadEntryTextKeysPageAt(db, tenantId, { limit: pageRows, after });
+        keys.push(...page.keys);
+        after = page.next;
+      }
+      return keys;
+    },
+    openStore,
+  );
 }
 
 export function writeEntriesTogether(hippoRoot: string, entries: readonly MemoryEntry[]): number {

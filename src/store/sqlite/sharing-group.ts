@@ -1,6 +1,11 @@
 // The built-in store's sharing reads and writes: the existing functions, bound to this store.
 import { tallySourcesAt } from '../candidates.js';
-import { loadEntriesByIdsAt, loadEntriesWithSignalsAt, loadEntryTextKeysAt } from '../entry-reads.js';
+import {
+  loadEntriesByIdsAt,
+  loadEntriesPageAt,
+  loadEntriesWithSignalsAt,
+  loadEntryTextKeysPageAt,
+} from '../entry-reads.js';
 import { writeEntriesSkippingRejectedAt } from '../entry-writes.js';
 import { type OnHandle, openStore } from '../open.js';
 import type { Sharing } from '../port/sharing.js';
@@ -8,8 +13,10 @@ import { loadRecallEntriesAt, loadSearchEntriesAt } from '../search-rows.js';
 
 export function sqliteSharing(on: OnHandle): Sharing {
   return {
-    entriesWithSignals: (signals, tenantId) => on((db) => loadEntriesWithSignalsAt(db, signals, tenantId), openStore),
-    textKeys: (tenantId) => on((db) => loadEntryTextKeysAt(db, tenantId), openStore),
+    entriesPage: (tenantId, page) => on((db) => loadEntriesPageAt(db, tenantId, page), openStore),
+    entriesWithSignals: (signals, tenantId, page) =>
+      on((db) => loadEntriesWithSignalsAt(db, signals, tenantId, page), openStore),
+    textKeysPage: (tenantId, page) => on((db) => loadEntryTextKeysPageAt(db, tenantId, page), openStore),
     entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids), openStore),
     writeSkippingRejected: (fill) => on((db, files) => writeEntriesSkippingRejectedAt(db, files, fill), openStore),
     sourceTallies: async (tenantId) => on((db) => tallySourcesAt(db, tenantId), openStore),

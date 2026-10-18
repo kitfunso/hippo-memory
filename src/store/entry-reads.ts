@@ -11,7 +11,7 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { placeholders } from '../util/sql.js';
 import type { EntryCursor, EntryPage } from './port/consolidation.js';
 import type { RawRefRow } from './port/context-reads.js';
-import type { EntrySignals, EntryTextKey } from './port/sharing.js';
+import type { EntrySignals, EntryTextKeyPage } from './port/sharing.js';
 
 const MAX_IDS_PER_READ = 500;
 const MAX_FRESH_RAW = 200;
@@ -333,25 +333,47 @@ function pageOf(rows: MemoryEntry[], limit: number): EntryPage {
   return { entries, next: rows.length > limit && last ? { created: last.created, id: last.id } : null };
 }
 
-/** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether
+/** The keyset clause that resumes loadAllEntries' order after `after`, and its arguments. */
+function afterCursor(after: EntryCursor | undefined): { sql: string; args: string[] } {
+  return after
+    ? { sql: ' AND (created > ? OR (created = ? AND id > ?))', args: [after.created, after.created, after.id] }
+    : { sql: '', args: [] };
+}
+
+/** Where the page after `rows` starts: one row past `limit` was read only to say that another page follows. */
+function cursorAfter(rows: ReadonlyArray<{ created: string; id: string }>, limit: number): EntryCursor | null {
+  const last = rows[Math.min(rows.length, limit) - 1];
+  return rows.length > limit && last ? { created: last.created, id: last.id } : null;
+}
+
+/** A page of rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether
  * another store already holds each. */
-export function loadEntryTextKeysAt(db: DatabaseSyncLike, tenantId?: string): EntryTextKey[] {
-  const where = tenantId !== undefined ? 'WHERE tenant_id = ? ' : '';
-  // SAFETY: rows' shape matches the four columns named in the SELECT.
-  const rows = db
-    .prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
-    .all(...(tenantId !== undefined ? [tenantId] : [])) as Array<{
+export function loadEntryTextKeysPageAt(
+  db: DatabaseSyncLike,
+  tenantId: string | undefined,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): EntryTextKeyPage {
+  const tenant = tenantAnd(tenantId);
+  const after = afterCursor(page.after);
+  // SAFETY: rows' shape matches the five columns named in the SELECT.
+  const rows = cachedStatement(
+    db,
+    `SELECT id, tenant_id, content, source, created FROM memories ` +
+      `WHERE 1${tenant.sql}${after.sql} ORDER BY created ASC, id ASC LIMIT ?`,
+  ).all(...tenant.args, ...after.args, page.limit + 1) as Array<{
     id: string;
     tenant_id: string | null;
     content: string;
     source: string;
+    created: string;
   }>;
-  return rows.map((row) => ({
+  const keys = rows.slice(0, page.limit).map((row) => ({
     id: row.id,
     tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
     content: row.content,
     source: row.source,
   }));
+  return { keys, next: cursorAfter(rows, page.limit) };
 }
 
 /** Every tenant's rows in loadAllEntries' order through one cursor, so the caller holds one row at a time. */
@@ -404,16 +426,35 @@ export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): Memor
   return selectAllRows(db, tenantId).map(rowToEntry);
 }
 
-/** The columns a text match needs, for every row of a tenant in loadAllEntries' order: callers read whole rows only
- * for the ids that match. */
-export function selectTenantTexts(
+/** The columns a text match needs, for one row of a tenant. */
+export interface TenantText {
+  readonly id: string;
+  readonly content: string;
+  readonly source: string;
+  readonly scope: string | null;
+}
+
+/** One page of TenantText rows, and where the next page starts (null after the last). */
+export interface TenantTextPage {
+  readonly texts: TenantText[];
+  readonly next: EntryCursor | null;
+}
+
+/** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs: callers read whole rows
+ * only for the ids that match. */
+export function selectTenantTextsPage(
   db: DatabaseSyncLike,
   tenantId: string,
-): Array<{ id: string; content: string; source: string; scope: string | null }> {
-  // SAFETY: rows' shape matches the four columns named in the SELECT.
-  return db
-    .prepare('SELECT id, content, source, scope FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC')
-    .all(tenantId) as Array<{ id: string; content: string; source: string; scope: string | null }>;
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): TenantTextPage {
+  const after = afterCursor(page.after);
+  // SAFETY: rows' shape matches the five columns named in the SELECT.
+  const rows = cachedStatement(
+    db,
+    `SELECT id, content, source, scope, created FROM memories ` +
+      `WHERE tenant_id = ?${after.sql} ORDER BY created ASC, id ASC LIMIT ?`,
+  ).all(tenantId, ...after.args, page.limit + 1) as Array<TenantText & { created: string }>;
+  return { texts: rows.slice(0, page.limit), next: cursorAfter(rows, page.limit) };
 }
 
 /** Live rows whose source starts with `prefix`, on the caller's
@@ -478,17 +519,25 @@ export interface PreviewRow {
   tags_json: string | null;
 }
 
-/** Reads memories from a store whose schema may predate some columns; `columns` is the table's real column set. */
-export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<string>, tenantId: string): PreviewRow[] {
-  const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
+/** A page of memories, by rowid, from a store whose schema may predate some columns; `columns` is the table's real
+ * column set, and every schema has a rowid. */
+export function selectPreviewRowsPage(
+  db: DatabaseSyncLike,
+  columns: ReadonlySet<string>,
+  tenantId: string,
+  page: { readonly limit: number; readonly afterRowid: number },
+): Array<PreviewRow & { row_id: number }> {
+  const tenant = columns.has('tenant_id') ? ' AND tenant_id = ?' : '';
   const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
   const statement = db.prepare(
-    `SELECT id, content, ${column('source', "''")}, ` +
+    `SELECT rowid AS row_id, id, content, ${column('source', "''")}, ` +
       `${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ` +
-      `${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`,
+      `${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories ` +
+      `WHERE rowid > ?${tenant} ORDER BY rowid LIMIT ?`,
   );
-  // SAFETY: the SELECT names every PreviewRow field, each a literal fallback when its column is missing.
-  return (tenant ? statement.all(tenantId) : statement.all()) as PreviewRow[];
+  const args = tenant ? [page.afterRowid, tenantId, page.limit] : [page.afterRowid, page.limit];
+  // SAFETY: the SELECT names the rowid and every PreviewRow field, each a literal fallback when its column is missing.
+  return statement.all(...args) as Array<PreviewRow & { row_id: number }>;
 }
 
 /** True when a memory row, of any tenant, already holds `id`. */
@@ -587,13 +636,14 @@ export function loadCurrentDistilledEntriesAt(db: DatabaseSyncLike): MemoryEntry
   return rows.map(rowToEntry);
 }
 
-/** Rows holding at least one signal, in loadAllEntries' order; omitting `tenantId` reads every tenant. A superset:
- * callers re-check each row. */
+/** A page of the rows holding at least one signal, in loadAllEntries' order; an undefined `tenantId` reads every
+ * tenant. A superset: callers re-check each row. */
 export function loadEntriesWithSignalsAt(
   db: DatabaseSyncLike,
   signals: EntrySignals,
-  tenantId?: string,
-): MemoryEntry[] {
+  tenantId: string | undefined,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): EntryPage {
   // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so the prefix match is
   // wider than startsWith.
   const anyOf = [
@@ -611,14 +661,14 @@ export function loadEntriesWithSignalsAt(
     ...signals.tags.map((t) => JSON.stringify(t)),
   ];
   const tenant = tenantAnd(tenantId);
+  const after = afterCursor(page.after);
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db
-    .prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-        `WHERE (${anyOf.join(' OR ')})${tenant.sql} ORDER BY created ASC, id ASC`,
-    )
-    .all(...params, ...tenant.args) as MemoryRow[];
-  return rows.map(rowToEntry);
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+      `WHERE (${anyOf.join(' OR ')})${tenant.sql}${after.sql} ORDER BY created ASC, id ASC LIMIT ?`,
+  ).all(...params, ...tenant.args, ...after.args, page.limit + 1) as MemoryRow[];
+  return pageOf(rows.map(rowToEntry), page.limit);
 }
 
 /** A tenant's rows from `origins` that nothing superseded and

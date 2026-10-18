@@ -41,8 +41,10 @@ export function longestWord(text: string): string {
     .reduce((best, w) => (w.length > best.length ? w : best), '');
 }
 
-export function storedTextKeys(entries: readonly Text[]): Set<string> {
-  return new Set(entries.flatMap(heldTextKeys));
+export function storedTextKeys(entries: Iterable<Text>): Set<string> {
+  const keys = new Set<string>();
+  for (const entry of entries) for (const key of heldTextKeys(entry)) keys.add(key);
+  return keys;
 }
 
 /**

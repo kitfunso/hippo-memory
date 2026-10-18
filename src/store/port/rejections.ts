@@ -8,7 +8,8 @@ export interface RejectionCheck {
 }
 
 export interface Rejections {
-  /** In one transaction: the tombstone, the removal of every row in reach holding the text, one reject_value row. */
+  /** The tombstone commits first; then one short transaction removes every row in reach holding the text, with one
+   * reject_value row. */
   apply(rejection: Rejection): Promise<AppliedRejection>;
   /** Lifts the tenant's one tombstone `digestPrefix` names, with its unreject_value row; none or two write nothing. */
   lift(tenantId: string, digestPrefix: string, actor: string): Promise<LiftedRejection>;

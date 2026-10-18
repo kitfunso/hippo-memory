@@ -7,9 +7,10 @@ import { type StoreFiles } from './open.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { SqlFragment } from './rule-sql.js';
 import type { WriteBudget } from '../util/write-budget.js';
-import { rejectionDigest } from './rejection.js';
 import { RejectedValueError } from '../core/api-errors.js';
+import { chunked } from '../util/chunked.js';
 import { escapeLike } from '../util/escape.js';
+import { placeholders } from '../util/sql.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { DAY_MS } from '../util/time.js';
 import { appendAuditEvent } from './audit.js';
@@ -234,28 +235,70 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
   return Number(result.changes ?? 0) > 0;
 }
 
-/** Deletes the tenant's dormant copies of a rejected digest whose snapshot scope `inReach` admits, so the value cannot
- * linger; returns their ids. */
-export function purgeDormantByDigest(
+/** The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not parse. */
+export interface DormantText {
+  readonly id: string;
+  readonly content: string;
+  readonly source: string | null;
+  readonly scope: string | null;
+}
+
+const DORMANT_TEXT_COLUMNS =
+  `id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END AS source, ` +
+  `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope`;
+
+/** Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match reads. */
+export function dormantTextsPage(
   db: DatabaseSyncLike,
   tenantId: string,
-  digest: string,
-  inReach: (scope: string | null) => boolean,
-): string[] {
-  // SAFETY: rows' shape matches the three columns named in the SELECT.
-  const rows = db
-    .prepare(
-      `SELECT id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope
-       FROM dormant_memories WHERE tenant_id = ?`,
-    )
-    .all(tenantId) as Array<{ id: string; content: string; scope: string | null }>;
-  const removed: string[] = [];
-  for (const row of rows) {
-    if (rejectionDigest(row.content) !== digest || !inReach(row.scope)) continue;
-    deleteDormantRow(db, tenantId, row.id);
-    removed.push(row.id);
+  page: { readonly limit: number; readonly afterId: string },
+): DormantText[] {
+  // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
+  return db
+    .prepare(`SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id > ? ORDER BY id LIMIT ?`)
+    .all(tenantId, page.afterId, page.limit) as DormantText[];
+}
+
+/** The text columns of a tenant's dormant memories with these ids, one query per chunk. */
+export function dormantTextsByIds(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  ids: readonly string[],
+): Map<string, DormantText> {
+  const byId = new Map<string, DormantText>();
+  for (const chunk of chunked([...new Set(ids)])) {
+    // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
+    const rows = db
+      .prepare(
+        `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
+      )
+      .all(tenantId, ...chunk) as DormantText[];
+    for (const row of rows) byId.set(row.id, row);
   }
-  return removed;
+  return byId;
+}
+
+/** A tenant's dormant snapshots with these ids that still read back, one query per chunk. */
+export function dormantSnapshotsByIds(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  ids: readonly string[],
+): Map<string, DormantSnapshot> {
+  const byId = new Map<string, DormantSnapshot>();
+  for (const chunk of chunked([...new Set(ids)])) {
+    // SAFETY: rows' shape matches the seven columns named in the SELECT.
+    const rows = db
+      .prepare(
+        `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+         FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
+      )
+      .all(tenantId, ...chunk) as DormantRow[];
+    for (const row of rows) {
+      const snapshot = toSnapshot(row);
+      if (snapshot) byId.set(row.id, snapshot);
+    }
+  }
+  return byId;
 }
 
 interface DormantKey {

@@ -11,11 +11,13 @@ import { isPersonalScope, isQuarantineScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { embedMemory, embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
-import { duplicateKey, storedTextKeys } from '../util/same-text.js';
+import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
+import { chunked } from '../util/chunked.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
-import type { EntrySignals } from '../store/port/sharing.js';
+import type { EntryCursor } from '../store/port/consolidation.js';
+import type { EntrySignals, PageRequest, Sharing } from '../store/port/sharing.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
@@ -73,35 +75,56 @@ export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
 /** The transfer score a memory needs before sleep or `hippo share --auto` copies it to the global store. */
 export const AUTO_SHARE_MIN_SCORE = 0.6;
 
-/** Every trait that lifts transferScore above 0.5 or makes autoShare skip a row before scoring it. */
+/** Below this transfer score a hand-run share copies a row only when forced. */
+const SHARE_MIN_SCORE = 0.3;
+
+/** transferScore's weights: where a row with no signal sits, then what each signal adds or takes away. */
+const TRANSFER_WEIGHTS = {
+  neutral: 0.5,
+  perTransferableTag: 0.1,
+  perProjectTag: 0.15,
+  retrieved: 0.1,
+  pinned: 0.1,
+  negativeValence: 0.05,
+} as const;
+
+/** Recalls after which a memory counts as reused and earns TRANSFER_WEIGHTS.retrieved. */
+const REUSED_AFTER_RETRIEVALS = 3;
+
+/** Every trait that lifts transferScore above neutral or makes autoShare skip a row before scoring it. */
 const AUTO_SHARE_SIGNALS: EntrySignals = {
   tags: [...TRANSFERABLE_TAGS, ...NEVER_AUTO_SHARE_TAGS],
   sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX,
-  minRetrievals: 3,
+  minRetrievals: REUSED_AFTER_RETRIEVALS,
   valences: ['negative', 'critical'],
 };
+
+/** Rows autoShare reads, and shares, per page, so neither a read nor a write holds a whole tenant. */
+const AUTO_SHARE_PAGE_ROWS = 500;
 
 /** Estimate how well a memory would transfer to other projects.
  *  Returns 0..1 where >0.5 = good candidate for sharing. */
 export function transferScore(entry: MemoryEntry): number {
-  let score = 0.5; // neutral default
+  let score = TRANSFER_WEIGHTS.neutral;
 
   // Boost for transferable tags
   const transferableCount = entry.tags.filter((t) => TRANSFERABLE_TAGS.has(t)).length;
-  score += transferableCount * 0.1;
+  score += transferableCount * TRANSFER_WEIGHTS.perTransferableTag;
 
   // Penalize for project-specific tags
   const specificCount = entry.tags.filter((t) => PROJECT_SPECIFIC_TAGS.has(t)).length;
-  score -= specificCount * 0.15;
+  score -= specificCount * TRANSFER_WEIGHTS.perProjectTag;
 
   // High-retrieval memories are more likely to be universally useful
-  if (entry.retrieval_count >= 3) score += 0.1;
+  if (entry.retrieval_count >= REUSED_AFTER_RETRIEVALS) score += TRANSFER_WEIGHTS.retrieved;
 
   // Pinned memories are important to their owner
-  if (entry.pinned) score += 0.1;
+  if (entry.pinned) score += TRANSFER_WEIGHTS.pinned;
 
   // Error-tagged memories often encode universal lessons
-  if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') score += 0.05;
+  if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') {
+    score += TRANSFER_WEIGHTS.negativeValence;
+  }
 
   return Math.min(1, Math.max(0, score));
 }
@@ -140,7 +163,7 @@ function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): M
   assertShareable(entry, entry.id);
 
   const score = transferScore(entry);
-  if (score < 0.3 && !force) return null;
+  if (score < SHARE_MIN_SCORE && !force) return null;
 
   // The label keeps the folder name for a user-global row; a NULL
   // row gets `shared::`, which originFromSource reads as no project.
@@ -225,12 +248,8 @@ export async function listPeers(
 
 type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
 
-function isAutoShareCandidate(
-  entry: MemoryEntry,
-  globalContentSet: Set<string>,
-  minScore: number,
-  stats: AutoShareStats | undefined,
-): boolean {
+/** The rules a row must clear before autoShare asks the global store whether it already holds the text. */
+function clearsShareRules(entry: MemoryEntry, minScore: number, stats: AutoShareStats | undefined): boolean {
   // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
   if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) {
     return false;
@@ -240,11 +259,17 @@ function isAutoShareCandidate(
     if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;
     return false;
   }
-  const score = transferScore(entry);
-  if (score < minScore) return false;
+  return transferScore(entry) >= minScore;
+}
 
+/** A row that cleared the rules shares unless the global store holds its text or it carries a secret. */
+function isNewAndClean(
+  entry: MemoryEntry,
+  globalKeys: ReadonlySet<string>,
+  stats: AutoShareStats | undefined,
+): boolean {
   // Skip if already shared (same text apart from spacing)
-  if (globalContentSet.has(duplicateKey(entry.content))) return false;
+  if (globalKeys.has(duplicateKey(entry.content))) return false;
 
   // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the score or dedupe gate
   // was never going to share).
@@ -257,9 +282,53 @@ function isAutoShareCandidate(
   return true;
 }
 
+/** The local rows a page at a time: above the neutral score only a row carrying a signal can share or count as a
+ * never-auto-share skip, so only those are read. */
+function* autoSharePages(sharing: Sharing, minScore: number, tenantId: string | undefined): Generator<MemoryEntry[]> {
+  let after: EntryCursor | null = null;
+  do {
+    const page: PageRequest = { limit: AUTO_SHARE_PAGE_ROWS, after: after ?? undefined };
+    const { entries, next } =
+      minScore > TRANSFER_WEIGHTS.neutral
+        ? sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
+        : sharing.entriesPage(tenantId, page);
+    yield entries;
+    after = next;
+  } while (after !== null);
+}
+
+/** The page's rows that share. Only a global row holding a row's longest word can hold its text, so the global store,
+ * the union of every tenant, is asked for those rows alone. */
+function pageCandidates(
+  to: LocalFiles,
+  page: readonly MemoryEntry[],
+  minScore: number,
+  stats: AutoShareStats | undefined,
+): MemoryEntry[] {
+  const scored = page.filter((entry) => clearsShareRules(entry, minScore, stats));
+  if (scored.length === 0) return [];
+  const words = scored.map((entry) => longestWord(entry.content)).filter((word) => word.length > 0);
+  const globalKeys = storedTextKeys(to.captures.textsHolding(undefined, words, { everyScope: true }));
+  return scored.filter((entry) => isNewAndClean(entry, globalKeys, stats));
+}
+
+/** Writes one page of candidates in one transaction; returns the copies written and how many a tombstone refused. */
+function sharePage(localRoot: string, to: LocalFiles, page: readonly MemoryEntry[]) {
+  const shared: MemoryEntry[] = [];
+  let refused = 0;
+  to.sharing.writeSkippingRejected((put) => {
+    for (const entry of page) {
+      const globalEntry = toGlobalEntry(localRoot, entry, true);
+      if (!globalEntry) continue;
+      if (put(globalEntry)) shared.push(globalEntry);
+      else refused++;
+    }
+  });
+  return { shared, refused };
+}
+
 // A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort the autoShare sleep
-// phase.
-// The candidates are rows already held, written in one transaction; the caller embeds once via embedAll() afterwards.
+// phase. The caller embeds once via embedAll() afterwards.
 function shareCandidates(
   localRoot: string,
   to: LocalFiles,
@@ -268,20 +337,14 @@ function shareCandidates(
 ): MemoryEntry[] {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
-  to.sharing.writeSkippingRejected((put) => {
-    for (const entry of candidates) {
-      const globalEntry = toGlobalEntry(localRoot, entry, true);
-      if (!globalEntry) continue;
-      if (put(globalEntry)) {
-        shared.push(globalEntry);
-        continue;
-      }
-      rejectedSkipped++;
-      if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + 1;
-    }
-  });
+  for (const page of chunked(candidates, AUTO_SHARE_PAGE_ROWS)) {
+    const written = sharePage(localRoot, to, page);
+    shared.push(...written.shared);
+    rejectedSkipped += written.refused;
+  }
 
   if (rejectedSkipped > 0) {
+    if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + rejectedSkipped;
     log.warn(`autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`);
   }
   return shared;
@@ -302,23 +365,13 @@ export function autoShare(
   } = {},
 ): MemoryEntry[] {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
-
-  // A row with none of these signals scores at most 0.5, so above that
-  // bar only signal rows can share or count as never-auto-share skips.
-  const local = from.store.localFiles;
-  const localEntries =
-    minScore > 0.5
-      ? local.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, options.tenantId)
-      : local.learning.allEntries(options.tenantId);
   const to = global.store.localFiles;
   to.ensureFiles();
-  // Host-wide read. The global store IS the union across all tenants;
-  // per-tenant filtering on the global root would defeat the purpose.
-  const globalContentSet = storedTextKeys(to.sharing.textKeys());
-
-  const candidates = localEntries.filter((entry) =>
-    isAutoShareCandidate(entry, globalContentSet, minScore, options.stats),
-  );
+  // Every page is judged before any is written, so a copy written early cannot hide a later row's twin.
+  const candidates: MemoryEntry[] = [];
+  for (const page of autoSharePages(from.store.localFiles.sharing, minScore, options.tenantId)) {
+    candidates.push(...pageCandidates(to, page, minScore, options.stats));
+  }
 
   if (dryRun) return candidates;
 
