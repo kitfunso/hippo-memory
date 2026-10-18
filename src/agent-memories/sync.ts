@@ -47,7 +47,7 @@ export const ADAPTERS: readonly Adapter[] = [
   qwenCodeAdapter,
 ];
 
-/** Overrides config because `hippo init` creates the store in the same command that imports (plan design 11). */
+/** Overrides config because `hippo init` creates the store in the same command that imports. */
 export const TOOLS_ENV = 'HIPPO_AGENT_MEMORY_TOOLS';
 
 /** Everything the adapters may know about the machine; tests hand in a scratch one. */

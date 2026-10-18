@@ -1,4 +1,4 @@
-// An imported row's source, `agent-memory:<tool>:<container>/<item>#<hash>`, and the stored text: plan design 3 and 4.
+// An imported row's source, `agent-memory:<tool>:<container>/<item>#<hash>`, and the stored text.
 import { realpathOrResolve } from '../util/real-path.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { maskEmails } from '../util/secret-detect.js';

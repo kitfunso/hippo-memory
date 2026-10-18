@@ -1,4 +1,4 @@
-// One container's sync in one transaction on the target store: lookup, plan, then every write (plan designs 6 to 8).
+// One container's sync in one transaction on the target store: lookup, plan, then every write.
 import { strengthAblation } from '../core/ablation.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
@@ -26,7 +26,7 @@ export interface ContainerWork {
   readonly container: Container;
   /** `containerPrefix(tool, containerId)`: every row of the container has a source starting with it. */
   readonly prefix: string;
-  /** Legacy rows that take an item's key as they are, by key (plan design 10, first round). */
+  /** Legacy rows that take an item's key as they are, by key. */
   readonly adopt: ReadonlyMap<string, readonly MemoryEntry[]>;
   /** Legacy rows a new row of the key supersedes, by key (second round). */
   readonly replace: ReadonlyMap<string, readonly MemoryEntry[]>;

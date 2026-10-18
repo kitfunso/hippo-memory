@@ -1,4 +1,4 @@
-// What a sync did, per tool, and the one line a command prints about it (plan design 11).
+// What a sync did, per tool, and the one line a command prints about it.
 import { AGENT_MEMORY_TOOLS, type ToolId } from '../core/agent-memory-tools.js';
 import { plural } from '../util/format.js';
 import type { Scope } from './types.js';

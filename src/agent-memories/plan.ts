@@ -1,4 +1,4 @@
-// What one sync does to one container's rows: a pure function of the items read and the rows found (plan design 6).
+// What one sync does to one container's rows: a pure function of the items read and the rows found.
 
 export interface PlanItem {
   readonly key: string;
@@ -30,7 +30,7 @@ export interface PlanInput {
   readonly live: readonly LiveRow[];
   /** Snapshots that are readable and not superseded. */
   readonly dormant: readonly DormantRow[];
-  /** Legacy rows a new row of the key replaces (plan design 10, second round). */
+  /** Legacy rows a new row of the key replaces. */
   readonly legacy?: ReadonlyMap<string, readonly string[]>;
   /** Asked only when a row would be written: the text is already stored live by another path. */
   readonly isDuplicate: (item: PlanItem) => boolean;
@@ -203,7 +203,7 @@ export interface LegacyMatch {
   readonly replace: ReadonlyMap<string, string>;
 }
 
-/** Plan design 10: same text first, then one legacy row per file name; anything else is left to decay. */
+/** Same text first, then one legacy row per file name; anything else is left to decay. */
 export function matchLegacy(rows: readonly LegacyRow[], targets: readonly LegacyTarget[]): LegacyMatch {
   const byText = new Map<string, string>();
   for (const t of targets) if (!byText.has(t.textKey)) byText.set(t.textKey, t.ref);
