@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import type { AddressInfo } from 'net';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { adminActor, type Context } from '../api/index.js';
-import { getMemory } from '../api/memories/memories.js';
+import { memoryGet } from '../api/memories/memories.js';
 import { cardDetail, cardList } from '../api/objects/cards.js';
 import { cliStore } from '../cli/api-context.js';
 import { evalNow } from '../core/ablation.js';
@@ -149,7 +149,7 @@ function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | nu
 /** The drawer's detail of a live memory, or null when the tenant holds no live row with that id. */
 async function memoryDetail(ctx: RouteContext, id: string, fresh: boolean): Promise<MemoryDetail | null> {
   const context = ctx.context();
-  const entry = await getMemory(context, id);
+  const entry = await memoryGet(context, id);
   if (entry === null || !isLiveMemory(entry)) return null;
   const snapshotId = ctx.snapshots.get(context.tenantId, fresh).id;
   const embedded = ctx.snapshots.isEmbedded(entry.id);

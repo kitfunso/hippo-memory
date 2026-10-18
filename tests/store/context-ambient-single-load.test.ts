@@ -1,4 +1,4 @@
-// `hippo context` renders the ambient state getContext returns, so the printed summary counts the rows the context admitted.
+// `hippo context` renders the ambient state contextGet returns, so the printed summary counts the rows the context admitted.
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { computeAmbientState, renderAmbientSummary } from '../../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -23,7 +23,7 @@ afterEach(() => {
 
 const FAKE_NOW = '2026-09-06T12:00:00.000Z';
 
-describe('`hippo context` prints the ambient summary getContext computed', () => {
+describe('`hippo context` prints the ambient summary contextGet computed', () => {
   it('counts only the rows the context admitted (real CLI, real store)', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ambient-cli-'));
     for (const name of ['HIPPO_HOME', 'HOME', 'USERPROFILE']) vi.stubEnv(name, dir);
@@ -100,7 +100,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
     };
     writeEntry(projA, privateScopeRow);
 
-    const result = await getContext(ctx, { currentProject: 'proj-a', budget: 1500 });
+    const result = await contextGet(ctx, { currentProject: 'proj-a', budget: 1500 });
 
     expect(result.ambientState).toBeDefined();
     expect(result.ambientState!.totalMemories).toBe(1);
@@ -141,7 +141,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     _resetAblationCacheForTests();
 
-    const result = await getContext(ctx, { currentProject: 'proj-a', budget: 5000 });
+    const result = await contextGet(ctx, { currentProject: 'proj-a', budget: 5000 });
 
     expect(result.entries.length).toBe(1);
     expect(result.ambientState).toBeDefined();

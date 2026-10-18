@@ -5,7 +5,7 @@
  * Contract:
  *   - api.recall(ctx, opts) is a READ — it does NOT mutate
  *     index.last_retrieval_ids.
- *   - api.getContext(ctx, opts) DOES write last_retrieval_ids (used by
+ *   - api.contextGet(ctx, opts) DOES write last_retrieval_ids (used by
  *     the SDK's outcome-after-context workflow).
  *   - The CLI cmdRecall (cli.ts:1282 region) also writes last_retrieval_ids
  *     because the CLI is interactive — user is about to run
@@ -22,7 +22,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, retrieve, getContext } from '../../src/api/index.js';
+import { remember, retrieve, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall } from '../_helpers/root-forms.js';
@@ -49,7 +49,7 @@ function tmpHome() {
 }
 
 describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effect)', () => {
-  it('api.recall does NOT write last_retrieval_ids; api.getContext DOES', async () => {
+  it('api.recall does NOT write last_retrieval_ids; api.contextGet DOES', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -67,8 +67,8 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       expect(afterRecall).toEqual(before);
       expect(afterRecall).toEqual([]);
 
-      // api.getContext — SHOULD mutate. (getContext opts use `q`, not `query`.)
-      const ctxResult = await getContext(ctx, { currentProject: cwdProject(), q: 'target', budget: 1000 });
+      // api.contextGet - SHOULD mutate. (contextGet opts use `q`, not `query`.)
+      const ctxResult = await contextGet(ctx, { currentProject: cwdProject(), q: 'target', budget: 1000 });
       expect(ctxResult.entries).toHaveLength(2);
       const afterContext = loadLastRecall(home).last_retrieval_ids ?? [];
       expect([...afterContext].sort()).toEqual(ctxResult.entries.map((e) => e.entry.id).sort());

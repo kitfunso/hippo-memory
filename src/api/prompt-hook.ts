@@ -1,7 +1,7 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
-// hook route's call). promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the
+// hook route's call). promptHookContext keeps the server-side copy of the CLI's contextGet flags (cli/context.ts); the
 // CLI parity case in tests/store/prompt-hook-context.test.ts is all that ties the two.
-import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
+import { contextGet, type Context, type ContextResult, type ContextResultEntry } from './index.js';
 import { sharedStoreOf } from './types.js';
 import { BadRequestError } from '../core/api-errors.js';
 import type { HippoConfig } from '../core/config.js';
@@ -100,7 +100,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
   }
 }
 
-/** What one render needs once api.getContext has answered. */
+/** What one render needs once api.contextGet has answered. */
 export interface ContextView {
   readonly config: HippoConfig;
   readonly tenantId: string;
@@ -390,7 +390,7 @@ export async function promptHookContext(
   const arm = sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
-  const result = await getContext(ctx, {
+  const result = await contextGet(ctx, {
     budget: HOOK_BUDGET,
     pinnedOnly: true,
     includeRecent: HOOK_INCLUDE_RECENT,

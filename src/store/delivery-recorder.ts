@@ -122,7 +122,7 @@ export interface DeliverySelected {
   promptRecall?: boolean;
 }
 
-/** What getContext reports while it selects. Every method only reads; none changes what is selected. */
+/** What contextGet reports while it selects. Every method only reads; none changes what is selected. */
 export interface DeliveryObserver {
   facts(facts: DeliveryFacts): void;
   sections(shown: number, dropped: number): void;

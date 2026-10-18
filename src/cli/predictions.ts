@@ -32,7 +32,7 @@ async function predictClose(ctx: Context, args: string[], flags: CliFlags): Prom
   }
   const closureNote = stringFlag(flags, 'note');
 
-  const closed = await predictionsApi.closePrediction(ctx, id, {
+  const closed = await predictionsApi.predictionClose(ctx, id, {
     // SAFETY: the check above exits unless stateRaw is in VALID_CLOSURE_STATES and not open.
     closureState: stateRaw as Exclude<ClosureState, 'open'>,
     actualValue,
@@ -50,21 +50,21 @@ async function loadPredictionList(
   limit: number,
 ): Promise<Prediction[]> {
   if (status === 'open') {
-    return predictionsApi.listPredictions(ctx, {
+    return predictionsApi.predictionList(ctx, {
       classTag: classTag || undefined,
       closureState: 'open',
       limit,
     });
   }
   if (status === 'all') {
-    return predictionsApi.listPredictions(ctx, classTag ? { classTag, limit } : { limit });
+    return predictionsApi.predictionList(ctx, classTag ? { classTag, limit } : { limit });
   }
   const closureState = requireStatus(status, VALID_CLOSURE_STATES);
   if (!classTag) {
     // status filter without class: scan all classes is more complex; v1 requires --class for non-default status
     fail('--status filter (non-open) requires --class to be set.');
   }
-  return predictionsApi.listPredictions(ctx, {
+  return predictionsApi.predictionList(ctx, {
     classTag,
     closureState,
     limit,
@@ -169,7 +169,7 @@ async function predictCreate(ctx: Context, claimText: string, flags: CliFlags): 
   const estimateUnit = stringFlag(flags, 'unit');
   const targetDate = stringFlag(flags, 'target');
 
-  const created = await predictionsApi.recordPrediction(ctx, {
+  const created = await predictionsApi.predictionRecord(ctx, {
     classTag,
     claimText,
     estimateValue,

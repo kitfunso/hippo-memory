@@ -43,32 +43,28 @@ import {
 import { cliConfig, cliApiContext, cliSecondStore } from './api-context.js';
 import { printError } from './output.js';
 import {
+  failLater,
+  intFlagInRange,
   parseLimitFlag,
   parseBudgetFlag,
   type CliFlags,
+  type ParsedFlag,
   type CommandContext,
   parseAsOfFlag,
   engineFlags,
   boolFlag,
   flagIsTrue,
-  isBooleanFlag,
   isStringFlag,
   numberFlag,
-  stringFlag,
   stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
-import {
-  recallEntryText,
-  recallHeading,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  captureConsole,
-} from './print.js';
+import { continuityTexts, recallEntryText, recallHeading } from './print.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
 import { CLI_ACTOR } from '../core/actor.js';
+
+const MAX_NEIGHBORS_FLAG = 200;
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
@@ -91,12 +87,6 @@ function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | nu
     : null;
 }
 
-/** A flag value, or the deferred error that rejects it. */
-interface ParsedFlag<T> {
-  value?: T;
-  fail?: () => never;
-}
-
 /** A flag the ranking stages read, rejected where the old mid-pipeline check printed its error. */
 interface LateFlagError {
   stage: RankStage;
@@ -112,62 +102,26 @@ interface RecallLateFlags {
   error?: LateFlagError;
 }
 
-function failWith(message: string): () => never {
-  return () => {
-    fail(message);
-  };
-}
-
 /** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local store only. */
 function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
-  let hops: number | undefined;
-  if (flags['graph-hops'] !== undefined) {
-    if (isBooleanFlag(flags['graph-hops'])) {
-      failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
-    }
-    const h = Number(flags['graph-hops']);
-    if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
-      failWith(`Invalid --graph-hops: "${stringFlag(flags, 'graph-hops')}". Must be an integer 1..${MAX_HOPS}.`)();
-    }
-    hops = h;
-  }
-  let seeds: number | undefined;
-  if (flags['graph-seeds'] !== undefined) {
-    if (isBooleanFlag(flags['graph-seeds'])) {
-      failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
-    }
-    const s = Number(flags['graph-seeds']);
-    if (!Number.isInteger(s) || s < 1) {
-      failWith(`Invalid --graph-seeds: "${stringFlag(flags, 'graph-seeds')}". Must be a positive integer.`)();
-    }
-    seeds = s;
-  }
-  return { hops, seeds };
+  const hops = intFlagInRange(flags, 'graph-hops', { min: 1, max: MAX_HOPS, example: '2' });
+  hops.fail?.();
+  const seeds = intFlagInRange(flags, 'graph-seeds', { min: 1, example: '10' });
+  seeds.fail?.();
+  return { hops: hops.value, seeds: seeds.value };
 }
 
 function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
-  if (flags['hops'] === undefined) return {};
-  // A value-less `--hops` parses as true, and Number(true) === 1 would silently run a 1-hop expansion.
-  if (isBooleanFlag(flags['hops'])) {
-    return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
-  }
-  const hops = Number(flags['hops']);
-  if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
-    return { fail: failWith(`Invalid --hops: "${stringFlag(flags, 'hops')}". Must be an integer 0..${MAX_HOPS}.`) };
-  }
-  const raw = flags['max-neighbors'];
-  if (raw === undefined) return { value: { hops, maxNeighbors: DEFAULT_MAX_NEIGHBORS } };
-  if (isBooleanFlag(raw)) return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
-  const maxNeighbors = Number(raw);
-  if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
-    return { fail: failWith(`Invalid --max-neighbors: "${String(raw)}". Must be an integer 1..200.`) };
-  }
-  return { value: { hops, maxNeighbors } };
+  const hops = intFlagInRange(flags, 'hops', { min: 0, max: MAX_HOPS, example: '1' });
+  if (hops.value === undefined) return { fail: hops.fail };
+  const neighbors = intFlagInRange(flags, 'max-neighbors', { min: 1, max: MAX_NEIGHBORS_FLAG });
+  if (neighbors.fail) return { fail: neighbors.fail };
+  return { value: { hops: hops.value, maxNeighbors: neighbors.value ?? DEFAULT_MAX_NEIGHBORS } };
 }
 
 function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   const nameRaw = flags['reranker'];
-  if (nameRaw !== undefined && !isStringFlag(nameRaw)) return { fail: failWith('--reranker requires a value.') };
+  if (nameRaw !== undefined && !isStringFlag(nameRaw)) return { fail: failLater('--reranker requires a value.') };
   const name = nameRaw?.trim() ?? '';
   let picked: CliRecallRerankerPick | null;
   try {
@@ -182,13 +136,10 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   }
   if (!picked) return {};
   const { fn } = picked;
-  const raw = flags['reranker-top-k'];
-  const topK = raw !== undefined ? Number(raw) : picked.defaultTopK;
   // slice(0, -1) would quietly drop the last candidate rather than fail.
-  if (!Number.isInteger(topK) || topK < 1) {
-    return { fail: failWith(`Invalid --reranker-top-k: "${String(raw)}". Must be a positive integer.`) };
-  }
-  return { value: { fn, topK } };
+  const topK = intFlagInRange(flags, 'reranker-top-k', { min: 1 });
+  if (topK.fail) return { fail: topK.fail };
+  return { value: { fn, topK: topK.value ?? picked.defaultTopK } };
 }
 
 function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
@@ -196,7 +147,7 @@ function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
   if (raw === undefined) return {};
   const threshold = Number(raw);
   if (!Number.isFinite(threshold) || threshold <= 0) {
-    return { fail: failWith(`Invalid --salience-threshold: "${String(raw)}". Must be a positive number.`) };
+    return { fail: failLater(`Invalid --salience-threshold: "${String(raw)}". Must be a positive number.`) };
   }
   return { value: threshold };
 }
@@ -204,12 +155,12 @@ function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
 function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
   const raw = flags[name];
   if (raw !== undefined && !isStringFlag(raw)) {
-    return { fail: failWith(`--${name} requires a value. Must be one of: ${valid.join(', ')}.`) };
+    return { fail: failLater(`--${name} requires a value. Must be one of: ${valid.join(', ')}.`) };
   }
   const value = raw?.trim() ?? '';
   if (!value) return {};
   if (!valid.includes(value)) {
-    return { fail: failWith(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
+    return { fail: failLater(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
   }
   return { value };
 }
@@ -408,52 +359,27 @@ interface RecallRenderView {
 function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRenderView): string {
   const { query, showWhy, showPlan, planText, hasContinuity, entryText } = v;
   const { activeSnapshot, sessionHandoff, recentSessionEvents } = v.continuity;
-  const printContinuity = (): void => {
-    if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
-    if (sessionHandoff) printHandoff(sessionHandoff);
-    if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-  };
-  return settleTokens((t) =>
-    captureConsole(() => {
-      if (list.length === 0) {
-        // The hint still prints when nothing matched, so the agent sees its track record.
-        if (showPlan) {
-          console.log(planText);
-          console.log();
-        }
-        if (hasContinuity) {
-          printContinuity();
-          console.log(`(no memories matched "${query}")`);
-        } else {
-          console.log('No memories found for:', query);
-        }
-        return;
-      }
-      printContinuity();
-      // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
-      if (h.anchoring) {
-        console.log(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`);
-        console.log();
-      }
-      if (h.availability) {
-        console.log(
-          `Availability bias (${h.availability.recentCount}/${h.availability.returnedCount} recent): ${h.availability.summary}`,
-        );
-        console.log();
-      }
-      if (showPlan) {
-        console.log(planText);
-        console.log();
-      }
-      const cutoff = showWhy ? cutoffLine(list.length, h.summary) : null;
-      if (cutoff) {
-        console.log(cutoff);
-        console.log();
-      }
-      console.log(recallHeading(list.length, t, query));
-      for (const r of list) console.log(entryText(r));
-    }),
-  );
+  const continuity = continuityTexts(activeSnapshot, sessionHandoff, recentSessionEvents);
+  // The hint still prints when nothing matched, so the agent sees its track record.
+  const plan = showPlan && planText !== null ? [planText, ''] : [];
+  return settleTokens((t) => {
+    if (list.length === 0) {
+      const none = hasContinuity ? `(no memories matched "${query}")` : `No memories found for: ${query}`;
+      return [...plan, ...(hasContinuity ? continuity : []), none].join('\n');
+    }
+    // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
+    const lines = [...continuity];
+    if (h.anchoring) lines.push(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`, '');
+    if (h.availability) {
+      const { recentCount, returnedCount, summary } = h.availability;
+      lines.push(`Availability bias (${recentCount}/${returnedCount} recent): ${summary}`, '');
+    }
+    lines.push(...plan);
+    const cutoff = showWhy ? cutoffLine(list.length, h.summary) : null;
+    if (cutoff) lines.push(cutoff, '');
+    lines.push(recallHeading(list.length, t, query), ...list.map(entryText));
+    return lines.join('\n');
+  });
 }
 
 /** Pays the continuity sections in print order after the header; one that does not fit is dropped. */

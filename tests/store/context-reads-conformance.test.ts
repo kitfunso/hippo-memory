@@ -269,7 +269,7 @@ describe('ContextReads.ambientTallies', () => {
   });
 });
 
-/** Digest, vault and tagged rows over both tenants, apart from the getContext fixture so its windows stay as they are. */
+/** Digest, vault and tagged rows over both tenants, apart from the contextGet fixture so its windows stay as they are. */
 function seedRowReads(dir: string): void {
   const at = (minute: number): string => new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
   const row = (content: string, minute: number, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry => ({

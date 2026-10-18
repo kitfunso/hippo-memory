@@ -1,4 +1,4 @@
-// getContext with the delivery observer attached: same result, no writes, and a reason for every rejected candidate.
+// contextGet with the delivery observer attached: same result, no writes, and a reason for every rejected candidate.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { getContext, type ContextOptions } from '../../src/api/index.js';
+import { contextGet, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
@@ -85,11 +85,11 @@ const baseOpts: ContextOptions = {
   currentSessionId: 's1',
 };
 
-/** Runs getContext without and then with an observer, asserts both results match, and returns the event. */
+/** Runs contextGet without and then with an observer, asserts both results match, and returns the event. */
 async function observed(opts: ContextOptions = baseOpts): Promise<DeliveryEventInput> {
-  const without = await getContext(ctx, opts);
+  const without = await contextGet(ctx, opts);
   const rec = recorder();
-  const withObs = await getContext(ctx, { ...opts, deliveryObserver: rec });
+  const withObs = await contextGet(ctx, { ...opts, deliveryObserver: rec });
   expect(JSON.stringify(withObs)).toBe(JSON.stringify(without));
   expect(withObs).toEqual(without);
   return eventOf(rec);
@@ -146,7 +146,7 @@ afterEach(() => {
   _resetAblationCacheForTests();
 });
 
-describe('the observer never changes getContext', () => {
+describe('the observer never changes contextGet', () => {
   const scenarios: Array<[string, ContextOptions, boolean]> = [
     ['include-recent 5', baseOpts, true],
     ['budget pressure', { ...baseOpts, budget: 40 }, true],
@@ -158,7 +158,7 @@ describe('the observer never changes getContext', () => {
         configure({ promptRecall });
         if (seeded) seedMixedStore();
         const event = await observed(opts);
-        const result = await getContext(ctx, opts);
+        const result = await contextGet(ctx, opts);
         expect(event.selectedCount).toBe(result.entries.length);
         expect(event.consideredCount).toBe(event.selectedCount + event.rejectedCount);
         expect(event.promptRecall).toBe(promptRecall);
@@ -178,9 +178,9 @@ describe('the observer never changes getContext', () => {
     configure({ promptRecall: true });
     seedMixedStore();
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const without = await getContext(ctx, baseOpts);
+    const without = await contextGet(ctx, baseOpts);
     const rec = recorder('observe');
-    expect(await getContext(ctx, { ...baseOpts, deliveryObserver: rec })).toEqual(without);
+    expect(await contextGet(ctx, { ...baseOpts, deliveryObserver: rec })).toEqual(without);
     const write = vi.fn(() => 1);
     rec.flush(write);
     expect(write).not.toHaveBeenCalled();
@@ -270,7 +270,7 @@ describe('rejection reasons', () => {
       pinned: true,
     });
     const event = await observed({ ...baseOpts, limit: 1 });
-    const kept = (await getContext(ctx, { ...baseOpts, limit: 1 })).entries.map((e) => e.entry.id);
+    const kept = (await contextGet(ctx, { ...baseOpts, limit: 1 })).entries.map((e) => e.entry.id);
     const cut = [pin.id, other.id].filter((id) => !kept.includes(id));
     const rows = new Map(rowsOf(event).map((c) => [c.memoryId, c]));
     expect([rows.get(copy.id)?.stage, rows.get(copy.id)?.reason]).toEqual(['load', 'duplicate']);

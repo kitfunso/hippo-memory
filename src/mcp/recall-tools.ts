@@ -1,7 +1,7 @@
 // Read-side tool handlers: hippo_recall, hippo_assemble, hippo_drill and hippo_context.
 
 import * as path from 'path';
-import { drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext } from '../api/index.js';
+import { drillDown as apiDrillDown, assemble as apiAssemble, contextGet as apiGetContext } from '../api/index.js';
 import { autoDetectContext } from '../api/context-auto.js';
 import { sharedStoreOf } from '../api/types.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';

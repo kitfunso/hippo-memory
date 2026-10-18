@@ -744,7 +744,7 @@ describe('hippo_status', () => {
       );
       const reply = JSON.stringify(result);
       expect(reply).toContain(`Memories: ${n} (1 pinned, 1 errors)`);
-      expect(reply).toContain('At risk (<0.1): 1\\n');
+      expect(reply).toContain('At risk (<0.2): 1\\n');
       expect(reply).toContain('Open conflicts: 1\\n');
       read.push(rowsRead);
     }

@@ -22,7 +22,7 @@ import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { auditMemory } from '../../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { NO_MERGE_TAGS } from '../../src/sharing/share.js';
-import { forget, listDormant, sleep, supersede } from '../../src/api/index.js';
+import { forget, dormantList, sleep, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -261,7 +261,7 @@ describe('sleep with decay forced', () => {
     expect(readEntry(root, kept.id)).not.toBeNull();
     expect(readEntry(root, merged.id)).toBeNull();
     expect(readEntry(root, plain.id)).toBeNull();
-    expect((await listDormant(ctxFor(root))).map((m) => m.id).sort()).toEqual(
+    expect((await dormantList(ctxFor(root))).map((m) => m.id).sort()).toEqual(
       name === 'dormant on' ? [merged.id, plain.id].sort() : [],
     );
   });
@@ -277,7 +277,7 @@ describe('sleep with decay forced', () => {
     await consolidate(root, { now: sixtyDaysOn() });
 
     expect(readEntry(root, kept.id)).not.toBeNull();
-    expect((await listDormant(ctxFor(root))).map((m) => m.id)).not.toContain(kept.id);
+    expect((await dormantList(ctxFor(root))).map((m) => m.id)).not.toContain(kept.id);
   });
 
   it('a kept row survives a second sleep further on', async () => {
@@ -315,7 +315,7 @@ describe('a memory saved from a compaction fades like any other', () => {
 
     await consolidate(root, { now: sixtyDaysOn() });
     expect(readEntry(root, faded.id)).toBeNull();
-    expect((await listDormant(ctxFor(root))).map((m) => m.id)).toEqual([faded.id]);
+    expect((await dormantList(ctxFor(root))).map((m) => m.id)).toEqual([faded.id]);
   });
 });
 

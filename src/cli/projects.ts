@@ -10,13 +10,14 @@ import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
 import { errorMessage } from '../util/log.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
+import { GIT_CALL_TIMEOUT_MS } from '../util/time.js';
 
 /** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
 function worktreeNames(): Map<string, string> {
   try {
     const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
       encoding: 'utf8',
-      timeout: 10_000,
+      timeout: GIT_CALL_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
     });
@@ -49,7 +50,7 @@ function count(n: number, one: string, many = `${one}s`): string {
 
 function projectsList(ctx: CliContext, flags: CliFlags): void {
   const root = ctx.hippoRoot;
-  const projects = api.listProjectNames(ctx);
+  const projects = api.projectNameList(ctx);
   if (flags['json']) {
     console.log(JSON.stringify({ store: root, projects }, null, 2));
     return;
@@ -67,7 +68,7 @@ function projectsList(ctx: CliContext, flags: CliFlags): void {
 function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): void {
   const apply = flagIsTrue(flags, 'apply');
   const [from, into] = [args[1] ?? '', args[2] ?? ''];
-  const r = api.mergeProjectNames(ctx, { from, into, dryRun: !apply });
+  const r = api.projectNameMerge(ctx, { from, into, dryRun: !apply });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
@@ -94,7 +95,7 @@ function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): void {
 function projectsRepair(ctx: CliContext, flags: CliFlags): void {
   const root = ctx.hippoRoot;
   const apply = flagIsTrue(flags, 'apply');
-  const r = api.repairProjectNames(ctx, { dryRun: !apply });
+  const r = api.projectNameRepair(ctx, { dryRun: !apply });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;

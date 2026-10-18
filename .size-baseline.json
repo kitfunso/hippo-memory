@@ -17,7 +17,7 @@
     "src/cli/decisions.ts": 1,
     "src/cli/explain.ts": 2,
     "src/cli/predictions.ts": 1,
-    "src/cli/recall.ts": 3,
+    "src/cli/recall.ts": 1,
     "src/cli/slack.ts": 1,
     "src/cli/usage.ts": 2,
     "src/cli/verbs/memory.ts": 1,

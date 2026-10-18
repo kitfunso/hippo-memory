@@ -9,7 +9,7 @@ export const AUDIT_OPS = [
   'auth_revoke',
   'auth_create', // emitted by api.authCreate
   'outcome',
-  'pin', // emitted by api.pinMemory
+  'pin', // emitted by api.memoryPin
   'consolidate', // emitted once per api.sleep invocation
   'audit_prune', // emitted by pruneAuditLog after each retention prune
   'summary_marked_dirty', // emitted by markSummaryDirty on the 0->1 transition
@@ -53,7 +53,7 @@ export const AUDIT_OPS = [
   'unreject_value', // emitted by the `hippo unreject` verb
   'conflict_resolve', // emitted by resolveConflict on every resolution path
   'half_life_migrate', // emitted by migrateDefaultHalfLife with the rescaled ids
-  'dormant_restore', // emitted by api.restoreDormant
+  'dormant_restore', // emitted by api.dormantRestore
   'auth_grant', // emitted by api.authGrant
   'auth_ungrant', // emitted by api.authUngrant
   'quarantine', // emitted by recordQuarantine inside remember's write transaction

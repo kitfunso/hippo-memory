@@ -3,8 +3,8 @@
 import { envAnthropicApiKey } from '../util/env.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
-import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
-import { countAllMemories } from '../api/memories/memories.js';
+import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
+import { memoryCountAll } from '../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
@@ -65,7 +65,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
-  const total = await countAllMemories(cliApiContext(hippoRoot, tenantId));
+  const total = await memoryCountAll(cliApiContext(hippoRoot, tenantId));
   console.log(
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );
@@ -150,7 +150,7 @@ export async function handleEmbed(
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   let count: number;
   try {
-    count = await embedMissingMemories(ctx, provider);
+    count = await memoryEmbedMissing(ctx, provider);
   } catch (err) {
     printError(`Embedding failed: ${errorMessage(err)}`);
     printError(

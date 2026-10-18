@@ -55,7 +55,7 @@ function renderSleepResult(result: api.SleepResult): void {
 /** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
 function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
   try {
-    const r = api.repairProjectNamesOnce(cliApiContext(hippoRoot, tenantId));
+    const r = api.projectNameRepairOnce(cliApiContext(hippoRoot, tenantId));
     if (r === null) return;
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
