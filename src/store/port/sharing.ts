@@ -18,6 +18,11 @@ export interface Sharing {
   entriesWithSignals(signals: EntrySignals, tenantId: string | undefined, page: PageRequest): EntryPage;
   /** A page of the id, tenant, source and text of the memories of `tenantId` or of every tenant, oldest first. */
   textKeysPage(tenantId: string | undefined, page: PageRequest): EntryTextKeyPage;
+  /** The id, tenant, source and text of the memories of `tenantId`, or of every tenant, that may hold one of `texts`
+   * word for word, spacing aside: a superset the caller checks again. */
+  textKeysHolding(tenantId: string | undefined, texts: readonly string[]): EntryTextKey[];
+  /** The ids among `ids` that a memory of any tenant holds. */
+  takenIds(ids: readonly string[]): string[];
   /** The memories with these ids, in any tenant; at most 500 ids a call. */
   entriesByIds(ids: readonly string[]): MemoryEntry[];
   /** Writes the rows `fill` puts in one transaction; a rejected value is audited and `put` answers false. Returns how

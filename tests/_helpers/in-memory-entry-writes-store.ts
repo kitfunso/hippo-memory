@@ -1,7 +1,7 @@
 // A store other than hippo.db for the EntryWrites group: it copies memories and tombstones out of hippo.db once, keeps them in
 // memory and writes what hippo.db writes, with only what hippo-memory/store-kit exports, so a conformance test shows that is enough.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { selectAllEntries } from '../../src/store/entry-reads.js';
+import { iterateEveryTenantEntriesAt } from '../../src/store/entry-reads.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/server.js';
 import {
   entryAfterOutcome,
@@ -71,7 +71,9 @@ export const tombstoneKey = (tenantId: string, digest: string): string => `${ten
 function copyRows(hippoRoot: string): CopiedRows {
   const db = openHippoDb(hippoRoot);
   try {
-    const memories = new Map(selectAllEntries(db).map((entry): [string, MemoryEntry] => [entry.id, entry]));
+    const memories = new Map(
+      [...iterateEveryTenantEntriesAt(db)].map((entry): [string, MemoryEntry] => [entry.id, entry]),
+    );
     // SAFETY: the SELECT names these four columns.
     const rows = db.prepare('SELECT tenant_id, digest, reason, rejected_at FROM rejected_values').all() as {
       tenant_id: string;

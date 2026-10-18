@@ -6,7 +6,7 @@ import { contextGet } from '../../src/api/index.js';
 import { containerId, containerPrefix } from '../../src/agent-memories/source.js';
 import { importAtSessionEnd } from '../../src/agent-memories/sync.js';
 import { saveItems } from '../../src/store/compactions-record.js';
-import { listDormantSnapshots } from '../../src/store/dormant.js';
+import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';

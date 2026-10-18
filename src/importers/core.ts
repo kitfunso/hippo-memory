@@ -4,9 +4,8 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
-import { duplicateKey, storedTextKeys } from '../util/same-text.js';
+import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { eachTextKey } from '../sharing/text-keys.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import type { LocalFiles, Sync } from '../store/port.js';
@@ -72,7 +71,6 @@ export function importRoot(options: ImportOptions): string {
  *  create MemoryEntry objects, write them (unless dry-run), and return a result. */
 export function importEntries(chunks: string[], source: string, tags: string[], options: TargetedImport): ImportResult {
   const target = openImportTarget(options);
-  const { keys } = target;
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
   const baseHalfLifeDays = loadConfig(target.targetRoot).defaultHalfLifeDays;
 
@@ -89,7 +87,7 @@ export function importEntries(chunks: string[], source: string, tags: string[], 
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw);
 
-      const skip = skipReason(chunk, keys);
+      const skip = skipReason(chunk, target);
       if (skip !== 'too-short') total++;
       if (skip !== null) {
         skipped++;
@@ -102,7 +100,7 @@ export function importEntries(chunks: string[], source: string, tags: string[], 
         continue;
       }
       // Add to existing so subsequent chunks dedup against freshly imported ones
-      if (!options.dryRun) keys.add(duplicateKey(chunk));
+      if (!options.dryRun) target.written.add(duplicateKey(chunk));
 
       entries.push(entry);
       imported++;
@@ -115,22 +113,32 @@ export function importEntries(chunks: string[], source: string, tags: string[], 
 
 interface OpenImport {
   readonly targetRoot: string;
-  readonly keys: ReturnType<typeof storedTextKeys>;
+  readonly sharing: LocalFiles['sharing'];
+  /** Whose rows a chunk is checked against; undefined checks every tenant's. */
+  readonly tenantId: string | undefined;
+  /** Keys of the chunks this run wrote; a dry run writes none. */
+  readonly written: Set<string>;
   readonly rejections: Sync<Rejections>;
 }
 
-/** The store the import writes to, made ready, with the text keys it already holds. */
+/** The store the import writes to, made ready. */
 function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImport {
   const { localFiles, rejections } = target.store;
   if (global) localFiles.ensureFiles();
-  const keys = storedTextKeys(eachTextKey(localFiles.sharing, global ? undefined : tenantId));
-  return { targetRoot: target.root, keys, rejections };
+  const scope = global ? undefined : tenantId;
+  return { targetRoot: target.root, sharing: localFiles.sharing, tenantId: scope, written: new Set(), rejections };
 }
 
-function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {
+function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate' | null {
   if (!chunk || chunk.length < 10) return 'too-short';
-  if (keys.has(duplicateKey(chunk))) return 'duplicate';
+  if (target.written.has(duplicateKey(chunk)) || storeHolds(target, chunk)) return 'duplicate';
   return null;
+}
+
+/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those alone. */
+function storeHolds({ sharing, tenantId }: OpenImport, chunk: string): boolean {
+  const key = duplicateKey(chunk);
+  return sharing.textKeysHolding(tenantId, [chunk]).some((row) => heldTextKeys(row).includes(key));
 }
 
 /** The secret-vetted chunk capped at 1000 chars, and whether vetting changed it. */

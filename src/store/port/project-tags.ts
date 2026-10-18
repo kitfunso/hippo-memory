@@ -18,11 +18,34 @@ export type SetAsideResult =
 
 export type ProjectTagOp = 'project_merge' | 'project_repair';
 
+/** Which of a tenant's rows tagged one project name to read. */
+export interface OriginRows {
+  readonly origin: string;
+  /** Only rows nothing superseded. */
+  readonly live?: boolean;
+  /** Only rows whose source starts with this. */
+  readonly sourcePrefix?: string;
+}
+
+/** One project name's live rows: how many, how many whose source starts with the asked prefix, and the newest. */
+export interface OriginTally {
+  /** '' is user-global, null is unknown. */
+  readonly origin: string | null;
+  readonly live: number;
+  readonly prefixed: number;
+  readonly newest: string;
+}
+
 export interface ProjectTagReads {
-  entries(): MemoryEntry[];
+  /** Every project name with live rows, in the order its first row was written. */
+  originTallies(sourcePrefix: string): OriginTally[];
+  /** The rows `rows` names, oldest first. */
+  entriesFromOrigin(rows: OriginRows): MemoryEntry[];
   liveEntriesBySourcePrefix(prefix: string): MemoryEntry[];
   entriesByIds(ids: readonly string[]): Map<string, MemoryEntry>;
-  dormant(): DormantSnapshot[];
+  /** The readable dormant snapshots whose row carried project name `origin`. */
+  dormantFromOrigin(origin: string): DormantSnapshot[];
+  dormantByIds(ids: readonly string[]): Map<string, DormantSnapshot>;
   auditEvents(op: ProjectTagOp): AuditEvent[];
   compactionTranscripts(): Array<{ transcript: string; cwd: string | null }>;
   compactionOriginsWithCwd(): Array<{ origin: string; cwd: string }>;
