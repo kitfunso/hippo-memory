@@ -3,7 +3,7 @@
 import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { SessionEventInput, SnapshotInput } from '../store/port/sessions.js';
-import type { Sessions } from '../store/index.js';
+import type { Sessions } from '../store/port-groups.js';
 import type { WorkingMemoryItem } from '../store/port/sessions.js';
 import type { Context } from './types.js';
 

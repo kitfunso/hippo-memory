@@ -10,13 +10,14 @@ export interface GraphRebuild {
 }
 
 /** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives a mirror forget/prune
- * (memory_id may go NULL) and is re-validated by the rebuild, not a hard FK. */
+ * (memory_id may go null) and is re-validated by the rebuild, not enforced by the store. */
 export interface SourceObjectRef {
   type: SourceObjectType;
   id: number;
 }
 
-/** What names an object-derived entity across rebuilds; v38 has no UNIQUE on it, so the diff keeps one row per key. */
+/** What names an object-derived entity across rebuilds; v38 enforces no unique key on it, so the diff keeps
+ * one row per key. */
 export interface NaturalKey {
   readonly entityType: EntityType;
   readonly sourceObject: SourceObjectRef;

@@ -32,8 +32,8 @@ import {
   type SearchResult,
 } from '../../core/search-types.js';
 import { rankBothStores } from '../../sharing/search-both.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../store/rows.js';
-import type { HippoStore } from '../../store/index.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../core/search-types.js';
+import type { HippoStore } from '../../store/port.js';
 import { isJsonNumber } from '../../util/json.js';
 import { currentSignal } from '../../util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../../util/tokenize.js';

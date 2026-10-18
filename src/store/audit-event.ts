@@ -1,6 +1,7 @@
 import { openHippoDb } from '../db/index.js';
 import { resolveTenantId } from './tenant.js';
-import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { appendAuditEvent } from './audit.js';
+import { reportAuditWriteFailure } from '../core/audit-report.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import type { JsonValue } from '../util/json.js';
 import { CLI_ACTOR } from '../core/actor.js';

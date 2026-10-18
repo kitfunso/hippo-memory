@@ -47,7 +47,7 @@ export interface Predictions {
 
 export interface Prediction {
   id: number;
-  /** Nullable: ON DELETE SET NULL allows memory deletion (forget /
+  /** Nullable: a memory may be deleted (forget /
    *  consolidate / archive) without breaking the prediction row. */
   memoryId: string | null;
   tenantId: string;

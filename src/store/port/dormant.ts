@@ -9,13 +9,13 @@ export interface DormantMemory {
   tags: string[];
   /** Live strength when it went dormant. */
   strength: number;
-  /** Why it went dormant: one of the {@link DormantReason} values. */
+  /** Why it went dormant: one of the `DormantReason` values. */
   reason: string;
   /** ISO time it went dormant. */
   dormantAt: string;
 }
 
-/** Options for {@link listDormantRows}. */
+/** Options for `listDormantRows`. */
 export interface ListDormantOpts {
   /** Whitespace-separated terms; a row must contain every term (case-insensitive substring). */
   query?: string;

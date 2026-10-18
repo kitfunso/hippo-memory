@@ -537,17 +537,16 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('groupChecksInApi counts requireGroup, hasGroup and storeWith in the api and domain layers only', () => {
+  it('groupChecksInApi counts requireGroup and hasGroup in the api and domain layers only', () => {
     const files = {
       'layers.json': JSON.stringify({ folders: { api: 'api', consolidate: 'domain', cli: 'surface' } }),
       'src/api/a.ts': "export const f = (s: any) => requireGroup(s, 'localFiles');\n",
       'src/consolidate/b.ts': "export const g = (s: any) => hasGroup(s, 'localFiles');\n",
-      'src/consolidate/d.ts': "export const k = (s: any) => storeWith(s, 'localFiles');\n",
       'src/cli/c.ts': "export const h = (s: any) => requireGroup(s, 'localFiles');\n",
     };
     withFixture(files, null, ({ run }) => {
       const l = list(run);
-      expect(l.groupChecksInApi).toBe('3');
+      expect(l.groupChecksInApi).toBe('2');
       expect(l['src/api/a.ts:1']).toBe('groupChecksInApi');
       expect(l['src/cli/c.ts:1']).toBeUndefined();
     });

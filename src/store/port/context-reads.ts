@@ -34,8 +34,8 @@ export interface ContextReads {
    * 'default-deny'`. Rejects an empty tenant id. */
   unfinishedHandoff(tenantId: string, maxAgeMs: number, key: ContinuityKey | null): Promise<SessionHandoff | null>;
   /** As `loadAmbientCandidates` with `ambientRefusal` as its admit; `recall` searches with the query `rarestFtsQuery`
-   * builds from FTS document counts over every tenant's rows, and finds nothing when no term is indexed. Core keeps
-   * only `tenantId`'s rows that the admission passes, whatever the store returns. */
+   * builds from full-text document counts over every tenant's rows, and finds nothing when no term is indexed. Core
+   * keeps only `tenantId`'s rows that the admission passes, whatever the store returns. */
   ambientCandidates(tenantId: string, request: AmbientCandidateRequest): Promise<AmbientCandidates>;
   /** As `loadContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by
    * created, then id. */

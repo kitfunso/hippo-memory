@@ -132,9 +132,14 @@ function storeImplemented() {
     }
     if (ts.isArrayTypeNode(node)) return walkType(file, node.elementType);
     if (ts.isTypeLiteralNode(node)) return walkMembers(file, node.members);
-    if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node))
-      return node.types.forEach((n) => walkType(file, n));
-    if (ts.isTupleTypeNode(node)) return node.elements.forEach((n) => walkType(file, n));
+    if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
+      node.types.forEach((n) => walkType(file, n));
+      return;
+    }
+    if (ts.isTupleTypeNode(node)) {
+      node.elements.forEach((n) => walkType(file, n));
+      return;
+    }
     if (!ts.isTypeReferenceNode(node)) return;
     (node.typeArguments ?? []).forEach((n) => walkType(file, n));
     if (ts.isIdentifier(node.typeName)) walkName(file, node.typeName.text);

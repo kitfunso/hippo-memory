@@ -2,8 +2,9 @@
 import { isSqliteBusy, noteStoreBusy, type DatabaseSyncLike } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { recordTokenUse } from './token-ledger.js';
-import { ensurePilotArm, hashArm, readPilotArm } from './pilot-arm.js';
-import type { PilotArm } from './port/ledger.js';
+import { ensurePilotArm, readPilotArm } from './pilot-arm.js';
+import { hashArm } from '../core/pilot-arm.js';
+import type { PilotArm } from '../core/pilot-arm.js';
 import { type DeliveryPruneSchedule, writeDeliveryEventOnHandle } from './recall-trace.js';
 import type { LedgerTurn } from './port/ledger.js';
 

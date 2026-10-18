@@ -123,7 +123,7 @@ export interface Goals {
   push(tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Promise<Goal>;
   /** Every status, for `hippo goal list --all`; active-only reads use base `activeGoals`. */
   sessionGoals(tenantId: string, sessionId: string): Promise<Goal[]>;
-  /** By id. Goal ids are not tenant-scoped in hippo.db, so the SQLite store ignores `tenantId` and the api keeps the
+  /** By id. Goal ids are not tenant-scoped in hippo.db, so that store ignores `tenantId` and the api keeps the
    * host-admin check; a tenant-keyed store filters on it. */
   complete(tenantId: string, goalId: string, opts: CompleteGoalOpts): Promise<void>;
   suspend(tenantId: string, goalId: string): Promise<void>;
@@ -147,7 +147,7 @@ export interface DormantRestoreRequest {
   readonly revive: (snapshot: DormantSnapshot, now: Date) => MemoryEntry;
 }
 
-/** `ownScope` is the caller's personal scope; the store builds its own scope test, so no SQL crosses the port. */
+/** `ownScope` is the caller's personal scope; the store builds its own scope test, so no predicate crosses the port. */
 export interface Dormant {
   list(tenantId: string, ownScope: string | null, opts: ListDormantOpts): Promise<DormantMemory[]>;
   holds(tenantId: string, ownScope: string | null, id: string): Promise<boolean>;

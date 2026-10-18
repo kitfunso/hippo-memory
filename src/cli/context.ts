@@ -1,6 +1,6 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
-import type { DeliveryRecorder } from '../store/delivery-recorder.js';
+import type { DeliveryRecorder } from '../api/delivery-recorder.js';
 import { isSubagentPayload } from '../util/hook-payload.js';
 import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../api/context-auto.js';

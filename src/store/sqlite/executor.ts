@@ -2,7 +2,7 @@
 // so the event loop keeps answering.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
-import { addAuditWriteFailures } from '../audit.js';
+import { addAuditWriteFailures } from '../../core/audit-report.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
 import { StoreBusyError } from '../port.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';

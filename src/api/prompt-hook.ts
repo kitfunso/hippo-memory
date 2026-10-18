@@ -14,20 +14,26 @@ import {
   settleTokens,
   snapshotText,
 } from './context-render.js';
-import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from '../store/delivery-recorder.js';
-import type { DeliveryEventType } from '../store/port/delivery.js';
+import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from './delivery-recorder.js';
+import type { DeliveryEventType } from '../core/delivery.js';
 import type { HookRuntime } from '../core/capture-contract.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerFiles, ledgerLastSent, ledgerReachOf, type LedgerReach } from './ledger-db.js';
-import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
+import {
+  bookLedgerTurn,
+  bookLedgerTurnPerRow,
+  ledgerFiles,
+  ledgerLastSent,
+  ledgerReachOf,
+  type LedgerReach,
+} from './ledger-db.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
-import type { PilotArm } from '../store/port/ledger.js';
+import type { PilotArm } from '../core/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/port/ledger.js';
-import { shouldSkipUnchanged } from '../store/token-ledger.js';
+import { shouldSkipUnchanged } from '../core/skip-unchanged.js';
 import type { TokenSurface, TokenUse } from '../store/port/token-ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
@@ -302,13 +308,12 @@ function recordAdditionalContextRows(
     tokens: estimateTokens(part.text),
     hash: blockHash(part.text),
   });
-  bookLedgerTurn(
+  bookLedgerTurnPerRow(
     {
       uses: [
         ...(staticPart.text ? [row(staticPart, surface)] : []),
         ...(recallPart.text ? [row(recallPart, 'hook_recall')] : []),
       ],
-      onRowError: noteLedgerRowSkipped,
       delivery: (write) => flushDeliveryRecorder(view.rec, write),
     },
     view.reach,

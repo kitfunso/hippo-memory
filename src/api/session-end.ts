@@ -7,7 +7,7 @@ import type { HandoffEvidence } from '../core/handoff.js';
 import type { ProjectRef } from '../core/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { LocalFiles } from '../store/port.js';
-import { readApiCalls, type TranscriptCalls } from '../store/token-ledger.js';
+import { readApiCalls, type TranscriptCalls } from '../core/transcript-calls.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';

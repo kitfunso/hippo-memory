@@ -4,7 +4,7 @@ import type { ToolInputSchema } from './tool-args.js';
 import { DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
 import { MAX_ID_LEN, MAX_LIST_LIMIT } from '../util/limits.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../core/search-types.js';
 import { DEFAULT_CONFIG } from '../core/config.js';
 
 // ── Tool definitions ──

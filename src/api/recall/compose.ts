@@ -5,7 +5,7 @@ import { formatHandoffEvidenceLine } from '../../core/handoff.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
 import { boostByGoals, type GoalStackBoostOptions } from '../../search/goal-boost.js';
 import type { ForwardClaimMatch } from '../../learn/forward-claim-detector.js';
-import type { RecallWrites } from '../../store/index.js';
+import type { RecallWrites } from '../../store/port.js';
 import { churnStaleFactor } from '../../search/boosts.js';
 import type { RerankStep } from '../../core/search-types.js';
 import { compareEntryIdentity } from '../../core/compare.js';

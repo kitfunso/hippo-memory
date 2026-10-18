@@ -7,7 +7,7 @@ import { predictionBaserate } from '../api/objects/predictions.js';
 import { everyConflict, listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
 import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
 import { mcpApiContext, type McpContext, type ToolCall } from './protocol.js';
-import { storeWith } from '../store/port.js';
+import { requireGroup, type StoreWith } from '../store/port.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import { isJsonString } from '../util/json.js';
@@ -96,7 +96,9 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
   await getTouchableMemory(mcpApiContext(ctx), shareId);
   // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's
   // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
-  const local = { root: hippoRoot, store: storeWith(store, 'localFiles') };
+  requireGroup(store, 'localFiles');
+  // SAFETY: requireGroup threw unless the store sets localFiles.
+  const local = { root: hippoRoot, store: store as StoreWith<'localFiles'> };
   const shared = await shareMemory(local, globalTarget(ctx), shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;

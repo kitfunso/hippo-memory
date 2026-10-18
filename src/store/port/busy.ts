@@ -11,7 +11,7 @@ export class StoreBusyError extends Error {
   }
 }
 
-/** A held lock in any store: SQLite's busy codes or a port's StoreBusyError. */
+/** A held lock in any store: a busy code from the data layer or a StoreBusyError. */
 export function isStoreBusy<E>(error: E): boolean {
   return error instanceof StoreBusyError || isSqliteBusy(error);
 }

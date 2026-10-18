@@ -31,21 +31,13 @@ export interface TokenUse {
   items: number;
   /** Estimated tokens of the text; for a `skip`, the tokens not sent. */
   tokens: number;
-  /** {@link blockHash} of the text, when the caller wants change detection. */
+  /** `blockHash` of the text, when the caller wants change detection. */
   hash?: string | null;
   /** Override the timestamp (tests). ISO string. */
   now?: string;
 }
 
-/** What a session last sent on a surface, for {@link lastSentState}. */
-export interface LastSent {
-  /** {@link blockHash} of the last injected block. */
-  hash: string;
-  /** Consecutive `skip` rows since that injection. */
-  skipsSince: number;
-}
-
-/** Per-surface totals for {@link summarizeTokenUse}. */
+/** Per-surface totals for `summarizeTokenUse`. */
 export interface TokenSurfaceSummary {
   surface: TokenSurface;
   /** Blocks sent. */
@@ -56,8 +48,7 @@ export interface TokenSurfaceSummary {
   skipped: number;
   /** Tokens those skipped blocks would have cost. */
   tokensAvoided: number;
-  /** Tokens of these blocks that later model calls read again, from sessions that have ended; 0 off {@link
-   * REREAD_SURFACES}. */
+  /** Tokens of these blocks that later model calls read again, from ended sessions; 0 off `REREAD_SURFACES`. */
   tokensReread: number;
   /** Distinct session ids seen (rows without one are not counted). */
   sessions: number;
@@ -75,16 +66,8 @@ export interface TokenSummary {
   meanTokensPerSession: number;
   /** Distinct session ids in the window. */
   sessions: number;
-  /** Sessions that sent, skipped or re-read a {@link REREAD_SURFACES} block, the ones whose re-reads can be counted. */
+  /** Sessions that sent, skipped or re-read a `REREAD_SURFACES` block, the ones whose re-reads can be counted. */
   hookSessions: number;
   /** Sessions whose re-reads were counted at session end; open or crashed sessions are not. */
   rereadSessions: number;
-}
-
-/** One model API call in a host transcript, for {@link recordRereads}. */
-export interface ApiCall {
-  /** Epoch milliseconds of the call's first transcript line. */
-  at: number;
-  /** Compactions before the call, in file order. */
-  compactions: number;
 }

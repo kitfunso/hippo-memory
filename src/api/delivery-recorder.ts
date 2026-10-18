@@ -7,7 +7,7 @@ import { scoreOverlap, type PromptRecallGate } from '../core/prompt-recall.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
-import type { Ledger } from './port/ledger.js';
+import type { Ledger } from '../store/port/ledger.js';
 import type {
   DeliveryBlockState,
   DeliveryCandidateInput,
@@ -19,16 +19,10 @@ import type {
   DeliverySessionState,
   DeliveryStage,
   DeliveryWriteStore,
-} from './port/delivery.js';
-/** True for the boundary types: a compaction's two hooks and the end of a session. */
-export const isBoundaryEvent = (type: DeliveryEventType): boolean =>
-  type === 'pre-compact' || type === 'compact-resume' || type === 'session-end';
+} from '../core/delivery.js';
 /** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a prompt. */
 const carriesPrompt = (type: DeliveryEventType): boolean => type === 'prompt-submit' || type === 'pinned-manual';
 
-/** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can write `tool-failure` rows
- * and hashes the store's resolved root. */
-export const DELIVERY_LEDGER_VERSION = 4;
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 const DELIVERY_REJECTED_ROW_CAP = 16;
 

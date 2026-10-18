@@ -1,7 +1,7 @@
 // Ambient context injection: the admission policy and getContext.
 
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
-import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../core/search-types.js';
+import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../core/session-snapshot.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -16,7 +16,7 @@ import { DEFAULT_CONFIG } from '../core/config.js';
 import { promptTokens } from '../core/prompt-recall.js';
 import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../core/read-admission.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
-import type { HippoStore } from '../store/index.js';
+import type { HippoStore } from '../store/port.js';
 import type { StoreReach } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {

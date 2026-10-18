@@ -1,4 +1,5 @@
-// The delivery event a store writes: the shape of one row the ledger group books.
+// The delivery event a store writes: the shape of one row the ledger group books, and the two facts about it the
+// recorder and the store share.
 
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 
@@ -86,3 +87,11 @@ export interface DeliveryEventInput {
   failureId?: number | null;
   candidates: readonly DeliveryCandidateInput[];
 }
+
+/** True for the boundary types: a compaction's two hooks and the end of a session. */
+export const isBoundaryEvent = (type: DeliveryEventType): boolean =>
+  type === 'pre-compact' || type === 'compact-resume' || type === 'session-end';
+
+/** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can write `tool-failure` rows
+ * and hashes the store's resolved root. */
+export const DELIVERY_LEDGER_VERSION = 4;

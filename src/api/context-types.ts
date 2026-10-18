@@ -3,7 +3,7 @@
 import type { TaskSnapshot, SessionEvent } from '../store/port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
-import type { DeliveryObserver } from '../store/delivery-recorder.js';
+import type { DeliveryObserver } from './delivery-recorder.js';
 import type { AmbientState } from '../core/ambient.js';
 import type { ProjectRef } from '../core/project-identity.js';
 

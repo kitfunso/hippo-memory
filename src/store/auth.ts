@@ -1,5 +1,16 @@
-import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import {
+  DEFAULT_KEY_TTL_DAYS,
+  DEFAULT_SCRYPT,
+  mintApiKey,
+  mintedKeyId,
+  SCRYPT_MAXMEM,
+  SCRYPT_MAX_N,
+  SCRYPT_MAX_P,
+  SCRYPT_MAX_R,
+  type ScryptParams,
+} from '../core/api-key.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { keysetAfter } from '../util/keyset.js';
@@ -8,47 +19,6 @@ import { DAY_MS } from '../util/time.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../util/version.js';
 import type { ApiKeyRecord } from './port/types.js';
 import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from './port/key-writes.js';
-
-/** Every minted API key starts with this, so the server can route a bearer token by shape. */
-export const API_KEY_PREFIX = 'hk_';
-const ID_LEN = 24; // base32 chars after prefix
-const SECRET_LEN = 32; // base32 chars after dot
-const SCRYPT_KEYLEN = 32;
-// Node's defaults, written out so a hash states the cost it was made with.
-const SCRYPT_N = 16384;
-const SCRYPT_R = 8;
-const SCRYPT_P = 1;
-const SCRYPT_MAXMEM = 64 * 1024 * 1024;
-// A stored row must not be able to make verify hang or exhaust memory.
-const SCRYPT_MAX_N = 2 ** 20;
-const SCRYPT_MAX_R = 32;
-const SCRYPT_MAX_P = 16;
-
-interface ScryptParams {
-  readonly N: number;
-  readonly r: number;
-  readonly p: number;
-  readonly maxmem: number;
-}
-
-const DEFAULT_SCRYPT: ScryptParams = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
-
-const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
-const MINTED_KEY_PATTERN = new RegExp(`^${API_KEY_PREFIX}[a-z2-7]{${ID_LEN}}\\.[a-z2-7]{${SECRET_LEN}}$`);
-
-function randBase32(n: number): string {
-  const bytes = randomBytes(n);
-  let out = '';
-  for (let i = 0; i < n; i++) out += BASE32[bytes[i]! % 32];
-  return out;
-}
-
-function hashKey(plaintext: string): string {
-  // Format: scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>
-  const salt = randomBytes(16);
-  const hash = scryptSync(plaintext, salt, SCRYPT_KEYLEN, DEFAULT_SCRYPT);
-  return `scrypt2$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`;
-}
 
 /** Counts since process start, so a flood of bad tokens shows as scrypt work, not just as 401s. */
 export interface ApiKeyVerifyStats {
@@ -130,23 +100,9 @@ export interface CreateApiKeyOptions {
   expiresAt?: string;
 }
 
-/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by itself. */
-export const DEFAULT_KEY_TTL_DAYS = 90;
-
 export interface CreateApiKeyResult {
   keyId: string;
   plaintext: string;
-}
-
-/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in its place. */
-export interface MintedApiKey extends CreateApiKeyResult {
-  keyHash: string;
-}
-
-export function mintApiKey(): MintedApiKey {
-  const keyId = `${API_KEY_PREFIX}${randBase32(ID_LEN)}`;
-  const plaintext = `${keyId}.${randBase32(SECRET_LEN)}`;
-  return { keyId, plaintext, keyHash: hashKey(plaintext) };
 }
 
 export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
@@ -228,11 +184,6 @@ function keyExpiryMs(expiresAt: string | null | undefined): number {
   if (expiresAt === undefined) return -Infinity;
   const ms = Date.parse(expiresAt);
   return Number.isNaN(ms) ? -Infinity : ms;
-}
-
-/** The key id of a minted-key-shaped token, else null. */
-function mintedKeyId(plaintext: string): string | null {
-  return MINTED_KEY_PATTERN.test(plaintext) ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN) : null;
 }
 
 /** True for a record that is present, unrevoked and unexpired, before any secret check. */

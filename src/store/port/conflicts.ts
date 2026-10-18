@@ -9,7 +9,7 @@ export interface ConflictMember {
   readonly origin_project: string | null;
 }
 
-/** A conflict and its two members from one JOIN; a member is null only on an every-tenant read whose row is gone. */
+/** A conflict and its two members from one read; a member is null only on an every-tenant read whose row is gone. */
 export interface ConflictRow {
   readonly conflict: MemoryConflict;
   readonly a: ConflictMember | null;

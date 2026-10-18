@@ -1,8 +1,8 @@
 // What a recall remembers and records: the anchoring detector and query history, the session rings and audit rows, then
 // the write around one recall (history, ring, recalled counter and token ledger row).
 import { isRecallBoostAblated } from '../../core/ablation.js';
-import { auditQueryFields } from '../../store/audit.js';
-import type { HippoStore, RecallWrites } from '../../store/index.js';
+import { auditQueryFields } from '../../core/audit-report.js';
+import type { HippoStore, RecallWrites } from '../../store/port.js';
 import type { TokenSurface } from '../../store/port/token-ledger.js';
 import { envAnchoringOff, envAvailabilityOff } from '../../util/env.js';
 import type { AvailabilityHint } from '../availability.js';

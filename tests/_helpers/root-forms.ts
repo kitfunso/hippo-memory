@@ -106,10 +106,10 @@ import {
   clearActiveTaskSnapshotAt,
   closeTaskSnapshotsForSessionAt,
   findPromotableSessionsAt,
-  freshActiveSnapshot,
   listSessionEventsAt,
   loadActiveTaskSnapshotAt,
 } from '../../src/store/sessions.js';
+import { freshActiveSnapshot } from '../../src/core/session-snapshot.js';
 import {
   applyRebuildResultAt,
   loadAllDirtySummariesAt,
@@ -117,7 +117,7 @@ import {
   loadChildrenOfSummariesAt,
   loadChildrenOfSummaryAt,
 } from '../../src/store/summaries.js';
-import type { ApiCall } from '../../src/store/port/token-ledger.js';
+import type { ApiCall } from '../../src/core/transcript-calls.js';
 import { recordRereadsAt } from '../../src/store/token-ledger.js';
 import {
   loadStoredParticlesAt,

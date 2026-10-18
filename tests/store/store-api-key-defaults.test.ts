@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey, DEFAULT_KEY_TTL_DAYS, readApiKeyRecord } from '../../src/store/auth.js';
+import { createApiKey, readApiKeyRecord } from '../../src/store/auth.js';
+import { DEFAULT_KEY_TTL_DAYS } from '../../src/core/api-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let home: string;

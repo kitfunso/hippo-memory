@@ -2,8 +2,7 @@
 import type { JsonValue } from '../../util/json.js';
 import type { ConfidenceLevel, Layer } from '../../core/memory.js';
 
-/** Named field set for the legacy `stats.json` mirror — the only fields any
- * caller reads (see loadLegacyStatsFile's callers below). */
+/** Named field set for the legacy `stats.json` mirror: the only fields any caller reads. */
 export interface LegacyStats {
   [key: string]: JsonValue;
   total_remembered: JsonValue;

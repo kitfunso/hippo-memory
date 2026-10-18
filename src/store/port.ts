@@ -198,16 +198,6 @@ export interface FolderStore {
   readonly store: StoreWith<'localFiles'>;
 }
 
-function setsGroup<G extends OptionalGroup>(store: HippoStore, group: G): store is StoreWith<G> {
-  return store[group] !== undefined;
-}
-
-/** `store` typed with `group` set; a store without it throws StoreNotPortedError, which answers 501. */
-export function storeWith<G extends OptionalGroup>(store: HippoStore, group: G): StoreWith<G> {
-  if (!setsGroup(store, group)) throw new StoreNotPortedError(store.kind, group);
-  return store;
-}
-
 /** Which stores a call reaches, probed once by a composition root so the api reads this instead of the disk. */
 export interface StoreReach {
   readonly hasLocal: boolean; // the primary store has a project of its own, or is not hippo.db
@@ -221,22 +211,22 @@ export interface StoreReach {
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './port/busy.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
- * await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
+ * await, since a lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
 export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pick<StoreGroups, OptionalGroup>> {
   /** A name for logs and errors; what a store can do beyond the required groups is the optional ones it sets. */
   readonly kind: string;
-  /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
+  /** The API key record for `keyId` with its scope grants, revoked or not; null when none matches. */
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
-  /** Recall candidates in `loadRecallEntriesAt` order: FTS, then LIKE, then every row in scope. */
+  /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every row in scope. */
   searchRecallEntries(query: string, args: RecallSearchArgs): Promise<MemoryEntry[]>;
   /** The rows among the first 500 ids, a tenant narrowing them, ordered by created, then content, then id, all
-   * ascending, as `loadEntriesByIds` does; the input order is ignored. */
+   * ascending; the input order is ignored. */
   entriesByIds(ids: readonly string[], tenantId?: string): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
   activeGoals(opts: GetActiveGoalsOpts): Promise<ActiveGoals>;
   /** The first `count` (at most 200) unsuperseded raw rows a tenant, a non-empty session
    * id and non-null `origins` (those projects and user-global rows) must narrow, by
-   * created descending, then content and id ascending, as `loadFreshRawMemories` does. */
+   * created descending, then content and id ascending. */
   freshRawEntries(
     count: number,
     tenantId: string | undefined,
@@ -244,7 +234,7 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
     origins: readonly string[] | null,
   ): Promise<MemoryEntry[]>;
   /** The newest active snapshot a non-null `key` must narrow to one owner and project (null only on an unshared
-   * hippo.db), then for its session the newest handoff (same key) and `eventLimit` newest events returned oldest first,
+   * store), then for its session the newest handoff (same key) and `eventLimit` newest events returned oldest first,
    * each tie broken by the larger id; the caller applies scope. */
   continuity(tenantId: string, eventLimit: number, key: ContinuityKey | null): Promise<ContinuityBlock>;
   /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit row. */
@@ -256,7 +246,7 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
    * failure there logs and still resolves, since the reply is already decided. */
   finishRecall(writes: RecallWrites): Promise<void>;
   /** Adds `recalled` to the one store-wide total_recalled counter,
-   * no tenant; the SQLite store also rewrites stats.json. */
+   * no tenant. */
   bumpRecallStats(recalled: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;

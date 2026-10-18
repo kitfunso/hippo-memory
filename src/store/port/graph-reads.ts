@@ -54,8 +54,8 @@ export interface Entity {
   tenantId: string;
   entityType: EntityType;
   name: string;
-  /** The consolidated source memory this entity came from; NULL once the mirror is forgotten/pruned (ON DELETE SET
-   * NULL), then provenance is source_object. */
+  /** The consolidated source memory this entity came from; null once the mirror is forgotten/pruned,
+   * then provenance is source_object. */
   memoryId: string | null;
   sourceKind: SourceKind;
   /** The authoritative object this entity is anchored to (object-provenance path).

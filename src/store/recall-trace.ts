@@ -6,8 +6,8 @@
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { OnHandle } from './open.js';
 import type { RerankStep } from '../core/search-types.js';
-import { DELIVERY_LEDGER_VERSION, isBoundaryEvent } from './delivery-recorder.js';
-import type { DeliveryEventInput } from './port/delivery.js';
+import { DELIVERY_LEDGER_VERSION, isBoundaryEvent } from '../core/delivery.js';
+import type { DeliveryEventInput } from '../core/delivery.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 import { blockHash } from '../util/token-text.js';

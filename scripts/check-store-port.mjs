@@ -8,7 +8,7 @@
 // portImportsFromSql counts imports and re-exports in src/store/port.ts, src/store/port-groups.ts and src/store/port/ of a src/store file outside those, or of a src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
 // buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
 // storeImportsInCli counts value imports of src/store or src/db in src/cli files other than the CLI's composition root.
-// groupChecksInApi counts requireGroup, hasGroup and storeWith calls in files that layers.json puts in the api or a domain layer.
+// groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // portFunctionParams counts parameters of methods on port interfaces whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
@@ -223,7 +223,7 @@ function countDomainStoreImports(file, sf) {
 }
 
 const STORE_BUILDERS = new Set(['sqliteStore', 'sqliteSyncStore', 'initStore']);
-const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup', 'storeWith']);
+const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup']);
 // Where a store may be built, each with why: every other file takes its store as a parameter or from the Context.
 const COMPOSITION_ROOTS = new Map([
   ['src/cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],

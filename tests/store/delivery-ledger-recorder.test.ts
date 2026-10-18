@@ -10,12 +10,8 @@ import { getContext, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
-import {
-  createDeliveryRecorder,
-  type DeliveryFault,
-  type DeliveryRecorder,
-} from '../../src/store/delivery-recorder.js';
-import type { DeliveryEventInput, DeliveryEventType } from '../../src/store/port/delivery.js';
+import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
+import type { DeliveryEventInput, DeliveryEventType } from '../../src/core/delivery.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/prompt-hook.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

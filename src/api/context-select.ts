@@ -2,8 +2,8 @@
 
 import { recallScopeFilter } from '../core/recall-scope.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { auditQueryFields } from '../store/audit.js';
-import type { ContextReads, HippoStore } from '../store/index.js';
+import { auditQueryFields } from '../core/audit-report.js';
+import type { ContextReads, HippoStore } from '../store/port.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { rankBothStores } from '../sharing/search-both.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
@@ -24,7 +24,7 @@ import {
   type PromptRecallMetric,
   type PromptRecallGate,
 } from '../core/prompt-recall.js';
-import type { DeliveryObserver } from '../store/delivery-recorder.js';
+import type { DeliveryObserver } from './delivery-recorder.js';
 import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';
 import type { Context, GlobalInReach } from './types.js';
