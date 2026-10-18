@@ -1,9 +1,6 @@
 // Admission sent as data admits the rows the callbacks getContext and drillDown passed before 3.0 admitted, on a store
 // that mixes tenants, scopes, origins, secrets, compaction items and digests, in process and from a store worker.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/core/memory.js';
 import { isWorthSurfacing } from '../../src/core/memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from '../../src/core/project-identity.js';
@@ -15,12 +12,12 @@ import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/core/session-d
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadAmbientCandidatesAt } from '../../src/store/candidates.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { detectSecret } from '../../src/util/secret-detect.js';
+import { makeRoot } from '../_helpers/make-root.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 
 const ACME = 'acme';
@@ -169,8 +166,7 @@ function oldWalk(tenantId: string, id: string, depth: number, admit: (row: Memor
 const levelIds = (walked: SummaryDescendants | null): string[][] | null => walked && walked.levels.map((l) => l.map((r) => r.id));
 
 beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-read-admission-'));
-  initStore(root);
+  root = makeRoot('read-admission');
   for (const r of [...ambientRows(ACME, 'a'), ...ambientRows(GLOBEX, 'b'), ...dagRows(ACME, 'a'), ...dagRows(GLOBEX, 'b')]) {
     writeEntry(root, r);
   }
@@ -183,7 +179,6 @@ beforeAll(() => {
 afterAll(async () => {
   await onWorkers?.close();
   await inProcess?.close();
-  rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe('ambient admission as data', () => {
