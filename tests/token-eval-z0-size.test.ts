@@ -164,7 +164,7 @@ describe('Z0 sizing', () => {
     expect(new Set(bySeed!.filter((u: Unit) => u.repo === 'r0').map((u: Unit) => u.seed)).size).toBe(4);
   });
 
-  it('draws 3 to 9 seeds under the rule and extends the same families, or stops after wave 1', () => {
+  it('draws 3 to 9 seeds under the rule and extends the same families, or on a cap miss stops after wave 1 or runs at the cap', () => {
     const cal = both(spread(0.005, 0.005, 0.05));
     const design = { repos: 6, families: 3, seeds: 3 };
     const seen = new Set<number>();
@@ -184,6 +184,11 @@ describe('Z0 sizing', () => {
     expect([stopped.stopped, stopped.seeds]).toEqual([true, 3]);
     const power = repeatSizer(both(spread(1, 0, 0.01)), { sims: 30, seed: 2 }, 'T3')({ repos: 6, families: 3 }, 0.15);
     expect(power).toMatchObject({ win: 0, tie: 0, falseWin: 0, meanSeeds: 3, stopShare: 1 });
+    const capped = repeatRun(both(spread(1, 0, 0.01)), design, -0.15, seededRandom(1), { m: 0.15, cap: 9, targetZ: 3.5, onMiss: 'cap' });
+    expect([capped.stopped, capped.seeds]).toEqual([false, 9]);
+    expect(capped.units.violation.filter((u: Unit) => u.seed <= 3)).toEqual(stopped.units.violation);
+    const capPower = repeatSizer(both(spread(1, 0, 0.01)), { sims: 30, seed: 2, onMiss: 'cap' }, 'T3')({ repos: 6, families: 3 }, 0.15);
+    expect(capPower).toMatchObject({ meanSeeds: 9, stopShare: 0 });
   });
 
   it('simulates set N with one unit per task and seed, and no summed n', () => {

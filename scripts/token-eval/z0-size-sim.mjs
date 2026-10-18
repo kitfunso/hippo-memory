@@ -116,10 +116,11 @@ const normals = (n, rand) => Array.from({ length: n }, () => normal(rand));
 
 /** One simulated H1 or H2 run: the same draws under both codings, each with its own spread, dilution and unit loss. Family
  * effects are drawn first and a sequence effect per seed, so seeds the rule adds later extend the same families. With a
- * `rule` of { m, cap, targetZ } the first wave is SEEDS and the rule sets the count; `stopped` means it could not.
+ * `rule` of { m, cap, targetZ, onMiss } the first wave is SEEDS and the rule sets the count. When the cap cannot reach the
+ * target, onMiss 'stop' (the default) stops the run and onMiss 'cap' runs it at the cap.
  * @param {Record<string, {scale: number, loss: number, family: number, sequence: number, noise: number}>} cal
  * @param {{repos: number, families: number, seeds?: number}} design @param {number} delta
- * @param {{m: number, cap?: number, targetZ?: number} | null} [rule] */
+ * @param {{m: number, cap?: number, targetZ?: number, onMiss?: 'stop' | 'cap'} | null} [rule] */
 export function repeatRun(cal, design, delta, rand, rule = null) {
   const zf = Array.from({ length: design.repos }, () => normals(design.families, rand));
   const units = byCoding(() => []);
@@ -146,8 +147,8 @@ export function repeatRun(cal, design, delta, rand, rule = null) {
   }
   drawTo(SEEDS);
   const needed = CODINGS.map((c) => seedsNeeded(units[c], rule.m, rule));
-  if (needed.includes(null)) return { units, seeds, stopped: true };
-  drawTo(Math.max(...needed));
+  if (needed.includes(null) && rule.onMiss !== 'cap') return { units, seeds, stopped: true };
+  drawTo(Math.max(...needed.map((n) => n ?? rule.cap ?? SEED_CAP)));
   return { units, seeds, stopped: false };
 }
 
@@ -161,12 +162,12 @@ const decide = (ests, spec) => combineCodings(...CODINGS.map((c) => verdict(ests
  * target depends on it. A run the rule stops counts in every denominator and is neither a win, a tie nor a false win.
  * `rule: false` draws `opts.seeds` (default SEEDS) seeds in every run instead.
  * @param {Record<string, {scale: number, loss: number, family: number, sequence: number, noise: number}>} cal
- * @param {{sims: number, seed: number, cap?: number, targetZ?: number, rule?: boolean, seeds?: number}} opts @param {string} label */
+ * @param {{sims: number, seed: number, cap?: number, targetZ?: number, onMiss?: 'stop' | 'cap', rule?: boolean, seeds?: number}} opts @param {string} label */
 export function repeatSizer(cal, opts, label) {
   const [ruleOn, fixed] = [opts.rule !== false, opts.seeds ?? SEEDS];
   const runs = (design, delta, m) => {
     const rand = seededRandom(cellSeed(opts.seed, label, design.repos, design.families, m, ruleOn ? 'rule' : `seeds ${fixed}`, delta));
-    const rule = ruleOn ? { m, cap: opts.cap ?? SEED_CAP, targetZ: opts.targetZ ?? TARGET_Z } : null;
+    const rule = ruleOn ? { m, cap: opts.cap ?? SEED_CAP, targetZ: opts.targetZ ?? TARGET_Z, onMiss: opts.onMiss } : null;
     return Array.from({ length: opts.sims }, () => analysed(repeatRun(cal, { ...design, seeds: fixed }, delta, rand, rule)));
   };
   const zeros = new Map();
@@ -252,9 +253,9 @@ function binaryRun(cal, design, rand) {
  * `held` is true when every level is at most 2 simulation errors of its own run count above 0.025; a cell with no run fails.
  * @param {Record<string, any>} calPoint @param {Record<string, any>} calUpper
  * @param {{repos: number, families: number}} design @param {number} m
- * @param {{sims: number, seed: number, cap?: number, targetZ?: number, label?: string}} opts */
+ * @param {{sims: number, seed: number, cap?: number, targetZ?: number, onMiss?: 'stop' | 'cap', label?: string}} opts */
 export function levelCheck(calPoint, calUpper, design, m, opts) {
-  const rule = { m, cap: opts.cap ?? SEED_CAP, targetZ: opts.targetZ ?? TARGET_Z };
+  const rule = { m, cap: opts.cap ?? SEED_CAP, targetZ: opts.targetZ ?? TARGET_Z, onMiss: opts.onMiss };
   const [three, two] = [{ ...design, seeds: SEEDS }, { ...design, seeds: 2 }];
   const cases = [
     ['rule at bounds', (rand) => analysed(repeatRun(calUpper, three, 0, rand, rule))],

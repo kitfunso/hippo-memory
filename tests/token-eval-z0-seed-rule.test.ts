@@ -78,6 +78,14 @@ describe('Z0 seed rule', () => {
     expect(res.json!.reasons.at(-1)).toContain('z0-size.mjs');
   });
 
+  it('runs a cap miss at the cap with --on-miss cap, and names it, instead of stopping', () => {
+    const res = run(familySpread(), ['--on-miss', 'cap']);
+    expect(res.code).toBe(0);
+    expect(res.json).toMatchObject({ stop: false, seeds: { A1: 9, A2: 9, A5: 9, X2: 3, X3: 3 }, perHypothesis: { H1: null, H2: 3 } });
+    expect(res.json!.reasons).toContain('H1 needs more than 9 seeds, so it runs at the cap');
+    expect(run(familySpread(), ['--on-miss', 'never']).stderr).toContain('--on-miss must be stop or cap');
+  });
+
   it('prints one line with --out: the seeds, or the stop', () => {
     const quiet = run(generate(QUIET), ['--out', 'rule.json']);
     expect(quiet).toMatchObject({ code: 0, stdout: 'seeds A1 3, A2 3, A5 3, X2 3, X3 3\n' });

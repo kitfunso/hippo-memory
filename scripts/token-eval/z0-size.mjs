@@ -23,12 +23,12 @@ export const QUOTA_USD_PER_DAY = { 'claude-code': 300, codex: 100 };
 export const DEFAULTS = {
   repos: [5, 8, 10, 12, 15, 20], effects: [0.15, 0.2, 0.25], power: 0.8, sims: 2_000, seed: 1,
   searchSims: 200, maxFamilies: 60, maxFamiliesPerRepo: 4, maxNTasks: 600, spreadBound: 0.8,
-  seedCap: 9, targetZ: 3.5, levelSims: 20_000,
+  seedCap: 9, targetZ: 3.5, onMiss: 'stop', levelSims: 20_000,
 };
 const USAGE = 'usage: z0-size.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--drop-list FILE] '
   + '[--repos 5,8,10,12,15,20] [--effects 0.15,0.2,0.25] [--power 0.8] [--sims 2000] [--seed 1] '
   + '[--search-sims 200] [--max-families 60] [--max-families-per-repo 4] [--max-n-tasks 600] [--spread-bound 0.8] '
-  + '[--seed-cap 9] [--target-z 3.5] [--level-sims 20000] '
+  + '[--seed-cap 9] [--target-z 3.5] [--on-miss stop|cap] [--level-sims 20000] '
   + '[--claude-usd-per-day 300] [--codex-usd-per-day 100] [--out FILE]';
 
 const integer = (flag, min) => (v) => {
@@ -46,6 +46,10 @@ const positive = (flag) => (v) => {
   if (!(Number.isFinite(n) && n > 0)) throw new Error(`${flag} must be a positive number, got ${v}`);
   return n;
 };
+const oneOf = (flag, values) => (v) => {
+  if (!values.includes(v)) throw new Error(`${flag} must be one of ${values.join(', ')}, got ${v}`);
+  return v;
+};
 const list = (parse) => (v) => v.split(',').map(parse);
 const FLAGS = new Map([
   ['--prices', ['prices', String]], ['--drop-list', ['dropList', String]], ['--out', ['out', String]],
@@ -56,6 +60,7 @@ const FLAGS = new Map([
   ['--max-families-per-repo', ['maxFamiliesPerRepo', integer('--max-families-per-repo', 2)]],
   ['--max-n-tasks', ['maxNTasks', integer('--max-n-tasks', 1)]], ['--spread-bound', ['spreadBound', fraction('--spread-bound')]],
   ['--seed-cap', ['seedCap', integer('--seed-cap', 3)]], ['--target-z', ['targetZ', positive('--target-z')]],
+  ['--on-miss', ['onMiss', oneOf('--on-miss', ['stop', 'cap'])]],
   ['--level-sims', ['levelSims', integer('--level-sims', 1)]],
   ['--claude-usd-per-day', ['claudeQuota', positive('--claude-usd-per-day')]], ['--codex-usd-per-day', ['codexQuota', positive('--codex-usd-per-day')]],
 ]);
@@ -258,7 +263,7 @@ function choose(rows) {
 const powerAt = ({ win, tie, meanSeeds, stopShare }) => ({ win, tie, meanSeeds, stopShare });
 
 function searchesOf(cal, layout, opts) {
-  const full = { sims: opts.sims, seed: opts.seed, cap: opts.seedCap, targetZ: opts.targetZ };
+  const full = { sims: opts.sims, seed: opts.seed, cap: opts.seedCap, targetZ: opts.targetZ, onMiss: opts.onMiss };
   const coarse = { ...full, sims: Math.min(opts.searchSims, opts.sims) };
   const stages = coarse.sims < full.sims ? [coarse, full] : [full];
   const sizers = stages.map((stat) => ({
@@ -297,7 +302,7 @@ function searchesOf(cal, layout, opts) {
 /** The level of H1's test, and H2's when sized, at the chosen design: `held: false` stops the freeze. */
 function levelOf(cal, chosen, m, opts) {
   const check = (h, families) => levelCheck(cal[h].sim, cal[h].simUpper, { repos: chosen.repos, families }, m,
-    { sims: opts.levelSims, seed: opts.seed, cap: opts.seedCap, targetZ: opts.targetZ, label: h });
+    { sims: opts.levelSims, seed: opts.seed, cap: opts.seedCap, targetZ: opts.targetZ, onMiss: opts.onMiss, label: h });
   const [H1, H2] = [check('H1', chosen.setR.familiesPerRepo), chosen.H2 ? check('H2', chosen.setX.familiesPerRepo) : null];
   return { H1, H2, held: H1.held && (H2 === null || H2.held) };
 }
@@ -336,7 +341,7 @@ export function sizeZ0(records, planCells, prices, opts) {
 const NOTES = [
   'Power runs through the analyzer\'s own fixed-repository t tests (family is the unit) at Holm\'s strictest level, 0.05/2 over H1 and H2 (prereg 209, Amendment 2); a win needs both codings.',
   'H3 is reported with no verdict, so it sets no size; set R is sized by H1 alone.',
-  'Seeds follow the blind rule: wave 1 runs 3 seeds, then the fewest up to seedCap whose predicted standard error is at most the minimum effect over targetZ, the larger of the two codings. A run the rule cannot size stops and counts as neither win nor tie.',
+  'Seeds follow the blind rule: wave 1 runs 3 seeds, then the fewest up to seedCap whose predicted standard error is at most the minimum effect over targetZ, the larger of the two codings. A run the rule cannot size stops and counts as neither win nor tie, unless onMiss is cap: then it runs at seedCap.',
   'A size passes at the calibration\'s point estimates. boundsPower repeats that size with every spread at its one-sided spreadBound upper bound, and choose prefers the rows that pass there.',
   'Set N\'s one-sided resolve share is taken at its exact one-sided spreadBound upper bound (Clopper-Pearson); resolve.oneSideEstimate is the point value.',
   'Families per repository are capped at maxFamiliesPerRepo. Each size is found by a search at searchSims, then confirmed at sims one size at a time; reported power is from the full sim count.',
