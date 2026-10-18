@@ -22,6 +22,9 @@ import { mergedText } from '../../src/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
+// Each case seeds and runs a full three-tenant sleep three times, once at one-row pages, which can pass the unit budget.
+vi.setConfig({ testTimeout: 20_000 });
+
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const DAY = 86_400_000;
 const TENANTS = ['default', 'acme', 'globex'] as const;
