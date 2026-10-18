@@ -5,6 +5,7 @@ import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
 import { loadStoredVectorViewsAt } from '../vector-index.js';
+import { errorFields, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
@@ -146,19 +147,32 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
   const graphs = init.pinned ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold }) : undefined;
   const ops = workerOps(init.hippoRoot, graphs);
   const stores = new WorkerStores(init);
+  // Each step still closes what is left when the one before it throws, so a failed flush leaves no handle on the files.
+  const closeThread = (): void => {
+    try {
+      flushStatsMirrors(init.hippoRoot);
+    } finally {
+      try {
+        stores.close();
+      } finally {
+        port.close();
+      }
+    }
+  };
   // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and it waits for that
   // job's reply.
   let last: Promise<void> = Promise.resolve();
   port.on('message', (message: Job | 'stop') => {
     if (message === 'stop') {
       graphs?.close();
-      void Promise.all([last, graphs?.idle()]).then(() => {
-        flushStatsMirrors(init.hippoRoot);
-        stores.close();
-        port.close();
-      });
+      Promise.all([last, graphs?.idle()])
+        .finally(closeThread)
+        .catch((err) => log.error('store worker: stopping the thread failed', errorFields(err)));
       return;
     }
-    last = answer(ops, stores, init.hippoRoot, message).then((reply) => post(port, reply));
+    // Ends in a catch, so a reply that cannot be posted never rejects `last` and skips the stop above.
+    last = answer(ops, stores, init.hippoRoot, message)
+      .then((reply) => post(port, reply))
+      .catch((err) => log.error(`store worker: no reply was posted for job ${message.id}`, errorFields(err)));
   });
 }
