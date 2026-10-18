@@ -148,13 +148,15 @@ function extractSpecSections(text: string): ExtractedItem[] {
 
 // A reply to the agent's work states how the person wants it done, rule word or not; "Thanks, looks good" says nothing to keep.
 const ANY_STATEMENT = [/\S/];
-const MIN_FOLLOW_UP_WORDS = 4;
 // A kept reply names code or limits a choice; "Now do the same" and a pasted test count do neither, so digits are no cue.
-const CONSTRAINT_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]|n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
+// Naming code is enough in two words ("`pnpm` for installs."); a limiting word needs four, so "Not that." stays out.
+const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
+const LIMIT_CUE = /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
 
 function followUpRule(sentence: string): ExtractedItem | null {
   const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
-  if (!item || item.content.split(/\s+/).length < MIN_FOLLOW_UP_WORDS || !CONSTRAINT_CUE.test(item.content)) return null;
+  const words = item ? item.content.split(/\s+/).length : 0;
+  if (!item || !((words >= 2 && CODE_CUE.test(item.content)) || (words >= 4 && LIMIT_CUE.test(item.content)))) return null;
   return { ...item, tags: [...item.tags, 'follow-up'] };
 }
 

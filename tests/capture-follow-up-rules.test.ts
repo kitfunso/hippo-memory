@@ -57,6 +57,11 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(loadAllEntries(root).map((e) => e.content)).toEqual([expect.stringContaining('pnpm test:unit')]);
   });
 
+  it('pins a short reply that names code, and leaves a short limit with no code out', () => {
+    capture([user(REQUEST), done, user('`pnpm` for installs.'), done, user('Not that.')]);
+    expect(loadAllEntries(root).map((e) => [e.content, e.pinned])).toEqual([['`pnpm` for installs', true]]);
+  });
+
   const replies = (n: number) => Array.from({ length: n }, (_, i) => user(`Name the helper file net-${i}.ts in the same folder as the caller.`));
 
   it('a tail that cut off the request reads its first user turn as a reply', () => {
