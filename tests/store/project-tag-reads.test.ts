@@ -38,7 +38,7 @@ const withStore = <R>(fn: (store: ProjectTagStore) => R): R =>
 
 const memory = (content: string, origin: string | null, i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { layer: Layer.Semantic }),
-  origin_project: origin,
+  originProject: origin,
   created: at(i),
   ...extra,
 });
@@ -65,12 +65,12 @@ function seed() {
     note(DEPLOY, 'repo-wt-a', 1),
     note('the release notes live in changelog.d', 'repo-wt-a', 2),
     memory('the flaky sync test needs a fresh temp dir', 'repo-wt-a', 3),
-    note('an old copy of a release note', 'repo-wt-a', 4, { superseded_by: 'mem_newer' }),
+    note('an old copy of a release note', 'repo-wt-a', 4, { supersededBy: 'mem_newer' }),
     memory('an unrelated project memory', 'elsewhere', 5),
     note(HOME, '', 6),
     note(HOME, 'elsewhere', 7),
     memory('a lesson saved with no project', null, 7),
-    memory('another tenant lesson', 'repo-wt-a', 9, { tenant_id: 'other' }),
+    memory('another tenant lesson', 'repo-wt-a', 9, { tenantId: 'other' }),
   ];
   r.push(
     merged(11, [r[3].id, r[5].id]),
@@ -79,7 +79,7 @@ function seed() {
     merged(14, [faded.id]),
     merged(15, [r[6].id]),
     merged(16, [r[9].id]),
-    merged(17, [r[3].id], { superseded_by: 'mem_newer' }),
+    merged(17, [r[3].id], { supersededBy: 'mem_newer' }),
   );
   withDb((db) => {
     for (const entry of r) writeEntryDbOnly(db, entry);

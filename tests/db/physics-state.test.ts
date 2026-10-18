@@ -76,8 +76,8 @@ function makeMemoryEntry(id: string, overrides?: Partial<MemoryEntry>): MemoryEn
     ...createMemory(`test content for ${id}`),
     id,
     created: NOW.toISOString(),
-    last_retrieved: NOW.toISOString(),
-    half_life_days: 7,
+    lastRetrieved: NOW.toISOString(),
+    halfLifeDays: 7,
     source: 'test',
     ...overrides,
   };
@@ -440,8 +440,8 @@ describe('CASCADE delete', () => {
 describe('initializeParticle', () => {
   it('creates correct initial state from MemoryEntry + embedding', () => {
     const entry = makeMemoryEntry('mem_init', {
-      retrieval_count: 3,
-      emotional_valence: 'negative',
+      retrievalCount: 3,
+      emotionalValence: 'negative',
     });
     const embedding = [0.5, -0.5, 0.7071];
 
@@ -470,14 +470,14 @@ describe('initializeParticle', () => {
   });
 
   it('handles positive emotional valence', () => {
-    const entry = makeMemoryEntry('mem_pos', { emotional_valence: 'positive' });
+    const entry = makeMemoryEntry('mem_pos', { emotionalValence: 'positive' });
     const embedding = [1, 0, 0];
     const particle = initializeParticle(entry, embedding, NOW);
     expect(particle.charge).toBeCloseTo(0.3, 10);
   });
 
   it('handles critical emotional valence', () => {
-    const entry = makeMemoryEntry('mem_crit', { emotional_valence: 'critical' });
+    const entry = makeMemoryEntry('mem_crit', { emotionalValence: 'critical' });
     const embedding = [1, 0, 0];
     const particle = initializeParticle(entry, embedding, NOW);
     expect(particle.charge).toBeCloseTo(-1.0, 10);
@@ -597,8 +597,8 @@ describe('refreshParticleProperties', () => {
     particle.temperature = 999;
 
     const entry = makeMemoryEntry('mem_refresh', {
-      emotional_valence: 'negative',
-      retrieval_count: 5,
+      emotionalValence: 'negative',
+      retrievalCount: 5,
     });
 
     const entries = new Map<string, MemoryEntry>();
@@ -642,8 +642,8 @@ describe('refreshParticleProperties', () => {
     unmatched.mass = 42;
 
     const entry = makeMemoryEntry('mem_matched', {
-      emotional_valence: 'positive',
-      retrieval_count: 10,
+      emotionalValence: 'positive',
+      retrievalCount: 10,
     });
 
     const entries = new Map<string, MemoryEntry>();
@@ -663,7 +663,7 @@ describe('refreshParticleProperties', () => {
     const particles = [makeParticle('mem_mut')];
     const originalRef = particles[0];
 
-    const entry = makeMemoryEntry('mem_mut', { emotional_valence: 'critical' });
+    const entry = makeMemoryEntry('mem_mut', { emotionalValence: 'critical' });
     const entries = new Map<string, MemoryEntry>([['mem_mut', entry]]);
 
     refreshParticleProperties(particles, entries, NOW);

@@ -39,7 +39,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     // Back-date last_retrieved by many half-lives so strength drops.
     const aged = {
       ...trace,
-      last_retrieved: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+      lastRetrieved: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
     };
 
     const strengthNow = calculateStrength(trace);
@@ -100,7 +100,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     const db = openHippoDb(tmpDir);
     try {
       // At its own last_retrieved an unretrieved neutral trace has strength 1, so its mass is 1.
-      const particle = initializeParticle(trace, fakeEmbedding, new Date(trace.last_retrieved));
+      const particle = initializeParticle(trace, fakeEmbedding, new Date(trace.lastRetrieved));
       savePhysicsState(db, [particle]);
       const map = loadPhysicsState(db, [trace.id]);
       expect(map.has(trace.id)).toBe(true);

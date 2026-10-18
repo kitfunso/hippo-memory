@@ -93,7 +93,7 @@ describe('mcp hippo_drill', () => {
       confidence: 'inferred',
       dagLevel: 2,
     });
-    summary.descendant_count = 3;
+    summary.descendantCount = 3;
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {
       const c = createMemory(`alpha detail event ${i}`, {

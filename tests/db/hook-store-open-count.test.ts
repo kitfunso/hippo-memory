@@ -41,7 +41,7 @@ let preloadPath: string;
 let logPath: string;
 
 function seed(root: string, content: string, created: string, extra: Partial<MemoryEntry> = {}): void {
-  writeEntry(root, { ...createMemory(content, { baseHalfLifeDays: 30 }), created, last_retrieved: created, ...extra });
+  writeEntry(root, { ...createMemory(content, { baseHalfLifeDays: 30 }), created, lastRetrieved: created, ...extra });
 }
 
 // Stamped by hand: derived from the temp dir, the origin is whichever project marker sits above it on this machine.
@@ -49,7 +49,7 @@ function seedGlobalPin(): void {
   initStore(globalRoot);
   seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', {
     pinned: true,
-    origin_project: '',
+    originProject: '',
   });
 }
 

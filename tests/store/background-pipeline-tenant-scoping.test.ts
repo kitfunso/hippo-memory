@@ -202,7 +202,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // ASSERTION 2 (WRITE-side L9): the entry's tenant_id IS 'tenant-a',
     // not 'default'. This catches the scoped-dedup-passes-then-default-write
     // bug class (i.e. plumbing only the READ but not the WRITE).
-    expect(aAfter[0].tenant_id).toBe('tenant-a');
+    expect(aAfter[0].tenantId).toBe('tenant-a');
 
     // ASSERTION 3 (cross-tenant invariant): tenant-b unchanged.
     expect(loadAllEntries(hippoRoot, 'tenant-b').length).toBe(1);
@@ -242,7 +242,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // scoped-dedup-then-default-write bug class case 5 catches for capture.
     const aAfter = loadAllEntries(hippoRoot, 'tenant-a');
     expect(aAfter.length).toBe(1);
-    expect(aAfter[0].tenant_id).toBe('tenant-a');
+    expect(aAfter[0].tenantId).toBe('tenant-a');
     expect(aAfter[0].content).toBe(content);
 
     // ASSERTION 3 (cross-tenant invariant): tenant-b unchanged.
@@ -339,7 +339,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     // Reader-shape contract: host-wide reader returns both tenants.
     const all = loadEveryTenantEntries(hippoRoot);
     expect(all.length).toBe(2);
-    expect(all.map((e) => e.tenant_id).sort()).toEqual(['tenant-a', 'tenant-b']);
+    expect(all.map((e) => e.tenantId).sort()).toEqual(['tenant-a', 'tenant-b']);
   });
 
   it('case 11: host-wide reader semantics for embeddings.ts (signature-only test)', async () => {
@@ -365,7 +365,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     // re-evaluated.
     const hostWideRead = loadEveryTenantEntries(hippoRoot);
     expect(hostWideRead.length).toBe(2);
-    expect(hostWideRead.map((e) => e.tenant_id).sort()).toEqual(['tenant-a', 'tenant-b']);
+    expect(hostWideRead.map((e) => e.tenantId).sort()).toEqual(['tenant-a', 'tenant-b']);
   });
 
   it('case 12: listPeers aggregates across all tenants regardless of source-tenant', async () => {

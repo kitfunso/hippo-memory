@@ -73,8 +73,8 @@ function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): 
     tenantId: 'default',
     emotionalValence: valence,
   });
-  e.last_retrieved = fiveDaysAgo;
-  e.half_life_days = 3;
+  e.lastRetrieved = fiveDaysAgo;
+  e.halfLifeDays = 3;
   return { ...e, ...opts };
 }
 
@@ -293,8 +293,8 @@ describe('behavioral: env=0 ranking effect', () => {
         tenantId: 'default',
         emotionalValence: valence,
       });
-      e.last_retrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
-      e.half_life_days = 3;
+      e.lastRetrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
+      e.halfLifeDays = 3;
       e.strength = calculateStrength(e, NOW);
       writeEntry(root, e);
     }
@@ -331,8 +331,8 @@ describe('behavioral: env=0 ranking effect', () => {
     });
     // Force an aged last_retrieved so the stored strength stays unclamped
     // and the env-driven multiplier difference is visible.
-    baselineEntry.last_retrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
-    baselineEntry.half_life_days = 3;
+    baselineEntry.lastRetrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    baselineEntry.halfLifeDays = 3;
     // Recompute the stored strength after the age override so writeEntry
     // captures the aged value (the strength field was set at createMemory time
     // with last_retrieved=now; we re-run calculateStrength now that the entry

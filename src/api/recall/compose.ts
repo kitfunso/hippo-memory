@@ -46,7 +46,7 @@ export function recallOrigin(opts: RecallOptions): readonly string[] | undefined
 
 function inCallerProject(entry: MemoryEntry, opts: RecallOptions): boolean {
   const project = opts.filter?.project;
-  return !project || classifyOriginProject(entry.origin_project, project) !== 'cross-project';
+  return !project || classifyOriginProject(entry.originProject, project) !== 'cross-project';
 }
 
 /** The scope-admitted candidates in churn order, and the top `limit` of them. */
@@ -189,7 +189,7 @@ function admitCandidates(
   limit: number,
   personalScope: string | undefined,
 ): CandidateWindow {
-  const current = all.filter((e) => !e.superseded_by);
+  const current = all.filter((e) => !e.supersededBy);
   const scope = opts.filter?.scope;
   let entries: typeof all;
   if (scope !== undefined && scope !== '') {
@@ -301,9 +301,9 @@ function overflowGroups(window: CandidateWindow, limit: number): Map<string, Mem
   const baseIds = new Set(window.baseSlice.map((e) => e.id));
   const overflowByParent = new Map<string, MemoryEntry[]>();
   for (const e of window.entries.slice(limit)) {
-    const parentId = e.dag_parent_id;
+    const parentId = e.dagParentId;
     if (!parentId) continue;
-    if ((e.dag_level ?? 0) > DAG_LEVEL.extracted) continue;
+    if ((e.dagLevel ?? 0) > DAG_LEVEL.extracted) continue;
     const list = overflowByParent.get(parentId) ?? [];
     list.push(e);
     overflowByParent.set(parentId, list);
@@ -347,7 +347,7 @@ function summaryItem(s: SummaryDecoration, opts: RecallOptions): RecallResultIte
     strength: s.entry.strength,
     isSummary: true,
     substitutedFor: s.childIds,
-    descendantCount: s.entry.descendant_count ?? s.childIds.length,
+    descendantCount: s.entry.descendantCount ?? s.childIds.length,
   };
   if (opts.trace?.explain) item.rerankPipeline = 'api';
   return item;

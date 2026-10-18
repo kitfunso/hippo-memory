@@ -96,7 +96,7 @@ describe('POST /v1/connectors/slack/events', () => {
     const slackRow = entries.find((e) => e.tags.includes('source:slack') && e.kind === 'raw');
     expect(slackRow).toBeDefined();
     expect(slackRow!.owner).toBe('user:U1');
-    expect(slackRow!.artifact_ref).toBe('slack://T1/C1/1700000000.000100');
+    expect(slackRow!.artifactRef).toBe('slack://T1/C1/1700000000.000100');
 
     const coverage = buildProvenanceCoverage(entries);
     expect(coverage.rawTotal).toBe(1);

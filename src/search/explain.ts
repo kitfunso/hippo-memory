@@ -47,8 +47,8 @@ export function explainMatch(query: string, result: SearchResult): MatchExplanat
       kind: result.entry.kind ?? 'distilled',
       scope: result.entry.scope ?? null,
       owner: result.entry.owner ?? null,
-      artifact_ref: result.entry.artifact_ref ?? null,
-      session_id: result.entry.source_session_id ?? null,
+      artifact_ref: result.entry.artifactRef ?? null,
+      session_id: result.entry.sourceSessionId ?? null,
       confidence: result.entry.confidence ?? 'observed',
     },
   };

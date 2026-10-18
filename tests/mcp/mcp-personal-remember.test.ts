@@ -65,7 +65,7 @@ describe('hippo_remember personal over HTTP MCP', () => {
     const rows = loadAllEntries(root, 'default');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.scope).toBe('personal:private:oid-a');
-    expect(rows[0]?.origin_project).toBe('');
+    expect(rows[0]?.originProject).toBe('');
     expect(rows[0]?.content).toBe(NOTE);
   });
 

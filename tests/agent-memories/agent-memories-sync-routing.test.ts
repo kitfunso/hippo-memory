@@ -62,7 +62,7 @@ const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 const opts = () => ({ configAt: loadConfig, tenantId: 'default', agentImport: sqliteAgentImport, machine: w.machine });
 
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
-  const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), origin_project: origin };
+  const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), originProject: origin };
   writeEntry(root, entry);
   return entry;
 }
@@ -111,7 +111,7 @@ describe('agent memory sync: routing and sharing', () => {
     note(projectNotes(w, hx), 'utc.md', SHARED);
 
     expect(claude(importAtSessionEnd(hx, undefined, opts()))).toMatchObject({ imported: 1, duplicate: 1 });
-    expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, origin_project: deriveOriginProject(hx) }]);
+    expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, originProject: deriveOriginProject(hx) }]);
   });
 
   it('post-compact reads the session folder only and runs no git call', () => {
@@ -129,7 +129,7 @@ describe('agent memory sync: routing and sharing', () => {
     const compaction = spawnsDuring(() => importSessionFolder(w.local, transcript, w.project, opts()));
     expect(compaction.spawns).toBe(0);
     expect(claude(compaction.result).imported).toBe(1);
-    expect(liveRows(w.local)).toMatchObject([{ content: Q, origin_project: 'proj' }]);
+    expect(liveRows(w.local)).toMatchObject([{ content: Q, originProject: 'proj' }]);
     expect(isInitialized(w.global)).toBe(false);
     // Claude Code's folder names ask git once; this world has no Gemini index or Copilot store to ask it again.
     expect(spawnsDuring(() => importProjectMemories(w.local, opts())).spawns).toBe(1);
@@ -143,7 +143,7 @@ describe('agent memory sync: routing and sharing', () => {
 
     importAtSessionEnd(a, transcript, opts());
     importAtSessionEnd(b, transcript, opts());
-    expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, origin_project: '' }]);
+    expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, originProject: '' }]);
     expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
     expect(liveTexts(w.local)).toEqual([]);
   });
@@ -155,7 +155,7 @@ describe('agent memory sync: routing and sharing', () => {
     writeFileSync(transcript, `${JSON.stringify({ type: 'user', cwd: x })}\n`, 'utf8');
 
     expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(1);
-    expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, origin_project: deriveOriginProject(x) }]);
+    expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, originProject: deriveOriginProject(x) }]);
     expect(liveTexts(w.local)).toEqual([]);
   });
 
@@ -178,7 +178,7 @@ describe('agent memory sync: routing and sharing', () => {
     initStore(w.global);
     const stray = {
       ...createMemory('An older wording of the home note.', { tenantId: 'default', baseHalfLifeDays: 30 }),
-      origin_project: 'repoa',
+      originProject: 'repoa',
       source: `${containerPrefix('claude-code', containerId(notes, 'project', process.platform, 'repoa'))}h.md#abc`,
       tags: ['claude-code-memory'],
     };
@@ -198,7 +198,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(repair(false).copies).toEqual([]);
 
     importSessionFolder(w.local, transcript, join(w.dir, 'repoa'), opts());
-    expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, origin_project: '' }]);
+    expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, originProject: '' }]);
     expect(dormantRows(w.global).map((d) => d.id)).toEqual([stray.id]);
   });
 
@@ -220,7 +220,7 @@ describe('agent memory sync: routing and sharing', () => {
     note(dir, 'u.md', USER_NOTE);
 
     expect(claude(importForStore(w.local, opts())).imported).toBe(1);
-    expect(liveRows(w.global)).toMatchObject([{ content: USER_NOTE, origin_project: '' }]);
+    expect(liveRows(w.global)).toMatchObject([{ content: USER_NOTE, originProject: '' }]);
     expect(
       liveRows(w.global)[0].source.startsWith(`agent-memory:claude-code:${expectedContainer(dir, 'u')}/u.md#`),
     ).toBe(true);

@@ -25,7 +25,7 @@ describe('decision memory', () => {
     expect(entry!.tags).toContain('decision');
     expect(entry!.layer).toBe('semantic');
     expect(entry!.confidence).toBe('verified');
-    expect(entry!.half_life_days).toBe(DEFAULT_HALF_LIFE_DAYS);
+    expect(entry!.halfLifeDays).toBe(DEFAULT_HALF_LIFE_DAYS);
     expect(entry!.source).toBe('decision');
   });
 
@@ -41,13 +41,13 @@ describe('decision memory', () => {
 
     // Supersede
     const old = readEntry(hippoRoot, mem.id)!;
-    old.half_life_days = Math.max(1, Math.floor(old.half_life_days / 2));
+    old.halfLifeDays = Math.max(1, Math.floor(old.halfLifeDays / 2));
     old.confidence = 'stale';
     if (!old.tags.includes('superseded')) old.tags.push('superseded');
     writeEntry(hippoRoot, old);
 
     const updated = readEntry(hippoRoot, mem.id)!;
-    expect(updated.half_life_days).toBe(Math.floor(DEFAULT_HALF_LIFE_DAYS / 2));
+    expect(updated.halfLifeDays).toBe(Math.floor(DEFAULT_HALF_LIFE_DAYS / 2));
     expect(updated.tags).toContain('superseded');
     expect(updated.confidence).toBe('stale');
   });

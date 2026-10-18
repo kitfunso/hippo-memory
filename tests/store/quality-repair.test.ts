@@ -62,7 +62,7 @@ const dispositionOf = (id: string) => run().issues.find((issue) => issue.id === 
 
 describe('recoverable automatic memory quality repair', () => {
   it('previews without writes, then preserves full history, audits each move, and leaves a restored row alone', async () => {
-    const bad = seed('Found local migration files to be', { retrieval_count: 7, tags: ['error', 'captured'] });
+    const bad = seed('Found local migration files to be', { retrievalCount: 7, tags: ['error', 'captured'] });
     const good = seed(
       'Keep test schema setup outside production migrations because production applies every sorted migration.',
     );
@@ -80,7 +80,7 @@ describe('recoverable automatic memory quality repair', () => {
     const snapshot = withDb((db) => readDormantSnapshot(db, 'default', bad.id));
     expect(snapshot?.entry).toMatchObject({
       content: bad.content,
-      retrieval_count: 7,
+      retrievalCount: 7,
       tags: bad.tags,
       source: bad.source,
     });
@@ -95,7 +95,7 @@ describe('recoverable automatic memory quality repair', () => {
     expect(await dormantRestore(ctx(), bad.id)).toMatchObject({
       id: bad.id,
       content: bad.content,
-      retrieval_count: 7,
+      retrievalCount: 7,
       confidence: 'verified',
     });
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null, issues: [] });
@@ -178,8 +178,8 @@ describe('recoverable automatic memory quality repair', () => {
     );
     const automatic = [
       seed(FRAGMENT, { source: 'compaction:s-1' }),
-      seed(FRAGMENT, { source: 'cli', extracted_from: manual[0].id }),
-      seed(FRAGMENT, { source: 'cli', dag_level: 1 }),
+      seed(FRAGMENT, { source: 'cli', extractedFrom: manual[0].id }),
+      seed(FRAGMENT, { source: 'cli', dagLevel: 1 }),
       seed(FRAGMENT, { source: 'git-learn' }),
       seed(FRAGMENT, { source: 'git' }),
       seed(FRAGMENT, { source: 'promoted:/work/app/.hippo', tags: ['captured'] }),
@@ -223,7 +223,7 @@ describe('recoverable automatic memory quality repair', () => {
       layer: Layer.Semantic,
     });
     const weak = seed('more detail soon');
-    const trace = seed('succeeds (inserts or updates)', { trace_outcome: 'success', layer: Layer.Trace });
+    const trace = seed('succeeds (inserts or updates)', { traceOutcome: 'success', layer: Layer.Trace });
     const promoted = seed('succeeds (inserts or updates)', { source: 'auto-promote', tags: ['captured'] });
     const digest = seed('succeeds (inserts or updates)', { tags: ['session-digest'] });
     const result = run(true);
@@ -273,7 +273,7 @@ describe('recoverable automatic memory quality repair', () => {
     const next = seed(
       'Keep test schema setup outside production migrations because production applies every sorted migration.',
     );
-    seed('Found local migration files to be', { superseded_by: next.id });
+    seed('Found local migration files to be', { supersededBy: next.id });
     seed('Found local migration files to be', { kind: 'archived' });
     expect(run(true)).toMatchObject({ total: 1, issues: [], appliedIds: [] });
   });
@@ -336,7 +336,7 @@ describe('recoverable automatic memory quality repair', () => {
 
   it('does not disclose the source text in its report and scopes repair to one tenant', () => {
     const mine = seed('succeeds (inserts or updates)');
-    const other = seed(mine.content, { tenant_id: 'other' });
+    const other = seed(mine.content, { tenantId: 'other' });
     const result = run(true);
     expect(result.appliedIds).toEqual([mine.id]);
     expect(JSON.stringify(result)).not.toContain(mine.content);

@@ -137,9 +137,9 @@ describe('strengthenRetrieved', () => {
     expect(countMatching(statements, /UPDATE memories SET retrieval_count/)).toBe(1);
     for (const id of ids) {
       const after = readEntry(root, id)!;
-      expect(after.retrieval_count).toBe(1);
-      expect(after.half_life_days).toBe(createMemory('xyz memory').half_life_days + 2);
-      expect(after.last_retrieved).not.toBe(after.created);
+      expect(after.retrievalCount).toBe(1);
+      expect(after.halfLifeDays).toBe(createMemory('xyz memory').halfLifeDays + 2);
+      expect(after.lastRetrieved).not.toBe(after.created);
     }
   });
 });

@@ -33,14 +33,14 @@ export interface HalfLifeMigrationResult {
   halfLives: ReadonlyMap<string, number>;
 }
 
-type HalfLifeFields = Pick<MemoryEntry, 'half_life_days' | 'tags' | 'schema_fit' | 'retrieval_count' | 'superseded_by'>;
+type HalfLifeFields = Pick<MemoryEntry, 'halfLifeDays' | 'tags' | 'schemaFit' | 'retrievalCount' | 'supersededBy'>;
 
 /** Recall bonus over `written`, the half-life `entry` got at write, or null when off it; each recall added 2 days. */
 export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): number | null {
-  if (entry.superseded_by || entry.tags.includes('invalidated') || entry.tags.includes('superseded')) return null;
-  const bonus = entry.half_life_days - written;
+  if (entry.supersededBy || entry.tags.includes('invalidated') || entry.tags.includes('superseded')) return null;
+  const bonus = entry.halfLifeDays - written;
   const k = Math.round(bonus / 2);
-  return Math.abs(bonus - 2 * k) < 1e-9 && k >= 0 && k <= entry.retrieval_count ? bonus : null;
+  return Math.abs(bonus - 2 * k) < 1e-9 && k >= 0 && k <= entry.retrievalCount ? bonus : null;
 }
 
 type MoveFields = HalfLifeFields & Pick<MemoryEntry, 'source'>;
@@ -60,8 +60,8 @@ function onTypedBase(e: MoveFields): boolean {
 /** The half-life an object's memory moves to off the flat 90 days, or null when it stays. */
 function typedTarget(e: MoveFields, to: number): number | null {
   const bonus = TYPED_SOURCES.has(e.source) ? halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) : null;
-  const next = bonus === null ? e.half_life_days : deriveHalfLife(to, e) + bonus;
-  return next === e.half_life_days ? null : next;
+  const next = bonus === null ? e.halfLifeDays : deriveHalfLife(to, e) + bonus;
+  return next === e.halfLifeDays ? null : next;
 }
 
 /**
@@ -122,11 +122,11 @@ function planMoves(rows: HalfLifeRows, to: number) {
   let count = 0;
   for (const e of rows.rows) {
     count++;
-    if (e.superseded_by) copies.add(e.superseded_by);
+    if (e.supersededBy) copies.add(e.supersededBy);
     const base = baseTarget(e, rows.from, to);
     const typed = typedPending ? typedTarget(e, to) : null;
     if (base === null && typed === null) continue;
-    const change = { id: e.id, tenantId: e.tenant_id, oldHalfLifeDays: e.half_life_days };
+    const change = { id: e.id, tenantId: e.tenantId, oldHalfLifeDays: e.halfLifeDays };
     movable.push({ change, typedBase: onTypedBase(e), base, typed });
   }
   // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the

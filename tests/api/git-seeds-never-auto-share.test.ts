@@ -96,7 +96,7 @@ describe('git-learned rows and the global store', () => {
       DEFAULT_HALF_LIFE_DAYS,
     );
     expect(fact.tags).toContain('git-learned');
-    const recalled = { ...fact, retrieval_count: 3 };
+    const recalled = { ...fact, retrievalCount: 3 };
     writeEntry(hippoRoot, recalled);
     expect(transferScore(recalled)).toBeGreaterThanOrEqual(0.6);
     autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS });
@@ -120,7 +120,7 @@ describe('git-learned rows and the global store', () => {
         valence: 'neutral',
       })),
       DEFAULT_HALF_LIFE_DAYS,
-    ).map((f) => ({ ...f, dag_level: 1 }));
+    ).map((f) => ({ ...f, dagLevel: 1 }));
     await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'test',
@@ -131,7 +131,7 @@ describe('git-learned rows and the global store', () => {
       apiKey: 'test',
       fetcher,
     });
-    const summaries = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 2);
+    const summaries = loadAllEntries(hippoRoot, 'default').filter((e) => e.dagLevel === 2);
     expect(summaries).toHaveLength(2);
     for (const s of summaries) expect(s.tags).toContain('git-learned');
 
@@ -140,7 +140,7 @@ describe('git-learned rows and the global store', () => {
       apiKey: 'test',
       fetcher,
     });
-    const profiles = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 3);
+    const profiles = loadAllEntries(hippoRoot, 'default').filter((e) => e.dagLevel === 3);
     expect(profiles).toHaveLength(1);
     expect(profiles[0].tags).toContain('git-learned');
   });

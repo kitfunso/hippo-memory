@@ -44,9 +44,9 @@ function seed() {
     [520, () => automatic(PART_A)],
     [600, () => automatic('Always check which branch the PR merges into')],
     [700, () => automatic(PART_A, { pinned: true })],
-    [800, (ids) => automatic('Found local migration files to be', { superseded_by: ids[0] })],
+    [800, (ids) => automatic('Found local migration files to be', { supersededBy: ids[0] })],
     [801, () => automatic('Found local migration files to be', { kind: 'archived' })],
-    [900, () => automatic('Found local migration files to be', { tenant_id: 'other' })],
+    [900, () => automatic('Found local migration files to be', { tenantId: 'other' })],
     [1090, (ids) => automatic(mergedText(HEADER, [PART_A, PART_B]), bundleOf([ids[520], dormantParent.id]))],
   ]);
   const ids: string[] = [];

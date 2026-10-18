@@ -106,7 +106,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
     writeEntry(home, u);
     const supersedeResult = await api.supersede(ctx(home), u.id, 'unrelated baseline, revised');
     expect(supersedeResult.ok).toBe(true);
-    expect(readEntry(home, u.id)!.superseded_by).toBe(supersedeResult.newId);
+    expect(readEntry(home, u.id)!.supersededBy).toBe(supersedeResult.newId);
     expect(readEntry(home, supersedeResult.newId)!.content).toBe('unrelated baseline, revised');
 
     // cmdSupersede-style 2-write flow (cli.ts's cmdSupersede pattern,
@@ -115,12 +115,12 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
     const v = createMemory('second unrelated baseline', { layer: Layer.Episodic });
     writeEntry(home, v);
     const vNew = createMemory('second unrelated baseline, revised', { layer: Layer.Episodic });
-    v.superseded_by = vNew.id;
+    v.supersededBy = vNew.id;
     expect(() => {
       writeEntry(home, v);
       writeEntry(home, vNew);
     }).not.toThrow();
-    expect(readEntry(home, v.id)!.superseded_by).toBe(vNew.id);
+    expect(readEntry(home, v.id)!.supersededBy).toBe(vNew.id);
     expect(readEntry(home, vNew.id)!.content).toBe('second unrelated baseline, revised');
   });
 });
@@ -139,7 +139,7 @@ describe('case 2: refused supersede audit surface', () => {
     // CAS rolled back: the old row's superseded_by pointer is untouched.
     const stored = readEntry(home, old.id);
     expect(stored).not.toBeNull();
-    expect(stored!.superseded_by).toBeNull();
+    expect(stored!.supersededBy).toBeNull();
 
     const db = openHippoDb(home);
     try {
@@ -397,8 +397,8 @@ describe('consolidation-loop fix: merge tombstone check', () => {
     expect(e2After).toBeDefined();
     expect(e1After!.layer).toBe(Layer.Episodic);
     expect(e2After!.layer).toBe(Layer.Episodic);
-    expect(e1After!.half_life_days).toBe(e1.half_life_days);
-    expect(e2After!.half_life_days).toBe(e2.half_life_days);
+    expect(e1After!.halfLifeDays).toBe(e1.halfLifeDays);
+    expect(e2After!.halfLifeDays).toBe(e2.halfLifeDays);
 
     const dbAfter = openHippoDb(home);
     try {
@@ -661,7 +661,7 @@ describe('merge tombstone check uses the destination tenant', () => {
     const allAfter = loadEveryTenantEntries(home);
     const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
     expect(semantic).toBeDefined();
-    expect(semantic!.tenant_id).toBe('tenant-a');
+    expect(semantic!.tenantId).toBe('tenant-a');
   });
 });
 

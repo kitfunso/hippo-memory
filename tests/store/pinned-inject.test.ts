@@ -161,8 +161,8 @@ describe('hippo context --pinned-only', () => {
     const reloaded = loadAllEntries(hippoDir, 'default');
     const target = reloaded.find((e) => e.id === pinned.id);
     expect(target).toBeDefined();
-    expect(target!.retrieval_count).toBe(0);
-    expect(target!.last_retrieved).toBe(pinned.last_retrieved);
+    expect(target!.retrievalCount).toBe(0);
+    expect(target!.lastRetrieved).toBe(pinned.lastRetrieved);
   });
 
   it('emits multiple pinned memories in one injection payload', async () => {

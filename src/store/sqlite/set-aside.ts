@@ -14,7 +14,7 @@ export function setAsideRow(db: DatabaseSyncLike, tag: string, row: MemoryEntry,
   const untagged: MemoryEntry = { ...row, tags: row.tags.filter((t) => t !== tag) };
   const audit = (metadata: Record<string, string | boolean>): void =>
     appendAuditEvent(db, {
-      tenantId: row.tenant_id,
+      tenantId: row.tenantId,
       actor: SYNC_ACTOR,
       op: 'agent_memory_set_aside',
       targetId: row.id,

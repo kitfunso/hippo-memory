@@ -36,7 +36,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     confidence: 'inferred',
     dagLevel: 2,
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
   });
 }
 
@@ -45,10 +45,10 @@ function makeChild(text: string, parentId: string, opts: Partial<MemoryEntry> = 
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     confidence: 'observed',
-    dagLevel: opts.dag_level ?? 1,
+    dagLevel: opts.dagLevel ?? 1,
     dagParentId: parentId,
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
   });
 }
 
@@ -61,9 +61,9 @@ describe('drillDown', () => {
 
   it('returns the summary plus its direct children', async () => {
     const s = makeSummary('topic alpha');
-    s.descendant_count = 4;
-    s.earliest_at = '2026-01-01T00:00:00.000Z';
-    s.latest_at = '2026-01-04T00:00:00.000Z';
+    s.descendantCount = 4;
+    s.earliestAt = '2026-01-01T00:00:00.000Z';
+    s.latestAt = '2026-01-04T00:00:00.000Z';
     writeEntry(root, s);
     const childIds: string[] = [];
     for (let i = 0; i < 4; i++) {

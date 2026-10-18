@@ -182,12 +182,12 @@ export function writeEntryDbOnly(
 /** What follows a row's upsert inside its write scope: the remember row, last of the write's audit rows, then the
  * summary parent's dirty mark. */
 export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
-  const tenantId = entry.tenant_id;
+  const tenantId = entry.tenantId;
   audit(db, 'remember', { targetId: entry.id, metadata: rememberAuditMetadata(entry), actor, tenantId });
   // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
   // have no parent, so the hot path pays one null check.
-  if (entry.dag_parent_id) {
-    markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenant_id, actor);
+  if (entry.dagParentId) {
+    markSummaryDirtyInTx(db, entry.dagParentId, entry.tenantId, actor);
   }
 }
 
@@ -246,7 +246,7 @@ export function strengthenRetrievedOn(
       `WITH v(id, rc, lr, hl, st) AS (VALUES ${values})
        UPDATE memories SET retrieval_count = v.rc, last_retrieved = v.lr, half_life_days = v.hl, strength = v.st
        FROM v WHERE memories.id = v.id`,
-    ).run(...chunk.flatMap((e) => [e.id, e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength]));
+    ).run(...chunk.flatMap((e) => [e.id, e.retrievalCount, e.lastRetrieved, e.halfLifeDays, e.strength]));
     for (const e of chunk) found.add(e.id);
   }
   return found;
@@ -257,7 +257,7 @@ export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void
   db.prepare(`UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`).run(
     JSON.stringify(entry.tags),
     entry.id,
-    entry.tenant_id,
+    entry.tenantId,
   );
   syncFtsRow(db, entry);
 }
@@ -265,9 +265,9 @@ export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void
 /** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's dormant move does, and
  * marks its summary parent dirty. */
 export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
-  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenant_id);
+  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenantId);
   deleteFtsRow(db, entry.id);
-  if (entry.dag_parent_id) markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenant_id, actor);
+  if (entry.dagParentId) markSummaryDirtyInTx(db, entry.dagParentId, entry.tenantId, actor);
 }
 
 /** One half-life per memory id, on the caller's transaction. */
@@ -438,7 +438,7 @@ function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): v
  * holds. */
 function assertIdInTenant(db: DatabaseSyncLike, entry: MemoryEntry): void {
   const holder = selectMemoryReach(db, entry.id)?.tenantId;
-  if (holder !== undefined && holder !== entry.tenant_id) {
+  if (holder !== undefined && holder !== entry.tenantId) {
     throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
   }
 }
@@ -494,7 +494,7 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): readonly M
         retagged.map((row) => row.id),
       );
     }
-    const parents = [...new Set(rows.flatMap((row) => (row.dag_parent_id ? [row.dag_parent_id] : [])))];
+    const parents = [...new Set(rows.flatMap((row) => (row.dagParentId ? [row.dagParentId] : [])))];
     const flipped = markSummariesDirtyInTx(db, parents, outcome.tenantId);
     appendAuditEventsAt(db, outcomeAuditRows(applied, flipped, outcome));
     markMirrorsDue(
@@ -515,13 +515,13 @@ function outcomeAuditRows(
   const marked = new Set<string>();
   return applied.flatMap((entry) => {
     const rows: AppendAuditOpts[] = [
-      { tenantId: entry.tenant_id, actor, op: 'remember', targetId: entry.id, metadata: rememberAuditMetadata(entry) },
+      { tenantId: entry.tenantId, actor, op: 'remember', targetId: entry.id, metadata: rememberAuditMetadata(entry) },
     ];
-    const parent = entry.dag_parent_id;
+    const parent = entry.dagParentId;
     const level = parent ? flipped.get(parent) : undefined;
     if (parent && level !== undefined && !marked.has(parent)) {
       marked.add(parent);
-      rows.push(summaryDirtyAuditRow(parent, entry.tenant_id, actor, level));
+      rows.push(summaryDirtyAuditRow(parent, entry.tenantId, actor, level));
     }
     rows.push({ tenantId, actor, op: 'outcome', targetId: entry.id, metadata: { good } });
     return rows;

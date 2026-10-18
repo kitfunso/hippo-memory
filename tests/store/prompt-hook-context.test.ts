@@ -70,7 +70,7 @@ function makeProject(dir: string, rateBp: number | null = null): string {
 }
 
 function pin(store: string, content: string, origin: string): void {
-  writeEntry(store, { ...createMemory(content), pinned: true, origin_project: origin });
+  writeEntry(store, { ...createMemory(content), pinned: true, originProject: origin });
 }
 
 const ctxFor = (store: string): FullContext => apiCtx(store, 'default', adminActor('prompt-hook-test'));
@@ -124,14 +124,14 @@ describe('promptHookContext', () => {
       ...createMemory(
         'Kafka consumers in the billing service must be paused with kafka-pause.sh before a schema migration',
       ),
-      origin_project: 'proj',
+      originProject: 'proj',
     });
     for (let i = 0; i < 7; i++) {
       writeEntry(cliStore, {
         ...createMemory(
           `Release train ${i}: the payments worker on port 80${i}1 drains for 90 seconds before the cutover`,
         ),
-        origin_project: 'proj',
+        originProject: 'proj',
       });
     }
     saveActiveTaskSnapshot(cliStore, 'default', {
@@ -395,11 +395,11 @@ describe('promptHookContext on a shared store', () => {
     pin(store, 'PINNED: the user-global pin about the rollback plan', '');
     writeEntry(store, {
       ...createMemory('Kafka consumers in the billing service must be paused with kafka-pause.sh first'),
-      origin_project: 'p',
+      originProject: 'p',
     });
     writeEntry(store, {
       ...createMemory('Somebody keeps personal shell aliases in the dotfiles repo on the build box'),
-      origin_project: '',
+      originProject: '',
     });
     const own = await ask(store, 'tail-own', false);
     expect(own.stdout).toContain('dotfiles');

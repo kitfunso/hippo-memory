@@ -84,7 +84,7 @@ describe('agent memory sync: the Added list', () => {
     note(dir, 'deploy.md', B);
     expect(claude(sync()).replaced).toBe(1);
     expect(only().content).toBe(B);
-    expect(readEntry(w.local, newId)?.superseded_by).toBe(only().id);
+    expect(readEntry(w.local, newId)?.supersededBy).toBe(only().id);
   });
 
   it('a deleted note that comes back unchanged is restored from dormant with its id', () => {
@@ -119,7 +119,7 @@ describe('agent memory sync: the Added list', () => {
     const a2 = only();
 
     expect(a2.id).not.toBe(a1.id);
-    expect([readEntry(w.local, a1.id)?.superseded_by, readEntry(w.local, b.id)?.superseded_by]).toEqual([b.id, a2.id]);
+    expect([readEntry(w.local, a1.id)?.supersededBy, readEntry(w.local, b.id)?.supersededBy]).toEqual([b.id, a2.id]);
   });
 
   it('two tagged rows for one key collapse to the newest', () => {
@@ -135,7 +135,7 @@ describe('agent memory sync: the Added list', () => {
 
     expect(claude(sync())).toMatchObject({ collapsed: 1, unchanged: 0, imported: 0 });
     expect(only().id).toBe(newest.id);
-    expect(readEntry(w.local, older.id)?.superseded_by).toBe(newest.id);
+    expect(readEntry(w.local, older.id)?.supersededBy).toBe(newest.id);
   });
 
   it('a restore after a rewrite survives two syncs', async () => {
@@ -293,7 +293,7 @@ describe('agent memory sync: the Added list', () => {
     withDb(w.local, (db) => {
       db.exec('BEGIN IMMEDIATE');
       insertDormantRow(db, {
-        entry: { ...row, superseded_by: 'mem_elsewhere' },
+        entry: { ...row, supersededBy: 'mem_elsewhere' },
         strength: 0.1,
         reason: 'decay',
         dormantAt: new Date().toISOString(),

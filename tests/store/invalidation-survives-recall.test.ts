@@ -44,7 +44,7 @@ describe('a deliberate stale tier survives being read', () => {
     await contextGet(ctx(), { currentProject: cwdProject(), q: 'legacy pipeline deploys', budget: 2000 });
 
     const afterRead = readEntry(home, id)!;
-    expect(afterRead.retrieval_count).toBeGreaterThan(invalidated.retrieval_count);
+    expect(afterRead.retrievalCount).toBeGreaterThan(invalidated.retrievalCount);
     expect(afterRead.confidence).toBe('stale');
     expect(afterRead.tags).toContain('invalidated');
   });
@@ -78,9 +78,9 @@ describe('a deliberate stale tier survives being read', () => {
 
     const [updated] = markRetrieved([entry]);
 
-    expect(updated.retrieval_count).toBe(entry.retrieval_count + 1);
-    expect(updated.half_life_days).toBe(entry.half_life_days + 2);
-    expect(new Date(updated.last_retrieved).getTime()).toBeGreaterThan(new Date(entry.last_retrieved).getTime() - 1);
+    expect(updated.retrievalCount).toBe(entry.retrievalCount + 1);
+    expect(updated.halfLifeDays).toBe(entry.halfLifeDays + 2);
+    expect(new Date(updated.lastRetrieved).getTime()).toBeGreaterThan(new Date(entry.lastRetrieved).getTime() - 1);
   });
 
   it('leaves every other tier untouched, so the fix is not a blanket freeze', () => {

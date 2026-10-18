@@ -421,8 +421,8 @@ export function initializeParticle(entry: MemoryEntry, embedding: number[], now:
     memoryId: entry.id,
     position: [...embedding], // copy: position will diverge from original embedding
     velocity: vecZero(embedding.length),
-    mass: computeMass(strength, entry.retrieval_count),
-    charge: computeCharge(entry.emotional_valence),
+    mass: computeMass(strength, entry.retrievalCount),
+    charge: computeCharge(entry.emotionalValence),
     temperature: computeTemperature(ageDays, 1.0),
     lastSimulation: now.toISOString(),
   };

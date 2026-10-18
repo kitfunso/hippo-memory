@@ -19,7 +19,7 @@ export const DECAY_THRESHOLD = 0.05;
 /** What the decay pass hands to the conflict check and the rescue audit at the end of the run. */
 export interface DecayOutcome {
   rescuedIds: Set<string>;
-  rescuedEntries: Array<Pick<MemoryEntry, 'id' | 'tenant_id'>>;
+  rescuedEntries: Array<Pick<MemoryEntry, 'id' | 'tenantId'>>;
   /** The rank of each condemned row and of each row whose score is not finite. */
   rankById: Map<string, MvRankInfo>;
 }
@@ -57,7 +57,7 @@ function keepSurvivor(run: SleepRun, entry: Pick<MemoryEntry, 'id' | 'strength'>
 
 /** Notes the row's DAG parent for the flush's family units, then returns its live strength. */
 function liveStrength(run: SleepRun, entry: MemoryEntry): number {
-  if (entry.dag_parent_id) run.parentOf.set(entry.id, entry.dag_parent_id);
+  if (entry.dagParentId) run.parentOf.set(entry.id, entry.dagParentId);
   return calculateStrength(entry, run.now, run.decayOpts);
 }
 
@@ -108,7 +108,7 @@ function classifyByStrength(run: SleepRun) {
     for (const entry of page) {
       const live = liveStrength(run, entry);
       const condemned = run.retirable(entry) && live < DECAY_THRESHOLD;
-      verdicts.push({ id: entry.id, tenant_id: entry.tenant_id, strength: entry.strength, live, condemned });
+      verdicts.push({ id: entry.id, tenant_id: entry.tenantId, strength: entry.strength, live, condemned });
       if (!entry.pinned) candidates.push(mvCandidate(entry, run.now));
     }
   }
@@ -166,7 +166,7 @@ function commitVerdicts(
       } else if (rescuedIds.has(v.id)) {
         // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a cached computation.
         keepSurvivor(run, v, v.live);
-        rescuedEntries.push({ id: v.id, tenant_id: v.tenant_id });
+        rescuedEntries.push({ id: v.id, tenantId: v.tenant_id });
         reportRescue(run.result, v.id, v.live, rankById.get(v.id));
       } else {
         const row = fadedRows.get(v.id);

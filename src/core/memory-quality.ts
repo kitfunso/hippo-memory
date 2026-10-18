@@ -298,7 +298,7 @@ const COPY_SOURCE = /^(?:promoted|shared):/;
 export const BUNDLE_HEADER =
   /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/;
 
-type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extracted_from' | 'dag_level' | 'tags'>;
+type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extractedFrom' | 'dagLevel' | 'tags'>;
 
 /**
  * A row hippo wrote that no person vouched for: hippo's writers
@@ -310,8 +310,8 @@ export function isAutomaticEntry(entry: Provenance): boolean {
     AUTOMATIC_SOURCES.has(entry.source) ||
     entry.source.startsWith(COMPACTION_SOURCE_PREFIX) ||
     (COPY_SOURCE.test(entry.source) && entry.tags.some((tag) => AUTOMATIC_TAGS.has(tag))) ||
-    entry.extracted_from !== null ||
-    entry.dag_level >= DAG_LEVEL.extracted ||
+    entry.extractedFrom !== null ||
+    entry.dagLevel >= DAG_LEVEL.extracted ||
     BUNDLE_HEADER.test(entry.content)
   );
 }

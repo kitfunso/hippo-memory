@@ -96,7 +96,7 @@ async function loadAmbientEntries(
   options: LoadAmbientEntriesOptions,
 ): Promise<AmbientLoadResult> {
   const { pinnedOnly, recent, admit, recheck, admission, window, recall, onRefused } = options;
-  const ownTenant = (e: MemoryEntry): boolean => e.tenant_id === tenantId;
+  const ownTenant = (e: MemoryEntry): boolean => e.tenantId === tenantId;
   if (!pinnedOnly) {
     const rows =
       'query' in window
@@ -240,8 +240,8 @@ function entryPricer(
           entry,
           isGlobal,
           promptRecall,
-          origin: entry.origin_project ?? null,
-          category: classifyOriginProject(entry.origin_project, currentProject),
+          origin: entry.originProject ?? null,
+          category: classifyOriginProject(entry.originProject, currentProject),
         })
       : estimateTokens(entry.content);
 }
@@ -411,7 +411,7 @@ function ambientAdmission(
   };
   const admit = (e: MemoryEntry): boolean => ambientAdmits(e, rule);
   // The two-store search has always ranked a session's own compaction items; only the local search drops them.
-  const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientEnvelopeAdmits(e, rule);
+  const bothStoresAdmit = (e: MemoryEntry): boolean => !e.supersededBy && ambientEnvelopeAdmits(e, rule);
   return { rule, admit, bothStoresAdmit };
 }
 
@@ -520,8 +520,8 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   // the active project, so renderers can mark cross-project rows.
   selected = selected.map((r) => ({
     ...r,
-    origin: r.entry.origin_project ?? null,
-    category: classifyOriginProject(r.entry.origin_project, plan.currentProject),
+    origin: r.entry.originProject ?? null,
+    category: classifyOriginProject(r.entry.originProject, plan.currentProject),
   }));
   obs?.selected(selected);
   return { items: selected, tokens };

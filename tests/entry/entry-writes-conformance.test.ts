@@ -29,19 +29,19 @@ const ACTOR = 'api_key:caller';
 type Row = Pick<
   MemoryEntry,
   | 'id'
-  | 'tenant_id'
+  | 'tenantId'
   | 'kind'
   | 'scope'
   | 'content'
   | 'tags'
   | 'strength'
-  | 'outcome_score'
-  | 'outcome_positive'
-  | 'outcome_negative'
-  | 'superseded_by'
-  | 'dag_parent_id'
-  | 'summary_dirty'
-  | 'origin_project'
+  | 'outcomeScore'
+  | 'outcomePositive'
+  | 'outcomeNegative'
+  | 'supersededBy'
+  | 'dagParentId'
+  | 'summaryDirty'
+  | 'originProject'
   | 'pinned'
 >;
 type Value = string | string[] | Row[] | void;
@@ -87,19 +87,19 @@ async function seed(dir: string): Promise<Seeded> {
 const project = (entries: MemoryEntry[]): Row[] =>
   entries.map((e) => ({
     id: e.id,
-    tenant_id: e.tenant_id,
+    tenantId: e.tenantId,
     kind: e.kind,
     scope: e.scope,
     content: e.content,
     tags: e.tags,
     strength: e.strength,
-    outcome_score: e.outcome_score,
-    outcome_positive: e.outcome_positive,
-    outcome_negative: e.outcome_negative,
-    superseded_by: e.superseded_by,
-    dag_parent_id: e.dag_parent_id,
-    summary_dirty: e.summary_dirty,
-    origin_project: e.origin_project,
+    outcomeScore: e.outcomeScore,
+    outcomePositive: e.outcomePositive,
+    outcomeNegative: e.outcomeNegative,
+    supersededBy: e.supersededBy,
+    dagParentId: e.dagParentId,
+    summaryDirty: e.summaryDirty,
+    originProject: e.originProject,
     pinned: e.pinned,
   }));
 
@@ -122,7 +122,7 @@ const readBack =
     project(await store.entriesByIds(ids, tenantId));
 const fresh = (content: string, extra: Parameters<typeof createMemory>[1] = {}): MemoryEntry => ({
   ...createMemory(content, { tenantId: TENANT_A, ...extra }),
-  origin_project: 'proj',
+  originProject: 'proj',
 });
 const target = (id: string, ownScope: string | null = null, tenantId = TENANT_A) => ({
   tenantId,
@@ -147,7 +147,7 @@ const dirtied = (summary: MemoryEntry) => ({
   metadata: { dag_level: 2, source: 'E2' },
 });
 const remembered = (e: MemoryEntry) => ({
-  tenantId: e.tenant_id,
+  tenantId: e.tenantId,
   actor: ACTOR,
   op: 'remember',
   targetId: e.id,
@@ -182,7 +182,7 @@ describe('EntryWrites.writeEntry', () => {
       },
       readBack(TENANT_A, entry.id),
     ]);
-    expect(side.outcomes[1]).toEqual({ value: project([{ ...entry, summary_dirty: false }]) });
+    expect(side.outcomes[1]).toEqual({ value: project([{ ...entry, summaryDirty: false }]) });
     expect(added(side)).toEqual([remembered(entry)]);
   });
 
@@ -197,7 +197,7 @@ describe('EntryWrites.writeEntry', () => {
       };
     const side = await conforms([write(first), write(second), readBack(TENANT_A, summary.id)]);
     // SAFETY: the third call reads rows back, so it resolved to Row[].
-    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.summary_dirty])).toEqual([
+    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.summaryDirty])).toEqual([
       [summary.id, true],
     ]);
     expect(added(side)).toEqual([remembered(first), dirtied(summary), remembered(second)]);
@@ -205,7 +205,7 @@ describe('EntryWrites.writeEntry', () => {
 
   it('refuses a tombstoned value in its tenant, writes a reject_refusal row, and lets another tenant store it', async () => {
     const banned = fresh(BANNED);
-    const elsewhere = { ...fresh(BANNED), tenant_id: TENANT_B };
+    const elsewhere = { ...fresh(BANNED), tenantId: TENANT_B };
     const side = await conforms([
       async (g) => {
         await g.writeEntry({ entry: banned, actor: ACTOR });
@@ -240,7 +240,7 @@ describe('EntryWrites.writeEntry', () => {
       },
       readBack(TENANT_B, noteB.id),
     ]);
-    expect(side.outcomes[0]).toMatchObject({ value: [{ id: noteB.id, tenant_id: TENANT_B, content: noteB.content }] });
+    expect(side.outcomes[0]).toMatchObject({ value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }] });
     expect(side.outcomes[1]).toEqual({ error: `ConflictError: Memory ${noteB.id} belongs to another tenant` });
     expect(side.outcomes[2]).toEqual(side.outcomes[0]);
     expect(added(side)).toEqual([]);
@@ -260,7 +260,7 @@ describe('EntryWrites.applyOutcome', () => {
     // SAFETY: the third call reads rows back, so it resolved to Row[].
     const rows = (side.outcomes[2] as { value: Row[] }).value;
     const [n, p] = [rows.find((r) => r.id === note.id), rows.find((r) => r.id === personal.id)];
-    expect([n?.outcome_positive, n?.outcome_score, p?.outcome_negative, p?.outcome_score]).toEqual([2, 1, 1, -1]);
+    expect([n?.outcomePositive, n?.outcomeScore, p?.outcomeNegative, p?.outcomeScore]).toEqual([2, 1, 1, -1]);
     const outcomeRow = (id: string, good: boolean) => ({
       tenantId: TENANT_A,
       actor: ACTOR,
@@ -354,7 +354,7 @@ describe('EntryWrites.supersede', () => {
       { error: `ConflictError: Memory ${child.id} already superseded by another writer` },
     ]);
     // SAFETY: the third call reads rows back, so it resolved to Row[].
-    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.superseded_by])).toEqual([
+    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy])).toEqual([
       [child.id, next.id],
     ]);
     expect(added(side)).toEqual([
@@ -378,7 +378,7 @@ describe('EntryWrites.supersede', () => {
       { error: `NotFoundError: memory not found: ${personal.id}` },
     ]);
     // SAFETY: the last two calls read rows back, so each resolved to Row[].
-    const chains = (i: number) => (side.outcomes[i] as { value: Row[] }).value.map((r) => [r.id, r.superseded_by]);
+    const chains = (i: number) => (side.outcomes[i] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy]);
     expect([chains(2), chains(3)]).toEqual([[[personal.id, null]], [[noteB.id, null]]]);
     expect(added(side)).toEqual([]);
   });
@@ -389,7 +389,7 @@ describe('EntryWrites.supersede', () => {
     const side = await conforms([supersede(note.id, banned), readBack(TENANT_A, note.id, banned.id)]);
     expect(side.outcomes[0]).toMatchObject({ error: expect.stringMatching(/^RejectedValueError: /) });
     // SAFETY: the second call reads rows back, so it resolved to Row[].
-    expect((side.outcomes[1] as { value: Row[] }).value.map((r) => [r.id, r.superseded_by])).toEqual([[note.id, null]]);
+    expect((side.outcomes[1] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy])).toEqual([[note.id, null]]);
     expect(added(side).map((r) => [r.op, r.targetId])).toEqual([['reject_refusal', banned.id]]);
   });
 });

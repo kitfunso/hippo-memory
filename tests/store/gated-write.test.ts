@@ -56,17 +56,17 @@ describe('the shared gated write', () => {
   it('writes a worthwhile row on the caller handle, stamped with the store origin, and audits it', () => {
     const entry = entryFor('The billing service uses pnpm, so npm install is never run there.');
     expect(gatedWrite(db, s.hippoRoot, entry)).toBe('written');
-    expect(readEntry(s.hippoRoot, entry.id)).toMatchObject({ content: entry.content, origin_project: 'proj' });
+    expect(readEntry(s.hippoRoot, entry.id)).toMatchObject({ content: entry.content, originProject: 'proj' });
     expect(queryAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((e) => e.targetId)).toContain(entry.id);
   });
 
   it('keeps an origin the caller already set', () => {
     const entry = {
       ...entryFor('The billing service uses pnpm, so npm install is never run there.'),
-      origin_project: 'elsewhere',
+      originProject: 'elsewhere',
     };
     expect(gatedWrite(db, s.hippoRoot, entry)).toBe('written');
-    expect(readEntry(s.hippoRoot, entry.id)?.origin_project).toBe('elsewhere');
+    expect(readEntry(s.hippoRoot, entry.id)?.originProject).toBe('elsewhere');
   });
 
   it('skips text that is not worth storing', () => {
@@ -141,7 +141,7 @@ describe('capture on the shared gated write', () => {
     expect(result.stdout).toContain('Captured 3 items (0 skipped as duplicates)');
     const rows = loadAllEntries(s.hippoRoot, 'default');
     expect(rows).toHaveLength(3);
-    expect(rows.every((r) => r.origin_project === 'proj' && r.tags.includes('captured'))).toBe(true);
+    expect(rows.every((r) => r.originProject === 'proj' && r.tags.includes('captured'))).toBe(true);
     expect(fs.readdirSync(path.join(s.hippoRoot, 'episodic')).sort()).toEqual(rows.map((r) => `${r.id}.md`).sort());
   });
 

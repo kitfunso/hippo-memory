@@ -132,7 +132,7 @@ function seedRow(
 ): MemoryEntry {
   const entry: MemoryEntry = {
     ...createMemory(content, { tenantId: 'default', scope, ...opts }),
-    origin_project: origin,
+    originProject: origin,
     ...patch,
   };
   writeEntry(store, entry);
@@ -203,7 +203,7 @@ beforeAll(async () => {
     A_SCOPE,
     '',
     { layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'] },
-    { descendant_count: 1 },
+    { descendantCount: 1 },
   );
   ids.summary = summary.id;
   ids.child = seedRow('the umberline ledger closed at noon', A_SCOPE, '', {
@@ -230,8 +230,8 @@ afterAll(async () => {
 
 describe('personal memories walk (plan lane T)', () => {
   it('line 1: POST /v1/memories personal stamps the owner scope and a user-global origin', async () => {
-    expect(readEntry(store, ids.aZircon)).toMatchObject({ scope: A_SCOPE, origin_project: '' });
-    expect(readEntry(store, ids.bBasalt)).toMatchObject({ scope: B_SCOPE, origin_project: '' });
+    expect(readEntry(store, ids.aZircon)).toMatchObject({ scope: A_SCOPE, originProject: '' });
+    expect(readEntry(store, ids.bBasalt)).toMatchObject({ scope: B_SCOPE, originProject: '' });
     const signedIn = await post(SIGNIN_A, { content: 'signin-only note for alpha', personal: true });
     expect(readEntry(store, signedIn)?.scope).toBe(A_SCOPE);
     expect(
@@ -346,8 +346,8 @@ describe('personal memories walk (plan lane T)', () => {
       B: mint('solo-b', 'member', 'oid-b', solo),
       ADM: mint('solo-adm', 'admin', undefined, solo),
     };
-    writeEntry(solo, { ...createMemory(QUILL, { tenantId: 'default', scope: A_SCOPE }), origin_project: '' });
-    writeEntry(solo, { ...createMemory(TEAL, { tenantId: 'default', scope: null }), origin_project: '' });
+    writeEntry(solo, { ...createMemory(QUILL, { tenantId: 'default', scope: A_SCOPE }), originProject: '' });
+    writeEntry(solo, { ...createMemory(TEAL, { tenantId: 'default', scope: null }), originProject: '' });
     const soloHandle = await serve({ hippoRoot: solo, host: '127.0.0.1', port: 0 });
     const cwd = process.cwd();
     const away = path.join(tmp, 'away');
@@ -469,7 +469,7 @@ describe('personal memories walk (plan lane T)', () => {
       const id = await post(keys.A.plaintext, { content: `walk ${p.name} target row`, personal: true, kind: p.kind });
       for (const who of OTHERS) await sameAsMissing(id, (x) => p.call(keys[who].plaintext, x), p.othersStatus);
       const kept = readEntry(store, id);
-      expect([kept?.outcome_positive, kept?.scope, kept?.superseded_by ?? null], `${p.name} row untouched`).toEqual([
+      expect([kept?.outcomePositive, kept?.scope, kept?.supersededBy ?? null], `${p.name} row untouched`).toEqual([
         0,
         A_SCOPE,
         null,
@@ -492,10 +492,10 @@ describe('personal memories walk (plan lane T)', () => {
     expect(fromB.status, fromB.text).toBe(200);
     expect(json<{ ids: string[] }>(fromB).ids).not.toContain(ids.aZircon);
     const after = readEntry(store, ids.aZircon);
-    expect([after?.strength, after?.outcome_positive, after?.outcome_negative]).toEqual([
+    expect([after?.strength, after?.outcomePositive, after?.outcomeNegative]).toEqual([
       before?.strength,
-      before?.outcome_positive,
-      before?.outcome_negative,
+      before?.outcomePositive,
+      before?.outcomeNegative,
     ]);
     expect(json<{ ids: string[] }>(await http(keys.A.plaintext, 'POST', '/v1/outcome', { good: true })).ids).toContain(
       ids.aZircon,

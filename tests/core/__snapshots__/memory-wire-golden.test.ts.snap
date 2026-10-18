@@ -1,0 +1,198 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`memory wire goldens > MCP hippo_recall text 1`] = `
+"Found 1 memories:
+
+[observed] tags: wire, golden (strength=0.81)
+the haddock wire golden reads back through recall
+"
+`;
+
+exports[`memory wire goldens > dormant snapshot: entry_json bytes, and the entry it restores 1`] = `"{"id":"mem-golden-every","created":"2026-01-10T09:00:00.000Z","last_retrieved":"2026-01-20T10:00:00.000Z","retrieval_count":4,"strength":0.8125,"half_life_days":21,"layer":"episodic","tags":["wire","golden"],"emotional_valence":"positive","schema_fit":0.65,"source":"cli","outcome_score":0.5,"outcome_positive":3,"outcome_negative":1,"conflicts_with":["mem-golden-other"],"pinned":true,"confidence":"observed","content":"the wire golden keeps every stored key in its place","parents":["mem-golden-parent"],"starred":true,"trace_outcome":"success","source_session_id":"sess-golden","valid_from":"2026-01-11T00:00:00.000Z","superseded_by":"mem-golden-newer","extracted_from":"mem-golden-source","dag_level":2,"dag_parent_id":"mem-golden-topic","kind":"distilled","scope":"project:golden","owner":"user:golden","artifact_ref":"gh://kitfunso/hippo-memory/pull/1","tenant_id":"acme","origin_project":"golden","descendant_count":7,"earliest_at":"2025-12-01T00:00:00.000Z","latest_at":"2026-01-09T00:00:00.000Z","summary_dirty":true,"last_rebuilt_at":"2026-01-12T00:00:00.000Z","rebuild_count":2,"dag_level_3_built_at":"2026-01-13T00:00:00.000Z","bm25_score":-3.25}"`;
+
+exports[`memory wire goldens > hippo export: the JSON dump 1`] = `
+"[
+  {
+    "id": "mem-golden-every",
+    "created": "2026-01-10T09:00:00.000Z",
+    "last_retrieved": "2026-01-20T10:00:00.000Z",
+    "retrieval_count": 4,
+    "strength": 0.8125,
+    "half_life_days": 21,
+    "layer": "episodic",
+    "tags": [
+      "wire",
+      "golden"
+    ],
+    "emotional_valence": "positive",
+    "schema_fit": 0.65,
+    "source": "cli",
+    "outcome_score": 0.5,
+    "outcome_positive": 3,
+    "outcome_negative": 1,
+    "conflicts_with": [
+      "mem-golden-other"
+    ],
+    "pinned": true,
+    "confidence": "observed",
+    "content": "the wire golden keeps every stored key in its place",
+    "parents": [
+      "mem-golden-parent"
+    ],
+    "starred": true,
+    "trace_outcome": "success",
+    "source_session_id": "sess-golden",
+    "valid_from": "2026-01-11T00:00:00.000Z",
+    "superseded_by": "mem-golden-newer",
+    "extracted_from": "mem-golden-source",
+    "dag_level": 2,
+    "dag_parent_id": "mem-golden-topic",
+    "kind": "distilled",
+    "scope": "project:golden",
+    "owner": "user:golden",
+    "artifact_ref": "gh://kitfunso/hippo-memory/pull/1",
+    "tenant_id": "acme",
+    "origin_project": "golden",
+    "descendant_count": 7,
+    "earliest_at": "2025-12-01T00:00:00.000Z",
+    "latest_at": "2026-01-09T00:00:00.000Z",
+    "summary_dirty": true,
+    "last_rebuilt_at": "2026-01-12T00:00:00.000Z",
+    "rebuild_count": 2,
+    "dag_level_3_built_at": "2026-01-13T00:00:00.000Z"
+  },
+  {
+    "id": "mem-golden-recall",
+    "created": "2026-01-10T09:00:00.000Z",
+    "last_retrieved": "2026-01-20T10:00:00.000Z",
+    "retrieval_count": 4,
+    "strength": 0.8125,
+    "half_life_days": 21,
+    "layer": "episodic",
+    "tags": [
+      "wire",
+      "golden"
+    ],
+    "emotional_valence": "positive",
+    "schema_fit": 0.65,
+    "source": "cli",
+    "outcome_score": 0.5,
+    "outcome_positive": 3,
+    "outcome_negative": 1,
+    "conflicts_with": [
+      "mem-golden-other"
+    ],
+    "pinned": true,
+    "confidence": "observed",
+    "content": "the haddock wire golden reads back through recall",
+    "parents": [
+      "mem-golden-parent"
+    ],
+    "starred": true,
+    "trace_outcome": "success",
+    "source_session_id": "sess-golden",
+    "valid_from": "2026-01-11T00:00:00.000Z",
+    "superseded_by": null,
+    "extracted_from": "mem-golden-source",
+    "dag_level": 0,
+    "dag_parent_id": "mem-golden-topic",
+    "kind": "distilled",
+    "scope": null,
+    "owner": "user:golden",
+    "artifact_ref": "gh://kitfunso/hippo-memory/pull/1",
+    "tenant_id": "acme",
+    "origin_project": "",
+    "descendant_count": 7,
+    "earliest_at": "2025-12-01T00:00:00.000Z",
+    "latest_at": "2026-01-09T00:00:00.000Z",
+    "summary_dirty": false,
+    "last_rebuilt_at": null,
+    "rebuild_count": 0,
+    "dag_level_3_built_at": "2026-01-13T00:00:00.000Z"
+  }
+]
+"
+`;
+
+exports[`memory wire goldens > hippo recall --json --why 1`] = `
+"{"query":"haddock","budget":4000,"results":[{"id":"mem-golden-recall","score":0.2876166606537619,"strength":0.8125,"tokens":13,"tags":["wire","golden"],"content":"the haddock wire golden reads back through recall","layer":"episodic","confidence":"observed","aged_out":false,"source":"local","reason":"BM25: matched terms [haddock]","bm25":0.28768207245178085,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":"user:golden","artifact_ref":"gh://kitfunso/hippo-memory/pull/1","session_id":"sess-golden","confidence":"observed"}}],"total":1,"suppressionSummary":{"totalCandidates":1,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+"
+`;
+
+exports[`memory wire goldens > hippo trace --json 1`] = `
+"{
+  "id": "mem-golden-every",
+  "source": "local",
+  "layer": "episodic",
+  "confidence": "observed",
+  "aged_out": false,
+  "pinned": true,
+  "starred": true,
+  "tags": [
+    "wire",
+    "golden"
+  ],
+  "content": "the wire golden keeps every stored key in its place",
+  "created": "2026-01-10T09:00:00.000Z",
+  "age_days": 21.625,
+  "last_retrieved": "2026-01-20T10:00:00.000Z",
+  "days_since_last_retrieval": 11.583333333333334,
+  "retrieval_count": 4,
+  "strength_now": 1,
+  "half_life_days": 21,
+  "reward_factor": 1.2,
+  "effective_half_life_days": 25.2,
+  "projected_strength_30d": 1,
+  "projected_strength_90d": 1,
+  "outcome_positive": 3,
+  "outcome_negative": 1,
+  "parents": [
+    {
+      "id": "mem-golden-parent",
+      "content": "(not found)"
+    }
+  ],
+  "open_conflicts": []
+}
+"
+`;
+
+exports[`memory wire goldens > markdown mirror: front matter bytes, and the entry it reads back 1`] = `
+"---
+id: mem-golden-every
+created: "2026-01-10T09:00:00.000Z"
+last_retrieved: "2026-01-20T10:00:00.000Z"
+retrieval_count: 4
+strength: 0.8125
+half_life_days: 21
+layer: episodic
+tags: [wire, golden]
+emotional_valence: positive
+schema_fit: 0.65
+source: cli
+outcome_score: 0.5
+outcome_positive: 3
+outcome_negative: 1
+conflicts_with: [mem-golden-other]
+pinned: true
+confidence: observed
+parents: [mem-golden-parent]
+starred: true
+trace_outcome: success
+source_session_id: sess-golden
+kind: distilled
+scope: "project:golden"
+owner: "user:golden"
+artifact_ref: "gh://kitfunso/hippo-memory/pull/1"
+valid_from: "2026-01-11T00:00:00.000Z"
+superseded_by: mem-golden-newer
+extracted_from: mem-golden-source
+dag_level: 2
+dag_parent_id: mem-golden-topic
+tenant_id: acme
+origin_project: golden
+---
+
+the wire golden keeps every stored key in its place
+"
+`;

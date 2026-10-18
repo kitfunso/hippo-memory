@@ -4,9 +4,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/core/memory.js';
-import { initStore } from '../dist/entry/testing.js';
-import { upsertEntryRow } from '../dist/entry/testing.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../dist/core/memory.js';
+import { createMemoryWire as createMemory, initStore } from '../dist/entry/testing.js';
+import { upsertEntryRowWire as upsertEntryRow } from '../dist/entry/testing.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { consolidate } from '../dist/index.js';
 

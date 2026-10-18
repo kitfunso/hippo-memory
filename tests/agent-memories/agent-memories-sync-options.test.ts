@@ -221,7 +221,7 @@ describe('agent memory sync: options, time and reporting', () => {
     const end = Date.now();
 
     const byText = new Map(liveRows(w.local).map((e) => [e.content, e]));
-    expect([byText.get(A)?.created, byText.get(A)?.valid_from]).toEqual([
+    expect([byText.get(A)?.created, byText.get(A)?.validFrom]).toEqual([
       '2026-03-04T08:00:00.000Z',
       '2026-03-04T08:00:00.000Z',
     ]);
@@ -239,7 +239,7 @@ describe('agent memory sync: options, time and reporting', () => {
         `Incident ${i + 700} on the Orders API was fixed by raising the pool to ${i + 20} connections.`,
         { tenantId: 'default', baseHalfLifeDays: 30 },
       );
-      const entry = { ...made, created: yesterday, valid_from: yesterday };
+      const entry = { ...made, created: yesterday, validFrom: yesterday };
       writeEntry(w.local, entry);
       return entry.id;
     });

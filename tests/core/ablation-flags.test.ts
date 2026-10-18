@@ -67,8 +67,8 @@ function agedMemory(daysAgo: number, content = 'aged memory content'): MemoryEnt
   const m = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   const then = new Date(NOW.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
   m.created = then;
-  m.last_retrieved = then;
-  m.half_life_days = 7;
+  m.lastRetrieved = then;
+  m.halfLifeDays = 7;
   return m;
 }
 
@@ -84,9 +84,9 @@ describe('defaults (no flags set)', () => {
     expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(calculateStrength(agedMemory(0), NOW, abl()));
     // Strengthening live: markRetrieved mutates.
     const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
-    expect(marked.retrieval_count).toBe(1);
-    expect(marked.last_retrieved).toBe(NOW.toISOString());
-    expect(marked.half_life_days).toBe(9); // 7 + 2
+    expect(marked.retrievalCount).toBe(1);
+    expect(marked.lastRetrieved).toBe(NOW.toISOString());
+    expect(marked.halfLifeDays).toBe(9); // 7 + 2
     // Slow outcome channel live.
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
@@ -156,8 +156,8 @@ describe('HIPPO_ABLATE_DECAY', () => {
 
   it('isolation: strengthening writes still run', () => {
     const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
-    expect(marked.retrieval_count).toBe(1);
-    expect(marked.half_life_days).toBe(9);
+    expect(marked.retrievalCount).toBe(1);
+    expect(marked.halfLifeDays).toBe(9);
   });
 
   it('isolation: slow outcome channel still runs', () => {
@@ -171,7 +171,7 @@ describe('HIPPO_ABLATE_DECAY', () => {
     // The strengthening READ-side therefore flattens when decay is off (the
     // boost can only offset decay, never exceed baseline). See ablation.ts.
     const m = agedMemory(0);
-    m.retrieval_count = 16;
+    m.retrievalCount = 16;
     expect(calculateStrength(m, NOW, abl())).toBe(1.0);
     expect(calculateStrength(agedMemory(0), NOW, abl())).toBe(1.0);
   });
@@ -214,9 +214,9 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     const result = markRetrieved([before], NOW, abl());
     expect(result.length).toBe(1); // ids preserved for outcome attribution
     expect(result[0]).toBe(before); // identical object, untouched
-    expect(result[0].retrieval_count).toBe(0); // no count
-    expect(result[0].last_retrieved).not.toBe(NOW.toISOString()); // no clock reset
-    expect(result[0].half_life_days).toBe(7); // no +2
+    expect(result[0].retrievalCount).toBe(0); // no count
+    expect(result[0].lastRetrieved).not.toBe(NOW.toISOString()); // no clock reset
+    expect(result[0].halfLifeDays).toBe(7); // no +2
     expect(result[0].confidence).toBe('stale'); // no stale->observed promotion
   });
 
@@ -230,12 +230,12 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     const created = new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const hot = agedMemory(10);
     hot.created = created;
-    hot.retrieval_count = 16;
-    hot.last_retrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    hot.retrievalCount = 16;
+    hot.lastRetrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
     const cold = agedMemory(10);
     cold.created = created;
-    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrieval_count)).toBe(
-      computeMass(calculateStrength(cold, NOW, abl()), cold.retrieval_count),
+    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrievalCount)).toBe(
+      computeMass(calculateStrength(cold, NOW, abl()), cold.retrievalCount),
     );
   });
 
@@ -247,7 +247,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // A store written BEFORE the flag was set can carry counts; the ablated
     // arm must not let that history leak strengthening into rankings.
     const withHistory = agedMemory(10);
-    withHistory.retrieval_count = 16;
+    withHistory.retrievalCount = 16;
     const without = agedMemory(10);
     expect(calculateStrength(withHistory, NOW, abl())).toBe(calculateStrength(without, NOW, abl()));
   });
@@ -270,12 +270,12 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     const created = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const reset = createMemory('clock reset by a prior run', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     reset.created = created;
-    reset.last_retrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
-    reset.half_life_days = 7;
+    reset.lastRetrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    reset.halfLifeDays = 7;
     const untouched = createMemory('never retrieved', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     untouched.created = created;
-    untouched.last_retrieved = created;
-    untouched.half_life_days = 7;
+    untouched.lastRetrieved = created;
+    untouched.halfLifeDays = 7;
     expect(calculateStrength(reset, NOW, abl())).toBe(calculateStrength(untouched, NOW, abl()));
     // Sanity: WITHOUT the flag these differ (the reset memory is stronger).
     clearAblationEnv();
@@ -319,7 +319,7 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
   it('isolation: decay and strengthening still run', () => {
     expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(calculateStrength(agedMemory(0), NOW, abl()));
     const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
-    expect(marked.retrieval_count).toBe(1);
+    expect(marked.retrievalCount).toBe(1);
   });
 
   it('silences replay reward bias too: outcome counts no longer skew replay priority', async () => {
@@ -393,8 +393,8 @@ describe('HIPPO_FAKE_NOW', () => {
     // stamps fake time under the flag, so the 2026 dates are set explicitly.)
     const realFresh = createMemory('fresh in 2026', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     realFresh.created = '2026-06-11T00:00:00.000Z';
-    realFresh.last_retrieved = '2026-06-11T00:00:00.000Z';
-    realFresh.half_life_days = 7;
+    realFresh.lastRetrieved = '2026-06-11T00:00:00.000Z';
+    realFresh.halfLifeDays = 7;
     expect(calculateStrength(realFresh, undefined, abl())).toBeLessThan(0.01);
     // createMemory write-stamps honor the fake clock too (simulated sessions).
     expect(createMemory('stamped in 2030', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }).created).toBe(
@@ -406,7 +406,7 @@ describe('HIPPO_FAKE_NOW', () => {
       undefined,
       abl(),
     );
-    expect(marked.last_retrieved).toBe('2030-01-01T00:00:00.000Z');
+    expect(marked.lastRetrieved).toBe('2030-01-01T00:00:00.000Z');
   });
 
   it('flows through search scoring, not just retrieval stamping', async () => {
@@ -416,8 +416,8 @@ describe('HIPPO_FAKE_NOW', () => {
     _resetAblationCacheForTests();
     const m = createMemory('search scoring uses the fake clock', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
-    m.last_retrieved = '2026-06-11T00:00:00.000Z';
-    m.half_life_days = 7;
+    m.lastRetrieved = '2026-06-11T00:00:00.000Z';
+    m.halfLifeDays = 7;
     const results = await hybridSearch('search scoring fake clock', [m], {
       budget: 10000,
       explain: true,
@@ -467,8 +467,8 @@ describe('HIPPO_FAKE_NOW', () => {
     const { searchBothHybrid } = await import('../../src/sharing/search-both.js');
     const m = createMemory('wrapper clock consistency check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
-    m.last_retrieved = '2026-06-11T00:00:00.000Z';
-    m.half_life_days = 7;
+    m.lastRetrieved = '2026-06-11T00:00:00.000Z';
+    m.halfLifeDays = 7;
     const tmp = makeRoot('abl');
     // Local-only store via the wrapper (global root nonexistent path).
     const { writeEntry } = await import('../_helpers/root-forms.js');

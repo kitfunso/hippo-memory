@@ -139,7 +139,7 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   // Aliases only widen what a reader matches; a row has one origin.
   // A personal row's '' follows its owner into every project.
   const origin = opts.personal ? '' : opts.project?.name;
-  const stamped = origin !== undefined ? { ...entry, origin_project: origin } : entry;
+  const stamped = origin !== undefined ? { ...entry, originProject: origin } : entry;
   return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };
 }
 
@@ -152,7 +152,7 @@ function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken'
   return {
     ...entry,
     strength: weaken.strength,
-    half_life_days: Math.max(1, entry.half_life_days * weaken.halfLifeFactor),
+    halfLifeDays: Math.max(1, entry.halfLifeDays * weaken.halfLifeFactor),
   };
 }
 
@@ -162,7 +162,7 @@ function rememberResult(ctx: Context, prepared: PreparedRemember, written?: Conn
     id: entry.id,
     kind: entry.kind,
     tenantId: ctx.tenantId,
-    halfLifeDays: entry.half_life_days,
+    halfLifeDays: entry.halfLifeDays,
     tags: [...entry.tags],
   };
   if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };

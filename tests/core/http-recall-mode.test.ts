@@ -40,8 +40,8 @@ beforeEach(async () => {
   const weak = {
     ...createMemory('alpha alpha beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     created: old,
-    last_retrieved: old,
-    half_life_days: 1,
+    lastRetrieved: old,
+    halfLifeDays: 1,
   };
   const strong = createMemory('alpha gamma delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(home, weak);
@@ -80,8 +80,8 @@ describe('GET /v1/memories honours mode and strengthens', () => {
   it('strengthens every returned row and leaves last_retrieval_ids alone', async () => {
     await recallIds('q=alpha');
     const rows = loadEntriesByIds(home, [weakId, strongId]);
-    expect(rows.map((r) => r.retrieval_count)).toEqual([1, 1]);
-    expect(rows.every((r) => r.last_retrieved > '2026-01-01')).toBe(true);
+    expect(rows.map((r) => r.retrievalCount)).toEqual([1, 1]);
+    expect(rows.every((r) => r.lastRetrieved > '2026-01-01')).toBe(true);
     expect(loadLastRecall(home).last_retrieval_ids).toEqual([]);
   });
 });

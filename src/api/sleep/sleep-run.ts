@@ -259,7 +259,7 @@ function summarizeAmbient(
   for (const page of pages()) {
     foldAmbientRows(
       tallies,
-      page.filter((e) => !e.superseded_by),
+      page.filter((e) => !e.supersededBy),
       now,
     );
   }

@@ -106,7 +106,7 @@ describe.each(defaults)('first-class objects on %s', (_label, config, base) => {
   it.each(writers)('a %s decays no faster than an ordinary memory', async (_kind, save) => {
     const root = store(config);
     const entry = readEntry(root, (await save(root)).memoryId!, 'default')!;
-    expect(entry.half_life_days).toBe(deriveHalfLife(base, entry));
-    expect(entry.half_life_days).toBeGreaterThanOrEqual(base);
+    expect(entry.halfLifeDays).toBe(deriveHalfLife(base, entry));
+    expect(entry.halfLifeDays).toBeGreaterThanOrEqual(base);
   });
 });

@@ -22,10 +22,10 @@ export function recallEntryText(r: SearchResult, query: string, showWhy: boolean
   const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
   const lines = [
     `--- ${e.id} [${e.layer}] ` +
-      `${confLabel}${isGlobal ? ' [global]' : ''}${e.superseded_by ? ' [superseded]' : ''}${graphMark} ` +
+      `${confLabel}${isGlobal ? ' [global]' : ''}${e.supersededBy ? ' [superseded]' : ''}${graphMark} ` +
       `score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`,
     `    [${'█'.repeat(bars)}${'░'.repeat(10 - bars)}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ` +
-      `${e.retrieval_count}x`,
+      `${e.retrievalCount}x`,
   ];
   if (showWhy) {
     const explanation = explainMatch(query, r);

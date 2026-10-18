@@ -26,7 +26,7 @@ describe('ambient tallies at the window and threshold edges', () => {
     ages.forEach((created, i) => {
       const e = createMemory(`edge row ${i}`);
       e.created = new Date(created).toISOString();
-      e.schema_fit = fits[i]!;
+      e.schemaFit = fits[i]!;
       writeEntry(root, e);
     });
 

@@ -30,7 +30,7 @@ function skippedLines(): string[] {
 }
 
 function pinNote(store: string): void {
-  writeEntry(store, { ...createMemory('the deploy window opens on Tuesdays'), pinned: true, origin_project: 'p' });
+  writeEntry(store, { ...createMemory('the deploy window opens on Tuesdays'), pinned: true, originProject: 'p' });
 }
 
 function ledgerLines(): string[] {

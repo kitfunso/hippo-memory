@@ -26,7 +26,7 @@ const FRESH = 'Run the schema migration on staging before production, never the 
 const REJECTED = 'The staging database password rotates every Monday at nine in the morning.';
 const FROZEN = 'Deploys freeze on Fridays after noon so the on-call team can watch the weekend traffic.';
 
-type Value = string | void | CallerItemsSaved | Array<Pick<MemoryEntry, 'retrieval_count' | 'last_retrieved'>>;
+type Value = string | void | CallerItemsSaved | Array<Pick<MemoryEntry, 'retrievalCount' | 'lastRetrieved'>>;
 
 let fixture: TwoTenantFixture;
 let heldId = '';
@@ -47,7 +47,7 @@ function seed(dir: string): void {
   const row = (content: string, over: Parameters<typeof createMemory>[1], origin: string): string => {
     const entry = {
       ...createMemory(content, { tenantId: TENANT_A, sourceSessionId: 'sOld', ...over }),
-      origin_project: origin,
+      originProject: origin,
     };
     writeEntry(dir, entry, { actor: 'cli' });
     return entry.id;
@@ -140,9 +140,9 @@ describe('Compactions', () => {
       (g) => g.saveCallerItems(TENANT_A, request({ sessionId: 'sD', requestId: 'req-done' })),
       (g) => g.saveCallerItems(TENANT_A, request({ sessionId: 'sB2', requestId: 'req-b', items: [HELD] })),
       async (_g, store) =>
-        (await store.entriesByIds([heldId], TENANT_A)).map(({ retrieval_count, last_retrieved }) => ({
-          retrieval_count,
-          last_retrieved,
+        (await store.entriesByIds([heldId], TENANT_A)).map(({ retrievalCount, lastRetrieved }) => ({
+          retrievalCount,
+          lastRetrieved,
         })),
     ]);
     expect(sameIds(sides.other)).toEqual(sameIds(sides.sqlite));
@@ -163,7 +163,7 @@ describe('Compactions', () => {
     expect(outcomes[6]).toEqual({ value: { written: 1, notes: [] } });
     expect(outcomes[7]).toEqual({ value: { written: 0, notes: ['skipped 1 item(s) the store already holds'] } });
     // Restated twice, by sA and by sB2, each a session other than the row's own.
-    expect(outcomes[8]).toEqual({ value: [{ retrieval_count: 2, last_retrieved: NOW }] });
+    expect(outcomes[8]).toEqual({ value: [{ retrievalCount: 2, lastRetrieved: NOW }] });
     expect(sides.sqlite.audit.slice(-3).map((r) => r.op)).toEqual(['remember', 'remember', 'reject_refusal']);
   });
 });

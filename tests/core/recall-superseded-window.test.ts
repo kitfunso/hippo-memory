@@ -32,7 +32,7 @@ function seedVersions(root: string, oldCreatedFirst: boolean) {
   const old = {
     ...createMemory('deploy deploy deploy on monday'),
     created: oldCreatedFirst ? early : late,
-    superseded_by: current.id,
+    supersededBy: current.id,
   };
   writeEntry(root, current);
   writeEntry(root, old);

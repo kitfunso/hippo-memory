@@ -101,7 +101,7 @@ function recordRow(db: DatabaseSyncLike, id: string): RecordRow | undefined {
 function seed(content: string, origin: string, tags: string[] = []): void {
   writeEntry(root, {
     ...createMemory(content, { tenantId: TENANT, tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    origin_project: origin,
+    originProject: origin,
   });
 }
 

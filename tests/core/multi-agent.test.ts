@@ -51,7 +51,7 @@ describe('transferScore', () => {
 
   it('boosts frequently retrieved memories', () => {
     const base = createMemory('Some lesson', { tags: ['error'] });
-    const retrieved: MemoryEntry = { ...base, retrieval_count: 5 };
+    const retrieved: MemoryEntry = { ...base, retrievalCount: 5 };
 
     expect(transferScore(retrieved)).toBeGreaterThan(transferScore(base));
   });
@@ -68,7 +68,7 @@ describe('transferScore', () => {
       tags: ['error', 'platform', 'windows', 'python', 'shell', 'pattern', 'rule', 'gotcha', 'best-practice'],
       pinned: true,
     });
-    const highEntry: MemoryEntry = { ...high, retrieval_count: 100 };
+    const highEntry: MemoryEntry = { ...high, retrievalCount: 100 };
 
     expect(transferScore(highEntry)).toBeLessThanOrEqual(1);
     expect(transferScore(highEntry)).toBeGreaterThanOrEqual(0);

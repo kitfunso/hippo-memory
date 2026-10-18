@@ -111,19 +111,29 @@ describe('package entry re-exports sleep', () => {
  * seams. */
 const EVAL_KIT = [
   'ambientSecretAdmit',
+  'ambientSecretAdmitWire',
+  'batchWriteAndDeleteWire',
   'buildIndexFromDb',
+  'calculateStrengthWire',
+  'createMemoryWire',
   'embedMemory',
+  'embedMemoryWire',
+  'hybridSearchWire',
   'initStore',
+  'isWorthSurfacingWire',
   'loadAllEntries',
+  'loadAllEntriesWire',
   'loadEmbeddingIndex',
   'loadVectorCandidateEntriesAt',
   'recordTokenUse',
   'resolveTenantId',
   'tokensBySession',
   'upsertEntryRow',
+  'upsertEntryRowWire',
   'writeDeliveryEventOnHandle',
   'writeEntry',
   'writeEntryDbOnly',
+  'writeEntryWire',
   'writeIndexMirror',
 ];
 
@@ -269,15 +279,17 @@ describe('published runtime exports', () => {
       sqliteStore
       tallyAmbientEntries",
         "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests _setDigestExistsProbeForTests
-      ambientSecretAdmit
-      buildIndexFromDb
-      embedMemory
-      initStore
-      loadAllEntries loadEmbeddingIndex loadVectorCandidateEntriesAt
+      ambientSecretAdmit ambientSecretAdmitWire
+      batchWriteAndDeleteWire buildIndexFromDb
+      calculateStrengthWire createMemoryWire
+      embedMemory embedMemoryWire
+      hybridSearchWire
+      initStore isWorthSurfacingWire
+      loadAllEntries loadAllEntriesWire loadEmbeddingIndex loadVectorCandidateEntriesAt
       recordTokenUse resolveTenantId
       tokensBySession
-      upsertEntryRow
-      writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeIndexMirror",
+      upsertEntryRow upsertEntryRowWire
+      writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeEntryWire writeIndexMirror",
       }
     `);
   });

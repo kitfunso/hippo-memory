@@ -1,10 +1,11 @@
-// 2.0 entry shape: snake_case tenant_id and a boolean summary_dirty, on a real store.
+// 3.0 entry shape: camelCase fields in memory, snake_case keys in every stored and exported format.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
+import { toWire } from '../../src/core/memory-wire.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -18,50 +19,52 @@ beforeEach(() => {
 
 afterEach(() => rmSync(join(root, '..'), { recursive: true, force: true }));
 
-describe('MemoryEntry 2.0 shape', () => {
-  it('round-trips tenant_id and a boolean summary_dirty', () => {
+describe('MemoryEntry 3.0 shape', () => {
+  it('round-trips tenantId and a boolean summaryDirty', () => {
     const entry = createMemory('acme deploys on tuesdays', { tenantId: 'acme' });
     writeEntry(root, entry);
     const back = readEntry(root, entry.id, 'acme');
-    expect(back?.tenant_id).toBe('acme');
-    expect(back?.summary_dirty).toBe(false);
-    expect(back).not.toHaveProperty('tenantId');
+    expect(back?.tenantId).toBe('acme');
+    expect(back?.summaryDirty).toBe(false);
+    expect(back).not.toHaveProperty('tenant_id');
   });
 
-  it('refuses an entry that carries the 1.x tenantId and no tenant_id', () => {
-    const { tenant_id: _dropped, ...rest } = createMemory('legacy caller', { tenantId: 'acme' });
-    // @ts-expect-error a 1.x caller still passes tenantId
-    expect(() => writeEntry(root, { ...rest, tenantId: 'acme' })).toThrow(
-      new TypeError('tenantId was renamed to tenant_id in 2.0'),
+  it('refuses an entry that carries the 2.x tenant_id and no tenantId', () => {
+    const { tenantId: _dropped, ...rest } = createMemory('legacy caller', { tenantId: 'acme' });
+    // @ts-expect-error a 2.x caller still passes tenant_id
+    expect(() => writeEntry(root, { ...rest, tenant_id: 'acme' })).toThrow(
+      new TypeError('tenant_id was renamed to tenantId in 3.0'),
     );
   });
 
   it('revives a 1.x dormant JSON row with the right tenant and a boolean flag', () => {
-    const { tenant_id: _dropped, ...rest } = createMemory('dormant from 1.x', { tenantId: 'acme' });
-    const snapshot = { ...rest, tenantId: 'acme', summary_dirty: 1 };
+    const entry = createMemory('dormant from 1.x', { tenantId: 'acme' });
+    const { tenant_id: _dropped, ...wire } = toWire(entry);
+    const snapshot = { ...wire, tenantId: 'acme', summary_dirty: 1 };
     const db = openHippoDb(root);
     try {
       db.prepare(`INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
         'acme',
-        rest.id,
-        rest.content,
+        entry.id,
+        entry.content,
         JSON.stringify(snapshot),
         'decay',
         0.1,
         '2026-01-01T00:00:00.000Z',
       );
       const [snap] = listDormantSnapshots(db, 'acme');
-      expect(snap?.entry.tenant_id).toBe('acme');
-      expect(snap?.entry.summary_dirty).toBe(true);
+      expect(snap?.entry.tenantId).toBe('acme');
+      expect(snap?.entry.summaryDirty).toBe(true);
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('emits tenant_id and a boolean summary_dirty in the export JSON', async () => {
+  it('keeps tenant_id and a boolean summary_dirty in the export JSON', async () => {
     writeEntry(root, createMemory('exported note', { tenantId: 'acme' }));
-    const exported = JSON.parse(JSON.stringify(await memoryList(cliApiContext(root, 'acme')), null, 2));
+    const entries = await memoryList(cliApiContext(root, 'acme'));
+    const exported = JSON.parse(JSON.stringify(entries.map(toWire), null, 2));
     expect(exported).toHaveLength(1);
     expect(exported[0]).toMatchObject({ tenant_id: 'acme', summary_dirty: false });
     expect(exported[0]).not.toHaveProperty('tenantId');

@@ -42,9 +42,9 @@ function makeL2Summary(
     confidence: 'inferred',
     dagLevel: 2,
   });
-  if (opts.lastRebuiltAt !== undefined) s.last_rebuilt_at = opts.lastRebuiltAt;
-  if (opts.rebuildCount !== undefined) s.rebuild_count = opts.rebuildCount;
-  if (opts.descendantCount !== undefined) s.descendant_count = opts.descendantCount;
+  if (opts.lastRebuiltAt !== undefined) s.lastRebuiltAt = opts.lastRebuiltAt;
+  if (opts.rebuildCount !== undefined) s.rebuildCount = opts.rebuildCount;
+  if (opts.descendantCount !== undefined) s.descendantCount = opts.descendantCount;
   return s;
 }
 

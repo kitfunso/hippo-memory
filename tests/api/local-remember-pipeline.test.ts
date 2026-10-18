@@ -112,11 +112,11 @@ describe('rememberLocally', () => {
     expect(typedFit).not.toBe(storedFit);
     expect(
       storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true }))
-        .schema_fit,
+        .schemaFit,
     ).toBe(typedFit);
     const other = store();
     for (const n of [1, 2, 3]) seed(other, `the billing service sends invoice batch ${n}`, ['billing']);
-    expect(storedRow(await rememberLocally(other, { content: TEXT, tags: stored })).schema_fit).toBe(storedFit);
+    expect(storedRow(await rememberLocally(other, { content: TEXT, tags: stored })).schemaFit).toBe(storedFit);
   });
 
   it('with the gate off, stores a repeat of the same text', async () => {
@@ -147,8 +147,8 @@ describe('rememberLocally', () => {
     );
     expect(forced.strength).toBeCloseTo(1, 3);
     expect(entry.strength).toBeCloseTo(0.3, 3);
-    expect(entry.half_life_days).toBe(forced.half_life_days * 0.5);
-    expect(readEntry(ctx.hippoRoot, entry.id, ctx.tenantId)?.half_life_days).toBe(entry.half_life_days);
+    expect(entry.halfLifeDays).toBe(forced.halfLifeDays * 0.5);
+    expect(readEntry(ctx.hippoRoot, entry.id, ctx.tenantId)?.halfLifeDays).toBe(entry.halfLifeDays);
     expect(counted(ctx)).toBe(1);
   });
 
@@ -228,7 +228,7 @@ describe('extractRememberedFacts', () => {
   const stored = async (ctx: FullContext): Promise<MemoryEntry> =>
     storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
   const extracted = (ctx: FullContext, from: MemoryEntry): MemoryEntry[] =>
-    rows(ctx).filter((row) => row.extracted_from === from.id);
+    rows(ctx).filter((row) => row.extractedFrom === from.id);
 
   it('is off unless the caller or the config asks', async () => {
     const ctx = store();

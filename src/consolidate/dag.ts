@@ -76,7 +76,7 @@ export interface DagBuildResult {
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
-    const key = derivationPartitionKey(fact.tenant_id, fact.scope, fact.origin_project);
+    const key = derivationPartitionKey(fact.tenantId, fact.scope, fact.originProject);
     const bucket = unparentedByTenant.get(key);
     if (bucket) bucket.push(fact);
     else unparentedByTenant.set(key, [fact]);
@@ -106,12 +106,12 @@ function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: 
     scope: home.scope,
     baseHalfLifeDays: home.baseHalfLifeDays,
   });
-  summaryEntry.origin_project = home.originProject;
+  summaryEntry.originProject = home.originProject;
   // Cache descendant_count + earliest/latest_at on the summary row so
   // DAG-aware recall can reason about scope without walking the children.
-  summaryEntry.descendant_count = cluster.members.length;
-  summaryEntry.earliest_at = memberCreatedAts[0];
-  summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
+  summaryEntry.descendantCount = cluster.members.length;
+  summaryEntry.earliestAt = memberCreatedAts[0];
+  summaryEntry.latestAt = memberCreatedAts[memberCreatedAts.length - 1];
   return summaryEntry;
 }
 
@@ -146,11 +146,11 @@ async function summarizeCluster(
   result.summariesCreated++;
 
   result.factsLinked += store.writeTogether(
-    cluster.members.map((member) => ({ ...member, dag_parent_id: summaryEntry.id })),
+    cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id })),
   );
   // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's
   // rebuild pass would re-rebuild every new summary at twice the LLM cost.
-  store.clearSummaryDirty(summaryEntry.id, summaryEntry.tenant_id, 'buildDag');
+  store.clearSummaryDirty(summaryEntry.id, summaryEntry.tenantId, 'buildDag');
 }
 
 export async function buildDag(local: DagStore, facts: MemoryEntry[], opts: DagBuildOptions): Promise<DagBuildResult> {
@@ -158,14 +158,14 @@ export async function buildDag(local: DagStore, facts: MemoryEntry[], opts: DagB
   const { baseHalfLifeDays } = opts;
 
   const unparented = facts.filter(
-    (f) => f.dag_level === DAG_LEVEL.extracted && !f.dag_parent_id && f.tags.includes('extracted'),
+    (f) => f.dagLevel === DAG_LEVEL.extracted && !f.dagParentId && f.tags.includes('extracted'),
   );
 
   for (const [, tenantFacts] of partitionFactsByTenant(unparented)) {
     const home: PartitionHome = {
-      tenantId: tenantFacts[0].tenant_id,
+      tenantId: tenantFacts[0].tenantId,
       scope: derivationScope(tenantFacts[0].scope),
-      originProject: tenantFacts[0].origin_project,
+      originProject: tenantFacts[0].originProject,
       baseHalfLifeDays,
     };
     const clusters = clusterFacts(tenantFacts);
@@ -202,7 +202,7 @@ async function rebuildOneSummary(
 ): Promise<void> {
   // A queued child may have been rebuilt earlier in this drain, so its preloaded content is stale: reread then.
   const children = preloaded.some((c) => queuedIds.has(c.id))
-    ? store.childrenOfSummary(summary.id, summary.tenant_id)
+    ? store.childrenOfSummary(summary.id, summary.tenantId)
     : preloaded;
 
   if (children.length === 0) {
@@ -225,9 +225,9 @@ async function rebuildOneSummary(
   const childCreatedAts = children.map((c) => c.created).sort();
   const { changed, refused } = store.applyRebuild(summary, {
     content: newContent,
-    descendant_count: children.length,
-    earliest_at: childCreatedAts[0],
-    latest_at: childCreatedAts[childCreatedAts.length - 1],
+    descendantCount: children.length,
+    earliestAt: childCreatedAts[0],
+    latestAt: childCreatedAts[childCreatedAts.length - 1],
     bumpRebuildCount: true,
     zeroChildren: false,
     actor: 'sleep',
@@ -245,9 +245,9 @@ async function rebuildOneSummary(
 function clearZeroChildSummary(store: Consolidation, summary: MemoryEntry, result: DagRebuildResult): void {
   const { changed } = store.applyRebuild(summary, {
     content: summary.content,
-    descendant_count: 0,
-    earliest_at: null,
-    latest_at: null,
+    descendantCount: 0,
+    earliestAt: null,
+    latestAt: null,
     bumpRebuildCount: false,
     zeroChildren: true,
     actor: 'sleep',
@@ -303,7 +303,7 @@ export async function rebuildDirtySummaries(
       // failure (SQLite I/O, prepare), since audit() already catches its own.
       result.failed++;
       log.error(
-        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenant_id}) failed: ${errorMessage(err)}`,
+        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${errorMessage(err)}`,
         errorFields(err),
       );
     }
@@ -338,11 +338,11 @@ function createProfileEntry(summary: string, cluster: FactCluster, home: Partiti
     scope: home.scope,
     baseHalfLifeDays: home.baseHalfLifeDays,
   });
-  profileEntry.origin_project = home.originProject;
-  profileEntry.descendant_count = cluster.members.length;
-  profileEntry.earliest_at = memberCreatedAts[0];
-  profileEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
-  profileEntry.dag_level_3_built_at = nowIso;
+  profileEntry.originProject = home.originProject;
+  profileEntry.descendantCount = cluster.members.length;
+  profileEntry.earliestAt = memberCreatedAts[0];
+  profileEntry.latestAt = memberCreatedAts[memberCreatedAts.length - 1];
+  profileEntry.dagLevel3BuiltAt = nowIso;
   return profileEntry;
 }
 
@@ -382,7 +382,7 @@ async function profileCluster(
   result.profilesCreated++;
 
   result.l2sLinked += store.writeTogether(
-    cluster.members.map((member) => ({ ...member, dag_parent_id: profileEntry.id })),
+    cluster.members.map((member) => ({ ...member, dagParentId: profileEntry.id })),
   );
   // Re-linking just marked the fresh L3 dirty; clear it so this cycle's rebuild skips it.
   // The distinct source tags the audit row.
@@ -406,13 +406,13 @@ export async function buildEntityProfiles(
   const { baseHalfLifeDays } = opts;
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
-  const unparented = l2Summaries.filter((s) => s.dag_level === DAG_LEVEL.topic && !s.dag_parent_id);
+  const unparented = l2Summaries.filter((s) => s.dagLevel === DAG_LEVEL.topic && !s.dagParentId);
 
   for (const [, tenantL2s] of partitionFactsByTenant(unparented)) {
     const home: PartitionHome = {
-      tenantId: tenantL2s[0].tenant_id,
+      tenantId: tenantL2s[0].tenantId,
       scope: derivationScope(tenantL2s[0].scope),
-      originProject: tenantL2s[0].origin_project,
+      originProject: tenantL2s[0].originProject,
       baseHalfLifeDays,
     };
     const clusters = clusterFacts(tenantL2s);

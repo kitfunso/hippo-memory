@@ -32,7 +32,7 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
     async savePrediction(tenantId, input, actor) {
       const { mirror } = input;
       const held = mirrors.get(mirror.id);
-      if (held && held.tenant_id !== mirror.tenant_id) {
+      if (held && held.tenantId !== mirror.tenantId) {
         throw new ConflictError(`Memory ${mirror.id} belongs to another tenant`);
       }
       const id = lastId + 1;
@@ -66,7 +66,7 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
           },
         },
         {
-          tenantId: mirror.tenant_id,
+          tenantId: mirror.tenantId,
           actor,
           op: 'remember',
           targetId: mirror.id,
@@ -158,7 +158,7 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
       const found = [...mirrors.values()].filter(
-        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenant_id === tenantId),
+        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenantId === tenantId),
       );
       return structuredClone(
         found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),

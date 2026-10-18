@@ -27,7 +27,7 @@ export function retireHeldTexts(run: SleepRun): void {
   // Only a merged row can hold a retired text, so only those are kept, by place, while the rest page past.
   const held: Array<readonly [number, string]> = [];
   for (const [index, row] of survivors.indexed()) {
-    if (row.source === 'consolidation' && !row.superseded_by && run.retirable(row)) held.push([index, row.id]);
+    if (row.source === 'consolidation' && !row.supersededBy && run.retirable(row)) held.push([index, row.id]);
   }
   // From the last place back, so dropping a survivor never moves one still to come.
   for (let end = held.length; end > 0; end -= run.rows.pageRows) {
@@ -44,7 +44,7 @@ export function retireHeldTexts(run: SleepRun): void {
 }
 
 function retireHeldText(run: SleepRun, index: number, row: MemoryEntry, sources: ReadonlyMap<string, MemoryEntry>) {
-  const rejected = (text: string): boolean => run.tombstones.find(row.tenant_id, rejectionDigest(text)) !== null;
+  const rejected = (text: string): boolean => run.tombstones.find(row.tenantId, rejectionDigest(text)) !== null;
   const successor = successorAfterRetirement(row, sources, rejected);
   if (successor === undefined) return;
   run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
@@ -59,7 +59,7 @@ function retireHeldText(run: SleepRun, index: number, row: MemoryEntry, sources:
 interface MergePartition {
   tenantId: string;
   scope: ReturnType<typeof derivationScope>;
-  origin: MemoryEntry['origin_project'];
+  origin: MemoryEntry['originProject'];
 }
 
 /** One partition's merge candidates, with the token set and length of each: all the overlap join reads. */
@@ -81,7 +81,7 @@ function partitionMergeCandidates(run: SleepRun): Map<string, MergeBucket> {
   for (const e of run.survivors.rows()) {
     const candidate =
       e.layer === Layer.Episodic &&
-      !e.superseded_by &&
+      !e.supersededBy &&
       !keptAsWritten(e) &&
       !alreadyMergedIds.has(e.id) &&
       !e.pinned && // a pin merged with a look-alike would read as one of two values
@@ -89,10 +89,10 @@ function partitionMergeCandidates(run: SleepRun): Map<string, MergeBucket> {
     const tokens = candidate ? tokenize(e.content) : [];
     // Two empty token sets overlap 1, so tokenless text would merge with any other.
     if (tokens.length === 0) continue;
-    const key = derivationPartitionKey(e.tenant_id, e.scope, e.origin_project);
+    const key = derivationPartitionKey(e.tenantId, e.scope, e.originProject);
     let bucket = buckets.get(key);
     if (!bucket) {
-      const partition = { tenantId: e.tenant_id, scope: derivationScope(e.scope), origin: e.origin_project };
+      const partition = { tenantId: e.tenantId, scope: derivationScope(e.scope), origin: e.originProject };
       buckets.set(key, (bucket = { partition, ids: [], lengths: [], sets: [] }));
     }
     bucket.ids.push(e.id);
@@ -192,7 +192,7 @@ function semanticSummary(
       scope: partition.scope,
       baseHalfLifeDays,
     }),
-    origin_project: partition.origin,
+    originProject: partition.origin,
     parents: cluster.map((e) => e.id),
   };
 }
@@ -200,7 +200,7 @@ function semanticSummary(
 /** The later conflict check reads the survivors, so it sees the post-demotion half-life. */
 function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): void {
   const demoted = cluster.map((e) => {
-    const row = { ...e, half_life_days: Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR)) };
+    const row = { ...e, halfLifeDays: Math.max(1, Math.floor(e.halfLifeDays * MERGE_SOURCE_HALF_LIFE_FACTOR)) };
     return { ...row, strength: calculateStrength(row, run.now, run.decayOpts) };
   });
   run.survivors.set(demoted);
@@ -222,8 +222,8 @@ function mergeRejected(
   const newDigest = rejectionDigest(semantic.content);
   // tombstones from older releases hold this format's digest
   const oldDigest = rejectionDigest(legacyMergeContents(related));
-  const newHit = tombstones.find(semantic.tenant_id, newDigest);
-  const tombstone = newHit ?? tombstones.find(semantic.tenant_id, oldDigest);
+  const newHit = tombstones.find(semantic.tenantId, newDigest);
+  const tombstone = newHit ?? tombstones.find(semantic.tenantId, oldDigest);
   const mergeDigest = newHit ? newDigest : oldDigest;
   if (!tombstone) return false;
   // Still mark used: these members are not re-tried against a different cluster in this pass; the next sleep
@@ -232,7 +232,7 @@ function mergeRejected(
   const rejected = newHit ? cluster : related;
   for (const e of rejected) used.add(e.id);
   tombstones.auditOrCount({
-    tenantId: semantic.tenant_id,
+    tenantId: semantic.tenantId,
     actor: 'sleep',
     op: 'reject_refusal',
     metadata: {
@@ -273,10 +273,10 @@ function legacyMergeContents(entries: MemoryEntry[]): string {
   return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
 }
 
-function pickStrongestValence(entries: MemoryEntry[]): MemoryEntry['emotional_valence'] {
+function pickStrongestValence(entries: MemoryEntry[]): MemoryEntry['emotionalValence'] {
   const order = ['critical', 'negative', 'positive', 'neutral'] as const;
   for (const v of order) {
-    if (entries.some((e) => e.emotional_valence === v)) return v;
+    if (entries.some((e) => e.emotionalValence === v)) return v;
   }
   return 'neutral';
 }

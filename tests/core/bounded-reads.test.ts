@@ -45,7 +45,7 @@ describe('invalidateMatching without onlyId', () => {
       tagOnly: memory('nothing in the text', { tags: ['Zephyrine Cache'] }),
       pinned: memory('pinned zephyrine cache note', { pinned: true }),
     };
-    const misses = [memory('zephyrines and caches differ'), memory('acme zephyrine cache', { tenant_id: 'acme' })];
+    const misses = [memory('zephyrines and caches differ'), memory('acme zephyrine cache', { tenantId: 'acme' })];
     writeEntriesTogether(root, [...padding(n), ...Object.values(hits), ...misses]);
     return { root, hits };
   }
@@ -101,7 +101,7 @@ describe('rebuildDirtySummaries', () => {
         tags: ['dag-summary'],
         dagLevel: 2,
       }),
-      latest_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
+      latestAt: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
     }));
     writeEntriesTogether(root, summaries);
     const db = openHippoDb(root);
@@ -137,7 +137,7 @@ describe('memoryCountAll', () => {
     const read: number[] = [];
     for (const n of [10, 200]) {
       const root = newRoot('bounded-count');
-      writeEntriesTogether(root, [...padding(n), memory('acme row', { tenant_id: 'acme' })]);
+      writeEntriesTogether(root, [...padding(n), memory('acme row', { tenantId: 'acme' })]);
       const ctx = {
         hippoRoot: root,
         tenantId: 'default',

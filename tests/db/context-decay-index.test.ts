@@ -47,12 +47,12 @@ function seedRows(count: number): MemoryEntry[] {
       ...createMemory(`decay row ${i}`, { tenantId: i % 40 === 39 ? 'other' : 'default' }),
       id: `m${String(i).padStart(4, '0')}`,
       created: new Date(BASE - (count - i) * 60_000).toISOString(),
-      last_retrieved: roll > 0.97 ? pick(BAD_DATES) : new Date(BASE - age * DAY).toISOString(),
-      half_life_days: pick(HALF_LIVES),
+      lastRetrieved: roll > 0.97 ? pick(BAD_DATES) : new Date(BASE - age * DAY).toISOString(),
+      halfLifeDays: pick(HALF_LIVES),
       pinned: next() < 0.05,
-      outcome_positive: next() < 0.4 ? Math.floor(next() * 9) : 0,
-      outcome_negative: next() < 0.3 ? Math.floor(next() * 9) : 0,
-      superseded_by: i % 50 === 49 ? 'm0000' : null,
+      outcomePositive: next() < 0.4 ? Math.floor(next() * 9) : 0,
+      outcomeNegative: next() < 0.3 ? Math.floor(next() * 9) : 0,
+      supersededBy: i % 50 === 49 ? 'm0000' : null,
     };
   });
 }
@@ -125,9 +125,9 @@ function rfRow(id: string, halfLivesOld: number, outcomePositive = 0): MemoryEnt
     ...createMemory(`rf row ${id}`, { tenantId: 'rf' }),
     id,
     created: lastRetrieved,
-    last_retrieved: lastRetrieved,
-    half_life_days: 10,
-    outcome_positive: outcomePositive,
+    lastRetrieved: lastRetrieved,
+    halfLifeDays: 10,
+    outcomePositive: outcomePositive,
   };
 }
 

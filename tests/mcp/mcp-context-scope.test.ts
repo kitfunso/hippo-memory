@@ -55,7 +55,7 @@ describe('mcp hippo_context scope filter', () => {
     const current = createMemory('the deploy runbook lives in docs/deploy.md');
     const other = createMemory('rollbacks go through the release branch');
     const old = createMemory('the deploy runbook lives in the wiki');
-    old.superseded_by = current.id;
+    old.supersededBy = current.id;
     for (const e of [current, other, old]) writeEntry(home, e);
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Parity snapshot task',
@@ -118,7 +118,7 @@ describe('mcp hippo_context scope filter', () => {
     );
 
     expect(extractText(res)).toBe('Done.');
-    expect(readEntry(home, memory.id)?.retrieval_count).toBe(0);
+    expect(readEntry(home, memory.id)?.retrievalCount).toBe(0);
   });
 
   it('default-deny: no-scope caller does not see private-scope memories or snapshot', async () => {
@@ -181,7 +181,7 @@ describe('mcp hippo_context scope filter', () => {
     writeEntry(home, createMemory('own public deploykey fact'));
     writeEntry(home, {
       ...createMemory('BRAVO deploykey fact from another project', { pinned: true }),
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     });
 
     const res = await callTool(
@@ -203,11 +203,11 @@ describe('mcp hippo_context scope filter', () => {
     // (ambientSecretAdmit admits a flagged row only inside its owning project).
     writeEntry(home, {
       ...createMemory('mcp secret sk_vendor_deadbeef123456 foreign', { pinned: true }),
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     });
     writeEntry(home, {
       ...createMemory('mcp secret sk_vendor_feedface654321 orphan', { pinned: true }),
-      origin_project: '',
+      originProject: '',
     });
 
     const res = await callTool(

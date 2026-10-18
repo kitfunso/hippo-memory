@@ -97,7 +97,7 @@ export function writeConfig(root: string, tools: readonly string[] | null): void
 export const agentRows = (root: string): MemoryEntry[] =>
   isInitialized(root) ? loadAllEntries(root, 'default').filter((e) => e.source.startsWith('agent-memory:')) : [];
 
-export const liveRows = (root: string): MemoryEntry[] => agentRows(root).filter((e) => !e.superseded_by);
+export const liveRows = (root: string): MemoryEntry[] => agentRows(root).filter((e) => !e.supersededBy);
 
 export const liveTexts = (root: string): string[] =>
   liveRows(root)

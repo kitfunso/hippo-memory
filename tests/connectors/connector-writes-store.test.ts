@@ -102,7 +102,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       });
       expect(deleted).toEqual({ ok: true, archivedAt: NOW });
       const rows = await memory.store.entriesByIds([message.id, redelivered.id, opened.id], TENANT_A);
-      expect(rows.map((r) => [r.id, r.kind, r.artifact_ref])).toEqual([
+      expect(rows.map((r) => [r.id, r.kind, r.artifactRef])).toEqual([
         [opened.id, 'raw', 'github://acme/demo/issue/42'],
       ]);
       return { message: message.id, opened: opened.id };

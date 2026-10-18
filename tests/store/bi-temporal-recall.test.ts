@@ -44,11 +44,11 @@ describe('recall with bi-temporal filter', () => {
 
   it('markRetrieved is no-op for superseded memories', () => {
     const entry = createMemory('old fact here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
-    entry.superseded_by = 'mem_successor';
-    const origCount = entry.retrieval_count;
-    const origHalfLife = entry.half_life_days;
+    entry.supersededBy = 'mem_successor';
+    const origCount = entry.retrievalCount;
+    const origHalfLife = entry.halfLifeDays;
     const [updated] = markRetrieved([entry]);
-    expect(updated.retrieval_count).toBe(origCount);
-    expect(updated.half_life_days).toBe(origHalfLife);
+    expect(updated.retrievalCount).toBe(origCount);
+    expect(updated.halfLifeDays).toBe(origHalfLife);
   });
 });

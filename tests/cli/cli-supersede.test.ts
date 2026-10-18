@@ -46,12 +46,12 @@ describe('hippo supersede', () => {
     expect(out).toContain(oldId);
 
     const oldEntry = readEntry(hippoRoot, oldId);
-    expect(oldEntry!.superseded_by).not.toBeNull();
+    expect(oldEntry!.supersededBy).not.toBeNull();
 
-    const newEntry = readEntry(hippoRoot, oldEntry!.superseded_by!);
+    const newEntry = readEntry(hippoRoot, oldEntry!.supersededBy!);
     expect(newEntry).not.toBeNull();
     expect(newEntry!.content).toContain('X is false now');
-    expect(newEntry!.superseded_by).toBeNull();
+    expect(newEntry!.supersededBy).toBeNull();
   });
 
   it('keeps the old row origin project and session on the new row', async () => {
@@ -61,16 +61,16 @@ describe('hippo supersede', () => {
       ...createMemory('the billing service retries a failed charge three times', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       }),
-      origin_project: 'proj-a',
-      source_session_id: 'sess-old',
+      originProject: 'proj-a',
+      sourceSessionId: 'sess-old',
     };
     writeEntry(hippoRoot, old);
 
     await hippo('supersede', old.id, 'the billing service retries a failed charge five times');
 
-    const next = readEntry(hippoRoot, readEntry(hippoRoot, old.id)!.superseded_by!);
-    expect(next!.origin_project).toBe('proj-a');
-    expect(next!.source_session_id).toBe('sess-old');
+    const next = readEntry(hippoRoot, readEntry(hippoRoot, old.id)!.supersededBy!);
+    expect(next!.originProject).toBe('proj-a');
+    expect(next!.sourceSessionId).toBe('sess-old');
   });
 
   it('carries layer, tags and pin from the old row unless a flag overrides them', async () => {
@@ -84,7 +84,7 @@ describe('hippo supersede', () => {
       writeEntry(hippoRoot, entry);
       return entry.id;
     };
-    const successor = (id: string) => readEntry(hippoRoot, readEntry(hippoRoot, id)!.superseded_by!)!;
+    const successor = (id: string) => readEntry(hippoRoot, readEntry(hippoRoot, id)!.supersededBy!)!;
 
     const kept = seed('the billing service retries a failed charge three times');
     await hippo('supersede', kept, 'the billing service retries a failed charge five times');

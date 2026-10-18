@@ -88,7 +88,7 @@ describe('the api with ctx.store', () => {
       expect(await rawArchive(ctx, raw.id, 'source deleted')).toEqual({ ok: true, archivedAt: NOW });
       expect(await forget(ctx, newId)).toEqual({ ok: true, id: newId });
       const rows = await memory.store.entriesByIds([note.id, newId, raw.id], TENANT_A);
-      expect(rows.map((r) => [r.id, r.superseded_by, r.outcome_positive])).toEqual([[note.id, newId, 1]]);
+      expect(rows.map((r) => [r.id, r.supersededBy, r.outcomePositive])).toEqual([[note.id, newId, 1]]);
     });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(memory.forgotten()).toBe(2);
@@ -228,7 +228,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
     expect(id).toBeDefined();
     lastRecalledIds.set(resolveClientKey(ctx), [id ?? '']);
     expect(textOf(await call('hippo_outcome', { good: true }))).toBe('Applied positive outcome to 1 memories');
-    expect((await memory.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcome_positive)).toEqual([1]);
+    expect((await memory.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive)).toEqual([1]);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
   });
 });

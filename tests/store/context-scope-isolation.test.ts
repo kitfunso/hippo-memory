@@ -57,15 +57,15 @@ beforeEach(() => {
   writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
   writeEntry(globalStore, {
     ...createMemory(GLOBAL_PREF, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
-    origin_project: '',
+    originProject: '',
   });
   writeEntry(globalStore, {
     ...createMemory(BRAVO, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
-    origin_project: 'proj-b',
+    originProject: 'proj-b',
   });
   writeEntry(globalStore, {
     ...createMemory(LEGACY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
-    origin_project: 'placeholder',
+    originProject: 'placeholder',
   });
   const db = openHippoDb(globalStore);
   try {
@@ -157,7 +157,7 @@ describe('contextGet origin partition (project A session)', () => {
       ...createMemory('deploykey deploykey deploykey ' + 'filler text for bulk '.repeat(40), {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       }),
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     });
     const result = await contextGet(ctx, { currentProject: 'proj-a', q: 'deploykey', budget: 60 });
     const got = contents(result.entries);
@@ -171,7 +171,7 @@ describe('contextGet origin partition (project A session)', () => {
     writeEntry(projA, {
       ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'github:private:x' }),
     }); // excluded (private scope)
-    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: '' }); // admitted (user-global)
+    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), originProject: '' }); // admitted (user-global)
     const result = await contextGet(ctx, { currentProject: 'proj-a', q: 'deploykey duplicated' });
     expect(contents(result.entries)).toContain(DUP);
   });

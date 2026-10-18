@@ -125,14 +125,14 @@ export function inMemoryConnectorWritesStore(hippoRoot: string): InMemoryConnect
           if (quarantine) {
             const { originalScope, reason } = quarantine;
             tx.audit.splice(rememberAt, 0, {
-              tenantId: entry.tenant_id,
+              tenantId: entry.tenantId,
               actor,
               op: 'quarantine',
               targetId: entry.id,
               metadata: { reason, originalScope },
             });
             records.push({
-              tenantId: entry.tenant_id,
+              tenantId: entry.tenantId,
               memoryId: entry.id,
               originalScope,
               reason,

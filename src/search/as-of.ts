@@ -10,7 +10,7 @@ export interface CurrentnessOptions {
 /** Rows current at `asOf`, or rows not superseded unless `includeSuperseded`. */
 export function currentEntries(entries: MemoryEntry[], options: CurrentnessOptions): MemoryEntry[] {
   if (options.asOf) return entriesAsOf(entries, new Date(options.asOf));
-  return options.includeSuperseded ? entries : entries.filter((e) => !e.superseded_by);
+  return options.includeSuperseded ? entries : entries.filter((e) => !e.supersededBy);
 }
 
 function entriesAsOf(entries: MemoryEntry[], asOfDate: Date): MemoryEntry[] {
@@ -18,9 +18,9 @@ function entriesAsOf(entries: MemoryEntry[], asOfDate: Date): MemoryEntry[] {
   const byId = new Map<string, MemoryEntry>();
   for (const e of entries) if (!byId.has(e.id)) byId.set(e.id, e);
   return entries.filter((e) => {
-    if (new Date(e.valid_from) > asOfDate) return false;
-    if (!e.superseded_by) return true;
-    const successor = byId.get(e.superseded_by);
-    return successor?.valid_from ? new Date(successor.valid_from) > asOfDate : true;
+    if (new Date(e.validFrom) > asOfDate) return false;
+    if (!e.supersededBy) return true;
+    const successor = byId.get(e.supersededBy);
+    return successor?.validFrom ? new Date(successor.validFrom) > asOfDate : true;
   });
 }

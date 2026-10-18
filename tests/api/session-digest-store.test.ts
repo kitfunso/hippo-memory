@@ -80,7 +80,7 @@ describe('writing the digest row', () => {
       tags: [SESSION_DIGEST_TAG],
       source: SESSION_DIGEST_TAG,
       confidence: 'observed',
-      source_session_id: 's1',
+      sourceSessionId: 's1',
       content: `${REPLY}\nChanged: src/upload.ts`,
     });
   });
@@ -159,7 +159,7 @@ describe('text hippo injected is not stored again', () => {
   it('keeps a sentence restating a digest that has been superseded, since no read injects that row', () => {
     write('s1', scan(REPLY, { edits: [] }));
     const [old] = digests();
-    writeEntry(hippoRoot, { ...old, superseded_by: 'mem_successor' });
+    writeEntry(hippoRoot, { ...old, supersededBy: 'mem_successor' });
     expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toMatch(WROTE);
   });
 
@@ -231,7 +231,7 @@ describe('consolidation leaves digests alone', () => {
     if (digest) {
       expect(result.merged).toBe(0);
       expect(semantic).toEqual([]);
-      expect(loadAllEntries(hippoRoot, 'default').filter((e) => e.superseded_by)).toEqual([]);
+      expect(loadAllEntries(hippoRoot, 'default').filter((e) => e.supersededBy)).toEqual([]);
     } else {
       expect(result.merged).toBe(3);
     }

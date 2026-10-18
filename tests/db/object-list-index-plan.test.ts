@@ -194,9 +194,9 @@ describe('session digest read plan', () => {
         (e) =>
           e.source === 'session-digest' &&
           e.tags.includes('session-digest') &&
-          !e.extracted_from &&
-          !e.superseded_by &&
-          e.source_session_id !== 's1',
+          !e.extractedFrom &&
+          !e.supersededBy &&
+          e.sourceSessionId !== 's1',
       )
       .map((e) => e.content);
     expect([...expected].sort()).toEqual(['digest from another session', 'digest with no session']);

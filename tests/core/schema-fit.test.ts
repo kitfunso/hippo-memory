@@ -157,25 +157,25 @@ describe('contextReads.schemaFit', () => {
 describe('schema_fit affects half-life', () => {
   it('high schema_fit (>0.7) gives 1.5x half-life', () => {
     const base = 7;
-    const hl = deriveHalfLife(base, { tags: [], schema_fit: 0.85 });
+    const hl = deriveHalfLife(base, { tags: [], schemaFit: 0.85 });
     expect(hl).toBe(base * 1.5);
   });
 
   it('low schema_fit (<0.3) gives 0.5x half-life', () => {
     const base = 7;
-    const hl = deriveHalfLife(base, { tags: [], schema_fit: 0.15 });
+    const hl = deriveHalfLife(base, { tags: [], schemaFit: 0.15 });
     expect(hl).toBe(base * 0.5);
   });
 
   it('neutral schema_fit (0.3-0.7) leaves half-life unchanged', () => {
     const base = 7;
-    const hl = deriveHalfLife(base, { tags: [], schema_fit: 0.5 });
+    const hl = deriveHalfLife(base, { tags: [], schemaFit: 0.5 });
     expect(hl).toBe(base);
   });
 
   it('error tag + high schema_fit stack: 2x * 1.5x = 3x', () => {
     const base = 7;
-    const hl = deriveHalfLife(base, { tags: ['error'], schema_fit: 0.85 });
+    const hl = deriveHalfLife(base, { tags: ['error'], schemaFit: 0.85 });
     expect(hl).toBe(base * 2 * 1.5);
   });
 });
@@ -186,8 +186,8 @@ describe('end-to-end: schema_fit flows through createMemory', () => {
     const lowFit = createMemory('test', { schemaFit: 0.15 });
     const neutral = createMemory('test', { schemaFit: 0.5 });
 
-    expect(highFit.half_life_days).toBe(DEFAULT_HALF_LIFE_DAYS * 1.5);
-    expect(lowFit.half_life_days).toBe(DEFAULT_HALF_LIFE_DAYS * 0.5);
-    expect(neutral.half_life_days).toBe(DEFAULT_HALF_LIFE_DAYS);
+    expect(highFit.halfLifeDays).toBe(DEFAULT_HALF_LIFE_DAYS * 1.5);
+    expect(lowFit.halfLifeDays).toBe(DEFAULT_HALF_LIFE_DAYS * 0.5);
+    expect(neutral.halfLifeDays).toBe(DEFAULT_HALF_LIFE_DAYS);
   });
 });

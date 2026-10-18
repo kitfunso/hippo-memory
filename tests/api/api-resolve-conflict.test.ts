@@ -56,7 +56,7 @@ function supersedeB({ b }: Pair): void {
     tenantId: TENANT,
   });
   writeEntry(root, successor);
-  writeEntry(root, { ...b, superseded_by: successor.id, kind: 'superseded' });
+  writeEntry(root, { ...b, supersededBy: successor.id, kind: 'superseded' });
 }
 
 async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
@@ -101,7 +101,7 @@ describe('MCP hippo_resolve', () => {
       NOT_RESOLVED,
     );
     expect(openIds()).toEqual([pair.conflictId]);
-    expect(readEntry(root, pair.b.id, TENANT)?.half_life_days).toBe(pair.b.half_life_days);
+    expect(readEntry(root, pair.b.id, TENANT)?.halfLifeDays).toBe(pair.b.halfLifeDays);
   });
 
   it('refuses a keep id outside the pair with a message naming the pair', async () => {

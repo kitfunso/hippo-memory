@@ -42,7 +42,7 @@ function seed(dir: string): void {
   const lesson = (content: string, over: Parameters<typeof createMemory>[1], origin: string | null): void =>
     writeEntry(
       dir,
-      { ...createMemory(content, { tenantId: TENANT_A, tags: ['error', TAG], ...over }), origin_project: origin },
+      { ...createMemory(content, { tenantId: TENANT_A, tags: ['error', TAG], ...over }), originProject: origin },
       { actor: 'cli' },
     );
   lesson('lesson in proj', {}, 'proj');

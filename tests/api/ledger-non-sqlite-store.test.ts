@@ -23,7 +23,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     fs.mkdirSync(donor);
     initStore(donor);
     const pin = createMemory('PINNED: always check the rollback plan', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    writeEntry(donor, { ...pin, pinned: true, origin_project: 'p' });
+    writeEntry(donor, { ...pin, pinned: true, originProject: 'p' });
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
     const store = { ...sqliteStore(donor), localFiles: undefined };

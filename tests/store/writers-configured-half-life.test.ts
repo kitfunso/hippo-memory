@@ -299,8 +299,8 @@ describe('writers on a configured default half-life', () => {
     // The file import splits its two paragraphs into two rows; every other writer makes one row from its seed.
     expect(written).toHaveLength(name === 'file import' ? 2 : 1);
     for (const entry of written) {
-      expect(entry.half_life_days).toBe(deriveHalfLife(CONFIGURED, entry));
-      expect(readEntry(root, entry.id)?.half_life_days).toBe(entry.half_life_days);
+      expect(entry.halfLifeDays).toBe(deriveHalfLife(CONFIGURED, entry));
+      expect(readEntry(root, entry.id)?.halfLifeDays).toBe(entry.halfLifeDays);
     }
   });
 
@@ -320,7 +320,7 @@ describe('an invalid configured default half-life', () => {
     const old = seed(root, 'the deploy window is Tuesday afternoon');
     const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));
     const [entry] = await added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
-    expect(entry.half_life_days).toBe(deriveHalfLife(DEFAULT_HALF_LIFE_DAYS, entry));
+    expect(entry.halfLifeDays).toBe(deriveHalfLife(DEFAULT_HALF_LIFE_DAYS, entry));
     expect(warn.mock.calls.some((args) => String(args[0]).includes('"defaultHalfLifeDays"'))).toBe(true);
   });
 });

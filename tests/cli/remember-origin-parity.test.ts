@@ -65,7 +65,7 @@ async function thinRemember(store: string, text: string): Promise<string> {
 async function bothOrigins(store: string): Promise<ReadonlyArray<string | null | undefined>> {
   const direct = await directRemember(store, 'the build cache lives under the shared drive');
   const thin = await thinRemember(store, 'the release branch is cut on thursdays');
-  return [readEntry(store, direct)?.origin_project, readEntry(store, thin)?.origin_project];
+  return [readEntry(store, direct)?.originProject, readEntry(store, thin)?.originProject];
 }
 
 beforeEach(() => {

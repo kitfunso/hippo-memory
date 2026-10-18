@@ -41,7 +41,7 @@ function makeL2Summary(content: string, speaker: string = 'alice', parentId?: st
     confidence: 'inferred',
     dagLevel: 2,
   });
-  if (parentId !== undefined) s.dag_parent_id = parentId ?? null;
+  if (parentId !== undefined) s.dagParentId = parentId ?? null;
   return s;
 }
 
@@ -265,7 +265,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
   it('test #6: rebuildDirtySummaries handles dirty L3 (label derivation + dag_level_3_built_at preserved)', async () => {
     const l3 = makeL3Profile('old alice profile content xxx', 'alice');
     const builtAtIso = '2026-01-01T00:00:00.000Z';
-    l3.dag_level_3_built_at = builtAtIso;
+    l3.dagLevel3BuiltAt = builtAtIso;
     writeEntry(hippoRoot, l3);
     // Add a child L2 so rebuild has children to read
     const childL2 = makeL2Summary('alice topic for rebuild test', 'alice', l3.id);
@@ -347,7 +347,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
   it('test #8: drillDown depth=2 from L3 returns L2s + L1s with dedup + totalChildren=8', async () => {
     const l3 = makeL3Profile('alice profile for depth test', 'alice');
-    l3.descendant_count = 2; // stored direct-child count (2 L2 kids)
+    l3.descendantCount = 2; // stored direct-child count (2 L2 kids)
     writeEntry(hippoRoot, l3);
     const l2a = makeL2Summary('alice topic A for depth', 'alice', l3.id);
     const l2b = makeL2Summary('alice topic B for depth', 'alice', l3.id);
@@ -451,7 +451,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       'alice owns the API layer in tenant A repo one',
     ].map((c, _i) => {
       const m = makeL2Summary(c, 'alice');
-      m.tenant_id = 'tenant-a';
+      m.tenantId = 'tenant-a';
       return m;
     });
     const tenantBL2s = [
@@ -460,7 +460,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       'alice owns the frontend in tenant B repo two',
     ].map((c, _i) => {
       const m = makeL2Summary(c, 'alice');
-      m.tenant_id = 'tenant-b';
+      m.tenantId = 'tenant-b';
       return m;
     });
     [...tenantAL2s, ...tenantBL2s].forEach((e) => writeEntry(hippoRoot, e));

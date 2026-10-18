@@ -175,7 +175,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
     const oldEntry = readEntry(home, oldId);
     const newEntry = readEntry(home, result.newId);
-    expect(oldEntry?.superseded_by).toBe(result.newId);
+    expect(oldEntry?.supersededBy).toBe(result.newId);
     expect(newEntry?.content).toBe('updated-belief');
 
     const db = openHippoDb(home);

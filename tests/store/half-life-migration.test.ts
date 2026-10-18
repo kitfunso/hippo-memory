@@ -90,7 +90,7 @@ function bulkLegacyStore(n: number): string {
 const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 function byContent(root: string): Map<string, number> {
-  return new Map(loadAllEntries(root, 'default').map((e) => [e.content, e.half_life_days]));
+  return new Map(loadAllEntries(root, 'default').map((e) => [e.content, e.halfLifeDays]));
 }
 
 describe('default half-life migration', () => {
@@ -104,9 +104,9 @@ describe('default half-life migration', () => {
     const plain = legacy('the staging deploy needs the VPN to reach the health check');
     const error = legacy('npm install fails in billing; use pnpm', { tags: ['error'] });
     const shortened = legacy('an invalidated memory hippo already halved');
-    shortened.half_life_days = 3;
+    shortened.halfLifeDays = 3;
     const fixed = legacy('decision: we release on Tuesdays');
-    fixed.half_life_days = 90;
+    fixed.halfLifeDays = 90;
     const root = legacyStore([plain, error, shortened, fixed]);
 
     const r = migrateDefaultHalfLife(local(root), 365);
@@ -137,11 +137,11 @@ describe('default half-life migration', () => {
 
   it('moves recalled memories with their recall bonus, and logs the old half-life', () => {
     const recalled = legacy('the billing cron runs at 02:00 UTC');
-    recalled.retrieval_count = 3;
-    recalled.half_life_days = 7 + 2 * 3;
+    recalled.retrievalCount = 3;
+    recalled.halfLifeDays = 7 + 2 * 3;
     const overBonus = legacy('a memory with more half-life than its recalls explain');
-    overBonus.retrieval_count = 1;
-    overBonus.half_life_days = 7 + 2 * 2;
+    overBonus.retrievalCount = 1;
+    overBonus.halfLifeDays = 7 + 2 * 2;
     const invalidated = legacy('an invalidated memory whose halved value lands on the grid', { tags: ['invalidated'] });
     const root = legacyStore([recalled, overBonus, invalidated]);
 
@@ -165,7 +165,7 @@ describe('default half-life migration', () => {
 
   it('a dry-run sleep previews decay at the new base', async () => {
     const old = legacy('the staging deploy needs the VPN to reach the health check');
-    old.created = old.last_retrieved = new Date(Date.now() - 60 * 86_400_000).toISOString();
+    old.created = old.lastRetrieved = new Date(Date.now() - 60 * 86_400_000).toISOString();
     const root = legacyStore([old]);
     const preview = await consolidate(root, { dryRun: true });
     const real = await consolidate(root);
@@ -243,12 +243,12 @@ describe('default half-life migration', () => {
 function pinTo90(root: string, id: string, recalls = 0): void {
   writeEntry(root, {
     ...readEntry(root, id, 'default')!,
-    retrieval_count: recalls,
-    half_life_days: LEGACY_TYPED_HALF_LIFE + 2 * recalls,
+    retrievalCount: recalls,
+    halfLifeDays: LEGACY_TYPED_HALF_LIFE + 2 * recalls,
   });
 }
 function halfLifeOf(root: string, id: string): number {
-  return readEntry(root, id, 'default')!.half_life_days;
+  return readEntry(root, id, 'default')!.halfLifeDays;
 }
 function queryPlan(root: string, sql: string): string[] {
   const db = openHippoDb(root);
@@ -325,8 +325,8 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
       })
     ).memoryId!;
     const old = readEntry(root, superseded, 'default')!;
-    writeEntry(root, { ...old, half_life_days: 45, confidence: 'stale', tags: [...old.tags, 'superseded'] });
-    writeEntry(root, { ...readEntry(root, handSet, 'default')!, half_life_days: 200 });
+    writeEntry(root, { ...old, halfLifeDays: 45, confidence: 'stale', tags: [...old.tags, 'superseded'] });
+    writeEntry(root, { ...readEntry(root, handSet, 'default')!, halfLifeDays: 200 });
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 
     expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({ typed: 0, kept: 2 });
@@ -420,7 +420,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     ).memoryId!;
     const copy = (await supersede(apiCtx(root, 'default', adminActor('test')), decision, 'we release on Tuesdays now'))
       .newId;
-    writeEntry(root, { ...readEntry(root, copy, 'default')!, retrieval_count: 40, half_life_days: 30 + 2 * 40 });
+    writeEntry(root, { ...readEntry(root, copy, 'default')!, retrievalCount: 40, halfLifeDays: 30 + 2 * 40 });
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 
     migrateDefaultHalfLife(local(root), 30);
@@ -437,8 +437,8 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     // A conflict loser: resolveConflict halved 90 + 2 * 38 and left no tag.
     writeEntry(root, {
       ...readEntry(root, decision, 'default')!,
-      retrieval_count: 38,
-      half_life_days: (90 + 2 * 38) / 2,
+      retrievalCount: 38,
+      halfLifeDays: (90 + 2 * 38) / 2,
     });
     unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
 
@@ -450,7 +450,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const root = store();
     migrateDefaultHalfLife(local(root), 100);
     const both = createMemory('use gRPC for internal APIs', { source: 'decision', baseHalfLifeDays: 100 });
-    writeEntry(root, { ...both, retrieval_count: 5, half_life_days: 90 + 2 * 5 });
+    writeEntry(root, { ...both, retrievalCount: 5, halfLifeDays: 90 + 2 * 5 });
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 
     expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({ from: 100, rescaled: 0, typed: 1, kept: 0 });
