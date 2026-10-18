@@ -2,8 +2,8 @@
 import { loadAmbientTalliesAt } from '../ambient.js';
 import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
-import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
-import { getHippoDbPath, withWriteScope } from '../../db/index.js';
+import { appendAuditEventsAt, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
+import { getHippoDbPath } from '../../db/index.js';
 import { activeGoalsWithPoliciesAt } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
@@ -183,9 +183,7 @@ function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
   return {
     appendAuditEvents(events) {
       if (events.length === 0) return;
-      on((db) => withWriteScope(db, 'append_audit_events', () => {
-        for (const event of events) appendAuditEvent(db, event);
-      }));
+      on((db) => appendAuditEventsAt(db, events));
     },
     finishRecall(writes) {
       on((db) => finishRecallAt(db, writes));

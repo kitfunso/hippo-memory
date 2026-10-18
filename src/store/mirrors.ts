@@ -195,13 +195,50 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
 
 // Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror
 // is the resurrection channel bootstrapLegacyStore guards against.
+const MIRROR_LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
+
 export function removeEntryMirrors(hippoRoot: string, id: string): void {
-  for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]) {
+  for (const layer of MIRROR_LAYERS) {
     const file = path.join(layerDir(hippoRoot, layer), `${id}.md`);
     if (fs.existsSync(file)) {
       fs.unlinkSync(file);
     }
   }
+}
+
+/** writeMarkdownMirror for many entries: each layer folder is listed once, so no file is probed one by one. A file that
+ * fails is warned about and the rest still land. */
+export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<MemoryEntry>): void {
+  mirrorBestEffort('markdown mirrors', () => {
+    const listed = MIRROR_LAYERS.map((layer) => {
+      const dir = layerDir(hippoRoot, layer);
+      return { dir, names: new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : []) };
+    });
+    const made = new Set<string>();
+    for (const entry of entries) {
+      try {
+        writeListedMirror(hippoRoot, entry, listed, made);
+      } catch (err) {
+        log.warnThenSample('markdown-mirror', `${entry.id}.md not refreshed (${errorMessage(err)}); the database ` +
+          `write succeeded`, errorFields(err));
+      }
+    }
+  });
+}
+
+/** writeMarkdownMirror against a listing taken before the batch; `made` holds the folders already made. */
+function writeListedMirror(
+  hippoRoot: string,
+  entry: MemoryEntry,
+  listed: ReadonlyArray<{ dir: string; names: ReadonlySet<string> }>,
+  made: Set<string>,
+): void {
+  const name = `${entry.id}.md`;
+  for (const { dir, names } of listed) if (names.has(name)) fs.rmSync(path.join(dir, name), { force: true });
+  const dir = layerDir(hippoRoot, entry.layer);
+  if (!made.has(dir)) fs.mkdirSync(dir, MIRROR_FOLDER);
+  made.add(dir);
+  writeMirror(path.join(dir, name), serializeEntry(entry));
 }
 
 export function removeEntryMirrorsIn(files: StoreFiles, id: string): void {
@@ -211,8 +248,7 @@ export function removeEntryMirrorsIn(files: StoreFiles, id: string): void {
 /** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
  * can name the stuck file. */
 function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
-  // Layer list kept in lockstep with removeEntryMirrors.
-  return [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]
+  return MIRROR_LAYERS
     .map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`))
     .filter((file) => fs.existsSync(file));
 }
@@ -438,7 +474,7 @@ const MIRROR_PAGE_ROWS = 500;
 
 /** Pages through every row by rowid: each file is independent of the others, so row order does not reach the output,
  * and rowid keeps each page a seek (no index covers `created, id`). */
-function* pagedMemoryRows(db: ReturnType<typeof openHippoDb>): Generator<MemoryEntry[]> {
+function* pagedMemoryRows(db: ReturnType<typeof openHippoDb>): Generator<MemoryEntry> {
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS beside the rowid, matching MemoryRow's field set.
   const page = db.prepare(
     `SELECT rowid AS page_rowid, ${MEMORY_SELECT_COLUMNS} FROM memories WHERE rowid > ? ORDER BY rowid LIMIT ?`,
@@ -449,16 +485,12 @@ function* pagedMemoryRows(db: ReturnType<typeof openHippoDb>): Generator<MemoryE
     const rows = page.all(after, MIRROR_PAGE_ROWS) as Array<MemoryRow & { page_rowid: number }>;
     if (rows.length === 0) return;
     after = rows[rows.length - 1]!.page_rowid;
-    yield rows.map(rowToEntry);
+    yield* rows.map(rowToEntry);
   }
 }
 
 export function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
-  mirrorBestEffort('markdown mirrors', () => {
-    for (const entries of pagedMemoryRows(db)) {
-      for (const entry of entries) writeMarkdownMirror(hippoRoot, entry);
-    }
-  });
+  writeMarkdownMirrors(hippoRoot, pagedMemoryRows(db));
   syncSideMirrors(hippoRoot, db);
 }
 
@@ -468,9 +500,7 @@ export function syncChangedMirrors(
   db: ReturnType<typeof openHippoDb>,
   changed: readonly MemoryEntry[],
 ): void {
-  mirrorBestEffort('markdown mirrors', () => {
-    for (const entry of changed) writeMarkdownMirror(hippoRoot, entry);
-  });
+  writeMarkdownMirrors(hippoRoot, changed);
   syncSideMirrors(hippoRoot, db);
 }
 
