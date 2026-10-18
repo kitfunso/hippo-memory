@@ -1,9 +1,10 @@
 // The published hybridSearch and physicsSearch: each fills the hippo.db folder default, then calls the domain ranker
-// of the same name, which takes its store from the caller.
+// of the same name, which takes its store from the caller. The eval kit's embedMemory takes a folder the same way.
 
 import type { MemoryEntry } from '../core/memory.js';
 import type { SearchResult } from '../core/search-types.js';
 import { sqliteStore } from '../store/index.js';
+import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../search/hybrid.js';
 import { loadConfig } from '../core/config.js';
 import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../search/physics-search.js';
@@ -49,4 +50,14 @@ export async function physicsSearch(
 ): Promise<SearchResult[]> {
   const source = entries.length > 0 ? folderVectorSource(options) : undefined;
   return rankPhysics(query, entries, { ...options, source });
+}
+
+/** The eval kit's folder form of embedMemory, for frozen scripts written against it. */
+export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
+  const store = sqliteStore(hippoRoot);
+  try {
+    return await embedInto(folderIndex({ root: hippoRoot, store, config: loadConfig(hippoRoot) }), entry);
+  } finally {
+    await store.close();
+  }
 }

@@ -16,7 +16,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createMemory } from '../../dist/core/memory.js';
 import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
-import { embedMemory } from '../../dist/search/embed-memories.js';
+import { embedMemory } from '../../dist/entry/testing.js';
 import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
 import { consolidate } from '../../dist/index.js';
