@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { blockHash, estimateTokens } from '../../src/util/token-text.js';
-import { DELIVERY_LEDGER_VERSION } from '../../src/store/delivery-recorder.js';
+import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { initStore } from '../../src/store/open.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';

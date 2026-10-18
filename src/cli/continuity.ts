@@ -19,7 +19,7 @@ import {
 import { cliApiContext } from './api-context.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../core/handoff.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
-import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
+import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
 import {

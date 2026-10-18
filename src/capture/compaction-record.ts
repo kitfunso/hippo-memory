@@ -9,7 +9,7 @@ import type {
   Log,
   ReplayOptions,
   ReplaySources,
-} from '../store/compactions-record.js';
+} from '../store/port/compaction-hooks.js';
 import type { FolderFiles } from '../store/port.js';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';

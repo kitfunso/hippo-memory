@@ -7,8 +7,8 @@ import {
   detectPlanningClaim,
   type PlanningFallacyDecision,
 } from '../../predictions/planning-fallacy.js';
-import { reportAuditWriteFailure } from '../../store/audit.js';
-import type { HippoStore, LastRecall, LastRecallWrites } from '../../store/index.js';
+import { reportAuditWriteFailure } from '../../core/audit-report.js';
+import type { HippoStore, LastRecall, LastRecallWrites } from '../../store/port.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';

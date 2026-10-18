@@ -59,6 +59,13 @@ const SQLITE_BASE = {
   'src/mcp/keep.ts': '',
   'src/store/sqlite/store.ts': 'export const storeFor = 1;\nexport type S = 1;\n',
 };
+const PORT_BASE = {
+  ...SQLITE_BASE,
+  'src/store/rows.ts': 'export const rule = 1;\nexport type R = 1;\n',
+  'src/store/port.ts': 'export type P = 1;\n',
+  'src/store/port-groups.ts': 'export type G = 1;\n',
+  'src/store/port/types.ts': 'export type T = 1;\n',
+};
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
 
 type Row = {
@@ -229,10 +236,37 @@ const rows: Row[] = [
     ],
   },
   {
-    name: 'an api type-only import of the SQLite adapter passes',
+    name: 'an api type-only import of the SQLite adapter fails on the port rule',
     files: {
       ...SQLITE_BASE,
       'src/api/y.ts': "import type { S } from '../store/sqlite/store.js';\nexport type Y = S;\n",
+    },
+    map: SQLITE_MAP,
+    status: 1,
+    output: ['src/api/y.ts:1 imports src/store/sqlite/store.ts'],
+  },
+  {
+    name: 'an api import of a store module outside the port fails, runtime or type-only',
+    files: {
+      ...PORT_BASE,
+      'src/api/y.ts': "import { rule } from '../store/rows.js';\nexport const y = rule;\n",
+      'src/api/z.ts': "import type { R } from '../store/rows.js';\nexport type Z = R;\n",
+    },
+    map: SQLITE_MAP,
+    status: 1,
+    output: ['src/api/y.ts:1 imports src/store/rows.ts', 'src/api/z.ts:1 imports src/store/rows.ts'],
+  },
+  {
+    name: 'an api import of port.ts, port-groups.ts or port/ passes',
+    files: {
+      ...PORT_BASE,
+      'src/api/y.ts': [
+        "import type { P } from '../store/port.js';",
+        "import type { G } from '../store/port-groups.js';",
+        "import type { T } from '../store/port/types.js';",
+        'export type Y = [P, G, T];',
+        '',
+      ].join('\n'),
     },
     map: SQLITE_MAP,
     status: 0,

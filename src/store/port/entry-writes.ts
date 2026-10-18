@@ -44,7 +44,7 @@ export interface EntryWrites {
    * tenant tombstoned rejects with RejectedValueError; one reject_refusal row follows the rollback, best effort. */
   writeEntry(write: EntryWrite): Promise<void>;
   /** Per id in order, a row of the tenant within reach gets `entryAfterOutcome` (rewrite as writeEntry does) and one
-   * outcome row ({good}); other ids skipped. Each read holds the row lock to commit (SELECT ... FOR UPDATE), so a
+   * outcome row ({good}); other ids skipped. Each read holds the row's lock to commit, so a
    * concurrent supersede is not undone. Resolves to the ids applied, repeats kept. */
   applyOutcome(outcome: OutcomeWrite): Promise<string[]>;
   /** Rewrites the row as writeEntry does plus one pin row ({pinned}); out of reach rejects as forget does. */

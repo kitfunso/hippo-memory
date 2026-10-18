@@ -12,7 +12,8 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
-import { ensurePilotArm, hashArm, readPilotArm } from '../../src/store/pilot-arm.js';
+import { ensurePilotArm, readPilotArm } from '../../src/store/pilot-arm.js';
+import { hashArm } from '../../src/core/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/token-ledger.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt, folderFiles } from '../_helpers/cli-stores.js';

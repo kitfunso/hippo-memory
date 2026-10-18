@@ -1,6 +1,5 @@
 import {
   type MemoryEntry,
-  type ConfidenceLevel,
   FALLBACK_HALF_LIFE_DAYS,
   Layer,
   calculateStrength,
@@ -25,6 +24,7 @@ import type {
   RecentOrigins,
 } from './port/context-reads.js';
 import type { SourceTally } from './port/sharing.js';
+import type { StatusCounts, StrengthTallies } from './port/reports.js';
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
 /** idx_memories_pinned (migration v51) serves it. */
@@ -371,17 +371,6 @@ export function tallySourcesAt(db: DatabaseSyncLike, tenantId?: string): SourceT
 export const jsonList = (column: string): string =>
   `(CASE WHEN json_valid(${column}) AND json_type(${column}) = 'array' THEN ${column} ELSE '[]' END)`;
 
-/** Whole-tenant health numbers: every row counts, superseded and archived ones too. */
-export interface StrengthTallies {
-  total: number;
-  pinned: number;
-  /** Rows tagged exactly `error`. */
-  errors: number;
-  strengthSum: number;
-  /** Unpinned rows whose strength is under `atRiskBelow`. */
-  atRisk: number;
-}
-
 /** calculateStrength over every row of a tenant in one aggregate pass, no row loaded. */
 export function loadStrengthTalliesAt(
   db: DatabaseSyncLike,
@@ -420,22 +409,6 @@ export function strengthTalliesAt(
     strengthSum: Number(row.strengthSum),
     atRisk: Number(row.atRisk),
   };
-}
-
-/** What `hippo status` prints about the whole store: every tenant and superseded rows too. */
-export interface StatusCounts {
-  total: number;
-  byLayer: Record<Layer, number>;
-  byConfidence: Record<ConfidenceLevel, number>;
-  pinned: number;
-  /** Rows whose strength is under the caller's line; unlike StrengthTallies, pinned rows count. */
-  atRisk: number;
-  agedOut: number;
-  avgStrength: number;
-  /** Open conflicts of every tenant, the rows listMemoryConflicts returns when given no tenant. */
-  openConflicts: number;
-  /** Rows that have a stored vector. */
-  embedded: number;
 }
 
 type StatusColumn =

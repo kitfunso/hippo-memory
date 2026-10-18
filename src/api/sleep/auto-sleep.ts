@@ -2,7 +2,6 @@
 
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import type { HippoStore } from '../../store/port.js';
-import { resolveTenantId } from '../../store/tenant.js';
 import type { HippoConfig } from '../../core/config.js';
 
 export const autoSleepInFlight = new Set<string>();
@@ -23,6 +22,8 @@ export interface AutoSleepDue {
 export interface AutoSleepGate {
   readonly hippoRoot: string;
   readonly tenantId: string;
+  /** The tenant that owns the host: consolidation is host-wide, so only this tenant's writes may start it. */
+  readonly hostTenantId: string;
   readonly config: HippoConfig['autoSleep'];
   readonly allowed: boolean;
 }
@@ -43,10 +44,10 @@ export async function autoSleepDue(
  * may start it. A failed count rejects; the run itself never does. */
 export async function startAutoSleepIfDue(
   store: HippoStore,
-  { hippoRoot, tenantId, config, allowed }: AutoSleepGate,
+  { hippoRoot, tenantId, hostTenantId, config, allowed }: AutoSleepGate,
   run: AutoSleepRunner,
 ): Promise<void> {
-  if (!allowed || !config.enabled || tenantId !== resolveTenantId({}) || autoSleepInFlight.has(hippoRoot)) return;
+  if (!allowed || !config.enabled || tenantId !== hostTenantId || autoSleepInFlight.has(hippoRoot)) return;
   // Held from the count on, so two writes landing together never both start a sleep.
   autoSleepInFlight.add(hippoRoot);
   let due = false;

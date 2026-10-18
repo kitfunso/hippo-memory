@@ -1,7 +1,7 @@
 import { MemoryEntry, type DecayOptions } from '../core/memory.js';
 import type { Consolidation } from '../store/port.js';
 import type { Learning } from '../store/port/learning.js';
-import type { TombstoneChecks } from '../store/tombstone-checks.js';
+import type { TombstoneChecks } from '../store/port/consolidation.js';
 import { loadConfig } from '../core/config.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
 import type { DormantMove, StrengthRefresh } from '../store/port/consolidation.js';

@@ -1,7 +1,5 @@
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { log } from '../util/log.js';
-import { blockHash } from '../util/token-text.js';
 import { keysetAfter } from '../util/keyset.js';
 import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
@@ -22,18 +20,6 @@ function isBigIntValue(value: JsonValueWithBigInt): value is bigint {
 
 function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValueWithBigInt {
   return isBigIntValue(value) ? value.toString() : value;
-}
-
-export type AuditQueryFields = {
-  query_hash: string;
-  query_length: number;
-};
-
-export function auditQueryFields(query: string): AuditQueryFields {
-  return {
-    query_hash: blockHash(query),
-    query_length: query.length,
-  };
 }
 
 const INSERT_AUDIT_ROW_SQL = `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`;
@@ -62,24 +48,6 @@ function auditRowValues(opts: AppendAuditOpts): [string, string, string, string 
     opts.targetId ?? null,
     JSON.stringify(opts.metadata ?? {}, bigintSafeReplacer),
   ];
-}
-
-let auditWriteFailures = 0;
-
-/** For callers that keep a mutation when its audit row fails: the failure is logged and counted, never silent. */
-export function reportAuditWriteFailure(op: AuditOp, reason: string, targetId?: string | null): void {
-  auditWriteFailures++;
-  log.error(`audit write failed: ${reason}`, { op, target: targetId ?? undefined });
-}
-
-/** Audit rows this process failed to write; the loopback `/health` body reports it. */
-export function auditWriteFailureCount(): number {
-  return auditWriteFailures;
-}
-
-/** Adds the failures a store worker counted on its own thread, so the process reports one number. */
-export function addAuditWriteFailures(count: number): void {
-  auditWriteFailures += count;
 }
 
 export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions): AuditEvent[] {

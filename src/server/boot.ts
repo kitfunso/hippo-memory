@@ -2,11 +2,11 @@ import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps, val
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../store/index.js';
-import { isStoreBusy } from '../store/busy.js';
+import { isStoreBusy } from '../store/port.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { configReader } from '../core/config.js';
-import { auditWriteFailureCount } from '../store/audit.js';
+import { auditWriteFailureCount } from '../core/audit-report.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { MINUTE_MS } from '../util/time.js';
 import { errorFields, errorMessage, log } from '../util/log.js';

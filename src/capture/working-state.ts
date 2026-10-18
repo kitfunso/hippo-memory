@@ -1,7 +1,7 @@
 // A session's working state read from its transcript tail, with no store in the imports, so a hook with no store can
 // derive it.
 import * as fs from 'fs';
-import type { TaskSnapshot } from '../store/rows.js';
+import type { TaskSnapshot } from '../store/port/sessions.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 import { errorMessage } from '../util/log.js';

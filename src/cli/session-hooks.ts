@@ -40,7 +40,7 @@ import { errorMessage, log, errorFields } from '../util/log.js';
 import { cmdShimArgs } from '../util/spawn-argv.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
 import { flushDeliveryRecorder, startDeliveryRecorder, startToolFailureRecorder } from '../api/prompt-hook.js';
-import type { DeliveryRecorder } from '../store/delivery-recorder.js';
+import type { DeliveryRecorder } from '../api/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';

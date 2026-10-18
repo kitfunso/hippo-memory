@@ -5,15 +5,8 @@ import { assertTenantId } from '../core/tenant-id.js';
 import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import {
-  type EntityType,
-  type RelationType,
-  type SourceKind,
-  type SourceObjectType,
-  type SourceObjectRef,
   GRAPH_ENTITY_TYPES,
   GRAPH_RELATION_TYPES,
-  type Entity,
-  type Relation,
   type InsertEntityOptions,
   type InsertRelationOptions,
   type UpdateEntityOptions,
@@ -24,6 +17,8 @@ import {
   ENTITY_COLS,
   RELATION_COLS,
 } from './graph-rows.js';
+import type { SourceObjectRef } from './port/graph-rebuild.js';
+import type { EntityType, RelationType, SourceKind, SourceObjectType, Entity, Relation } from './port/graph-reads.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */

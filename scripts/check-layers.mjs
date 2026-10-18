@@ -5,6 +5,7 @@
 // A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
 // So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // So does a runtime import from src/api/**, src/connectors/** or src/mcp/** into src/store/sqlite/**, unless SQLITE_PINNED names it with a reason: they take the store from the Context.
+// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**): the api reads the store through the port and takes shared rules from src/core.
 // layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
 
@@ -167,6 +168,27 @@ function cliStoreProblems(srcDir) {
   ];
 }
 
+const API_PORT_FILES = new Set(['store/port.ts', 'store/port-groups.ts']);
+
+/** Imports from src/api into a src/store file that is not part of the port, one per (file, target), runtime or type-only. */
+function findApiStoreReaches(srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = new Map();
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!from.startsWith('api/')) continue;
+    for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
+      const to = target && rel(target);
+      const outsidePort = to?.startsWith('store/') && !API_PORT_FILES.has(to) && !to.startsWith('store/port/');
+      const key = `${from}\t${to}`;
+      if (outsidePort && !out.has(key)) out.set(key, { file: from, target: to, line });
+    }
+  }
+  return [...out.values()];
+}
+
 const SQLITE_FROM = ['api/', 'connectors/', 'dashboard/', 'mcp/'];
 const SQLITE_DIR = 'store/sqlite/';
 // Each runtime import that may stay, as src-relative paths with why.
@@ -282,6 +304,15 @@ if (sqliteProblems.length > 0 && !args.includes('--list')) {
     'The api, connectors, dashboard or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:',
   );
   for (const p of sqliteProblems) console.error(`  ${p}`);
+  process.exit(1);
+}
+
+const apiStoreReaches = findApiStoreReaches('src');
+if (apiStoreReaches.length > 0 && !args.includes('--list')) {
+  console.error(
+    'The api imports a store module past the port; read it through the port, or move the shared rule to src/core:',
+  );
+  for (const e of apiStoreReaches) console.error(`  src/${e.file}:${e.line} imports src/${e.target}`);
   process.exit(1);
 }
 

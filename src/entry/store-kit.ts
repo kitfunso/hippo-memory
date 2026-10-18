@@ -98,13 +98,13 @@ export type { KeysetPosition } from '../util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
 export type { ContinuityBlock } from '../api/recall/types.js';
 export type { MemoryEntry } from '../core/memory.js';
-export type { SessionEvent, TaskSnapshot } from '../store/rows.js';
+export type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 export type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 // The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
 export type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
-export type { CardDetail } from '../store/card-detail.js';
-export type { CompleteGoalOpts, PushGoalOpts } from '../store/goals.js';
-export type { HandoffFilter, SessionEndHandoffRequest } from '../store/handoffs.js';
+export type { CardDetail } from '../store/port/cards.js';
+export type { CompleteGoalOpts, PushGoalOpts } from '../store/port/goals.js';
+export type { HandoffFilter, SessionEndHandoffRequest } from '../store/port/sessions.js';
 export type {
   ConflictListQuery,
   ConflictMember,
@@ -114,19 +114,19 @@ export type {
   ConflictSide,
   LoserFate,
 } from '../store/port/conflicts.js';
-export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../store/dormant.js';
-export type { FailureSummary } from '../store/failure-log.js';
-export type { CallerItems } from '../store/compaction-caller.js';
-export type { CompactionStart } from '../store/compactions-record.js';
-export type { MemoryConflict } from '../store/rows.js';
-export type { SessionEventInput, SnapshotInput } from '../store/sessions.js';
-export type { StatusCounts, StrengthTallies } from '../store/candidates.js';
-export type { LegacyStats } from '../store/rows.js';
-export type { TokenSummary } from '../store/token-ledger.js';
-export type { WorkingMemoryItem } from '../store/working-memory.js';
-export type { AppliedRejection, LiftedRejection, Rejection, RejectionSource } from '../store/rejected-values.js';
+export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../store/port/dormant.js';
+export type { FailureSummary } from '../store/port/failure-log.js';
+export type { CallerItems } from '../store/port/compactions.js';
+export type { CompactionStart } from '../store/port/compactions.js';
+export type { MemoryConflict } from '../store/port/conflicts.js';
+export type { SessionEventInput, SnapshotInput } from '../store/port/sessions.js';
+export type { StatusCounts, StrengthTallies } from '../store/port/reports.js';
+export type { LegacyStats } from '../store/port/reports.js';
+export type { TokenSummary } from '../store/port/token-ledger.js';
+export type { WorkingMemoryItem } from '../store/port/sessions.js';
+export type { AppliedRejection, LiftedRejection, Rejection, RejectionSource } from '../store/port/rejections.js';
 export type { AmbientTallies } from '../core/ambient.js';
-export type { TokenUse } from '../store/token-ledger.js';
+export type { TokenUse } from '../store/port/token-ledger.js';
 export type { PhysicsParticle } from '../core/physics.js';
 // An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root in the options.
 export { physicsSearch } from './folder-search.js';

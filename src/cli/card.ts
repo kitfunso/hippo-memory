@@ -4,7 +4,7 @@ import * as cardsApi from '../api/objects/cards.js';
 import { cliApiContext } from './api-context.js';
 import { isHandoffOutcome } from '../core/handoff.js';
 import { type Card, isCardStatus } from '../core/card.js';
-import type { CardDetail } from '../store/card-detail.js';
+import type { CardDetail } from '../store/port/cards.js';
 import { printError } from './output.js';
 import { type CliFlags, repeatedFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';

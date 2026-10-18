@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { type TaskSnapshot } from '../store/rows.js';
+import type { TaskSnapshot } from '../store/port/sessions.js';
 import { isInitialized } from '../core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
 import type { LocalFiles, Sync } from '../store/port.js';

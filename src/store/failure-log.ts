@@ -4,6 +4,7 @@ import type { DatabaseSyncLike } from '../db/index.js';
 import { DAY_MS } from '../util/time.js';
 import type { FailureEvent, FailureOutcome } from './port/failure-log.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../core/failure-log-retention.js';
+import type { FailureSummary } from './port/failure-log.js';
 
 /** Longest session id or tool name kept; the hook payload is not trusted to be short. */
 const MAX_FIELD = 128;
@@ -102,18 +103,6 @@ export function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceI
     bySession.set(row.session_id, { ...s, failures: s.failures + 1, repeats: s.repeats + (repeat ? 1 : 0) });
   }
   return [...bySession.values()];
-}
-
-/** Failure log totals over a window, for {@link summarizeFailures}. Counts only: a rate needs a holdout arm. */
-export interface FailureSummary {
-  /** ISO start of the window (inclusive). */
-  since: string;
-  outcomes: Record<FailureOutcome, number>;
-  total: number;
-  /** Rated failures from sessions with an id: the failures a repeat is counted among. */
-  rated: number;
-  repeats: number;
-  sessions: number;
 }
 
 /** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */

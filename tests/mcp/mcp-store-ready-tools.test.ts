@@ -11,7 +11,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { predictionMirror } from '../../src/store/predictions.js';
+import { predictionMirror } from '../../src/core/prediction.js';
 import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
