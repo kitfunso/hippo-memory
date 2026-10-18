@@ -12,16 +12,16 @@ import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/s
 import { learn, CLI_LEARN } from '../api/index.js';
 import { cliApiContext, cliInitGlobal, cliLocalFiles } from './api-context.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
+import { fail } from './exit.js';
 import { printError } from './output.js';
 import type { CliFlags } from './flag-values.js';
 
 export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
-    printError(
+    fail(
       `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run ` +
         `\`hippo init\` first.`,
     );
-    process.exit(1);
   }
 }
 
