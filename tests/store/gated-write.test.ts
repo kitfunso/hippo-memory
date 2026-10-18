@@ -127,15 +127,15 @@ describe('capture on the shared gated write', () => {
     'Gotcha: the staging cache must be flushed after every deploy of the search service.',
   ].join('\n');
 
-  function capture(input: string) {
+  async function capture(input: string) {
     const file = path.join(s.dir, 'input.txt');
     fs.writeFileSync(file, input);
-    return runHippo(['capture', '--file', file], s.proj, s.env);
+    return await runHippo(['capture', '--file', file], s.proj, s.env);
   }
 
-  it('writes every extracted item, mirrors each one, and stamps the store origin', () => {
-    initProject(s);
-    const result = capture(text);
+  it('writes every extracted item, mirrors each one, and stamps the store origin', async () => {
+    await initProject(s);
+    const result = await capture(text);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Captured 3 items (0 skipped as duplicates)');
     const rows = loadAllEntries(s.hippoRoot, 'default');
@@ -144,13 +144,13 @@ describe('capture on the shared gated write', () => {
     expect(fs.readdirSync(path.join(s.hippoRoot, 'episodic')).sort()).toEqual(rows.map((r) => `${r.id}.md`).sort());
   });
 
-  it('counts a rejected item, still writes the rest, and skips a repeat on the next run', () => {
-    initProject(s);
+  it('counts a rejected item, still writes the rest, and skips a repeat on the next run', async () => {
+    await initProject(s);
     const items = extractFromTexts([text]);
     expect(items).toHaveLength(3);
     reject(items[1]!.content);
 
-    const first = capture(text);
+    const first = await capture(text);
     expect(first.status).toBe(0);
     expect(first.stdout).toContain('Captured 2 items (0 skipped as duplicates, 1 rejected)');
     const contents = loadAllEntries(s.hippoRoot, 'default')
@@ -159,7 +159,7 @@ describe('capture on the shared gated write', () => {
     expect(contents).toEqual([items[0]!.content, items[2]!.content].sort());
     expect(fs.readdirSync(path.join(s.hippoRoot, 'episodic'))).toHaveLength(2);
 
-    const second = capture(text);
+    const second = await capture(text);
     expect(second.stdout).toContain('Captured 0 items (2 skipped as duplicates, 1 rejected)');
     expect(loadAllEntries(s.hippoRoot, 'default')).toHaveLength(2);
   });

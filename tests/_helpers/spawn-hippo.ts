@@ -1,8 +1,6 @@
 // One place that spawns bin/hippo.js for tests, so a test file states its cwd, env and input and nothing else.
 import { execFileSync, spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { resolve } from 'node:path';
-
-export const HIPPO_BIN = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
+import { HIPPO_BIN } from './hippo-bin.js';
 
 export interface HippoSpawnOptions {
   readonly cwd?: string;

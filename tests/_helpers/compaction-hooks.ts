@@ -1,12 +1,11 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { type SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { COMPACTION_MEMORY_TAG } from '../../src/core/memory.js';
-import { hippoRun } from './spawn-hippo.js';
 import { runCliAs } from './run-cli-as.js';
+import type { InProcessResult } from './run-in-process.js';
 const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 
 export interface Scratch {
@@ -38,12 +37,12 @@ export function runHippo(
   cwd: string,
   env: NodeJS.ProcessEnv,
   input?: string,
-): SpawnSyncReturns<string> {
-  return hippoRun(args, { cwd, env, input });
+): Promise<InProcessResult> {
+  return runCliAs(args, { cwd, env, input });
 }
 
-export function initProject(s: Scratch): void {
-  expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], s.proj, s.env).status).toBe(0);
+export async function initProject(s: Scratch): Promise<void> {
+  expect((await runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], s.proj, s.env)).status).toBe(0);
 }
 
 export async function initGlobal(s: Scratch): Promise<void> {

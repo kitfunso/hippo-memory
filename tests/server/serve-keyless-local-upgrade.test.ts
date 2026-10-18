@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
-import { HIPPO_BIN, hippoOut, hippoRun } from '../_helpers/spawn-hippo.js';
+import { HIPPO_BIN } from '../_helpers/hippo-bin.js';
+import { hippoOut, hippoRun } from '../_helpers/spawn-hippo.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH', 'HIPPO_API_KEY'];

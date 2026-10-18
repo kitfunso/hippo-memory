@@ -3,6 +3,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
 import { PROCESS_TESTS } from './tests/_process-tests.js';
+import { SERVER_TESTS } from './tests/_server-tests.js';
 
 // Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
 process.env.HIPPO_TEST_REAL_TMP ??= tmpdir();
@@ -48,15 +49,17 @@ export const EVAL_TESTS = [
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const UNIT_MS = 5_000;
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
-export { PROCESS_TESTS };
+export { PROCESS_TESTS, SERVER_TESTS };
 
 export default defineConfig({
   test: {
-    // A test that starts a process waits on the operating system and keeps 30 s; the rest get UNIT_MS. tests/process-tests-list.test.ts fails when the list goes stale.
+    // A test that starts a child process, the HTTP server or a worker thread waits on the operating system and keeps 30 s; the rest get UNIT_MS.
+    // tests/process-tests-list.test.ts fails when either list goes stale.
     // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
     projects: [
-      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_TESTS], testTimeout: UNIT_MS, hookTimeout: Math.max(UNIT_MS, 10_000) } },
+      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_TESTS, ...SERVER_TESTS], testTimeout: UNIT_MS, hookTimeout: Math.max(UNIT_MS, 10_000) } },
       { extends: true, test: { name: 'process', include: PROCESS_TESTS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
+      { extends: true, test: { name: 'server', include: SERVER_TESTS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
     ],
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);

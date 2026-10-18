@@ -8,10 +8,11 @@ import { openHippoDb, closeHippoDb, getHippoDbPath, HOOK_DB_WAIT_MS } from '../.
 import { readDeliveryEvents, type DeliveryEventRow } from '../_helpers/delivery-events.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { runCli } from '../../src/cli.js';
-import { compactionRows, runHippo } from '../_helpers/compaction-hooks.js';
+import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
+import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import {
@@ -27,6 +28,8 @@ import {
 import { loadActiveTaskSnapshot, loadAllEntries, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 
+const runHippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
+  hippoRun(args, { cwd, env, input });
 const CONTEXT_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'copilot'];
 const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth/retry.ts';
 const GLOBAL_PIN = 'Global pin: prefer small pull requests over large ones';

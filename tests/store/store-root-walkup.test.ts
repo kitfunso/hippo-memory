@@ -4,8 +4,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execFileSync, spawnSync } from 'child_process';
-import { fileURLToPath } from 'url';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
@@ -13,6 +11,7 @@ import { adminActor, retrieve } from '../../src/api/index.js';
 import { findHippoStoreDir, getHippoRoot, isInitialized } from '../../src/core/project-identity.js';
 import { findHippoRoot } from '../../src/mcp/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { runCliAs, runCliOut } from '../_helpers/run-cli-as.js';
 import {
   loadLastRecall,
   writeEntry,
@@ -26,9 +25,6 @@ import { initStore } from '../../src/store/sqlite/handles.js';
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const hippoBin = path.join(repoRoot, 'bin', 'hippo.js');
 
 let tmpRoot: string;
 let home: string;
@@ -150,17 +146,17 @@ describe('CLI end to end', () => {
       content: 'Foreign global event trail',
       source: 'test',
     });
-    const opts = { cwd: work, env: { ...process.env, HIPPO_HOME: globalStore }, encoding: 'utf-8' as const };
+    const opts = { cwd: work, env: { ...process.env, HIPPO_HOME: globalStore } };
 
-    const recall = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--json'], opts));
+    const recall = JSON.parse(await runCliOut(['recall', 'projectless-orbit', '--json'], opts));
     expect(recall.results.map((r: { id: string }) => r.id)).toContain(entry.id);
     expect(recall.suppressionSummary.totalCandidates).toBe(1);
     for (const query of ['projectless-orbit', 'absentxylophonezzq']) {
-      const packet = JSON.parse(execFileSync('node', [hippoBin, 'recall', query, '--continuity', '--json'], opts));
+      const packet = JSON.parse(await runCliOut(['recall', query, '--continuity', '--json'], opts));
       expect(packet.continuity).toEqual({ activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] });
       expect(packet.results.map((r: { id: string }) => r.id)).toEqual(query === 'projectless-orbit' ? [entry.id] : []);
     }
-    const autoContext = execFileSync('node', [hippoBin, 'context', '--auto'], opts);
+    const autoContext = await runCliOut(['context', '--auto'], opts);
     expect(autoContext).toContain(entry.content);
     expect(autoContext).not.toContain('Foreign global handoff summary');
     expect(autoContext).not.toContain('Foreign global snapshot summary');
@@ -171,7 +167,7 @@ describe('CLI end to end', () => {
     const beforeDb = openHippoDb(globalStore);
     const priorTraces = beforeDb.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all().length;
     closeHippoDb(beforeDb);
-    const queriedContext = execFileSync('node', [hippoBin, 'context', 'projectless-orbit'], opts);
+    const queriedContext = await runCliOut(['context', 'projectless-orbit'], opts);
     expect(queriedContext).toContain(entry.content);
     expect(queriedContext).not.toContain('Foreign global handoff summary');
     expect(queriedContext).not.toContain('Foreign global snapshot summary');
@@ -191,7 +187,7 @@ describe('CLI end to end', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(execFileSync('node', [hippoBin, 'context', 'absentxylophonezzq'], opts)).toBe('');
+    expect(await runCliOut(['context', 'absentxylophonezzq'], opts)).toBe('');
     const missedDb = openHippoDb(globalStore);
     try {
       const audits = queryAuditEvents(missedDb, { tenantId: 'default', op: 'recall' }).filter(
@@ -209,11 +205,9 @@ describe('CLI end to end', () => {
     }
     expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
     expect(fs.existsSync(path.join(work, '.hippo'))).toBe(false);
-    const contextJson = JSON.parse(
-      execFileSync('node', [hippoBin, 'context', 'projectless-orbit', '--format', 'json'], opts),
-    );
+    const contextJson = JSON.parse(await runCliOut(['context', 'projectless-orbit', '--format', 'json'], opts));
     expect(contextJson.memories[0].global).toBe(true);
-    const why = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--why', '--json'], opts));
+    const why = JSON.parse(await runCliOut(['recall', 'projectless-orbit', '--why', '--json'], opts));
     expect(why.results[0].source).toBe('global');
     vi.stubEnv('HIPPO_HOME', globalStore);
     const direct = await retrieve(apiCtx(globalStore, 'default', adminActor('test')), {
@@ -226,35 +220,26 @@ describe('CLI end to end', () => {
     expect(direct.results.map((r) => r.id)).toContain(entry.id);
   });
 
-  it('recall from <proj>/src finds the project store and creates no nested one', () => {
+  it('recall from <proj>/src finds the project store and creates no nested one', async () => {
     const globalStore = mkdirs('global-store');
     const env = { ...process.env, HIPPO_HOME: globalStore };
     const proj = mkdirs('home', 'proj');
     const src = mkdirs('home', 'proj', 'src');
-    const cliOpts = { env, encoding: 'utf-8' as const };
-
-    execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: proj, ...cliOpts });
-    execFileSync('node', [hippoBin, 'remember', 'walkup-target zeta fact'], { cwd: proj, ...cliOpts });
-    const out = execFileSync('node', [hippoBin, 'recall', 'walkup-target'], { cwd: src, ...cliOpts });
+    await runCliOut(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: proj, env });
+    await runCliOut(['remember', 'walkup-target zeta fact'], { cwd: proj, env });
+    const out = await runCliOut(['recall', 'walkup-target'], { cwd: src, env });
     expect(out).toContain('walkup-target');
     expect(fs.existsSync(path.join(src, '.hippo'))).toBe(false);
 
-    const again = execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-      cwd: src,
-      ...cliOpts,
-    });
+    const again = await runCliOut(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: src, env });
     expect(again).toContain('Already initialized at');
     expect(fs.existsSync(path.join(src, '.hippo'))).toBe(false);
   });
 
-  it('a directory with no store anywhere up to home still fails, naming both paths', () => {
+  it('a directory with no store anywhere up to home still fails, naming both paths', async () => {
     const globalStore = mkdirs('global-store');
     const lone = mkdirs('lone');
-    const res = spawnSync('node', [hippoBin, 'recall', 'anything'], {
-      cwd: lone,
-      env: { ...process.env, HIPPO_HOME: globalStore },
-      encoding: 'utf-8',
-    });
+    const res = await runCliAs(['recall', 'anything'], { cwd: lone, env: { ...process.env, HIPPO_HOME: globalStore } });
     expect(res.status).not.toBe(0);
     expect(res.stderr).toContain('No hippo store at');
     expect(res.stderr).toContain(path.join(lone, '.hippo'));
@@ -264,11 +249,7 @@ describe('CLI end to end', () => {
       ['context', '--auto'],
       ['context', 'anything'],
     ]) {
-      const context = spawnSync('node', [hippoBin, ...args], {
-        cwd: lone,
-        env: { ...process.env, HIPPO_HOME: globalStore },
-        encoding: 'utf-8',
-      });
+      const context = await runCliAs(args, { cwd: lone, env: { ...process.env, HIPPO_HOME: globalStore } });
       expect(context.status).not.toBe(0);
       expect(context.stderr).toContain('No hippo store at');
     }

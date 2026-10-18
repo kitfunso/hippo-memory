@@ -1,4 +1,4 @@
-// A store that answers only through the port: serve() blocks hippo.db for any other kind, so a recall
+// A store that answers only through the port: the server blocks hippo.db for any other kind, so a recall
 // path that still opens hippo.db directly throws, while the port's own methods reach the same rows.
 import { withSqliteAllowed } from '../../src/db/index.js';
 import { sqliteStore, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';

@@ -1,9 +1,7 @@
 // A hippo root holding the other-store marker refuses every hippo.db open, from the CLI as from a request, and never creates the file.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import {
   closeHippoDb,
   type DatabaseSyncLike,
@@ -19,10 +17,9 @@ import { PROTECTED_ROWS as repairProtection } from '../../src/core/memory-audit.
 import * as serverEntry from '../../src/server.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
 import { repairAutomaticMemories } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
-
-const CLI = join(dirname(dirname(dirname(fileURLToPath(import.meta.url)))), 'dist', 'cli.js');
 
 let root: string;
 let marker: string;
@@ -138,14 +135,10 @@ describe('the other-store marker', () => {
     expect(existsSync(join(root, 'backups'))).toBe(false);
   });
 
-  it('hippo auth create on the marked folder exits 1 with the message and mints into no hippo.db', () => {
+  it('hippo auth create on the marked folder exits 1 with the message and mints into no hippo.db', async () => {
     writeFileSync(marker, 'postgres\n');
     const cwd = makeRoot('marker-cwd', { init: false });
-    const run = spawnSync(process.execPath, [CLI, 'auth', 'create', '--global'], {
-      cwd,
-      encoding: 'utf8',
-      env: { ...process.env, HIPPO_HOME: root },
-    });
+    const run = await runCliAs(['auth', 'create', '--global'], { cwd, env: { ...process.env, HIPPO_HOME: root } });
     expect(run.status).toBe(1);
     expect(run.stderr).toContain(`This folder's memories live in the 'postgres' store, so hippo.db is not used here`);
     expect(run.stdout).not.toContain('plaintext');

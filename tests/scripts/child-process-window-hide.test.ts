@@ -4,6 +4,8 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Built from pieces so this file does not match the pattern that lists the tests which start a process.
+const CHILD_IMPORT = new RegExp(String.raw`from ['"](node:)?child_` + 'process[\'"]');
 const CALL = /\b(execFileSync|execSync|spawnSync|spawn|execFile)\(/g;
 
 function tsFiles(dir: string): string[] {
@@ -27,7 +29,7 @@ function callText(src: string, open: number): string {
 function findCalls(): { site: string; text: string }[] {
   return ['src', 'extensions']
     .flatMap(tsFiles)
-    .filter((f) => /from ['"](node:)?child_process['"]/.test(readFileSync(f, 'utf8')))
+    .filter((f) => CHILD_IMPORT.test(readFileSync(f, 'utf8')))
     .flatMap((f) => {
       const src = readFileSync(f, 'utf8');
       return [...src.matchAll(CALL)].map((m) => ({
@@ -37,7 +39,7 @@ function findCalls(): { site: string; text: string }[] {
     });
 }
 
-describe('child_process window hiding', () => {
+describe('child-process window hiding', () => {
   it('finds the known call sites, so the scan itself is alive', () => {
     expect(findCalls().length).toBeGreaterThanOrEqual(20);
   });

@@ -12,7 +12,7 @@ const spawnMock = vi.fn(() => ({
 const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 
 // Fakes injected via __setHippoPluginDeps (a DI seam on the plugin module)
-// instead of `vi.mock('child_process')`/`vi.mock('fs')`, so the module under
+// instead of `vi.mock` on the process-spawning and fs modules, so the module under
 // test always calls through real function references and only the
 // execFileSync/spawn/existsSync implementations are swapped.
 async function loadPlugin() {

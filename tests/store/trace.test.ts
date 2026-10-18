@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { createMemory } from '../../src/core/memory.js';
 import { renderTraceContent, parseSteps } from '../../src/consolidate/trace.js';
-import { hippoOut } from '../_helpers/spawn-hippo.js';
+import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { listSessionEvents, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
@@ -15,15 +15,15 @@ beforeEach(() => {
   hippoDir = path.join(tmpDir, '.hippo');
 });
 
-function runHippo(args: string[]): string {
+async function runHippo(args: string[]): Promise<string> {
   const globalDir = path.join(tmpDir, 'global');
-  return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
+  return await runCliOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
 }
 
 describe('hippo session complete', () => {
-  it('writes a session_complete event with outcome + summary', () => {
+  it('writes a session_complete event with outcome + summary', async () => {
     initStore(hippoDir);
-    runHippo([
+    await runHippo([
       'session',
       'complete',
       '--session',
@@ -41,9 +41,9 @@ describe('hippo session complete', () => {
     expect(complete!.metadata.summary).toBe('refactored auth module');
   });
 
-  it('rejects invalid outcomes', () => {
+  it('rejects invalid outcomes', async () => {
     initStore(hippoDir);
-    expect(() => runHippo(['session', 'complete', '--session', 'sess-x', '--outcome', 'not-real'])).toThrow();
+    await expect(runHippo(['session', 'complete', '--session', 'sess-x', '--outcome', 'not-real'])).rejects.toThrow();
   });
 });
 
@@ -94,10 +94,10 @@ describe('parseSteps', () => {
 });
 
 describe('hippo trace record', () => {
-  it('creates a Trace-layer memory with outcome + steps', () => {
+  it('creates a Trace-layer memory with outcome + steps', async () => {
     initStore(hippoDir);
 
-    runHippo([
+    await runHippo([
       'trace',
       'record',
       '--task',
@@ -120,9 +120,9 @@ describe('hippo trace record', () => {
     expect(traces[0].content).toContain('test passed');
   });
 
-  it('rejects invalid outcome values', () => {
+  it('rejects invalid outcome values', async () => {
     initStore(hippoDir);
-    expect(() =>
+    await expect(
       runHippo([
         'trace',
         'record',
@@ -133,12 +133,12 @@ describe('hippo trace record', () => {
         '--outcome',
         'not-real',
       ]),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });
 
 describe('hippo trace <id>', () => {
-  it('shows the half-life the memory decays on, not one recomputed from a 7-day base', () => {
+  it('shows the half-life the memory decays on, not one recomputed from a 7-day base', async () => {
     initStore(hippoDir);
     // 123 days is no base times a write-time multiplier, like a half-life that recalls stretched.
     const entry = {
@@ -148,22 +148,22 @@ describe('hippo trace <id>', () => {
     writeEntry(hippoDir, entry);
 
     // SAFETY: cmdTrace --json prints these numeric fields (src/cli.ts cmdTrace).
-    const json = JSON.parse(runHippo(['trace', entry.id, '--json'])) as {
+    const json = JSON.parse(await runHippo(['trace', entry.id, '--json'])) as {
       half_life_days: number;
       reward_factor: number;
       effective_half_life_days: number;
     };
     expect(json.half_life_days).toBe(123);
     expect(json.effective_half_life_days).toBeCloseTo(123 * json.reward_factor, 9);
-    expect(runHippo(['trace', entry.id])).toContain('half-life:  123.0d (stored)');
+    expect(await runHippo(['trace', entry.id])).toContain('half-life:  123.0d (stored)');
   });
 });
 
 describe('hippo recall --outcome filter', () => {
-  it('returns only successful traces when --outcome success is set', () => {
+  it('returns only successful traces when --outcome success is set', async () => {
     initStore(hippoDir);
     for (const outcome of ['success', 'failure'] as const) {
-      runHippo([
+      await runHippo([
         'trace',
         'record',
         '--task',
@@ -175,7 +175,7 @@ describe('hippo recall --outcome filter', () => {
       ]);
     }
 
-    const out = runHippo(['recall', 'refactor auth', '--outcome', 'success', '--json', '--why']);
+    const out = await runHippo(['recall', 'refactor auth', '--outcome', 'success', '--json', '--why']);
     const parsed = JSON.parse(out);
     expect(parsed.results).toHaveLength(1);
     for (const r of parsed.results) {
@@ -189,10 +189,10 @@ describe('hippo recall --outcome filter', () => {
     expect(allText).not.toContain('refactor auth module (failure)');
   });
 
-  it('does NOT filter non-trace entries by --outcome', () => {
+  it('does NOT filter non-trace entries by --outcome', async () => {
     initStore(hippoDir);
     // Record a failure trace
-    runHippo([
+    await runHippo([
       'trace',
       'record',
       '--task',
@@ -203,9 +203,9 @@ describe('hippo recall --outcome filter', () => {
       'failure',
     ]);
     // Remember a regular episodic memory that shares some text
-    runHippo(['remember', 'database connector patch applied successfully to staging']);
+    await runHippo(['remember', 'database connector patch applied successfully to staging']);
 
-    const out = runHippo(['recall', 'database connector patch', '--outcome', 'success', '--json']);
+    const out = await runHippo(['recall', 'database connector patch', '--outcome', 'success', '--json']);
     const parsed = JSON.parse(out);
     // The failure trace must be dropped; the episodic memory must survive.
     const allText = JSON.stringify(parsed);

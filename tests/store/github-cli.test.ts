@@ -1,16 +1,14 @@
 /**
  * Tests for `hippo github` CLI subcommands (Task 15).
  *
- * Strategy: subprocess via execFileSync (mirrors tests/connectors/slack-cli.test.ts) for
+ * Strategy: runCliAs (mirrors tests/connectors/slack-cli.test.ts) for
  * end-to-end argv/exit-code behaviour. The backfill happy paths call
  * handleGitHub in-process against a stubbed global fetch, so no request reaches GitHub. src/cli/github.ts is intentionally kept side-effect
  * free so it can be imported in-process.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { parkInDlq } from '../../src/connectors/dlq.js';
 import { githubDlq } from '../../src/connectors/github/dlq.js';
@@ -18,39 +16,11 @@ import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../..
 import type { JsonValue } from '../../src/util/json.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
-const CLI = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
-
-interface ExecError extends Error {
-  status?: number;
-  stdout?: string | Buffer;
-  stderr?: string | Buffer;
-}
-
 function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
-  if (!existsSync(CLI)) {
-    throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
-  }
-  try {
-    const stdout = execFileSync('node', [CLI, ...args], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...extraEnv },
-    });
-    return { stdout, stderr: '', status: 0 };
-  } catch (e) {
-    // SAFETY: execFileSync throws a Node child_process error augmented with
-    // status/stdout/stderr (per Node's ExecFileSyncError docs); ExecError
-    // models that exact shape.
-    const err = e as ExecError;
-    return {
-      stdout: err.stdout?.toString() ?? '',
-      stderr: err.stderr?.toString() ?? '',
-      status: err.status ?? 1,
-    };
-  }
+  return runCliAs(args, { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...extraEnv } });
 }
 
 /** Every GitHub list call answers one 200 page with no next link: `issues` on the issues stream, empty elsewhere. */
@@ -77,34 +47,18 @@ describe('hippo github CLI', () => {
     vi.unstubAllEnvs();
   });
 
-  it('backfill without --repo exits 2 with usage', () => {
-    const r = runCli(root, ['github', 'backfill'], { GITHUB_TOKEN: 'x' });
+  it('backfill without --repo exits 2 with usage', async () => {
+    const r = await runCli(root, ['github', 'backfill'], { GITHUB_TOKEN: 'x' });
     expect(r.status).toBe(2);
     const out = r.stdout + r.stderr;
     expect(out).toMatch(/--repo/);
     expect(out).toMatch(/owner\/name/);
   });
 
-  it('backfill --repo without GITHUB_TOKEN exits 2 with actionable error', () => {
+  it('backfill --repo without GITHUB_TOKEN exits 2 with actionable error', async () => {
     const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
     delete env.GITHUB_TOKEN;
-    let status = 0;
-    let stderr = '';
-    try {
-      execFileSync('node', [CLI, 'github', 'backfill', '--repo', 'a/b'], {
-        cwd: root,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env,
-      });
-    } catch (e) {
-      // SAFETY: execFileSync throws a Node child_process error augmented
-      // with status/stdout/stderr (per Node's ExecFileSyncError docs);
-      // ExecError models that exact shape.
-      const err = e as ExecError;
-      status = err.status ?? 1;
-      stderr = err.stderr?.toString() ?? '';
-    }
+    const { status, stderr } = await runCliAs(['github', 'backfill', '--repo', 'a/b'], { cwd: root, env });
     expect(status).toBe(2);
     expect(stderr).toMatch(/GITHUB_TOKEN/);
   });
@@ -145,8 +99,8 @@ describe('hippo github CLI', () => {
     expect(all.map((e) => e.content)).toEqual(['hello\n\nworld']);
   });
 
-  it('dlq list on empty DLQ prints "no entries"', () => {
-    const r = runCli(root, ['github', 'dlq', 'list']);
+  it('dlq list on empty DLQ prints "no entries"', async () => {
+    const r = await runCli(root, ['github', 'dlq', 'list']);
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/no entries/);
   });
@@ -159,7 +113,7 @@ describe('hippo github CLI', () => {
       bucket: 'unhandled',
       eventName: 'issues',
     });
-    const r = runCli(root, ['github', 'dlq', 'list']);
+    const r = await runCli(root, ['github', 'dlq', 'list']);
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/unhandled/);
     expect(r.stdout).toMatch(/default/);
@@ -175,14 +129,14 @@ describe('hippo github CLI', () => {
         bucket: 'unhandled',
       });
     }
-    const r = runCli(root, ['github', 'dlq', 'list'], { HIPPO_TENANT: 'acme' });
+    const r = await runCli(root, ['github', 'dlq', 'list'], { HIPPO_TENANT: 'acme' });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/err-acme/);
     expect(r.stdout).not.toMatch(/err-default/);
   });
 
-  it('dlq replay with invalid id exits 1 with not-found message', () => {
-    const r = runCli(root, ['github', 'dlq', 'replay', '99999']);
+  it('dlq replay with invalid id exits 1 with not-found message', async () => {
+    const r = await runCli(root, ['github', 'dlq', 'replay', '99999']);
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/not[_ ]found|not found/i);
   });
@@ -242,7 +196,7 @@ describe('hippo github CLI', () => {
   it('dlq replay re-ingests a parked delivery and counts the retry', async () => {
     const id = await parkDelivery('issues', issueOpenedBody);
 
-    const r = replay(id);
+    const r = await replay(id);
 
     expect(r.status).toBe(0);
     const raws = liveRaws('github://acme/repo/issue/42');
@@ -256,17 +210,17 @@ describe('hippo github CLI', () => {
     async (eventName, parent, artifactRef) => {
       const created = await parkDelivery(eventName, commentBody(parent, 'created'));
       const deleted = await parkDelivery(eventName, commentBody(parent, 'deleted'));
-      expect(replay(created).status).toBe(0);
+      expect((await replay(created)).status).toBe(0);
       expect(liveRaws(artifactRef)).toHaveLength(1);
 
-      const archived = replay(deleted);
+      const archived = await replay(deleted);
       expect(archived.status).toBe(0);
       expect(archived.stdout).toContain('replay ok: status=replayed memory_id=archived retry_count=1');
       expect(liveRaws(artifactRef)).toHaveLength(0);
       expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
 
       // A second replay has nothing left to archive and still stores nothing.
-      const again = replay(deleted);
+      const again = await replay(deleted);
       expect(again.status).toBe(0);
       expect(again.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=2');
       expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
@@ -276,7 +230,7 @@ describe('hippo github CLI', () => {
   it('dlq replay stores nothing when the parked body does not match its event header', async () => {
     const id = await parkDelivery('issues', commentBody(COMMENT_EVENTS[0][1], 'created'));
 
-    const r = replay(id);
+    const r = await replay(id);
 
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=1');
@@ -287,12 +241,12 @@ describe('hippo github CLI', () => {
   it('dlq replay refuses a row signed with another secret, and --force or the previous secret lets it through', async () => {
     const id = await parkDelivery('issues', issueOpenedBody, 'the-secret-before-rotation');
 
-    const refused = replay(id);
+    const refused = await replay(id);
     expect(refused.status).toBe(1);
     expect(refused.stderr).toContain('replay failed: status=sig_fail retry_count=1 reason=signature did not verify');
     expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
 
-    const rotated = runCli(root, ['github', 'dlq', 'replay', String(id)], {
+    const rotated = await runCli(root, ['github', 'dlq', 'replay', String(id)], {
       GITHUB_WEBHOOK_SECRET: SECRET,
       GITHUB_WEBHOOK_SECRET_PREVIOUS: 'the-secret-before-rotation',
     });
@@ -300,7 +254,7 @@ describe('hippo github CLI', () => {
     expect(rotated.stdout).toContain('retry_count=2');
     expect(liveRaws('github://acme/repo/issue/42')).toHaveLength(1);
 
-    const forced = replay(id, '--force');
+    const forced = await replay(id, '--force');
     expect(forced.status).toBe(0);
     expect(forced.stdout).toContain('retry_count=3');
     expect(retryCountOf(id)).toBe(3);
