@@ -1,5 +1,5 @@
-/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering main().
- * The dispatcher in cli.ts re-exports handleGitHub. */
+/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering main(); the verb
+ * table in verbs/health.ts dispatches to handleGitHub. */
 
 import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../util/env.js';
 import { adminActor, type Context } from '../api/index.js';
@@ -17,27 +17,11 @@ import {
   isGitHubPullRequestReviewCommentEvent,
 } from '../connectors/github/types.js';
 import type { JsonValue } from '../util/json.js';
-import type { CommandContext } from './flag-values.js';
+import { isStringFlag, type CliFlags, type CommandContext } from './flag-values.js';
+import { runDlqReplay } from './dlq-replay.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit } from './exit.js';
 import { errorMessage } from '../util/log.js';
-
-type FlagValue = string | boolean | string[];
-type Flags = Record<string, FlagValue>;
-
-function isFlagString(value: FlagValue): value is string {
-  return typeof value === 'string';
-}
-
-// FlagValue never includes `number`, so a `value is number` predicate on it would not type-check; the generic wrapper
-// narrows any type T instead.
-function isNumberLike<T>(value: T): value is T & number {
-  return typeof value === 'number';
-}
-
-function isFlagValueNumberLike(value: FlagValue): boolean {
-  return isNumberLike(value);
-}
 
 /** Map a parsed envelope + eventName header to an IngestEvent;
  * null for unknown event types or shapes failing the type guards. */
@@ -67,19 +51,15 @@ export function printGitHubBackfillUsage(): void {
 }
 
 /** `--max` as a whole positive count; undefined (no cap) when absent or not one. */
-function maxPerStreamFlag(maxRaw: FlagValue): number | undefined {
-  if (isFlagString(maxRaw) || isFlagValueNumberLike(maxRaw)) {
-    const parsed = Number(maxRaw);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return Math.floor(parsed);
-    }
-  }
-  return undefined;
+function maxPerStreamFlag(maxRaw: CliFlags[string] | undefined): number | undefined {
+  if (!isStringFlag(maxRaw)) return undefined;
+  const parsed = Number(maxRaw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
 }
 
-async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Flags): Promise<void> {
+async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const repo = flags['repo'];
-  if (!isFlagString(repo) || !repo.includes('/')) {
+  if (!isStringFlag(repo) || !repo.includes('/')) {
     printGitHubBackfillUsage();
     throw new CliExit(2);
   }
@@ -90,7 +70,7 @@ async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Fla
   }
   const maxPerStream = maxPerStreamFlag(flags['max']);
   const sinceFlag = flags['since'];
-  const sinceIso = isFlagString(sinceFlag) ? sinceFlag : undefined;
+  const sinceIso = isStringFlag(sinceFlag) ? sinceFlag : undefined;
 
   const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
   try {
@@ -108,7 +88,7 @@ async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Fla
   }
 }
 
-export async function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: Flags): Promise<void> {
+export async function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
   const items = await listDlq(githubDlq, cliStore(hippoRoot), { tenantId });
   if (items.length === 0) {
     console.log('no entries');
@@ -178,37 +158,17 @@ export async function cmdGitHubDlqReplay(
   hippoRoot: string,
   tenantId: string,
   args: string[],
-  flags: Flags,
+  flags: CliFlags,
 ): Promise<void> {
-  const idArg = args[0];
-  if (!idArg) {
-    console.error('Usage: hippo github dlq replay <id> [--force]');
-    throw new CliExit(1);
-  }
-  const id = Number(idArg);
-  if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
-    console.error(`replay: invalid id ${idArg}`);
-    throw new CliExit(1);
-  }
-  const force = flags['force'] === true;
   const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
-  const result = await replayDlqEntry(ctx, id, {
-    force,
-    webhookSecret: envGitHubWebhookSecret(),
-    previousSecret: envGitHubWebhookSecretPrevious(),
-    ingestHook: reingestParkedDelivery,
-  });
-  if (!result.ok) {
-    console.error(
-      `replay failed: status=${result.status} retry_count=${result.retryCount}${
-        result.reason ? ` reason=${result.reason}` : ''
-      }`,
-    );
-    throw new CliExit(1);
-  }
-  console.log(
-    `replay ok: status=${result.status} memory_id=${result.memoryId ?? '(none)'} retry_count=${result.retryCount}`,
+  await runDlqReplay('github', args[0], flags, (id, force) =>
+    replayDlqEntry(ctx, id, {
+      force,
+      webhookSecret: envGitHubWebhookSecret(),
+      previousSecret: envGitHubWebhookSecretPrevious(),
+      ingestHook: reingestParkedDelivery,
+    }),
   );
 }
 
