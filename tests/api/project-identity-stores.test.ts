@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { containerId, containerPrefix } from '../../src/agent-memories/source.js';
 import { importAtSessionEnd } from '../../src/agent-memories/sync.js';
 import { saveItems } from '../../src/store/compactions-record.js';
@@ -11,7 +11,7 @@ import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { planProjectRepair } from '../../src/sharing/project-merge.js';
-import { mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from '../../src/api/objects/projects.js';
+import { projectNameMerge, projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { projectTagReads } from '../../src/store/project-tags.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { _resetProjectIdentityCacheForTests, resolveProjectIdentity } from '../../src/core/project-identity.js';
@@ -85,7 +85,7 @@ function compaction(id: string, origin: string, cwd: string): void {
   );
 }
 
-const texts = (r: Awaited<ReturnType<typeof getContext>>): string[] => r.entries.map((e) => e.entry.content);
+const texts = (r: Awaited<ReturnType<typeof contextGet>>): string[] => r.entries.map((e) => e.entry.content);
 const sync = (cwd: string) =>
   importAtSessionEnd(cwd, undefined, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
 const prefixFor = (cwd: string, origin: string): string =>
@@ -110,8 +110,8 @@ describe('two repos named api in one global store', () => {
   it('keeps new rows apart and shows the old rows to both through the legacy name', async () => {
     expect(resolveProjectIdentity(a)).toMatchObject({ name: 'github.com/acme-pay/api', legacyName: 'api' });
     for (const mode of [{ pinnedOnly: true }, { pinnedOnly: false }, { q: 'api' }]) {
-      const inA = texts(await getContext(ctxFor(w.global), { currentProject: resolveProjectIdentity(a), ...mode }));
-      const inB = texts(await getContext(ctxFor(w.global), { currentProject: resolveProjectIdentity(b), ...mode }));
+      const inA = texts(await contextGet(ctxFor(w.global), { currentProject: resolveProjectIdentity(a), ...mode }));
+      const inB = texts(await contextGet(ctxFor(w.global), { currentProject: resolveProjectIdentity(b), ...mode }));
       expect(inA).toEqual(expect.arrayContaining([OLD, NEW_A]));
       expect(inA).not.toContain(NEW_B);
       expect(inB).toEqual(expect.arrayContaining([OLD, NEW_B]));
@@ -278,7 +278,7 @@ describe('the upgrade re-sync', () => {
           .run(T, api, transcript, new Date().toISOString()),
       );
 
-      const r = repairProjectNames(cliApiContext(w.global, T), { dryRun: false });
+      const r = projectNameRepair(cliApiContext(w.global, T), { dryRun: false });
       expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
       expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
       expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).copies).toEqual([]);
@@ -296,7 +296,7 @@ describe('the upgrade re-sync', () => {
       sync(svc);
       writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
       _resetProjectIdentityCacheForTests();
-      const merged = mergeProjectNames(cliApiContext(w.global, T), { from: 'old-svc', into: 'new-svc', dryRun: false });
+      const merged = projectNameMerge(cliApiContext(w.global, T), { from: 'old-svc', into: 'new-svc', dryRun: false });
       expect(merged.setAside).toEqual([]);
 
       expect(toolTally(sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
@@ -316,7 +316,7 @@ describe('a project store with an id', () => {
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('svc');
 
-    const r = repairProjectNames(cliApiContext(store, T), { dryRun: false });
+    const r = projectNameRepair(cliApiContext(store, T), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
     expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
     expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([]);
@@ -345,11 +345,11 @@ describe('repair on sleep', () => {
     const store = join(svc, '.hippo');
     initStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
-    const first = repairProjectNamesOnce(cliApiContext(store, T));
+    const first = projectNameRepairOnce(cliApiContext(store, T));
     expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
     expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
     pinned(store, 'A later row under the old name.', 'svc');
-    expect(repairProjectNamesOnce(cliApiContext(store, T))).toBeNull();
+    expect(projectNameRepairOnce(cliApiContext(store, T))).toBeNull();
   });
 
   it('leaves global folds to the manual repair, since a same-named repo may never have compacted', () => {
@@ -357,7 +357,7 @@ describe('repair on sleep', () => {
     const a = checkout('git@github.com:acme-pay/api.git', 'pay', 'api');
     pinned(w.global, 'OLD-API rows under the folder name.', 'api');
     compaction('c-a', 'api', a);
-    expect(repairProjectNamesOnce(cliApiContext(w.global, T))).toBeNull();
+    expect(projectNameRepairOnce(cliApiContext(w.global, T))).toBeNull();
     expect(loadAllEntries(w.global, 'default').map((e) => e.origin_project)).toEqual(['api']);
     expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).folds).toEqual([
       { from: 'api', into: 'github.com/acme-pay/api' },

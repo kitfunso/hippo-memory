@@ -7,7 +7,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { resolveMemoryConflict } from '../../src/api/index.js';
+import { conflictResolve } from '../../src/api/index.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/core/api-errors.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -51,7 +51,7 @@ function seedConflict() {
 }
 
 const resolve = (conflictId: number, keepId: string, opts: { forget?: boolean; tenantId?: string } = {}) =>
-  resolveMemoryConflict(apiCtx(tmpDir, opts.tenantId ?? 'default'), conflictId, { keepId, forget: opts.forget });
+  conflictResolve(apiCtx(tmpDir, opts.tenantId ?? 'default'), conflictId, { keepId, forget: opts.forget });
 
 describe('resolveConflict', () => {
   it('resolves conflict and weakens the loser (default)', async () => {

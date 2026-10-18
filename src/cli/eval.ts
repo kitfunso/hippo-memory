@@ -3,7 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MemoryEntry } from '../core/memory.js';
-import { listMemories } from '../api/memories/memories.js';
+import { memoryList } from '../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { isInitialized } from '../core/project-identity.js';
@@ -41,7 +41,7 @@ async function cmdEval(hippoRoot: string, tenantId: string, corpusPath: string |
   // Suite mode doesn't need an initialized store
   if (!flags['suite']) requireInit(hippoRoot);
 
-  const entries = flags['suite'] ? [] : await listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
+  const entries = flags['suite'] ? [] : await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
 
   if (flags['bootstrap']) {
     writeBootstrapCorpus(entries, flags);

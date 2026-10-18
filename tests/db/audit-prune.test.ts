@@ -1,5 +1,5 @@
 /**
- * Unit tests for pruneAuditLog (v1.12.9).
+ * Unit tests for auditPrune (v1.12.9).
  *
  * Real-DB per project rule.
  */
@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { parseOlderThanFlag } from '../../src/cli/audit-prune.js';
-import { pruneAuditLog, computeCutoff } from '../../src/api/auth/audit.js';
+import { auditPrune, computeCutoff } from '../../src/api/auth/audit.js';
 import { adminActor } from '../../src/api/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -68,7 +68,7 @@ describe('computeCutoff', () => {
   });
 });
 
-describe('pruneAuditLog', () => {
+describe('auditPrune', () => {
   let root: string;
   let db: DatabaseSyncLike;
 
@@ -88,7 +88,7 @@ describe('pruneAuditLog', () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 1 });
     expect(countAudit(db, 'acme')).toBe(4);
 
-    const result = await pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 90 });
+    const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 90 });
     // 2 rows older than 90 days deleted, 2 rows newer preserved, +1 audit_prune row.
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(false);
@@ -100,7 +100,7 @@ describe('pruneAuditLog', () => {
     seedAuditRow(db, { tenantId: 'globex', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'initech', op: 'recall', daysAgo: 100 });
 
-    const result = await pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 30 });
+    const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 30 });
     expect(result.count).toBe(1);
     expect(countAudit(db, 'acme')).toBe(1); // the audit_prune event
     expect(countAudit(db, 'globex')).toBe(1); // untouched
@@ -111,7 +111,7 @@ describe('pruneAuditLog', () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 95 });
 
-    const result = await pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 90, dryRun: true });
+    const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 90, dryRun: true });
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(true);
     expect(countAudit(db, 'acme')).toBe(2); // nothing deleted, no audit_prune emitted
@@ -120,10 +120,10 @@ describe('pruneAuditLog', () => {
   it('emits an audit_prune row with metadata after a real prune', async () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
 
-    await pruneAuditLog(apiCtx(root, 'acme', adminActor('cli:test')), { olderThanDays: 30 });
+    await auditPrune(apiCtx(root, 'acme', adminActor('cli:test')), { olderThanDays: 30 });
 
     // SAFETY: literal SELECT of these three known columns for the
-    // audit_prune row pruneAuditLog just emitted.
+    // audit_prune row auditPrune just emitted.
     const row = db
       .prepare(`SELECT actor, op, metadata_json FROM audit_log WHERE tenant_id = ? AND op = 'audit_prune'`)
       .get('acme') as { actor: string; op: string; metadata_json: string } | undefined;
@@ -140,26 +140,26 @@ describe('pruneAuditLog', () => {
   it('returns count=0 when nothing matches', async () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 1 });
 
-    const result = await pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 30 });
+    const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 30 });
     expect(result.count).toBe(0);
     // audit_prune row still emitted even for zero-count prunes (full audit trail).
     expect(countAudit(db, 'acme')).toBe(2);
   });
 
   it('throws on non-positive olderThanDays', async () => {
-    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 0 })).rejects.toThrow(
+    await expect(auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 0 })).rejects.toThrow(
       /positive number/,
     );
-    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: -1 })).rejects.toThrow(
+    await expect(auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: -1 })).rejects.toThrow(
       /positive number/,
     );
-    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: NaN })).rejects.toThrow(
+    await expect(auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: NaN })).rejects.toThrow(
       /positive number/,
     );
   });
 
   it('throws on missing tenantId', async () => {
-    await expect(pruneAuditLog(apiCtx(root, '', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow(
+    await expect(auditPrune(apiCtx(root, '', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow(
       /tenantId is required/,
     );
   });
@@ -167,7 +167,7 @@ describe('pruneAuditLog', () => {
   it('the just-emitted audit_prune row is NOT itself pruned by the same call', async () => {
     // Edge case: ensure the audit_prune row's ts > cutoff so it survives.
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
-    await pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 1 });
+    await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 1 });
     // 1 old row deleted, 1 audit_prune row remaining (its ts is now, way newer than cutoff).
     expect(countAudit(db, 'acme')).toBe(1);
     // SAFETY: literal SELECT of the op column against the known audit_log

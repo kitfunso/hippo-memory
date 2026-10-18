@@ -96,7 +96,7 @@ async function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliF
   const dryRun = flagIsTrue(flags, 'dry-run');
   const asJson = boolFlag(flags, 'json');
 
-  const result = await api.pruneAuditLog(cliApiContext(hippoRoot, tenantId), { olderThanDays, dryRun });
+  const result = await api.auditPrune(cliApiContext(hippoRoot, tenantId), { olderThanDays, dryRun });
 
   if (asJson) {
     console.log(JSON.stringify(result));
@@ -126,7 +126,7 @@ async function cmdAuditLog(hippoRoot: string, tenantId: string, args: string[], 
 
 async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
-  const result = await api.repairMemoryQuality(
+  const result = await api.memoryQualityRepair(
     cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId),
     apply,
   );
@@ -173,7 +173,7 @@ async function fixAuditErrors(
     console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
   } else if (errors.length > 0) {
     const ctx = cliApiContext(hippoRoot, tenantId);
-    const removedCount = (await api.removeAuditErrors(ctx, 'audit --fix', errors)).length;
+    const removedCount = (await api.auditRemoveErrors(ctx, 'audit --fix', errors)).length;
     console.log(`\nRemoved ${removedCount} error-severity memories.`);
     console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
   } else {

@@ -322,7 +322,7 @@ proj2: 2 memories (latest: 2026-05-27)"
 exports[`request-path output on a fixed store > mcp hippo_status {} 1`] = `
 "Memories: 76 (4 pinned, 10 errors)
 Avg strength: 0.62
-At risk (<0.1): 10
+At risk (<0.2): 19
 Open conflicts: 0
 Half-life default: 365d"
 `;

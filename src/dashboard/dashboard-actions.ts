@@ -1,7 +1,7 @@
 // The four dashboard writes, each the api call the CLI makes; the router owns HTTP and the cache.
 
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories/memories.js';
+import { memoryGet } from '../api/memories/memories.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
@@ -24,7 +24,7 @@ function notFound(): ActionResult {
 }
 
 async function liveEntry(ctx: api.Context, id: string): Promise<MemoryEntry | null> {
-  const entry = await getMemory(ctx, id);
+  const entry = await memoryGet(ctx, id);
   return entry !== null && isLiveMemory(entry) ? entry : null;
 }
 
@@ -35,7 +35,7 @@ export async function pinMemory(ctx: api.Context, rawId: string, body: ActionBod
   if (pinned === undefined) throw new ParamError('pinned must be true or false');
   if ((await liveEntry(ctx, id)) === null) return notFound();
   try {
-    return { status: 200, body: null, changed: true, entry: await api.pinMemory(ctx, id, pinned) };
+    return { status: 200, body: null, changed: true, entry: await api.memoryPin(ctx, id, pinned) };
   } catch (err) {
     if (err instanceof NotFoundError) return notFound();
     throw err;
@@ -48,7 +48,7 @@ export async function markWrong(ctx: api.Context, rawId: string): Promise<Action
   if ((await liveEntry(ctx, id)) === null) return notFound();
   // outcome() answers `applied: 0` for a missing or out-of-reach id instead of throwing.
   if ((await api.outcome(ctx, [id], false)).applied === 0) return notFound();
-  const entry = await getMemory(ctx, id);
+  const entry = await memoryGet(ctx, id);
   return entry === null ? notFound() : { status: 200, body: null, changed: true, entry };
 }
 
@@ -79,7 +79,7 @@ export async function resolveOpenConflict(
   if (keep === undefined) throw new ParamError('keep must be a memory id');
   parseMemoryId(keep);
   try {
-    const { loserId } = await api.resolveMemoryConflict(ctx, conflictId, { keepId: keep });
+    const { loserId } = await api.conflictResolve(ctx, conflictId, { keepId: keep });
     const result: ResolveResult = { ok: true, conflictId, keptId: keep, weakenedId: loserId };
     return { status: 200, body: result, changed: true };
   } catch (err) {

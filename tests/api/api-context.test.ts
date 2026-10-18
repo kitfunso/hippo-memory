@@ -1,5 +1,5 @@
 /**
- * Runtime tests for api.getContext (Episode A, Task 5).
+ * Runtime tests for api.contextGet (Episode A, Task 5).
  *
  * Coverage:
  *   - empty store -> empty result
@@ -24,7 +24,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import { remember, getContext } from '../../src/api/index.js';
+import { remember, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -35,7 +35,7 @@ afterEach(() => {
 function tmpHome() {
   const home = makeRoot('api-ctx');
   // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir
-  // so hasGlobal=false inside api.getContext. Keeps the test local-only and
+  // so hasGlobal=false inside api.contextGet. Keeps the test local-only and
   // prevents any global writes from leaking into the shared baseline.
   const globalTmp = makeRoot('api-ctx-global', { init: false });
   const origHippoHome = process.env.HIPPO_HOME;
@@ -53,12 +53,12 @@ function tmpHome() {
   };
 }
 
-describe('api.getContext', () => {
+describe('api.contextGet', () => {
   it('returns an empty result on an empty store', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      const result = await getContext(ctx, { currentProject: cwdProject() });
+      const result = await contextGet(ctx, { currentProject: cwdProject() });
       expect(result.entries).toEqual([]);
       expect(result.tokens).toBe(0);
       expect(result.activeSnapshot).toBeFalsy();
@@ -79,7 +79,7 @@ describe('api.getContext', () => {
         });
       }
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 1500 });
+      const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 });
 
       // All five fit the budget; estimateTokens is ceil(chars / 4), so each 25-character text costs 7.
       expect(result.entries).toHaveLength(5);
@@ -100,7 +100,7 @@ describe('api.getContext', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       for (let i = 0; i < 4; i++) await remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 1500, limit: 2 });
+      const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 1500, limit: 2 });
 
       expect(result.entries).toHaveLength(2);
     } finally {
@@ -120,7 +120,7 @@ describe('api.getContext', () => {
         });
       }
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 50 });
+      const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 50 });
 
       expect(result.tokens).toBeLessThanOrEqual(50);
       // At a 50-token budget, only the smallest-or-fewest memories fit
@@ -138,8 +138,8 @@ describe('api.getContext', () => {
       await remember(ctxA, { content: 'belongs-to-tenant-A', kind: 'distilled' });
       await remember(ctxB, { content: 'belongs-to-tenant-B', kind: 'distilled' });
 
-      const resultA = await getContext(ctxA, { currentProject: cwdProject(), budget: 1500 });
-      const resultB = await getContext(ctxB, { currentProject: cwdProject(), budget: 1500 });
+      const resultA = await contextGet(ctxA, { currentProject: cwdProject(), budget: 1500 });
+      const resultB = await contextGet(ctxB, { currentProject: cwdProject(), budget: 1500 });
 
       const idsA = resultA.entries.map((e) => e.entry.content);
       const idsB = resultB.entries.map((e) => e.entry.content);
@@ -158,7 +158,7 @@ describe('api.getContext', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       saveActiveTaskSnapshot(home, ctx.tenantId, {
-        task: 'Test task for api.getContext',
+        task: 'Test task for api.contextGet',
         summary: 'Stub for the activeSnapshot return path',
         next_step: 'Verify result.activeSnapshot is populated',
         source: 'test',
@@ -167,11 +167,11 @@ describe('api.getContext', () => {
       });
       await remember(ctx, { content: 'snapshot-test-mem', kind: 'distilled' });
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 1500 });
+      const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 });
 
       expect(result.activeSnapshot).toBeTruthy();
       expect(result.activeSnapshot?.session_id).toBe('sess-ctxtest');
-      expect(result.activeSnapshot?.task).toBe('Test task for api.getContext');
+      expect(result.activeSnapshot?.task).toBe('Test task for api.contextGet');
     } finally {
       restore();
     }
@@ -183,7 +183,7 @@ describe('api.getContext', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'budget-zero-test', kind: 'distilled' });
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 0 });
+      const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 0 });
 
       expect(result.entries).toEqual([]);
       expect(result.tokens).toBe(0);

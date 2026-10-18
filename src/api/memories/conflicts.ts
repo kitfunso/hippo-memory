@@ -71,13 +71,13 @@ async function touchableConflict(ctx: Context, conflictId: number): Promise<Conf
 }
 
 /** Conflict `conflictId` in the caller's tenant, any status; null when missing or a row of it is out of reach. */
-export async function getConflict(ctx: Context, conflictId: number): Promise<MemoryConflict | null> {
+export async function conflictGet(ctx: Context, conflictId: number): Promise<MemoryConflict | null> {
   return (await touchableConflict(ctx, conflictId))?.conflict ?? null;
 }
 
 /** Keeps `keepId` and weakens, deletes or rejects the other side, auditing as `ctx.actor`. NotFound: missing,
  * untouchable or no longer live. Conflict: already resolved. BadRequest: `keepId` outside the pair. */
-export async function resolveMemoryConflict(
+export async function conflictResolve(
   ctx: Context,
   conflictId: number,
   opts: ResolveMemoryConflictOptions,
@@ -135,7 +135,7 @@ function loserFate(actor: Actor, loser: ConflictSide, opts: ResolveMemoryConflic
 
 /** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:
  *  its repo or user-global, and no scope it was not asked for. */
-export async function listOpenConflicts(
+export async function conflictListOpen(
   ctx: Context,
   opts: ConflictPageOptions & { project?: CallerProject } = {},
 ): Promise<ConflictPage> {
@@ -158,7 +158,7 @@ export async function listOpenConflicts(
 
 /** One page of conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host
  * admin only. */
-export async function listConflicts(
+export async function conflictList(
   ctx: Context,
   status: string,
   reach: TenantReach = {},
@@ -175,7 +175,7 @@ export async function listConflicts(
 }
 
 /** Every conflict a paged list returns, read the largest page at a time, for the verbs that print the whole list. */
-export async function everyConflict(
+export async function conflictListAll(
   read: (page: ConflictPageOptions) => Promise<ConflictPage>,
 ): Promise<MemoryConflict[]> {
   const all: MemoryConflict[] = [];

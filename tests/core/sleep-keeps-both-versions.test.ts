@@ -469,8 +469,8 @@ describe('a retired version leaves the merged row', () => {
     await api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
 
     const out = await hippo(root, 'reject', old.id, '--reason', 'the port moved');
-    const [dormant] = await api.listDormant(ctx(root));
-    const restored = await api.restoreDormant(ctx(root), dormant.id);
+    const [dormant] = await api.dormantList(ctx(root));
+    const restored = await api.dormantRestore(ctx(root), dormant.id);
 
     expect(current(root)).not.toContain(OLD);
     expect(await recalled(root)).not.toContain('port 3000');
@@ -532,7 +532,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('api context', async () => {
     const { root, row } = await mergedStore();
-    const got = await api.getContext(ctx(root), {
+    const got = await api.contextGet(ctx(root), {
       currentProject: cwdProject(),
       q: QUERY,
       budget: 4000,
@@ -601,7 +601,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   const hookContext = async (root: string): Promise<string[]> =>
     (
-      await api.getContext(ctx(root), {
+      await api.contextGet(ctx(root), {
         currentProject: cwdProject(),
         pinnedOnly: true,
         includeRecent: 5,

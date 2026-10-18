@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handoffLatest, sessionEventList, snapshotLoad, workingMemoryRead } from '../../src/api/continuity.js';
-import { listMemories } from '../../src/api/memories/memories.js';
+import { memoryList } from '../../src/api/memories/memories.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { handleHandoff, handleSession, handleSnapshot, handleWm } from '../../src/cli/continuity.js';
 import { handleConflicts, handleOutcome, handleResolve } from '../../src/cli/curate.js';
@@ -30,7 +30,7 @@ async function stored() {
     events: (await sessionEventList(ctx, { limit: 50 })).length,
     handoff: Boolean(await handoffLatest(ctx)),
     working: (await workingMemoryRead(ctx, { limit: 50 })).length,
-    memories: (await listMemories(ctx)).length,
+    memories: (await memoryList(ctx)).length,
   };
 }
 const NOTHING = { snapshot: false, events: 0, handoff: false, working: 0, memories: 0 };
@@ -150,7 +150,7 @@ describe('a text flag with a value', () => {
     expect(trace.stdout).toContain('Recorded trace');
     const remembered = await runInProcess(() => handleRemember(c(['the deploy runs at noon'], { scope: 'team' })));
     expect(remembered.status).toBe(0);
-    expect(await listMemories(cliApiContext(root, 'default'))).toHaveLength(2);
+    expect(await memoryList(cliApiContext(root, 'default'))).toHaveLength(2);
   });
 
   it('export and import read their format and file flags', async () => {

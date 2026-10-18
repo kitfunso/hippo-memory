@@ -390,7 +390,7 @@ describe('cli thin-client mode', () => {
         const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events).toHaveLength(1);
         expect(events[0].actor).toBe('localhost:cli');
-        // The counter lives in api.archiveRaw so the routed path reaches it;
+        // The counter lives in api.rawArchive so the routed path reaches it;
         // when it lived in the CLI, routing an archive silently lost the count.
         expect(getMeta(db2, 'total_forgotten', '0')).toBe('1');
       } finally {

@@ -8,7 +8,7 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
-import { getContext } from '../../src/api/index.js';
+import { contextGet } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
@@ -77,7 +77,7 @@ afterEach(() => {
   _resetAblationCacheForTests();
 });
 
-describe('getContext prompt recall (api-level)', () => {
+describe('contextGet prompt recall (api-level)', () => {
   it('admits a relevant unpinned memory and marks it, excludes a newer irrelevant one', async () => {
     enablePromptRecall(local);
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy', {
@@ -87,7 +87,7 @@ describe('getContext prompt recall (api-level)', () => {
       created: '2026-06-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,
@@ -103,7 +103,7 @@ describe('getContext prompt recall (api-level)', () => {
     enablePromptRecall(local);
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy');
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       currentProject: PROJECT,
       prompt: 'how should the postgres migration rollback plan work',
@@ -120,7 +120,7 @@ describe('getContext prompt recall (api-level)', () => {
       created: '2026-06-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,
@@ -136,7 +136,7 @@ describe('getContext prompt recall (api-level)', () => {
     writeConfig(local, JSON.stringify({ pinnedInject: { promptRecall: 'false' } }));
     seed(local, 'the postgres migration script needs a rollback plan before deploy');
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       currentProject: PROJECT,
       prompt: 'how should the postgres migration rollback plan work',
@@ -149,7 +149,7 @@ describe('getContext prompt recall (api-level)', () => {
     enablePromptRecall(local, { promptRecallCandidates: 1.5 });
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy');
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,
@@ -164,7 +164,7 @@ describe('getContext prompt recall (api-level)', () => {
     const pin = seed(local, 'the pinned decision that always injects', { pinned: true });
     seed(local, 'a totally unrelated row about gardening tips for tomatoes');
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,
@@ -182,8 +182,8 @@ describe('getContext prompt recall (api-level)', () => {
       }),
     );
 
-    const withoutPrompt = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
-    const withPromptFlagOff = await getContext(ctx, {
+    const withoutPrompt = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const withPromptFlagOff = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,
@@ -202,7 +202,7 @@ describe('getContext prompt recall (api-level)', () => {
       }),
     );
 
-    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(new Set(ids(result))).toEqual(new Set(rows.map((r) => r.id)));
   });
@@ -223,7 +223,7 @@ describe('getContext prompt recall (api-level)', () => {
       pinned: true,
     });
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,
@@ -254,7 +254,7 @@ describe('getContext prompt recall (api-level)', () => {
       created: '2026-01-01T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,
@@ -280,7 +280,7 @@ describe('getContext prompt recall (api-level)', () => {
       created: '2026-01-02T00:00:00.000Z',
     });
 
-    const result = await getContext(ctx, {
+    const result = await contextGet(ctx, {
       pinnedOnly: true,
       includeRecent: 5,
       currentProject: PROJECT,

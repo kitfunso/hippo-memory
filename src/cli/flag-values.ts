@@ -66,6 +66,44 @@ export function parseListLimit(flags: CliFlags): number {
   return limit;
 }
 
+/** A flag value, or the deferred error that rejects it. */
+export interface ParsedFlag<T> {
+  value?: T;
+  fail?: () => never;
+}
+
+export function failLater(message: string): () => never {
+  return () => {
+    fail(message);
+  };
+}
+
+/** The whole numbers a flag accepts; without a `max` that is every integer from `min`, which is at least 1. */
+export interface IntRange {
+  readonly min: number;
+  readonly max?: number;
+  readonly example?: string;
+}
+
+/**
+ * A whole-number flag within `range`: {} when absent, else the number or the refusal to raise. A value-less flag is
+ * refused apart from a junk one, because Number(true) is 1 and would quietly run a 1-hop expansion.
+ */
+export function intFlagInRange(flags: CliFlags, name: string, { min, max, example }: IntRange): ParsedFlag<number> {
+  const raw = flags[name];
+  if (raw === undefined) return {};
+  const [noun, bounds] = max === undefined ? ['a positive integer', ''] : ['an integer', ` ${min}..${max}`];
+  if (isBooleanFlag(raw)) {
+    const hint = example === undefined ? '' : ` (e.g. --${name} ${example})`;
+    return { fail: failLater(`--${name} requires ${noun} value${bounds}${hint}.`) };
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > (max ?? Infinity)) {
+    return { fail: failLater(`Invalid --${name}: "${String(raw)}". Must be ${noun}${bounds}.`) };
+  }
+  return { value };
+}
+
 // A value-less flag is `true` and a repeated one is a string[]; only a string counts here.
 export function stringFlag(flags: CliFlags, name: string): string | undefined {
   const v = flags[name];
@@ -87,6 +125,12 @@ export function stringListFlag(flags: CliFlags, name: string): string[] | undefi
         .map((t) => t.trim())
         .filter(Boolean)
     : undefined;
+}
+
+// A repeated flag is a list and a single value a one-item list; unlike stringListFlag it never splits on commas.
+export function repeatedFlag(flags: CliFlags, name: string): string[] {
+  const v = flags[name];
+  return Array.isArray(v) ? v : isStringFlag(v) ? [v] : [];
 }
 
 export function isOneOf<T extends string>(allowed: readonly T[], value: string): value is T {

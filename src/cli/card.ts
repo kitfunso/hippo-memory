@@ -6,7 +6,7 @@ import { isHandoffOutcome } from '../core/handoff.js';
 import { type Card, isCardStatus } from '../core/card.js';
 import type { CardDetail } from '../store/card-detail.js';
 import { printError } from './output.js';
-import { type CliFlags, stringFlagOrExit, type CommandContext } from './flag-values.js';
+import { type CliFlags, repeatedFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit, fail } from './exit.js';
@@ -157,7 +157,7 @@ async function cardCreate(hippoRoot: string, tenantId: string, _args: string[], 
   if (dependsOnFlag === true) {
     fail('--depends-on requires a value');
   }
-  const dependsOn: string[] = Array.isArray(dependsOnFlag) ? dependsOnFlag : [];
+  const dependsOn = repeatedFlag(flags, 'depends-on');
 
   let card: Card;
   try {

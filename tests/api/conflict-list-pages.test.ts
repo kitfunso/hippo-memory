@@ -3,10 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
-  everyConflict,
-  getConflict,
-  listConflicts,
-  listOpenConflicts,
+  conflictListAll,
+  conflictGet,
+  conflictList,
+  conflictListOpen,
   remember,
   type Actor,
   type ConflictPageOptions,
@@ -64,25 +64,25 @@ describe('conflict list pages', () => {
   it('reads 9 conflicts in 3 pages of 3 that join up to the unpaged list', async () => {
     seedTeamConflicts(9);
     const ctx = apiCtx(root);
-    const whole = (await listConflicts(ctx, 'open', {}, { limit: 1000 })).conflicts.map((c) => c.id);
+    const whole = (await conflictList(ctx, 'open', {}, { limit: 1000 })).conflicts.map((c) => c.id);
     expect(whole).toHaveLength(9);
-    const paged = await walk((page) => listConflicts(ctx, 'open', {}, page), 3);
+    const paged = await walk((page) => conflictList(ctx, 'open', {}, page), 3);
     expect(paged.pages).toBe(3);
     expect(paged.ids).toEqual(whole);
-    expect((await everyConflict((page) => listOpenConflicts(ctx, page))).map((c) => c.id)).toEqual(whole);
+    expect((await conflictListAll((page) => conflictListOpen(ctx, page))).map((c) => c.id)).toEqual(whole);
   });
 
   it('refuses a limit past the cap or below one', async () => {
     const ctx = apiCtx(root);
-    await expect(listOpenConflicts(ctx, { limit: 1001 })).rejects.toThrow(/limit/);
-    await expect(listOpenConflicts(ctx, { limit: 0 })).rejects.toThrow(/limit/);
+    await expect(conflictListOpen(ctx, { limit: 1001 })).rejects.toThrow(/limit/);
+    await expect(conflictListOpen(ctx, { limit: 0 })).rejects.toThrow(/limit/);
   });
 
   it('lists 5 or 50 conflicts in the same statements, one JOIN and no per-conflict read', async () => {
     const count = async (n: number): Promise<string[]> => {
       seedTeamConflicts(n);
       const ctx = apiCtx(root);
-      const { result, statements } = await recordStatementsAsync(() => listOpenConflicts(ctx));
+      const { result, statements } = await recordStatementsAsync(() => conflictListOpen(ctx));
       expect(result.conflicts).toHaveLength(n);
       return statements;
     };
@@ -101,21 +101,21 @@ describe('conflict list pages', () => {
     ).id;
     const aTeam = (await remember(apiCtx(root, 'default', actorA), { content: 'a team deploy rule' })).id;
     seedTeamConflicts(4, 'default', [conflictOf(bPersonal, aTeam)]);
-    const all = (await listConflicts(apiCtx(root), 'open', {}, { limit: 1000 })).conflicts;
+    const all = (await conflictList(apiCtx(root), 'open', {}, { limit: 1000 })).conflicts;
     expect(all).toHaveLength(5);
     const hidden = all.find((c) => [c.memory_a_id, c.memory_b_id].includes(bPersonal))!.id;
 
     const ctxA = apiCtx(root, 'default', actorA);
-    const seenByA = await walk((page) => listOpenConflicts(ctxA, page), 1);
+    const seenByA = await walk((page) => conflictListOpen(ctxA, page), 1);
     expect(seenByA.ids).not.toContain(hidden);
     expect(seenByA.ids).toHaveLength(4);
-    expect(await getConflict(ctxA, hidden)).toBeNull();
-    expect((await walk((page) => listOpenConflicts(apiCtx(root, 'default', actorB), page), 1)).ids).toContain(hidden);
+    expect(await conflictGet(ctxA, hidden)).toBeNull();
+    expect((await walk((page) => conflictListOpen(apiCtx(root, 'default', actorB), page), 1)).ids).toContain(hidden);
   });
 
   it("keeps another tenant's conflicts off a tenant key's pages", async () => {
     seedTeamConflicts(2, 'other');
-    expect((await listOpenConflicts(apiCtx(root, 'default', actorA))).conflicts).toHaveLength(0);
-    expect((await listConflicts(apiCtx(root), 'open', { everyTenant: true })).conflicts).toHaveLength(2);
+    expect((await conflictListOpen(apiCtx(root, 'default', actorA))).conflicts).toHaveLength(0);
+    expect((await conflictList(apiCtx(root), 'open', { everyTenant: true })).conflicts).toHaveLength(2);
   });
 });
