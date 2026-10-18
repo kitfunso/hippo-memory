@@ -1,12 +1,12 @@
 // `hippo audit`: list and prune the audit log.
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
-import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
+import { MAX_LIST_LIMIT } from '../util/limits.js';
 import type { AuditResult } from '../core/memory-audit.js';
 import * as api from '../api/index.js';
 import { parseOlderThanFlag } from './audit-prune.js';
 import { cliApiContext } from './api-context.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isBooleanFlag, stringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, parseListLimit, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { errorMessage } from '../util/log.js';
@@ -41,18 +41,8 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
 }
 
 function readAuditLimit(flags: CliFlags): number {
-  const limitRaw = flags['limit'];
-  let limit = DEFAULT_LIST_LIMIT;
-  if (limitRaw !== undefined && !isBooleanFlag(limitRaw)) {
-    const parsed = parseInt(String(limitRaw), 10);
-    if (!Number.isFinite(parsed)) {
-      fail(`Invalid --limit value: ${String(limitRaw)} (expected a positive integer).`);
-    }
-    limit = parsed;
-  }
-  if (limit < 1 || limit > 10000) {
-    fail(`--limit must be between 1 and 10000 (got ${limit}).`);
-  }
+  const limit = parseListLimit(flags);
+  if (limit > MAX_LIST_LIMIT) fail(`--limit must be between 1 and ${MAX_LIST_LIMIT} (got ${limit}).`);
   return limit;
 }
 

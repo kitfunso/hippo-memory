@@ -311,8 +311,8 @@ function printFileImportSummary(
       for (const e of result.entries.slice(0, MAX_ENTRIES_SHOWN)) {
         console.log(`    - ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
       }
-      if (result.entries.length > 10) {
-        console.log(`    ... and ${result.entries.length - 10} more`);
+      if (result.entries.length > MAX_ENTRIES_SHOWN) {
+        console.log(`    ... and ${result.entries.length - MAX_ENTRIES_SHOWN} more`);
       }
     }
   } else {

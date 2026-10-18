@@ -12,6 +12,7 @@ import { BadRequestError } from '../core/api-errors.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { classifyOriginProject, projectId, projectNames } from '../core/project-identity.js';
+import { DEFAULT_CONFIG } from '../core/config.js';
 import { promptTokens } from '../core/prompt-recall.js';
 import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../core/read-admission.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
@@ -301,7 +302,7 @@ function promptRecallRequest(opts: ContextOptions, plan: ContextPlan): AmbientRe
   return promptRecallTerms.length > 0
     ? {
         terms: promptRecallTerms,
-        limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, 100, 1)),
+        limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, DEFAULT_CONFIG.pinnedInject.promptRecallCandidates, 1)),
         ownScope: plan.ownScope,
       }
     : undefined;

@@ -52,7 +52,7 @@ interface DormantRow {
   dormant_at: string;
 }
 
-const DEFAULT_LIST_LIMIT = 20;
+const DEFAULT_DORMANT_LIMIT = 20;
 
 /** Insert (or refresh) the dormant snapshot for `move.entry`; the caller deletes the `memories` row in the same
  * transaction. */
@@ -146,7 +146,7 @@ function listDormantRows(
   const limit =
     opts.limit !== undefined && Number.isFinite(opts.limit) && opts.limit >= 1
       ? Math.floor(opts.limit)
-      : DEFAULT_LIST_LIMIT;
+      : DEFAULT_DORMANT_LIMIT;
   const termClauses = terms.map(() => ` AND content LIKE ? ESCAPE '\\'`).join('');
   // SAFETY: rows' shape matches the seven columns named in the SELECT.
   const rows = db

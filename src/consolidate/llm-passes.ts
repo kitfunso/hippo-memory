@@ -7,6 +7,9 @@ import { type AnthropicMessageFailure, isPermanentFailure } from '../util/anthro
 
 // Bounds the LLM calls one sleep spends on extraction.
 const EXTRACTION_BATCH_LIMIT = 20;
+// The ceiling keeps a misconfigured env from burning unbounded LLM cost.
+const MAX_DAG_REBUILD_CAP = 1000;
+const DEFAULT_DAG_REBUILD_CAP = 20;
 
 /** The key, model options and once-per-line error reporter every LLM phase shares. */
 function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
@@ -148,8 +151,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   try {
     const { rebuildDirtySummaries } = await import('./dag.js');
     const rawCap = envDagRebuildCap();
-    // Hard ceiling so a misconfigured env can't burn unbounded LLM cost.
-    const cap = rawCap !== undefined ? Math.min(rawCap, 1000) : 20;
+    const cap = rawCap !== undefined ? Math.min(rawCap, MAX_DAG_REBUILD_CAP) : DEFAULT_DAG_REBUILD_CAP;
     const rebuildResult = await rebuildDirtySummaries(run.store, {
       ...llmOpts,
       onError: llmError('dag rebuild'),

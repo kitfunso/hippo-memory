@@ -14,10 +14,16 @@ import type { RawRefRow } from './port/context-reads.js';
 import type { EntrySignals, EntryTextKey } from './port/sharing.js';
 
 const MAX_IDS_PER_READ = 500;
+const MAX_FRESH_RAW = 200;
 
 // The plus keeps SQLite on the primary key for an id list: with
 // a bare tenant_id it walks every row of the tenant instead.
 export const TENANT_IS = '+tenant_id = ?';
+
+/** The ` AND <condition>` suffix and its argument when a read is tenant-scoped; both empty when it spans tenants. */
+function tenantAnd(tenantId: string | undefined, condition: string = 'tenant_id = ?'): { sql: string; args: string[] } {
+  return tenantId === undefined ? { sql: '', args: [] } : { sql: ` AND ${condition}`, args: [tenantId] };
+}
 
 /** Read a memory entry by ID. With `tenantId` the read is tenant-scoped (cross-tenant returns null); omitted, no
  * tenant filter is applied. */
@@ -45,15 +51,14 @@ export function selectEntriesByIds(
   tenantId?: string,
 ): Map<string, MemoryEntry> {
   const byId = new Map<string, MemoryEntry>();
-  const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
-  const tenantArgs = tenantId !== undefined ? [tenantId] : [];
+  const tenant = tenantAnd(tenantId, TENANT_IS);
   for (const chunk of chunked([...new Set(ids)])) {
     const marks = placeholders(chunk.length);
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = cachedStatement(
       db,
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks})${tenantClause}`,
-    ).all(...chunk, ...tenantArgs) as MemoryRow[];
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks})${tenant.sql}`,
+    ).all(...chunk, ...tenant.args) as MemoryRow[];
     for (const row of rows) byId.set(row.id, rowToEntry(row));
   }
   return byId;
@@ -66,16 +71,15 @@ export function selectChildrenByParent(
   tenantId?: string,
 ): Map<string, MemoryEntry[]> {
   const byParent = new Map<string, MemoryEntry[]>();
-  const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
-  const tenantArgs = tenantId !== undefined ? [tenantId] : [];
+  const tenant = tenantAnd(tenantId, TENANT_IS);
   for (const chunk of chunked([...new Set(parentIds)])) {
     const marks = placeholders(chunk.length);
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = cachedStatement(
       db,
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-        `WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
-    ).all(...chunk, ...tenantArgs) as MemoryRow[];
+        `WHERE dag_parent_id IN (${marks})${tenant.sql} ORDER BY created ASC, id ASC`,
+    ).all(...chunk, ...tenant.args) as MemoryRow[];
     for (const row of rows) {
       const entry = rowToEntry(row);
       const parentId = entry.dag_parent_id ?? '';
@@ -132,10 +136,9 @@ export function loadSessionRawMemoriesAt(
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ` +
     `AND source_session_id = ? AND superseded_by IS NULL`;
   params.push(sessionId);
-  if (tenantId !== undefined) {
-    sql += ' AND tenant_id = ?';
-    params.push(tenantId);
-  }
+  const tenant = tenantAnd(tenantId);
+  sql += tenant.sql;
+  params.push(...tenant.args);
   sql += originClause(origins);
   params.push(...(origins ?? []));
   if (cap !== undefined && cap > 0) {
@@ -168,10 +171,9 @@ export function countSessionRawMemoriesAt(
   let sql =
     `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' ` + `AND source_session_id = ? AND superseded_by IS NULL`;
   params.push(sessionId);
-  if (tenantId !== undefined) {
-    sql += ' AND tenant_id = ?';
-    params.push(tenantId);
-  }
+  const tenant = tenantAnd(tenantId);
+  sql += tenant.sql;
+  params.push(...tenant.args);
   sql += originClause(origins);
   params.push(...(origins ?? []));
   if (scope !== undefined && scope !== '') {
@@ -199,13 +201,12 @@ export function loadFreshRawMemoriesAt(
   origins?: readonly string[],
 ): MemoryEntry[] {
   if (count <= 0) return [];
-  const capped = Math.min(count, 200);
+  const capped = Math.min(count, MAX_FRESH_RAW);
   const params: Array<string | number> = [];
   let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
-  if (tenantId !== undefined) {
-    sql += ' AND tenant_id = ?';
-    params.push(tenantId);
-  }
+  const tenant = tenantAnd(tenantId);
+  sql += tenant.sql;
+  params.push(...tenant.args);
   if (sessionId !== undefined && sessionId !== '') {
     sql += ' AND source_session_id = ?';
     params.push(sessionId);
@@ -306,8 +307,7 @@ export function loadEntriesMentioningAt(
     clauses.push('instr(content, ?) > 0', 'instr(tags_json, ?) > 0');
     params.push(ch, ch);
   }
-  const tenantClause = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
-  const tenantParams = tenantId !== undefined ? [tenantId] : [];
+  const tenant = tenantAnd(tenantId);
   const ftsQuery = plainTag && isFtsAvailable(db) && isFtsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
   const where =
     ftsQuery === null
@@ -320,10 +320,10 @@ export function loadEntriesMentioningAt(
   const rows = db
     .prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-        `WHERE ${tenantClause}(${where})${afterClause} ORDER BY created ASC, id ASC LIMIT ?`,
+        `WHERE (${where})${tenant.sql}${afterClause} ORDER BY created ASC, id ASC LIMIT ?`,
     )
     // One extra row says whether another page follows without a count.
-    .all(...tenantParams, ...(ftsQuery === null ? params : [ftsQuery]), ...afterParams, page.limit + 1) as MemoryRow[];
+    .all(...(ftsQuery === null ? params : [ftsQuery]), ...tenant.args, ...afterParams, page.limit + 1) as MemoryRow[];
   return pageOf(rows.map(rowToEntry), page.limit);
 }
 
@@ -610,14 +610,14 @@ export function loadEntriesWithSignalsAt(
     `${escapeLike(signals.sourcePrefix)}%`,
     ...signals.tags.map((t) => JSON.stringify(t)),
   ];
-  const tenant = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
+  const tenant = tenantAnd(tenantId);
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-        `WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
+        `WHERE (${anyOf.join(' OR ')})${tenant.sql} ORDER BY created ASC, id ASC`,
     )
-    .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
+    .all(...params, ...tenant.args) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
