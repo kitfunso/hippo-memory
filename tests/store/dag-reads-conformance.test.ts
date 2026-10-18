@@ -8,9 +8,9 @@ import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
-import { passesScopeFilterForRecall, type AuditEvent, type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
+import type { AuditEvent, HippoStore, MemoryEntry } from '../../src/entry/store-kit.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import type { SessionRawCount, SessionRawWindow, SummaryDescendants } from '../../src/store/port.js';
+import type { DescendantWalk, SessionRawCount, SessionRawWindow, SummaryDescendants } from '../../src/store/port.js';
 import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -75,7 +75,8 @@ const SESSION_IDS = [
   'raw_a_0', 'raw_a_1', 'raw_a_2', 'raw_a_3', 'raw_a_4', 'raw_a_5', 'raw_a_tie_x', 'raw_a_tie_y', 'raw_a_private', 'raw_a_alice',
   'raw_a_legacy', 'raw_a_team', 'raw_a_other', 'raw_a_global', 'raw_a_no_origin',
 ];
-const SUM_A_CHILDREN = ['raw_a_0', 'raw_a_1', 'raw_a_2', 'fact_a_0', 'fact_a_1', 'fact_a_tie_x', 'fact_a_tie_y', 'fact_a_private'];
+/** sum_a's children the default scope deny admits: fact_a_private is left out, and leaf_a_under_private with it. */
+const SUM_A_CHILDREN = ['raw_a_0', 'raw_a_1', 'raw_a_2', 'fact_a_0', 'fact_a_1', 'fact_a_tie_x', 'fact_a_tie_y'];
 
 type Call<R> = GroupCall<'dagReads', R>;
 
@@ -96,9 +97,8 @@ async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
 const window = (cap: number, over: Partial<SessionRawWindow> = {}): Call<string[]> => async (g) =>
   (await g.sessionRawEntries({ tenantId: TENANT_A, sessionId: SESSION, cap, ...over })).map((r) => r.id);
 const count = (over: Partial<SessionRawCount> = {}): Call<number> => (g) => g.sessionRawCount({ tenantId: TENANT_A, sessionId: SESSION, ...over });
-const everyRow = (): boolean => true;
-const walk = (id: string, depth: number, admit: (r: MemoryEntry) => boolean = everyRow, tenantId = TENANT_A): Call<SummaryDescendants | null> => (g) =>
-  g.summaryWithDescendants(tenantId, id, { depth, admit });
+const walk = (id: string, depth: number, more: Partial<DescendantWalk> = {}, tenantId = TENANT_A): Call<SummaryDescendants | null> => (g) =>
+  g.summaryWithDescendants(tenantId, id, { depth, admit: {}, ...more });
 const levelIds = (walked: SummaryDescendants | null): string[][] | null => walked && walked.levels.map((level) => level.map((r) => r.id));
 
 beforeAll(() => {
@@ -172,18 +172,18 @@ describe('DagReads.sessionRawCount', () => {
 
 describe('DagReads.summaryWithDescendants', () => {
   it("answers null for a missing id and for another tenant's summary", async () => {
-    expect(await conforms([walk('sum_missing', 1), walk('sum_b', 1), walk('sum_a', 1, everyRow, TENANT_B)])).toEqual([null, null, null]);
+    expect(await conforms([walk('sum_missing', 1), walk('sum_b', 1), walk('sum_a', 1, {}, TENANT_B)])).toEqual([null, null, null]);
   });
 
   it("lists one level by created then id, without another tenant's row linked under the summary", async () => {
-    const [mine, theirs] = await conforms([walk('sum_a', 1), walk('sum_b', 1, everyRow, TENANT_B)]);
+    const [mine, theirs] = await conforms([walk('sum_a', 1), walk('sum_b', 1, {}, TENANT_B)]);
     expect(mine?.summary.id).toBe('sum_a');
     expect(levelIds(mine)).toEqual([SUM_A_CHILDREN]);
     expect(levelIds(theirs)).toEqual([['fact_b_0']]);
   });
 
   it('reads no level at depth zero, each level down to the depth asked, and stops where the rows end', async () => {
-    const leaves = ['leaf_a_0', 'leaf_a_1', 'leaf_a_under_private'];
+    const leaves = ['leaf_a_0', 'leaf_a_1'];
     const got = (await conforms([walk('sum_a', 0), walk('sum_a', 2), walk('sum_a', 10), walk('profile_a', 3), walk('sum_a_empty', 3), walk('fact_a_0', 1)])).map(levelIds);
     expect(got).toEqual([
       [],
@@ -196,14 +196,14 @@ describe('DagReads.summaryWithDescendants', () => {
   });
 
   it('leaves out a refused row and reads nothing under it, the summary included', async () => {
-    const open = (r: MemoryEntry): boolean => passesScopeFilterForRecall(r.scope ?? null, undefined);
-    const got = await conforms([walk('sum_a', 3, open), walk('sum_a', 3, (r) => r.id !== 'sum_a'), walk('profile_a', 3, (r) => r.id !== 'sum_a')]);
-    expect(got.map(levelIds)).toEqual([
-      [SUM_A_CHILDREN.filter((id) => id !== 'fact_a_private'), ['leaf_a_0', 'leaf_a_1']],
-      [],
-      [['sum_a2'], ['fact_a2_0']],
+    const got = await conforms([
+      walk('sum_a', 3, { minSummaryLevel: 3 }),
+      walk('sum_a', 3, { admit: { project: 'other' } }),
+      walk('sum_a', 3, { admit: { project: { name: 'proj', legacyName: 'proj' } } }),
+      walk('profile_a', 3, { minSummaryLevel: 3 }),
     ]);
-    expect(got[1]?.summary.id).toBe('sum_a');
+    expect(got.map(levelIds)).toEqual([[], [], [SUM_A_CHILDREN, ['leaf_a_0', 'leaf_a_1']], [['sum_a2', 'sum_a'], ['fact_a2_0', ...SUM_A_CHILDREN], ['leaf_a_0', 'leaf_a_1']]]);
+    expect(got[0]?.summary.id).toBe('sum_a');
   });
 
   it('lists a row once when two summaries name each other as parent', async () => {

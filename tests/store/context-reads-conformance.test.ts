@@ -69,7 +69,7 @@ const DENIED: readonly string[] = ['mem_a_bob', 'mem_a_legacy'];
 
 function recallIds(outcome: Outcome<unknown> | undefined): string[] {
   if (outcome === undefined || !('value' in outcome)) return [];
-  // SAFETY: every ambient() call resolves to { result: AmbientLoadResult, seen }.
+  // SAFETY: every ambient() call resolves to { result: AmbientLoadResult }.
   const { result } = outcome.value as { result: AmbientLoadResult };
   return (result.recall ?? []).map((e) => e.id);
 }
@@ -94,16 +94,11 @@ describe('ContextReads.unfinishedHandoff', () => {
   });
 });
 
-/** An ambient load whose admit refuses one origin and records every id it saw, in order. */
-function ambient(tenantId: string, recentNeeded: number, more: Omit<AmbientCandidateRequest, 'admit' | 'recentNeeded'> = {}, refuse: string | null = 'other'): Call {
-  return async (g) => {
-    const seen: string[] = [];
-    const admit = (e: MemoryEntry): boolean => {
-      seen.push(e.id);
-      return e.origin_project !== refuse;
-    };
-    return { result: await g.ambientCandidates(tenantId, { recentNeeded, admit, ...more }), seen };
-  };
+/** An ambient load in PROJECT, which refuses other projects' rows unless `cross`; each answer lists its refusals in read order. */
+function ambient(tenantId: string, recentNeeded: number, more: Omit<AmbientCandidateRequest, 'admit' | 'recentNeeded'> = {}, cross = false): Call {
+  return async (g) => ({
+    result: await g.ambientCandidates(tenantId, { recentNeeded, admit: { currentProject: PROJECT, includeCrossProject: cross }, ...more }),
+  });
 }
 
 describe('ContextReads.ambientCandidates', () => {
@@ -111,7 +106,7 @@ describe('ContextReads.ambientCandidates', () => {
     const own = { names: [PROJECT], userGlobal: true };
     const out = await conforms([
       ['pins only', ambient(TENANT_A, 0)],
-      ['first window suffices', ambient(TENANT_A, 5, {}, null)],
+      ['first window suffices', ambient(TENANT_A, 5, {}, true)],
       ['own window', ambient(TENANT_A, 10, { origins: own })],
       ['full scan', ambient(TENANT_A, 10)],
       ['fractional', ambient(TENANT_A, 3.7)],
@@ -128,8 +123,12 @@ describe('ContextReads.ambientCandidates', () => {
     expect(out.get('drifted')).toMatchObject({ value: { result: { entries: expect.arrayContaining([expect.objectContaining({ id: 'mem_b_drift' })]) } } });
     expect(out.get('recall')).toMatchObject({ value: { result: { recall: expect.arrayContaining([expect.objectContaining({ id: 'mem_a_error' })]) } } });
     expect(out.get('recall no term indexed')).toMatchObject({ value: { result: { recall: [] } } });
-    expect(out.get('no names')).toMatchObject({ value: { result: { entries: [{ id: 'mem_a_pin' }, { id: 'mem_a_pin_private' }] } } });
-    // The first tenant's loads never show, or ask admit about, a second-tenant row.
+    expect(out.get('no names')).toMatchObject({ value: { result: { entries: [{ id: 'mem_a_pin' }] } } });
+    // Pins are read oldest first: the other project's pin, then the private one the default deny refuses.
+    expect(out.get('pins only')).toMatchObject({
+      value: { result: { refused: [{ id: 'mem_a_pin_other', reason: 'admission' }, { id: 'mem_a_pin_private', reason: 'admission' }] } },
+    });
+    // The first tenant's loads never show, or refuse, a second-tenant row.
     for (const [name, outcome] of out) if (name !== 'drifted') expect(idsIn(outcome).filter((id) => id.startsWith('mem_b_')), name).toEqual([]);
     // Prompt recall applies the default deny itself: another person's personal row and the legacy bucket stay out, the caller's own comes in.
     for (const name of ['recall', 'recall own scope']) expect(recallIds(out.get(name)).filter((id) => DENIED.includes(id)), name).toEqual([]);

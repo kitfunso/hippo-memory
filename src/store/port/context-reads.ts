@@ -1,15 +1,29 @@
 import type { MemoryEntry } from '../../core/memory.js';
 import type { SessionHandoff } from '../../core/handoff.js';
 import type { AmbientTallies } from '../../core/ambient.js';
+import type { AmbientAdmission, AmbientRefusalReason } from '../../core/read-admission.js';
 import type { ContinuityKey } from './types.js';
 
-/** One ambient load: the pins, the `recentNeeded` newest rows `admit` keeps, and the prompt-recall candidates. */
+export type { AmbientAdmission, AmbientRefusalReason };
+
+/** One ambient load: the pins, the `recentNeeded` newest rows `ambientRefusal` keeps under `admit`, and the
+ * prompt-recall candidates. */
 export interface AmbientCandidateRequest {
   readonly recentNeeded: number;
-  /** Sees each row in the order `loadAmbientCandidates` reads them, since the delivery ledger counts its refusals. */
-  readonly admit: (e: MemoryEntry) => boolean;
+  readonly admit: AmbientAdmission;
   readonly recall?: AmbientRecallRequest;
   readonly origins?: RecentOrigins;
+}
+
+/** A row an ambient load read and left out; the delivery ledger counts each one. */
+export interface AmbientRefusal {
+  readonly id: string;
+  readonly reason: AmbientRefusalReason;
+}
+
+/** An ambient load and the rows it refused, in the order `loadAmbientCandidates` read them. */
+export interface AmbientCandidates extends AmbientLoadResult {
+  refused: AmbientRefusal[];
 }
 
 /** The reads behind getContext beyond the base `continuity`: its fallback handoff, candidate rows and ambient tallies.
@@ -19,10 +33,10 @@ export interface ContextReads {
    * one, and passes recall's default scope deny, as `loadLatestHandoff` with `unfinishedOnly` and `scopeFilter:
    * 'default-deny'`. Rejects an empty tenant id. */
   unfinishedHandoff(tenantId: string, maxAgeMs: number, key: ContinuityKey | null): Promise<SessionHandoff | null>;
-  /** As `loadAmbientCandidates`; `recall` searches with the query `rarestFtsQuery` builds from FTS document counts over
-   * every tenant's rows, and finds nothing when no term is indexed. Core keeps only `tenantId`'s rows that its own
-   * admit passes, whatever the store returns. */
-  ambientCandidates(tenantId: string, request: AmbientCandidateRequest): Promise<AmbientLoadResult>;
+  /** As `loadAmbientCandidates` with `ambientRefusal` as its admit; `recall` searches with the query `rarestFtsQuery`
+   * builds from FTS document counts over every tenant's rows, and finds nothing when no term is indexed. Core keeps
+   * only `tenantId`'s rows that the admission passes, whatever the store returns. */
+  ambientCandidates(tenantId: string, request: AmbientCandidateRequest): Promise<AmbientCandidates>;
   /** As `loadContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by
    * created, then id. */
   contextCandidates(tenantId: string, filter: ContextCandidateFilter): Promise<MemoryEntry[]>;

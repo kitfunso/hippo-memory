@@ -5,8 +5,7 @@ import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessi
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
-import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
-import { isWorthSurfacing } from '../core/memory-quality.js';
+import { markRetrieved, type MemoryEntry } from '../core/memory.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
@@ -19,11 +18,9 @@ import {
   classifyOriginProject,
   projectId,
   projectNames,
-  type ProjectRef,
 } from '../core/project-identity.js';
 import { promptTokens } from '../core/prompt-recall.js';
-import { detectSecret } from '../util/secret-detect.js';
-import { isSessionDigestRow } from '../core/session-digest-row.js';
+import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../core/read-admission.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
 import type { HippoStore } from '../store/index.js';
 import type { StoreReach } from '../store/port.js';
@@ -47,37 +44,13 @@ import type {
   ContextCandidateFilter,
   AmbientRecallRequest,
   AmbientLoadResult,
+  AmbientRefusal,
   RecentOrigins,
 } from '../store/port/context-reads.js';
 import type { ContinuityKey } from '../store/port/types.js';
 import type { RecallTraceInput } from '../store/port/recall-writes.js';
 
 export { oneCopyPerMemory } from './context-select.js';
-
-/** The single ambient-injection admission policy, shared by getContext and the CLI ambient-state summary so they cannot
- * drift. Secret veto is unconditional (flagged rows inject only in their own project); private scopes need
- * `exactScope`, other projects `includeCrossProject`. */
-function ambientAdmitEntry(
-  e: MemoryEntry,
-  currentProject: ProjectRef,
-  includeCrossProject: boolean,
-  exactScope: string | undefined,
-  own: string | undefined,
-): boolean {
-  if (!ambientSecretAdmit(e, currentProject)) return false;
-  if (!passesScopeFilterForRecall(e.scope ?? null, exactScope, own)) return false;
-  if (includeCrossProject) return true;
-  return classifyOriginProject(e.origin_project, currentProject) !== 'cross-project';
-}
-
-/** The secret half of the ambient policy alone, for callers with their own scope rule: a flagged row is admitted only
- * inside its owning project. */
-export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
-  if (!detectSecret(e).flagged) return true;
-  const origin = e.origin_project;
-  if (origin === undefined || origin === null || origin === '') return false;
-  return projectNames(currentProject).includes(origin);
-}
 
 /** Tokens a context block may use when the caller sets no budget; the hook command and the CLI default match it. */
 export const DEFAULT_CONTEXT_BUDGET = 1500;
@@ -107,17 +80,19 @@ function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: store.contextReads };
 }
 
-/** What one store's ambient read is asked for. `recent`, `recall`
- * and `onQualityDrop` apply to the pinned-only branch alone. */
+/** What one store's ambient read is asked for. `recent`, `admission`, `recall`
+ * and `onRefused` apply to the pinned-only branch alone. */
 interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
   readonly admit: (e: MemoryEntry) => boolean;
   /** `admit` without the delivery observer, so a row checked twice is not refused twice in the ledger. */
   readonly recheck: (e: MemoryEntry) => boolean;
+  /** `recheck` as data, which the store applies in the pinned-only load. */
+  readonly admission: AmbientAdmission;
   readonly window: ContextCandidateFilter | ContextQueryWindow;
   readonly recall?: AmbientRecallRequest;
-  readonly onQualityDrop?: (e: MemoryEntry) => void;
+  readonly onRefused?: (refusal: AmbientRefusal) => void;
 }
 
 // The pinned-only branch needs pins and recent-N candidates, not the corpus.
@@ -126,7 +101,7 @@ async function loadAmbientEntries(
   tenantId: string,
   options: LoadAmbientEntriesOptions,
 ): Promise<AmbientLoadResult> {
-  const { pinnedOnly, recent, admit, recheck, window, recall, onQualityDrop } = options;
+  const { pinnedOnly, recent, admit, recheck, admission, window, recall, onRefused } = options;
   const ownTenant = (e: MemoryEntry): boolean => e.tenant_id === tenantId;
   if (!pinnedOnly) {
     const rows = 'query' in window
@@ -142,20 +117,14 @@ async function loadAmbientEntries(
       : await source.reads.contextCandidates(tenantId, window);
     return { entries: rows.filter((e) => ownTenant(e) && admit(e)) };
   }
-  // The quality floor runs on the recent-N slice AFTER this load, so the load
-  // counts by it too, or it stops short of a store whose newest rows are junk.
-  const admitAmbient = (e: MemoryEntry): boolean => {
-    if (!admit(e)) return false;
-    if (e.pinned || isWorthSurfacing(e)) return true;
-    onQualityDrop?.(e);
-    return false;
-  };
+  // The store applies the quality floor too, or its recent-N load stops short of a store whose newest rows are junk.
   const loaded = await source.reads.ambientCandidates(tenantId, {
     recentNeeded: recent.needed,
-    admit: admitAmbient,
+    admit: admission,
     recall,
     origins: recent.origins,
   });
+  if (onRefused) for (const refusal of loaded.refused) onRefused(refusal);
   // Pins and recent rows reach core only through the store's own
   // call to admit, so core applies it again with the tenant.
   const entries = loaded.entries.filter((e) => ownTenant(e) && recheck(e));
@@ -436,30 +405,19 @@ function ambientAdmission(
   plan: ContextPlan,
   shownHandoff: SessionHandoff | null,
 ): ContextAdmission {
-  const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
-  const ambientAdmit = (e: MemoryEntry): boolean => {
-    // A printed handoff already carries the session's closing message, which its digest would print a second time.
-    if (
-      transcriptHandoffSession !== null &&
-      e.source_session_id === transcriptHandoffSession &&
-      isSessionDigestRow(e)
-    ) {
-      return false;
-    }
-    return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope, plan.ownScope);
+  const rule: AmbientAdmission = {
+    currentProject: plan.currentProject,
+    includeCrossProject: plan.includeCrossProject,
+    exactScope: plan.exactScope,
+    ownScope: plan.ownScope,
+    // Inside admit, not after the load, so the loader's window widens past a session's own items.
+    ownSessionId: opts.currentSessionId || undefined,
+    handoffSessionId: shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : undefined,
   };
-  const ownSessionId = opts.currentSessionId || '';
-  // Inside admit, not after the load, so the loader's window widens past a session's own items.
-  const isOwnCompactionItem = (e: MemoryEntry): boolean =>
-    ownSessionId !== '' &&
-    e.source_session_id === ownSessionId &&
-    e.tags.includes(COMPACTION_MEMORY_TAG);
-  // Superseded rows never inject; which rows reach ambientAdmitEntry
-  // matters because it regex-scans content for secrets.
-  const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
+  const admit = (e: MemoryEntry): boolean => ambientAdmits(e, rule);
   // The two-store search has always ranked a session's own compaction items; only the local search drops them.
-  const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
-  return { ambientAdmit, admit, bothStoresAdmit };
+  const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientEnvelopeAdmits(e, rule);
+  return { rule, admit, bothStoresAdmit };
 }
 
 /** Origins the recent backfill may read past its first window;
@@ -481,8 +439,12 @@ async function loadPools(
   const searchesBoth = searches && hasGlobal && !primaryIsGlobal;
   const poolAdmit = searchesBoth ? admission.bothStoresAdmit : admission.admit;
   const loadAdmit = obs ? obs.watchAdmit(poolAdmit) : poolAdmit;
-  const qualityDrop = (isGlobal: boolean): ((e: MemoryEntry) => void) | undefined =>
-    obs && !plan.promptRecallPending ? (e) => obs.qualityDropped(e, isGlobal) : undefined;
+  // With prompt recall on, eligibility reports a row the quality floor drops.
+  const refusedBy = (isGlobal: boolean): ((refusal: AmbientRefusal) => void) | undefined =>
+    obs && ((r) => {
+      if (r.reason === 'admission') obs.filtered(r.id);
+      else if (!plan.promptRecallPending) obs.qualityDropped(r.id, isGlobal);
+    });
 
   // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are unchanged.
   const window: ContextCandidateFilter | ContextQueryWindow = searches
@@ -495,16 +457,21 @@ async function loadPools(
         now: evalNow(),
       };
   // Tenant-scoped loads: never resolveTenantId({}) here.
-  const read = { pinnedOnly, recent, admit: loadAdmit, recheck: poolAdmit, window, recall: recallRequest };
+  const read = {
+    pinnedOnly,
+    recent,
+    admit: loadAdmit,
+    recheck: poolAdmit,
+    admission: admission.rule,
+    window,
+    recall: recallRequest,
+  };
   const local: AmbientLoadResult = plan.hasLocal
-    ? await loadAmbientEntries(plan.local, ctx.tenantId, { ...read, onQualityDrop: qualityDrop(primaryIsGlobal) })
+    ? await loadAmbientEntries(plan.local, ctx.tenantId, { ...read, onRefused: refusedBy(primaryIsGlobal) })
     : { entries: [] };
   const global: AmbientLoadResult =
     hasGlobal && !primaryIsGlobal
-      ? await loadAmbientEntries(globalSource(ctx), ctx.tenantId, {
-          ...read,
-          onQualityDrop: qualityDrop(true),
-        })
+      ? await loadAmbientEntries(globalSource(ctx), ctx.tenantId, { ...read, onRefused: refusedBy(true) })
       : { entries: [] };
   return { local, global };
 }

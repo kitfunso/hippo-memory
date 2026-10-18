@@ -3,7 +3,7 @@ import type { DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { selectEntriesByIds, TENANT_IS } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
-import type { DescendantOrigin, DescendantPage, SummaryDescendants } from './port.js';
+import type { DescendantOrigin, SummaryDescendants } from './port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { placeholders } from '../util/sql.js';
 
@@ -11,7 +11,9 @@ export interface PagedWalk {
   readonly tenantId: string;
   readonly summary: MemoryEntry;
   readonly depth: number;
-  readonly page: DescendantPage;
+  /** How many rows the caller reads whole, counted from the first row of the first level. */
+  readonly rows: number;
+  readonly admit: (row: DescendantOrigin) => boolean;
 }
 
 interface LevelRead {
@@ -33,13 +35,13 @@ interface ChildGroup extends DescendantOrigin {
 
 const marks = (ids: readonly string[]): string => placeholders(ids.length);
 
-/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `page.rows` rows and each level's full
+/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full
  * count in `sizes`. */
 export function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {
   const sizes: number[] = [];
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([walk.summary.id]);
-  let room = Math.max(0, walk.page.rows);
+  let room = Math.max(0, walk.rows);
   let parents: readonly string[] = summaryAdmitted ? [walk.summary.id] : [];
   for (let level = 0; level < walk.depth && parents.length > 0; level++) {
     const counted = level === walk.depth - 1 ? countedLevel(db, walk, parents, room) : null;
@@ -78,7 +80,7 @@ function keyedLevel(
   const ids: string[] = [];
   for (const parentId of parents) {
     for (const key of byParent.get(parentId) ?? []) {
-      if (at.seen.has(key.id) || !walk.page.admit(key)) continue;
+      if (at.seen.has(key.id) || !walk.admit(key)) continue;
       at.seen.add(key.id);
       ids.push(key.id);
     }
@@ -108,7 +110,7 @@ function countedLevel(
       )
       .all(...chunk, walk.tenantId, walk.summary.id) as ChildGroup[];
     for (const group of groups) {
-      if (!walk.page.admit(group)) return null;
+      if (!walk.admit(group)) return null;
       perParent.set(group.dag_parent_id, (perParent.get(group.dag_parent_id) ?? 0) + Number(group.n));
     }
   }

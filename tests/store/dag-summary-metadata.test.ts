@@ -120,7 +120,7 @@ describe('schema v25 — DAG summary metadata', () => {
     writeEntry(root, child2);
     writeEntry(root, grandchild);
 
-    const direct = sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: () => true })?.levels[0] ?? [];
+    const direct = sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: {} })?.levels[0] ?? [];
     expect(direct.map((e) => e.id)).toEqual([child1.id, child2.id]);
     // Grandchild reachable only via child1, not directly under parent.
     expect(direct.find((e) => e.id === grandchild.id)).toBeUndefined();

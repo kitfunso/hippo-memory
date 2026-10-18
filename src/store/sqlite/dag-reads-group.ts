@@ -1,6 +1,7 @@
 // hippo.db's half of the DagReads store group: the reads session assembly and summary drill-down run today.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../core/memory.js';
+import { descendantAdmits } from '../../core/read-admission.js';
 import { pagedDescendants } from '../descendant-page.js';
 import {
   countSessionRawMemoriesAt,
@@ -9,7 +10,7 @@ import {
   selectEntriesByIds,
 } from '../entry-reads.js';
 import { type OnHandle, openStore } from '../open.js';
-import type { DagReads, DescendantWalk, SummaryDescendants, Sync } from '../port.js';
+import type { DagReads, DescendantOrigin, DescendantWalk, SummaryDescendants, Sync } from '../port.js';
 
 export function sqliteDagReads(on: OnHandle): Sync<DagReads> {
   return {
@@ -27,20 +28,22 @@ function summaryWithDescendantsAt(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
-  { depth, admit, page }: DescendantWalk,
+  { depth, admit, minSummaryLevel, page }: DescendantWalk,
 ): SummaryDescendants | null {
   const summary = selectEntriesByIds(db, [id], tenantId).get(id);
   if (!summary) return null;
-  if (page) return pagedDescendants(db, { tenantId, summary, depth, page }, admit(summary));
+  const readable = (row: DescendantOrigin): boolean => descendantAdmits(row, admit);
+  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dag_level ?? 0) >= minSummaryLevel);
+  if (page) return pagedDescendants(db, { tenantId, summary, depth, rows: page.rows, admit: readable }, walked);
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([id]);
-  let parents = admit(summary) ? [id] : [];
+  let parents = walked ? [id] : [];
   for (let level = 0; level < depth && parents.length > 0; level++) {
     const childrenOf = selectChildrenByParent(db, parents, tenantId);
     const admitted: MemoryEntry[] = [];
     for (const parentId of parents) {
       for (const child of childrenOf.get(parentId) ?? []) {
-        if (seen.has(child.id) || !admit(child)) continue;
+        if (seen.has(child.id) || !readable(child)) continue;
         seen.add(child.id);
         admitted.push(child);
       }

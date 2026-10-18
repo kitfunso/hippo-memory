@@ -35,9 +35,13 @@ entry/session-text.d.ts: scrubForSharing re-export
 entry/session-text.d.ts: sessionTail re-export
 entry/session-text.d.ts: transcriptWorkingState re-export
 entry/store-kit.d.ts: ActiveGoals re-export
+entry/store-kit.d.ts: AmbientAdmission re-export
 entry/store-kit.d.ts: AmbientCandidateRequest re-export
+entry/store-kit.d.ts: AmbientCandidates re-export
 entry/store-kit.d.ts: AmbientLoadResult re-export
 entry/store-kit.d.ts: AmbientRecallRequest re-export
+entry/store-kit.d.ts: AmbientRefusal re-export
+entry/store-kit.d.ts: AmbientRefusalReason re-export
 entry/store-kit.d.ts: AmbientStoreFilter re-export
 entry/store-kit.d.ts: AmbientTallies re-export
 entry/store-kit.d.ts: ApiKeyListItem re-export
@@ -70,6 +74,7 @@ entry/store-kit.d.ts: ContextCandidateFilter re-export
 entry/store-kit.d.ts: ContextReads re-export
 entry/store-kit.d.ts: ContinuityBlock re-export
 entry/store-kit.d.ts: ContinuityKey re-export
+entry/store-kit.d.ts: DescendantAdmission re-export
 entry/store-kit.d.ts: Dormant re-export
 entry/store-kit.d.ts: DormantMemory re-export
 entry/store-kit.d.ts: DormantRestoreOutcome re-export
@@ -165,8 +170,10 @@ entry/store-kit.d.ts: VectorWrites re-export
 entry/store-kit.d.ts: WorkingMemoryFilter re-export
 entry/store-kit.d.ts: WorkingMemoryItem re-export
 entry/store-kit.d.ts: WorkingMemoryPush re-export
+entry/store-kit.d.ts: ambientRefusal re-export
 entry/store-kit.d.ts: bufferToFloat32 re-export
 entry/store-kit.d.ts: decodeVector re-export
+entry/store-kit.d.ts: descendantAdmits re-export
 entry/store-kit.d.ts: encodeVector re-export
 entry/store-kit.d.ts: entryAfterOutcome re-export
 entry/store-kit.d.ts: float32ToBuffer re-export

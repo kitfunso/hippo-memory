@@ -159,7 +159,8 @@ export function loadAmbientCandidates(
   recall?: AmbientRecallRequest,
   origins?: RecentOrigins,
 ): AmbientLoadResult {
-  return onHandle(hippoRoot, (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, admit, recall, origins), openStore);
+  const judge = (e: MemoryEntry) => (admit(e) ? null : 'admission' as const);
+  return onHandle(hippoRoot, (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, judge, recall, origins), openStore);
 }
 
 export function loadContextCandidates(

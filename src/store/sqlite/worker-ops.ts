@@ -12,9 +12,9 @@ export type OpPlaces<G> = { readonly [M in keyof G]: OpPlace };
 
 type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 
-/** Store methods answered by a worker, base ones under `base`. Tagged by effect, not name: predictionBaserate (audit
- * row) and bumpRecallStats (stats.json) are writes. A read that opens through `openStore` is a read: the writer runs
- * that open's setup before any reader serves. */
+/** Every store method but hippo.db's local files, so a served store runs no SQLite on the server thread. Tagged by
+ * effect: predictionBaserate (audit row) and bumpRecallStats (stats.json) write; an `openStore` read is a read, as the
+ * writer runs that open's setup before any reader serves. */
 export const WORKER_OPS = {
   base: {
     findApiKey: 'read',
@@ -62,7 +62,7 @@ export const WORKER_OPS = {
   },
   contextReads: {
     unfinishedHandoff: 'read',
-    ambientCandidates: 'server',
+    ambientCandidates: 'read',
     contextCandidates: 'read',
     ambientTallies: 'read',
     newestEntries: 'read',
@@ -80,7 +80,7 @@ export const WORKER_OPS = {
   dagReads: {
     sessionRawEntries: 'read',
     sessionRawCount: 'read',
-    summaryWithDescendants: 'server',
+    summaryWithDescendants: 'read',
   },
   auditLog: {
     listAuditEvents: 'read',
@@ -112,8 +112,136 @@ export const WORKER_OPS = {
   readiness: {
     ping: 'read',
   },
-} as const satisfies { readonly [G in keyof StoreGroups]?: OpPlaces<StoreGroups[G]> } & {
-  readonly base: Partial<OpPlaces<BaseMethods>>;
+  keyGrants: {
+    changeScopeGrant: 'write',
+  },
+  connectorWrites: {
+    writeConnectorEntry: 'write',
+    archiveConnectorEntry: 'write',
+  },
+  connectorEvents: {
+    eventRecord: 'read',
+    markEventSeen: 'write',
+    deletionTarget: 'read',
+    archiveDeletedArtifact: 'write',
+    slackTeamRoute: 'read',
+    githubRouting: 'read',
+    parkDeadLetter: 'write',
+    deadLetters: 'read',
+    deadLetter: 'read',
+    markDeadLetterRetried: 'write',
+    slackCursor: 'read',
+    saveSlackCursor: 'write',
+    githubCursors: 'read',
+    saveGitHubHwm: 'write',
+    seedGitHubCursors: 'write',
+    slackWorkspaces: 'read',
+    registerSlackWorkspace: 'write',
+    removeSlackWorkspace: 'write',
+  },
+  // finishRecall strengthens the global store's rows too, from the writer thread of this one.
+  lastRecall: {
+    applyTracedOutcome: 'write',
+    applyOutcomeToLast: 'write',
+    finishRecall: 'write',
+  },
+  auditMaintenance: {
+    objectBackedIds: 'read',
+    deleteAutomatically: 'write',
+    pruneAuditRows: 'write',
+    // Both take the caller's protection rule.
+    repairQuality: 'server',
+    repairQualityOnce: 'server',
+  },
+  lessonWrites: {
+    textsHoldingWords: 'read',
+    contentsWithTag: 'read',
+    writeSkippingRejected: 'write',
+    writeTogether: 'write',
+    bumpRemembered: 'write',
+  },
+  // Both snapshot loads rewrite the active-task mirror file, so they run on the one writer.
+  sessions: {
+    saveSnapshot: 'write',
+    loadSnapshot: 'write',
+    loadFreshSnapshot: 'write',
+    clearSnapshot: 'write',
+    closeSessionSnapshots: 'write',
+    appendEvent: 'write',
+    listEvents: 'read',
+    saveHandoff: 'write',
+    latestHandoff: 'read',
+    handoffById: 'read',
+    stampHandoffOutcome: 'write',
+    writeSessionEndHandoff: 'write',
+    pushWorkingMemory: 'write',
+    readWorkingMemory: 'read',
+    clearWorkingMemory: 'write',
+    bindSessionOwner: 'write',
+  },
+  cards: {
+    create: 'write',
+    load: 'read',
+    detail: 'read',
+    list: 'read',
+    runs: 'read',
+    claim: 'write',
+    heartbeat: 'write',
+    block: 'write',
+    review: 'write',
+    complete: 'write',
+    reclaimExpired: 'write',
+    comment: 'write',
+  },
+  goals: {
+    push: 'write',
+    sessionGoals: 'read',
+    complete: 'write',
+    suspend: 'write',
+    resume: 'write',
+  },
+  conflicts: {
+    list: 'read',
+    get: 'read',
+    // The reject fate carries the caller's inReach test.
+    resolve: 'server',
+  },
+  dormant: {
+    list: 'read',
+    holds: 'read',
+    restore: 'server',
+    forget: 'write',
+  },
+  reports: {
+    tokenUse: 'read',
+    failures: 'read',
+    memoryStatus: 'read',
+    entriesPage: 'read',
+    countEntries: 'read',
+    stats: 'read',
+    statusCounts: 'read',
+    correctionEntries: 'read',
+    rawEntries: 'read',
+    createdSinceLastSleep: 'read',
+  },
+  rejections: {
+    apply: 'server',
+    lift: 'write',
+    list: 'read',
+    refusedAmong: 'read',
+  },
+  failureLog: {
+    record: 'write',
+    requestOutcome: 'read',
+    settleOutcome: 'write',
+  },
+  compactions: {
+    start: 'write',
+    markSnapshotSaved: 'write',
+    saveCallerItems: 'write',
+  },
+} as const satisfies { readonly [G in Exclude<keyof StoreGroups, 'localFiles'>]: OpPlaces<StoreGroups[G]> } & {
+  readonly base: OpPlaces<BaseMethods>;
 };
 
 /** Sent by the executor itself and by no store method: the writer runs the store's open-time setup once, before any

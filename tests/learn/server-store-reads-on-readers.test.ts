@@ -13,10 +13,12 @@ import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from '../_helpers/moved-reads-seed.js';
 import { FAKE_NOW, freshStore, SESSION, TENANT } from '../_helpers/recall-golden-seed.js';
-import { cleanups, holdWriteLock, mirrorFiles, patientStore, undoAll } from '../_helpers/store-worker-server.js';
+import { cleanups, holdWriteLock, mirrorFiles, onDb, patientStore, undoAll } from '../_helpers/store-worker-server.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
+import { insertDormantRow } from '../../src/store/dormant.js';
+import { rejectValue } from '../../src/trust/reject-flow.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 
 type Served = HippoStore & StoreGroups;
@@ -47,6 +49,79 @@ function read<T>(name: string, run: Call<T>, shows: string | RegExp): Read {
 
 const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
 
+const SLACK_EVENT = { connector: 'slack', eventId: 'Ev-seeded' } as const;
+const REPO = 'acme/demo';
+const REFUSED = 'never deploy on a friday afternoon';
+/** Ids the extra seed makes, read by the rows below once it has run. */
+const made = { handoffId: 0, cardId: '' };
+
+/** The rows the moved-reads seed lacks, written through the in-process store: connector state, working memory, a claimed card, a failure, a token row, a rejection, a conflict and a dormant memory. */
+async function seedSessionAndAdmin(root: string): Promise<void> {
+  const s = sqliteStore(root);
+  await s.connectorEvents.markEventSeen(SLACK_EVENT);
+  await s.connectorEvents.registerSlackWorkspace('T-seeded', TENANT);
+  await s.connectorEvents.parkDeadLetter({ connector: 'github', tenantId: TENANT, rawPayload: '{"seeded":true}', error: 'unroutable payload', signature: null, bucket: 'unroutable' });
+  await s.connectorEvents.saveSlackCursor(TENANT, 'C-seeded', '1700000000.000100');
+  await s.connectorEvents.seedGitHubCursors(TENANT, REPO, '2026-01-01T00:00:00Z');
+  await s.sessions.pushWorkingMemory(TENANT, { scope: 'deploy', content: 'watch the canary error rate', sessionId: SESSION });
+  const card = await s.cards.create(TENANT, { title: 'cut the eu release' });
+  await s.cards.claim(TENANT, card.id, 'codex', SESSION);
+  await s.failureLog.record({ tenantId: TENANT, sessionId: SESSION, tool: 'Bash', outcome: 'stored', requestId: 'req-seeded', now: FAKE_NOW });
+  await s.recordTokens({ tenantId: TENANT, sessionId: SESSION, surface: 'http_recall', event: 'inject', items: 2, tokens: 120, now: FAKE_NOW });
+  await rejectValue(s, { tenantId: TENANT, actor: ACTOR, reason: 'wrong', value: REFUSED });
+  onDb(root, (db) => {
+    db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT, FAKE_NOW);
+    db.prepare("INSERT INTO memory_conflicts (memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at, tenant_id) VALUES ('mem_p_plain', 'mem_p_noise', 'seeded contradiction', 0.9, 'open', ?, ?, ?)").run(FAKE_NOW, FAKE_NOW, TENANT);
+    const faded = { ...createMemory('the old staging hostname was stg-1', { tenantId: TENANT }), id: 'mem_d_faded' };
+    insertDormantRow(db, { entry: faded, strength: 0.01, reason: 'decay', dormantAt: FAKE_NOW });
+  });
+  // SAFETY: MAX(id) over the handoff just pushed returns one row with a numeric id.
+  made.handoffId = onDb(root, (db) => Number((db.prepare('SELECT MAX(id) AS id FROM session_handoffs').get() as { id: number }).id));
+  made.cardId = card.id;
+  await s.close();
+}
+
+const SESSION_AND_ADMIN_READS: readonly Read[] = [
+  read('connectorEvents.eventRecord', (s) => s.connectorEvents.eventRecord(SLACK_EVENT), 'seen: true'),
+  read('connectorEvents.deletionTarget', (s) => s.connectorEvents.deletionTarget({ event: { connector: 'slack', eventId: 'Ev-unseen' }, artifactRef: 'vault:golden:rollout.md', tenantId: TENANT }), 'mem_z_vault'),
+  read('connectorEvents.slackTeamRoute', (s) => s.connectorEvents.slackTeamRoute('T-seeded'), `tenantId: '${TENANT}'`),
+  read('connectorEvents.githubRouting', (s) => s.connectorEvents.githubRouting({ installationId: '101' }), `tenant: '${TENANT}'`),
+  read('connectorEvents.deadLetters', (s) => s.connectorEvents.deadLetters('github', TENANT, 5), 'unroutable payload'),
+  read('connectorEvents.deadLetter', (s) => s.connectorEvents.deadLetter('github', 1), 'unroutable payload'),
+  read('connectorEvents.slackCursor', (s) => s.connectorEvents.slackCursor(TENANT, 'C-seeded'), '1700000000.000100'),
+  read('connectorEvents.githubCursors', (s) => s.connectorEvents.githubCursors(TENANT, REPO), '2026-01-01T00:00:00Z'),
+  read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),
+  read('auditMaintenance.objectBackedIds', (s) => s.auditMaintenance.objectBackedIds(), /'sem_/),
+  read('lessonWrites.textsHoldingWords', (s) => s.lessonWrites.textsHoldingWords(TENANT, ['deploy'], null), PLAIN),
+  read('lessonWrites.contentsWithTag', (s) => s.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined), 'migrate the rollout scripts'),
+  read('sessions.listEvents', (s) => s.sessions.listEvents(TENANT, { sessionId: SESSION, limit: 5 }), 'canary passed'),
+  read('sessions.latestHandoff', (s) => s.sessions.latestHandoff(TENANT, SESSION, {}, null), 'handoff after the canary'),
+  read('sessions.handoffById', (s) => s.sessions.handoffById(TENANT, made.handoffId), 'handoff after the canary'),
+  read('sessions.readWorkingMemory', (s) => s.sessions.readWorkingMemory(TENANT, { sessionId: SESSION }), 'watch the canary error rate'),
+  read('cards.load', (s) => s.cards.load(TENANT, made.cardId), 'cut the eu release'),
+  read('cards.detail', (s) => s.cards.detail(TENANT, made.cardId), 'cut the eu release'),
+  read('cards.list', (s) => s.cards.list(TENANT, {}), 'cut the eu release'),
+  read('cards.runs', (s) => s.cards.runs(TENANT, made.cardId), 'codex'),
+  read('goals.sessionGoals', (s) => s.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
+  read('conflicts.list', (s) => s.conflicts.list({ tenantId: TENANT, status: 'open', limit: 5 }), 'seeded contradiction'),
+  read('conflicts.get', (s) => s.conflicts.get(TENANT, 1), 'seeded contradiction'),
+  read('dormant.list', (s) => s.dormant.list(TENANT, null, {}), 'stg-1'),
+  read('dormant.holds', (s) => s.dormant.holds(TENANT, null, 'mem_d_faded'), /^true$/),
+  read('reports.tokenUse', (s) => s.reports.tokenUse(TENANT, '2000-01-01T00:00:00.000Z'), /120/),
+  read('reports.failures', (s) => s.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
+  read('reports.memoryStatus', (s) => s.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),
+  read('reports.entriesPage', (s) => s.reports.entriesPage(TENANT, { limit: 3 }), /id: 'mem_/),
+  read('reports.countEntries', (s) => s.reports.countEntries(), /^[1-9]\d*$/),
+  read('reports.stats', (s) => s.reports.stats(), /total_recalled/),
+  read('reports.statusCounts', (s) => s.reports.statusCounts(NOW, 0.1), /total/),
+  read('reports.correctionEntries', (s) => s.reports.correctionEntries(), /id: 'mem_/),
+  read('reports.rawEntries', (s) => s.reports.rawEntries(), 'mem_x_raw'),
+  read('reports.createdSinceLastSleep', (s) => s.reports.createdSinceLastSleep(TENANT, NOW), /^[1-9]\d*$/),
+  read('rejections.list', (s) => s.rejections.list(TENANT), "reason: 'wrong'"),
+  read('rejections.refusedAmong', (s) => s.rejections.refusedAmong([{ tenantId: TENANT, entryId: 'mem_new', content: REFUSED }]), /^\[ true \]$/),
+  read('failureLog.requestOutcome', (s) => s.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION), "'stored'"),
+];
+
 const READS: readonly Read[] = [
   read('findApiKey', (s, seed) => s.findApiKey(seed.keyIds[1] ?? ''), "role: 'member'"),
   read('searchRecallEntries', (s) => s.searchRecallEntries('deploy', { limit: 50, tenantId: TENANT, explicitScopeMode: 'exact', includeSuperseded: false, ownScope: undefined }), 'mem_p_plain'),
@@ -65,6 +140,7 @@ const READS: readonly Read[] = [
   read('keyWrites.listApiKeys', (s) => s.keyWrites.listApiKeys({ tenantId: TENANT, active: true }), "role: 'member'"),
   read('vectorWrites.entriesWithoutVector', (s) => s.vectorWrites.entriesWithoutVector({ model: VECTOR_IDENTITY, limit: 5 }), 'mem_p_fill0'),
   read('contextReads.unfinishedHandoff', (s) => s.contextReads.unfinishedHandoff(TENANT, CENTURY_MS, null), 'handoff after the canary'),
+  read('contextReads.ambientCandidates', (s) => s.contextReads.ambientCandidates(TENANT, { recentNeeded: 3, admit: { currentProject: '', includeCrossProject: true } }), 'mem_p_pinned'),
   read('contextReads.contextCandidates', (s) => s.contextReads.contextCandidates(TENANT, { cap: 5, now: NOW }), 'mem_p_pinned'),
   read('contextReads.ambientTallies', (s) => s.contextReads.ambientTallies(TENANT, { currentProject: [], now: NOW }), /tagCounts: Map\(\d+\) \{/),
   read('contextReads.newestEntries', (s) => s.contextReads.newestEntries(TENANT, 3), /id: 'mem_/),
@@ -75,6 +151,7 @@ const READS: readonly Read[] = [
   read('predictions.listPredictions', (s) => s.predictions.listPredictions(TENANT, { limit: 5 }), 'deploy-duration'),
   read('dagReads.sessionRawEntries', (s) => s.dagReads.sessionRawEntries({ tenantId: TENANT, sessionId: SESSION, cap: 10 }), 'mem_x_raw'),
   read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
+  read('dagReads.summaryWithDescendants', (s) => s.dagReads.summaryWithDescendants(TENANT, 'mem_x_summary', { depth: 2, admit: {}, page: { rows: 1 } }), 'mem_x_child1'),
   read('auditLog.listAuditEvents', (s) => s.auditLog.listAuditEvents({ tenantId: TENANT, limit: 5 }), "tenantId: 'default'"),
   read('quarantine.listQuarantined', (s) => s.quarantine.listQuarantined(TENANT, { status: 'all' }), 'scripts/wipe.sh before every deploy'),
   read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
@@ -89,6 +166,7 @@ const READS: readonly Read[] = [
   read('objects.activeSkillsByName', (s) => s.objects.activeSkillsByName(TENANT, 5), 'page the owner, then revert'),
   read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
   read('readiness.ping', (s) => s.readiness.ping(), /^undefined$/),
+  ...SESSION_AND_ADMIN_READS,
 ];
 
 interface Write {
@@ -158,6 +236,7 @@ describe('a read the op table places on a reader thread', () => {
     // Nor a raw row under an artifact ref; its id sorts last, so the backfill read's first page keeps its rows.
     const raw = createMemory('raw vault note on the rollout', { kind: 'raw', artifactRef: 'vault:golden:rollout.md', tenantId: TENANT });
     writeEntry(root, { ...raw, id: 'mem_z_vault' });
+    await seedSessionAndAdmin(root);
     onWorkers = workerSqliteStore(root);
     inProcess = sqliteStore(root);
   });

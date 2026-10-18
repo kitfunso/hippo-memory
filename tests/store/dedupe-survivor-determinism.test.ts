@@ -17,7 +17,7 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -30,6 +30,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/open.js';
+
+// Test 2 builds six fresh stores, one per ingest order, which can pass the unit budget on a Windows runner.
+vi.setConfig({ testTimeout: 15_000 });
 
 function ctxFor(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });

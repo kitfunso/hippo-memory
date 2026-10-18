@@ -4,6 +4,7 @@ import type { Context } from '../api/index.js';
 import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
+import type { GlobalStores } from '../store/sqlite/worker-store.js';
 
 export interface ServerHandle {
   port: number;
@@ -34,12 +35,13 @@ export interface AddonCall {
   readonly body: Readonly<Record<string, JsonValue>>;
 }
 
-/** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the
- * returned value as 200 JSON. Unset, `storeReady` means hippo.db's local files; a required group always passes. */
+/** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the returned
+ * value as 200 JSON. Unset, `storeReady` means hippo.db's local files; `loop: 'off'` fences it as a built-in row's. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
   readonly storeReady?: StoreGroup;
+  readonly loop?: 'off';
 }
 
 export interface RateLimitSpec { ratePerSec: number; burst: number }
@@ -88,6 +90,8 @@ export interface ServeOpts {
 
 export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
+  /** The operator's global store a request reaches beside `store`. */
+  globalStores: GlobalStores;
   /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */
   offLoop: <T>(run: () => T) => T;
   publicJsonBodies: ReadonlyMap<string, string>;

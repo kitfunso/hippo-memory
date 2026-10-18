@@ -2,7 +2,7 @@
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
 // (database openers outside the data layer, store branches in the API, routes that need hippo.db (storeReady 'localFiles' or sqliteOnly; sqliteOnly rows are counted apart too, and their list is pinned), twin
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
-// routesOnLoop counts the routes whose SQLite work still runs on the server thread: V1_ROUTES rows without `loop: 'off'`, plus the routes outside that table.
+// routesOnLoop counts the built-in routes whose SQLite work still runs on the server thread: V1_ROUTES rows and HOST_ROUTES entries without `loop: 'off'`, plus each MCP tool that POST /mcp runs on the server thread (on the localFiles group, or naming onServerThread). Add-on routes declare their own.
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
@@ -25,8 +25,6 @@ const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesNeedi
   'portImportsFromSql', 'buildsOutsideRoots', 'groupChecksInApi'];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
-// Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
-const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'GET /health', 'GET /ready', 'POST add-on routes'];
 // src/store files that run no SQL yet belong there: hippo.db's shapes, SQL text and plumbing. A path ending in / covers its folder.
 const DB_DEFINITION_FILES = {
   'src/store/rows.ts': 'row shapes and column lists of hippo.db',
@@ -272,10 +270,25 @@ function countTwins(sf) {
   return n;
 }
 
-const routeFail = (why) => {
-  console.error(`check-store-port: src/server/route-table.ts V1_ROUTES ${why}; the route count would read low. Declare it as an object literal whose storeReady or sqliteOnly, if any, is a string literal, or update readRoutes.`);
+const routeFail = (why, file = 'src/server/route-table.ts') => {
+  console.error(`check-store-port: ${file} ${why}; the route count would read low. Declare each route as an object literal whose storeReady, sqliteOnly and loop, if any, are string literals, or update readRoutes.`);
   process.exit(1);
 };
+
+/** The initializer of the variable `name` in `sf`, unwrapped from as, satisfies and parentheses; undefined when none. */
+function declaredValue(sf, name) {
+  let found;
+  const visit = (n) => {
+    if (ts.isVariableDeclaration(n) && n.name.getText(sf) === name && n.initializer) {
+      let init = n.initializer;
+      while (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)) init = init.expression;
+      found = init;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return found;
+}
 
 const propNamed = (row, name) => row.properties.find((p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === name);
 const rowLabel = (row, sf) => {
@@ -287,39 +300,76 @@ const rowLabel = (row, sf) => {
 
 const isOffLoop = (p) => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === 'loop' && ts.isStringLiteralLike(p.initializer) && p.initializer.text === 'off';
 
-/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal sqliteOnly), the sorted `METHOD path` of the sqliteOnly rows,
- *  and the rows that do not declare `loop: 'off'` plus every route outside the table. */
-function readRoutes(sf) {
-  let array;
-  const visit = (n) => {
-    if (ts.isVariableDeclaration(n) && n.name.getText(sf) === 'V1_ROUTES' && n.initializer) {
-      let init = n.initializer;
-      while (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)) init = init.expression;
-      if (ts.isArrayLiteralExpression(init)) array = init;
+/** HOST_ROUTES entries that do not declare `loop: 'off'`: the routes boot.ts dispatches outside V1_ROUTES. */
+function hostRoutesOnLoop(sf) {
+  const table = declaredValue(sf, 'HOST_ROUTES');
+  if (!table || !ts.isObjectLiteralExpression(table)) return routeFail('HOST_ROUTES is not declared as an object literal');
+  let onLoop = 0;
+  for (const entry of table.properties) {
+    const at = `line ${sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1}`;
+    if (!ts.isPropertyAssignment(entry) || !ts.isObjectLiteralExpression(entry.initializer)) return routeFail(`HOST_ROUTES has a spread or non-object entry (${at})`);
+    if (!entry.initializer.properties.some(isOffLoop)) onLoop++;
+  }
+  return onLoop;
+}
+
+const literalText = (node) => (node && ts.isStringLiteralLike(node) ? node.text : undefined);
+// null when the entry does not name the property, undefined when it names it with no string literal.
+const literalProp = (obj, name) => {
+  const p = propNamed(obj, name);
+  return p ? (ts.isPropertyAssignment(p) ? literalText(p.initializer) : undefined) : null;
+};
+
+/** Entries of src/mcp/request.ts TOOL_HANDLERS that POST /mcp runs on the server thread: on the localFiles group, as toolOn('localFiles', run) or
+ *  { storeReady: 'localFiles', run }, or naming a non-empty onServerThread reason. */
+function mcpToolsOnLoop(sf) {
+  const file = 'src/mcp/request.ts';
+  const made = declaredValue(sf, 'TOOL_HANDLERS');
+  const entries = made && ts.isNewExpression(made) ? made.arguments?.[0] : undefined;
+  if (!entries || !ts.isArrayLiteralExpression(entries)) return routeFail('TOOL_HANDLERS is not declared as new Map([...]) of an array literal', file);
+  let onLoop = 0;
+  for (const entry of entries.elements) {
+    const value = ts.isArrayLiteralExpression(entry) ? entry.elements[1] : undefined;
+    let group;
+    let reason = null;
+    if (value && ts.isCallExpression(value) && value.expression.getText(sf) === 'toolOn') group = literalText(value.arguments[0]);
+    else if (value && ts.isObjectLiteralExpression(value)) {
+      group = literalProp(value, 'storeReady');
+      reason = literalProp(value, 'onServerThread');
     }
-    ts.forEachChild(n, visit);
-  };
-  visit(sf);
-  if (!array) return routeFail('is not declared as an array literal');
+    if (group === undefined || reason === undefined || reason === '') {
+      const at = sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1;
+      return routeFail(`TOOL_HANDLERS has an entry that is not [name, toolOn(literal, run)] or [name, { run }] with literal fields (line ${at})`, file);
+    }
+    if (group === 'localFiles' || reason !== null) onLoop++;
+  }
+  return onLoop;
+}
+
+/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal sqliteOnly), the sorted `METHOD path` of the sqliteOnly rows,
+ *  and the rows that do not declare `loop: 'off'` plus the HOST_ROUTES entries that do not. */
+function readRoutes(sf) {
+  const array = declaredValue(sf, 'V1_ROUTES');
+  if (!array || !ts.isArrayLiteralExpression(array)) return routeFail('V1_ROUTES is not declared as an array literal');
   let needsHippoDb = 0;
-  let onLoop = OFF_TABLE_ROUTES.length;
+  let onLoop = 0;
   const sqliteOnly = [];
   for (const row of array.elements) {
     const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
-    if (!ts.isObjectLiteralExpression(row)) return routeFail(`has a spread or non-object element (${at})`);
+    if (!ts.isObjectLiteralExpression(row)) return routeFail(`V1_ROUTES has a spread or non-object element (${at})`);
     if (!row.properties.some(isOffLoop)) onLoop++;
     const label = rowLabel(row, sf);
     const store = propNamed(row, 'storeReady');
     const only = propNamed(row, 'sqliteOnly');
-    if (store && only) return routeFail(`row ${label} declares both storeReady and sqliteOnly`);
-    if (store && !(ts.isPropertyAssignment(store) && ts.isStringLiteralLike(store.initializer))) return routeFail(`row ${label} has a storeReady that is not a string literal`);
+    if (store && only) return routeFail(`V1_ROUTES row ${label} declares both storeReady and sqliteOnly`);
+    if (store && !(ts.isPropertyAssignment(store) && ts.isStringLiteralLike(store.initializer))) return routeFail(`V1_ROUTES row ${label} has a storeReady that is not a string literal`);
     if (only) {
-      if (!(ts.isPropertyAssignment(only) && ts.isStringLiteralLike(only.initializer) && only.initializer.text.trim() !== '')) return routeFail(`row ${label} has a sqliteOnly that is not a non-empty string literal`);
+      if (!(ts.isPropertyAssignment(only) && ts.isStringLiteralLike(only.initializer) && only.initializer.text.trim() !== '')) return routeFail(`V1_ROUTES row ${label} has a sqliteOnly that is not a non-empty string literal`);
       sqliteOnly.push(label);
       needsHippoDb++;
     } else if (store && store.initializer.text === 'localFiles') needsHippoDb++;
   }
-  return { needsHippoDb, sqliteOnly: sqliteOnly.sort(), onLoop };
+  return { needsHippoDb, sqliteOnly: sqliteOnly.sort(), onLoop: onLoop + hostRoutesOnLoop(sf) };
 }
 
 /** True when the file names the reply carrier (`andThen`, `onStore` or `StoreReply`) as an identifier; comments and strings never match. */
@@ -421,8 +471,9 @@ function measure() {
       out.routesNeedingHippoDb = routes.needsHippoDb;
       out.sqliteOnlyRoutes = routes.sqliteOnly.length;
       sqliteOnlyRoutesList = routes.sqliteOnly;
-      out.routesOnLoop = routes.onLoop;
+      out.routesOnLoop += routes.onLoop;
     }
+    if (file === 'src/mcp/request.ts') out.routesOnLoop += mcpToolsOnLoop(sf);
     sqliteLocalMethods.push(...localMethods(sf));
     sites.portImportsFromSql.push(...portSqlImports(file, sf));
     if (buildsOutsideRootsHere(file)) sites.buildsOutsideRoots.push(...callsOf(file, sf, builderNames(file, sf)));
