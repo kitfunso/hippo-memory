@@ -214,6 +214,7 @@ describe('published runtime exports', () => {
       transcriptWorkingState",
         "./store-kit": "EMBEDDING_MODEL_META_KEY
       OTHER_STORE_MARKER
+      PROTECTED_ROWS
       RECALL_DEFAULT_DENY_SCOPES RejectedValueError
       SECRET_TAGS StoreBusyError
       ambientRefusal
@@ -226,7 +227,7 @@ describe('published runtime exports', () => {
       normalizeValueForRejection
       ownScopeTouches
       passesScopeFilterForRecall physicsSearch
-      rankVectorRows rarestFtsQuery rejectionDigest replacesIndex requireGroup
+      rankVectorRows rarestFtsQuery rejectionDigest repairKeeps replacesIndex requireGroup
       sqliteStore
       tallyAmbientEntries",
         "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests _setDigestExistsProbeForTests",
