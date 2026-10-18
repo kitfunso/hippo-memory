@@ -17,6 +17,7 @@ import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../util/tenant.js';
 import { tenantAnd } from './tenant.js';
+import { chunked } from '../../util/chunked.js';
 import type { AmbientRefusalReason } from '../../core/read-admission.js';
 import type {
   AmbientCandidates,
@@ -291,9 +292,8 @@ export function loadTextsHoldingWordsAt(
   const out: HeldText[] = [];
   const tenant = tenantAnd(tenantId);
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  // Chunked so one statement stays far under SQLite's bound-parameter limit.
-  for (let i = 0; i < unique.length; i += 200) {
-    const chunk = unique.slice(i, i + 200);
+  // One instr() per word in an OR chain: ID_CHUNK terms stay under SQLite's 1000-level expression depth.
+  for (const chunk of chunked(unique)) {
     // SAFETY: rows' shape matches the three columns named in the SELECT below.
     const rows = db
       .prepare(

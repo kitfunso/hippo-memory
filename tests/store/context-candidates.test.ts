@@ -5,6 +5,7 @@ import { calculateStrength, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { _resetAblationCacheForTests, strengthAblation } from '../../src/core/ablation.js';
+import { ID_CHUNK } from '../../src/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadContextCandidates, tallySources, loadTextsHoldingWords, writeEntry } from '../_helpers/root-forms.js';
 
@@ -94,6 +95,17 @@ describe('loadContextCandidates over the cap', () => {
       ['row e-mid body', 'proj'],
       ['row h-global body', ''],
     ]);
+  });
+
+  it('finds a row whose word falls on either side of a chunk boundary and in the last chunk', () => {
+    const filler = (n: number): string[] => Array.from({ length: n }, (_, i) => `absent-${i}`);
+    const words = [...filler(ID_CHUNK - 1), 'e-mid', 'g-other', ...filler(ID_CHUNK), 'h-global'];
+    expect(words.length).toBeGreaterThan(2 * ID_CHUNK);
+    expect(
+      loadTextsHoldingWords(root, 'default', words)
+        .map((r) => r.content)
+        .sort(),
+    ).toEqual(['row e-mid body', 'row g-other body', 'row h-global body']);
   });
 });
 

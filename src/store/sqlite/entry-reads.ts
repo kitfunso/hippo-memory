@@ -5,7 +5,7 @@ import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../../util/escape.js';
 import { originInSql } from '../../core/project-identity.js';
 import { scopeAdmitSql } from './rule-sql.js';
-import { chunked } from '../../util/chunked.js';
+import { chunked, ID_CHUNK } from '../../util/chunked.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../util/tenant.js';
 import { placeholders } from '../../util/sql.js';
 import { duplicateKey, longestWord } from '../../util/same-text.js';
@@ -15,7 +15,6 @@ import type { RawRefRow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../port/project-tags.js';
 import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
 
-const MAX_IDS_PER_READ = 500;
 const MAX_FRESH_RAW = 200;
 
 // The plus keeps SQLite on the primary key for an id list: with
@@ -80,10 +79,10 @@ export function selectChildrenByParent(
   return byParent;
 }
 
-/** Batched lookup, capped at 500 ids per call to keep IN(?,?,...) within SQLite limits. */
+/** Batched lookup, capped at ID_CHUNK ids per call to keep IN(?,?,...) within SQLite limits. */
 export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
   if (ids.length === 0) return [];
-  const capped = ids.slice(0, MAX_IDS_PER_READ);
+  const capped = ids.slice(0, ID_CHUNK);
   const tenant = tenantAnd(tenantId, TENANT_IS);
   // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.

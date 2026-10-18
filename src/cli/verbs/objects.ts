@@ -1,7 +1,7 @@
 // First-class object, server, goal and auth verbs, in `hippo help` order.
 
 import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../api/auth/auth.js';
-import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../../server/defaults.js';
+import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../../server/defaults.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
 export const OBJECT_VERBS = {
@@ -205,7 +205,7 @@ export const OBJECT_VERBS = {
     usage: [
       `
   dashboard                Open web dashboard for memory health
-    --port <n>             Port to serve on (default: 3333)`,
+    --port <n>             Port to serve on (default: ${DEFAULT_DASHBOARD_PORT})`,
     ],
   }),
   mcp: verb(() => import('../serve.js'), 'handleMcp', {

@@ -9,6 +9,7 @@ import { withWriteScope } from './busy.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
 import { initializeParticle } from '../core/physics.js';
+import { chunked } from '../util/chunked.js';
 import { placeholders } from '../util/sql.js';
 import { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
 
@@ -45,8 +46,6 @@ interface PhysicsRow {
   last_simulation: string;
 }
 
-const PHYSICS_ID_CHUNK = 500;
-
 /**
  * Load physics state for specific memory IDs (or all if no IDs given).
  */
@@ -56,8 +55,7 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
   let rows: PhysicsRow[] = [];
   if (memoryIds && memoryIds.length > 0) {
     // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
-    for (let i = 0; i < memoryIds.length; i += PHYSICS_ID_CHUNK) {
-      const chunk = memoryIds.slice(i, i + PHYSICS_ID_CHUNK);
+    for (const chunk of chunked(memoryIds)) {
       const marks = placeholders(chunk.length);
       // SAFETY: the SELECT projects exactly the PhysicsRow columns, in order.
       rows.push(

@@ -13,6 +13,11 @@ export function rowsPerStatement(bindsPerRow: number): number {
   return Math.floor(SQLITE_MAX_BOUND_PARAMS / bindsPerRow);
 }
 
+/** How many ids one statement can bind when each id is bound `copies` times beside `otherBinds` more marks. */
+export function idsPerStatement(copies: number, otherBinds: number): number {
+  return Math.floor((SQLITE_MAX_BOUND_PARAMS - otherBinds) / copies);
+}
+
 /** `rows` VALUES rows of `bindsPerRow` marks each, e.g. (2, 2) -> "(?, ?), (?, ?)". */
 export function valuesRows(rows: number, bindsPerRow: number): string {
   const row = `(${placeholders(bindsPerRow)})`;
