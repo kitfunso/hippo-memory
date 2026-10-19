@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   closeHippoDb,
   isSqliteBusy,
+  openHippoDb,
   outsideRequestStores,
   withTrialScope,
   withWriteScope,
@@ -33,7 +34,7 @@ import {
 import { gatedWrite } from './gated-write.js';
 import { updateStatsAt } from './index-and-stats.js';
 import { removeEntryMirrors } from './mirrors.js';
-import { initStore, onHandle, openBareHandle, openStore } from './handles.js';
+import { initStore, onHandle, openStore } from './handles.js';
 import { projectTagReads } from './project-tags.js';
 import { findRejectedValue } from './rejection.js';
 import { rejectionDigest } from '../../core/rejection-digest.js';
@@ -97,13 +98,13 @@ function importTarget(db: DatabaseSyncLike, root: string, tenantId: string, clos
 export const sqliteAgentImport: AgentImport = {
   create: (root) => initStore(root),
   open: (root, tenantId, opts) => {
-    const db = openBareHandle(root, { busyWaitMs: opts.busyWaitMs });
+    const db = openHippoDb(root, { busyWaitMs: opts.busyWaitMs });
     return importTarget(db, root, tenantId, () => closeHippoDb(db));
   },
   openStandIn: (tenantId) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
     // Its folder is deleted at close, so a request scope must not keep the file open past that.
-    const db = outsideRequestStores(() => openBareHandle(root));
+    const db = outsideRequestStores(() => openHippoDb(root));
     return importTarget(db, root, tenantId, () => {
       closeHippoDb(db);
       fs.rmSync(root, { recursive: true, force: true });

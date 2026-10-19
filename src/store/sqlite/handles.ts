@@ -45,11 +45,6 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
   }
 }
 
-/** A connection with no mirror or legacy setup, for a caller that already ran `initStore`. */
-export function openBareHandle(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  return openHippoDb(hippoRoot, opts);
-}
-
 /** One call on a handle of its own, closed after (a request scope's handle stays open);
  *  pass openStore where the call also sets up mirror folders and legacy rows. */
 export function onHandle<T>(

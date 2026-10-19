@@ -459,7 +459,6 @@ const FOLDER_OPENERS = new Set([
   'openHippoDbWithFacts',
   'withUnmigratedDb',
   'reproveStoreSchema',
-  'openBareHandle',
   'onHandleAsync',
   'initStore',
   'handlesOf',
