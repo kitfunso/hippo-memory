@@ -78,24 +78,62 @@ function seedCircle(nodes: GraphNode[], width: number, height: number): Map<numb
   return pos;
 }
 
-function addRepulsion(nodes: GraphNode[], pos: Map<number, Point>, disp: Point[], k: number): void {
-  const n = nodes.length;
-  for (let i = 0; i < n; i++) {
-    const pi = pos.get(nodes[i].id)!;
-    for (let j = i + 1; j < n; j++) {
-      const pj = pos.get(nodes[j].id)!;
-      const dx = pi.x - pj.x;
-      const dy = pi.y - pj.y;
-      const dist = Math.hypot(dx, dy) || 0.01;
-      const rep = (k * k) / dist;
-      const ux = dx / dist;
-      const uy = dy / dist;
-      disp[i].x += ux * rep;
-      disp[i].y += uy * rep;
-      disp[j].x -= ux * rep;
-      disp[j].y -= uy * rep;
+/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/2, so the grid leaves it out. */
+const REPULSION_REACH_K = 2;
+const CELL_KEY_STRIDE = 1 << 20;
+
+/** Node indexes by grid cell of side `reach`, each cell's list in index order. */
+function gridOf(pts: readonly Point[], reach: number): Map<number, number[]> {
+  const cells = new Map<number, number[]>();
+  pts.forEach((p, i) => {
+    const key = Math.floor(p.x / reach) * CELL_KEY_STRIDE + Math.floor(p.y / reach);
+    const cell = cells.get(key);
+    if (cell) cell.push(i);
+    else cells.set(key, [i]);
+  });
+  return cells;
+}
+
+/** Adds every pair's repulsion within the reach, reading only the 3 by 3 cells around each node; `visits` counts the
+ * pairs looked at. */
+function addRepulsion(
+  nodes: GraphNode[],
+  pos: Map<number, Point>,
+  disp: Point[],
+  k: number,
+  visits: { pairs: number },
+): void {
+  const reach = REPULSION_REACH_K * k;
+  const pts = nodes.map((node) => pos.get(node.id)!);
+  const cells = gridOf(pts, reach);
+  for (let i = 0; i < pts.length; i++) {
+    const pi = pts[i];
+    const cx = Math.floor(pi.x / reach);
+    const cy = Math.floor(pi.y / reach);
+    for (let gx = cx - 1; gx <= cx + 1; gx++) {
+      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+        for (const j of cells.get(gx * CELL_KEY_STRIDE + gy) ?? []) {
+          if (j <= i) continue;
+          visits.pairs++;
+          repel(pi, pts[j], disp[i], disp[j], k, reach);
+        }
+      }
     }
   }
+}
+
+function repel(pi: Point, pj: Point, di: Point, dj: Point, k: number, reach: number): void {
+  const dx = pi.x - pj.x;
+  const dy = pi.y - pj.y;
+  const dist = Math.hypot(dx, dy) || 0.01;
+  if (dist >= reach) return;
+  const rep = (k * k) / dist;
+  const ux = dx / dist;
+  const uy = dy / dist;
+  di.x += ux * rep;
+  di.y += uy * rep;
+  dj.x -= ux * rep;
+  dj.y -= uy * rep;
 }
 
 function addAttraction(
@@ -146,11 +184,12 @@ function applyDisplacement(
 
 /**
  * Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations, no `Math.random`, so
- * one model gives the same positions.
+ * one model gives the same positions. Repulsion reaches 2k and runs on a grid, so a pass costs the nodes near each
+ * node, not every pair; `opts.visits` counts the pairs looked at.
  *  Non-finite coordinates are clamped to the viewport centre and all positions to the bounds. */
 export function layoutGraph(
   model: GraphModel,
-  opts: { width?: number; height?: number; iterations?: number } = {},
+  opts: { width?: number; height?: number; iterations?: number; visits?: { pairs: number } } = {},
 ): Map<number, { x: number; y: number }> {
   const width = opts.width ?? LAYOUT_W;
   const height = opts.height ?? LAYOUT_H;
@@ -163,10 +202,11 @@ export function layoutGraph(
   const pos = seedCircle(nodes, width, height);
   const idIndex = new Map<number, number>(nodes.map((node, i) => [node.id, i]));
   const k = Math.sqrt((width * height) / n); // ideal edge length
+  const visits = opts.visits ?? { pairs: 0 };
 
   for (let iter = 0; iter < iterations; iter++) {
     const disp = nodes.map(() => ({ x: 0, y: 0 }));
-    addRepulsion(nodes, pos, disp, k);
+    addRepulsion(nodes, pos, disp, k, visits);
     addAttraction(model.edges, idIndex, pos, disp, k);
     const temp = Math.max(1, (width / 10) * (1 - iter / iterations));
     applyDisplacement(nodes, pos, disp, temp, width, height);

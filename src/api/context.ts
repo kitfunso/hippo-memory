@@ -52,8 +52,21 @@ export const DEFAULT_CONTEXT_BUDGET = 1500;
 // The plan's query when the caller gave none: context then ranks by strength instead of searching.
 export const NO_QUERY = '*';
 
-/** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
+/** Most rows per store a no-query context reads; past it, ranking sees the strongest by decay. */
 const CONTEXT_CANDIDATE_CAP = 2000;
+/** The page is sized from the rows the budget can pay for: a memory under this many tokens is rarer than the slack. */
+const CONTEXT_PAGE_ROW_TOKENS = 20;
+/** Strength also weighs recall count and valence, so the strongest rows by strength sit a few times deeper than their
+ * decay rank; the page reads that many times the rows it can return. */
+const CONTEXT_PAGE_SLACK = 4;
+/** The smallest page, so a tiny budget or limit still ranks a real candidate set. */
+const CONTEXT_PAGE_MIN = 200;
+
+/** Rows per store a no-query context reads: the strongest by decay, enough to fill the budget and the limit. */
+function contextCandidatePage(left: number, limit: number): number {
+  const returnable = Math.min(Math.ceil(Math.max(0, left) / CONTEXT_PAGE_ROW_TOKENS), limit);
+  return Math.min(CONTEXT_CANDIDATE_CAP, Math.max(CONTEXT_PAGE_MIN, Math.ceil(returnable * CONTEXT_PAGE_SLACK)));
+}
 
 /** A query reads recall's FTS window from each store; the search's vector arm adds the nearest rows. */
 interface ContextQueryWindow {
@@ -148,7 +161,7 @@ export async function contextGet(ctx: Context, opts: ContextOptions): Promise<Co
   const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
   const admission = ambientAdmission(opts, plan, sections.shownHandoff);
-  const pools = await loadPools(ctx, plan, admission, promptRecallRequest(opts, plan));
+  const pools = await loadPools(ctx, plan, admission, promptRecallRequest(opts, plan), sections.left);
   const noSections = !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
   if (nothingToInject(plan, pools, noSections)) {
     return { entries: [], tokens: 0 };
@@ -427,6 +440,7 @@ async function loadPools(
   plan: ContextPlan,
   admission: ContextAdmission,
   recallRequest: AmbientRecallRequest | undefined,
+  left: number,
 ): Promise<ContextPools> {
   const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope, ownScope } = plan;
   const recent: RecentRequest = { needed: plan.includeRecent, origins: recentOrigins(plan) };
@@ -449,7 +463,7 @@ async function loadPools(
         exactScope,
         ownScope,
         project: plan.originProject,
-        cap: CONTEXT_CANDIDATE_CAP,
+        cap: contextCandidatePage(left, plan.limit),
         now: evalNow(),
       };
   // Tenant-scoped loads: never resolveTenantId({}) here.

@@ -115,18 +115,18 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
   return Number(result.changes ?? 0);
 }
 
-/** Latest time each target got a good outcome, from the audit rows, read on a handle of its own; unlike
- * queryAuditEvents it has no row cap. */
-export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
+/** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike queryAuditEvents it has
+ * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
+export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
   // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
   const rows = db
     .prepare(
       `SELECT target_id, MAX(ts) AS ts FROM audit_log
-       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+       WHERE tenant_id = ? AND ts >= ? AND op = 'outcome' AND target_id IS NOT NULL
          AND json_extract(metadata_json, '$.good') = 1
        GROUP BY target_id`,
     )
-    .all(tenantId) as { target_id: string; ts: string }[];
+    .all(tenantId, since) as { target_id: string; ts: string }[];
   return new Map(rows.map((r) => [r.target_id, r.ts]));
 }
 

@@ -72,12 +72,7 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
   const parsed = parseStoredJson(site, row.entry_json);
   if (parsed === undefined) return null;
   const entry = isStoredSnapshot(parsed) ? toCurrentEntry(parsed) : undefined;
-  if (
-    entry === undefined ||
-    entry.id !== row.id ||
-    entry.tenantId !== row.tenant_id ||
-    entry.content !== row.content
-  ) {
+  if (entry === undefined || entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
     warnDamagedColumn(site, 'wrong shape');
     return null;
   }

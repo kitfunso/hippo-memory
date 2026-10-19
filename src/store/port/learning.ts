@@ -22,6 +22,6 @@ export interface Learning {
   writeEntriesTogether(entries: readonly MemoryEntry[]): number;
   /** Adds `tag` to each of the tenant's rows `ids` names that lacks it, in one transaction. */
   addTagToEntries(tenantId: string, ids: readonly string[], tag: string): void;
-  /** When each memory was last confirmed by a good outcome, by id. */
-  confirmedOutcomeTimes(tenantId: string): Map<string, string>;
+  /** When each memory was last confirmed by a good outcome at or after `since` (an ISO time), by id. */
+  confirmedOutcomeTimes(tenantId: string, since: string): Map<string, string>;
 }

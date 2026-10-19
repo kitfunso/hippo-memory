@@ -106,7 +106,7 @@ function seed(root, sourceOf) {
         baseHalfLifeDays: 30,
       });
       const created = new Date(started - (i % 365) * DAY_MS - i * 1000).toISOString();
-      writeEntryDbOnly(db, { ...entry, created, last_retrieved: created, origin_project: 'proj' });
+      writeEntryDbOnly(db, { ...entry, created, lastRetrieved: created, originProject: 'proj' });
     }
     db.exec('COMMIT');
   } catch (error) {
@@ -215,7 +215,7 @@ const httpTool =
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
-  ['contextGet, no query', () => contextGet(ctx, { currentProject: 'proj' }), [330, 5335, 11]],
+  ['contextGet, no query', () => contextGet(ctx, { currentProject: 'proj' }), [330, 920, 11]],
   ['contextGet, query', () => contextGet(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665, 16]],
   [
     'contextGet, pinned only',
@@ -236,7 +236,7 @@ const cases = [
     },
     [19, 6, 2],
   ],
-  ['mcp hippo_context', tool('hippo_context'), [345, 5370, 2]],
+  ['mcp hippo_context', tool('hippo_context'), [345, 1730, 2]],
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [411, 1495, 1]],
   ['mcp hippo_status', tool('hippo_status'), [13, 7, 1]],
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],

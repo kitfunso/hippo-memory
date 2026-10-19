@@ -267,9 +267,10 @@ export async function loadVectorCandidateEntriesAt(
   );
   if (matches.length === 0) return [];
   // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db
-    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(matches.length)})`)
-    .all(...matches.map((m) => m.id)) as MemoryRow[];
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(matches.length)})`,
+  ).all(...matches.map((m) => m.id)) as MemoryRow[];
   const byId = new Map(rows.map((r) => [r.id, rowToEntry(r)]));
   return matches.flatMap((m) => byId.get(m.id) ?? []);
 }
@@ -287,9 +288,10 @@ export function pickRarestFtsQuery(
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
   // SAFETY: rows' shape matches the two columns named in the SELECT.
-  const rows = db
-    .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`)
-    .all(...vocab) as Array<{ term: string; doc: number }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,
+  ).all(...vocab) as Array<{ term: string; doc: number }>;
   const counts = new Map(rows.map((r) => [r.term, r.doc]));
   return rarestFtsQuery(terms, (part) => counts.get(part) ?? 0, maxTerms);
 }
