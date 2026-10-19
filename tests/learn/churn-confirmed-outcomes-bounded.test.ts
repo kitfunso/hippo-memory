@@ -27,23 +27,31 @@ function newRoot(): string {
   return root;
 }
 
-function addOutcome(root: string, targetId: string, ts: string, good = true): void {
+type Outcome = readonly [targetId: string, ts: string, good: boolean];
+
+function addOutcomes(root: string, outcomes: readonly Outcome[]): void {
   const db = openHippoDb(root);
   try {
-    db.prepare(
+    const insert = db.prepare(
       `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, 'default', 'test', 'outcome', ?, ?)`,
-    ).run(ts, targetId, JSON.stringify({ good }));
+    );
+    db.exec('BEGIN');
+    for (const [targetId, ts, good] of outcomes) insert.run(ts, targetId, JSON.stringify({ good }));
+    db.exec('COMMIT');
   } finally {
     closeHippoDb(db);
   }
 }
 
 function seedHistory(root: string): void {
-  for (let i = 0; i < OLD_TARGETS; i++) addOutcome(root, `old-${i}`, '2020-01-01T00:00:00.000Z');
-  addOutcome(root, 'new-a', '2026-03-01T00:00:00.000Z');
-  addOutcome(root, 'new-a', '2026-04-01T00:00:00.000Z');
-  addOutcome(root, 'new-b', '2026-05-01T00:00:00.000Z');
-  addOutcome(root, 'new-bad', '2026-05-01T00:00:00.000Z', false);
+  const old = Array.from({ length: OLD_TARGETS }, (_, i): Outcome => [`old-${i}`, '2020-01-01T00:00:00.000Z', true]);
+  addOutcomes(root, [
+    ...old,
+    ['new-a', '2026-03-01T00:00:00.000Z', true],
+    ['new-a', '2026-04-01T00:00:00.000Z', true],
+    ['new-b', '2026-05-01T00:00:00.000Z', true],
+    ['new-bad', '2026-05-01T00:00:00.000Z', false],
+  ]);
 }
 
 describe('confirmedOutcomeTimes', () => {

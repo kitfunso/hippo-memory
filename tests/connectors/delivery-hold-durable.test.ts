@@ -16,8 +16,10 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const claim = (key: string, nowMs: number, connector: 'slack' | 'github' = 'slack') =>
-  sqliteSyncStore(root).connectorEvents.claimDelivery({ connector, key, nowMs, ttlMs: TTL });
+const claimOn = (store: ReturnType<typeof sqliteSyncStore>, key: string, nowMs: number) =>
+  store.connectorEvents.claimDelivery({ connector: 'slack', key, nowMs, ttlMs: TTL });
+/** Each call builds a store of its own, as a restarted server would. */
+const claim = (key: string, nowMs: number) => claimOn(sqliteSyncStore(root), key, nowMs);
 
 function holdRows(): number {
   const db = openHippoDb(root);
@@ -43,10 +45,11 @@ describe('claimDelivery', () => {
   });
 
   it('sweeps the holds that ran out, so the rows stay as many as the holds still live', async () => {
-    for (let i = 0; i < 40; i++) await claim(`sig-${i}`, 0);
+    const store = sqliteSyncStore(root);
+    for (let i = 0; i < 40; i++) await claimOn(store, `sig-${i}`, 0);
     expect(holdRows()).toBe(40);
 
-    expect(await claim('late', TTL)).toBe(true);
+    expect(await claimOn(store, 'late', TTL)).toBe(true);
     expect(holdRows()).toBe(1);
   });
 });
