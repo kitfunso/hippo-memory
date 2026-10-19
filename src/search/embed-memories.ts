@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import type { MemoryEntry } from '../core/memory.js';
+import type { MemoryEntry, StrengthOptions } from '../core/memory.js';
 import { initializeParticle } from '../core/physics.js';
 import { apiKeyMissing, resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import type { EmbeddingsConfig, HippoConfig } from '../core/config.js';
@@ -230,21 +230,21 @@ function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknow
   log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
 }
 
-/** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write; `withParticles`
- * seeds each memory's particle. */
+/** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write; `particles`, when
+ * given, scores the particle each memory seeds. */
 async function writeVectorPage(
   writes: VectorWrites,
   write: Pick<VectorWrite, 'model' | 'replaceIndex'>,
   page: readonly MemoryEntry[],
   vectors: readonly number[][],
-  withParticles: boolean,
+  particles: StrengthOptions | undefined,
 ): Promise<VectorWriteResult> {
   const byTenant = new Map<string, VectorRowWrite[]>();
   page.forEach((entry, i) => {
     const vector = vectors[i];
     if (!vector || vector.length === 0) return noteSkippedEmbedding(entry.id);
-    const row: VectorRowWrite = withParticles
-      ? { memoryId: entry.id, vector, particle: initializeParticle(entry, vector) }
+    const row: VectorRowWrite = particles
+      ? { memoryId: entry.id, vector, particle: initializeParticle(entry, vector, particles) }
       : { memoryId: entry.id, vector };
     byTenant.set(entry.tenantId, [...(byTenant.get(entry.tenantId) ?? []), row]);
   });
@@ -266,6 +266,7 @@ async function backfillInStore(
   provider: EmbeddingProvider,
   model: string,
   rebuild: boolean,
+  strength: StrengthOptions,
 ): Promise<number> {
   let count = 0;
   let afterId: string | undefined;
@@ -277,7 +278,13 @@ async function backfillInStore(
       page.map((e) => embeddingInputText(e)),
       'passage',
     );
-    const result = await writeVectorPage(writes, { model, replaceIndex: rebuild }, page, vectors, rebuild);
+    const result = await writeVectorPage(
+      writes,
+      { model, replaceIndex: rebuild },
+      page,
+      vectors,
+      rebuild ? strength : undefined,
+    );
     // Another process rebuilt the index mid-run; every later page
     // would be refused too, after paying the provider for it.
     if (result.modelMismatch) throw new Error(OTHER_MODEL_INDEX);
@@ -286,17 +293,25 @@ async function backfillInStore(
 }
 
 /** embedAll on a store: a model change re-embeds every memory, and the first page written drops the old index. */
-async function embedAllInStore(store: HippoStore, provider: EmbeddingProvider): Promise<number> {
+async function embedAllInStore(
+  store: HippoStore,
+  provider: EmbeddingProvider,
+  strength: StrengthOptions,
+): Promise<number> {
   const { vectors: reads, vectorWrites: writes } = store;
   const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
-  return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild);
+  return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild, strength);
 }
 
 /** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it leaves a model change to
  * embedAll, so a stale
  * read here never drops another process's rebuild; the read only saves a paid embed call, as the write refuses
  * another model itself. */
-function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
+function embedMemoryInStore(
+  { store, strength }: StoreEmbedTarget,
+  provider: EmbeddingProvider,
+  entry: MemoryEntry,
+): Promise<EmbedOutcome> {
   return withProcessEmbedLock(async () => {
     const { vectors: reads, vectorWrites: writes } = store;
     const model = embeddingIndexIdentity(provider.id);
@@ -309,7 +324,7 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
             { model, replaceIndex: false },
             [entry],
             await provider.embed([embeddingInputText(entry)], 'passage'),
-            true,
+            strength,
           )
         ).modelMismatch;
       if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
@@ -334,7 +349,15 @@ export type EmbedOutcome = 'indexed' | 'off' | 'failed';
  * config that names the provider. */
 export type EmbedTarget =
   | { readonly hippoRoot: string; readonly embeddingIndex: EmbeddingIndex; readonly embeddings: EmbeddingsConfig }
-  | { readonly hippoRoot: string; readonly store: HippoStore; readonly embeddings: EmbeddingsConfig };
+  | StoreEmbedTarget;
+
+/** A store's vector groups, with the strength rules the particles a vector write seeds are scored by. */
+export interface StoreEmbedTarget {
+  readonly hippoRoot: string;
+  readonly store: HippoStore;
+  readonly embeddings: EmbeddingsConfig;
+  readonly strength: StrengthOptions;
+}
 
 /** A hippo.db folder with the config its root loaded, so a write into it embeds with the provider that config names. */
 export interface ConfiguredFolder extends FolderStore {
@@ -361,7 +384,7 @@ export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: s
     return 'failed';
   }
   if (!available) return 'off';
-  if ('store' in on) return embedMemoryInStore(on.store, provider, entry);
+  if ('store' in on) return embedMemoryInStore(on, provider, entry);
   const index = on.embeddingIndex;
   return withEmbedLock(on.hippoRoot, () => embedMemoryLocked(index, provider, entry)).catch((err): EmbedOutcome => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`, errorFields(err));
@@ -509,7 +532,7 @@ export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: 
     throwIfProviderKeyMissing(cfg, provider);
     return 0;
   }
-  if ('store' in on) return withProcessEmbedLock(() => embedAllInStore(on.store, provider));
+  if ('store' in on) return withProcessEmbedLock(() => embedAllInStore(on.store, provider, on.strength));
   const index = on.embeddingIndex;
   return withEmbedLock(on.hippoRoot, async () => {
     const identity = provider.id;

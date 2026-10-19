@@ -695,7 +695,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
         importProjectMemories(root, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport,
+          agentImport: sqliteAgentImport({}),
           machine: { home, env: {}, platform: process.platform },
         }),
       ).imported;

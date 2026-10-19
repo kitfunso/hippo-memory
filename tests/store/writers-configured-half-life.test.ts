@@ -173,7 +173,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
         importProjectMemories(root, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport,
+          agentImport: sqliteAgentImport({}),
           machine: { home, env: {}, platform: process.platform },
         }),
       );

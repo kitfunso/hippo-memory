@@ -9,7 +9,6 @@ import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { auditMemoryQuality } from '../../src/api/auth/audit.js';
 import { deduplicateStore, type DedupPair } from '../../src/consolidate/dedupe.js';
 import { auditMemories, type AuditIssue } from '../../src/core/memory-audit.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
 import { loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
 
@@ -18,7 +17,6 @@ const roots: string[] = [];
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
@@ -97,7 +95,6 @@ describe('sleep in keyset pages', () => {
     roots.push(home);
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
-    _resetAblationCacheForTests();
     expect(ROWS.length).toBeGreaterThan(PAGE * 2);
 
     const paged = await sleepWithPages(PAGE, dryRun);

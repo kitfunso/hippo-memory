@@ -1,7 +1,8 @@
-import type { MemoryEntry } from '../core/memory.js';
+import { strengthOptionsOf, type MemoryEntry } from '../core/memory.js';
+import type { RuntimeSettings } from '../core/config.js';
 import { estimateTokens } from '../util/token-text.js';
 import { tokenize } from '../util/tokenize.js';
-import { evalNow } from '../core/ablation.js';
+import { evalNow, rankAblation } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
 import { compareScoredResults } from '../core/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
@@ -21,6 +22,8 @@ export interface SearchOptions {
   asOf?: string;
   /** Active scope for scope-boost scoring; none when unset. */
   scope?: string | null;
+  /** The root's settings; `lossAversionRatio` scales an error memory's strength. */
+  runtime?: RuntimeSettings;
 }
 
 type Corpus = ReturnType<typeof buildCorpus>;
@@ -55,12 +58,14 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
     temporal: temporalContext(query, pool),
     outcome: false,
     summary: NO_SUMMARY_SCORING,
+    strength: strengthOptionsOf(options.runtime),
+    ablation: rankAblation(),
   };
   const scored: SearchResult[] = [];
   for (let i = 0; i < pool.length; i++) {
     const bm25 = bm25Score(corpus, i, queryTerms);
     if (bm25 <= 0) continue;
-    const { strength, recency } = strengthRecencyMultipliers(pool[i], now);
+    const { strength, recency } = strengthRecencyMultipliers(pool[i], ctx);
     const normBm25 = bm25 / queryTerms.length;
     const score = applyRankBoosts(normBm25 * strength * recency, pool[i], ctx).score;
     scored.push({ entry: pool[i], score, bm25, cosine: 0, tokens: estimateTokens(pool[i].content) });

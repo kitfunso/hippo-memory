@@ -6,7 +6,6 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry, deserializeEntry } from '../../src/core/markdown.js';
 import { stampOriginProject } from '../../src/store/sqlite/entry-row.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
@@ -27,7 +26,6 @@ function makeProjectStore(projectName: string): string {
 
 beforeEach(() => {
   tmpRoot = makeRoot('origin', { init: false });
-  _resetProjectIdentityCacheForTests();
 });
 
 describe('writeEntry origin stamping (v39)', () => {

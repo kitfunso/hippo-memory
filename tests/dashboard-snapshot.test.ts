@@ -176,6 +176,7 @@ describe('dashboard snapshot', () => {
       entries: loadAllEntries(root, 'default').map((e) => asDashboardRow(e, embeddedIds.has(e.id))),
       openConflicts: listMemoryConflicts(root, 'open', 'default'),
       scanText: () => {},
+      lossAversion: {},
     });
 
     expect(snap.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });

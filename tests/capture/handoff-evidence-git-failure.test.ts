@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { collectHandoffEvidence } from '../../src/capture/handoff-evidence.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 
 // Far past a loaded box's slow git start, so only a real failure reaches the log.
 const GIT_WAIT_MS = 30_000;
@@ -13,7 +12,6 @@ let dir: string;
 let stderr: MockInstance<typeof process.stderr.write>;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'hippo-handoff-'));
-  _resetLogOnceForTests();
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 afterEach(() => {

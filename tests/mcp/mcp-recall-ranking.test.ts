@@ -5,15 +5,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
-import {
-  handleMcpRequest,
-  _resetSessionRecallHistoryMcpForTests,
-  type McpContext,
-  type McpResponse,
-} from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -190,14 +184,11 @@ describe('MCP hippo_recall ranking', () => {
 
   beforeEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
-    _resetAblationCacheForTests();
-    _resetSessionRecallHistoryMcpForTests();
   });
 
   afterEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', undefined);
     vi.stubEnv('OPENAI_API_KEY', undefined);
-    _resetAblationCacheForTests();
     vi.unstubAllGlobals();
     for (const h of homes.splice(0)) rmSync(h, { recursive: true, force: true });
   });

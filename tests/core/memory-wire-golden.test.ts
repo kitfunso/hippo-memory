@@ -5,11 +5,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { cliStdioHost } from '../../src/cli/api-context.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { deserializeEntry } from '../../src/core/markdown.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/mcp/server.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
@@ -50,8 +49,6 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   vi.stubEnv('ANTHROPIC_API_KEY', '');
-  _resetAblationCacheForTests();
-  _resetSessionRecallHistoryMcpForTests();
   process.chdir(base);
   seed();
 });
@@ -59,7 +56,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
@@ -125,7 +121,7 @@ describe('memory wire goldens', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
       },
-      { ...cliStdioHost.contextFor(root, GOLDEN_TENANT), project: { name: '', legacyName: '' } },
+      { ...cliStdioHost().contextFor(root, GOLDEN_TENANT), project: { name: '', legacyName: '' } },
     );
     // SAFETY: a tools/call result is written by src/mcp/request.ts as { content: [{ text }], isError? }.
     const result = res?.result as { content?: { text: string }[] } | undefined;

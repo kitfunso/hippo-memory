@@ -15,12 +15,13 @@ import {
   type StoreGroups,
   type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
+import type { LossAversion } from '../../src/core/memory.js';
 
 declare const store: HippoStore;
 
 describe('hippo-memory/store-kit entry types', () => {
-  it('sqliteStore takes a root path and returns a store with every optional group', () => {
-    expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string]>();
+  it('sqliteStore takes a root path and the ratio its root read, and returns a store with every optional group', () => {
+    expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string, rules?: LossAversion]>();
     expectTypeOf(sqliteStore).returns.toEqualTypeOf<HippoStore & StoreGroups>();
     // @ts-expect-error the root is a path string
     typeOnly(() => sqliteStore({ hippoRoot: '/tmp/root' }));
@@ -51,8 +52,8 @@ describe('hippo-memory/store-kit entry types', () => {
     expect(sqliteStore).toBeTypeOf('function');
   });
 
-  it('entryAfterOutcome takes the entry then a boolean and returns an entry', () => {
-    expectTypeOf(entryAfterOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean]>();
+  it('entryAfterOutcome takes the entry, a boolean and the root ratio, and returns an entry', () => {
+    expectTypeOf(entryAfterOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean, LossAversion?]>();
     expectTypeOf(entryAfterOutcome).returns.toEqualTypeOf<MemoryEntry>();
     expectTypeOf<InstanceType<typeof RejectedValueError>>().toMatchTypeOf<Error>();
   });

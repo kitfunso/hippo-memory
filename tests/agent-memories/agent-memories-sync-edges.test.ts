@@ -52,7 +52,7 @@ const sync = (): ImportReport =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport,
+    agentImport: sqliteAgentImport({}),
     machine: w.machine,
   });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');

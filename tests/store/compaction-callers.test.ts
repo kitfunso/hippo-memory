@@ -6,8 +6,7 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { isStoreBusy } from '../../src/store/port.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
+import { loadConfig } from '../../src/core/config.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
 import {
   markSnapshotSaved,
@@ -63,8 +62,6 @@ let root: string;
 beforeEach(() => {
   dir = makeRoot('compaction-callers', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });
   initStore(root);
@@ -74,7 +71,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetSharedStoreCacheForTests();
 });
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
@@ -277,7 +273,7 @@ describe('saveItems for a caller', () => {
         cwd: null,
         items: [ITEMS[1]],
       };
-      expect(saveItems(db, root, ctx, noLog, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
+      expect(saveItems(db, { hippoRoot: root }, ctx, noLog, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       expect(writtenRows(db, 'compaction:s2')).toEqual([
         { content: ITEMS[1], origin_project: null, actor: 'post-compact' },
       ]);

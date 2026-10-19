@@ -1,6 +1,7 @@
 // Readers that turn parsed CLI flags into typed values, and the flag types they share.
 
 import { resolveListLimit } from '../util/limits.js';
+import type { CallerState } from '../api/callers.js';
 import type { RecallSearchOptions } from '../api/recall/pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { fail } from './exit.js';
@@ -164,6 +165,9 @@ export interface CommandContext {
   readonly tenantId: string;
   readonly args: string[];
   readonly flags: CliFlags;
+  /** Unset in a hippo process, which runs one command, so its recall starts empty rings; a caller that runs several
+   * commands in one process passes one set to each. */
+  readonly callers?: CallerState;
 }
 
 export type EngineFlags = Pick<RecallSearchOptions, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;

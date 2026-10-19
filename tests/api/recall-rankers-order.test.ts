@@ -9,7 +9,6 @@ import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { adminActor, type RecallOptions } from '../../src/api/index.js';
 import type { RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { loadConfig } from '../../src/core/config.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
@@ -294,12 +293,10 @@ describe('recall ranker order', () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-    _resetAblationCacheForTests();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetAblationCacheForTests();
   });
 
   it.each(BAND)('band ranker: %s', async (_name, opts, order) => {

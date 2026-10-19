@@ -8,7 +8,6 @@ import * as path from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { contextGet } from '../../src/api/index.js';
 import { computeAmbientState, renderAmbientSummary } from '../../src/core/ambient.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
@@ -61,7 +60,6 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
 
   beforeEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
-    _resetAblationCacheForTests();
     tmpRoot = makeRoot('ambient-summary', { init: false });
     projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
@@ -71,7 +69,6 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
 
   afterEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-    _resetAblationCacheForTests();
   });
 
   it('cross-project row + private-scope row are excluded from ambientState and its rendered summary', async () => {
@@ -116,13 +113,11 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
 
   afterEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-    _resetAblationCacheForTests();
   });
 
   it('avgStrength matches computeAmbientState over the returned (post-markRetrieved) entries, not the pre-retrieval ones', async () => {
     const AGED_NOW = '2026-01-01T00:00:00.000Z';
     vi.stubEnv('HIPPO_FAKE_NOW', AGED_NOW);
-    _resetAblationCacheForTests();
 
     tmpRoot = makeRoot('ambient-strength', { init: false });
     const projA = path.join(tmpRoot, 'proj-a', '.hippo');
@@ -139,7 +134,6 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     writeEntry(projA, aged);
 
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
-    _resetAblationCacheForTests();
 
     const result = await contextGet(ctx, { currentProject: 'proj-a', budget: 5000 });
 

@@ -8,7 +8,6 @@ import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../sr
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { contextGet } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -60,7 +59,6 @@ function enablePromptRecall(root: string, overrides: Partial<HippoConfig['pinned
 }
 
 beforeEach(() => {
-  _resetAblationCacheForTests();
   tmpRoot = makeRoot('prompt-recall', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   const globalRoot = path.join(tmpRoot, 'global');
@@ -74,7 +72,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.stubEnv('HIPPO_HOME', undefined);
-  _resetAblationCacheForTests();
 });
 
 describe('contextGet prompt recall (api-level)', () => {

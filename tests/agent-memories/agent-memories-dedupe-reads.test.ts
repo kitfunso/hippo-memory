@@ -67,7 +67,7 @@ const sync = (dryRun: boolean): ImportReport =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport,
+    agentImport: sqliteAgentImport({}),
     machine: w.machine,
     dryRun,
   });

@@ -3,7 +3,7 @@
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
+import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, strengthOptionsOf } from '../core/memory.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
 import type { FolderStore, LocalFiles } from '../store/port.js';
@@ -150,7 +150,12 @@ export async function shareMemory(
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
   // the whole index per call.
   if (!options.skipEmbed) {
-    const target = { hippoRoot: global.root, store: global.store, embeddings: global.config.embeddings };
+    const target = {
+      hippoRoot: global.root,
+      store: global.store,
+      embeddings: global.config.embeddings,
+      strength: strengthOptionsOf(global.config.runtime),
+    };
     embedMemoryDetached(target, globalEntry);
   }
 

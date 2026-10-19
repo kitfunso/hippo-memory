@@ -1,5 +1,5 @@
 // hippo.db's Reports group: the tenant reports, listings and usage reports the status verbs print.
-import type { MemoryEntry } from '../../core/memory.js';
+import type { LossAversion, MemoryEntry } from '../../core/memory.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { summarizeTokenUse } from './token-ledger.js';
@@ -12,7 +12,7 @@ import { createdSinceLastSleepAt } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
-import { bound, type Bodies } from './bound.js';
+import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import type { Reports } from '../port-groups.js';
 import type { Sync } from '../port.js';
 
@@ -48,12 +48,13 @@ function rawEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
 /** Strength tallies and the open-conflict count on one snapshot, so they never straddle another process's write. */
 function memoryStatusAt(
   db: DatabaseSyncLike,
+  rules: LossAversion,
   tenantId: string,
   now: Date,
   atRiskBelow: number,
 ): StrengthTallies & { openConflicts: number } {
   return withReadSnapshot(db, () => ({
-    ...strengthTalliesAt(db, tenantId, now, atRiskBelow),
+    ...strengthTalliesAt(db, rules, tenantId, now, atRiskBelow),
     openConflicts: countOpenConflictsAt(db, tenantId),
   }));
 }
@@ -64,17 +65,27 @@ const reportTotalsAt: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
   failures: summarizeFailures,
 };
 
-const reportReadsAt: Bodies<Omit<Reports, 'tokenUse' | 'failures'>> = {
+type Scored = 'memoryStatus' | 'statusCounts';
+
+// These two score strength, so they take the store's loss-aversion rules beside the handle.
+const scoredReadsAt: FileBodies<Pick<Reports, Scored>> = {
   memoryStatus: memoryStatusAt,
+  statusCounts: statusCountsAt,
+};
+
+const reportReadsAt: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
   entriesPage: loadEntriesPageAt,
   countEntries: countAllEntriesAt,
   stats: buildStatsFromDb,
-  statusCounts: statusCountsAt,
   correctionEntries: correctionEntriesAt,
   rawEntries: rawEntriesAt,
   createdSinceLastSleep: createdSinceLastSleepAt,
 };
 
 export function sqliteReports(on: OnHandle): Sync<Reports> {
-  return { ...bound(on, reportTotalsAt), ...bound(on, reportReadsAt, openStore) };
+  return {
+    ...bound(on, reportTotalsAt),
+    ...bound(on, reportReadsAt, openStore),
+    ...boundWithFiles(on, scoredReadsAt, openStore),
+  };
 }

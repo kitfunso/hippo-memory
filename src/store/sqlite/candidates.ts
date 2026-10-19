@@ -5,6 +5,7 @@ import {
   calculateStrength,
   confidenceFacets,
   schemaFitFrom,
+  type LossAversion,
 } from '../../core/memory.js';
 import { strengthSql } from './rule-sql.js';
 import { isOutcomeSlowAblated } from '../../core/ablation.js';
@@ -378,12 +379,13 @@ export const jsonList = (column: string): string =>
  * it can share a snapshot with other reads. */
 export function strengthTalliesAt(
   db: DatabaseSyncLike,
+  rules: LossAversion,
   tenantId: string,
   now: Date,
   atRiskBelow: number,
 ): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
-  const strength = `COALESCE(${strengthSql(now)}, 0)`;
+  const strength = `COALESCE(${strengthSql(now, rules)}, 0)`;
   // SAFETY: one aggregate row whose columns are the aliases named below.
   const row = db
     .prepare(
@@ -437,6 +439,7 @@ function tallyStatusRows(
   rows: Iterable<StatusRow>,
   now: Date,
   atRiskBelow: number,
+  rules: LossAversion,
 ): Omit<StatusCounts, 'openConflicts' | 'embedded'> {
   const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
   const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
@@ -454,7 +457,7 @@ function tallyStatusRows(
       outcomePositive: Number(row.outcome_positive ?? 0),
       outcomeNegative: Number(row.outcome_negative ?? 0),
     };
-    const strength = calculateStrength(entry, now);
+    const strength = calculateStrength(entry, now, rules);
     const facets = confidenceFacets(entry, now);
     sums.total++;
     sums.strength += strength;
@@ -470,7 +473,12 @@ function tallyStatusRows(
 
 /** The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is
  * built. */
-export function statusCountsAt(db: DatabaseSyncLike, now: Date, atRiskBelow: number): StatusCounts {
+export function statusCountsAt(
+  db: DatabaseSyncLike,
+  rules: LossAversion,
+  now: Date,
+  atRiskBelow: number,
+): StatusCounts {
   // One read transaction, so the row tallies and the two counts describe the same store.
   return withReadSnapshot(db, () => {
     // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
@@ -478,7 +486,7 @@ export function statusCountsAt(db: DatabaseSyncLike, now: Date, atRiskBelow: num
     const rows = db
       .prepare(`SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`)
       .iterate() as Iterable<StatusRow>;
-    const tallies = tallyStatusRows(rows, now, atRiskBelow);
+    const tallies = tallyStatusRows(rows, now, atRiskBelow, rules);
     // SAFETY: one row whose columns are the two aliases named below.
     const counts = db
       .prepare(`SELECT

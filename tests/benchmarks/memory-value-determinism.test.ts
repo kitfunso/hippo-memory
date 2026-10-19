@@ -33,7 +33,6 @@ import { simulateQuestion } from '../../benchmarks/memory-value/simulate.mjs';
 import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
 import { evaluateAll } from '../../benchmarks/memory-value/evaluate.mjs';
 import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../../benchmarks/memory-value/common.mjs';
-import { _resetAblationCacheForTests } from '../../dist/core/ablation.js';
 
 import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
 
@@ -122,7 +121,6 @@ describe('cross-ingest determinism', () => {
       }
     } finally {
       vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', undefined);
-      _resetAblationCacheForTests();
       // Both temp roots are OUTSIDE the default scratch root (scratchRootDir()
       // reads the env var, which is already cleared above), so a plain
       // fs.rmSync is correct here — safeRemoveScratchDir would refuse them.

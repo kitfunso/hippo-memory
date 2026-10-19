@@ -7,7 +7,6 @@ import * as path from 'node:path';
 import { createRequire } from 'module';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { contextGet } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -41,7 +40,6 @@ function enablePromptRecall(root: string) {
 }
 
 beforeEach(() => {
-  _resetAblationCacheForTests();
   tmpRoot = makeRoot('f4-recall-connection', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
@@ -55,7 +53,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.stubEnv('HIPPO_HOME', undefined);
-  _resetAblationCacheForTests();
 });
 
 describe('prompt recall reuses the ambient load connection', () => {

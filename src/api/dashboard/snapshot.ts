@@ -7,6 +7,7 @@ import {
   netWrong,
   Layer as MemoryLayer,
   type ConfidenceInputs,
+  type LossAversion,
   type MemoryEntry,
   type StrengthInputs,
 } from '../../core/memory.js';
@@ -104,11 +105,12 @@ function daysBetween(thenIso: string, nowMs: number): number {
 export function memoryFacts(
   entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>,
   nowMs: number,
+  lossAversion: LossAversion,
 ): MemoryFacts {
   const now = new Date(nowMs);
-  const strength = calculateStrength(entry, now);
-  const strength7d = calculateStrength(entry, new Date(nowMs + 7 * DAY_MS));
-  const strength30d = calculateStrength(entry, new Date(nowMs + 30 * DAY_MS));
+  const strength = calculateStrength(entry, now, lossAversion);
+  const strength7d = calculateStrength(entry, new Date(nowMs + 7 * DAY_MS), lossAversion);
+  const strength30d = calculateStrength(entry, new Date(nowMs + 30 * DAY_MS), lossAversion);
   const facets = confidenceFacets(entry, now);
   const band = entry.pinned
     ? BAND_PINNED
@@ -243,6 +245,8 @@ export interface SnapshotInput {
   excluded?: ExcludedCounts;
   openConflicts: readonly ConflictPair[];
   scanText: TextScan;
+  /** The ratio the root read, which the strengths are scored by. */
+  lossAversion: LossAversion;
 }
 
 interface CutHead {
@@ -346,12 +350,13 @@ class SnapshotDraft {
   constructor(
     private readonly nowMs: number,
     private readonly excluded: ExcludedCounts,
+    private readonly lossAversion: LossAversion,
   ) {}
 
   addRow(row: DashboardRow): void {
     if (!isLiveMemory(row)) return tallyExcluded(row, this.excluded);
     const p = draftIndexFor(projectIdentity(row.originProject), this.projectIndex, this.drafts);
-    const f = memoryFacts(row, this.nowMs);
+    const f = memoryFacts(row, this.nowMs, this.lossAversion);
     const parsedCreated = Date.parse(row.created);
     const draft = this.drafts[p];
     draft.members.push(this.facts.length);
@@ -409,7 +414,7 @@ const noneExcluded = (): ExcludedCounts => ({ superseded: 0, archived: 0, quaran
 
 /** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
 export function buildSnapshot(input: SnapshotInput): Snapshot {
-  const draft = new SnapshotDraft(input.nowMs, { ...noneExcluded(), ...input.excluded });
+  const draft = new SnapshotDraft(input.nowMs, { ...noneExcluded(), ...input.excluded }, input.lossAversion);
   for (const row of input.entries) draft.addRow(row);
   for (const pair of input.openConflicts) draft.addConflict(pair);
   return draft.finish(input.id, input.tenantId, input.scanText);
@@ -460,12 +465,13 @@ class SnapshotCacheService implements SnapshotService {
 
   constructor(
     private readonly reads: DashboardReads,
+    private readonly lossAversion: LossAversion,
     private readonly now: () => number,
     private readonly cacheClock: () => number,
   ) {}
 
   private build(tenantId: string, dv: number | null, nowMs: number): Snapshot {
-    const draft = new SnapshotDraft(nowMs, noneExcluded());
+    const draft = new SnapshotDraft(nowMs, noneExcluded(), this.lossAversion);
     if (dv !== null) {
       draft.addExcluded(
         this.reads.scan(tenantId, {
@@ -518,11 +524,12 @@ class SnapshotCacheService implements SnapshotService {
 }
 
 /** The snapshot cache over the store's dashboard reads, whose commit signal decides reuse; `now` dates the strength
- * projections, `cacheClock` ages the cache. */
+ * projections by the root's `lossAversion`, `cacheClock` ages the cache. */
 export function createSnapshotService(
   reads: DashboardReads,
+  lossAversion: LossAversion,
   now: () => number,
   cacheClock: () => number = Date.now,
 ): SnapshotService {
-  return new SnapshotCacheService(reads, now, cacheClock);
+  return new SnapshotCacheService(reads, lossAversion, now, cacheClock);
 }

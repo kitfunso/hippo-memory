@@ -24,7 +24,6 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { remember, retrieve, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
@@ -323,7 +322,6 @@ describe('CLI cmdRecall — trace wiring', () => {
   beforeEach(() => {
     hippoRoot = makeRoot('cli-recall-trace', { init: false });
     vi.stubEnv('HIPPO_HOME', hippoRoot);
-    resetSessionRings('cli');
   });
 
   afterEach(() => {
@@ -413,7 +411,6 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     vi.stubEnv('HIPPO_SESSION_ID', '');
     vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
-    resetSessionRings('cli');
   });
 
   afterEach(() => {

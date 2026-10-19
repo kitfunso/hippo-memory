@@ -13,14 +13,13 @@ import {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../store/index.js';
-import { isStoreBusy } from '../store/port.js';
+import { hasGroup, isStoreBusy } from '../store/port.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { createSqliteExecutor } from '../store/sqlite/executor.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { sqliteReach } from '../store/sqlite/store.js';
 import { tenantOfApiKey, type ResolveOptions } from '../store/sqlite/tenant.js';
 import { configReader } from '../core/config.js';
-import { setLossAversionRatio } from '../core/memory.js';
 import { auditWriteFailureCount } from '../core/audit-report.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { MINUTE_MS } from '../util/time.js';
@@ -40,7 +39,9 @@ import {
 import { workerCounts } from '../store/sqlite/executor-counts.js';
 import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
-import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
+import { answerAtDeadline, isAbandoned, requestDeadlineFor } from './deadline.js';
+import { createSleepQueue } from './sleep-offload.js';
+import { createCallerState } from '../api/callers.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
@@ -67,7 +68,14 @@ import {
   dispatchV1Route,
   HOST_ROUTES,
 } from './route-table.js';
-import type { RateLimitSpec, ResolvedServeOptions, RouteRequest, ServeOpts, ServerHandle } from './types.js';
+import type {
+  RateLimitSpec,
+  ResolvedServeOptions,
+  RouteRequest,
+  ServeOpts,
+  ServerCounts,
+  ServerHandle,
+} from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
 // listening, a string only for pipe/unix-socket listeners (never used here).
@@ -84,6 +92,7 @@ interface HandleRequestOptions {
   readonly startedAt: string;
   readonly streamSlots: Map<string, number>;
   readonly limiter?: RateLimiter;
+  readonly counts: ServerCounts;
 }
 
 async function handleRequest(
@@ -92,7 +101,7 @@ async function handleRequest(
   opts: ResolvedServeOptions,
   options: HandleRequestOptions,
 ): Promise<void> {
-  const { startedAt, streamSlots, limiter } = options;
+  const { streamSlots, limiter } = options;
   // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
   // Node's URL parser collapses them and they slip past the route table.
   rejectEncodedSlash(req.url ?? '/');
@@ -105,7 +114,7 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   const request = { method, path };
   const { health, ready, mcpStream } = HOST_ROUTES;
-  if (await dispatchHostRoute(routeRequest, request, health, async () => sendHealth(req, res, startedAt))) return;
+  if (await dispatchHostRoute(routeRequest, request, health, async () => sendHealth(req, res, options))) return;
   if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, opts.store))) return;
 
   enforceRateLimit(req, path, limiter);
@@ -132,7 +141,7 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
   return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () => handleMcpPost(r.req, r.res, r.opts));
 }
 
-function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
+function sendHealth(req: IncomingMessage, res: ServerResponse, { startedAt, counts }: HandleRequestOptions): void {
   // A caller on this machine (detectServer's probe reads version and pid) gets the full body; anyone else, even a
   // proxied caller or a browser page on loopback,
   // gets liveness only: the version would fingerprint the build and the pid is noise. Platform health checks only need
@@ -147,7 +156,8 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
       store_queue_refusals: workerCounts.queueRefusals,
       store_jobs_expired: workerCounts.jobsExpired,
       store_workers_replaced: workerCounts.workersReplaced,
-      handler_deadlines: handlerDeadlineCount(),
+      handler_deadlines: counts.handlerDeadlines,
+      auto_sleeps: counts.autoSleeps,
     });
   } else {
     sendJson(res, 200, { ok: true });
@@ -343,7 +353,7 @@ export function answerRequest(
   req: IncomingMessage,
   res: ServerResponse,
   handle: () => Promise<void>,
-  slowWarnMs: number | undefined,
+  { slowWarnMs, counts }: { slowWarnMs: number | undefined; counts: Pick<ServerCounts, 'handlerDeadlines'> },
 ): void {
   const requestId = openRequest(req, res, slowWarnMs);
   const deadline = requestDeadlineFor(req);
@@ -356,7 +366,10 @@ export function answerRequest(
         answerAtDeadline(
           res,
           deadline,
-          () => replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId),
+          () => {
+            counts.handlerDeadlines += 1;
+            replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId);
+          },
           () => abort?.abort(new DeadlineExceededError(HANDLER_LATE)),
         );
       }
@@ -414,8 +427,6 @@ export function resolveTenantId(opts: ResolveOptions): string {
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
-  setLossAversionRatio(envLossAversionRatio());
-
   const routes = frozenAddonRoutes(opts.routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   const limiters = bootLimiters(opts.rateLimits);
@@ -456,7 +467,8 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
-  const server = acceptingServer(served, holder, inflight, { startedAt, streamSlots, limiter: limiters.perAddress });
+  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts: served.counts };
+  const server = acceptingServer(served, holder, inflight, options);
 
   setKeepAliveTimeouts(server);
 
@@ -470,6 +482,8 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
     if (stopping) return;
     stopping = true;
     await stopListening(opts, server, inflight, startedAt);
+    // An auto-sleep answers no request, so draining skips it; its child must leave the store before the store closes.
+    await served.sleeps.settled();
     // The store's worker threads close their connections first, so the held one is still SQLite's last.
     if (!opts.store) await served.store.close();
     await served.globalStores.close();
@@ -503,9 +517,18 @@ function servedOptsFor(
   publicJsonBodies: ReadonlyMap<string, string>,
   { callerLimiter, failedAuthLimiter }: BootedLimiters,
 ): ResolvedServeOptions {
-  const executorOpts = { queueMax: envStoreQueueMax() };
-  const store = opts.store ?? workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, executorOpts));
+  const executorOpts = { queueMax: envStoreQueueMax(), lossAversionRatio: envLossAversionRatio() };
+  const store =
+    opts.store ?? workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, executorOpts), executorOpts);
   const globalStores = globalStoresFor(store, executorOpts);
+  const sleeps = createSleepQueue();
+  const counts: ServerCounts = { handlerDeadlines: 0, autoSleeps: 0 };
+  const run = (root: string): Promise<void> => {
+    counts.autoSleeps += 1;
+    return sleeps.consolidate(root);
+  };
+  const sleepsHere = opts.autoSleep !== false && hasGroup(store, 'localFiles');
+  const autoSleep = sleepsHere ? { run, hostTenantId: envTenant() } : undefined;
   return {
     ...opts,
     routes,
@@ -518,6 +541,9 @@ function servedOptsFor(
     callerLimiter,
     failedAuthLimiter,
     authResolver: outsideRouteBlock(opts.authResolver),
+    callers: createCallerState(autoSleep),
+    sleeps,
+    counts,
   };
 }
 
@@ -531,12 +557,10 @@ function acceptingServer(
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(
-      req,
-      res,
-      () => holder.runRequest(() => handleRequest(req, res, served, options)),
-      served.slowRequestWarnMs,
-    );
+    answerRequest(req, res, () => holder.runRequest(() => handleRequest(req, res, served, options)), {
+      slowWarnMs: served.slowRequestWarnMs,
+      counts: options.counts,
+    });
   });
 }
 

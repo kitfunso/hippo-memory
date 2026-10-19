@@ -5,7 +5,6 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { retrieve, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -33,7 +32,6 @@ async function recallIds(qs: string): Promise<string[]> {
 }
 
 beforeEach(async () => {
-  __resetSessionRecallHistoryHttp();
   home = makeRoot('http-recall-mode');
   // The better BM25 match has decayed for years; hybrid scoring must see that.
   const old = '2020-01-01T00:00:00.000Z';

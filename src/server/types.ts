@@ -7,6 +7,8 @@ import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
 import type { StoreReach } from '../store/port.js';
 import type { GlobalStores } from '../store/local/global-stores.js';
 import type { ConfigReader } from '../core/config.js';
+import type { CallerState } from '../api/callers.js';
+import type { SleepQueue } from './sleep-offload.js';
 
 export interface ServerHandle {
   port: number;
@@ -93,6 +95,14 @@ export interface ServeOpts {
   };
 }
 
+/** Counts this server's /health reports, since it started. */
+export interface ServerCounts {
+  /** Requests answered 504 by the handler deadline. */
+  handlerDeadlines: number;
+  /** Background sleeps its writes started. */
+  autoSleeps: number;
+}
+
 export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
   /** The operator's global stores a request reaches beside `store`, closed when the server stops. */
@@ -106,6 +116,10 @@ export type ResolvedServeOptions = ServeOpts & {
   publicJsonBodies: ReadonlyMap<string, string>;
   callerLimiter?: RateLimiter;
   failedAuthLimiter: RateLimiter;
+  /** This server's per-caller state, handed to every request's Context. */
+  callers: CallerState;
+  sleeps: SleepQueue;
+  counts: ServerCounts;
 };
 
 /** Per-request values the /v1 route handlers read. */

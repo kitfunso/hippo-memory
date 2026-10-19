@@ -7,10 +7,11 @@ import { strengthenRetrieved } from './folder-forms.js';
 import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
 import { saveIndexAt } from './index-and-stats.js';
 import { readLastRecall } from './mirrors.js';
-import type { OnHandle, StoreFiles } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import type { HippoIndex } from './rows.js';
 import type { EntryTarget } from '../port/entry-writes.js';
 import { bound, boundWithFiles, type FileBodies } from './bound.js';
+import type { LossAversion } from '../../core/memory.js';
 import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites, Sync } from '../port.js';
 import { writeRecallTrace } from './recall-trace.js';
@@ -23,11 +24,11 @@ interface RecallFinish {
 }
 
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecallAt(db: DatabaseSyncLike, writes: RecallWrites): RecallFinish {
+export function finishRecallAt(db: DatabaseSyncLike, rules: LossAversion, writes: RecallWrites): RecallFinish {
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen
-      ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts)
+      ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts, rules)
       : new Set<string>(),
   });
   // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them, never the read.
@@ -59,8 +60,8 @@ interface RecallEnds {
   saveIndex(index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void;
 }
 
-export function sqliteLastRecall(on: OnHandle): Sync<LastRecall> {
-  const { finish } = bound<Pick<RecallEnds, 'finish'>>(on, { finish: finishRecallAt });
+export function sqliteLastRecall({ on, files }: Handles): Sync<LastRecall> {
+  const { finish } = boundWithFiles<Pick<RecallEnds, 'finish'>>(on, { finish: finishRecallAt });
   const { saveIndex } = bound<Pick<RecallEnds, 'saveIndex'>>(on, { saveIndex: saveIndexAt }, openStore);
   return {
     ...boundWithFiles(on, outcomesAt, openStore),
@@ -72,6 +73,7 @@ export function sqliteLastRecall(on: OnHandle): Sync<LastRecall> {
           globalRoot,
           ids.filter((id) => !strengthened.has(id)),
           opts,
+          files,
         );
       }
       // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.

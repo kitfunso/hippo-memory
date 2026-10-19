@@ -20,7 +20,6 @@ import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
 import { cliConfig } from '../../src/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -171,12 +170,10 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
   let shared: string;
 
   beforeEach(() => {
-    _resetSharedStoreCacheForTests();
     shared = makeRoot('mcp-f5-shared', { config: { sharedStore: true } });
   });
 
   afterEach(() => {
-    _resetSharedStoreCacheForTests();
     rmSync(shared, { recursive: true, force: true });
   });
 

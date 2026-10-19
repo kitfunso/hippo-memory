@@ -2,7 +2,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
@@ -126,7 +125,7 @@ function vectorRow(entry: MemoryEntry, model: string, vector: number[]): VectorR
 }
 
 function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsParticle {
-  return { ...initializeParticle(entry, vector, new Date(at)), position: vector.map(Math.fround) };
+  return { ...initializeParticle(entry, vector, {}, new Date(at)), position: vector.map(Math.fround) };
 }
 
 /** The state a rebuild under `providerId` must leave: every row in store order, each with a particle dated FAKE_NOW. */
@@ -164,7 +163,7 @@ beforeAll(async () => {
     savePhysicsState(
       db,
       loadEveryTenantEntries(indexedOld).map((e) =>
-        initializeParticle(e, fakeVector('fake-old', e), new Date(SEEDED_AT)),
+        initializeParticle(e, fakeVector('fake-old', e), {}, new Date(SEEDED_AT)),
       ),
     );
   } finally {
@@ -179,14 +178,12 @@ afterAll(async () => {
 beforeEach(() => {
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-  _resetAblationCacheForTests();
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 describe('embedAll backfill on hippo.db', () => {

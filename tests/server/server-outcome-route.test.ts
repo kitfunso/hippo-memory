@@ -1,20 +1,5 @@
-/**
- * Runtime tests for POST /v1/outcome (Episode B, Task 2).
- *
- * Thin wrapper over api.outcome + api.outcomeForLastRecall:
- *   - body.ids provided  -> api.outcome(ctx, ids, good), returns {applied}
- *   - body.ids omitted   -> api.outcomeForLastRecall(ctx, good), returns {applied, ids}
- *
- * Coverage:
- *   - ids path (200)
- *   - last-recall path (200, ids in response)
- *   - no last recall (200, applied:0 + empty ids)
- *   - non-boolean good (400)
- *   - audit emission per applied id
- *   - cross-tenant id silently skipped (applied:0, zero audit rows)
- *
- * Real HTTP server (serve port:0), per-test isolated local + global stores.
- */
+// POST /v1/outcome over a real server: with ids it applies to them; without, to the ids this client last recalled over
+// REST, so one client's outcome never lands on another's recall.
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -25,7 +10,8 @@ import { remember } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
+import { loadLastRecall, readEntry, saveIndex } from '../_helpers/root-forms.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -34,6 +20,24 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+
+/** POST /v1/outcome with no ids as `bearer`, or keyless, so it lands on that caller's last recall. */
+async function postOutcome(url: string, body: { readonly good: boolean }, bearer?: string): Promise<Response> {
+  const auth: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
+  return fetch(`${url}/v1/outcome`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...auth },
+    body: JSON.stringify(body),
+  });
+}
+
+/** The ids a REST recall for `q` showed `bearer`, or a keyless caller. */
+async function recalledIds(url: string, q: string, bearer?: string): Promise<string[]> {
+  const headers: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
+  const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent(q)}`, { headers });
+  expect(res.status).toBe(200);
+  return (await jsonAs<{ results: { id: string }[] }>(res)).results.map((r) => r.id);
+}
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets POST /v1/outcome under test in
@@ -75,23 +79,27 @@ describe('POST /v1/outcome', () => {
     expect(body.applied).toBe(2);
   });
 
-  it('without ids uses last-recall (returns {applied, ids})', async () => {
+  it('without ids applies to what this client last recalled (returns {applied, ids})', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-    const m1 = await remember(ctx, { content: 'last-recall-mem-1' });
-    const m2 = await remember(ctx, { content: 'last-recall-mem-2' });
+    const m1 = await remember(ctx, { content: 'zebrafish feeding schedule one' });
+    const m2 = await remember(ctx, { content: 'zebrafish feeding schedule two' });
+    const shown = await recalledIds(handle.url, 'zebrafish');
+    expect([...shown].sort()).toEqual([m1.id, m2.id].sort());
+
+    const res = await postOutcome(handle.url, { good: true });
+    expect(res.status).toBe(200);
+    expect(await jsonAs<{ applied: number; ids: string[] }>(res)).toEqual({ applied: 2, ids: shown });
+  });
+
+  it("without ids ignores the store's CLI last recall", async () => {
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const m1 = await remember(ctx, { content: 'cli-last-recall-mem' });
     const idx = loadLastRecall(home);
-    idx.last_retrieval_ids = [m1.id, m2.id];
+    idx.last_retrieval_ids = [m1.id];
     saveIndex(home, idx);
 
-    const res = await fetch(`${handle.url}/v1/outcome`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ good: true }),
-    });
-    expect(res.status).toBe(200);
-    const body = await jsonAs<{ applied: number; ids: string[] }>(res);
-    expect(body.applied).toBe(2);
-    expect(body.ids).toEqual([m1.id, m2.id]);
+    const res = await postOutcome(handle.url, { good: true });
+    expect(await jsonAs<{ applied: number; ids: string[] }>(res)).toEqual({ applied: 0, ids: [] });
   });
 
   it('without ids and no last recall returns {applied:0, ids:[]}', async () => {
@@ -166,16 +174,8 @@ describe('POST /v1/outcome', () => {
   });
 
   it('cross-tenant last-recall path: response ids field does NOT leak other-tenant ids', async () => {
-    // Regression test for the v1.11.4 security fix.
-    // Pre-fix: tenant_b POSTing {good:true} (no ids) would receive
-    //   {applied:0, ids:[<tenant_a's mem_*>]} — tenant_a's memory ids
-    //   surfaced verbatim to tenant_b through last_retrieval_ids (which
-    //   is per-hippoRoot, not tenant-scoped at the index layer).
-    // Post-fix: api.outcomeForLastRecall returns appliedIds (tenant-filtered)
-    //   as the ids field, so non-applied (cross-tenant) ids are excluded.
-    // This route hit has no Bearer, so ctx.tenantId = 'default'. We seed
-    // last_retrieval_ids with a tenant_b memory id and verify the
-    // 'default' caller cannot see it.
+    // v1.11.4 regression: the store's last_retrieval_ids is per folder, not per tenant, so it must never answer a
+    // keyless 'default' caller with a tenant_b id.
     const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const tenantBMem = await remember(tenantBCtx, { content: 'tenant-b-secret-id' });
     const idx = loadLastRecall(home);
@@ -255,5 +255,51 @@ describe('POST /v1/outcome', () => {
       body: payload,
     });
     expect(res.status).toBe(413);
+  });
+});
+
+describe('POST /v1/outcome without ids, one client beside another', () => {
+  let home: string;
+  let globalHome: string;
+  let handle: ServerHandle;
+
+  beforeEach(async () => {
+    home = makeRoot('srv-out-clients');
+    globalHome = makeRoot('srv-out-clients');
+    vi.stubEnv('HIPPO_HOME', globalHome);
+    handle = await serve({ hippoRoot: home, port: 0 });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    rmSync(home, { recursive: true, force: true });
+    rmSync(globalHome, { recursive: true, force: true });
+  });
+
+  const memberKey = (label: string): string => {
+    const db = openHippoDb(home);
+    try {
+      return createApiKey(db, { tenantId: 'default', label, role: 'member' }).plaintext;
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  it("lands on the ids each client last recalled, never on another client's", async () => {
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const zebra = await remember(ctx, { content: 'zebrafish feeding schedule' });
+    const quokka = await remember(ctx, { content: 'quokka habitat survey' });
+    const [a, b, idle] = [memberKey('a'), memberKey('b'), memberKey('idle')];
+    expect(await recalledIds(handle.url, 'zebrafish', a)).toEqual([zebra.id]);
+    expect(await recalledIds(handle.url, 'quokka', b)).toEqual([quokka.id]);
+
+    const outA = await postOutcome(handle.url, { good: true }, a);
+    const outB = await postOutcome(handle.url, { good: false }, b);
+    const outIdle = await postOutcome(handle.url, { good: true }, idle);
+    expect(await jsonAs<{ ids: string[] }>(outA)).toEqual({ applied: 1, ids: [zebra.id] });
+    expect(await jsonAs<{ ids: string[] }>(outB)).toEqual({ applied: 1, ids: [quokka.id] });
+    expect(await jsonAs<{ ids: string[] }>(outIdle)).toEqual({ applied: 0, ids: [] });
+    expect(readEntry(home, zebra.id)).toMatchObject({ outcomePositive: 1, outcomeNegative: 0 });
+    expect(readEntry(home, quokka.id)).toMatchObject({ outcomePositive: 0, outcomeNegative: 1 });
   });
 });

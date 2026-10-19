@@ -19,7 +19,8 @@ import {
 } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
-import { lastRecalledIds, resolveClientKey } from '../../src/api/recall/last-recalled.js';
+import { resolveClientKey } from '../../src/api/recall/last-recalled.js';
+import { createCallerState } from '../../src/api/callers.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';
@@ -143,7 +144,7 @@ describe('the entry write routes', () => {
     vi.unstubAllEnvs();
   });
 
-  it('serve every entry write through the store that has entryWrites; the last-recall outcome stays 501', async () => {
+  it('serve every entry write through the store that has entryWrites; a no-ids outcome needs no last recall', async () => {
     const root = copyOf();
     const before = auditIdsOnHippoDb(root);
     const memory = inMemoryEntryWritesStore(root);
@@ -158,10 +159,10 @@ describe('the entry write routes', () => {
     expect(
       await json<Pick<OutcomeResult, 'applied'>>(send('/v1/outcome', 'POST', token, { ids: [note.id], good: true })),
     ).toEqual({ applied: 1 });
-    const lastRecall = await send('/v1/outcome', 'POST', token, { good: true });
-    expect({ status: lastRecall.status, body: await lastRecall.json() }).toEqual({
-      status: 501,
-      body: { error: 'this store keeps no last recall: send the ids your recall returned' },
+    // It lands on this client's own last REST recall, which the server holds, and this client has recalled nothing.
+    expect(await json<{ applied: number; ids: string[] }>(send('/v1/outcome', 'POST', token, { good: true }))).toEqual({
+      applied: 0,
+      ids: [],
     });
     const { newId } = await json<SupersedeResult>(
       send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }),
@@ -206,6 +207,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
   it('remember and apply an outcome through the store, with hippo.db blocked', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryEntryWritesStore(copyOf());
+    const callers = createCallerState();
     const ctx: McpContext = {
       hippoRoot,
       tenantId: TENANT_A,
@@ -215,6 +217,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
       store: memory.store,
       clientKey: 'entry-writes-store',
       config: loadConfig(hippoRoot),
+      callers,
     };
     const call = (name: string, args: Record<string, string | boolean>) =>
       withSqliteBlocked('in-memory', () =>
@@ -226,7 +229,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
     const remembered = textOf(await call('hippo_remember', { text: 'deploys go out on tuesdays', tag: 'deploy' }));
     const id = /^Remembered \[(\w+)\] \(half-life: \d+d, tags: deploy\)$/.exec(remembered ?? '')?.[1];
     expect(id).toBeDefined();
-    lastRecalledIds.set(resolveClientKey(ctx), [id ?? '']);
+    callers.lastShown.set(resolveClientKey(ctx), [id ?? '']);
     expect(textOf(await call('hippo_outcome', { good: true }))).toBe('Applied positive outcome to 1 memories');
     expect((await memory.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive)).toEqual([1]);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);

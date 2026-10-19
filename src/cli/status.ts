@@ -1,11 +1,17 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
 import { envHomeDir } from '../util/env.js';
-import { evalNow, strengthAblation } from '../core/ablation.js';
+import { evalNow } from '../core/ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer } from '../core/memory.js';
+import {
+  calculateStrength,
+  calculateRewardFactor,
+  resolveConfidence,
+  Layer,
+  strengthOptionsOf,
+} from '../core/memory.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../core/physics.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
@@ -156,13 +162,15 @@ export function physicsEnergyText(particles: PhysicsParticle[], gMemory: number)
 async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
-  const entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const entry = await memoryGet(ctx, id);
   if (!entry) {
     fail(`Memory not found: ${id}`);
   }
 
   const now = evalNow();
-  const currentStrength = calculateStrength(entry, now, { ablation: strengthAblation() });
+  const rules = strengthOptionsOf(ctx.config.runtime);
+  const currentStrength = calculateStrength(entry, now, rules);
   const lastRetrieved = new Date(entry.lastRetrieved);
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
@@ -184,7 +192,7 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   console.log(`Schema fit:       ${entry.schemaFit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
-  const rewardFactor = calculateRewardFactor(entry, strengthAblation());
+  const rewardFactor = calculateRewardFactor(entry, rules.ablation);
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   const outcomeLabel = pos === 0 && neg === 0 ? 'none' : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;

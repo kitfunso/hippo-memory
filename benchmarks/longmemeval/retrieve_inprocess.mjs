@@ -17,7 +17,7 @@ import { physicsSearch } from '../../dist/entry/store-kit.js';
 import { buildCorpus } from '../../dist/search/bm25.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { loadAllEntries } from '../../dist/entry/testing.js';
-import { getReranker } from '../../dist/rerankers/index.js';
+import { cliReranker as getReranker } from '../../dist/cli/api-context.js';
 
 function flag(name, fallback) {
   const i = process.argv.indexOf(name);

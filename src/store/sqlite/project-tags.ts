@@ -2,7 +2,7 @@
 // merge and repair rules in src/sharing/project-merge.ts decide without holding it.
 import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { withBackup } from '../../db/backup.js';
-import { calculateStrength } from '../../core/memory.js';
+import { calculateStrength, type LossAversion } from '../../core/memory.js';
 import { MAX_AUDIT_LIMIT } from '../../util/limits.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../util/pages.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
@@ -68,16 +68,25 @@ export function projectTagReads(db: DatabaseSyncLike, tenantId: string): Project
   };
 }
 
-function projectTagWrites(db: DatabaseSyncLike, { tenantId, actor }: ProjectTagScope): ProjectTagWrites {
+function projectTagWrites(
+  db: DatabaseSyncLike,
+  { tenantId, actor }: ProjectTagScope,
+  rules: LossAversion,
+): ProjectTagWrites {
   return {
     ...projectTagReads(db, tenantId),
-    setAside: (tag, row, why) => setAsideRow(db, tag, row, why),
+    setAside: (tag, row, why) => setAsideRow(db, tag, row, why, rules),
     restampOrigin: (from, into) => restampOriginProjectAt(db, tenantId, from, into),
     restampCompactions: (from, into) => restampCompactionOrigin(db, tenantId, from, into),
     replaceDormant: (id, entry) => replaceDormantEntry(db, tenantId, id, entry),
     stampOrigins: (rows) => stampOriginProjectsAt(db, tenantId, rows),
     retire: (row, reason, now) => {
-      insertDormantRow(db, { entry: row, strength: calculateStrength(row, now), reason, dormantAt: now.toISOString() });
+      insertDormantRow(db, {
+        entry: row,
+        strength: calculateStrength(row, now, rules),
+        reason,
+        dormantAt: now.toISOString(),
+      });
       deleteEntryRowInTx(db, row, actor);
     },
     audit: (op, metadata) => appendAuditEvent(db, { tenantId, actor, op, metadata }),
@@ -91,7 +100,7 @@ function rewriteOn<T>(
   opts: { readonly dryRun: boolean; readonly backupLabel: string },
   body: (tx: ProjectTagWrites, backup: string | null) => TagRewrite<T>,
 ): T {
-  const tx = projectTagWrites(db, scope);
+  const tx = projectTagWrites(db, scope, files);
   if (opts.dryRun) return withTrialScope(db, TX_LABEL, () => body(tx, null)).result;
   const done = withBackup(db, files.hippoRoot, opts.backupLabel, (backup) =>
     withWriteScope(db, TX_LABEL, () => body(tx, backup)),

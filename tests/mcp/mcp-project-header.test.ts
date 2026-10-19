@@ -4,10 +4,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../../src/entry/project-identity.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
@@ -72,14 +69,11 @@ function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promi
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-header-'));
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
 });
 
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  _resetSharedStoreCacheForTests();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -98,10 +92,9 @@ describe('X-Hippo-Project on a shared store', () => {
 
     const aliased = { ...createMemory('the aliasmark row from before the rename'), originProject: 'old,name' };
     writeEntry(store, aliased);
-    lastRecalledIds.clear();
     const recalled = await post(headers, toolCall('hippo_recall', { query: 'aliasmark' }));
     expect(recalled.status, recalled.text).toBe(200);
-    expect([...lastRecalledIds.values()].flat()).toContain(aliased.id);
+    expect(recalled.text).toContain(aliased.content);
   });
 
   it('reads an empty aliases header as no aliases', async () => {

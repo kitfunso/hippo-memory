@@ -3,7 +3,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../../core/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS, type LossAversion, type MemoryEntry, Layer } from '../../core/memory.js';
 import {
   type DatabaseSyncLike,
   openHippoDb,
@@ -23,8 +23,9 @@ import { layerDir } from './mirrors.js';
 import { isJsonObject, type JsonValue } from '../../util/json.js';
 import { CLI_ACTOR } from '../../core/actor.js';
 
-/** The folder a store keeps its mirror files in, beside hippo.db; an adapter hands it on and never reads it. */
-export interface StoreFiles {
+/** The folder a store keeps its mirror files in, beside hippo.db, with the ratio its root built it with; an adapter
+ * hands it on and never reads it. */
+export interface StoreFiles extends LossAversion {
   readonly hippoRoot: string;
 }
 

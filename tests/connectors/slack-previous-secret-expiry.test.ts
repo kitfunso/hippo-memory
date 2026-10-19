@@ -3,8 +3,8 @@ import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { previousSecretInForce } from '../../src/connectors/slack/signature.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 
 const NEW_SECRET = 'rotated-in';
 const OLD_SECRET = 'rotated-out';
@@ -18,7 +18,7 @@ const warnings = (): string[] =>
   stderr.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('SLACK_SIGNING_SECRET_PREVIOUS'));
 
 beforeEach(() => {
-  _resetLogOnceForTests();
+  onceKeysPerCase();
   vi.stubEnv('HIPPO_LOG', 'warn');
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });

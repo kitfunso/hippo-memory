@@ -8,6 +8,7 @@ import type { HippoConfig } from '../../core/config.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
+import type { CallerState } from '../callers.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
 import { chunked } from '../../util/chunked.js';
 import type { AuditOp } from '../../core/audit-ops.js';
@@ -290,30 +291,31 @@ export async function heldIds(store: HippoStore, ids: readonly string[], tenantI
 
 export type RecallSurface = 'cli' | 'mcp' | 'http';
 
-// One map per surface, each with its own LRU cap, so a repeat on one surface is a first recall on another.
-const rings = {
-  cli: new Map<string, RingBuffer>(),
-  mcp: new Map<string, RingBuffer>(),
-  http: new Map<string, RingBuffer>(),
-};
+/** Whose rings a recall reads: the root's callers, under the recall's tenant. */
+export interface RingOwner {
+  readonly config: HintConfig;
+  readonly tenantId: string;
+  readonly callers?: CallerState;
+}
 
-/** The session's ring, created on first use; null when anchoring is off or the call has no session. */
+/** The session's ring, created on first use; null when anchoring is off, the call has no session, or the root keeps no
+ * callers. */
 export function sessionRing(
-  config: HintConfig,
+  owner: RingOwner,
   surface: RecallSurface,
-  tenantId: string,
   sessionId: string | undefined,
 ): RingBuffer | null {
-  if (!biasHintEnabled(config, 'anchoring') || !sessionId) return null;
-  return getOrCreateRing(rings[surface], buildSessionKey(tenantId, sessionId));
+  const rings = owner.callers?.rings[surface];
+  if (rings === undefined || !biasHintEnabled(owner.config, 'anchoring') || !sessionId) return null;
+  return getOrCreateRing(rings, buildSessionKey(owner.tenantId, sessionId));
 }
 
 /**
  * The session's history, read without creating or touching its ring, so a request that then fails evicts no live
  * session.
  */
-function peekSessionRing(surface: RecallSurface, tenantId: string, sessionId: string): RecallHistorySnapshot {
-  const ring = rings[surface].get(buildSessionKey(tenantId, sessionId));
+function peekSessionRing(owner: RingOwner, surface: RecallSurface, sessionId: string): RecallHistorySnapshot {
+  const ring = owner.callers?.rings[surface].get(buildSessionKey(owner.tenantId, sessionId));
   return ring ? snapshotRing(ring) : [];
 }
 
@@ -325,10 +327,6 @@ export function noteRecall(
   anchoredOn: string | undefined,
 ): void {
   appendRecall(ring, hashQueryText(query), topId, anchoredOn);
-}
-
-export function resetSessionRings(surface: RecallSurface): void {
-  rings[surface].clear();
 }
 
 /** Whom a recall audit row names. */
@@ -399,7 +397,8 @@ export function availabilityRows(who: RecallAuditCaller, hint: AvailabilityHint 
 
 export interface ShownRecall {
   readonly query: string;
-  readonly ring: RingBuffer | null;
+  /** Empty or absent when the call named no session, the one case the skip row records. */
+  readonly sessionId: string | undefined;
   readonly topId: string | null;
   readonly anchoring: AnchoringHint | null;
   readonly availability: AvailabilityHint | null;
@@ -410,7 +409,7 @@ export interface ShownRecall {
  */
 export function shownRecallRows(config: HintConfig, who: RecallAuditCaller, shown: ShownRecall): AppendAuditOpts[] {
   return [
-    ...(shown.ring ? [] : anchorSkippedRows(config, who, shown.query)),
+    ...(shown.sessionId ? [] : anchorSkippedRows(config, who, shown.query)),
     ...anchoringRows(who, shown.anchoring),
     ...availabilityRows(who, shown.availability),
   ];
@@ -451,9 +450,7 @@ export function recallLead(
   return {
     // Peeked, never created: a recall that then fails must not LRU-evict a live session.
     recallHistory:
-      sessionId && biasHintEnabled(ctx.config, 'anchoring')
-        ? peekSessionRing(how.ring, ctx.tenantId, sessionId)
-        : undefined,
+      sessionId && biasHintEnabled(ctx.config, 'anchoring') ? peekSessionRing(ctx, how.ring, sessionId) : undefined,
     // Written first in the recall's own write, so a recall that fails leaves no row.
     leadingAudit: sessionId ? [] : anchorSkippedRows(ctx.config, callerOf(ctx), query),
   };
@@ -484,7 +481,7 @@ export async function recordShownRecall(
 ): Promise<void> {
   // A surface that only peeked has its ring created here, after the
   // write, so a recall that fails cannot LRU-evict a live session.
-  const ring = sessionRing(ctx.config, how.ring, ctx.tenantId, shown.sessionId);
+  const ring = sessionRing(ctx, how.ring, shown.sessionId);
   if (ring) noteRecall(ring, shown.query, shown.topId, shown.anchoredOn);
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.
   if (shown.written && (how.stats === 'every' || shown.items > 0)) await store.bumpRecallStats(shown.items);

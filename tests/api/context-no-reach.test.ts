@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { contextGet } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -36,7 +34,6 @@ function seedPin(root: string, content: string): string {
 const idsOf = (r: { entries: Array<{ entry: { id: string } }> }): string[] => r.entries.map((e) => e.entry.id);
 
 beforeEach(() => {
-  _resetAblationCacheForTests();
   tmpRoot = makeRoot('no-reach', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
@@ -51,8 +48,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.stubEnv('HIPPO_HOME', undefined);
-  _resetAblationCacheForTests();
-  _resetSharedStoreCacheForTests();
 });
 
 const OPTS = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT } as const;

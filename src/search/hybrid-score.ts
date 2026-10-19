@@ -60,7 +60,7 @@ function scoreEntry(i: number, input: HybridScoreInput): EntryScore {
   const entry = input.entries[i];
   const rawBm25 = input.bm25Scores[i];
   const normBm25 = rawBm25 / input.maxBm25;
-  const { strength, recency } = strengthRecencyMultipliers(entry, input.boosts.now);
+  const { strength, recency } = strengthRecencyMultipliers(entry, input.boosts);
   let base: number;
   let mode: HybridMode;
   if (input.useEmbeddings) {

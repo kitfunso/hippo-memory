@@ -6,8 +6,7 @@
  */
 
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
-import { strengthAblation } from '../core/ablation.js';
-import { type MemoryEntry, calculateStrength } from '../core/memory.js';
+import { type MemoryEntry, type StrengthOptions, calculateStrength, strengthOptionsOf } from '../core/memory.js';
 import { compareEntryIdentity, compareScoresDesc, type EntryIdentity } from '../core/compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import { DAY_MS } from '../util/time.js';
@@ -51,7 +50,11 @@ export interface MvFeatureVector {
  * DecayOptions, as in the weights' training; passing the production decay basis would silently break parity with the
  * frozen weights.
  */
-export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVector {
+export function computeMvFeatures(
+  entry: MemoryEntry,
+  now: Date,
+  rules: StrengthOptions = strengthOptionsOf(undefined),
+): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
@@ -59,7 +62,7 @@ export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVecto
     age_days: ageDays,
     half_life_days: entry.halfLifeDays,
     // clock-basis, never the production decay basis — see doc comment above
-    strength: calculateStrength(entry, now, { ablation: strengthAblation() }),
+    strength: calculateStrength(entry, now, rules),
     retrieval_count: entry.retrievalCount,
     outcome_positive: pos,
     outcome_negative: neg,
@@ -190,7 +193,7 @@ export function rankNonPinnedByTenant(
 ): Map<string, MvRankInfo> {
   validateWeights(weights, digest);
   const byId = new Map(entries.map((e) => [e.id, e]));
-  const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now));
+  const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now, strengthOptionsOf(undefined)));
   return rankCandidates(
     candidates,
     () => true,
@@ -207,9 +210,13 @@ export interface MvCandidate {
 }
 
 /** The candidate `entry` ranks as; pinned entries never compete for rescue (never condemned). */
-export function mvCandidate(entry: MemoryEntry, now: Date): MvCandidate {
+export function mvCandidate(entry: MemoryEntry, now: Date, rules: StrengthOptions): MvCandidate {
   // Default an undefined tenantId as dag.ts:341 does: keying it "undefined" would split it into its own tenant.
-  return { id: entry.id, tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, features: computeMvFeatures(entry, now) };
+  return {
+    id: entry.id,
+    tenantId: entry.tenantId ?? DEFAULT_TENANT_ID,
+    features: computeMvFeatures(entry, now, rules),
+  };
 }
 
 /** rankNonPinnedByTenant over compact candidates, for the `wanted` ids and every non-finite one; `read` returns the

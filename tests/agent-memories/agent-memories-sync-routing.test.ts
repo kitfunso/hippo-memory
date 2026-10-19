@@ -59,7 +59,12 @@ afterEach(() => {
 });
 
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
-const opts = () => ({ configAt: loadConfig, tenantId: 'default', agentImport: sqliteAgentImport, machine: w.machine });
+const opts = () => ({
+  configAt: loadConfig,
+  tenantId: 'default',
+  agentImport: sqliteAgentImport({}),
+  machine: w.machine,
+});
 
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
   const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), originProject: origin };

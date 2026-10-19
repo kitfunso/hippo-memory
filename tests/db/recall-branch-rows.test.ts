@@ -4,10 +4,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
-import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
 import {
   CLEARED_ENV,
@@ -305,10 +301,8 @@ const SCENARIOS = RECALL_BRANCHES.flatMap((b) =>
 beforeAll(async () => {
   // savePrediction stamps its memory from the eval clock, so a fixed clock keeps that row's score the same on every run.
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
-  _resetAblationCacheForTests();
   templates = await seedTemplates(seedPortBranches);
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 afterAll(() => {
@@ -321,15 +315,10 @@ describe('recall branch replies and rows', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     vi.stubEnv('HIPPO_V1_RPS', '0');
-    __resetSessionRecallHistoryHttp();
-    _resetSessionRecallHistoryMcpForTests();
-    _resetAblationCacheForTests();
-    lastRecalledIds.clear();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetAblationCacheForTests();
   });
 
   it.each(SCENARIOS)('%s', async (_name, via, branch) => {

@@ -4,10 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { shareRoot } from '../_helpers/share-root.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from '../_helpers/context-fixture.js';
@@ -47,9 +44,6 @@ async function send(url: string, call: Call): Promise<Reply> {
 
 /** Every call over serve() on a fresh copy of the fixture, with no global store. */
 async function runServed(makeStore?: (root: string) => HippoStore) {
-  _resetSharedStoreCacheForTests();
-  _resetAblationCacheForTests();
-  lastRecalledIds.clear();
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-served-'));
   try {
     const root = join(home, 'store');
@@ -94,8 +88,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
-  _resetSharedStoreCacheForTests();
-  _resetAblationCacheForTests();
 });
 
 describe('context over serve()', () => {

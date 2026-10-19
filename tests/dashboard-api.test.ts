@@ -113,6 +113,7 @@ describe('overview and project', () => {
       entries: rows,
       openConflicts: [],
       scanText: () => {},
+      lossAversion: {},
     });
 
     // SAFETY: 4,001 members is over the cut-off, so the scatter is the grid shape.
@@ -135,6 +136,7 @@ describe('KPI series', () => {
       entries: rows,
       openConflicts: [],
       scanText: () => {},
+      lossAversion: {},
     });
     return buildOverview(snap).kpis.find((k) => k.id === id)!.series!;
   };

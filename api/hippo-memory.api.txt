@@ -205,15 +205,6 @@ entry/testing.d.ts: MemoryWire re-export
 entry/testing.d.ts: WireSearchResult re-export
 entry/testing.d.ts: WireStrengthInputs re-export
 entry/testing.d.ts: WriteEntryOptions re-export
-entry/testing.d.ts: __resetSessionRecallHistoryHttp re-export
-entry/testing.d.ts: _readApiKeyVerifyStatsForTests re-export
-entry/testing.d.ts: _resetAblationCacheForTests re-export
-entry/testing.d.ts: _resetLogOnceForTests re-export
-entry/testing.d.ts: _resetLossAversionRatioCacheForTests re-export
-entry/testing.d.ts: _resetProjectIdentityCacheForTests re-export
-entry/testing.d.ts: _resetSessionRecallHistoryMcpForTests re-export
-entry/testing.d.ts: _resetSharedStoreCacheForTests re-export
-entry/testing.d.ts: _setDigestExistsProbeForTests re-export
 entry/testing.d.ts: ambientSecretAdmit re-export
 entry/testing.d.ts: ambientSecretAdmitWire re-export
 entry/testing.d.ts: batchWriteAndDeleteWire function

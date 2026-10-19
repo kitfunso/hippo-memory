@@ -5,14 +5,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { assemble, retrieve } from '../../src/api/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -120,16 +117,15 @@ async function tool(repo: Repo, name: string, args: Record<string, JsonValue> = 
   };
 }
 
-/** The ids hippo_recall or hippo_context listed, read from the outcome map both fill. */
+/** The named ids whose text hippo_recall or hippo_context printed; every seeded text is unique. */
 async function shown(
   repo: Repo,
   name: 'hippo_recall' | 'hippo_context',
   args: Record<string, JsonValue> = {},
 ): Promise<string[]> {
-  lastRecalledIds.clear();
   const r = await tool(repo, name, args);
   expect(r.isError, r.text).toBe(false);
-  return [...lastRecalledIds.values()].flat();
+  return Object.values(ids).filter((id) => r.text.includes(readEntry(store, id)?.content ?? '\u0000'));
 }
 
 function expectOnly(
@@ -158,8 +154,6 @@ beforeAll(async () => {
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
   // The server shares this process, so its own requests pass through and only the embedding call is faked.
   vi.stubGlobal(
     'fetch',
@@ -281,8 +275,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await handle?.stop();
   vi.unstubAllGlobals();
-  _resetSharedStoreCacheForTests();
-  _resetProjectIdentityCacheForTests();
 });
 
 describe('MCP on a shared store with two repos', () => {

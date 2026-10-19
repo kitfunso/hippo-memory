@@ -4,11 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { shareRoot } from '../_helpers/share-root.js';
-import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
 import {
   CLEARED_ENV,
@@ -114,12 +110,8 @@ interface Pass {
 
 let templates: Templates;
 
-/** One scenario on a fresh store copy, with every module-level ring and cache cleared first. */
+/** One scenario on a fresh store copy and a fresh server, so no ring or last-shown list carries over. */
 async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoStore): Promise<Pass> {
-  __resetSessionRecallHistoryHttp();
-  _resetSessionRecallHistoryMcpForTests();
-  _resetAblationCacheForTests();
-  lastRecalledIds.clear();
   const s = freshStore(templates, scenario.kind);
   try {
     // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
@@ -167,7 +159,6 @@ describe('recall over the port matches recall on hippo.db', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetAblationCacheForTests();
   });
 
   it.each(SCENARIOS.map((s) => [s.name, s] as const))('%s', async (_name, scenario) => {

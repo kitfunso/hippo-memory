@@ -7,7 +7,7 @@ import { sharedStoreOf } from '../api/types.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../api/context-render.js';
 import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
-import { lastRecalledIds, resolveClientKey } from '../api/recall/last-recalled.js';
+import { resolveClientKey } from '../api/recall/last-recalled.js';
 import { toolRecallText } from '../api/recall/tool-recall.js';
 import {
   formatMemories,
@@ -115,7 +115,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
     currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd),
     cost: contextCost,
   });
-  lastRecalledIds.set(
+  ctx.callers?.lastShown.set(
     resolveClientKey(ctx),
     result.entries.map((r) => r.entry.id),
   );

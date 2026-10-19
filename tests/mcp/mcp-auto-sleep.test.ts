@@ -6,6 +6,7 @@ import { handleMcpRequest } from '../../src/mcp/server.js';
 import { currentRequestStores, runWithRequestStores, type RequestStores } from '../../src/db/index.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
 import { cliStdioHost } from '../../src/cli/api-context.js';
+import type { McpHost } from '../../src/mcp/protocol.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const roots: string[] = [];
@@ -16,10 +17,11 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-function remember(hippoRoot: string, text: string) {
+/** A remember through `host`, whose callers hold the stores with a sleep in flight. */
+function remember(host: McpHost, hippoRoot: string, text: string) {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
-    cliStdioHost.contextFor(hippoRoot, 'default'),
+    host.contextFor(hippoRoot, 'default'),
   );
 }
 
@@ -44,14 +46,15 @@ describe('MCP auto-sleep', () => {
       }),
     );
 
-    await remember(root, 'the deploy moved to friday');
+    const host = cliStdioHost();
+    await remember(host, root, 'the deploy moved to friday');
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    await remember(root, 'alice owns the billing service');
+    await remember(host, root, 'alice owns the billing service');
     release();
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
     expect(sent.filter((body) => body.includes('alice owns the billing service'))).toEqual([]);
 
-    await remember(root, 'alice reviews every schema change');
+    await remember(host, root, 'alice reviews every schema change');
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(2));
   });
 
@@ -75,7 +78,7 @@ describe('MCP auto-sleep', () => {
     await runWithRequestStores(
       async () => {
         callScope = currentRequestStores();
-        await remember(root, 'the deploy moved to friday');
+        await remember(cliStdioHost(), root, 'the deploy moved to friday');
       },
       { busyWaitMs: 250 },
     );

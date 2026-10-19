@@ -3,9 +3,9 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { cliStdioHost } from '../../src/cli/api-context.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
+import type { McpHost } from '../../src/mcp/protocol.js';
 import {
   CLEARED_ENV,
   FAKE_NOW,
@@ -21,6 +21,9 @@ import {
 
 type ToolArgs = Record<string, string | number | boolean>;
 
+// One host per store, as one stdio loop serves one client: an outcome lands on what that host's recall showed.
+let host: McpHost;
+
 let templates: Templates;
 
 // A named project keeps hippo_context off the git-derived query, which would read this checkout's own diff.
@@ -29,7 +32,7 @@ const NO_PROJECT = { name: '', legacyName: '' };
 async function tool(s: Store, name: string, args: ToolArgs): Promise<string> {
   const res: McpResponse | null = await handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { ...cliStdioHost.contextFor(s.root, TENANT), project: NO_PROJECT },
+    { ...host.contextFor(s.root, TENANT), project: NO_PROJECT },
   );
   // SAFETY: a tools/call result is written by src/mcp/request.ts as { content: [{ text }], isError? }.
   const result = res?.result as { content?: { text: string }[] } | undefined;
@@ -38,6 +41,7 @@ async function tool(s: Store, name: string, args: ToolArgs): Promise<string> {
 
 async function onFreshStore(run: (s: Store) => Promise<string[]>): Promise<string[]> {
   const s = freshStore(templates, 'local');
+  host = cliStdioHost();
   try {
     return normalize(await run(s), s);
   } finally {
@@ -59,13 +63,10 @@ describe('MCP read tools golden', () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    _resetAblationCacheForTests();
-    _resetSessionRecallHistoryMcpForTests();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetAblationCacheForTests();
   });
 
   it('hippo_recall: a plain query, then hippo_outcome on the ids it showed', async () => {

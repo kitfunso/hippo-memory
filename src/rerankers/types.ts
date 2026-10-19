@@ -1,4 +1,5 @@
 import type { SearchResult } from '../core/search-types.js';
+import type { ClefSettings } from '../core/config.js';
 
 /**
  * Reorders hybridSearch's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so it sees the full
@@ -23,6 +24,8 @@ export interface RerankerOptions {
   topK?: number;
   /** Per-track config blob; opaque to the seam. */
   config?: Record<string, RerankerConfigValue>;
+  /** The CLEF rerankers' transport, from the root's config; the other rerankers ignore it. */
+  clef?: ClefSettings;
 }
 
 /** Which backend and model produced a rerank, or why it fell back. */

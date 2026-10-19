@@ -84,7 +84,7 @@ export function embed(hippoRoot: string, ids: readonly string[]): void {
 
 /** A snapshot cache over the store under `hippoRoot`, as the dashboard builds it; `close` releases its reader. */
 export function snapshotsOf(hippoRoot: string, now: () => number, cacheClock?: () => number): SnapshotService {
-  return createSnapshotService(sqliteSyncStore(hippoRoot).localFiles.dashboard, now, cacheClock);
+  return createSnapshotService(sqliteSyncStore(hippoRoot).localFiles.dashboard, {}, now, cacheClock);
 }
 
 /** A whole entry as the snapshot's scan hands it over: the full text as the head. */

@@ -5,16 +5,12 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../../src/entry/store-kit.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { folderVectorSource, hybridSearch } from '../../src/entry/folder-search.js';
 import { resolveVectorArm } from '../../src/search/vector.js';
 import { shareRoot } from '../_helpers/share-root.js';
-import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
+import { log as hippoLog } from '../../src/util/log.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -135,7 +131,6 @@ interface Reply {
 }
 interface Pass {
   replies: Reply[];
-  mcpIds: string[][];
   rows: ReturnType<typeof rowsOf>;
   requests: number;
   log: string;
@@ -147,10 +142,13 @@ const MCP: Call = { via: 'mcp', args: { query: QUERY } };
 
 const send = (url: string, call: Call): Promise<Reply> => sendRecall(url, call.via, call.args, PROJECT);
 
+/** The ids the replies list, and for an MCP recall, whose text names no id, the rows it strengthened. */
 function shownIds(pass: Pass): string[] {
   // SAFETY: a GET /v1/memories reply is a serialised RecallResult; an MCP reply has no results field.
   const http = pass.replies.flatMap((r) => (r.body as { results?: { id: string }[] }).results?.map((x) => x.id) ?? []);
-  return [...http, ...pass.mcpIds.flat()];
+  // SAFETY: rowsOf selects `id` from memories for each retrieved row.
+  const retrieved = (pass.rows.retrieved as { id: string }[]).map((r) => r.id);
+  return [...http, ...retrieved];
 }
 
 let templates: Templates;
@@ -166,11 +164,6 @@ async function runPass(
   backing: Backing,
   prepare?: (root: string) => void,
 ): Promise<Pass> {
-  __resetSessionRecallHistoryHttp();
-  _resetSessionRecallHistoryMcpForTests();
-  _resetAblationCacheForTests();
-  lastRecalledIds.clear();
-  _resetLogOnceForTests();
   const s = freshStore(templates, 'local');
   const lines: string[] = [];
   try {
@@ -189,24 +182,24 @@ async function runPass(
       lines.push(String(chunk));
       return true;
     });
+    // A once-only warning reaches stderr once per process, so each pass keeps the ones it asked for itself.
+    const once = vi.spyOn(hippoLog, 'once').mockImplementation((_key, _level, message) => {
+      lines.push(`${message}\n`);
+    });
     const handle = await serve({ hippoRoot: s.root, port: 0, store });
     const replies: Reply[] = [];
-    const mcpIds: string[][] = [];
     try {
       for (const call of calls) {
         replies.push(await send(handle.url, call));
-        if (call.via === 'mcp') mcpIds.push([...lastRecalledIds.values()].flat());
       }
     } finally {
       await handle.stop();
       await store?.close();
       stderr.mockRestore();
+      once.mockRestore();
     }
     const requests = embeddings.requests() - before;
-    return normalize(
-      { replies, mcpIds, rows: rowsOf(s.root), requests, log: lines.join(''), calls: memory?.calls ?? [] },
-      s,
-    );
+    return normalize({ replies, rows: rowsOf(s.root), requests, log: lines.join(''), calls: memory?.calls ?? [] }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }
@@ -238,7 +231,6 @@ beforeEach(() => {
 afterEach(() => {
   embeddings.setStatus(200);
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 describe('recall through the vector reads of a store other than hippo.db', () => {
@@ -253,15 +245,13 @@ describe('recall through the vector reads of a store other than hippo.db', () =>
       const onHippoDb = await runPass(calls, physics, 'workers');
       const onMemory = await runPass(calls, physics, 'memory');
       const inProcess = await runPass(calls, physics, 'in process');
-      expect([onHippoDb.replies, onHippoDb.mcpIds, onHippoDb.rows, onHippoDb.requests]).toEqual([
+      expect([onHippoDb.replies, onHippoDb.rows, onHippoDb.requests]).toEqual([
         inProcess.replies,
-        inProcess.mcpIds,
         inProcess.rows,
         inProcess.requests,
       ]);
       expect(onHippoDb.log).not.toContain('fell back to BM25');
       expect(onMemory.replies).toEqual(onHippoDb.replies);
-      expect(onMemory.mcpIds).toEqual(onHippoDb.mcpIds);
       expect(onMemory.rows).toEqual(onHippoDb.rows);
       expect(onMemory.requests).toBe(onHippoDb.requests);
       expect(onMemory.calls).toContain(read);
@@ -305,7 +295,7 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
   it('a stale index names the rebuild each store needs', async () => {
     const onHippoDb = await runPass([http('hybrid')], false, 'workers', staleModel);
     const onMemory = await runPass([http('hybrid')], false, 'memory', staleModel);
-    expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed' ts=");
+    expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed'\n");
     expect(onMemory.log).toContain(
       "run 'hippo embed' on the SQLite store, then rebuild the 'in-memory' database from it",
     );

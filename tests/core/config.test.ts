@@ -4,13 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import {
-  configReader,
-  loadConfig,
-  isSharedStore,
-  _resetSharedStoreCacheForTests,
-  type HippoConfig,
-} from '../../src/core/config.js';
+import { configReader, loadConfig, isSharedStore, type HippoConfig } from '../../src/core/config.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { log } from '../../src/util/log.js';
 
@@ -173,7 +167,6 @@ describe('loadConfig characterization', () => {
 describe('config.sharedStore', () => {
   let tmp: string;
   beforeEach(() => {
-    _resetSharedStoreCacheForTests();
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-shared-'));
     return () => fs.rmSync(tmp, { recursive: true, force: true });
   });
@@ -206,13 +199,15 @@ describe('config.sharedStore', () => {
     expect(isSharedStore(tmp)).toBe(false);
   });
 
-  it('stays true for the process once seen, so a broken edit cannot turn it off', () => {
+  it('stays true for the process once seen, so a broken edit cannot turn it off', async () => {
     writeConfig(JSON.stringify({ sharedStore: true }));
     expect(isSharedStore(tmp)).toBe(true);
     writeConfig('{not json');
     expect(isSharedStore(tmp)).toBe(true);
-    _resetSharedStoreCacheForTests();
-    expect(() => isSharedStore(tmp)).toThrow(/config\.json could not be loaded/);
+    // A fresh module graph stands in for the next process, which has not seen the folder.
+    vi.resetModules();
+    const nextProcess = await import('../../src/core/config.js');
+    expect(() => nextProcess.isSharedStore(tmp)).toThrow(/config\.json could not be loaded/);
   });
 
   /** Flags `seen`, breaks its config, then asks through `other`, a second spelling of the same folder. */
@@ -259,7 +254,6 @@ describe('config.json is parsed once per file version, per reader', () => {
   let tmp: string;
   let file: string;
   beforeEach(() => {
-    _resetSharedStoreCacheForTests();
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-cache-'));
     file = path.join(tmp, 'config.json');
     return () => {

@@ -3,9 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { handleRemember } from '../../src/cli/remember.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import type { JsonValue } from '../../src/util/json.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
@@ -71,14 +69,11 @@ async function bothOrigins(store: string): Promise<ReadonlyArray<string | null |
 beforeEach(() => {
   tmp = makeRoot('origin-parity', { init: false });
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
 });
 
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  _resetSharedStoreCacheForTests();
 });
 
 describe('remember origin: direct path and thin client agree', () => {

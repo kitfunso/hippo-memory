@@ -6,7 +6,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { remember, retrieve } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -39,7 +38,6 @@ async function httpRecall(qs: string): Promise<Response> {
 }
 
 beforeEach(async () => {
-  __resetSessionRecallHistoryHttp();
   home = makeRoot('http-recall-count');
   for (const content of ['alpha token one', 'alpha token two', 'alpha token three']) {
     await remember(ctx(), { content });

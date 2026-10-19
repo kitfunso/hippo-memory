@@ -38,7 +38,7 @@ import { initStore, onHandle, openStore } from './handles.js';
 import { projectTagReads } from './project-tags.js';
 import { findRejectedValue } from './rejection.js';
 import { rejectionDigest } from '../../core/rejection-digest.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import type { LossAversion, MemoryEntry } from '../../core/memory.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../util/pages.js';
 import { setAsideRow } from './set-aside.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
@@ -52,7 +52,7 @@ function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): Gene
   );
 }
 
-function containerTx(db: DatabaseSyncLike, root: string): ContainerTx {
+function containerTx(db: DatabaseSyncLike, root: string, rules: LossAversion): ContainerTx {
   return {
     liveBySourcePrefix: (tenantId, prefix) => liveUnder(db, tenantId, prefix),
     dormantBySourcePrefix: (tenantId, prefix) => dormantSnapshotsBySourcePrefix(db, tenantId, prefix),
@@ -70,12 +70,18 @@ function containerTx(db: DatabaseSyncLike, root: string): ContainerTx {
     markSummaryDirty: (summaryId, tenantId, actor) => markSummaryDirtyInTx(db, summaryId, tenantId, actor),
     appendAudit: (event) => appendAuditEvent(db, event),
     gatedWrite: (entry, opts) => gatedWrite(db, root, entry, opts),
-    setAside: (tag, row, why) => setAsideRow(db, tag, row, why),
+    setAside: (tag, row, why) => setAsideRow(db, tag, row, why, rules),
     stampOrigin: (entry) => stampOriginProject(root, entry),
   };
 }
 
-function importTarget(db: DatabaseSyncLike, root: string, tenantId: string, close: () => void): ImportTarget {
+function importTarget(
+  db: DatabaseSyncLike,
+  root: string,
+  tenantId: string,
+  close: () => void,
+  rules: LossAversion,
+): ImportTarget {
   return {
     root,
     tenantId,
@@ -84,7 +90,7 @@ function importTarget(db: DatabaseSyncLike, root: string, tenantId: string, clos
       selectRowsHoldingOutsideSourcePrefixAt(db, tenantId, text, prefix, origins),
     projectTagReads: () => projectTagReads(db, tenantId),
     inContainer: (scope, dryRun, work) => {
-      const run = () => work(containerTx(db, root));
+      const run = () => work(containerTx(db, root, rules));
       return dryRun ? withTrialScope(db, scope, run) : withWriteScope(db, scope, run);
     },
     writeMirror: (entry) => writeEntryMirrors(root, entry),
@@ -95,20 +101,27 @@ function importTarget(db: DatabaseSyncLike, root: string, tenantId: string, clos
   };
 }
 
-export const sqliteAgentImport: AgentImport = {
+/** The import side of a store whose root read `rules`, which every store it opens scores by. */
+export const sqliteAgentImport = (rules: LossAversion): AgentImport => ({
   create: (root) => initStore(root),
   open: (root, tenantId, opts) => {
     const db = openHippoDb(root, { busyWaitMs: opts.busyWaitMs });
-    return importTarget(db, root, tenantId, () => closeHippoDb(db));
+    return importTarget(db, root, tenantId, () => closeHippoDb(db), rules);
   },
   openStandIn: (tenantId) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
     // Its folder is deleted at close, so a request scope must not keep the file open past that.
     const db = outsideRequestStores(() => openHippoDb(root));
-    return importTarget(db, root, tenantId, () => {
-      closeHippoDb(db);
-      fs.rmSync(root, { recursive: true, force: true });
-    });
+    return importTarget(
+      db,
+      root,
+      tenantId,
+      () => {
+        closeHippoDb(db);
+        fs.rmSync(root, { recursive: true, force: true });
+      },
+      rules,
+    );
   },
   isBusy: (err) => isSqliteBusy(err),
-};
+});

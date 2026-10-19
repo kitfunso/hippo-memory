@@ -1,4 +1,4 @@
-import { MemoryEntry, calculateStrength } from '../core/memory.js';
+import { MemoryEntry, calculateStrength, clockBasisOf } from '../core/memory.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { chunked } from '../util/chunked.js';
 import {
@@ -104,12 +104,14 @@ interface Verdict {
 function classifyByStrength(run: SleepRun) {
   const verdicts: Verdict[] = [];
   const candidates: MvCandidate[] = [];
+  // The weights were trained on clock-basis strength, so only the switches and the ratio carry over.
+  const mvRules = clockBasisOf(run.decayOpts);
   for (const page of run.rows.pages()) {
     for (const entry of page) {
       const live = liveStrength(run, entry);
       const condemned = run.retirable(entry) && live < DECAY_THRESHOLD;
       verdicts.push({ id: entry.id, tenant_id: entry.tenantId, strength: entry.strength, live, condemned });
-      if (!entry.pinned) candidates.push(mvCandidate(entry, run.now));
+      if (!entry.pinned) candidates.push(mvCandidate(entry, run.now, mvRules));
     }
   }
   return { verdicts, candidates };

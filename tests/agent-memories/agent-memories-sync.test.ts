@@ -51,7 +51,7 @@ const sync = (): ImportReport =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport,
+    agentImport: sqliteAgentImport({}),
     machine: w.machine,
   });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
@@ -197,7 +197,7 @@ describe('agent memory sync', () => {
     const report = importForStore(w.local, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport,
+      agentImport: sqliteAgentImport({}),
       machine: w.machine,
       busyWaitMs: 5000,
     });
@@ -246,7 +246,7 @@ describe('agent memory sync', () => {
       const again = importProjectMemories(w.local.toUpperCase(), {
         configAt: loadConfig,
         tenantId: 'default',
-        agentImport: sqliteAgentImport,
+        agentImport: sqliteAgentImport({}),
         machine: upper,
       });
       expect(claude(again)).toMatchObject({ unchanged: 1, imported: 0, setAside: 0 });
@@ -327,7 +327,7 @@ describe('agent memory sync', () => {
         importAtSessionEnd(cwd, transcript, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport,
+          agentImport: sqliteAgentImport({}),
           machine: w.machine,
         }),
       ).imported,

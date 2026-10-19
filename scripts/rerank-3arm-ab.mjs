@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { hybridSearch } from '../dist/index.js';
 import { buildCorpus } from '../dist/search/bm25.js';
 import { loadAllEntries } from '../dist/entry/testing.js';
-import { getReranker } from '../dist/rerankers/index.js';
+import { cliReranker as getReranker } from '../dist/cli/api-context.js';
 
 // Literal, not new Date(): a bare Date() drifted 26min between Lane 12/13 runs
 // and moved a rank. Passing `now` below also short-circuits HIPPO_FAKE_NOW.

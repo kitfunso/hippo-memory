@@ -55,7 +55,7 @@ import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { outcomeMultiplier } from '../../dist/search/boosts.js';
 import { markRetrieved } from '../../dist/core/memory.js';
-import { isRecallBoostAblated, _resetAblationCacheForTests } from '../../dist/core/ablation.js';
+import { isRecallBoostAblated, evalNow as _resetAblationCacheForTests } from '../../dist/core/ablation.js';
 import { generateProtocol, GENERATOR_VERSION } from './generate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

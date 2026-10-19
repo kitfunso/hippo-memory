@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getHippoDbPath, withSharedStoreHandles } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -19,7 +18,6 @@ let stderrSpy: MockInstance<typeof process.stderr.write>;
 beforeEach(() => {
   root = makeRoot('fts-set-delete');
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  _resetLogOnceForTests();
 });
 
 afterEach(() => {

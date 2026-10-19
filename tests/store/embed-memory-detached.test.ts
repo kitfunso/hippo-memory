@@ -26,6 +26,7 @@ describe('embedMemoryDetached', () => {
     const target: EmbedTarget = {
       hippoRoot: root,
       embeddings: loadConfig(root).embeddings,
+      strength: {},
       get store(): HippoStore {
         throw new Error('store is unreachable');
       },

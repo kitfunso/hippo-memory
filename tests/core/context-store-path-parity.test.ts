@@ -4,9 +4,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
@@ -329,8 +328,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
-  _resetSharedStoreCacheForTests();
-  _resetAblationCacheForTests();
 });
 
 interface PassOptions {
@@ -355,8 +352,6 @@ async function runPass(
   { withGlobal, embedded, prepare }: PassOptions,
   makeStore?: (root: string) => HippoStore,
 ): Promise<Pass> {
-  _resetSharedStoreCacheForTests();
-  _resetAblationCacheForTests();
   const home = makeRoot('context-parity', { init: false });
   const root = join(home, 'store');
   const globalRoot = join(home, 'global');

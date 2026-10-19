@@ -6,7 +6,6 @@ import * as path from 'node:path';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { contextGet, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryEventType } from '../../src/core/delivery.js';
@@ -122,7 +121,6 @@ function storeCounts(root: string): string {
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_FAKE_NOW', '2026-07-01T00:00:00.000Z');
-  _resetAblationCacheForTests();
   tmpRoot = makeRoot('delivery-recorder', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
@@ -138,7 +136,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.stubEnv('HIPPO_HOME', undefined);
   vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-  _resetAblationCacheForTests();
 });
 
 describe('the observer never changes contextGet', () => {

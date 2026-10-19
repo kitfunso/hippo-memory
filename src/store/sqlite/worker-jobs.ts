@@ -26,9 +26,9 @@ import {
 
 /** Every method the op table can name: the synchronous store, and the vector reads, which answer only through Promises.
  *  The two reads that return vectors answer with a pack, which worker-store.ts turns back into the port's Map. */
-function workerOps(hippoRoot: string, graphs: VectorGraphs | undefined) {
-  const handles = handlesOf(hippoRoot);
-  const sync = sqliteSyncStore(hippoRoot);
+function workerOps({ hippoRoot, lossAversionRatio }: WorkerInit, graphs: VectorGraphs | undefined) {
+  const handles = handlesOf(hippoRoot, { lossAversionRatio });
+  const sync = sqliteSyncStore(hippoRoot, { lossAversionRatio });
   const packed = (ids: readonly string[]) => packVectors(sync.vectorViews.storedVectorViews(ids));
   return {
     ...sync,
@@ -147,7 +147,7 @@ function post(port: MessagePort, reply: Reply): void {
  * files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
   const graphs = init.pinned ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold }) : undefined;
-  const ops = workerOps(init.hippoRoot, graphs);
+  const ops = workerOps(init, graphs);
   const stores = new WorkerStores(init);
   // Each step still closes what is left when the one before it throws, so a failed flush leaves no handle on the files.
   const closeThread = (): void => {

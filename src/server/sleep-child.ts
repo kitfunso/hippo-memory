@@ -4,7 +4,6 @@ import { sleep } from '../api/sleep/sleep.js';
 import { runConsolidation } from '../consolidate/sleep.js';
 import { isStoreBusy } from '../store/port.js';
 import { configReader } from '../core/config.js';
-import { setLossAversionRatio } from '../core/memory.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
 import { sqliteReach, sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../util/env.js';
@@ -17,6 +16,7 @@ import type { ConsolidationResult } from '../consolidate/run.js';
 type JobResult = SleepResult | ConsolidationResult;
 
 const loadConfig = configReader(envRuntimeSettings);
+const storeAt = (root: string) => sqliteStore(root, { lossAversionRatio: envLossAversionRatio() });
 
 function failed<E>(err: E): SleepReply<never> {
   return {
@@ -29,8 +29,8 @@ function failed<E>(err: E): SleepReply<never> {
 
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
 function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
-  const store = sqliteStore(hippoRoot);
-  const reach = contextReach(sqliteReach(hippoRoot, store), loadConfig);
+  const store = storeAt(hippoRoot);
+  const reach = contextReach(sqliteReach(hippoRoot, store, undefined, storeAt), loadConfig);
   const config = loadConfig(hippoRoot);
   return sleep({ hippoRoot, tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
 }
@@ -48,10 +48,9 @@ function sendReply(reply: SleepReply<JobResult>): Promise<number> {
 process.once('message', (message) => {
   // SAFETY: sleep-offload.ts is the only writer on this channel and sends exactly one SleepJob.
   const job = message as SleepJob;
-  setLossAversionRatio(envLossAversionRatio());
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
-      ? runConsolidation(sqliteSyncStore(job.hippoRoot).localFiles, {
+      ? runConsolidation(sqliteSyncStore(job.hippoRoot, { lossAversionRatio: envLossAversionRatio() }).localFiles, {
           config: loadConfig(job.hippoRoot),
           tenantId: envTenant(),
         })

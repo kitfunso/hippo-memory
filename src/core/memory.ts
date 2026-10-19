@@ -3,7 +3,7 @@
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
-import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from './ablation.js';
+import { evalNow, NO_STRENGTH_ABLATION, strengthAblation, type StrengthAblation } from './ablation.js';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
@@ -112,37 +112,17 @@ export const EMOTIONAL_MULTIPLIERS = {
 // so values below it fall back to 1.0.
 const LOSS_AVERSION_RATIO_MIN = 0.5;
 
-function parseLossAversionRatio(raw: string | number | undefined): number {
+/** HIPPO_LOSS_AVERSION_RATIO as scoring reads it, which a root hands down: unset, unparseable or below the floor is
+ * 1.0. */
+export function parseLossAversionRatio(raw: string | number | undefined): number {
   const parsed = raw === undefined || raw === '' ? 1.0 : Number(raw);
   return Number.isFinite(parsed) && parsed >= LOSS_AVERSION_RATIO_MIN ? parsed : 1.0;
-}
-
-// A process setting, not a config field: the store's strength SQL needs it, and the store is handed no config.
-let processLossAversionRatio = 1.0;
-
-/** A root sets this once from HIPPO_LOSS_AVERSION_RATIO; unset, unparseable or below the floor means 1.0. */
-export function setLossAversionRatio(raw: string | number | undefined): void {
-  processLossAversionRatio = parseLossAversionRatio(raw);
-}
-
-/** The ratio the root set, so a store worker thread can be given the same one. */
-export function lossAversionRatio(): number {
-  return processLossAversionRatio;
-}
-
-/** Test-only: back to the 1.0 a process starts with (tests/core/emotional-multipliers.test.ts). */
-export function _resetLossAversionRatioCacheForTests(): void {
-  processLossAversionRatio = 1.0;
 }
 
 /**
  * Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the losses-vs-gains claim.
  */
-export function applyLossAversionRatio(
-  valence: EmotionalValence,
-  baseMultiplier: number,
-  ratio: number = processLossAversionRatio,
-): number {
+export function applyLossAversionRatio(valence: EmotionalValence, baseMultiplier: number, ratio: number): number {
   if (valence !== 'negative') return baseMultiplier;
   return baseMultiplier * ratio;
 }
@@ -209,9 +189,23 @@ export interface DecayOptions {
   sleepCount?: number;
   /** EVAL-ONLY switches resolved once at the entry layer (`strengthAblation()`); absent means production scoring. */
   ablation?: StrengthAblation;
-  /** Scales the negative multiplier, under the HIPPO_LOSS_AVERSION_RATIO rules; absent means the ratio the root set,
-   * else 1.0. */
+  /** Scales the negative multiplier under the HIPPO_LOSS_AVERSION_RATIO rules, as the root read it; absent is 1.0. */
   lossAversionRatio?: number;
+}
+
+/** The root's ratio alone, for a write that scores with the production switches. */
+export type LossAversion = Pick<DecayOptions, 'lossAversionRatio'>;
+/** What an entry-layer caller hands each strength call: the eval switches and the root's ratio. */
+export type StrengthOptions = Pick<DecayOptions, 'ablation' | 'lossAversionRatio'>;
+
+/** The switches and ratio of `options` alone, for a caller that scores on the clock basis. */
+export function clockBasisOf(options: StrengthOptions): StrengthOptions {
+  return { ablation: options.ablation, lossAversionRatio: options.lossAversionRatio };
+}
+
+/** The eval switches this process runs under, with the ratio the root read into `runtime`. */
+export function strengthOptionsOf(runtime: LossAversion | undefined): StrengthOptions {
+  return { ablation: strengthAblation(), lossAversionRatio: runtime?.lossAversionRatio };
 }
 
 /**
@@ -248,7 +242,7 @@ export function calculateStrength(
   const retrievalBoost = retrievalBoostFor(entry, ablation);
 
   const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotionalValence] ?? 1.0;
-  const ratio = options.lossAversionRatio === undefined ? undefined : parseLossAversionRatio(options.lossAversionRatio);
+  const ratio = parseLossAversionRatio(options.lossAversionRatio);
   const emotionalMultiplier = applyLossAversionRatio(entry.emotionalValence, baseMultiplier, ratio);
 
   const raw = decay * retrievalBoost * emotionalMultiplier;
@@ -323,20 +317,20 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
  * Counts the outcome; calculateStrength turns the counts into a reward factor on the half-life, so there is no fixed
  * delta here.
  */
-export function applyOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
+export function applyOutcome(entry: MemoryEntry, good: boolean, rules: LossAversion = {}): MemoryEntry {
   const updated: MemoryEntry = {
     ...entry,
     outcomeScore: good ? 1 : -1,
     outcomePositive: (entry.outcomePositive ?? 0) + (good ? 1 : 0),
     outcomeNegative: (entry.outcomeNegative ?? 0) + (good ? 0 : 1),
   };
-  updated.strength = calculateStrength(updated);
+  updated.strength = calculateStrength(updated, undefined, rules);
   return updated;
 }
 
 /** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its churn-stale tag goes. */
-export function entryAfterOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
-  const updated = applyOutcome(entry, good);
+export function entryAfterOutcome(entry: MemoryEntry, good: boolean, rules: LossAversion = {}): MemoryEntry {
+  const updated = applyOutcome(entry, good, rules);
   if (!good || !updated.tags.includes(CHURN_STALE_TAG)) return updated;
   return { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
 }
@@ -640,9 +634,10 @@ function inferValence(tags: string[]): EmotionalValence {
 export function markRetrieved(
   entries: MemoryEntry[],
   now: Date = evalNow(),
-  options: Pick<DecayOptions, 'ablation'> = {},
+  options: StrengthOptions = {},
 ): MemoryEntry[] {
   const ablation = options.ablation ?? NO_STRENGTH_ABLATION;
+  const lossAversionRatio = options.lossAversionRatio;
   if (ablation.recallBoost) return entries;
   return entries.map((e) => {
     if (e.supersededBy) return e;
@@ -655,7 +650,7 @@ export function markRetrieved(
       lastRetrieved: wrong ? e.lastRetrieved : now.toISOString(),
       halfLifeDays: wrong ? e.halfLifeDays : e.halfLifeDays + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
     };
-    updated.strength = calculateStrength(updated, now, { ablation });
+    updated.strength = calculateStrength(updated, now, { ablation, lossAversionRatio });
     return updated;
   });
 }

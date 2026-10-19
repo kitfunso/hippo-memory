@@ -194,6 +194,23 @@ export interface RuntimeSettings {
   readonly dagRebuildCap?: number;
   /** HIPPO_SCOPE, else GSTACK_SKILL, else OPENCLAW_SKILL: the scope recall boosts. */
   readonly activeScope?: string;
+  /** HIPPO_LOSS_AVERSION_RATIO, which scales an error memory's strength; strength scoring applies its floor. */
+  readonly lossAversionRatio?: number;
+  /** Where the CLEF rerankers send a request; without it they keep the native order. */
+  readonly clef?: ClefSettings;
+}
+
+/** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
+export interface ClefSettings {
+  /** HIPPO_CLEF_ENDPOINT, trimmed. */
+  readonly endpoint?: string;
+  /** HIPPO_CLEF_ENDPOINT_TOKEN, sent only to `endpoint`. */
+  readonly endpointToken?: string;
+  /** HIPPO_CLEF_TIMEOUT_MS as written; the reranker parses it strictly. */
+  readonly timeoutMs?: string;
+  /** CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, trimmed; empty when unset. */
+  readonly cloudflareAccountId: string;
+  readonly cloudflareApiToken: string;
 }
 
 /** The `embeddings` block, which the embedding provider reads alone. */
@@ -584,10 +601,4 @@ export function isSharedStore(hippoRoot: string): boolean {
   }
   sharedStoreRoots.add(key);
   return true;
-}
-
-/** Test seam: forget every root seen as shared. */
-export function _resetSharedStoreCacheForTests(): void {
-  sharedStoreRoots.clear();
-  notSharedStamps.clear();
 }

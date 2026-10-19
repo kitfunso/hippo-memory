@@ -535,6 +535,7 @@ describe('HTTP route status table: status and error text per route', () => {
     const health = await get('/health');
     expect(Object.keys(isJsonObject(health.json) ? health.json : {}).sort()).toEqual([
       'audit_write_failures',
+      'auto_sleeps',
       'handler_deadlines',
       'ok',
       'pid',
