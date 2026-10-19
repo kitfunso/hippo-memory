@@ -12,6 +12,8 @@ import {
 import { join } from 'node:path';
 import { isObjectLike } from '../core/capture-contract.js';
 import { envHealthProbeMs } from '../util/env.js';
+import { isJsonObject, parseJson, tryReadJsonFile } from '../util/json.js';
+import { tryParseUrl } from '../util/net.js';
 import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 
 export interface ServerInfo {
@@ -93,12 +95,8 @@ function isLiveLoopbackTarget(info: ServerInfo): boolean {
   // url that is not http on a loopback
   // host and the recorded port is malformed or forged. Reject it before probing, since the probe and any routed request
   // can carry HIPPO_API_KEY.
-  let probeUrl: URL;
-  try {
-    probeUrl = new URL(info.url);
-  } catch {
-    return false;
-  }
+  const probeUrl = tryParseUrl(info.url);
+  if (probeUrl === undefined) return false;
   return (
     probeUrl.protocol === 'http:' &&
     PIDFILE_LOOPBACK_HOSTS.has(probeUrl.hostname.replace(/^\[(.*)\]$/, '$1')) &&
@@ -269,8 +267,8 @@ function startingClaim(path: string): ServerInfo | undefined {
         ? { pid: 0, port: 0, url: '', started_at: '' }
         : undefined;
     }
-    const info: ServerInfo = JSON.parse(raw);
-    return info?.port === 0 && pidIsAlive(info.pid) ? info : undefined;
+    const info = parseJson(raw);
+    return isServerInfo(info) && info.port === 0 && pidIsAlive(info.pid) ? info : undefined;
   } catch (err) {
     // Expected: the file vanished after EEXIST, or it is corrupt and detectServer clears it.
     if (errorCode(err) === 'ENOENT' || err instanceof SyntaxError) return undefined;
@@ -335,18 +333,15 @@ function removePidfile(hippoRoot: string): void {
  */
 export function removePidfileIfOwned(hippoRoot: string, owner: { pid: number; startedAt: string }): boolean {
   const path = join(hippoRoot, PIDFILE);
+  const info = tryReadJsonFile(path);
+  // A missing, unreadable, malformed or non-object pidfile, or one another server now owns, is not provably mine.
+  if (!isJsonObject(info) || info.pid !== owner.pid || info.started_at !== owner.startedAt) return false;
   try {
-    const info: ServerInfo = JSON.parse(readFileSync(path, 'utf8'));
-    // A literal JSON `null` parses cleanly but throws on property access;
-    // that lands in the catch below, which is the intended "not mine" path.
-    if (info.pid !== owner.pid || info.started_at !== owner.startedAt) {
-      return false; // a different server owns the pidfile now
-    }
     unlinkSync(path);
     return true;
-  } catch {
-    // Missing, unreadable, malformed, or non-object pidfile, or an unlink
-    // failure: none is a provable own-removal, so report not-removed.
+  } catch (err) {
+    // Gone since the read means another process removed it; any other failure leaves a file the caller should hear of.
+    if (errorCode(err) !== 'ENOENT') log.warn(`could not remove the server pidfile ${path}`, errorFields(err));
     return false;
   }
 }

@@ -127,6 +127,8 @@ export const WORKER_OPS = {
   connectorEvents: {
     eventRecord: 'read',
     markEventSeen: 'write',
+    claimDelivery: 'write',
+    releaseDelivery: 'write',
     deletionTarget: 'read',
     archiveDeletedArtifact: 'write',
     slackTeamRoute: 'read',

@@ -5,6 +5,7 @@ import { REPLAY_AFTER_MS } from '../core/compaction-timing.js';
 import { SPOOL_PROBLEM, spoolCounts } from '../capture/compaction-spool.js';
 import { defaultSleepLogPath } from '../hooks/shared.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
+import { ignoringCodes, PATH_UNREADABLE } from '../util/expected-errors.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { printError } from './output.js';
 import { type CliFlags, type CommandContext } from './flag-values.js';
@@ -53,13 +54,9 @@ export function cmdLastSleep(
 
   if (!fs.existsSync(logPath)) return;
 
-  let content: string;
-  try {
-    content = fs.readFileSync(logPath, 'utf8');
-  } catch {
-    // Removed or locked since the exists check: there is nothing to show this session.
-    return;
-  }
+  // Removed or locked since the exists check: there is nothing to show this session.
+  const content = ignoringCodes([...PATH_UNREADABLE, 'EBUSY'], () => fs.readFileSync(logPath, 'utf8'));
+  if (content === undefined) return;
 
   if (content.trim().length > 0) {
     printError('=== Previous session hippo consolidation ===');

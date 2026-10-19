@@ -21,7 +21,7 @@ import { setLossAversionRatio } from '../core/memory.js';
 import { auditWriteFailureCount } from '../core/audit-report.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { MINUTE_MS } from '../util/time.js';
-import { errorFields, errorMessage, log } from '../util/log.js';
+import { errorClassFields, errorFields, errorMessage, log } from '../util/log.js';
 import { runWithRequestId } from '../util/request-scope.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { RecallContractError } from '../api/index.js';
@@ -46,6 +46,7 @@ import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
 import {
   accessRouteOf,
+  endReply,
   logRequestFailure,
   openRequest,
   parseRequest,
@@ -255,11 +256,7 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
   const mapped = replyFor(err);
   logRequestFailure(req, err, mapped.status);
   if (res.headersSent) {
-    try {
-      res.end();
-    } catch {
-      /* socket already gone */
-    }
+    endReply(res);
     return;
   }
   if (isStoreBusy(err)) {
@@ -301,7 +298,7 @@ function logLateFailure<E>(req: IncomingMessage, err: E, requestId: string): voi
     route: accessRouteOf(req),
     failureStatus: replyFor(err).status,
   };
-  log.warn('request failed after its deadline reply', { ...fields, errorClass: errorFields(err).errorClass });
+  log.warn('request failed after its deadline reply', { ...fields, ...errorClassFields(err) });
 }
 
 // A handler that ends after the 504 finds the response finished, so sending its own reply throws this: its work ran to

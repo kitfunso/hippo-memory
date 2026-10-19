@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runWatched, runWatchedLine, RunWatchedTimeoutError } from '../../src/learn/autolearn.js';
+import { runWatched, RunWatchedTimeoutError } from '../../src/learn/autolearn.js';
 
 /** Runs argv under runWatched with stderr captured, so the child's stderr is the result and the terminal stays quiet. */
 async function stderrOf(argv: readonly string[]): Promise<{ exitCode: number; stderr: string }> {
@@ -50,16 +50,6 @@ describe('runWatched', () => {
     ]);
     expect(exitCode).toBe(0);
     expect(JSON.parse(stderr)).toEqual(SHELL_META);
-  });
-
-  it('runs one command line through the shell only when asked', async () => {
-    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    try {
-      const { exitCode } = await runWatchedLine(`"${process.execPath}" -e "process.exit(4)"`);
-      expect(exitCode).toBe(4);
-    } finally {
-      spy.mockRestore();
-    }
   });
 
   it.runIf(process.platform === 'win32')('runs a .cmd shim with the same literal arguments', async () => {

@@ -53,29 +53,41 @@ describe('createRateLimiter', () => {
     expect(rl.check('a', 1_000_000)).toBe(true);
   });
 
-  it('holds the map at maxKeys: while no tracked bucket has refilled, unseen keys share one overflow bucket', () => {
+  it('gives each new key its own bucket when the table is full, so none starves another', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
-    for (const k of ['k1', 'k2', 'k3']) rl.check(k, 1000);
-    // Had the map grown, each new key would get its own burst of 5; sharing one bucket, the sixth new key is refused.
-    const fresh = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6'].map((k) => rl.check(k, 1000));
-    expect(fresh).toEqual([true, true, true, true, true, false]);
+    for (const k of ['k1', 'k2', 'k3']) for (let i = 0; i < 5; i++) rl.check(k, 1000);
+    // A shared overflow bucket would run dry after five requests across n1 and n2; each key spends a burst of its own.
+    const n1 = Array.from({ length: 6 }, () => rl.check('n1', 1000));
+    expect(n1).toEqual([true, true, true, true, true, false]);
+    expect(rl.check('n2', 1000)).toBe(true);
   });
 
-  it('evicts the least-recently-used bucket once it has refilled, so a new key gets its own bucket', () => {
+  it('evicts the least-recently-used key at maxKeys, not the one that was asking', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
-    for (const k of ['k1', 'k2', 'k3']) rl.check(k, 1000);
-    // 100 ms at 10/s refills k1's one spent token: k1 is back at burst, so dropping it gives nothing away.
-    for (let i = 0; i < 5; i++) expect(rl.check('k4', 1100)).toBe(true);
-    expect(rl.check('k4', 1100)).toBe(false);
-    // k4 spent its own bucket, not a shared one: k5 evicts the refilled k2 and still gets a request through.
-    expect(rl.check('k5', 1100)).toBe(true);
+    for (let i = 0; i < 4; i++) rl.check('idle', 1000); // one token left
+    for (let i = 0; i < 5; i++) rl.check('busy', 1000); // drained, and the most recent
+    rl.check('other', 1000);
+    rl.check('n1', 1000); // the table is full: this evicts idle
+    expect(rl.check('busy', 1000)).toBe(false);
+    // idle starts over with a full burst of five; had it been kept, it would be refused on the second request.
+    expect(Array.from({ length: 5 }, () => rl.check('idle', 1000))).toEqual([true, true, true, true, true]);
   });
 
-  it('keeps a throttled key throttled however many new keys churn the full map', () => {
+  it('keeps a throttled key throttled however many new keys churn the full map, while it keeps asking', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
     for (let i = 0; i < 5; i++) rl.check('attacker', 1000);
-    expect(rl.check('attacker', 1000)).toBe(false);
-    for (let i = 0; i < 50; i++) rl.check(`rotated-${i}`, 1000);
-    expect(rl.check('attacker', 1000)).toBe(false);
+    for (let i = 0; i < 50; i++) {
+      rl.check(`rotated-${i}`, 1000);
+      expect(rl.check('attacker', 1000)).toBe(false);
+    }
+  });
+
+  it('lets a throttled key start over only after maxKeys other keys arrive while it is silent', () => {
+    const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
+    for (let i = 0; i < 5; i++) rl.check('attacker', 1000);
+    rl.check('n1', 1000);
+    rl.check('n2', 1000);
+    rl.check('n3', 1000);
+    expect(rl.check('attacker', 1000)).toBe(true);
   });
 });

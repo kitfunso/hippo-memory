@@ -363,7 +363,6 @@ Commands:
   embed                    Embed all memories for semantic search
     --status               Show embedding coverage
   watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)
-    --shell "<line>"       Run one command line through the shell instead
   learn                    Learn lessons from repository history
     --git                  Scan recent git commits for lessons
     --days <n>             Scan this many days back (default: 7)
@@ -1956,7 +1955,6 @@ exports[`CLI help output is byte-identical and runs nothing > hippo watch --help
   "status": 0,
   "stderr": "",
   "stdout": "  watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)
-    --shell "<line>"       Run one command line through the shell instead
 ",
 }
 `;

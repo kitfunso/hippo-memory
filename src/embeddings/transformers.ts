@@ -4,6 +4,7 @@ import { MINUTE_MS } from '../util/time.js';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { errorCode, errorMessage } from '../util/log.js';
+import { ignoringCodes } from '../util/expected-errors.js';
 
 const _require = createRequire(import.meta.url);
 
@@ -29,18 +30,17 @@ export function resolveTransformersPackage(): TransformersPackage | null {
   return null;
 }
 
+// Neither resolver finding the package means it is not installed, and the caller tries the next one.
+const NOT_INSTALLED = ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_PACKAGE_PATH_NOT_EXPORTED'];
+
 function entryUrl(name: string): string | null {
-  try {
-    return import.meta.resolve(name);
-  } catch {
-    // import.meta.resolve is missing under some module runners (vitest's included), so the require-based resolve stands
-    // in there.
-    try {
-      return pathToFileURL(_require.resolve(name)).href;
-    } catch {
-      return null; // not installed; the caller tries the next package
-    }
-  }
+  // import.meta.resolve is missing under some module runners (vitest's included), so the require-based resolve stands
+  // in there.
+  const viaImport =
+    'resolve' in import.meta ? ignoringCodes(NOT_INSTALLED, () => import.meta.resolve(name)) : undefined;
+  if (viaImport !== undefined) return viaImport;
+  const viaRequire = ignoringCodes(NOT_INSTALLED, () => _require.resolve(name));
+  return viaRequire === undefined ? null : pathToFileURL(viaRequire).href;
 }
 
 /** The package's module namespace, typed by the parts the caller reads; null when neither package is installed. */

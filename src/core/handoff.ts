@@ -4,7 +4,7 @@
  */
 
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { warnDamagedColumn } from '../util/stored-json.js';
+import { parseStoredJson, warnDamagedColumn } from '../util/stored-json.js';
 
 /** Terminal state of a handoff's session, denormalized from its `session_complete` event. */
 export type HandoffOutcome = 'success' | 'failure' | 'partial';
@@ -86,27 +86,16 @@ function isHandoffEvidence(v: JsonValue): v is JsonValue & HandoffEvidence {
 function storedList(row: SessionHandoffRow, column: 'artifacts_json' | 'constraints_json'): string[] {
   const raw = row[column];
   if (!raw) return [];
-  try {
-    const parsed: JsonValue = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
-  } catch {
-    warnDamagedColumn({ table: 'session_handoffs', id: row.id, column }, 'not valid JSON');
-    return [];
-  }
+  const parsed = parseStoredJson({ table: 'session_handoffs', id: row.id, column }, raw);
+  return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
 }
 
 /** Stored evidence, or null (after a log line) when the column is damaged or holds another shape. */
 function storedEvidence(row: SessionHandoffRow): HandoffEvidence | null {
   if (!row.evidence_json) return null;
   const site = { table: 'session_handoffs', id: row.id, column: 'evidence_json' };
-  let parsed: JsonValue;
-  try {
-    parsed = JSON.parse(row.evidence_json);
-  } catch {
-    warnDamagedColumn(site, 'not valid JSON');
-    return null;
-  }
-  if (parsed === null) return null;
+  const parsed = parseStoredJson(site, row.evidence_json);
+  if (parsed === undefined || parsed === null) return null;
   if (isHandoffEvidence(parsed)) return parsed;
   warnDamagedColumn(site, 'wrong shape');
   return null;

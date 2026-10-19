@@ -8,7 +8,7 @@ import { gitLayout } from './git.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
-import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
+import { type JsonValue, isJsonObjectLiteral, parseJson } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
 import type { JsonObject } from '../store/port/types.js';
 
@@ -74,8 +74,7 @@ function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, war
 }
 
 function parseIndex(text: string): JsonObject {
-  // SAFETY: JSON.parse yields JSON; the object checks below decide what is used.
-  const data = JSON.parse(text) as JsonValue;
+  const data = parseJson(text);
   const projects = isJsonObjectLiteral(data) ? data.projects : undefined;
   if (!isJsonObjectLiteral(projects)) throw new Error('expected { "projects": { "<absolute path>": "<slug>" } }');
   return projects;

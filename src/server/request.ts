@@ -133,6 +133,26 @@ export function sendError(res: ServerResponse, status: number, message: string):
   sendJson(res, status, { error: message });
 }
 
+/** Ends the reply; a socket that refuses is logged under the request's id, once, since no other reply can follow. */
+export function endReply(res: ServerResponse): void {
+  try {
+    res.end();
+  } catch (err) {
+    log.warn('could not end the reply', errorFields(err));
+  }
+}
+
+/** True when the socket took the chunk; one that refuses is logged under the request's id and is not written again. */
+export function writeChunk(res: ServerResponse, chunk: string): boolean {
+  try {
+    res.write(chunk);
+    return true;
+  } catch (err) {
+    log.warn('could not write to the reply', errorFields(err));
+    return false;
+  }
+}
+
 interface ParsedRoute {
   method: string;
   path: string;

@@ -1,4 +1,5 @@
 import type { Route, RouteRequest } from './types.js';
+import { tryDecodeUri } from '../util/expected-errors.js';
 
 /** What the lookup reads of a row: its method, and an exact path when it has one. The /v1 and dashboard tables both
  * fit. */
@@ -44,12 +45,7 @@ function firstMatch<T, Q>(
 /** Whether a `%` escape in the path fails to decode, which is what makes a pattern row's path matcher throw. */
 function hasMalformedEscape(path: string): boolean {
   if (!path.includes('%')) return false;
-  try {
-    decodeURIComponent(path);
-    return false;
-  } catch {
-    return true;
-  }
+  return tryDecodeUri(path) === undefined;
 }
 
 /** First-match lookup: a literal path is one Map read, any other tests only its own method's pattern and regex rows in

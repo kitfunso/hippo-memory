@@ -8,6 +8,7 @@ import type { CompactionText, Log } from '../store/port/compaction-hooks.js';
 import type { PostCompactPayload } from './compaction-record.js';
 import { isSqliteBusy } from '../db/busy-code.js';
 import { errorMessage } from '../util/log.js';
+import { tryParseJson } from '../util/json.js';
 
 const STAMP_DIGITS = 13;
 
@@ -203,12 +204,8 @@ export function spool(options: SpoolOptions): void {
 
 /** null when the text is not a spooled compaction. */
 export function parseSpooled(text: string, fallbackTenantId: string): SpooledCompaction | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null; // a half-written spool file holds no compaction; the caller treats null as unreadable
-  }
+  // A half-written spool file holds no compaction; the caller treats null as unreadable.
+  const raw: unknown = tryParseJson(text);
   if (
     !isObjectLike(raw) ||
     !('sessionId' in raw) ||
@@ -238,12 +235,8 @@ const heldBy = (pid: number | null): string =>
   `spool left to another replayer (lock held by ${pid === null ? 'another process' : `pid ${pid}`})`;
 
 function parseLock(text: string): LockBody | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null; // torn, or its holder is still writing it; the caller judges it by mtime
-  }
+  // Torn, or its holder is still writing it; the caller judges it by mtime.
+  const raw: unknown = tryParseJson(text);
   if (!isObjectLike(raw) || !('at' in raw) || !isTime(raw.at)) return null;
   const pid = 'pid' in raw && isTime(raw.pid) ? raw.pid : null;
   const token = 'token' in raw && isStringValue(raw.token) ? raw.token : null;

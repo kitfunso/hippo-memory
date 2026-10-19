@@ -1,7 +1,7 @@
 // The shared shape every agent adapter turns a host payload into, so capture code is written once for all runtimes.
 // Field meanings, statuses and how to add a runtime: docs/integrations/agent-inventory.md.
 
-import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+import { isJsonObject, isJsonString, tryParseJson, type JsonValue } from '../util/json.js';
 
 type JsonObject = { [key: string]: JsonValue };
 
@@ -82,12 +82,7 @@ function isBlank(stdinText: string | undefined): boolean {
 
 /** The JSON object in stdin, or null for blank, non-JSON, array and scalar text. */
 function parseObject(stdinText: string | undefined): JsonObject | null {
-  let payload: JsonValue | undefined;
-  try {
-    payload = JSON.parse((stdinText ?? '').trim());
-  } catch {
-    // Non-JSON stdin leaves payload undefined, which every reader's shape check rejects.
-  }
+  const payload = tryParseJson((stdinText ?? '').trim());
   return isJsonObject(payload) ? payload : null;
 }
 

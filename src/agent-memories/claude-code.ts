@@ -10,7 +10,7 @@ import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter 
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
-import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
+import { isJsonObjectLiteral, isJsonString, parseJson, tryParseJson } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
 
 const NAME_SLUG_MAX_CHARS = 200;
@@ -133,8 +133,9 @@ function transcriptStartCwd(transcriptPath: string): string | null {
     for (const line of lines) {
       const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
       if (cwd === undefined) continue;
-      // SAFETY: the match is the body of one JSON string, so parsing it in quotes yields a string.
-      return JSON.parse(`"${cwd}"`) as string;
+      // The match is the body of one JSON string, so parsing it in quotes yields a string; a bad escape skips the line.
+      const decoded = tryParseJson(`"${cwd}"`);
+      if (isJsonString(decoded)) return decoded;
     }
     return null;
   } finally {
@@ -169,10 +170,9 @@ function autoMemoryDirectory(settings: string, home: string, warnings: string[])
     warnings.push(file.reason);
     return null;
   }
-  let json: JsonValue;
+  let json;
   try {
-    // SAFETY: JSON.parse yields JSON; the object and string checks below decide what is used.
-    json = JSON.parse(file.text) as JsonValue;
+    json = parseJson(file.text);
   } catch (err) {
     warnings.push(`${settings}: ${errorMessage(err)}`);
     return null;

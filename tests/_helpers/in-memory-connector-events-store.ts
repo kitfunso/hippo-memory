@@ -133,6 +133,8 @@ type StateMethods = Omit<
   ConnectorEvents,
   | 'eventRecord'
   | 'markEventSeen'
+  | 'claimDelivery'
+  | 'releaseDelivery'
   | 'deletionTarget'
   | 'archiveDeletedArtifact'
   | 'slackTeamRoute'
@@ -215,6 +217,7 @@ export function inMemoryConnectorEventsStore(hippoRoot: string): InMemoryConnect
   const installations = tenantById(hippoRoot, INSTALLATIONS_SQL);
   const repositories = rowsOf<RepoRoute>(hippoRoot, REPOSITORIES_SQL);
   const letters = lettersAt(hippoRoot);
+  const held = new Map<string, number>();
 
   const connectorEvents: ConnectorEvents = {
     async eventRecord(event) {
@@ -223,6 +226,16 @@ export function inMemoryConnectorEventsStore(hippoRoot: string): InMemoryConnect
     },
     async markEventSeen(event) {
       base.logOnce(event, null);
+    },
+    async claimDelivery({ connector, key: deliveryKey, nowMs, ttlMs }) {
+      for (const [heldKey, expires] of held) if (expires <= nowMs) held.delete(heldKey);
+      const heldKey = key(connector, deliveryKey);
+      if (held.has(heldKey)) return false;
+      held.set(heldKey, nowMs + ttlMs);
+      return true;
+    },
+    async releaseDelivery(connector, deliveryKey) {
+      held.delete(key(connector, deliveryKey));
     },
     async deletionTarget({ event, artifactRef, tenantId }) {
       if (base.logged(event)) return { seen: true };

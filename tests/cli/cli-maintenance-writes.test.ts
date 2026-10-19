@@ -107,7 +107,7 @@ describe('hippo watch (built CLI, no server)', () => {
     expect(await s.run('watch')).toEqual({
       status: 1,
       stdout: '',
-      stderr: 'Usage: hippo watch -- <command> [args...], or hippo watch --shell "<command line>"\n',
+      stderr: 'Usage: hippo watch -- <command> [args...]\n',
     });
     expect(s.rows()).toEqual([]);
   });

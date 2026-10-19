@@ -9,7 +9,7 @@ import type { TaskSnapshot, SessionEvent, SessionEventInput, WorkingMemoryItem }
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import type { ContinuityKey, JsonObject } from '../port/types.js';
-import { warnDamagedColumn } from '../../util/stored-json.js';
+import { parseStoredObject } from '../../util/stored-json.js';
 import {
   loadHandoffByIdAt,
   loadLatestHandoffAt,
@@ -324,15 +324,9 @@ interface WorkingMemoryRow {
 }
 
 function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
-  let metadata: JsonObject = {};
-  try {
-    // SAFETY: metadata_json is always written by wmPush via JSON.stringify(opts.metadata ?? {}), so a successful parse
-    // yields a plain JSON object; malformed content falls through to the catch below.
-    metadata = JSON.parse(row.metadata_json) as JsonObject;
-  } catch {
-    // The item still lists with its content; only its metadata reads as empty.
-    warnDamagedColumn({ table: 'working_memory', id: row.id, column: 'metadata_json' }, 'not valid JSON');
-  }
+  // Damaged metadata logs once and reads as empty: the item still lists with its content.
+  const metadata: JsonObject =
+    parseStoredObject({ table: 'working_memory', id: row.id, column: 'metadata_json' }, row.metadata_json) ?? {};
   return {
     id: row.id,
     scope: row.scope,

@@ -8,15 +8,16 @@ export function isLoopbackHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '[::1]' || hostname === '::1' || IPV4_LOOPBACK.test(hostname);
 }
 
+/** The URL `raw` spells, or undefined when it is not one. */
+export function tryParseUrl(raw: string): URL | undefined {
+  return URL.canParse(raw) ? new URL(raw) : undefined;
+}
+
 /** An endpoint that gets a key or memory text: https, or http only to this machine, and no userinfo, which fetch echoes
  * in its error text. Throws naming `setting`, and `keySetting` as the home for a credential. */
 export function parseOutboundUrl(raw: string, setting: string, keySetting?: string): URL {
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new Error(`${setting} is not a valid URL`);
-  }
+  const parsed = tryParseUrl(raw);
+  if (parsed === undefined) throw new Error(`${setting} is not a valid URL`);
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new Error(`${setting} must be an http or https URL`);
   }
