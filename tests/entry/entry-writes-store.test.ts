@@ -160,7 +160,10 @@ describe('the entry write routes', () => {
       await json<Pick<OutcomeResult, 'applied'>>(send('/v1/outcome', 'POST', token, { ids: [note.id], good: true })),
     ).toEqual({ applied: 1 });
     // It lands on this client's own last REST recall, which the server holds, and this client has recalled nothing.
-    expect(await json<{ applied: number; ids: string[] }>(send('/v1/outcome', 'POST', token, { good: true }))).toEqual({ applied: 0, ids: [] });
+    expect(await json<{ applied: number; ids: string[] }>(send('/v1/outcome', 'POST', token, { good: true }))).toEqual({
+      applied: 0,
+      ids: [],
+    });
     const { newId } = await json<SupersedeResult>(
       send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }),
     );

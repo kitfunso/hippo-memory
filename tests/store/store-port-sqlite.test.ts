@@ -716,7 +716,6 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
     await embeddings.close();
   });
 
-
   it.each(OPENS)('%s: %i opens', async (_name, opens, call, vectorArm = false) => {
     const s = freshStore(templates, 'local');
     try {
@@ -744,7 +743,6 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
 });
 
 describe('a recall whose store read fails mid-way', () => {
-
   // Continuity is read after the search, the goals and the fresh tail, so the earlier reads have run.
   it.each([
     ['http', `/v1/memories?q=deploy&session_id=${SESSION}&include_continuity=true`],

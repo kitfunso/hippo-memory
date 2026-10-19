@@ -1,6 +1,7 @@
 // The `hippo recall` verb; main() loads it lazily from the command table.
 
 import { envActiveScope, envHippoSessionId } from '../util/env.js';
+import type { CallerState } from '../api/callers.js';
 import { Layer } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -197,9 +198,15 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
 
 /** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieveWithCliCore` ranks and
  * records, then the block prints. */
-async function cmdRecall(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
+async function cmdRecall(
+  hippoRoot: string,
+  tenantId: string,
+  query: string,
+  flags: CliFlags,
+  callers: CallerState | undefined,
+): Promise<void> {
   requireInit(hippoRoot);
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cliApiContext(hippoRoot, tenantId, callers);
   const o = parseRecallOptions(ctx, flags);
   const priced = priceRecallEntries(ctx, query, o);
   const { globalRoot } = o.setting;
@@ -562,10 +569,10 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
   return tail;
 }
 
-export async function handleRecall({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleRecall({ hippoRoot, tenantId, args, flags, callers }: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
     fail('Please provide a search query.');
   }
-  await cmdRecall(hookStoreRoot(hippoRoot), tenantId, query, flags);
+  await cmdRecall(hookStoreRoot(hippoRoot), tenantId, query, flags, callers);
 }

@@ -5,11 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';

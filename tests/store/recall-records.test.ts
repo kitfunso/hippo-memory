@@ -28,16 +28,14 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
-import { freshCliCallers } from '../_helpers/held-cli-callers.js';
+import { createCallerState, type CallerState } from '../../src/api/callers.js';
 
 // Each case is one process, so its CLI commands share one CallerState.
-vi.mock('../../src/cli/api-context.js', async (importOriginal) =>
-  (await import('../_helpers/held-cli-callers.js')).holdingCallers(await importOriginal()),
-);
+let callers: CallerState;
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-  freshCliCallers();
+  callers = createCallerState();
 });
 
 type Surface = 'http' | 'cli';
@@ -91,7 +89,9 @@ async function viaHttp(handle: ServerHandle, c: RecallCall): Promise<Reply> {
 async function viaCli(s: Store, c: RecallCall): Promise<Reply> {
   const flags: CliFlags = { ...c.cli };
   if (c.session) flags['session-id'] = c.session;
-  const out = await runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags }));
+  const out = await runInProcess(() =>
+    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  );
   return {
     status: out.status,
     cacheControl: null,

@@ -24,7 +24,6 @@ function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
 }
 
-
 afterEach(async () => {
   await handle?.stop();
   handle = undefined;

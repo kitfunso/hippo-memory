@@ -199,10 +199,7 @@ async function runPass(
       once.mockRestore();
     }
     const requests = embeddings.requests() - before;
-    return normalize(
-      { replies, rows: rowsOf(s.root), requests, log: lines.join(''), calls: memory?.calls ?? [] },
-      s,
-    );
+    return normalize({ replies, rows: rowsOf(s.root), requests, log: lines.join(''), calls: memory?.calls ?? [] }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }

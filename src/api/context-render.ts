@@ -114,12 +114,9 @@ export function contextLine(
   framing: string,
   showStrength: boolean,
   now: Date,
-  // A number is the percent to print as is; options score the entry here.
-  strength: number | StrengthOptions = strengthOptionsOf(undefined),
+  strengthPct: number,
 ): string {
   const e = item.entry;
-  const strengthPct =
-    typeof strength === 'number' ? strength : Math.round(calculateStrength(e, undefined, strength) * 100);
   const content = shownContent(e);
   const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
   const strengthStr = showStrength ? ` (${strengthPct}%)` : '';
@@ -152,7 +149,15 @@ export function contextBlockLines(
   const strength = opts.strength ?? strengthOptionsOf(undefined);
   return [
     contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens),
-    ...items.map((item) => contextLine(item, framing, showStrength, now, strength)),
+    ...items.map((item) =>
+      contextLine(
+        item,
+        framing,
+        showStrength,
+        now,
+        Math.round(calculateStrength(item.entry, undefined, strength) * 100),
+      ),
+    ),
   ];
 }
 

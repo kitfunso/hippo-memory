@@ -14,11 +14,7 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.

@@ -9,10 +9,6 @@ import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
-vi.mock('node:crypto', async (importOriginal) =>
-  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
-);
-
 afterEach(() => {
   vi.unstubAllEnvs();
 });

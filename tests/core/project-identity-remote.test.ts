@@ -3,10 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  projectNames,
-  resolveProjectIdentity,
-} from '../../src/core/project-identity.js';
+import { projectNames, resolveProjectIdentity } from '../../src/core/project-identity.js';
 import { normalizeRemote, originUrlFromConfig } from '../../src/core/project-remote.js';
 
 afterEach(() => {

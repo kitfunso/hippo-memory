@@ -32,16 +32,14 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
-import { freshCliCallers, heldCliCallers } from '../_helpers/held-cli-callers.js';
+import { createCallerState, type CallerState } from '../../src/api/callers.js';
 
 // Each case is one process: its CLI commands and MCP calls share one CallerState, whose rings keep surfaces apart.
-vi.mock('../../src/cli/api-context.js', async (importOriginal) =>
-  (await import('../_helpers/held-cli-callers.js')).holdingCallers(await importOriginal()),
-);
+let callers: CallerState;
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-  freshCliCallers();
+  callers = createCallerState();
 });
 
 type Surface = 'cli' | 'mcp' | 'http';
@@ -75,7 +73,9 @@ async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
   const flags: CliFlags = { ...c.cliFlags };
   if (c.session) flags['session-id'] = c.session;
   if (c.budget !== undefined) flags.budget = String(c.budget);
-  const out = await runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags }));
+  const out = await runInProcess(() =>
+    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  );
   const anchored = /\[anchored_on: ([^\]]+)\]/.exec(out.stdout);
   return { output: out, hint: anchored ? anchored[1]! : null };
 }
@@ -93,7 +93,7 @@ function callTool(root: string, name: string, args: ToolArgs): Promise<McpRespon
       hostAdmin: true,
       store: sqliteStore(root),
       config: loadConfig(root),
-      callers: heldCliCallers(),
+      callers,
     },
   );
 }

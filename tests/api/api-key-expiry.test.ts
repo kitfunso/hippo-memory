@@ -29,10 +29,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyRecord } from '../../src/store/port/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
-vi.mock('node:crypto', async (importOriginal) =>
-  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
-);
-
 afterEach(() => {
   vi.unstubAllEnvs();
 });

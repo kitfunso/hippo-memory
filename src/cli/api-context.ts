@@ -21,7 +21,7 @@ import {
 import { CLI_ACTOR } from '../core/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../util/env.js';
 import { getReranker, type RerankerFn } from '../rerankers/index.js';
-import { createCallerState } from '../api/callers.js';
+import { createCallerState, type CallerState } from '../api/callers.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an
  * unchanged config.json once. */
@@ -92,13 +92,16 @@ function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
 
 // The one place the CLI names its audit actor and builds its store;
 // root is a parameter because some verbs target the global store.
-export function cliApiContext(hippoRoot: string, tenantId: string): CliContext {
+// A command's callers start empty unless its caller holds a set; a CLI write starts no sleep.
+export function cliApiContext(
+  hippoRoot: string,
+  tenantId: string,
+  callers: CallerState = createCallerState(),
+): CliContext {
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = cliConfig(hippoRoot);
   const reach = cliReach(hippoRoot, store);
-  // A process runs one command, so a command's callers start empty as a spawned hippo's do; a CLI write starts no sleep.
-  const callers = createCallerState();
   return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach, config, callers };
 }
 

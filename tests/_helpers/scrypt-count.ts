@@ -1,20 +1,14 @@
-// Counts scrypt derivations, sync and pooled, in this process. A test file opts in with
-// vi.mock('node:crypto', async (orig) => (await import('../_helpers/scrypt-count.js')).countingCrypto(await orig()));
-type Crypto = typeof import('node:crypto');
+// Counts scrypt jobs handed to the thread pool, from Node's own async-resource record. A key check derives there;
+// scryptSync makes no job, so minting a key adds nothing.
+import { createHook } from 'node:async_hooks';
 
 let runs = 0;
 
-function counting<F extends (...args: never[]) => unknown>(fn: F): F {
-  // SAFETY: the wrapper passes every argument and `this` through unchanged, so it has fn's own overloads.
-  return function (this: unknown, ...args: unknown[]) {
-    runs += 1;
-    return Reflect.apply(fn, this, args);
-  } as unknown as F;
-}
+createHook({
+  init(_id, type) {
+    if (type === 'SCRYPTREQUEST') runs += 1;
+  },
+}).enable();
 
-export function countingCrypto(real: Crypto): Crypto {
-  return { ...real, scrypt: counting(real.scrypt), scryptSync: counting(real.scryptSync) };
-}
-
-/** Derivations since the process started, minted keys' hashes included. */
+/** Pooled scrypt runs since this helper loaded. */
 export const scryptRuns = (): number => runs;

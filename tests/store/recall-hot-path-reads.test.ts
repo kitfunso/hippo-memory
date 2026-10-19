@@ -190,17 +190,21 @@ describe('finishRecallAt', () => {
     const ids = entries.map((e) => e.id);
     const { result, statements } = recordStatements(() =>
       handlesOf(root).on((db) =>
-        finishRecallAt(db, {
-          goalLog: [],
-          audit: [{ tenantId: 'default', actor: 'cli', op: 'recall' }],
-          trace: {
-            tenantId: 'default',
-            pipeline: 'api',
-            query: 'zephyrine',
-            results: ids.map((memoryId) => ({ memoryId, score: 1 })),
+        finishRecallAt(
+          db,
+          {
+            goalLog: [],
+            audit: [{ tenantId: 'default', actor: 'cli', op: 'recall' }],
+            trace: {
+              tenantId: 'default',
+              pipeline: 'api',
+              query: 'zephyrine',
+              results: ids.map((memoryId) => ({ memoryId, score: 1 })),
+            },
+            strengthen: { ids, opts: { tenantId: 'default', recallBoostAblated: false } },
           },
-          strengthen: { ids, opts: { tenantId: 'default', recallBoostAblated: false } },
-        }, {}),
+          {},
+        ),
       ),
     );
     expect(countMatching(statements, /^BEGIN/)).toBe(1);

@@ -267,7 +267,6 @@ function storeFacts(fx: Fixture) {
   });
 }
 
-
 afterEach(() => {
   vi.unstubAllEnvs();
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });

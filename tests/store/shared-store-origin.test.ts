@@ -32,7 +32,6 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });
 
-
 interface Layout {
   readonly store: string;
   readonly folderStamp: string;

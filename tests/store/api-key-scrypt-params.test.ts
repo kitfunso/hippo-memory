@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { insertApiKey, verifyApiKeyCached } from '../../src/store/sqlite/auth.js';
@@ -7,10 +7,6 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { sqliteStore } from '../../src/store/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
-
-vi.mock('node:crypto', async (importOriginal) =>
-  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
-);
 
 describe('api key scrypt parameters', () => {
   let root: string;

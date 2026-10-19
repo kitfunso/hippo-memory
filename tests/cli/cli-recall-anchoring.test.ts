@@ -1,21 +1,17 @@
-// `hippo recall` anchoring hint, run through handleRecall in this process. A command's callers start empty, as a spawned
-// hippo's do, so each case holds one CallerState across its recalls as a process that kept them would.
+// `hippo recall` anchoring hint, run through handleRecall in this process. A hippo process starts empty rings for its one
+// command, so each case hands its recalls one CallerState, as a caller running several in one process would.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleRecall } from '../../src/cli/recall.js';
 import { resolveTenantId } from '../../src/server/host-tenant.js';
 import { sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
-import { freshCliCallers, heldCliCallers } from '../_helpers/held-cli-callers.js';
+import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-
-vi.mock('../../src/cli/api-context.js', async (importOriginal) =>
-  (await import('../_helpers/held-cli-callers.js')).holdingCallers(await importOriginal()),
-);
 
 // Four phrasings that hash apart and all rank the one seeded memory first.
 const Q = [
@@ -32,6 +28,7 @@ interface RecallJson {
 
 let root: string;
 let memoryId: string;
+let callers: CallerState;
 
 function seed(tenantId: string): string {
   const entry = createMemory(`frobnicate baz quux ${tenantId} memory`, {
@@ -47,7 +44,7 @@ function seed(tenantId: string): string {
 async function recall(query: string, flags: Flags = { 'session-id': 's1' }): Promise<string> {
   // Dispatch resolves the tenant per call, so a test that switches HIPPO_TENANT midway sees the switch.
   const run = await runInProcess(() =>
-    handleRecall({ hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags }),
+    handleRecall({ hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags, callers }),
   );
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
@@ -60,7 +57,7 @@ async function recallJson(query: string, flags: Flags = { 'session-id': 's1' }):
 
 // Reads a ring through its production entry; an empty ring for a surface that never recalled.
 const history = (surface: 'cli' | 'mcp', tenant: string) =>
-  snapshotRing(sessionRing({ config: {}, tenantId: tenant, callers: heldCliCallers() }, surface, 's1')!);
+  snapshotRing(sessionRing({ config: {}, tenantId: tenant, callers }, surface, 's1')!);
 
 describe('hippo recall anchoring hint', () => {
   beforeEach(() => {
@@ -68,7 +65,7 @@ describe('hippo recall anchoring hint', () => {
     // A global store that does not exist keeps the recall on the local store alone.
     vi.stubEnv('HIPPO_HOME', join(root, 'no-global'));
     for (const name of ['HIPPO_TENANT', 'HIPPO_SESSION_ID', 'HIPPO_ANCHORING']) vi.stubEnv(name, '');
-    freshCliCallers();
+    callers = createCallerState();
     memoryId = seed('default');
   });
 

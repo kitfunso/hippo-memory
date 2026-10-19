@@ -3,11 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import {
-  createApiKey,
-  revokeApiKey,
-  type CreateApiKeyOptions,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/auth.js';
 import { serve, type AddonRoute, type ServeOpts } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
@@ -15,10 +11,6 @@ import { Socket } from 'node:net';
 import { clientLimitKey } from '../../src/server/client-ip.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
-
-vi.mock('node:crypto', async (importOriginal) =>
-  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
-);
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

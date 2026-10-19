@@ -1,12 +1,8 @@
 // Actor.owner is the person behind a call: an owned key's owner_subject or the resolver's subject, never set by plugin code.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import {
-  createApiKey,
-  verifyApiKeyCached,
-  type CreateApiKeyResult,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey, verifyApiKeyCached, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { ownerOrSubject, type Actor } from '../../src/api/index.js';
 import {
   ownerOrSubject as exportedOwnerOrSubject,
@@ -19,10 +15,6 @@ import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { ApiKeyRecord } from '../../src/store/port/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
-
-vi.mock('node:crypto', async (importOriginal) =>
-  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
-);
 
 const WHOAMI = '/v1/x-whoami';
 

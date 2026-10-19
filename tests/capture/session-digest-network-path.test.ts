@@ -1,5 +1,7 @@
 // Transcript text naming a network host never reaches the filesystem: existsSync on \\host opens an SMB connection.
 import * as fs from 'fs';
+import nodeFs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/core/config.js';
@@ -10,19 +12,9 @@ import { syncStore } from '../_helpers/cli-stores.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 
-const probe = vi.hoisted(() => ({ host: /fileserver|example\.com|[\\/]opt[\\/]/i, paths: [] as string[] }));
-const HOST = probe.host;
-const probes = probe.paths;
-
-// A host-named probe answers false, so a broken guard fails the test without dialing out.
-vi.mock('fs', async (importOriginal) => {
-  const real = await importOriginal<typeof import('fs')>();
-  const existsSync = (p: import('fs').PathLike): boolean => {
-    probe.paths.push(String(p));
-    return probe.host.test(String(p)) ? false : real.existsSync(p);
-  };
-  return { ...real, existsSync, default: { ...real, existsSync } };
-});
+const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
+const probes: string[] = [];
+const realExists = nodeFs.existsSync;
 
 let tmp: string;
 let repo: string;
@@ -34,9 +26,17 @@ beforeEach(() => {
   repo = fs.realpathSync.native(path.join(tmp, 'repo'));
   hippoRoot = path.join(repo, '.hippo');
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
+  // A host-named probe answers false, so a broken guard fails the test without dialing out.
+  vi.spyOn(nodeFs, 'existsSync').mockImplementation((p) => {
+    probes.push(String(p));
+    return HOST.test(String(p)) ? false : realExists(p);
+  });
+  syncBuiltinESMExports();
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
+  syncBuiltinESMExports();
   vi.unstubAllEnvs();
 });
 

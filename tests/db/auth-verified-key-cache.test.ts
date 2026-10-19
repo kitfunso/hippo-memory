@@ -16,10 +16,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
-vi.mock('node:crypto', async (importOriginal) =>
-  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
-);
-
 let lookups = 0;
 
 /** `store` with each key-row read counted. */

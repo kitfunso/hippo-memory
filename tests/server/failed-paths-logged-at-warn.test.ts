@@ -77,7 +77,6 @@ describe('judge failures', () => {
 });
 
 describe('failures that used to log at debug', () => {
-
   it('warns once when a judge reply is not readable, then goes quiet', async () => {
     const fetcher: typeof fetch = async () => new Response('<html>busy</html>', { status: 200 });
     await judgeAll(['a durable fact about the deploy', 'another durable fact about the deploy'], {

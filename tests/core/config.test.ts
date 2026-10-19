@@ -4,12 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import {
-  configReader,
-  loadConfig,
-  isSharedStore,
-  type HippoConfig,
-} from '../../src/core/config.js';
+import { configReader, loadConfig, isSharedStore, type HippoConfig } from '../../src/core/config.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { log } from '../../src/util/log.js';
 

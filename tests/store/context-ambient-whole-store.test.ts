@@ -110,7 +110,6 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     };
   }
 
-
   it.each([
     ['default flags', {}],
     ['decay ablated', { HIPPO_ABLATE_DECAY: '1' }],

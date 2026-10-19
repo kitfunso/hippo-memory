@@ -21,8 +21,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** POST /v1/outcome as `bearer`, or keyless. */
-async function postOutcome(url: string, body: object, bearer?: string): Promise<Response> {
+/** POST /v1/outcome with no ids as `bearer`, or keyless, so it lands on that caller's last recall. */
+async function postOutcome(url: string, body: { readonly good: boolean }, bearer?: string): Promise<Response> {
   const auth: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
   return fetch(`${url}/v1/outcome`, {
     method: 'POST',

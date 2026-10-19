@@ -23,11 +23,7 @@ import {
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { outcomeMultiplier } from '../../src/search/boosts.js';
 import { markRetrieved } from '../../src/core/memory.js';
-import {
-  evalNow,
-  isOutcomeSlowAblated,
-  strengthAblation,
-} from '../../src/core/ablation.js';
+import { evalNow, isOutcomeSlowAblated, strengthAblation } from '../../src/core/ablation.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';

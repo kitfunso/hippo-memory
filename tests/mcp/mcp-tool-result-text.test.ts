@@ -7,6 +7,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
+import { createCallerState } from '../../src/api/callers.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
@@ -60,6 +61,8 @@ beforeEach(() => {
     role: 'admin',
     hostAdmin: true,
     clientKey: 'client-1',
+    // The test is the transport root, so it keeps the client's last recall that an outcome with no ids lands on.
+    callers: createCallerState(),
     store,
     reach: testReach(root, store),
     config: loadConfig(root),
