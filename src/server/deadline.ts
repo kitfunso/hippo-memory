@@ -8,12 +8,6 @@ import { RequestDeadline, requestDeadlineMs } from '../util/request-scope.js';
 const EXEMPT = new Set(['POST /v1/sleep', 'GET /mcp/stream']);
 
 const abandoned = new WeakSet<ServerResponse>();
-let handlerDeadlines = 0;
-
-/** Requests answered 504 by the handler deadline since the process started; /health reports it. */
-export function handlerDeadlineCount(): number {
-  return handlerDeadlines;
-}
 
 /** Whether `res` was answered at its deadline, so whatever its handler does later has no caller. */
 export function isAbandoned(res: ServerResponse): boolean {
@@ -40,7 +34,6 @@ export function answerAtDeadline(
 ): void {
   const expire = (): void => {
     if (res.headersSent || res.destroyed) return;
-    handlerDeadlines += 1;
     abandoned.add(res);
     reply();
   };

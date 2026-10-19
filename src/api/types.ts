@@ -5,6 +5,7 @@ import type { HippoStore } from '../store/port.js';
 import type { HippoConfig } from '../core/config.js';
 import type { OptionalGroup, StoreReach, StoreWith } from '../store/port.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
+import type { CallerState } from './callers.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -46,6 +47,9 @@ export interface Context {
   reach?: ContextReach;
   /** The store's config, loaded by the composition root once per command or request. */
   readonly config: HippoConfig;
+  /** The root's per-caller state: recall rings, each client's last shown ids, and how a write starts a sleep. Absent,
+   * a recall keeps no session history and a write starts no sleep. */
+  readonly callers?: CallerState;
 }
 
 /** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader. */

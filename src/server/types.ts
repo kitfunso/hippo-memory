@@ -6,6 +6,8 @@ import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
 import type { GlobalStores } from '../store/sqlite/worker-store.js';
 import type { ConfigReader } from '../core/config.js';
+import type { CallerState } from '../api/callers.js';
+import type { SleepQueue } from './sleep-offload.js';
 
 export interface ServerHandle {
   port: number;
@@ -103,6 +105,9 @@ export type ResolvedServeOptions = ServeOpts & {
   publicJsonBodies: ReadonlyMap<string, string>;
   callerLimiter?: RateLimiter;
   failedAuthLimiter: RateLimiter;
+  /** This server's per-caller state, handed to every request's Context. */
+  callers: CallerState;
+  sleeps: SleepQueue;
 };
 
 /** Per-request values the /v1 route handlers read. */

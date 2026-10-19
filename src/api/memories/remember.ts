@@ -17,6 +17,7 @@ import { BadRequestError, ForbiddenError } from '../../core/api-errors.js';
 import { assertClientScope, canReadScope, personalScopeOf, ScopeForbiddenError } from '../../core/recall-scope.js';
 import { isQuarantineScope } from '../../trust/quarantine.js';
 import type { Context } from '../types.js';
+import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience gate. */
 export interface RememberLocal {
@@ -176,10 +177,17 @@ function quarantineOf({ requestedScope, detection }: PreparedRemember): Connecto
   return detection.flagged ? { originalScope: requestedScope, reason: detection.reason ?? 'unknown' } : undefined;
 }
 
-/** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's
- * subject. A write that carries a connector event or untrusted content goes through connectorWrites, which commits its
- * companion rows with it. */
+/** Store one memory, then start the root's auto-sleep if enough new memories have landed (`ctx.callers`). */
 export async function remember(ctx: Context, opts: RememberOptions): Promise<RememberResult> {
+  const result = await writeRemembered(ctx, opts);
+  await autoSleepAfterWrite(ctx);
+  return result;
+}
+
+/** The store's entryWrites group writes the row and its one remember audit row, under the caller's subject. A write
+ * that carries a connector event or untrusted content goes through connectorWrites, which commits its companion rows
+ * with it. */
+async function writeRemembered(ctx: Context, opts: RememberOptions): Promise<RememberResult> {
   const store = ctx.store;
   const entryWrites = store.entryWrites;
   const prepared = prepareRemember(ctx, opts);

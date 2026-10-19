@@ -11,23 +11,15 @@ import { assertCallerProject } from '../core/project-identity.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey } from './client-ip.js';
+import { clientKeyOf } from './client-key.js';
 import { noteAccess } from './request.js';
 import type { ResolvedServeOptions } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { blockHash } from '../util/token-text.js';
 import { MINUTE_MS } from '../util/time.js';
-import { consolidateInChild } from './sleep-offload.js';
 
 const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
-
-/** Per-client key for MCP state isolation under HTTP-MCP (scopes `lastRecalledIds`): sha256 of the token (16 hex chars,
- * so the raw bearer is never logged) plus the client address the rate limiter keys on; 'noauth' covers loopback. */
-function buildMcpClientKey(req: IncomingMessage): string {
-  const auth = readAuthHeader(req);
-  const tokenHash = auth.kind === 'bearer' ? blockHash(auth.token) : 'noauth';
-  return `http:${tokenHash}:${clientLimitKey(req)}`;
-}
 
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream
 // (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to handleMcpRequest as stdio does. Auth matches
@@ -66,12 +58,7 @@ export function callerProjectFromHeaders(req: IncomingMessage, shared: boolean):
   return { name, legacyName: name, aliases };
 }
 
-function mcpContextFor(
-  ctx: Context,
-  clientKey: string,
-  autoSleep: McpContext['autoSleep'],
-  project?: CallerProject,
-): McpContext {
+function mcpContextFor(ctx: Context, clientKey: string, project?: CallerProject): McpContext {
   const mcpCtx: McpContext = {
     hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,
@@ -87,8 +74,7 @@ function mcpContextFor(
     store: ctx.store,
     config: ctx.config,
     reach: ctx.reach,
-    autoSleep,
-    autoSleepRunner: consolidateInChild,
+    callers: ctx.callers,
   };
   if (project !== undefined) mcpCtx.project = project;
   return mcpCtx;
@@ -119,7 +105,7 @@ export async function handleMcpPost(
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, clientKeyOf(req), project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }

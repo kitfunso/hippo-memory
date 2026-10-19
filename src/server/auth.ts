@@ -99,7 +99,7 @@ type AuthOptions = Pick<
 > &
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
-type ContextOptions = AuthOptions & Pick<ResolvedServeOptions, 'configAt'>;
+type ContextOptions = AuthOptions & Pick<ResolvedServeOptions, 'configAt'> & Partial<Pick<ResolvedServeOptions, 'callers'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -317,9 +317,10 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   const reach = contextReach(sqliteReach(opts.hippoRoot, opts.store, team, opts.globalStores.open), opts.configAt);
   // The reader keys on the file's stamp, so each request still sees an edit made while the server runs.
   const config = opts.configAt(opts.hippoRoot);
+  const callers = opts.callers;
   if (id !== null) {
     const actor = bearerActor(id);
-    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store, reach, config };
+    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store, reach, config, callers };
   }
   return {
     hippoRoot: opts.hippoRoot,
@@ -328,6 +329,7 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
     store: opts.store,
     reach,
     config,
+    callers,
   };
 }
 

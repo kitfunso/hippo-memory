@@ -322,7 +322,7 @@ interface RankedRecall extends PricedEntries {
 function recallHinter(ctx: api.Context, query: string, o: RecallOptions, rank: RankedRecall['rank']) {
   const { tenantId, sessionId } = o;
   // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
-  const anchorRing = sessionRing(ctx.config, 'cli', tenantId, sessionId);
+  const anchorRing = sessionRing({ config: ctx.config, tenantId, callers: ctx.callers }, 'cli', sessionId);
   const queryHash = hashQueryText(query);
   const pool = availabilityPool(ctx.config, () => [...rank.localEntries, ...rank.globalEntries]);
   const hintsFor = (list: SearchResult[], held: number) => {
@@ -486,7 +486,7 @@ async function presentRecall(
     { tenantId: o.tenantId, actor: CLI_ACTOR },
     {
       query,
-      ring: fit.anchorRing,
+      sessionId: o.sessionId,
       topId: results[0]?.entry.id ?? null,
       anchoring: hints.anchoring,
       availability: hints.availability,

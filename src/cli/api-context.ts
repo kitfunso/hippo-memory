@@ -19,15 +19,25 @@ import {
   sqliteSyncStore,
 } from '../store/sqlite/store.js';
 import { CLI_ACTOR } from '../core/actor.js';
-import { envRuntimeSettings } from '../util/env.js';
+import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../util/env.js';
+import { getReranker, type RerankerFn } from '../rerankers/index.js';
+import { createCallerState } from '../api/callers.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an
  * unchanged config.json once. */
 export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
+/** A registry reranker with the CLEF transport this process's environment names, for a script that reranks outside a
+ * recall. */
+export function cliReranker(name: string | null | undefined): RerankerFn | null {
+  const fn = getReranker(name);
+  if (fn === null) return null;
+  return (query, results, options) => fn(query, results, { ...options, clef: options?.clef ?? envClefSettings() });
+}
+
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
-  return sqliteStore(hippoRoot);
+  return sqliteStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
 }
 
 /** A folder's hippo.db beside its folder, as sharing and sync take each side; the global one may not exist yet. */
@@ -37,7 +47,7 @@ export function cliFolder(hippoRoot: string): ConfiguredFolder {
 
 /** hippo.db whose calls answer at once, for a hook or verb that counts each statement against its own time. */
 export function cliSyncStore(hippoRoot: string): ReturnType<typeof sqliteSyncStore> {
-  return sqliteSyncStore(hippoRoot);
+  return sqliteSyncStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
 }
 
 /** The folder's hippo.db for a verb that runs a sleep pass by itself. */
@@ -77,7 +87,7 @@ export type CliContext = ContextWith<OptionalGroup>;
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config. */
 function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
-  return contextReach(sqliteReach(hippoRoot, store), cliConfig);
+  return contextReach(sqliteReach(hippoRoot, store, undefined, cliStore), cliConfig);
 }
 
 // The one place the CLI names its audit actor and builds its store;
@@ -86,7 +96,10 @@ export function cliApiContext(hippoRoot: string, tenantId: string): CliContext {
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = cliConfig(hippoRoot);
-  return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach: cliReach(hippoRoot, store), config };
+  const reach = cliReach(hippoRoot, store);
+  // A process runs one command, so a command's callers start empty as a spawned hippo's do; a CLI write starts no sleep.
+  const callers = createCallerState();
+  return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach, config, callers };
 }
 
 /** A second store a CLI read searches beside its own, with that store's config. */
@@ -100,25 +113,33 @@ export function cliLedgerReach(hippoRoot: string): LedgerReach {
   return ledgerReachOf({ hippoRoot, reach: cliReach(hippoRoot, store), store, config: cliConfig(hippoRoot) });
 }
 
-/** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. */
-export const cliStdioHost: McpHost = {
-  contextFor(hippoRoot, tenantId) {
-    const store = cliStore(hippoRoot);
-    return {
-      hippoRoot,
-      tenantId,
-      actor: 'mcp',
-      role: 'admin',
-      hostAdmin: true,
-      stdio: true,
-      store,
-      config: cliConfig(hippoRoot),
-      reach: cliReach(hippoRoot, store),
-      autoSleepRunner: (root) =>
-        runDetachedSqliteRequest(() =>
-          runConsolidation(cliLocalFiles(root), { config: cliConfig(root), tenantId }),
-        ).then(() => {}),
-    };
-  },
-  runRequest: cliRequest,
-};
+/** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. One
+ * host per stdio loop, so its callers live as long as the loop. */
+export function cliStdioHost(): McpHost {
+  const hostTenantId = envTenant();
+  const callers = createCallerState({
+    hostTenantId,
+    run: (root) =>
+      runDetachedSqliteRequest(() =>
+        runConsolidation(cliLocalFiles(root), { config: cliConfig(root), tenantId: hostTenantId }),
+      ).then(() => {}),
+  });
+  return {
+    contextFor(hippoRoot, tenantId) {
+      const store = cliStore(hippoRoot);
+      return {
+        hippoRoot,
+        tenantId,
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        stdio: true,
+        store,
+        config: cliConfig(hippoRoot),
+        reach: cliReach(hippoRoot, store),
+        callers,
+      };
+    },
+    runRequest: cliRequest,
+  };
+}

@@ -96,55 +96,54 @@ function runInChild<R>(job: SleepJob): Promise<R> {
   });
 }
 
-let turn: Promise<void> = Promise.resolve();
-
 // One running and one waiting: each further sleep would only hold
 // a request open behind work the waiting one already covers.
 const MAX_SLEEPS_IN_LINE = 2;
 const SLEEP_RETRY_AFTER_SEC = 30;
-let inLine = 0;
 
-function inTurn<R>(job: SleepJob): Promise<R> {
-  if (inLine >= MAX_SLEEPS_IN_LINE) {
-    return Promise.reject(
-      new HttpError(
-        503,
-        'a sleep is already running and another is waiting; retry when one has finished',
-        SLEEP_RETRY_AFTER_SEC,
-      ),
-    );
-  }
-  inLine += 1;
-  // One sleep at a time, as on the server's single thread: a second one waits its turn and does not fight the first for
-  // the write lock.
-  const run = turn.then(() => runInChild<R>(job));
-  // A failed sleep reaches its own caller through `run`; the queue only needs to know the turn is over.
-  turn = run
-    .then(
-      () => undefined,
-      () => undefined,
-    )
-    .finally(() => {
-      inLine -= 1;
-    });
-  return run;
+/** A server's sleeps, one at a time in a child process: POST /v1/sleep and the auto-sleep a write starts share it. */
+export interface SleepQueue {
+  /** `sleep` for the HTTP route: same result and errors, stopped at the deadline (10 minutes, or
+   * HIPPO_SLEEP_TIMEOUT_MS). */
+  readonly sleep: (ctx: Context, opts: SleepOpts) => Promise<SleepResult>;
+  /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
+  readonly consolidate: (hippoRoot: string) => Promise<void>;
 }
 
-/** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline
- * (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
-export function sleepInChild(ctx: Context, opts: SleepOpts): Promise<SleepResult> {
-  return inTurn<SleepResult>({
-    kind: 'sleep',
+export function createSleepQueue(): SleepQueue {
+  let turn: Promise<void> = Promise.resolve();
+  let inLine = 0;
+  const inTurn = <R>(job: SleepJob): Promise<R> => {
+    if (inLine >= MAX_SLEEPS_IN_LINE) {
+      return Promise.reject(
+        new HttpError(
+          503,
+          'a sleep is already running and another is waiting; retry when one has finished',
+          SLEEP_RETRY_AFTER_SEC,
+        ),
+      );
+    }
+    inLine += 1;
+    // One sleep at a time, as on the server's single thread: a second one waits its turn and does not fight the first
+    // for the write lock.
+    const run = turn.then(() => runInChild<R>(job));
+    // A failed sleep reaches its own caller through `run`; the queue only needs to know the turn is over.
+    turn = run
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .finally(() => {
+        inLine -= 1;
+      });
+    return run;
+  };
+  return {
     // The child reopens the served folder; the route ran only because its store is hippo.db.
-    hippoRoot: ctx.hippoRoot,
-    tenantId: ctx.tenantId,
-    actor: ctx.actor,
-    opts,
-  });
-}
-
-/** The MCP auto-sleep's consolidation, in the same queue and child
- * as POST /v1/sleep; auto-sleep only starts on a hippo.db store. */
-export async function consolidateInChild(hippoRoot: string): Promise<void> {
-  await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
+    sleep: (ctx, opts) =>
+      inTurn<SleepResult>({ kind: 'sleep', hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts }),
+    consolidate: async (hippoRoot) => {
+      await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
+    },
+  };
 }

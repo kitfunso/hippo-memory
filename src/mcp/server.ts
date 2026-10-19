@@ -4,7 +4,6 @@
  * Usage: hippo mcp (or npx hippo-memory
  * mcp). */
 
-export { _resetSessionRecallHistoryMcpForTests } from './session-state.js';
 export { findHippoRoot, mcpErrorResponse, type McpRequest, type McpResponse, type McpContext } from './protocol.js';
 export { handleMcpRequest } from './request.js';
 export { startStdioLoop } from './stdio.js';
@@ -30,5 +29,5 @@ const isMainModule = (() => {
 if (isMainModule) {
   // The CLI owns the store build, so running this file directly opens the same store `hippo mcp` does.
   const { cliStdioHost } = await import('../cli/api-context.js');
-  startStdioLoop(cliStdioHost);
+  startStdioLoop(cliStdioHost());
 }

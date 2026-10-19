@@ -1,32 +1,23 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
-import { hasGroup } from '../store/index.js';
-import { envTenant } from '../util/env.js';
-import { startAutoSleepIfDue } from '../api/sleep/auto-sleep.js';
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../api/index.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
-import { lastRecalledIds, resolveClientKey } from '../api/recall/last-recalled.js';
+import { resolveClientKey } from '../api/recall/last-recalled.js';
 
-export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId, store }: ToolCall): Promise<string> {
+export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> {
   const text = String(args.text || '');
   if (!text) return 'No text provided.';
   const tags: string[] = [];
   if (args.error) tags.push('error');
   if (args.tag) tags.push(String(args.tag));
   // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor
-  // under HTTP-MCP, 'mcp' for stdio.
+  // under HTTP-MCP, 'mcp' for stdio. It also starts the root's auto-sleep when one is due.
   const result = await apiRemember(mcpApiContext(ctx), {
     content: text,
     tags,
     personal: args.personal === true,
     project: ctx?.project,
   });
-
-  // Auto-sleep runs on hippo.db, so another store skips it.
-  const allowed = hasGroup(store, 'localFiles') && ctx.autoSleep !== false;
-  const run = ctx.autoSleepRunner;
-  const gate = { hippoRoot, tenantId, hostTenantId: envTenant(), config: config.autoSleep, allowed };
-  if (run !== undefined) await startAutoSleepIfDue(store, gate, run);
 
   const tagStr = result.tags.join(', ') || 'none';
   const warnings = (result.warnings ?? []).map((w) => `\nWarning: ${w}`).join('');
@@ -36,7 +27,7 @@ export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId, 
 export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   const good = Boolean(args.good);
   const clientKey = resolveClientKey(ctx);
-  const ids = lastRecalledIds.get(clientKey) ?? [];
+  const ids = ctx.callers?.lastShown.get(clientKey) ?? [];
   if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
   // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved ctx.actor under HTTP-MCP,

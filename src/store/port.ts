@@ -167,8 +167,7 @@ export interface StoreGroups extends SessionAndAdminGroups {
   readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
-  /** Unset on a store that keeps no last recall, where an outcome with no ids answers 501 and context writes no last
-   * recall. */
+  /** Unset on a store that keeps no last recall, where context writes none for the CLI's no-ids outcome to read. */
   readonly lastRecall: LastRecall;
 }
 

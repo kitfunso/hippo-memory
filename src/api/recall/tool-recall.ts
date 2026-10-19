@@ -17,7 +17,6 @@ import {
   type HintConfig,
   type RingBuffer,
 } from './finish.js';
-import { lastRecalledIds } from './last-recalled.js';
 import { retrieveRanking } from './recall.js';
 import {
   availabilityPool,
@@ -176,7 +175,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
     boost: { sessionId },
   } = opts;
   const budget = req.budget ?? ctx.config.defaultBudget;
-  const anchorRing = sessionRing(ctx.config, 'mcp', ctx.tenantId, sessionId);
+  const anchorRing = sessionRing(ctx, 'mcp', sessionId);
   const who = callerOf(ctx);
   const queryHash = hashQueryText(query);
   const out: RenderSlot = {};
@@ -199,7 +198,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
       hintRows: ({ list, anchoring, availability }) =>
         shownRecallRows(ctx.config, who, {
           query,
-          ring: anchorRing,
+          sessionId,
           topId: list[0]?.entry.id ?? null,
           anchoring,
           availability,
@@ -208,7 +207,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   );
   const { rendered } = out;
   if (!rendered) throw new Error('hippo_recall: api.retrieveRanking returned without calling its presenter');
-  lastRecalledIds.set(
+  ctx.callers?.lastShown.set(
     clientKey,
     rendered.list.map((r) => r.entry.id),
   );
