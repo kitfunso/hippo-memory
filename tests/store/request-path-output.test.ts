@@ -1,4 +1,4 @@
-// Pins what the whole-store MCP tools return on a small fixed store, so bounding their loads cannot move it.
+// What the whole-store MCP tools return on a small fixed store: which rows they show and the counts they print.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -181,14 +181,56 @@ describe('request-path output on a fixed store', () => {
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>
     handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, mcpCtx());
 
-  const toolCases: Array<[string, ToolArgs]> = [
-    ['hippo_context', {}],
-    ['hippo_context', { scope: 'team:x' }],
-    ['hippo_status', {}],
-    ['hippo_peers', {}],
-  ];
-  it.each(toolCases)('mcp %s %j', async (name, args) => {
-    expect(textOf(await call(name, args))).toMatchSnapshot();
+  /** The first content line of each row hippo_context prints, in print order. */
+  const blocks = (text: string): string[] =>
+    text
+      .split(/\n\n(?=\[verified\])/)
+      .slice(1)
+      .map((block) => block.split('\n')[1]!);
+  const firstLines = (entries: readonly MemoryEntry[]): string[] =>
+    entries.map((e) => e.content.split('\n')[0]!).sort();
+
+  // Shown: the caller's tenant, this project or no project, live, and outside a private or unknown scope.
+  const shownLocal = (e: MemoryEntry): boolean =>
+    e.tenantId === 'default' &&
+    e.supersededBy === null &&
+    (e.originProject === 'proj' || e.originProject === '') &&
+    e.scope !== 'unknown:legacy' &&
+    !(e.scope ?? '').includes(':private:');
+  const LOCAL = Array.from({ length: 80 }, (_, i) => localRow(i));
+  const GLOBAL = Array.from({ length: 40 }, (_, j) => globalRow(j));
+
+  it('mcp hippo_context shows every eligible row of both stores, and a scope keeps only its own rows', async () => {
+    const all = textOf(await call('hippo_context'));
+    const shown = [...LOCAL.filter(shownLocal), merged(), ...GLOBAL.filter((e) => e.tenantId === 'default')];
+    expect(shown).toHaveLength(91);
+    expect(all.split('\n')[0]).toBe('Found 91 memories:');
+    expect(blocks(all).sort()).toEqual(firstLines(shown));
+    expect(all).toContain(
+      '[verified] (strength=1.00)\nTwo related fixes\n\n- the loader must handle a null cache key before it reads the\n' +
+        '  index file\n- the loader retries twice\n',
+    );
+    const scoped = textOf(await call('hippo_context', { scope: 'team:x' }));
+    const teamX = LOCAL.filter((e) => shownLocal(e) && e.scope === 'team:x');
+    expect(scoped.split('\n')[0]).toBe('Found 4 memories:');
+    expect(blocks(scoped).sort()).toEqual(firstLines(teamX));
+  });
+
+  it('mcp hippo_status counts the local rows of the caller tenant, and hippo_peers groups global rows by source', async () => {
+    // 80 rows and the merged one, less the 5 of tenant acme; pinned every 25th row, an error tag every 8th.
+    expect(textOf(await call('hippo_status'))).toBe(
+      'Memories: 76 (4 pinned, 10 errors)\nAvg strength: 0.62\nAt risk (<0.2): 19\nOpen conflicts: 0\n' +
+        'Half-life default: 365d',
+    );
+    expect(textOf(await call('hippo_peers')).split('\n')).toEqual([
+      'projB: 11 memories (latest: 2026-06-01)',
+      'unknown: 10 memories (latest: 2026-05-31)',
+      'proj0: 4 memories (latest: 2026-06-01)',
+      'proj3: 3 memories (latest: 2026-05-31)',
+      'proj1: 3 memories (latest: 2026-05-29)',
+      'global-cli: 2 memories (latest: 2026-05-30)',
+      'proj2: 2 memories (latest: 2026-05-27)',
+    ]);
   });
 
   it('mcp hippo_learn skips texts the store already holds, including inside a merged row', async () => {
@@ -201,6 +243,11 @@ describe('request-path output on a fixed store', () => {
       .filter((e) => !before.has(e.id))
       .map((e) => e.content)
       .sort();
-    expect({ out, added }).toMatchSnapshot();
+    // Two of the four subjects are already held: one as a row, one inside the merged row's text.
+    expect(out).toBe('Git learn: 2 new, 2 duplicates skipped (scanned 7 days)');
+    expect(added).toEqual([
+      'bump the redis client to the next minor',
+      'refresh the token before the queue worker retries',
+    ]);
   });
 });

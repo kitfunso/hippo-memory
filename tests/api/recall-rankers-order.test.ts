@@ -1,5 +1,5 @@
-// Ids and order from each recall ranker (the SQL band, the MCP wide list, the CLI core) over one seeded store,
-// pinned so a change to how any of them picks its search engine cannot move a ranking.
+// The order each recall ranker (the SQL band, the MCP wide list, the CLI core) gives over one seeded store, so a
+// change to how any of them picks its search engine shows up as a moved row.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -64,58 +64,184 @@ function seedVectors(root: string, url: string): void {
   );
 }
 
-type BandCase = readonly [string, RecallOptions];
+type BandCase = readonly [string, RecallOptions, readonly string[]];
 interface CoreSetup {
   rank?: Partial<RankRecallOptions>;
   physics?: boolean;
   global?: boolean;
   sessionId?: string;
 }
-type CoreCase = readonly [string, string, CoreSetup];
+type CoreCase = readonly [string, string, CoreSetup, readonly string[]];
+interface Wide {
+  ranked: readonly string[];
+  band: readonly string[];
+}
+
+// The seeded prediction's claim is a semantic row with a fresh id each run.
+const CLAIM = '<claim>';
+const stable = (id: string): string => (id.startsWith('sem_') ? CLAIM : id);
+const FILLS = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
+
+/** The band's BM25 order for "deploy": the pinned row, the exact match, the summary's children, then the fillers. */
+const BM25 = ['mem_p_pinned', 'mem_p_plain', 'mem_x_child1', 'mem_x_child2', ...FILLS];
+/** The hybrid order for "deploy", where the vector arm lifts the trace and scoped rows above the fillers. */
+const HYBRID = [
+  'mem_p_plain',
+  'mem_p_trace',
+  'mem_p_pinned',
+  'mem_p_scoped',
+  'mem_p_fill5',
+  'mem_x_child1',
+  'mem_p_new',
+  'mem_p_fill2',
+  'mem_p_fill4',
+  'mem_x_raw',
+];
+/** The physics order for "deploy", which ranks the scoped row first. */
+const PHYSICS = [
+  'mem_p_scoped',
+  'mem_p_fill0',
+  'mem_p_trace',
+  'mem_p_plain',
+  'mem_p_goal',
+  'mem_p_pinned',
+  'mem_p_new',
+  'mem_x_child1',
+  'mem_p_fill5',
+  'mem_p_fill2',
+];
+/** The CLI core's order for "deploy", which a global store with no match or a private scope leaves alone. */
+const CORE_ORDER = [
+  'mem_p_plain',
+  'mem_p_pinned',
+  'mem_p_trace',
+  'mem_p_scoped',
+  'mem_p_fill5',
+  'mem_p_new',
+  'mem_p_fill2',
+  'mem_x_child1',
+  'mem_p_fill4',
+  'mem_p_fill1',
+];
+const goalFirst = (order: readonly string[], size = order.length): string[] => [
+  'mem_p_goal',
+  ...order.filter((id) => id !== 'mem_p_goal').slice(0, size - 1),
+];
 
 const BAND: readonly BandCase[] = [
-  ['bm25 plain', { query: 'deploy' }],
-  ['bm25 limit 3', { query: 'deploy', window: { limit: 3 } }],
-  ['hybrid', { query: 'deploy', mode: 'hybrid' }],
-  ['physics', { query: 'deploy', mode: 'physics' }],
-  ['scope team-alpha', { query: 'deploy', filter: { scope: 'team-alpha' } }],
-  ['session goal boost', { query: 'deploy', boost: { sessionId: SESSION } }],
+  ['bm25 plain', { query: 'deploy' }, BM25],
+  ['bm25 limit 3', { query: 'deploy', window: { limit: 3 } }, BM25.slice(0, 3)],
+  ['hybrid', { query: 'deploy', mode: 'hybrid' }, HYBRID],
+  ['physics', { query: 'deploy', mode: 'physics' }, PHYSICS],
+  ['scope team-alpha', { query: 'deploy', filter: { scope: 'team-alpha' } }, ['mem_p_scoped']],
+  // The band applies no session goal boost: the order stays BM25's.
+  ['session goal boost', { query: 'deploy', boost: { sessionId: SESSION } }, BM25],
   [
     'goal tag beats the session',
     { query: 'deploy', boost: { sessionId: SESSION, goalTag: 'goal-alpha' }, mode: 'hybrid' },
+    HYBRID,
   ],
-  ['fresh tail', { query: 'deploy', window: { freshTailCount: 1, freshTailSessionId: SESSION } }],
-  ['overflow summary', { query: 'deploy', window: { limit: 2 } }],
-  ['hybrid rollout limit 5', { query: 'rollout', mode: 'hybrid', window: { limit: 5 } }],
-  ['LIKE path', { query: 'caf' }],
+  [
+    'fresh tail',
+    { query: 'deploy', window: { freshTailCount: 1, freshTailSessionId: SESSION } },
+    ['mem_x_raw', ...BM25],
+  ],
+  ['overflow summary', { query: 'deploy', window: { limit: 2 } }, [...BM25.slice(0, 2), 'mem_x_summary']],
+  [
+    'hybrid rollout limit 5',
+    { query: 'rollout', mode: 'hybrid', window: { limit: 5 } },
+    ['mem_p_plain', CLAIM, 'mem_p_goal', 'mem_x_summary', 'mem_p_noise'],
+  ],
+  ['LIKE path', { query: 'caf' }, ['mem_x_cafe']],
   [
     'physics with session',
     { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, trace: { explain: true } },
+    goalFirst(PHYSICS),
   ],
 ];
 
-const WIDE: readonly BandCase[] = [
-  ['wide hybrid', { query: 'deploy' }],
+/** The rows past the band's ten in the wide list for "deploy", in hybrid order. */
+const WIDE_TAIL = [
+  'mem_p_fill1',
+  'mem_p_fill3',
+  'mem_p_goal',
+  'mem_x_child2',
+  'mem_p_fill0',
+  CLAIM,
+  'mem_p_noise',
+  'mem_x_cafe',
+  'mem_x_summary',
+];
+const WIDE_PHYSICS = [
+  ...goalFirst(PHYSICS),
+  'mem_p_fill1',
+  'mem_p_fill4',
+  'mem_p_fill3',
+  'mem_x_child2',
+  'mem_p_noise',
+  'mem_x_raw',
+  'mem_x_cafe',
+  CLAIM,
+  'mem_x_summary',
+];
+
+const WIDE: ReadonlyArray<readonly [string, RecallOptions, Wide]> = [
+  ['wide hybrid', { query: 'deploy' }, { ranked: [...HYBRID, ...WIDE_TAIL], band: HYBRID }],
   [
     'wide physics with session',
     { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, window: { limit: 5 } },
+    // Five rows fit the limit, then the overflow summary.
+    { ranked: WIDE_PHYSICS, band: [...WIDE_PHYSICS.slice(0, 5), 'mem_x_summary'] },
   ],
-  ['wide scoped', { query: 'rollout cluster', filter: { scope: 'team-alpha' } }],
+  [
+    'wide scoped',
+    { query: 'rollout cluster', filter: { scope: 'team-alpha' } },
+    { ranked: ['mem_p_scoped'], band: ['mem_p_scoped'] },
+  ],
 ];
 
 const CORE: readonly CoreCase[] = [
-  ['core hybrid', 'deploy', {}],
-  ['core physics', 'deploy', { physics: true }],
-  ['core with the global store', 'deploy', { global: true }],
-  ['core physics with the global store', 'deploy', { global: true, physics: true }],
-  ['core session goal boost', 'deploy', { sessionId: SESSION }],
-  ['core superseded kept', 'deploy target', { rank: { includeSuperseded: true } }],
-  ['core explicit private scope', 'deploy', { rank: { explicitScope: 'slack:private:C1' } }],
-  ['core explain physics', 'deploy rollout', { physics: true, rank: { why: true } }],
+  ['core hybrid', 'deploy', {}, CORE_ORDER],
+  ['core physics', 'deploy', { physics: true }, PHYSICS],
+  ['core with the global store', 'deploy', { global: true }, CORE_ORDER],
+  ['core physics with the global store', 'deploy', { global: true, physics: true }, CORE_ORDER],
+  ['core session goal boost', 'deploy', { sessionId: SESSION }, goalFirst(CORE_ORDER)],
+  [
+    'core superseded kept',
+    'deploy target',
+    { rank: { includeSuperseded: true } },
+    [
+      'mem_p_new',
+      'mem_p_old',
+      CLAIM,
+      'mem_p_plain',
+      'mem_x_child1',
+      'mem_p_trace',
+      'mem_p_noise',
+      'mem_p_scoped',
+      'mem_x_child2',
+      'mem_p_pinned',
+    ],
+  ],
+  ['core explicit private scope', 'deploy', { rank: { explicitScope: 'slack:private:C1' } }, CORE_ORDER],
+  [
+    'core explain physics',
+    'deploy rollout',
+    { physics: true, rank: { why: true } },
+    [
+      'mem_p_goal',
+      'mem_p_fill0',
+      'mem_p_plain',
+      'mem_p_pinned',
+      'mem_p_scoped',
+      'mem_p_noise',
+      'mem_p_new',
+      'mem_p_fill1',
+      'mem_p_trace',
+      'mem_p_fill2',
+    ],
+  ],
 ];
-
-// The seeded prediction's claim is a semantic row with a fresh id each run.
-const stable = (id: string): string => (id.startsWith('sem_') ? '<claim>' : id);
 
 let templates: Templates;
 let embeddings: HashedEmbeddings;
@@ -153,7 +279,7 @@ function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'bo
   };
 }
 
-describe('recall ranker goldens', () => {
+describe('recall ranker order', () => {
   beforeAll(async () => {
     embeddings = await startHashedEmbeddings();
     templates = await seedTemplates((root) => seedVectors(root, embeddings.url));
@@ -176,12 +302,12 @@ describe('recall ranker goldens', () => {
     _resetAblationCacheForTests();
   });
 
-  it.each(BAND)('band ranker: %s', async (_name, opts) => {
+  it.each(BAND)('band ranker: %s', async (_name, opts, order) => {
     const ids = await onStore(async (s) => (await retrieve(ctxOf(s), opts)).results.map((r) => stable(r.id)));
-    expect(ids).toMatchSnapshot();
+    expect(ids).toEqual(order);
   });
 
-  it.each(WIDE)('MCP wide ranker: %s', async (_name, opts) => {
+  it.each(WIDE)('MCP wide ranker: %s', async (_name, opts, wide) => {
     const got = await onStore(async (s) => {
       let ranked: string[] = [];
       const result = await retrieveRanking(
@@ -198,10 +324,10 @@ describe('recall ranker goldens', () => {
       );
       return { ranked: ranked.map(stable), band: result.results.map((r) => stable(r.id)) };
     });
-    expect(got).toMatchSnapshot();
+    expect(got).toEqual(wide);
   });
 
-  it.each(CORE)('CLI core ranker: %s', async (_name, query, c) => {
+  it.each(CORE)('CLI core ranker: %s', async (_name, query, c, order) => {
     const got = await onStore(async (s) => {
       let ranked: string[] = [];
       const ctx = ctxOf(s);
@@ -222,6 +348,6 @@ describe('recall ranker goldens', () => {
       );
       return ranked;
     });
-    expect(got).toMatchSnapshot();
+    expect(got).toEqual(order);
   });
 });

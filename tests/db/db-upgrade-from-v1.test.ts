@@ -80,12 +80,26 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     expect(lesson.created).toBe('2025-01-02T03:04:05.000Z');
   });
 
-  it('ends with the pinned schema after the full migration chain', () => {
+  // A fresh store's schema is pinned in db-schema-snapshot, so the upgrade path pins only where it differs.
+  it('ends with the fresh-store schema after the full migration chain, less two memories indexes', () => {
+    const freshDb = openHippoDb(makeRoot('upgrade-v1-fresh'));
     const db = openHippoDb(root);
     try {
-      expect(dumpSchema(db)).toMatchSnapshot();
+      const [fresh, upgraded] = [dumpSchema(freshDb), dumpSchema(db)];
+      expect(upgraded.userVersion).toBe(fresh.userVersion);
+      expect({
+        onlyFresh: fresh.objects.filter((o) => !upgraded.objects.includes(o)),
+        onlyUpgraded: upgraded.objects.filter((o) => !fresh.objects.includes(o)),
+      }).toEqual({
+        onlyFresh: [
+          'index idx_memories_last_retrieved: CREATE INDEX idx_memories_last_retrieved ON memories(last_retrieved)',
+          'index idx_memories_layer_created: CREATE INDEX idx_memories_layer_created ON memories(layer, created)',
+        ],
+        onlyUpgraded: [],
+      });
     } finally {
       closeHippoDb(db);
+      closeHippoDb(freshDb);
     }
   });
 
