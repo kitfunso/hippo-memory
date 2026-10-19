@@ -6,7 +6,7 @@ import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { objectMirror } from '../../src/objects/lifecycle.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type {
   BriefReceipt,

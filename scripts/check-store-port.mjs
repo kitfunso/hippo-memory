@@ -53,6 +53,7 @@ const DB_DEFINITION_FILES = {
   'src/store/port-groups.ts': 'the session and admin groups of the store port',
   'src/store/index.ts': 'the published entry of the store port',
   'src/store/sqlite/': 'the SQLite adapter and its executor plumbing',
+  'src/store/local/': 'the types of the stores a hippo.db root keeps beside its own',
 };
 const DB_TOUCH_NAMES = new Set([...OPENERS, ...HANDLE_TYPES, 'withWriteScope', 'withWriteScopeOr']);
 const TX_OWNER = 'src/db/busy.ts';

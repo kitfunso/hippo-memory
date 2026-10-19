@@ -4,7 +4,7 @@ import { cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type {
   QuarantineApproval,

@@ -1,6 +1,6 @@
 // The two sides a sharing call takes, built from folders as the CLI builds them.
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
 import type { ConfiguredFolder } from '../../src/search/embed-memories.js';
 

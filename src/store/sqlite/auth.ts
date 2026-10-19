@@ -1,94 +1,28 @@
-import { createHash, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
+import { scryptSync } from 'node:crypto';
 import {
   DEFAULT_KEY_TTL_DAYS,
-  DEFAULT_SCRYPT,
+  isUsableKey,
+  keyExpiryMs,
   mintApiKey,
   mintedKeyId,
-  SCRYPT_MAXMEM,
-  SCRYPT_MAX_N,
-  SCRYPT_MAX_P,
-  SCRYPT_MAX_R,
-  type ScryptParams,
+  storedScrypt,
+  verifiedKeyOf,
+  type VerifiedApiKey,
 } from '../../core/api-key.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { keysetAfter } from '../../util/keyset.js';
-import type { HippoStore } from '../index.js';
 import { DAY_MS } from '../../util/time.js';
 import { ALL_TENANTS } from '../../util/tenant.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../util/version.js';
 import type { ApiKeyRecord } from '../port/types.js';
 import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../port/key-writes.js';
 
-/** Counts since process start, so a flood of bad tokens shows as scrypt work, not just as 401s. */
-export interface ApiKeyVerifyStats {
-  readonly storeLookups: number;
-  readonly scryptRuns: number;
-}
-
-const verifyStats = { storeLookups: 0, scryptRuns: 0 };
-
-// Test hook: no production surface reads these counts yet.
-export function _readApiKeyVerifyStatsForTests(): ApiKeyVerifyStats {
-  return { ...verifyStats };
-}
-
-/** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value asks of a derivation,
- * with the one compare the sync and the pooled check share. */
-interface StoredScrypt {
-  readonly salt: Buffer;
-  readonly keylen: number;
-  readonly params: ScryptParams;
-  matches(derived: Buffer): boolean;
-}
-
-function validCost(n: number, r: number, p: number): boolean {
-  const powerOfTwo = Number.isInteger(n) && n >= 2 && (n & (n - 1)) === 0;
-  return (
-    powerOfTwo &&
-    n <= SCRYPT_MAX_N &&
-    Number.isInteger(r) &&
-    r >= 1 &&
-    r <= SCRYPT_MAX_R &&
-    Number.isInteger(p) &&
-    p >= 1 &&
-    p <= SCRYPT_MAX_P &&
-    128 * n * r <= SCRYPT_MAXMEM
-  );
-}
-
-/** Null when `stored` has another shape or asks for more work than a verify may do. */
-function storedScrypt(stored: string): StoredScrypt | null {
-  const parts = stored.split('$');
-  let params = DEFAULT_SCRYPT;
-  if (parts.length !== 3 && parts.length !== 6) return null;
-  const hashHex = parts[parts.length - 1]!;
-  const saltHex = parts[parts.length - 2]!;
-  if (parts.length === 3 && parts[0] !== 'scrypt') return null;
-  if (parts.length === 6) {
-    const [n, r, p] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];
-    if (parts[0] !== 'scrypt2' || !validCost(n, r, p)) return null;
-    params = { N: n, r, p, maxmem: SCRYPT_MAXMEM };
-  }
-  const expected = Buffer.from(hashHex, 'hex');
-  return {
-    salt: Buffer.from(saltHex, 'hex'),
-    keylen: expected.length,
-    params,
-    matches: (derived) => expected.length === derived.length && timingSafeEqual(expected, derived),
-  };
-}
-
 function verifyKey(plaintext: string, stored: string): boolean {
   const parsed = storedScrypt(stored);
   if (!parsed) return false;
-  verifyStats.scryptRuns++;
   return parsed.matches(scryptSync(plaintext, parsed.salt, parsed.keylen, parsed.params));
 }
-
-const scryptOffLoop: (password: string, salt: Buffer, keylen: number, params: ScryptParams) => Promise<Buffer> =
-  promisify(scrypt);
 
 export interface CreateApiKeyOptions {
   tenantId: string;
@@ -141,15 +75,6 @@ export interface ValidateResult {
   scopes?: string[];
 }
 
-/** The identity a verified API key carries. */
-export interface VerifiedApiKey {
-  tenantId: string;
-  keyId: string;
-  role: 'admin' | 'member';
-  scopes: string[];
-  ownerSubject?: string | null;
-}
-
 /** The api_keys row for `keyId` with its scope grants; null when no row matches. */
 export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRecord | null {
   // SAFETY: row comes from the SELECT above, which projects exactly key_hash, tenant_id, revoked_at, role, expires_at,
@@ -178,139 +103,17 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
   };
 }
 
-/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing
- * field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
-function keyExpiryMs(expiresAt: string | null | undefined): number {
-  if (expiresAt === null) return Infinity;
-  if (expiresAt === undefined) return -Infinity;
-  const ms = Date.parse(expiresAt);
-  return Number.isNaN(ms) ? -Infinity : ms;
-}
-
-/** True for a record that is present, unrevoked and unexpired, before any secret check. */
-function isUsable(record: ApiKeyRecord | null, now: number): record is ApiKeyRecord {
-  // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and let junk tokens burn
-  // CPU.
-  if (!record) return false;
-  return !record.revokedAt && now < keyExpiryMs(record.expiresAt);
-}
-
-/** The verified key a usable record whose secret matched carries. */
-function verifiedKeyOf(keyId: string, record: ApiKeyRecord): VerifiedApiKey {
-  // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
-  const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
-  const key: VerifiedApiKey = { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
-  // Only a real name counts as an owner; anything else leaves the key keyed on its own id.
-  if (record.ownerSubject) key.ownerSubject = record.ownerSubject;
-  return key;
-}
-
 /** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any failure. */
 function lookupApiKey(db: DatabaseSyncLike, plaintext: string, now: number): VerifiedApiKey | null {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
   const record = readApiKeyRecord(db, keyId);
-  return isUsable(record, now) && verifyKey(plaintext, record.keyHash) ? verifiedKeyOf(keyId, record) : null;
+  return isUsableKey(record, now) && verifyKey(plaintext, record.keyHash) ? verifiedKeyOf(keyId, record) : null;
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
   const found = lookupApiKey(db, plaintext, Date.now());
   return found ? { valid: true, ...found } : { valid: false };
-}
-
-const VERIFIED_KEY_CACHE_CAP = 1_000;
-
-function secretDigest(plaintext: string): Buffer {
-  return createHash('sha256').update(plaintext).digest();
-}
-
-/** LRU of the tokens that matched a stored key hash, so a repeat skips scrypt. Holds
- * a SHA-256 of the token, never the token, and nothing about the key's state. */
-export class VerifiedKeyCache {
-  // Keyed on the stored hash, so a rotated or re-minted key never meets an old entry; Map order makes the first key the
-  // least recent.
-  private readonly proven = new Map<string, Buffer>();
-
-  constructor(private readonly capacity: number) {}
-
-  get size(): number {
-    return this.proven.size;
-  }
-
-  has(keyHash: string, plaintext: string): boolean {
-    const digest = this.proven.get(keyHash);
-    // A wrong secret misses but leaves the entry, so a flood of bad guesses cannot evict a good key.
-    if (!digest || !timingSafeEqual(digest, secretDigest(plaintext))) return false;
-    this.proven.delete(keyHash);
-    this.proven.set(keyHash, digest);
-    return true;
-  }
-
-  add(keyHash: string, plaintext: string): void {
-    this.proven.delete(keyHash);
-    if (this.proven.size >= this.capacity) {
-      const oldest = this.proven.keys().next();
-      if (!oldest.done) this.proven.delete(oldest.value);
-    }
-    this.proven.set(keyHash, secretDigest(plaintext));
-  }
-}
-
-const verifiedKeys = new VerifiedKeyCache(VERIFIED_KEY_CACHE_CAP);
-
-/** A caller's limit on scrypt work, called once per derivation: it may throw to refuse `derive` or hold it in a
- * queue. */
-type DerivationBound = (keyId: string, derive: () => Promise<Buffer>) => Promise<Buffer>;
-
-// By stored hash and a digest of the token, never the token, so a burst with one unproved key derives once and is
-// charged once.
-const checksInFlight = new Map<string, Promise<boolean>>();
-
-/** Whether `plaintext` is the secret `keyHash` was minted from: a proved token skips scrypt, any other derives on the
- * thread pool. */
-async function secretMatches(
-  keyId: string,
-  plaintext: string,
-  keyHash: string,
-  bound?: DerivationBound,
-): Promise<boolean> {
-  if (verifiedKeys.has(keyHash, plaintext)) return true;
-  const parsed = storedScrypt(keyHash);
-  if (!parsed) return false;
-  const id = `${keyHash}\u0000${secretDigest(plaintext).toString('hex')}`;
-  const running = checksInFlight.get(id);
-  if (running) return running;
-  const derive = (): Promise<Buffer> => {
-    verifyStats.scryptRuns++;
-    return scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
-  };
-  const check = (bound ? bound(keyId, derive) : derive()).then((derived) => {
-    const matched = parsed.matches(derived);
-    // Only successes are kept: keeping misses would let junk tokens fill the cache and evict real keys.
-    if (matched) verifiedKeys.add(keyHash, plaintext);
-    return matched;
-  });
-  checksInFlight.set(id, check);
-  const forget = (): void => {
-    checksInFlight.delete(id);
-  };
-  void check.then(forget, forget);
-  return check;
-}
-
-/** Verify a bearer API key against `store`, null when invalid. The key's row is read on every
- * call, so a revoke, expiry, role or scope change by any process applies on the next one. */
-export async function verifyApiKeyCached(
-  plaintext: string,
-  store: HippoStore,
-  bound?: DerivationBound,
-): Promise<VerifiedApiKey | null> {
-  const keyId = mintedKeyId(plaintext);
-  if (keyId === null) return null;
-  verifyStats.storeLookups++;
-  const record = await store.findApiKey(keyId);
-  if (!isUsable(record, Date.now())) return null;
-  return (await secretMatches(keyId, plaintext, record.keyHash, bound)) ? verifiedKeyOf(keyId, record) : null;
 }
 
 export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = new Date().toISOString()): void {

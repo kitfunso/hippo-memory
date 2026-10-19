@@ -7,13 +7,8 @@ import { join } from 'node:path';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
-import {
-  sqliteStore,
-  type HippoStore,
-  type LastRecall,
-  type LastRecallWrites,
-  type RecallWrites,
-} from '../../src/store/index.js';
+import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
 import { adminActor } from '../../src/api/index.js';

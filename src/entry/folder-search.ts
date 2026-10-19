@@ -3,7 +3,7 @@
 
 import type { MemoryEntry } from '../core/memory.js';
 import type { SearchResult } from '../core/search-types.js';
-import { sqliteStore } from '../store/index.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../search/hybrid.js';
 import { loadConfig } from '../core/config.js';

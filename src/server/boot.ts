@@ -6,6 +6,7 @@ import {
   envRequireAuth,
   envRuntimeSettings,
   envStoreQueueMax,
+  envTenant,
   envV1Rps,
   validateFlags,
 } from '../util/env.js';
@@ -16,6 +17,8 @@ import { isStoreBusy } from '../store/port.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { createSqliteExecutor } from '../store/sqlite/executor.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
+import { sqliteReach } from '../store/sqlite/store.js';
+import { tenantOfApiKey, type ResolveOptions } from '../store/sqlite/tenant.js';
 import { configReader } from '../core/config.js';
 import { setLossAversionRatio } from '../core/memory.js';
 import { auditWriteFailureCount } from '../core/audit-report.js';
@@ -400,6 +403,12 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
   installCrashHandlers('serve', shutdown);
 }
 
+/** The ./testing kit's tenant resolver, kept at this root because it reads HIPPO_TENANT: the tenant `opts.apiKey`
+ * names, else HIPPO_TENANT's (the default tenant when unset or blank), as the server names it. */
+export function resolveTenantId(opts: ResolveOptions): string {
+  return opts.apiKey ? tenantOfApiKey({ ...opts, apiKey: opts.apiKey }) : envTenant();
+}
+
 /**
  * Boots the HTTP daemon on host:port and writes the pidfile under hippoRoot; refuses a non-loopback host unless
  * HIPPO_REQUIRE_AUTH=1 and
@@ -499,12 +508,14 @@ function servedOptsFor(
 ): ResolvedServeOptions {
   const executorOpts = { queueMax: envStoreQueueMax() };
   const store = opts.store ?? workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, executorOpts));
+  const globalStores = globalStoresFor(store, executorOpts);
   return {
     ...opts,
     routes,
     publicJsonBodies,
     store,
-    globalStores: globalStoresFor(store, executorOpts),
+    globalStores,
+    reachOf: (shared) => sqliteReach(opts.hippoRoot, store, shared, globalStores.open),
     configAt: configReader(envRuntimeSettings),
     offLoop: offLoopFor(store),
     callerLimiter,
