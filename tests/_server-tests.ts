@@ -60,6 +60,7 @@ export const SERVER_TESTS: readonly string[] = [
   'server/http-incidents.test.ts',
   'server/http-input-validation.test.ts',
   'server/http-list-cursor-paging.test.ts',
+  'server/http-objects-replies.test.ts',
   'server/http-objects.test.ts',
   'server/http-policies.test.ts',
   'server/http-predictions-stats.test.ts',
@@ -97,6 +98,8 @@ export const SERVER_TESTS: readonly string[] = [
   'server/server-mcp-tenant.test.ts',
   'server/server-object-routes-off-loop.test.ts',
   'server/server-other-store-fails-closed.test.ts',
+  'server/server-other-store-groups.test.ts',
+  'server/server-other-store-objects.test.ts',
   'server/server-outcome-route.test.ts',
   'server/server-proxied-loopback.test.ts',
   'server/server-public-json.test.ts',
@@ -142,5 +145,6 @@ export const SERVER_TESTS: readonly string[] = [
   'store/store-port-sqlite.test.ts',
   'store/typed-object-characterization.test.ts',
   'store/vector-graph-lanes.test.ts',
+  'store/work-queue-cards-claims.test.ts',
   'store/worker-jobs-cleanup.test.ts',
 ].map((name) => `tests/${name}`);
