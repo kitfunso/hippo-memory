@@ -126,7 +126,9 @@ describe('sleep overlap index matches the pairwise passes', () => {
     const rnd = mulberry32(seed);
     const entries = randomEntries(rnd, n);
     const rescued = new Set(entries.filter(() => rnd() < 0.1).map((e) => e.id));
-    expect(detectConflicts(entries, NOW, {}, rescued)).toEqual(pairwiseDetectConflicts(entries, NOW, {}, rescued));
+    expect(detectConflicts(entries, NOW, { rescuedIds: rescued })).toEqual(
+      pairwiseDetectConflicts(entries, NOW, {}, rescued),
+    );
   });
 
   it.each(cases)('merge partners match for $n memories (seed $seed)', ({ n, seed }) => {

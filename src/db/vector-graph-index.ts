@@ -99,7 +99,7 @@ export class VectorGraphs implements VectorIndex {
       return undefined;
     }
     if (!this.#refresh(db, dim, slot)) return undefined;
-    return graphMatches(db, slot.rows, query, k, where, params);
+    return graphMatches(db, slot.rows, { query, k, where, params });
   }
 
   /** Stops every build at its next turn; each closes its own connection as it stops. */

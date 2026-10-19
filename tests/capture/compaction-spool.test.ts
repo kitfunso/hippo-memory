@@ -78,8 +78,8 @@ function collector(): Collector {
   };
 }
 
-const replay = (importer: SpoolImporter, fsx?: SpoolFs): number =>
-  importSpool(root, 'default', log, Number.POSITIVE_INFINITY, importer, fsx);
+const replay = (importOne: SpoolImporter, fsx?: SpoolFs): number =>
+  importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: Number.POSITIVE_INFINITY, importOne, fsx });
 
 describe('spool names and order', () => {
   it('imports oldest first across sessions and legacy names', () => {
@@ -95,8 +95,9 @@ describe('spool names and order', () => {
 
   it('two spools for one session in one millisecond both land', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_760_000_000_000);
-    spool(root, 'default', payload('s1'), { summary: 'first', items: [] }, new Date(1_760_000_000_000));
-    spool(root, 'default', payload('s1'), { summary: 'second', items: [] }, new Date(1_760_000_000_000));
+    const at = new Date(1_760_000_000_000);
+    spool({ hippoRoot: root, tenantId: 'default', payload: payload('s1'), text: { summary: 'first', items: [] }, at });
+    spool({ hippoRoot: root, tenantId: 'default', payload: payload('s1'), text: { summary: 'second', items: [] }, at });
     vi.restoreAllMocks();
     expect(fs.readdirSync(spoolDir())).toHaveLength(2);
     const summaries: string[] = [];
@@ -174,7 +175,9 @@ describe('one replayer at a time', () => {
     const live = `${B}.a0.claim-${stamp(Date.now())}`;
     put(stale, 's1');
     put(live, 's2');
-    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(
+      importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
+    ).toBe(0);
     expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${A}.a1.json`, live]);
     expect(logs).toContain(`spool file ${stale} was claimed by a replayer that never finished, put back (try 1 of 3)`);
   });
@@ -183,7 +186,9 @@ describe('one replayer at a time', () => {
     const live = `${A}.a0.claim-${stamp(Date.now())}`;
     const old = new Date(Date.now() - 60 * MINUTE);
     fs.utimesSync(put(live, 's1'), old, old);
-    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(
+      importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
+    ).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([live]);
     expect(logs).toEqual([]);
   });
@@ -199,7 +204,14 @@ describe('one replayer at a time', () => {
         fs.renameSync(from, to);
         if (fired || !String(to).includes('.claim')) return;
         fired = true;
-        nested = importSpool(root, 'default', log, Number.POSITIVE_INFINITY, collector().importer, faulty);
+        nested = importSpool({
+          hippoRoot: root,
+          tenantId: 'default',
+          log,
+          deadline: Number.POSITIVE_INFINITY,
+          importOne: collector().importer,
+          fsx: faulty,
+        });
       },
     });
     const outer = collector();
@@ -343,7 +355,9 @@ describe('failures are counted and set aside', () => {
   it('a stale claim at a2 becomes interrupted.bad', () => {
     const stale = `${A}.a2.claim-${stamp(Date.now() - 11 * MINUTE)}`;
     const body = fs.readFileSync(put(stale, 's1'), 'utf8');
-    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(
+      importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
+    ).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.interrupted.bad`]);
     expect(fs.readFileSync(path.join(spoolDir(), `${A}.interrupted.bad`), 'utf8')).toBe(body);
     expect(logs).toEqual([
@@ -354,7 +368,9 @@ describe('failures are counted and set aside', () => {
   it('a stale claim whose .bad already landed is removed, not set aside a second time', () => {
     put(`${A}.failed.bad`, 's1');
     put(`${A}.a2.claim-${stamp(Date.now() - 11 * MINUTE)}`, 's1');
-    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(
+      importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
+    ).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.failed.bad`]);
     expect(logs).toEqual([]);
   });
@@ -493,7 +509,14 @@ describe('temp files a spool left', () => {
       },
     });
     expect(() =>
-      spool(root, 'default', payload('s1'), { summary: 'kept', items: [] }, new Date(), faulty),
+      spool({
+        hippoRoot: root,
+        tenantId: 'default',
+        payload: payload('s1'),
+        text: { summary: 'kept', items: [] },
+        at: new Date(),
+        fsx: faulty,
+      }),
     ).not.toThrow();
     const [name] = fs.readdirSync(spoolDir());
     expect(name).toMatch(/^\d{13}-[0-9a-f]{8}\.a0\.json\.tmp$/);

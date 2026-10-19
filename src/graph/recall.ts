@@ -9,6 +9,7 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
 import { estimateTokens } from '../util/token-text.js';
+import { chunked } from '../util/chunked.js';
 import { compareEntryIdentity, compareScoresDesc } from '../core/compare.js';
 import type { Entity } from '../store/port/graph-reads.js';
 import type { HippoStore } from '../store/index.js';
@@ -22,9 +23,6 @@ export const DEFAULT_MAX_NEIGHBORS = 25;
 /** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down
  *  1% per hop, so it ranks just below its seed and orders by hop-distance. */
 const HOP_DISCOUNT = 0.01;
-/** entriesByIds caps each call at 500 ids; chunk to lose none on high fanout. */
-const LOAD_CHUNK = 500;
-
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
 type GraphStore = Pick<HippoStore, 'graphReads' | 'entriesByIds'>;
 type GraphHit = SearchResult & { graphVia: GraphVia };
@@ -62,13 +60,11 @@ export interface GraphExpandOpts {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-/** Load memories by id in <=500-id chunks (entriesByIds caps each call at 500). */
+/** Load memories by id in ID_CHUNK-sized chunks, as entriesByIds caps each call there. */
 async function loadByIdsChunked(store: GraphStore, tenantId: string, ids: string[]): Promise<MemoryEntry[]> {
   if (ids.length === 0) return [];
   const out: MemoryEntry[] = [];
-  for (let i = 0; i < ids.length; i += LOAD_CHUNK) {
-    out.push(...(await store.entriesByIds(ids.slice(i, i + LOAD_CHUNK), tenantId)));
-  }
+  for (const chunk of chunked(ids)) out.push(...(await store.entriesByIds(chunk, tenantId)));
   return out;
 }
 

@@ -18,10 +18,15 @@ export interface HookTable {
   [agent: string]: HookSpec;
 }
 
-// Shared by the agents that differ only in the noun, an optional recall paragraph and an optional footer.
+// Shared by the agents that differ only in the noun, a recall paragraph, the capture lead-in and a footer.
 const PI_FOOTER = 'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
+const CODEX_CAPTURE = `When Hippo's Codex wrapper is installed, session-end capture runs automatically.
+If the wrapper is not installed, capture a brief summary manually:`;
 
-function agentsBlock(noun: 'task' | 'session', opts: { recall?: boolean; footer?: string } = {}): string {
+function agentsBlock(
+  noun: 'task' | 'session',
+  opts: { recall?: boolean; capture?: string; footer?: string } = {},
+): string {
   const recall = opts.recall
     ? `
 When stuck or repeating yourself, check if this happened before:
@@ -30,6 +35,7 @@ hippo recall "<what's going wrong>" --budget 2000
 \`\`\`
 `
     : '';
+  const capture = opts.capture ?? 'When ending a session, capture a brief summary:';
   const footer = opts.footer ? `\n${opts.footer}\n` : '';
   return `
 ## Project Memory (Hippo)
@@ -53,7 +59,7 @@ work, never as a closing step. Leave out secrets and personal details:
 hippo remember "<what you learned and why>"
 \`\`\`
 ${recall}
-When ending a session, capture a brief summary:
+${capture}
 \`\`\`bash
 hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 \`\`\`
@@ -89,34 +95,7 @@ ends, so there is nothing to run before you finish.
   codex: {
     file: 'AGENTS.md',
     description: 'OpenAI Codex',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When Hippo's Codex wrapper is installed, session-end capture runs automatically.
-If the wrapper is not installed, capture a brief summary manually:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
+    content: agentsBlock('task', { capture: CODEX_CAPTURE }),
   },
   cursor: { file: 'AGENTS.md', description: 'Cursor', content: agentsBlock('task') },
   openclaw: { file: 'AGENTS.md', description: 'OpenClaw', content: agentsBlock('session') },

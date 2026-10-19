@@ -93,7 +93,7 @@ describe('pilot config', () => {
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     writeConfig({ holdoutRateBp: bad });
     expect(loadConfig(root).pilot.holdoutRateBp).toBe(0);
-    expect(warn.mock.calls.some((c) => String(c[0]).includes('"pilot"'))).toBe(true);
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('"pilot.holdoutRateBp"'))).toBe(true);
   });
 
   it('warns for a pilot value that is not an object', () => {
