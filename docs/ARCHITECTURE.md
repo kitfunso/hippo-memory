@@ -48,7 +48,7 @@ Formula notes (load-bearing for the experiments). Ablating decay has TWO intrins
 1. Read-side strengthening flattens: raw = retrievalBoost * emotionalMult >= 1, and the [0,1] clamp caps it at 1.0, so the recall boost can only offset decay, never exceed baseline. (Write-side still runs.)
 2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `hybridSearch` is unaffected).
 
-Env caching follows the house pattern (see `getLossAversionRatio` in `memory.ts`): read once per process, with a test-only reset helper. Tests that mutate these env vars MUST call `_resetAblationCacheForTests()` in BOTH `beforeEach` AND `afterEach`.
+Nothing caches these env vars. The readers here read them on each call, so a test that stubs one sees it at once and resets nothing. `HIPPO_LOSS_AVERSION_RATIO` is a root setting: the CLI, `serve()`, the stdio MCP host, the sleep child and the dashboard read it once when they build their store and hand it down as `lossAversionRatio` (`sqliteStore(root, { lossAversionRatio })`, `strengthOptionsOf(config.runtime)`); a library caller passes it the same way.
 
 ## src/server/boot.ts
 
@@ -620,8 +620,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `token ledger section`: ── Token ledger (ROADMAP TE0) ──
 - `callTool tenantId`: A5: every store read in this server returns to the caller and is tenant-isolated.
 
-### src/mcp/session-state.ts
-- `sessionRecallHistoryMcp`: v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map for the MCP pipeline. Separate from CLI/HTTP rings per plan v3 architecture (per-pipeline rings; no IPC).
+### src/api/callers.ts
+- `CallerState`: what a root keeps for the callers it serves, handed down as `Context.callers`. The server, the stdio MCP host and each CLI command build one, so no module holds caller state. It holds each surface's J1 session rings (v0.33; one ring map per surface, no IPC), the ids each client was last shown (keyed by `resolveClientKey`, capped at 4096 clients) for an outcome with no ids, and the auto-sleep host a write starts a sleep through.
 
 ### src/core/memory-quality.ts
 - `CJK_LETTERS` (moved from src/store/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
@@ -658,10 +658,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `MemoryEntry`: F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
 - `CHURN_STALE_TAG`: FE2: tag on a memory whose named file/symbol/script changed after it was stored.
 - `EMOTIONAL_MULTIPLIERS`: Emotional multipliers from PLAN.md. v1.13.5 / J5 loss-aversion calibration (Lovallo-Kahneman TFAS empirics: losses ~2x larger than equivalent gains). Defaults rebalanced: - positive (success-tagged): 1.3 -> 1.0 - negative (error-tagged): 1.5 -> 2.0 - critical stays at 2.0 (literal roadmap reading; J5 silent on critical; ranking signal in consolidate.ts/salience.ts/ambient.ts unchanged) - neutral stays at 1.0
-- `getLossAversionRatio`: v1.13.5 / J5 — module-level lazy-cached read of HIPPO_LOSS_AVERSION_RATIO.
+- `parseLossAversionRatio`: v1.13.5 / J5. HIPPO_LOSS_AVERSION_RATIO as scoring reads it; the root reads the variable and hands the value down, so no module caches it.
 - `LOSS_AVERSION_RATIO_MIN`: v1.13.5 minimum acceptable ratio. Below this, the negative multiplier ... cycle. 0.5 is chosen as the floor because (a) it recovers the v1.13.4 ... the v1.13.4 default), and (b) below this the user is asking for LESS
-- `getLossAversionRatio`: Floor at the v1.13.4-equivalent (0.5) so the env var's tuning
-- `getLossAversionRatio`: Users wanting LESS loss aversion than v1.13.4's 1.5 multiplier should reconsider the design intent of J5 (the calibration was
+- `parseLossAversionRatio`: Floor at the v1.13.4-equivalent (0.5) so the env var's tuning
+- `parseLossAversionRatio`: Users wanting LESS loss aversion than v1.13.4's 1.5 multiplier should reconsider the design intent of J5 (the calibration was
 - `getLossAversionRatio`: `HIPPO_NEGATIVE_MULTIPLIER` env override (deferred to J5-v2).
 - `emotionalMultiplier`: `critical` is deliberately NOT scaled: J5 roadmap is silent on critical; its multiplier is left alone so the calibration only touches the
 - `calculateStrength`: clock: wall-clock time (default pre-v0.15)
@@ -846,7 +846,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `section header`: ── E2 project_brief routes ──
 
 ### src/server/routes/recall.ts
-- `sessionRecallHistoryHttp`: v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-pipeline rings; no IPC).
 - `parseFreshTail`: v1.6.2: surface the v1.5.0/v1.5.2 RecallOpts additions to HTTP callers.
 - `parseSessionId`: v1.7.4: session_id for the dlPFC goal-stack boost.
 - `parseRecallQuery`: A7 recall-trace: opt-in explain flag.
