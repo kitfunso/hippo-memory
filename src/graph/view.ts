@@ -115,18 +115,18 @@ function addRepulsion(
         for (const j of cells.get(gx * CELL_KEY_STRIDE + gy) ?? []) {
           if (j <= i) continue;
           visits.pairs++;
-          repel(pi, pts[j], disp[i], disp[j], k, reach);
+          repel(pi, pts[j], disp[i], disp[j], k);
         }
       }
     }
   }
 }
 
-function repel(pi: Point, pj: Point, di: Point, dj: Point, k: number, reach: number): void {
+function repel(pi: Point, pj: Point, di: Point, dj: Point, k: number): void {
   const dx = pi.x - pj.x;
   const dy = pi.y - pj.y;
   const dist = Math.hypot(dx, dy) || 0.01;
-  if (dist >= reach) return;
+  if (dist >= REPULSION_REACH_K * k) return;
   const rep = (k * k) / dist;
   const ux = dx / dist;
   const uy = dy / dist;
