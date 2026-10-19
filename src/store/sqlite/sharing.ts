@@ -12,21 +12,35 @@ import {
 import { writeEntriesSkippingRejectedAt } from './entry-writes.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles, type Bodies } from './bound.js';
+import { served } from './served.js';
 import type { Sharing } from '../port/sharing.js';
 import { loadRecallEntriesAt, loadSearchEntriesAt } from './search-rows.js';
 
+type SharingReads = Omit<Sharing, 'writeSkippingRejected' | 'sourceTallies'>;
+
+const sharingReadsAt: Bodies<SharingReads> = {
+  entriesPage: loadEntriesPageAt,
+  entriesWithSignals: loadEntriesWithSignalsAt,
+  textKeysPage: loadEntryTextKeysPageAt,
+  textKeysHolding: selectTextKeysHoldingAt,
+  takenIds: selectTakenIdsAt,
+  entriesByIds: (db, ids) => loadEntriesByIdsAt(db, ids, ALL_TENANTS),
+  searchEntries: loadSearchEntriesAt,
+  recallEntries: loadRecallEntriesAt,
+};
+
+type Tallies = Pick<Sharing, 'sourceTallies'>;
+
 export function sqliteSharing(on: OnHandle): Sharing {
   return {
-    entriesPage: (tenantId, page) => on((db) => loadEntriesPageAt(db, tenantId, page), openStore),
-    entriesWithSignals: (signals, tenantId, page) =>
-      on((db) => loadEntriesWithSignalsAt(db, signals, tenantId, page), openStore),
-    textKeysPage: (tenantId, page) => on((db) => loadEntryTextKeysPageAt(db, tenantId, page), openStore),
-    textKeysHolding: (tenantId, texts) => on((db) => selectTextKeysHoldingAt(db, tenantId, texts), openStore),
-    takenIds: (ids) => on((db) => selectTakenIdsAt(db, ids), openStore),
-    entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids, ALL_TENANTS), openStore),
-    writeSkippingRejected: (fill) => on((db, files) => writeEntriesSkippingRejectedAt(db, files, fill), openStore),
-    sourceTallies: async (tenantId) => on((db) => tallySourcesAt(db, tenantId), openStore),
-    searchEntries: (query, limit, tenantId) => on((db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore),
-    recallEntries: (query, options) => on((db) => loadRecallEntriesAt(db, query, options), openStore),
+    ...bound(on, sharingReadsAt, openStore),
+    ...boundWithFiles<Pick<Sharing, 'writeSkippingRejected'>>(
+      on,
+      { writeSkippingRejected: writeEntriesSkippingRejectedAt },
+      openStore,
+    ),
+    // hippo_peers awaits the tallies on a served store's worker, so this one method answers through a Promise.
+    ...served<Tallies>(bound<Tallies>(on, { sourceTallies: tallySourcesAt }, openStore)),
   };
 }

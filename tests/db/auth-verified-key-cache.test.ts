@@ -3,15 +3,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import {
-  createApiKey,
-  verifyApiKeyCached,
-  VerifiedKeyCache,
-  type VerifiedApiKey,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { verifyApiKeyCached, VerifiedKeyCache } from '../../src/server/api-key.js';
+import type { VerifiedApiKey } from '../../src/core/api-key.js';
 import { authRevoke, authGrant } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { sqliteStore, type HippoStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import type { HippoStore } from '../../src/store/port.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';

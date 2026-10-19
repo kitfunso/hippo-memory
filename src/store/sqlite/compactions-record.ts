@@ -30,7 +30,6 @@ import {
   heldMemoryRows,
   insertStartedCompaction,
   insertSummarizedCompaction,
-  latestCompactionRows,
   latestStartedRows,
   markCompactionDone,
   markCompactionSummarized,
@@ -150,11 +149,6 @@ export function startCompaction(
   const id = generateId('cmp');
   insertStartedCompaction(db, tenantId, { id, ...start, startedAt: at.toISOString() });
   return id;
-}
-
-/** A session's newest record, or null. */
-export function latestCompaction(db: DatabaseSyncLike, tenantId: string, sessionId: string): CompactionRecord | null {
-  return latestCompactionRows(db, tenantId, sessionId).map(toRecord)[0] ?? null;
 }
 
 /** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts

@@ -8,6 +8,7 @@ import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
 import type { Goals } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import type { OnHandle } from './open.js';
+import { bound, type Bodies } from './bound.js';
 
 // The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.
 const GOAL_ID_CHARS = 16;
@@ -46,11 +47,7 @@ export function rowToGoal(row: GoalRow): Goal {
   };
 }
 
-function pushGoalAt(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
-  return pushGoalWithDb(db, opts);
-}
-
-/** Depth-cap enforcer for pushGoalWithDb and resumeGoal: suspends the oldest `overflow` goals; **caller MUST be inside
+/** Depth-cap enforcer for pushGoalAt and resumeGoalAt: suspends the oldest `overflow` goals; **caller MUST be inside
  * a `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
 function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
   // SAFETY: the row comes from the SELECT above, which projects exactly one
@@ -80,7 +77,8 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
   }
 }
 
-function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
+function pushGoalAt(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Goal {
+  const opts: PushGoalOpts = { ...goal, tenantId };
   const id = generateId('g', GOAL_ID_CHARS);
   const createdAt = new Date().toISOString();
   let policyId: string | null = null;
@@ -174,7 +172,7 @@ export function activeGoalsWithPoliciesAt(db: DatabaseSyncLike, opts: GetActiveG
 }
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
-function getSessionGoalsAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
+function getSessionGoalsAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
   // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
   const rows = db
     .prepare(`
@@ -184,7 +182,7 @@ function getSessionGoalsAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal
     WHERE tenant_id = ? AND session_id = ?
     ORDER BY created_at ASC
   `)
-    .all(opts.tenantId, opts.sessionId) as GoalRow[];
+    .all(tenantId, sessionId) as GoalRow[];
   return rows.map(rowToGoal);
 }
 
@@ -273,7 +271,7 @@ const NEGATIVE_OUTCOME_THRESHOLD = 0.3;
 const STRENGTH_BOOST = 1.1;
 const STRENGTH_DECAY = 0.85;
 
-function completeGoalAt(db: DatabaseSyncLike, goalId: string, opts: CompleteGoalOpts): void {
+function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
   const completedAt = new Date().toISOString();
   const score = opts.outcomeScore ?? null;
 
@@ -318,11 +316,11 @@ function completeGoalAt(db: DatabaseSyncLike, goalId: string, opts: CompleteGoal
   });
 }
 
-function suspendGoalAt(db: DatabaseSyncLike, goalId: string): void {
+function suspendGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
   db.prepare(`UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
 }
 
-function resumeGoalAt(db: DatabaseSyncLike, goalId: string): void {
+function resumeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
   withWriteScope(db, 'resume_goal', () => {
     // SAFETY: the row comes from the SELECT above, which projects exactly
     // the session_id, tenant_id, and status columns of goal_stack.
@@ -337,13 +335,16 @@ function resumeGoalAt(db: DatabaseSyncLike, goalId: string): void {
   });
 }
 
+// Goal ids are not tenant-scoped in hippo.db, so complete, suspend and resume ignore the tenant; the api checks the
+// host admin.
+const goalsAt: Bodies<Goals> = {
+  push: pushGoalAt,
+  sessionGoals: getSessionGoalsAt,
+  complete: completeGoalAt,
+  suspend: suspendGoalAt,
+  resume: resumeGoalAt,
+};
+
 export function sqliteGoals(on: OnHandle): Sync<Goals> {
-  return {
-    push: (tenantId, goal) => on((db) => pushGoalAt(db, { ...goal, tenantId })),
-    sessionGoals: (tenantId, sessionId) => on((db) => getSessionGoalsAt(db, { sessionId, tenantId })),
-    // Goal ids are not tenant-scoped in hippo.db, so these ignore the tenant; the api checks the host admin.
-    complete: (_tenantId, goalId, opts) => on((db) => completeGoalAt(db, goalId, opts)),
-    suspend: (_tenantId, goalId) => on((db) => suspendGoalAt(db, goalId)),
-    resume: (_tenantId, goalId) => on((db) => resumeGoalAt(db, goalId)),
-  };
+  return bound(on, goalsAt);
 }

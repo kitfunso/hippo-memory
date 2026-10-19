@@ -14,10 +14,11 @@ import { chunked } from '../../util/chunked.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
 import { placeholders } from '../../util/sql.js';
 import type { CardDetail } from '../port/cards.js';
-import type { Cards } from '../port-groups.js';
+import type { CardCreate, Cards } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
+import { bound, type Bodies } from './bound.js';
 
 interface CardRow {
   id: string;
@@ -194,11 +195,7 @@ function transitionCards(
 
 /** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog.
  * An unknown dependsOn id throws and commits nothing. A repeated dependsOn id is recorded once. */
-function createCardAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  input: { title: string; repo?: string; contract?: string; budget?: number; dependsOn?: string[] },
-): Card {
+function createCardAt(db: DatabaseSyncLike, tenantId: string, input: CardCreate): Card {
   assertTenantId('createCard', tenantId);
   if (input.title.trim() === '') {
     throw new Error('title must not be empty');
@@ -577,25 +574,21 @@ function cardDetailAt(db: DatabaseSyncLike, tenantId: string, id: string): CardD
   };
 }
 
+const cardsAt: Bodies<Cards> = {
+  create: createCardAt,
+  load: loadCardAt,
+  detail: loadCardDetailAt,
+  list: listCardsAt,
+  runs: loadCardRunsAt,
+  claim: claimCardAt,
+  heartbeat: heartbeatCardAt,
+  block: blockCardAt,
+  review: reviewCardAt,
+  complete: completeCardAt,
+  reclaimExpired: reclaimExpiredCardsAt,
+  comment: addCardCommentAt,
+};
+
 export function sqliteCards(on: OnHandle): Sync<Cards> {
-  return {
-    create: (tenantId, input) =>
-      on(
-        (db) => createCardAt(db, tenantId, { ...input, dependsOn: input.dependsOn ? [...input.dependsOn] : undefined }),
-        openStore,
-      ),
-    load: (tenantId, id) => on((db) => loadCardAt(db, tenantId, id), openStore),
-    detail: (tenantId, id) => on((db) => loadCardDetailAt(db, tenantId, id), openStore),
-    list: (tenantId, opts) => on((db) => listCardsAt(db, tenantId, opts), openStore),
-    runs: (tenantId, id) => on((db) => loadCardRunsAt(db, tenantId, id), openStore),
-    claim: (tenantId, id, runtime, sessionId) =>
-      on((db) => claimCardAt(db, tenantId, id, runtime, sessionId), openStore),
-    heartbeat: (tenantId, id, runId) => on((db) => heartbeatCardAt(db, tenantId, id, runId), openStore),
-    block: (tenantId, id, reason, runId) => on((db) => blockCardAt(db, tenantId, id, reason, runId), openStore),
-    review: (tenantId, id, runId) => on((db) => reviewCardAt(db, tenantId, id, runId), openStore),
-    complete: (tenantId, id, outcome, runId) => on((db) => completeCardAt(db, tenantId, id, outcome, runId), openStore),
-    reclaimExpired: (tenantId) => on((db) => reclaimExpiredCardsAt(db, tenantId), openStore),
-    comment: (tenantId, cardId, author, body) =>
-      on((db) => addCardCommentAt(db, tenantId, cardId, author, body), openStore),
-  };
+  return bound(on, cardsAt, openStore);
 }

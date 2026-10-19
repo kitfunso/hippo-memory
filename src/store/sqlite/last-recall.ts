@@ -5,8 +5,12 @@ import { appendAuditEvent } from './audit.js';
 import { strengthenRetrievedInOwnTx, applyOutcomeAt } from './entry-writes.js';
 import { strengthenRetrieved } from './folder-forms.js';
 import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
-import { loadLastRecallAt, saveIndexAt } from './index-and-stats.js';
-import type { Handles } from './open.js';
+import { saveIndexAt } from './index-and-stats.js';
+import { readLastRecall } from './mirrors.js';
+import type { Handles, StoreFiles } from './open.js';
+import type { HippoIndex } from './rows.js';
+import type { EntryTarget } from '../port/entry-writes.js';
+import { bound, boundWithFiles, type FileBodies } from './bound.js';
 import type { LossAversion } from '../../core/memory.js';
 import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites, Sync } from '../port.js';
@@ -20,7 +24,7 @@ interface RecallFinish {
 }
 
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecallAt(db: DatabaseSyncLike, writes: RecallWrites, rules: LossAversion): RecallFinish {
+export function finishRecallAt(db: DatabaseSyncLike, rules: LossAversion, writes: RecallWrites): RecallFinish {
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen
@@ -38,18 +42,32 @@ export function finishRecallAt(db: DatabaseSyncLike, writes: RecallWrites, rules
   });
 }
 
+/** The outcome for the last recall's ids, linked to its trace; `[]` when no recall has run. */
+function applyOutcomeToLastAt(db: DatabaseSyncLike, files: StoreFiles, target: EntryTarget, good: boolean): string[] {
+  const { last_retrieval_ids: ids, last_trace_id: trace } = readLastRecall(db);
+  if (ids.length === 0) return [];
+  return applyOutcomeAt(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
+}
+
+const outcomesAt: FileBodies<Pick<LastRecall, 'applyTracedOutcome' | 'applyOutcomeToLast'>> = {
+  applyTracedOutcome: applyOutcomeAt,
+  applyOutcomeToLast: applyOutcomeToLastAt,
+};
+
+/** The two writes a finished recall makes here, either side of the global store's strengthen. */
+interface RecallEnds {
+  finish(writes: RecallWrites): RecallFinish;
+  saveIndex(index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void;
+}
+
 export function sqliteLastRecall({ on, files }: Handles): Sync<LastRecall> {
+  const { finish } = boundWithFiles<Pick<RecallEnds, 'finish'>>(on, { finish: finishRecallAt });
+  const { saveIndex } = bound<Pick<RecallEnds, 'saveIndex'>>(on, { saveIndex: saveIndexAt }, openStore);
   return {
-    applyTracedOutcome: (outcome, traceId) => on((db, files) => applyOutcomeAt(db, files, outcome, traceId), openStore),
-    applyOutcomeToLast: (target, good) =>
-      on((db, files) => {
-        const { last_retrieval_ids: ids, last_trace_id: trace } = loadLastRecallAt(db);
-        if (ids.length === 0) return [];
-        return applyOutcomeAt(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
-      }, openStore),
+    ...boundWithFiles(on, outcomesAt, openStore),
     finishRecall(writes, globalRoot) {
       const { ids, opts } = writes.strengthen;
-      const { traceId, strengthened } = on((db) => finishRecallAt(db, writes, files));
+      const { traceId, strengthened } = finish(writes);
       if (globalRoot !== undefined) {
         strengthenRetrieved(
           globalRoot,
@@ -60,7 +78,7 @@ export function sqliteLastRecall({ on, files }: Handles): Sync<LastRecall> {
       }
       // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.
       const index = { last_retrieval_ids: [...ids], last_trace_id: traceId === null ? null : String(traceId) };
-      on((db) => saveIndexAt(db, index), openStore);
+      saveIndex(index);
       return traceId;
     },
   };

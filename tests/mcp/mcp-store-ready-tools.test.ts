@@ -9,7 +9,7 @@ import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/m
 import { TOOLS } from '../../src/mcp/tools.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { predictionMirror } from '../../src/core/prediction.js';
 import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';

@@ -59,7 +59,7 @@ export function saveSessionHandoffAt(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
-  key?: ContinuityKey,
+  key?: ContinuityKey | null,
 ): SessionHandoff {
   assertTenantId('saveSessionHandoff', tenantId);
   const stamp = key ? continuityStamp(key) : null;
@@ -83,9 +83,9 @@ export function saveSessionHandoffAt(
 
 function handoffConditions(
   tenantId: string,
-  sessionId: string | undefined,
+  sessionId: string | null | undefined,
   opts: HandoffFilter,
-  key: ContinuityKey | undefined,
+  key: ContinuityKey | null | undefined,
 ) {
   const owned = key ? continuityWhere(key) : null;
   const conditions: string[] = ['tenant_id = ?'];
@@ -130,9 +130,9 @@ function handoffConditions(
 export function loadLatestHandoffAt(
   db: DatabaseSyncLike,
   tenantId: string,
-  sessionId?: string,
+  sessionId?: string | null,
   opts: HandoffFilter = {},
-  key?: ContinuityKey,
+  key?: ContinuityKey | null,
 ): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
   const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
@@ -195,7 +195,7 @@ function replaceTranscriptHandoffAt(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
-  key: ContinuityKey | undefined,
+  key: ContinuityKey | null | undefined,
 ): SessionHandoff | null {
   const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key);
   const newest =
@@ -292,9 +292,10 @@ function buildSessionEndHandoff(
 export function writeSessionEndHandoffAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
-  request: SessionEndHandoffRequest,
+  tenantId: string,
+  request: Omit<SessionEndHandoffRequest, 'tenantId'>,
 ): SessionHandoff | null {
-  const { tenantId, sessionId, evidence, derived = null, key, inPlace } = request;
+  const { sessionId, evidence, derived = null, key, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = loadActiveTaskSnapshotAt(db, files, tenantId, key);

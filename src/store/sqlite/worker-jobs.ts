@@ -4,7 +4,6 @@ import { auditWriteFailureCount } from '../../core/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
-import { loadStoredVectorViewsAt } from './vector-index.js';
 import { errorFields, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
@@ -29,8 +28,8 @@ import {
  *  The two reads that return vectors answer with a pack, which worker-store.ts turns back into the port's Map. */
 function workerOps({ hippoRoot, lossAversionRatio }: WorkerInit, graphs: VectorGraphs | undefined) {
   const handles = handlesOf(hippoRoot, { lossAversionRatio });
-  const packed = (ids: readonly string[]) => packVectors(handles.on((db) => loadStoredVectorViewsAt(db, ids)));
   const sync = sqliteSyncStore(hippoRoot, { lossAversionRatio });
+  const packed = (ids: readonly string[]) => packVectors(sync.vectorViews.storedVectorViews(ids));
   return {
     ...sync,
     vectors: { ...sqliteVectorReads(handles, graphs), storedVectors: packed },

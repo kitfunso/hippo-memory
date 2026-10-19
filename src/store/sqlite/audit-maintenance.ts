@@ -13,7 +13,6 @@ import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
-  memoriesBackingObjectsOn,
   deleteEntriesAutomaticallyAt,
   memoriesBackingObjectsAt,
 } from './delete-and-batch.js';
@@ -25,6 +24,7 @@ import type { StoreFiles, Handles } from './open.js';
 import type { EntryCursor } from '../port/consolidation.js';
 import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit-maintenance.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles, skipEmpty } from './bound.js';
 import type { AuditMaintenance, Sync } from '../port.js';
 import { withUnmigratedDb } from '../../db/open.js';
 
@@ -101,7 +101,7 @@ function judge(
 }
 
 function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
-  const backing = memoriesBackingObjectsOn(db);
+  const backing = memoriesBackingObjectsAt(db);
   const issues: QualityRepairIssue[] = [];
   let total = 0;
   let after: EntryCursor | undefined;
@@ -201,7 +201,7 @@ function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRep
   const ids = plan.issues.filter((issue) => issue.disposition === 'set-aside').map((issue) => issue.id);
   const rows = selectEntriesByIds(db, ids, run.tenantId);
   const entries = ids.flatMap((id) => rows.get(id) ?? []).filter(isRepairCandidate);
-  const issues = new Map(judge(db, run, entries, memoriesBackingObjectsOn(db)).map((issue) => [issue.id, issue]));
+  const issues = new Map(judge(db, run, entries, memoriesBackingObjectsAt(db)).map((issue) => [issue.id, issue]));
   return { ids: new Set(ids), rows, issues };
 }
 
@@ -277,11 +277,17 @@ function repairQualityOnceAt(
 }
 
 export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMaintenance> {
+  const { deleteAutomatically } = boundWithFiles<Pick<AuditMaintenance, 'deleteAutomatically'>>(
+    on,
+    { deleteAutomatically: deleteEntriesAutomaticallyAt },
+    openStore,
+  );
   return {
-    objectBackedIds: () => on((db) => memoriesBackingObjectsAt(db)),
-    deleteAutomatically: (removals, actor) =>
-      removals.length === 0 ? [] : on((db, own) => deleteEntriesAutomaticallyAt(db, own, removals, actor), openStore),
-    pruneAuditRows: (prune) => on((db) => pruneAuditRowsAt(db, prune)),
+    ...bound<Pick<AuditMaintenance, 'objectBackedIds' | 'pruneAuditRows'>>(on, {
+      objectBackedIds: memoriesBackingObjectsAt,
+      pruneAuditRows: pruneAuditRowsAt,
+    }),
+    deleteAutomatically: skipEmpty(deleteAutomatically, () => []),
     // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>
       withUnmigratedDb(files.hippoRoot, !apply, (db) =>

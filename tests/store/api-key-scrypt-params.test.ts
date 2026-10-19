@@ -1,10 +1,11 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { rmSync } from 'node:fs';
-import { insertApiKey, verifyApiKeyCached } from '../../src/store/sqlite/auth.js';
+import { insertApiKey } from '../../src/store/sqlite/auth.js';
+import { verifyApiKeyCached } from '../../src/server/api-key.js';
 import { mintApiKey } from '../../src/core/api-key.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 

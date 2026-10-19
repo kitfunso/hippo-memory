@@ -12,12 +12,13 @@ import { entryIdTakenAt } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import type { DormantSnapshot } from '../port/agent-import.js';
-import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../port/dormant.js';
+import type { DormantRestoreOutcome } from '../port/dormant.js';
 import { updateStatsUnlessBusyAt } from './index-and-stats.js';
-import type { Dormant } from '../port-groups.js';
+import type { Dormant, DormantRestoreRequest } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import { openStore } from './handles.js';
-import { deleteDormantRow, EVERY_SCOPE, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
+import { bound, boundWithFiles, type Bodies } from './bound.js';
+import { deleteDormantRow, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
 
 /** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`;
  * `retentionDays` bounds how long one is kept). Content stays in `dormant_memories` (schema v44) and the `memories` row
@@ -74,26 +75,6 @@ export async function expireDormantBeforeAt(
   return opts.dryRun ? keys.length : await expireInChunks(db, keys, cutoffIso, opts.budget);
 }
 
-/** A tenant's dormant memories whose scope `admit` passes, newest first, read on a handle of its own. */
-function loadDormantMemoriesAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  opts: ListDormantOpts = {},
-  admit: SqlFragment = EVERY_SCOPE,
-): DormantMemory[] {
-  return listDormantRows(db, tenantId, opts, admit);
-}
-
-/** Whether a tenant holds a dormant memory with this id whose scope `admit` passes, read on a handle of its own. */
-function holdsDormantMemoryAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  id: string,
-  admit: SqlFragment = EVERY_SCOPE,
-): boolean {
-  return hasDormantRow(db, tenantId, id, admit);
-}
-
 /** One restore as the store applies it. The two functions are the caller's policy over plain rows; neither is handed
  * the handle. */
 interface DormantRestore {
@@ -148,8 +129,10 @@ function restoreInWriteScope(db: DatabaseSyncLike, hippoRoot: string, restore: D
 function restoreDormantMemoryAt(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
-  restore: DormantRestore,
+  tenantId: string,
+  request: DormantRestoreRequest,
 ): DormantRestoreOutcome {
+  const restore: DormantRestore = { ...request, tenantId };
   let outcome: DormantRestoreOutcome;
   try {
     outcome = restoreInWriteScope(db, hippoRoot, restore);
@@ -182,13 +165,16 @@ function forgetDormantMemoryAt(db: DatabaseSyncLike, forget: DormantForget): boo
   return true;
 }
 
+// The port names the caller's own scope; the rows take the SQL that admits it.
+const dormantReadsAt: Bodies<Pick<Dormant, 'list' | 'holds'>> = {
+  list: (db, tenantId, ownScope, opts) => listDormantRows(db, tenantId, opts, touchableScopeSql('', ownScope)),
+  holds: (db, tenantId, ownScope, id) => hasDormantRow(db, tenantId, id, touchableScopeSql('', ownScope)),
+};
+
 export function sqliteDormant(on: OnHandle): Sync<Dormant> {
   return {
-    list: (tenantId, ownScope, opts) =>
-      on((db) => loadDormantMemoriesAt(db, tenantId, opts, touchableScopeSql('', ownScope))),
-    holds: (tenantId, ownScope, id) =>
-      on((db) => holdsDormantMemoryAt(db, tenantId, id, touchableScopeSql('', ownScope))),
-    restore: (tenantId, request) => on((db, files) => restoreDormantMemoryAt(db, files, { ...request, tenantId })),
+    ...bound(on, dormantReadsAt),
+    ...boundWithFiles<Pick<Dormant, 'restore'>>(on, { restore: restoreDormantMemoryAt }),
     forget(tenantId, ownScope, id, actor) {
       const admit = touchableScopeSql('', ownScope);
       return on((db, files) => {

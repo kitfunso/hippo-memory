@@ -61,16 +61,6 @@ function selectRows(db: DatabaseSyncLike, where: string, ...params: Array<string
   return db.prepare(`SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
 }
 
-/** A session's newest row, as an array of at most one. */
-export function latestCompactionRows(db: DatabaseSyncLike, tenantId: string, sessionId: string): CompactionRow[] {
-  return selectRows(
-    db,
-    'tenant_id = ? AND session_id = ? ORDER BY started_at DESC, id DESC LIMIT 1',
-    tenantId,
-    sessionId,
-  );
-}
-
 export function compactionRowsByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRow[] {
   return selectRows(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId);
 }

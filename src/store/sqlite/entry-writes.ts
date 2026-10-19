@@ -39,6 +39,7 @@ import type { AppendAuditOpts } from '../port/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { updateStatsUnlessBusyAt } from './index-and-stats.js';
 import { openStore } from './handles.js';
+import { boundWithFiles } from './bound.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 
 export interface WriteEntryOptions {
@@ -345,12 +346,12 @@ export function supersedeEntryAt(db: DatabaseSyncLike, tenantId: string, id: str
  * neither. */
 export function sqliteEntryWrites(on: OnHandle): Sync<EntryWrites> {
   return {
-    writeEntry(write) {
-      on((db, files) => writeEntryRowAt(db, files, write), openStore);
-    },
-    applyOutcome(outcome) {
-      return on((db, files) => applyOutcomeAt(db, files, outcome), openStore);
-    },
+    ...boundWithFiles<Pick<EntryWrites, 'writeEntry' | 'applyOutcome'>>(
+      on,
+      { writeEntry: writeEntryRowAt, applyOutcome: applyOutcomeAt },
+      openStore,
+    ),
+    ...boundWithFiles<Pick<EntryWrites, 'archiveRaw'>>(on, { archiveRaw: archiveRawAt }),
     setPinned(pin) {
       return on((db, files) => {
         const entry = commitPinned(db, pin);
@@ -364,9 +365,6 @@ export function sqliteEntryWrites(on: OnHandle): Sync<EntryWrites> {
         commitSupersede(db, { ...write, successor });
         writeEntryMirrorsIn(files, successor);
       });
-    },
-    archiveRaw(archive) {
-      return on((db, files) => archiveRawAt(db, files, archive));
     },
     forget(removal) {
       on((db, files) => {

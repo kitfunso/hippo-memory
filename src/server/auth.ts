@@ -1,10 +1,9 @@
 // Bearer and loopback auth for the HTTP server.
 import { envAllowKeylessLocal, envRequireAuth, envTenant } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
-import { sqliteReach } from '../store/sqlite/store.js';
 import { hasGroup } from '../store/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { verifyApiKeyCached } from '../store/sqlite/auth.js';
+import { verifyApiKeyCached } from './api-key.js';
 import { API_KEY_PREFIX } from '../core/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../api/index.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
@@ -95,7 +94,7 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
 
 type AuthOptions = Pick<
   ResolvedServeOptions,
-  'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'globalStores' | 'callerLimiter'
+  'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'reachOf' | 'callerLimiter'
 > &
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
@@ -316,7 +315,7 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
   const team = !hasGroup(opts.store, 'localFiles');
   // Per request, never cached at serve: the global store can be created while the server runs.
-  const reach = contextReach(sqliteReach(opts.hippoRoot, opts.store, team, opts.globalStores.open), opts.configAt);
+  const reach = contextReach(opts.reachOf(team), opts.configAt);
   // The reader keys on the file's stamp, so each request still sees an edit made while the server runs.
   const config = opts.configAt(opts.hippoRoot);
   const callers = opts.callers;

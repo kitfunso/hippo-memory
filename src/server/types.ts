@@ -4,7 +4,8 @@ import type { Context } from '../api/index.js';
 import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
-import type { GlobalStores } from '../store/sqlite/worker-store.js';
+import type { StoreReach } from '../store/port.js';
+import type { GlobalStores } from '../store/local/global-stores.js';
 import type { ConfigReader } from '../core/config.js';
 import type { CallerState } from '../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
@@ -104,8 +105,10 @@ export interface ServerCounts {
 
 export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
-  /** The operator's global store a request reaches beside `store`. */
+  /** The operator's global stores a request reaches beside `store`, closed when the server stops. */
   globalStores: GlobalStores;
+  /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
+  reachOf: (shared: boolean) => StoreReach;
   /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
   /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */

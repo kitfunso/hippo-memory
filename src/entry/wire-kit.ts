@@ -16,10 +16,6 @@ import type { SearchResult } from '../core/search-types.js';
 import { evalNow } from '../core/ablation.js';
 import type { HybridSearchOptions } from '../search/hybrid.js';
 import type { EmbedOutcome } from '../search/embed-memories.js';
-import { upsertEntryRow } from '../store/sqlite/entry-row.js';
-import type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
-import { batchWriteAndDelete, loadAllEntries, writeEntry } from '../store/sqlite/folder-forms.js';
-import type { openHippoDb } from '../db/index.js';
 import { embedMemory, hybridSearch } from './folder-search.js';
 
 /** A search hit whose entry carries the wire keys. */
@@ -42,22 +38,6 @@ export function createMemoryWire(content: string, options: Partial<CreateMemoryO
   return toWire(
     createMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS }),
   );
-}
-
-export function loadAllEntriesWire(hippoRoot: string): MemoryWire[] {
-  return loadAllEntries(hippoRoot).map(toWire);
-}
-
-export function writeEntryWire(hippoRoot: string, entry: MemoryWire, opts?: WriteEntryOptions): void {
-  writeEntry(hippoRoot, fromWire(entry), opts);
-}
-
-export function upsertEntryRowWire(db: ReturnType<typeof openHippoDb>, entry: MemoryWire): void {
-  upsertEntryRow(db, fromWire(entry));
-}
-
-export function batchWriteAndDeleteWire(hippoRoot: string, toWrite: MemoryWire[], toDeleteIds: string[]): string[] {
-  return batchWriteAndDelete(hippoRoot, toWrite.map(fromWire), toDeleteIds);
 }
 
 export function embedMemoryWire(hippoRoot: string, entry: MemoryWire): Promise<EmbedOutcome> {

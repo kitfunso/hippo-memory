@@ -10,7 +10,7 @@ import { recordTokens } from '../../src/api/index.js';
 import { recordMcpTokens } from '../../src/mcp/request.js';
 import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vector-index.js';
 import { resolveVectorArm } from '../../src/search/vector.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

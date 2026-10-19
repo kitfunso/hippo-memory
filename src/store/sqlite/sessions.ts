@@ -20,6 +20,7 @@ import {
 import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import {
   assertKeyedOnSharedStore,
   continuityStamp,
@@ -36,7 +37,7 @@ function loadFreshActiveTaskSnapshotAt(
   files: StoreFiles,
   tenantId: string,
   opts: { maxAgeMs?: number; sessionId?: string | null } = {},
-  key?: ContinuityKey,
+  key?: ContinuityKey | null,
 ): TaskSnapshot | null {
   return freshActiveSnapshot(loadActiveTaskSnapshotAt(db, files, tenantId, key), opts);
 }
@@ -79,7 +80,7 @@ function closeTaskSnapshotsForSessionAt(
   tenantId: string,
   sessionId: string,
   status: string = 'session-ended',
-  key?: ContinuityKey,
+  key?: ContinuityKey | null,
 ): number {
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
   if (key) continuityStamp(key);
@@ -301,9 +302,17 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
 }
 
 /** The owner stored for the session id, binding `binding.owner` first when none is stored. */
-function sessionOwnerOrBindAt(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
+function sessionOwnerOrBindAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+  owner: string,
+  retentionMs: number,
+): string | null {
   // A bound session is the common case after the first prompt, so it must not take the write lock.
-  return selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding);
+  return (
+    selectSessionOwnerAt(db, tenantId, sessionId) ?? insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
+  );
 }
 
 /** Working Memory: bounded buffer for current-state notes, separate from long-term memory; scoped, importance-ranked,
@@ -442,34 +451,52 @@ function wmClearAt(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemory
   return Number(result.changes ?? 0);
 }
 
+// These write or read the session's mirror files beside hippo.db as well as its rows.
+const sessionMirrorsAt: FileBodies<
+  Pick<
+    Sessions,
+    'saveSnapshot' | 'loadSnapshot' | 'loadFreshSnapshot' | 'clearSnapshot' | 'appendEvent' | 'writeSessionEndHandoff'
+  >
+> = {
+  saveSnapshot: saveActiveTaskSnapshotAt,
+  loadSnapshot: loadActiveTaskSnapshotAt,
+  loadFreshSnapshot: loadFreshActiveTaskSnapshotAt,
+  clearSnapshot: clearActiveTaskSnapshotAt,
+  appendEvent: appendSessionEventAt,
+  writeSessionEndHandoff: writeSessionEndHandoffAt,
+};
+
+const sessionRowsAt: Bodies<
+  Pick<
+    Sessions,
+    | 'closeSessionSnapshots'
+    | 'listEvents'
+    | 'saveHandoff'
+    | 'latestHandoff'
+    | 'handoffById'
+    | 'stampHandoffOutcome'
+    | 'pushWorkingMemory'
+    | 'readWorkingMemory'
+    | 'clearWorkingMemory'
+  >
+> = {
+  closeSessionSnapshots: closeTaskSnapshotsForSessionAt,
+  // The port names the session in camelCase; the event rows keep their column's name.
+  listEvents: (db, tenantId, { sessionId, task, limit }) =>
+    listSessionEventsAt(db, tenantId, { session_id: sessionId, task, limit }),
+  saveHandoff: saveSessionHandoffAt,
+  latestHandoff: loadLatestHandoffAt,
+  handoffById: loadHandoffByIdAt,
+  stampHandoffOutcome: stampHandoffOutcomeAt,
+  pushWorkingMemory: wmPushAt,
+  readWorkingMemory: wmReadAt,
+  clearWorkingMemory: wmClearAt,
+};
+
 export function sqliteSessions(on: OnHandle): Sync<Sessions> {
   return {
-    saveSnapshot: (tenantId, snapshot, key) =>
-      on((db, files) => saveActiveTaskSnapshotAt(db, files, tenantId, snapshot, key ?? undefined), openStore),
-    loadSnapshot: (tenantId, key) =>
-      on((db, files) => loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined), openStore),
-    loadFreshSnapshot: (tenantId, opts, key) =>
-      on((db, files) => loadFreshActiveTaskSnapshotAt(db, files, tenantId, opts, key ?? undefined), openStore),
-    clearSnapshot: (tenantId, clearedStatus) =>
-      on((db, files) => clearActiveTaskSnapshotAt(db, files, tenantId, clearedStatus), openStore),
-    closeSessionSnapshots: (tenantId, sessionId, status, key) =>
-      on((db) => closeTaskSnapshotsForSessionAt(db, tenantId, sessionId, status, key ?? undefined), openStore),
-    appendEvent: (tenantId, event) => on((db, files) => appendSessionEventAt(db, files, tenantId, event), openStore),
-    listEvents: (tenantId, { sessionId, task, limit }) =>
-      on((db) => listSessionEventsAt(db, tenantId, { session_id: sessionId, task, limit }), openStore),
-    saveHandoff: (tenantId, handoff, key) =>
-      on((db) => saveSessionHandoffAt(db, tenantId, handoff, key ?? undefined), openStore),
-    latestHandoff: (tenantId, sessionId, filter, key) =>
-      on((db) => loadLatestHandoffAt(db, tenantId, sessionId ?? undefined, filter, key ?? undefined), openStore),
-    handoffById: (tenantId, id) => on((db) => loadHandoffByIdAt(db, tenantId, id), openStore),
-    stampHandoffOutcome: (tenantId, sessionId, outcome) =>
-      on((db) => stampHandoffOutcomeAt(db, tenantId, sessionId, outcome), openStore),
-    writeSessionEndHandoff: (tenantId, request) =>
-      on((db, files) => writeSessionEndHandoffAt(db, files, { ...request, tenantId }), openStore),
-    pushWorkingMemory: (tenantId, item) => on((db) => wmPushAt(db, tenantId, item), openStore),
-    readWorkingMemory: (tenantId, filter) => on((db) => wmReadAt(db, tenantId, filter), openStore),
-    clearWorkingMemory: (tenantId, filter) => on((db) => wmClearAt(db, tenantId, filter), openStore),
-    bindSessionOwner: (tenantId, sessionId, owner, retentionMs) =>
-      on((db) => sessionOwnerOrBindAt(db, { tenantId, sessionId, owner, retentionMs })),
+    ...boundWithFiles(on, sessionMirrorsAt, openStore),
+    ...bound(on, sessionRowsAt, openStore),
+    ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBindAt }),
   };
 }

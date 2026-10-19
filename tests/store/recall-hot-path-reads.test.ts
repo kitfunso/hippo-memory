@@ -192,6 +192,7 @@ describe('finishRecallAt', () => {
       handlesOf(root).on((db) =>
         finishRecallAt(
           db,
+          {},
           {
             goalLog: [],
             audit: [{ tenantId: 'default', actor: 'cli', op: 'recall' }],
@@ -203,7 +204,6 @@ describe('finishRecallAt', () => {
             },
             strengthen: { ids, opts: { tenantId: 'default', recallBoostAblated: false } },
           },
-          {},
         ),
       ),
     );

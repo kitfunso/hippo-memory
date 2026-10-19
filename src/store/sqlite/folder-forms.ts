@@ -69,7 +69,7 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
 }
 
 export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  return onHandle(hippoRoot, (db) => loadAmbientTalliesAt(db, tenantId, filter, {}), openStore);
+  return onHandle(hippoRoot, (db) => loadAmbientTalliesAt(db, {}, tenantId, filter), openStore);
 }
 
 export function loadEntities(

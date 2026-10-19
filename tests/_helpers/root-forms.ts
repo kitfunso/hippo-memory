@@ -13,7 +13,7 @@ import {
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/sqlite/connectors/slack.js';
 import { promote } from '../../src/api/memories/promote.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { resolveTenantId } from '../../src/server/host-tenant.js';
+import { resolveTenantId } from '../../src/server/boot.js';
 import { apiCtx } from './api-ctx.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
@@ -24,6 +24,7 @@ import {
   openVectorStaging,
   replaceVectorsWithStaged,
   stageVectors,
+  upsertVectors,
 } from '../../src/db/vector-store.js';
 import {
   loadAmbientCandidatesAt,
@@ -72,12 +73,12 @@ import {
 } from '../../src/store/sqlite/handoffs.js';
 import {
   appendConsolidationRunAt,
-  loadLastRecallAt,
   loadSessionDecayContextAt,
   saveIndexAt,
   updateStatsUnlessBusyAt,
   updateStatsAt,
 } from '../../src/store/sqlite/index-and-stats.js';
+import { readLastRecall } from '../../src/store/sqlite/mirrors.js';
 import { waitingOpener, type StoreFiles } from '../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import type { RepairProtection } from '../../src/core/memory-audit.js';
@@ -116,7 +117,6 @@ import {
   loadStoredParticlesAt,
   loadStoredVectorsAt,
   resetStoredParticlesAt,
-  saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
 } from '../../src/store/sqlite/vector-index.js';
@@ -165,7 +165,7 @@ export function loadAmbientCandidates(
   const judge = (e: MemoryEntry) => (admit(e) ? null : ('admission' as const));
   return onHandle(
     hippoRoot,
-    (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, judge, recall, origins),
+    (db) => loadAmbientCandidatesAt(db, tenantId, { recentNeeded, judge, recall, origins }),
     openStore,
   );
 }
@@ -351,7 +351,11 @@ export function loadSessionRawMemories(
   cap?: number,
   origins?: readonly string[],
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadSessionRawMemoriesAt(db, sessionId, tenantId, cap, origins), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => loadSessionRawMemoriesAt(db, { sessionId, tenantId, cap: cap ?? 0, origins }),
+    openStore,
+  );
 }
 
 export function countSessionRawMemories(
@@ -364,7 +368,7 @@ export function countSessionRawMemories(
 ): number {
   return onHandle(
     hippoRoot,
-    (db) => countSessionRawMemoriesAt(db, sessionId, tenantId, scope, ownScope, origins),
+    (db) => countSessionRawMemoriesAt(db, { sessionId, tenantId, scope, ownScope, origins }),
     openStore,
   );
 }
@@ -466,11 +470,11 @@ export function stampHandoffOutcome(
 }
 
 export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHandoffRequest): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => writeSessionEndHandoffAt(db, { hippoRoot }, request), openStore);
+  return onHandle(hippoRoot, (db) => writeSessionEndHandoffAt(db, { hippoRoot }, request.tenantId, request), openStore);
 }
 
 export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  return onHandle(hippoRoot, (db) => loadLastRecallAt(db), openStore);
+  return onHandle(hippoRoot, (db) => readLastRecall(db), openStore);
 }
 
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
@@ -662,7 +666,7 @@ export function saveStoredVectors(
   rows: Iterable<readonly [string, readonly number[]]>,
   model: string,
 ): number {
-  return onHandle(hippoRoot, (db) => saveStoredVectorsAt(db, rows, model));
+  return onHandle(hippoRoot, (db) => upsertVectors(db, rows, model));
 }
 
 export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
@@ -674,7 +678,7 @@ export function resetStoredParticles(hippoRoot: string): number {
 }
 
 export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
-  return onHandle(hippoRoot, (db) => seedStoredParticleAt(db, entry, vector, {}));
+  return onHandle(hippoRoot, (db) => seedStoredParticleAt(db, {}, entry, vector));
 }
 
 export function wmPush(

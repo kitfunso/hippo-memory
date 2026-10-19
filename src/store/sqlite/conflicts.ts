@@ -25,6 +25,7 @@ import type {
 import { openStore } from './handles.js';
 import type { Conflicts } from '../port-groups.js';
 import type { Sync } from '../port.js';
+import { bound, boundWithFiles, type Bodies } from './bound.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -410,9 +411,8 @@ function removeConflictLoser(db: DatabaseSyncLike, tenantId: string, r: Conflict
     .get(loserId, tenantId) as LoserRow | undefined;
   // The claim in this transaction saw the row, so it is there.
   if (!loserRow) return removal;
-  const who = { actor: r.actor, reason: r.reason };
   if (r.fate.kind === 'reject') {
-    removal.rejectedDigest = tombstoneLoserValue(db, r, r.fate.ownScope, loserRow, who, removal);
+    removal.rejectedDigest = tombstoneLoserValue(db, { r, ownScope: r.fate.ownScope, loserRow, removal });
   }
   if (loserRow.kind === 'raw') {
     archiveRawMemory(db, loserId, { reason: r.reason, who: r.actor });
@@ -429,28 +429,32 @@ function recordRejectedLoserValue(
   r: ConflictResolution,
   loserRow: LoserRow,
   digest: string,
-  who: { actor: string; reason: string },
 ): void {
   insertRejectedValue(db, {
     tenantId: loserRow.tenant_id ?? DEFAULT_TENANT_ID,
     digest,
-    reason: who.reason,
-    rejectedBy: who.actor,
+    reason: r.reason,
+    rejectedBy: r.actor,
     rejectedAt: new Date().toISOString(),
     sourceMemoryId: r.loser.id,
     normalizedChars: normalizeValueForRejection(loserRow.content).length,
   });
 }
 
+/** A loser whose value is rejected: its row, the scope its duplicates are swept in, and the removal they go into. */
+interface RejectedLoser {
+  readonly r: ConflictResolution;
+  readonly ownScope: string | null;
+  readonly loserRow: LoserRow;
+  readonly removal: LoserRemoval;
+}
+
 /** Removes the live same-tenant rows `ownScope` may touch whose digest matches the rejected value into `removal`;
  * `keep` is spared. */
 function removeDuplicatesOfRejectedValue(
   db: DatabaseSyncLike,
-  r: ConflictResolution,
-  ownScope: string | null,
-  loserRow: LoserRow,
+  { r, ownScope, loserRow, removal }: RejectedLoser,
   rejectedDigest: string,
-  removal: LoserRemoval,
 ): void {
   // Every live same-tenant row holding the value goes, as `hippo reject` does; `keep` stays because the human chose it.
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
@@ -484,17 +488,10 @@ function removeDuplicatesOfRejectedValue(
 }
 
 /** Tombstones the loser's digest and removes its same-tenant duplicates into `removal`; returns the digest. */
-function tombstoneLoserValue(
-  db: DatabaseSyncLike,
-  r: ConflictResolution,
-  ownScope: string | null,
-  loserRow: LoserRow,
-  who: { actor: string; reason: string },
-  removal: LoserRemoval,
-): string {
-  const rejectedDigest = rejectionDigest(loserRow.content);
-  recordRejectedLoserValue(db, r, loserRow, rejectedDigest, who);
-  removeDuplicatesOfRejectedValue(db, r, ownScope, loserRow, rejectedDigest, removal);
+function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string {
+  const rejectedDigest = rejectionDigest(loser.loserRow.content);
+  recordRejectedLoserValue(db, loser.r, loser.loserRow, rejectedDigest);
+  removeDuplicatesOfRejectedValue(db, loser, rejectedDigest);
   return rejectedDigest;
 }
 
@@ -593,10 +590,11 @@ export function resolvedConflictsAt(
   }[];
 }
 
+const conflictsAt: Bodies<Omit<Conflicts, 'resolve'>> = { list: conflictPageAt, get: conflictByIdAt };
+
 export function sqliteConflicts(on: OnHandle): Sync<Conflicts> {
   return {
-    list: (query) => on((db) => conflictPageAt(db, query), openStore),
-    get: (tenantId, conflictId) => on((db) => conflictByIdAt(db, tenantId, conflictId), openStore),
-    resolve: (tenantId, resolution) => on((db, files) => resolveConflictAt(db, files, tenantId, resolution), openStore),
+    ...bound(on, conflictsAt, openStore),
+    ...boundWithFiles<Pick<Conflicts, 'resolve'>>(on, { resolve: resolveConflictAt }, openStore),
   };
 }

@@ -147,18 +147,8 @@ interface RereadDay {
 }
 
 /** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES} surface and UTC day;
- * returns the tokens booked. */
+ * returns the tokens booked. One transaction, so a refused row leaves the session's earlier re-read rows in place. */
 export function recordRereadsAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  calls: readonly ApiCall[],
-): number {
-  return replaceRereadRows(db, tenantId, sessionId, calls);
-}
-
-/** One transaction, so a refused row leaves the session's earlier re-read rows in place. */
-function replaceRereadRows(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,

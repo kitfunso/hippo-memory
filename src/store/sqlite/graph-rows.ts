@@ -21,11 +21,6 @@ export const GRAPH_RELATION_TYPES: ReadonlySet<RelationType> = new Set<RelationT
 ]);
 
 export type GraphQueueStatus = 'pending' | 'processed' | 'skipped';
-export const VALID_QUEUE_STATES: ReadonlySet<GraphQueueStatus> = new Set<GraphQueueStatus>([
-  'pending',
-  'processed',
-  'skipped',
-]);
 
 export interface EntityRow {
   id: number;

@@ -45,9 +45,9 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
  *  rows (own compaction items, a printed handoff's digest) still count: only injection drops them. */
 export function loadAmbientTalliesAt(
   db: DatabaseSyncLike,
+  rules: LossAversion,
   tenantId: string,
   filter: AmbientStoreFilter,
-  rules: LossAversion,
 ): AmbientTallies {
   const { where, params } = contextRowsWhere(tenantId, filter, [`COALESCE(kind, '') != 'archived'`]);
   const secret = secretTaggedSql();

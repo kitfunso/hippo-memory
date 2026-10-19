@@ -5,6 +5,7 @@ import { grantScope, insertApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeAp
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeyAudit, KeyGrants, KeyMint, KeyRevoke, KeyWrites, SelfKeyMint, Sync } from '../port.js';
 import type { OnHandle } from './open.js';
+import { bound, type Bodies } from './bound.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import type { ScopeGrantChange } from '../port/key-grants.js';
@@ -82,28 +83,26 @@ function auditHighIdAt(db: DatabaseSyncLike): number {
   return row?.seq ?? 0;
 }
 
+const keyWritesAt: Bodies<KeyWrites> = {
+  createApiKey: createKeyAt,
+  createSelfApiKey: createSelfKeyAt,
+  listApiKeys: listApiKeyRows,
+};
+
+const keyAuditAt: Bodies<KeyAudit> = {
+  revokeApiKey: revokeKeyAt,
+  auditEventsAfter: listAuditEventsAfter,
+  auditHighId: auditHighIdAt,
+};
+
 export function sqliteKeyWrites(on: OnHandle): Sync<KeyWrites> {
-  return {
-    createApiKey(mint) {
-      on((db) => createKeyAt(db, mint));
-    },
-    createSelfApiKey: (mint) => on((db) => createSelfKeyAt(db, mint)),
-    listApiKeys: (query) => on((db) => listApiKeyRows(db, query)),
-  };
+  return bound(on, keyWritesAt);
 }
 
 export function sqliteKeyGrants(on: OnHandle): Sync<KeyGrants> {
-  return {
-    changeScopeGrant(change) {
-      on((db) => changeScopeGrantAt(db, change));
-    },
-  };
+  return bound<KeyGrants>(on, { changeScopeGrant: changeScopeGrantAt });
 }
 
 export function sqliteKeyAudit(on: OnHandle): Sync<KeyAudit> {
-  return {
-    revokeApiKey: (revoke) => on((db) => revokeKeyAt(db, revoke)),
-    auditEventsAfter: (opts) => on((db) => listAuditEventsAfter(db, opts)),
-    auditHighId: () => on(auditHighIdAt),
-  };
+  return bound(on, keyAuditAt);
 }

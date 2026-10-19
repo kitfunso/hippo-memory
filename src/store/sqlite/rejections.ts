@@ -24,6 +24,7 @@ import type { EntryCursor } from '../port/consolidation.js';
 import type { AppliedRejection, HoldsValue, LiftedRejection, Rejection, Rejections } from '../port/rejections.js';
 import { RejectedValueError } from '../../core/api-errors.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles } from './bound.js';
 import type { Sync } from '../port.js';
 
 /** Rows a rejection reads per page while it looks for the rows that hold its text. */
@@ -97,14 +98,17 @@ function heldUnderLock(db: DatabaseSyncLike, rejection: Rejection, holdsValue: H
   };
 }
 
-function removeLiveRows(
-  db: DatabaseSyncLike,
-  hippoRoot: string,
-  rejection: Rejection,
-  holdsValue: HoldsValue,
-  { live }: Holders,
-  removal: Removal,
-): void {
+/** One reject's removal pass: the value test, the rows found holding the value under the lock, and what went. */
+interface Sweep {
+  readonly rejection: Rejection;
+  readonly holdsValue: HoldsValue;
+  readonly holders: Holders;
+  readonly removal: Removal;
+}
+
+function removeLiveRows(db: DatabaseSyncLike, hippoRoot: string, sweep: Sweep): void {
+  const { rejection, holdsValue, removal } = sweep;
+  const { live } = sweep.holders;
   const { tenantId, actor, reason } = rejection;
   const { removedIds, removedRawIds, successors } = removal;
   for (const row of live.whole) {
@@ -131,13 +135,9 @@ function removeLiveRows(
 
 // Dormant copies go in the same write scope, so `hippo dormant restore` cannot bring the text back. They have no mirror
 // to purge.
-function removeDormantCopies(
-  db: DatabaseSyncLike,
-  rejection: Rejection,
-  holdsValue: HoldsValue,
-  { dormant }: Holders,
-  removal: Removal,
-): void {
+function removeDormantCopies(db: DatabaseSyncLike, sweep: Sweep): void {
+  const { rejection, holdsValue, removal } = sweep;
+  const { dormant } = sweep.holders;
   const { tenantId } = rejection;
   const { removedIds, dormantSuccessorIds } = removal;
   for (const id of dormant.whole) {
@@ -180,9 +180,9 @@ function removeHolders(
 ): Removal {
   const removal: Removal = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
   withWriteScope(db, 'reject_value', () => {
-    const holders = heldUnderLock(db, rejection, holdsValue, found);
-    removeLiveRows(db, hippoRoot, rejection, holdsValue, holders, removal);
-    removeDormantCopies(db, rejection, holdsValue, holders, removal);
+    const sweep = { rejection, holdsValue, holders: heldUnderLock(db, rejection, holdsValue, found), removal };
+    removeLiveRows(db, hippoRoot, sweep);
+    removeDormantCopies(db, sweep);
     // Still inside the write scope: a failed audit row is reported and the removal commits without it.
     const { tenantId, actor, memoryId } = rejection;
     const { removedIds } = removal;
@@ -255,9 +255,8 @@ function liftRejectionAt(db: DatabaseSyncLike, tenantId: string, digestPrefix: s
 
 export function sqliteRejections(on: OnHandle): Sync<Rejections> {
   return {
-    apply: (rejection) => on((db, files) => applyRejectionAt(db, files, rejection), openStore),
-    lift: (tenantId, digestPrefix, actor) => on((db) => liftRejectionAt(db, tenantId, digestPrefix, actor), openStore),
-    list: (tenantId) => on((db) => listRejectedValues(db, tenantId), openStore),
+    ...boundWithFiles<Pick<Rejections, 'apply'>>(on, { apply: applyRejectionAt }, openStore),
+    ...bound<Pick<Rejections, 'lift' | 'list'>>(on, { lift: liftRejectionAt, list: listRejectedValues }, openStore),
     refusedAmong: (checks) =>
       on((db) =>
         checks.map(({ tenantId, entryId, content }) => {

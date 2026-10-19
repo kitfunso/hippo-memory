@@ -9,12 +9,13 @@ import {
   startCompaction,
 } from './compactions-record.js';
 import type { Log } from '../port/compaction-hooks.js';
-import type { CallerItems, Compactions } from '../port/compactions.js';
+import type { CallerItems, CallerItemsSaved, Compactions } from '../port/compactions.js';
 import type { Sync } from '../port.js';
+import { bound, boundWithFiles, type Bodies } from './bound.js';
 
 /** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,
  * and a `summarised` one is reused. */
-function saveCallerItemsAt(
+function writeCallerItemsAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -50,17 +51,28 @@ function saveCallerItemsAt(
   );
 }
 
+/** A caller's items saved, with each note the save logged so the caller can show it. */
+function saveCallerItemsAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  req: CallerItems,
+): CallerItemsSaved {
+  const notes: string[] = [];
+  const written = writeCallerItemsAt(db, files, tenantId, req, (message) => {
+    notes.push(message);
+  });
+  return { written, notes };
+}
+
+const compactionsAt: Bodies<Omit<Compactions, 'saveCallerItems'>> = {
+  start: startCompaction,
+  markSnapshotSaved,
+};
+
 export function sqliteCompactions(on: OnHandle): Sync<Compactions> {
   return {
-    start: (tenantId, start) => on((db) => startCompaction(db, tenantId, start)),
-    markSnapshotSaved: (tenantId, recordId) => on((db) => markSnapshotSaved(db, tenantId, recordId)),
-    saveCallerItems: (tenantId, req) => {
-      const notes: string[] = [];
-      const note = (message: string): void => {
-        notes.push(message);
-      };
-      const written = on((db, files) => saveCallerItemsAt(db, files, tenantId, req, note));
-      return { written, notes };
-    },
+    ...bound(on, compactionsAt),
+    ...boundWithFiles<Pick<Compactions, 'saveCallerItems'>>(on, { saveCallerItems: saveCallerItemsAt }),
   };
 }

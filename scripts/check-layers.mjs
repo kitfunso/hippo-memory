@@ -4,7 +4,8 @@
 // .layers-baseline.json holds one number, the cap on root files in layers.json, which may fall but never rise.
 // A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
 // So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
-// So does a runtime import from src/api/**, src/connectors/** or src/mcp/** into src/store/sqlite/**, unless SQLITE_PINNED names it with a reason: they take the store from the Context.
+// So does any import, re-export or import() (type-only too) into src/store/sqlite/** from a file outside src/store that
+// SQLITE_ROOTS does not name, and so does naming sqliteSyncStore there: every other file takes its store handed down.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**): the api reads the store through the port and takes shared rules from src/core.
 // So does any import, runtime or type-only, from src/dashboard/** into src/store, src/db or src/cli: the dashboard reads through src/api, with no baseline.
 // layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
@@ -190,21 +191,34 @@ function findApiStoreReaches(srcDir) {
   return [...out.values()];
 }
 
-const SQLITE_FROM = ['api/', 'connectors/', 'dashboard/', 'mcp/'];
 const SQLITE_DIR = 'store/sqlite/';
-// Each runtime import that may stay, as src-relative paths with why.
-const SQLITE_PINNED = [];
+// The composition roots, src-relative, each with why: only these build or publish the SQLite adapter.
+const SQLITE_ROOTS = new Map([
+  ['cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
+  ['server/boot.ts', 'the HTTP server builds its store, its global stores and their reach probe here'],
+  ['server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
+  ['server/dashboard-listener.ts', '`hippo dashboard` builds its worker store and held connection here'],
+  ['server/dashboard-reader-thread.ts', 'the dashboard reader is a thread entry of its own, handed only a folder'],
+  ['index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
+  ['server.ts', 'the ./server entry builds the store of the folder serve() names'],
+  ['entry/importers.ts', 'the published importers build the store of the folder their options name'],
+  ['entry/folder-search.ts', 'the published hybridSearch and physicsSearch build the store of the folder they name'],
+  ['entry/store-kit.ts', 'the ./store-kit entry publishes sqliteStore beside the port'],
+  ['entry/testing.ts', 'the ./testing entry publishes the eval kit, which seeds and reads hippo.db'],
+]);
+// The synchronous adapter is the roots' to hand down; every other file awaits the port.
+const SQLITE_SYNC_NAMES = new Set(['sqliteSyncStore', 'SqliteSyncStore']);
 
-/** Runtime imports from src/api, src/connectors, src/dashboard or src/mcp into src/store/sqlite, one per (file, target), as src-relative paths. */
+/** Imports, re-exports and import() calls, type-only too, from a file outside src/store and the roots into src/store/sqlite, one per (file, target). */
 function findSqliteReaches(srcDir) {
   const root = resolve(srcDir);
   const rel = (p) => relative(root, p).replace(/\\/g, '/');
   const out = new Map();
   for (const file of tsFiles(root)) {
     const from = rel(file);
-    if (!SQLITE_FROM.some((dir) => from.startsWith(dir))) continue;
-    for (const { spec, line, kind } of importsOf(readFileSync(file, 'utf8'))) {
-      const target = kind === 'runtime' ? resolveSpecifier(file, spec) : null;
+    if (from.startsWith('store/')) continue;
+    for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
       const to = target && rel(target);
       if (to?.startsWith(SQLITE_DIR) && !out.has(`${from}\t${to}`)) {
         out.set(`${from}\t${to}`, { file: from, target: to, line });
@@ -214,21 +228,32 @@ function findSqliteReaches(srcDir) {
   return [...out.values()];
 }
 
-/** Unpinned SQLite imports, then pinned entries whose file still exists but no longer imports the target. */
+/** `file:line` of each sqliteSyncStore or SqliteSyncStore identifier outside src/store/sqlite and the roots. */
+function findSyncStoreNames(srcDir) {
+  const root = resolve(srcDir);
+  const out = [];
+  for (const file of tsFiles(root)) {
+    const from = relative(root, file).replace(/\\/g, '/');
+    const text = readFileSync(file, 'utf8');
+    if (from.startsWith(SQLITE_DIR) || SQLITE_ROOTS.has(from) || !text.includes('qliteSyncStore')) continue;
+    const ids = readFacts(text, 'file.ts', ['identifiers']).identifiers.filter((id) => SQLITE_SYNC_NAMES.has(id.name));
+    for (const id of ids) out.push(`src/${from}:${id.line} names ${id.name}; await the port groups instead`);
+  }
+  return out;
+}
+
+/** SQLite imports outside the roots, names of the synchronous adapter, then roots that no longer import it. */
 function sqliteReachProblems(srcDir) {
-  const key = (e) => `${e.file}\t${e.target}`;
   const found = findSqliteReaches(srcDir);
-  const foundKeys = new Set(found.map(key));
-  const pinnedKeys = new Set(SQLITE_PINNED.map(key));
+  const importers = new Set(found.map((e) => e.file));
   return [
     ...found
-      .filter((e) => !pinnedKeys.has(key(e)))
-      .map(
-        (e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; take the store from the Context instead`,
-      ),
-    ...SQLITE_PINNED.filter((e) => existsSync(join(srcDir, e.file)) && !foundKeys.has(key(e))).map(
-      (e) => `pinned: src/${e.file} no longer imports src/${e.target}; delete the entry`,
-    ),
+      .filter((e) => !SQLITE_ROOTS.has(e.file))
+      .map((e) => `src/${e.file}:${e.line} imports src/${e.target}; take the store from a parameter or the Context`),
+    ...findSyncStoreNames(srcDir),
+    ...[...SQLITE_ROOTS.keys()]
+      .filter((f) => existsSync(join(srcDir, f)) && !importers.has(f))
+      .map((f) => `root: src/${f} no longer imports src/${SQLITE_DIR}; delete it from SQLITE_ROOTS`),
   ];
 }
 
@@ -323,7 +348,7 @@ if (cliProblems.length > 0 && !args.includes('--list')) {
 const sqliteProblems = sqliteReachProblems('src');
 if (sqliteProblems.length > 0 && !args.includes('--list')) {
   console.error(
-    'The api, connectors, dashboard or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:',
+    'A file outside src/store and the composition roots reaches the SQLite adapter; a root builds the store and hands it down:',
   );
   for (const p of sqliteProblems) console.error(`  ${p}`);
   process.exit(1);

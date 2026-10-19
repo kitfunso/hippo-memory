@@ -47,16 +47,12 @@ import { errorFields, errorMessage, log } from '../../util/log.js';
 
 const MAX_BACKFILL_PAGE = 500;
 
-function embeddingIndexStateOn(db: DatabaseSyncLike): EmbeddingIndexState {
+/** hippo.db's index state, the meta row and the EXISTS on one handle. */
+export function storedIndexStateAt(db: DatabaseSyncLike): EmbeddingIndexState {
   return {
     storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null,
     hasVectors: hasStoredVectors(db),
   };
-}
-
-/** hippo.db's index state, the meta row and the EXISTS on one handle. */
-export function storedIndexStateAt(db: DatabaseSyncLike): EmbeddingIndexState {
-  return embeddingIndexStateOn(db);
 }
 
 /** Records `identity` as what built the index. */
@@ -66,7 +62,7 @@ function saveIndexIdentityAt(db: DatabaseSyncLike, identity: string): void {
 
 function loadStoredEmbeddingModel(on: OnHandle): string | null {
   try {
-    return on((db) => storedIndexStateAt(db).storedModel);
+    return on(storedIndexStateAt).storedModel;
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     log.debug(`stored embedding model unreadable: ${errorMessage(err)}`, errorFields(err));
@@ -86,7 +82,7 @@ function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, numbe
   if (storedModel) return storedModel;
   return indexedModel({
     storedModel,
-    hasVectors: index ? Object.keys(index).length > 0 : on((db) => storedIndexStateAt(db).hasVectors),
+    hasVectors: index ? Object.keys(index).length > 0 : on(storedIndexStateAt).hasVectors,
   });
 }
 
@@ -134,16 +130,6 @@ export function beginVectorRebuildAt(db: DatabaseSyncLike, release: () => void):
 /** How many memories and vectors hippo.db holds, and how many memories have a vector. */
 export function vectorCoverageAt(db: DatabaseSyncLike): VectorCoverage {
   return { memories: countAllEntriesAt(db), ...countVectors(db) };
-}
-
-/** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how
- * many it wrote. */
-export function saveStoredVectorsAt(
-  db: DatabaseSyncLike,
-  rows: Iterable<readonly [string, readonly number[]]>,
-  model: string,
-): number {
-  return upsertVectors(db, rows, model);
 }
 
 /** Drops the vectors of deleted memories. */
@@ -223,7 +209,7 @@ function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[
 
 export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): VectorWriteResult {
   return withWriteScope(db, 'write_vectors', () => {
-    const replaces = replacesIndex(embeddingIndexStateOn(db), write.model);
+    const replaces = replacesIndex(storedIndexStateAt(db), write.model);
     if (replaces && !write.replaceIndex) return { written: 0, modelMismatch: true };
     const owned = ownedIds(
       db,
@@ -301,9 +287,9 @@ export function resetStoredParticlesAt(db: DatabaseSyncLike, rules: LossAversion
 /** Stores a first particle for `entry`, placed at `vector`; a memory that has one keeps it. */
 export function seedStoredParticleAt(
   db: DatabaseSyncLike,
+  rules: LossAversion,
   entry: MemoryEntry,
   vector: number[],
-  rules: LossAversion,
 ): void {
   if (loadPhysicsState(db, [entry.id]).has(entry.id)) return;
   savePhysicsState(db, [initializeParticle(entry, vector, strengthOptionsOf(rules))]);

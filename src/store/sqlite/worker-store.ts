@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId, currentSignal } from '../../util/request-scope.js';
 import type { HippoStore, LocalFiles, Readiness, StoreGroups, VectorReads, StoreWith } from '../port.js';
+import type { GlobalStores } from '../local/global-stores.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../core/memory.js';
@@ -183,12 +184,6 @@ export function workerSqliteStore(
   };
   offLoopStores.add(store);
   return store;
-}
-
-/** The operator's global stores a server opens beside its own, closed with it. */
-export interface GlobalStores {
-  readonly open: (root: string) => StoreWith<'localFiles'>;
-  readonly close: () => Promise<void>;
 }
 
 /** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server

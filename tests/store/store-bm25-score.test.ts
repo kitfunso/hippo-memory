@@ -16,7 +16,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { loadRecallSearchEntriesFromDb } from '../../src/store/sqlite/search-rows.js';
+import { loadRecallEntriesAt } from '../../src/store/sqlite/search-rows.js';
 import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
@@ -176,9 +176,9 @@ describe('loadSearchEntries bm25_score', () => {
         for (let i = step * 3000; i < size; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
         db.exec('COMMIT');
         lowered = 0;
-        expect(
-          loadRecallSearchEntriesFromDb(db, 'zzzznonexistenttokenxxxxxx', { limit: 200, tenantId: 'default' }),
-        ).toHaveLength(200);
+        expect(loadRecallEntriesAt(db, 'zzzznonexistenttokenxxxxxx', { limit: 200, tenantId: 'default' })).toHaveLength(
+          200,
+        );
         // The LIKE predicate lowers content and tags once per term for each row it tests.
         return lowered / 2;
       });

@@ -11,7 +11,7 @@ import {
 } from '../../src/store/sqlite/entry-reads.js';
 import { loadAmbientTalliesAt } from '../../src/store/sqlite/ambient.js';
 import { pendingVectorIdsAt, pruneOrphanVectorsAt } from '../../src/store/sqlite/vector-index.js';
-import { saveStoredVectorsAt } from '../../src/store/sqlite/vector-index.js';
+import { upsertVectors } from '../../src/db/vector-store.js';
 import { projectTagReads } from '../../src/store/sqlite/project-tags.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -83,7 +83,7 @@ describe('vectors without an index entry', () => {
     const rows = seeded(root, 7);
     const db = openHippoDb(root);
     try {
-      saveStoredVectorsAt(db, [[rows[2].id, [1, 0]]], 'm');
+      upsertVectors(db, [[rows[2].id, [1, 0]]], 'm');
       pruneOrphanVectorsAt(db);
       const ids: string[] = [];
       let after;
@@ -187,7 +187,7 @@ describe('ambient tag tallies', () => {
     const now = new Date(Date.UTC(2026, 0, 2));
     const db = openHippoDb(root);
     try {
-      const sql = loadAmbientTalliesAt(db, 'default', { currentProject: [], now }, {});
+      const sql = loadAmbientTalliesAt(db, {}, 'default', { currentProject: [], now });
       const js = tallyAmbientEntries(rows, now);
       expect(Object.fromEntries(sql.tagCounts)).toEqual(Object.fromEntries(js.tagCounts));
       expect(sql.errors).toBe(js.errors);
