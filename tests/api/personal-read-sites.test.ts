@@ -89,7 +89,15 @@ afterEach(() => {
 describe('owner-taking read sites', () => {
   it('lexical recall: A sees its row, B and no-owner do not', () => {
     const load = (own?: string): string[] =>
-      keysOf(loadRecallSearchEntries(root, 'zebrafish', 50, T, undefined, 'exact', false, undefined, own));
+      keysOf(
+        loadRecallSearchEntries(root, 'zebrafish', {
+          limit: 50,
+          tenantId: T,
+          explicitScopeMode: 'exact',
+          includeSuperseded: false,
+          ownScope: own,
+        }),
+      );
     expect(load(OWN_A)).toEqual(['a', 'team']);
     expect(load(OWN_B)).toEqual(['b', 'team']);
     expect(load()).toEqual(['team']);
@@ -97,7 +105,16 @@ describe('owner-taking read sites', () => {
 
   it("additive recall: a personal scope adds only the caller's own row, a connector scope adds its rows", () => {
     const load = (scope: string, own?: string): string[] =>
-      keysOf(loadRecallSearchEntries(root, 'zebrafish', 50, T, scope, 'additive', false, undefined, own));
+      keysOf(
+        loadRecallSearchEntries(root, 'zebrafish', {
+          limit: 50,
+          tenantId: T,
+          requestedScope: scope,
+          explicitScopeMode: 'additive',
+          includeSuperseded: false,
+          ownScope: own,
+        }),
+      );
     expect(load(OWN_A)).toEqual(['team']);
     expect(load(OWN_A, OWN_A)).toEqual(['a', 'team']);
     expect(load(OWN_B, OWN_A)).toEqual(['a', 'team']);

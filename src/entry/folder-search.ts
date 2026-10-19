@@ -1,9 +1,13 @@
 // The published hybridSearch and physicsSearch: each fills the hippo.db folder default, then calls the domain ranker
-// of the same name, which takes its store from the caller. The eval kit's embedMemory takes a folder the same way.
+// of the same name, which takes its store from the caller. The eval kit's embedMemory and loadRecallSearchEntries take
+// a folder the same way.
 
 import type { MemoryEntry } from '../core/memory.js';
 import type { SearchResult } from '../core/search-types.js';
 import { sqliteStore } from '../store/sqlite/store.js';
+import type { OriginFilter } from '../store/port/types.js';
+import { loadRecallSearchEntries as loadRecallByOptions } from '../store/search-rows.js';
+import type { TenantId } from '../util/tenant.js';
 import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../search/hybrid.js';
 import { loadConfig } from '../core/config.js';
@@ -60,4 +64,41 @@ export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promis
   } finally {
     await store.close();
   }
+}
+
+type PositionalRecallArgs = [
+  hippoRoot: string,
+  query: string,
+  limit: number | undefined,
+  tenantId: TenantId,
+  requestedScope?: string,
+  explicitScopeMode?: 'exact' | 'additive',
+  includeSuperseded?: boolean,
+  originProjects?: OriginFilter,
+  ownScope?: string,
+];
+
+/** The eval kit's positional form of the recall loader, for frozen scripts written against it. It takes one rest
+ * parameter, so the frozen q3b-ranker-floor call stays as written and src declares no long positional list. */
+export function loadRecallSearchEntries(...args: PositionalRecallArgs): MemoryEntry[] {
+  const [
+    hippoRoot,
+    query,
+    limit,
+    tenantId,
+    requestedScope,
+    explicitScopeMode,
+    includeSuperseded,
+    originProjects,
+    ownScope,
+  ] = args;
+  return loadRecallByOptions(hippoRoot, query, {
+    limit,
+    tenantId,
+    requestedScope,
+    explicitScopeMode,
+    includeSuperseded,
+    originProjects,
+    ownScope,
+  });
 }

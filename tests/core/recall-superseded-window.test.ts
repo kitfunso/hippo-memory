@@ -75,7 +75,7 @@ describe('the recall candidate window drops superseded rows before its LIMIT', (
     const root = newRoot();
     const { current, old } = seedVersions(root, oldCreatedFirst);
     const windowIds = (includeSuperseded: boolean): string[] =>
-      loadRecallSearchEntries(root, query, 1, 'default', undefined, 'exact', includeSuperseded).map((e) => e.id);
+      loadRecallSearchEntries(root, query, { limit: 1, tenantId: 'default', includeSuperseded }).map((e) => e.id);
 
     expect(windowIds(true)).toEqual([old.id]);
     expect(windowIds(false)).toEqual([current.id]);

@@ -18,7 +18,7 @@ export { ambientSecretAdmit } from '../core/read-admission.js';
 export { initStore } from '../store/sqlite/handles.js';
 export { loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/folder-forms.js';
 export type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
-export { embedMemory } from './folder-search.js';
+export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
 // Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these forms.
 export type { MemoryWire } from '../core/memory-wire.js';
 export {

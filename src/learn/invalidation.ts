@@ -142,8 +142,8 @@ export async function invalidateMatchingAmong(
   const seen = weakenMatches(live, target, { dryRun: true }).result;
   const ids = [...seen.targets, ...seen.skippedPinned];
   const fresh = new Map<string, MemoryEntry>();
-  // The port reads at most 500 ids a call.
-  for (const chunk of chunked(ids, 500)) {
+  // The port reads at most ID_CHUNK ids a call.
+  for (const chunk of chunked(ids)) {
     for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
   }
   const { result, weakened } = weakenMatches(

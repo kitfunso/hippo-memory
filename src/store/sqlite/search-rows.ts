@@ -257,14 +257,13 @@ export async function loadVectorCandidateEntriesAt(
   const tenant = tenantAnd(spec.tenantId, 'm.tenant_id = ?');
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const params = [...tenant.args, ...scope.params];
-  const matches = await topVectorMatches(
-    db,
-    queryVector,
-    spec.limit ?? 50,
-    `${tenant.sql} AND m.kind != 'archived'${scope.sql}${current}`,
+  const matches = await topVectorMatches(db, {
+    query: queryVector,
+    k: spec.limit ?? 50,
+    where: `${tenant.sql} AND m.kind != 'archived'${scope.sql}${current}`,
     params,
     index,
-  );
+  });
   if (matches.length === 0) return [];
   // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db

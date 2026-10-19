@@ -16,6 +16,7 @@ import {
 } from './protocol.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { handleMcpRequest } from './request.js';
+import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
 import { randomUUID } from 'node:crypto';
 import { currentRequestId, runWithRequestId } from '../util/request-scope.js';
@@ -57,7 +58,7 @@ function isRoutableRequest(v: JsonValue): v is JsonValue & McpRequest {
 function answerUnroutable(frame: JsonValue): void {
   const id = isJsonObject(frame) ? frame.id : undefined;
   if (isJsonString(id) || isJsonNumber(id)) {
-    send({ jsonrpc: '2.0', id, error: { code: -32600, message: 'Invalid Request: method must be a string' } });
+    send(errorReply(id, INVALID_REQUEST, 'Invalid Request: method must be a string'));
     return;
   }
   log.warn('mcp: dropped a frame with no method and no id; it cannot be routed or answered');
@@ -100,9 +101,6 @@ async function exitWhenDrained(): Promise<void> {
   exitAfterFlush(0);
 }
 
-// The code the MCP SDKs give a request that timed out.
-const REQUEST_TIMEOUT_CODE = -32001;
-
 /** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and
  * says whether that answer went out, so a later reply is dropped. */
 function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortController): () => boolean {
@@ -119,9 +117,7 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
     if (!owedReply) return;
     const requestId = currentRequestId();
     const message = `Request timed out: ${name} did not finish within ${ms} ms; a write it started may or may not be saved`;
-    const error: NonNullable<McpResponse['error']> = { code: REQUEST_TIMEOUT_CODE, message };
-    if (requestId !== undefined) error.data = { requestId };
-    send({ jsonrpc: '2.0', id: req.id, error });
+    send(errorReply(req.id, REQUEST_TIMEOUT, message, requestId === undefined ? undefined : { requestId }));
   }, ms);
   // Stdin and the call keep the process alive; this timer alone must not.
   timer.unref();
@@ -161,7 +157,7 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
     parsed = JSON.parse(body);
   } catch (err) {
     log.debug('mcp: answered a frame that is not valid JSON with a parse error', errorFields(err));
-    send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
+    send(errorReply(null, PARSE_ERROR, 'Parse error'));
     return;
   }
   if (!isRoutableRequest(parsed)) {
@@ -223,7 +219,7 @@ export function startStdioLoop(host: McpHost): void {
       if (result.kind === 'oversize') {
         refused = result.remainder;
         log.warn('mcp: refused a frame over the size cap with a parse error');
-        send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error: frame exceeds 1MB' } });
+        send(errorReply(null, PARSE_ERROR, 'Parse error: frame exceeds 1MB'));
         continue;
       }
       // One id per frame, so the error reply and every line logged for the call name the same request.

@@ -51,7 +51,7 @@ async function cmdContext(
     envSessionId: hostSessionId(),
   });
   // No try/finally: a render throw keeps its own exit code and writes no event.
-  await renderContext(hippoRoot, tenantId, args, flags, stdinText, rec);
+  await renderContext({ hippoRoot, tenantId, args, flags, stdinText, rec });
   flushDeliveryRecorder(rec);
 }
 
@@ -117,14 +117,17 @@ function contextGate(
   return { pinnedOnly, session, budget };
 }
 
-async function renderContext(
-  hippoRoot: string,
-  resolvedTenant: string,
-  args: string[],
-  flags: CliFlags,
-  stdinText: string | undefined,
-  rec: DeliveryRecorder | null,
-): Promise<void> {
+interface RenderContextOptions {
+  hippoRoot: string;
+  tenantId: string;
+  args: string[];
+  flags: CliFlags;
+  stdinText: string | undefined;
+  rec: DeliveryRecorder | null;
+}
+
+async function renderContext(options: RenderContextOptions): Promise<void> {
+  const { hippoRoot, tenantId: resolvedTenant, args, flags, stdinText, rec } = options;
   const gate = contextGate(hippoRoot, resolvedTenant, flags, stdinText, rec);
   if (gate === null) return;
   const { pinnedOnly, session, budget } = gate;

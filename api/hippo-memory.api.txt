@@ -1,6 +1,7 @@
 entry/folder-search.d.ts: embedMemory function
 entry/folder-search.d.ts: folderVectorSource function
 entry/folder-search.d.ts: hybridSearch function
+entry/folder-search.d.ts: loadRecallSearchEntries function
 entry/folder-search.d.ts: physicsSearch function
 entry/importers.d.ts: importChatGPT function
 entry/importers.d.ts: importClaude function
@@ -227,6 +228,7 @@ entry/testing.d.ts: isWorthSurfacingWire re-export
 entry/testing.d.ts: loadAllEntries re-export
 entry/testing.d.ts: loadAllEntriesWire function
 entry/testing.d.ts: loadEmbeddingIndex re-export
+entry/testing.d.ts: loadRecallSearchEntries re-export
 entry/testing.d.ts: loadVectorCandidateEntriesAt re-export
 entry/testing.d.ts: recordTokenUse re-export
 entry/testing.d.ts: resolveTenantId re-export

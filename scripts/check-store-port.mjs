@@ -467,7 +467,7 @@ const FOLDER_OPENERS = new Set([
 ]);
 // Only the SQLite adapter holds a folder; each folder form left above it, as `file name`, with why.
 const FOLDER_FORM_EXCEPTIONS = new Map([
-  ['src/store/search-rows.ts loadRecallSearchEntries', 'the frozen q3b-ranker-floor benchmark imports it from dist'],
+  ['src/store/search-rows.ts loadRecallSearchEntries', 'the eval kit serves the frozen q3b-ranker-floor benchmark'],
 ]);
 
 /** The file's top-level functions, declared or bound to a const, each with its node and whether the file exports it. */

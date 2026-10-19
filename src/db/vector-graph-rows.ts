@@ -9,6 +9,7 @@ import {
   EMBEDDING_MODEL_META_KEY,
   rankVectorRows,
   type VectorMatch,
+  type VectorMatchQuery,
   type VectorRow,
 } from './vector-store.js';
 
@@ -173,10 +174,7 @@ function admittedRows(
 export function graphMatches(
   db: DatabaseSyncLike,
   g: GraphRows,
-  query: readonly number[],
-  k: number,
-  where: string,
-  params: readonly (string | number)[],
+  { query, k, where, params }: VectorMatchQuery,
 ): VectorMatch[] | undefined {
   const q = Float32Array.from(query);
   const current = (node: number): boolean => g.nodeOf.get(g.ids[node]) === node;

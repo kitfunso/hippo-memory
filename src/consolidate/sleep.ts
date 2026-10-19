@@ -189,9 +189,11 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
 function logRun(run: SleepRun, decay: DecayOutcome): void {
   const { store, now, result } = run;
   const { survivors } = run;
-  const detectedConflicts = detectConflicts(survivors.rows(), now, run.decayOpts, decay.rescuedIds, (ids) =>
-    survivors.pagesOf(ids),
-  );
+  const detectedConflicts = detectConflicts(survivors.rows(), now, {
+    decayOpts: run.decayOpts,
+    rescuedIds: decay.rescuedIds,
+    pagesOf: (ids) => survivors.pagesOf(ids),
+  });
   store.replaceConflicts(detectedConflicts, now.toISOString());
 
   if (detectedConflicts.length > 0) {

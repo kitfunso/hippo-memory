@@ -411,15 +411,18 @@ function renderWithinBudget(
   return shrinkToFit(fitted.length, floor, budget, render, (r) => r.recallText);
 }
 
+interface FitRecallBlockOptions {
+  ctx: api.Context;
+  query: string;
+  recall: RecallOptions;
+  ranked: RankedRecall;
+  loaded: api.ContinuityBlock;
+  planning: PlanningFallacyOutput;
+}
+
 /** Pays the continuity sections and the plan hint first, then fits the memories into what is left. */
-function fitRecallBlock(
-  ctx: api.Context,
-  query: string,
-  o: RecallOptions,
-  ranked: RankedRecall,
-  loaded: api.ContinuityBlock,
-  planning: PlanningFallacyOutput,
-) {
+function fitRecallBlock(options: FitRecallBlockOptions) {
+  const { ctx, query, recall: o, ranked, loaded, planning } = options;
   const { budget } = o;
   // Sections print ahead of the memories, so they are paid first, after the header; one that does not fit is dropped.
   const sectionBudget = budget - printedTokens(recallHeading(budget, budget, query));
@@ -475,7 +478,7 @@ async function presentRecall(
 ) {
   // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
   const loaded = await loadCliRecallContinuity(ctx, o.setting, o.includeContinuity);
-  const fit = fitRecallBlock(ctx, query, o, ranked, loaded, planning);
+  const fit = fitRecallBlock({ ctx, query, recall: o, ranked, loaded, planning });
   const { results, hints } = fit;
   const text = recallOutput(query, o, fit, ranked.isGlobal);
   const audit = shownRecallRows(
