@@ -602,4 +602,3 @@ export function isSharedStore(hippoRoot: string): boolean {
   sharedStoreRoots.add(key);
   return true;
 }
-

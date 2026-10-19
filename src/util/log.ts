@@ -169,4 +169,3 @@ export function reportCompactionFailure(
 export function errorCode(cause: unknown): string {
   return cause instanceof Error && 'code' in cause ? String(cause.code) : '';
 }
-

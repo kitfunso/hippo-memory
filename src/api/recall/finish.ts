@@ -450,9 +450,7 @@ export function recallLead(
   return {
     // Peeked, never created: a recall that then fails must not LRU-evict a live session.
     recallHistory:
-      sessionId && biasHintEnabled(ctx.config, 'anchoring')
-        ? peekSessionRing(ctx, how.ring, sessionId)
-        : undefined,
+      sessionId && biasHintEnabled(ctx.config, 'anchoring') ? peekSessionRing(ctx, how.ring, sessionId) : undefined,
     // Written first in the recall's own write, so a recall that fails leaves no row.
     leadingAudit: sessionId ? [] : anchorSkippedRows(ctx.config, callerOf(ctx), query),
   };

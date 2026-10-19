@@ -82,7 +82,10 @@ export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle>
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => holder.runRequest(() => answerDashboard(serving, req, res)), { slowWarnMs: undefined, counts });
+    answerRequest(req, res, () => holder.runRequest(() => answerDashboard(serving, req, res)), {
+      slowWarnMs: undefined,
+      counts,
+    });
   });
   setKeepAliveTimeouts(server);
   // The reader thread and the store's workers close before the held connection, so its close is SQLite's last.

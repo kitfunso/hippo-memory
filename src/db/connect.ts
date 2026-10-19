@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
+import { forgetProjectIdentities } from '../core/project-identity.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
@@ -37,6 +38,7 @@ function createStoreFilesOwnerOnly(hippoRoot: string): void {
     fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
     settledSteps.delete(storeKey(hippoRoot));
     sweptThrough.delete(storeKey(hippoRoot));
+    forgetProjectIdentities();
   } catch (err) {
     if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) throw err;
   }

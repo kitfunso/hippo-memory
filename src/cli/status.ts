@@ -5,7 +5,13 @@ import { evalNow } from '../core/ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer, strengthOptionsOf } from '../core/memory.js';
+import {
+  calculateStrength,
+  calculateRewardFactor,
+  resolveConfidence,
+  Layer,
+  strengthOptionsOf,
+} from '../core/memory.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../core/physics.js';
 import { runDoctor, formatDoctor } from '../doctor.js';

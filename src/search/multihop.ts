@@ -2,7 +2,7 @@ import { compareScoresDesc } from '../core/compare.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { fitBudget } from './finalize.js';
 import { search, type SearchOptions } from './bm25-search.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
+import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 
 const PASS1_TOP_K = 10;
 
@@ -20,11 +20,7 @@ function newEntitiesOf(topK: SearchResult[], query: string): string[] {
   return [...entityTags].map((t) => t.split(':')[1]).filter((e) => !queryLower.includes(e.toLowerCase()));
 }
 
-export function multihopSearch(
-  query: string,
-  entries: MemoryEntry[],
-  options: SearchOptions = {},
-): SearchResult[] {
+export function multihopSearch(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
   const budget = options.budget ?? DEFAULT_RECALL_BUDGET;
   // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search() does.
   const fit = (ordered: SearchResult[]): SearchResult[] =>

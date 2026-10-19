@@ -42,13 +42,18 @@ export interface ResolveProjectIdentityOpts {
 
 const MAX_WALK_DEPTH = 64;
 
-// A walk costs milliseconds and a batch write stamps every row, so each path resolves once per process and remote rule;
-// a test that needs a fresh walk names a fresh folder or a stopDir. `remote` is null where no root made the rule count.
+// A walk costs milliseconds and a batch write stamps every row, so each path resolves once per process and remote rule,
+// until this process makes a store. `remote` is null where no root made the rule count.
 const identityCache = new Map<string, { readonly identity: ProjectIdentity; readonly remote: boolean | null }>();
 
 // The global store's config only: a per-store switch would stamp one checkout two ways. Read here, since the published
 // resolveProjectIdentity has callers in every layer and none holds a config; the reader rereads an edited file.
 const globalConfig = configReader();
+
+/** A store this process makes can move any folder under it into a new project, so its maker drops every walk. */
+export function forgetProjectIdentities(): void {
+  identityCache.clear();
+}
 
 function remoteRuleOn(): boolean {
   return globalConfig(resolveGlobalRootDir()).projectIdentity.remote;

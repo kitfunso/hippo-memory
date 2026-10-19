@@ -212,7 +212,11 @@ export interface MvCandidate {
 /** The candidate `entry` ranks as; pinned entries never compete for rescue (never condemned). */
 export function mvCandidate(entry: MemoryEntry, now: Date, rules: StrengthOptions): MvCandidate {
   // Default an undefined tenantId as dag.ts:341 does: keying it "undefined" would split it into its own tenant.
-  return { id: entry.id, tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, features: computeMvFeatures(entry, now, rules) };
+  return {
+    id: entry.id,
+    tenantId: entry.tenantId ?? DEFAULT_TENANT_ID,
+    features: computeMvFeatures(entry, now, rules),
+  };
 }
 
 /** rankNonPinnedByTenant over compact candidates, for the `wanted` ids and every non-finite one; `read` returns the

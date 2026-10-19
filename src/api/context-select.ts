@@ -143,7 +143,12 @@ export function selectPinned(
   const globalEntries = pools.global.entries;
   obs?.offer(localEntries, primaryIsGlobal);
   obs?.offer(globalEntries, true);
-  const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP, strengthOptionsOf(plan.config.runtime));
+  const [localPool, globalPool] = oneCopyPerMemory(
+    localEntries,
+    globalEntries,
+    nowP,
+    strengthOptionsOf(plan.config.runtime),
+  );
   obs?.dropMissing([...localEntries, ...globalEntries], [...localPool, ...globalPool], 'load', 'duplicate');
   const picked: Picked = { items: [], ids: new Set<string>(), used: 0 };
 
@@ -183,10 +188,7 @@ function rankPinned(
       const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, plan.activeScope));
       return {
         entry,
-        score:
-          calculateStrength(entry, nowP, strength) *
-          (isGlobal ? GLOBAL_DISCOUNT : 1) *
-          scopeBoost,
+        score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1) * scopeBoost,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };

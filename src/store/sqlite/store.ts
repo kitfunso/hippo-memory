@@ -388,7 +388,8 @@ function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
         openStore,
       ),
     contextCandidates: (tenantId, filter) => on((db) => loadContextCandidatesAt(db, tenantId, filter), openStore),
-    ambientTallies: (tenantId, filter) => on((db, files) => loadAmbientTalliesAt(db, tenantId, filter, files), openStore),
+    ambientTallies: (tenantId, filter) =>
+      on((db, files) => loadAmbientTalliesAt(db, tenantId, filter, files), openStore),
     newestEntries: (tenantId, limit) => on((db) => newestEntriesAt(db, tenantId, limit), openStore),
     schemaFit: (tenantId, content, tags) => on((db) => schemaFitAt(db, tenantId, content, tags), openStore),
     liveContentsBySourceAndTag: (tenantId, source, tag, exceptSessionId) =>

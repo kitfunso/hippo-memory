@@ -38,6 +38,11 @@ export async function dashboardDetailAfterWrite(
   if (write.changed) snapshots.invalidate();
   if (write.entry === undefined) return null;
   const embedded = snapshots.isEmbedded(write.entry.id);
-  const options = { snapshotId: snapshots.currentId(), nowMs, embedded, lossAversion: { lossAversionRatio: ctx.config.runtime?.lossAversionRatio } };
+  const options = {
+    snapshotId: snapshots.currentId(),
+    nowMs,
+    embedded,
+    lossAversion: { lossAversionRatio: ctx.config.runtime?.lossAversionRatio },
+  };
   return buildMemoryDetail(ctx.store, ctx.tenantId, write.entry, options);
 }

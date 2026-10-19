@@ -1,6 +1,12 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run, and the shared entry
 // write path.
-import { type LossAversion, type MemoryEntry, markRetrieved, entryAfterOutcome, strengthOptionsOf } from '../../core/memory.js';
+import {
+  type LossAversion,
+  type MemoryEntry,
+  markRetrieved,
+  entryAfterOutcome,
+  strengthOptionsOf,
+} from '../../core/memory.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
 import { chunked } from '../../util/chunked.js';
 import { RejectedValueError, ConflictError, NotFoundError } from '../../core/api-errors.js';

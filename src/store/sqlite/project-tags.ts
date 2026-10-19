@@ -81,7 +81,12 @@ function projectTagWrites(
     replaceDormant: (id, entry) => replaceDormantEntry(db, tenantId, id, entry),
     stampOrigins: (rows) => stampOriginProjectsAt(db, tenantId, rows),
     retire: (row, reason, now) => {
-      insertDormantRow(db, { entry: row, strength: calculateStrength(row, now, rules), reason, dormantAt: now.toISOString() });
+      insertDormantRow(db, {
+        entry: row,
+        strength: calculateStrength(row, now, rules),
+        reason,
+        dormantAt: now.toISOString(),
+      });
       deleteEntryRowInTx(db, row, actor);
     },
     audit: (op, metadata) => appendAuditEvent(db, { tenantId, actor, op, metadata }),

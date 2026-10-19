@@ -498,10 +498,7 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
 
 /** The PostCompact store work, on a handle of its own: record the summary, then write its items. Each step is
  * independent. Never throws. */
-export function saveCompactionAt(
-  on: OnHandle,
-  save: Omit<SaveStep, 'db' | 'files' | 'result'>,
-): CompactionSaveOutcome {
+export function saveCompactionAt(on: OnHandle, save: Omit<SaveStep, 'db' | 'files' | 'result'>): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
   let opened = false;
   try {

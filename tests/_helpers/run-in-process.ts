@@ -56,7 +56,6 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
       throw (exited ??= new ExitCalled(Number(code ?? 0)));
     }),
   ];
-  // A spawned hippo starts with no cached project, so one test's project cannot leak into the next.
   try {
     await fn();
   } catch (error) {

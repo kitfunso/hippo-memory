@@ -1,4 +1,10 @@
-import { calculateStrength, CHURN_STALE_TAG, DAG_LEVEL, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
+import {
+  calculateStrength,
+  CHURN_STALE_TAG,
+  DAG_LEVEL,
+  type MemoryEntry,
+  type StrengthOptions,
+} from '../core/memory.js';
 import type { RuntimeSettings } from '../core/config.js';
 import { isOutcomeFastAblated, type RankAblation } from '../core/ablation.js';
 import { pathBoostMultiplier } from './path-context.js';
@@ -94,7 +100,10 @@ export function summaryMultipliers(entry: MemoryEntry, now: Date, s: SummaryScor
   return { deboost: s.deboost, freshness: s.freshness ? summaryFreshnessMultiplier(entry, now) : 1.0 };
 }
 
-export function strengthRecencyMultipliers(entry: MemoryEntry, ctx: Pick<BoostContext, 'now' | 'strength' | 'ablation'>) {
+export function strengthRecencyMultipliers(
+  entry: MemoryEntry,
+  ctx: Pick<BoostContext, 'now' | 'strength' | 'ablation'>,
+) {
   return {
     strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
     recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),

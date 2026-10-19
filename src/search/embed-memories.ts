@@ -278,7 +278,13 @@ async function backfillInStore(
       page.map((e) => embeddingInputText(e)),
       'passage',
     );
-    const result = await writeVectorPage(writes, { model, replaceIndex: rebuild }, page, vectors, rebuild ? strength : undefined);
+    const result = await writeVectorPage(
+      writes,
+      { model, replaceIndex: rebuild },
+      page,
+      vectors,
+      rebuild ? strength : undefined,
+    );
     // Another process rebuilt the index mid-run; every later page
     // would be refused too, after paying the provider for it.
     if (result.modelMismatch) throw new Error(OTHER_MODEL_INDEX);
@@ -287,7 +293,11 @@ async function backfillInStore(
 }
 
 /** embedAll on a store: a model change re-embeds every memory, and the first page written drops the old index. */
-async function embedAllInStore(store: HippoStore, provider: EmbeddingProvider, strength: StrengthOptions): Promise<number> {
+async function embedAllInStore(
+  store: HippoStore,
+  provider: EmbeddingProvider,
+  strength: StrengthOptions,
+): Promise<number> {
   const { vectors: reads, vectorWrites: writes } = store;
   const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
   return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild, strength);
