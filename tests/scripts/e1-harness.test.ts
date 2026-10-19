@@ -111,7 +111,7 @@ describe('E1 driver', () => {
         expect(Date.parse(e.created)).toBeLessThan(Date.parse('2025-06-01T00:00:00.000Z'));
       }
       // Scheduled retrievals strengthened SOMETHING (full arm: writes live).
-      expect(entries.some((e) => e.retrieval_count > 0)).toBe(true);
+      expect(entries.some((e) => e.retrievalCount > 0)).toBe(true);
     });
     expect(storeSeen).toBe(true);
     expect(result.epochs.length).toBe(TINY.numSessions);
@@ -125,10 +125,10 @@ describe('E1 driver', () => {
     await runArmSeed('strengthen-off', 3, TINY, (hippoRoot: string) => {
       const entries = loadAllEntries(hippoRoot, 'default');
       // No strengthening writes anywhere (rev #10: the arm isolates one mechanism).
-      expect(entries.every((e) => e.retrieval_count === 0)).toBe(true);
+      expect(entries.every((e) => e.retrievalCount === 0)).toBe(true);
       // Outcomes still applied via explicit ids (codex round-7 coupling fix):
       // traps received --bad despite strengthening being off.
-      expect(entries.some((e) => (e.outcome_negative ?? 0) > 0)).toBe(true);
+      expect(entries.some((e) => (e.outcomeNegative ?? 0) > 0)).toBe(true);
     });
   });
 
@@ -136,8 +136,8 @@ describe('E1 driver', () => {
     await runArmSeed('all-off', 5, TINY, (hippoRoot: string) => {
       const entries = loadAllEntries(hippoRoot, 'default');
       // Probes ran every epoch over these entries; none of them wrote back.
-      expect(entries.every((e) => e.retrieval_count === 0)).toBe(true);
-      expect(entries.every((e) => e.half_life_days <= 90)).toBe(true); // no +2 accumulation beyond derive caps
+      expect(entries.every((e) => e.retrievalCount === 0)).toBe(true);
+      expect(entries.every((e) => e.halfLifeDays <= 90)).toBe(true); // no +2 accumulation beyond derive caps
     });
   });
 

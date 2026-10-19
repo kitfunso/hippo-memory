@@ -133,5 +133,5 @@ function findBestOverlap(content: string, memories: MemoryEntry[]) {
 }
 
 function countRecentErrors(memories: MemoryEntry[]): number {
-  return memories.filter((m) => m.emotional_valence === 'negative' || m.emotional_valence === 'critical').length;
+  return memories.filter((m) => m.emotionalValence === 'negative' || m.emotionalValence === 'critical').length;
 }

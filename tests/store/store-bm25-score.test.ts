@@ -1,5 +1,5 @@
 /**
- * F1 (v1.7.0) — `MemoryEntry.bm25_score` populated on the FTS path of
+ * F1 (v1.7.0): `MemoryEntry.bm25Score` populated on the FTS path of
  * `loadSearchEntries` and `undefined` everywhere else.
  *
  * loadSearchRows in src/store/search-rows.ts has FOUR query paths:
@@ -57,15 +57,15 @@ describe('loadSearchEntries bm25_score', () => {
     const results = loadSearchEntries(root, 'alpha beta', 200, 'default');
     // FTS path returns rows that match the OR of terms; we expect at least
     // the two alpha rows but tolerate any matching set sized 1+.
-    const matched = results.filter((e) => e.bm25_score !== undefined);
+    const matched = results.filter((e) => e.bm25Score !== undefined);
     expect(matched.length).toBeGreaterThanOrEqual(1);
     for (const e of matched) {
-      expect(e.bm25_score).toEqual(expect.any(Number));
-      expect(Number.isFinite(e.bm25_score!)).toBe(true);
+      expect(e.bm25Score).toEqual(expect.any(Number));
+      expect(Number.isFinite(e.bm25Score!)).toBe(true);
     }
     // Ascending bm25_score (FTS5: lower = better).
     for (let i = 1; i < matched.length; i++) {
-      expect(matched[i - 1]!.bm25_score!).toBeLessThanOrEqual(matched[i]!.bm25_score!);
+      expect(matched[i - 1]!.bm25Score!).toBeLessThanOrEqual(matched[i]!.bm25Score!);
     }
   });
 
@@ -75,9 +75,9 @@ describe('loadSearchEntries bm25_score', () => {
     const results = loadSearchEntries(root, 'alpha beta', 200, 'default');
     const both = results.find((e) => e.content === 'alpha beta');
     const one = results.find((e) => e.content === 'alpha by itself');
-    expect(both?.bm25_score).toBeDefined();
-    expect(one?.bm25_score).toBeDefined();
-    expect(both!.bm25_score!).toBeLessThan(one!.bm25_score!);
+    expect(both?.bm25Score).toBeDefined();
+    expect(one?.bm25Score).toBeDefined();
+    expect(both!.bm25Score!).toBeLessThan(one!.bm25Score!);
   });
 
   it('No-terms path: empty query returns entries with bm25_score undefined', () => {
@@ -85,7 +85,7 @@ describe('loadSearchEntries bm25_score', () => {
     const results = loadSearchEntries(root, '', 200, 'default');
     expect(results.map((e) => e.content)).toEqual(['any content']);
     for (const e of results) {
-      expect(e.bm25_score).toBeUndefined();
+      expect(e.bm25Score).toBeUndefined();
     }
   });
 
@@ -99,7 +99,7 @@ describe('loadSearchEntries bm25_score', () => {
     const results = loadSearchEntries(root, '', 10, 'default');
     expect(results.length).toBe(10);
     for (const e of results) {
-      expect(e.bm25_score).toBeUndefined();
+      expect(e.bm25Score).toBeUndefined();
     }
   });
 
@@ -112,7 +112,7 @@ describe('loadSearchEntries bm25_score', () => {
     // codex P1[3]: stamp valid_from too — createMemory sets it to now() at
     // construction; without alignment, valid_from > created is illegal-state
     // bait for any future schema migration. Cheap future-proofing.
-    probe.valid_from = probe.created;
+    probe.validFrom = probe.created;
     writeEntry(root, probe);
     const reread = loadSearchEntries(root, '', 1, 'default');
     expect(reread.length).toBe(1);
@@ -149,7 +149,7 @@ describe('loadSearchEntries bm25_score', () => {
     expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
     // No FTS path → no bm25_score on any returned row.
     for (const e of results) {
-      expect(e.bm25_score).toBeUndefined();
+      expect(e.bm25Score).toBeUndefined();
     }
   });
 
@@ -158,7 +158,7 @@ describe('loadSearchEntries bm25_score', () => {
     vi.stubEnv('HIPPO_FORCE_LIKE_PATH', '1');
     const results = loadSearchEntries(root, 'alphabet', 200, 'default');
     expect(results.map((e) => e.content)).toEqual(['alphabet soup contents']);
-    expect(results[0]!.bm25_score).toEqual(expect.any(Number));
+    expect(results[0]!.bm25Score).toEqual(expect.any(Number));
   });
 
   // Seeds 6,000 rows, in two transactions, since store size is the thing it varies.
@@ -204,7 +204,7 @@ describe('loadSearchEntries bm25_score', () => {
     // not enter the FTS path (FTS returned 0 → fell through to LIKE → 0
     // → full-store fallback).
     for (const e of results) {
-      expect(e.bm25_score).toBeUndefined();
+      expect(e.bm25Score).toBeUndefined();
     }
   });
 
@@ -218,7 +218,7 @@ describe('loadSearchEntries bm25_score', () => {
     const results = loadSearchEntries(root, 'zzzznonexistenttokenxxxxxx qqqqqqq', 10, 'default');
     expect(results.length).toBe(10);
     for (const e of results) {
-      expect(e.bm25_score).toBeUndefined();
+      expect(e.bm25Score).toBeUndefined();
     }
   });
 });

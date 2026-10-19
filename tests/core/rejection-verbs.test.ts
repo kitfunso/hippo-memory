@@ -401,7 +401,7 @@ describe('cmdSupersede write-order contract', () => {
     // The old row must be untouched: no dangling pointer, still live.
     const oldAfter = readEntry(tmpDir, old.id);
     expect(oldAfter).not.toBeNull();
-    expect(oldAfter!.superseded_by).toBeNull();
+    expect(oldAfter!.supersededBy).toBeNull();
     // And the successor id must not exist.
     expect(readEntry(tmpDir, newEntry.id)).toBeNull();
   });

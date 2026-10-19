@@ -18,7 +18,7 @@ describe('temporal-aware search', () => {
       tags: ['extracted', 'speaker:John', 'topic:basketball'],
     });
     // Backdate the old entry
-    const oldEntry = { ...old, created: '2024-01-01T00:00:00.000Z', last_retrieved: '2024-01-01T00:00:00.000Z' };
+    const oldEntry = { ...old, created: '2024-01-01T00:00:00.000Z', lastRetrieved: '2024-01-01T00:00:00.000Z' };
     writeEntry(hippoRoot, oldEntry);
 
     const recent = createMemory('John scored 35 points in a game', {
@@ -40,7 +40,7 @@ describe('temporal-aware search', () => {
       layer: Layer.Semantic,
       tags: ['extracted', 'speaker:John', 'topic:basketball'],
     });
-    const oldEntry = { ...old, created: '2024-01-01T00:00:00.000Z', last_retrieved: '2024-01-01T00:00:00.000Z' };
+    const oldEntry = { ...old, created: '2024-01-01T00:00:00.000Z', lastRetrieved: '2024-01-01T00:00:00.000Z' };
     writeEntry(hippoRoot, oldEntry);
 
     const recent = createMemory('John scored 35 points in a game', {

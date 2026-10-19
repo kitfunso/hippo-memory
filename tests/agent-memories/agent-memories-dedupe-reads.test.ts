@@ -58,8 +58,8 @@ function seed(): void {
     row(mergedText('[Consolidated from 2 related memories, newest first]', [MERGED, 'Tag every release.']), {
       source: 'consolidation',
     }),
-    row(OTHER_TENANT, { tenant_id: 'acme' }),
-    row(SUPERSEDED, { superseded_by: 'mem_newer' }),
+    row(OTHER_TENANT, { tenantId: 'acme' }),
+    row(SUPERSEDED, { supersededBy: 'mem_newer' }),
   ]);
 }
 

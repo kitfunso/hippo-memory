@@ -277,7 +277,7 @@ describe('producer + sync vetoes (real stores)', () => {
     const cleanRow = rows.find((e) => e.content === CLEAN_ROW)!;
     await expect(copyToGlobal(projA, secretRow.id)).rejects.toThrow(/secret/i);
     const promoted = await copyToGlobal(projA, cleanRow.id);
-    expect(promoted.origin_project).toBe('proj-a');
+    expect(promoted.originProject).toBe('proj-a');
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
@@ -285,20 +285,20 @@ describe('producer + sync vetoes (real stores)', () => {
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
     const globalCopy = await shareMemory(...sharingStores(projA), row.id, { tenantId: 'default', force: true });
-    expect(globalCopy?.origin_project).toBe('proj-a');
+    expect(globalCopy?.originProject).toBe('proj-a');
     expect(globalCopy?.source).toMatch(/^shared:proj-a:/);
   });
 
   it('syncGlobalToLocal skips secrets and other-project rows, preserves origin on copies', () => {
-    writeEntry(globalStore, { ...createMemory(CLEAN_ROW), origin_project: '' });
-    writeEntry(globalStore, { ...createMemory('project b routing table quirk'), origin_project: 'proj-b' });
-    writeEntry(globalStore, { ...createMemory(SECRET_ROW), origin_project: '' });
+    writeEntry(globalStore, { ...createMemory(CLEAN_ROW), originProject: '' });
+    writeEntry(globalStore, { ...createMemory('project b routing table quirk'), originProject: 'proj-b' });
+    writeEntry(globalStore, { ...createMemory(SECRET_ROW), originProject: '' });
 
     const count = syncGlobalToLocal(...sharingStores(projA, globalStore));
     expect(count).toBe(1);
     const local = loadAllEntries(projA, 'default');
     expect(local.map((e) => e.content)).toEqual([CLEAN_ROW]);
-    expect(local[0].origin_project).toBe('');
+    expect(local[0].originProject).toBe('');
 
     const withCross = syncGlobalToLocal(...sharingStores(projA, globalStore), { includeCrossProject: true });
     expect(withCross).toBe(1); // proj-b row now copies; the secret still never does
@@ -306,10 +306,10 @@ describe('producer + sync vetoes (real stores)', () => {
   });
 
   it('ambient context never injects a secret outside its owning project, even cross-project or with isolation off', async () => {
-    writeEntry(globalStore, { ...createMemory(SECRET_ROW, { pinned: true }), origin_project: 'proj-b' });
+    writeEntry(globalStore, { ...createMemory(SECRET_ROW, { pinned: true }), originProject: 'proj-b' });
     writeEntry(globalStore, {
       ...createMemory('a user-global secret sk_vendor_cafe0123456', { pinned: true }),
-      origin_project: '',
+      originProject: '',
     });
     const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 

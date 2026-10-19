@@ -124,8 +124,8 @@ describe('automatic provenance', () => {
         expect(isAutomaticEntry({ ...base, source, tags: [tag] }), `${source} ${tag}`).toBe(true);
       }
     }
-    expect(isAutomaticEntry({ ...base, extracted_from: 'm_1' })).toBe(true);
-    expect(isAutomaticEntry({ ...base, dag_level: 1 })).toBe(true);
+    expect(isAutomaticEntry({ ...base, extractedFrom: 'm_1' })).toBe(true);
+    expect(isAutomaticEntry({ ...base, dagLevel: 1 })).toBe(true);
     expect(
       isAutomaticEntry({ ...base, content: '[Consolidated from 2 related memories]\n\nNever push from the VM' }),
     ).toBe(true);

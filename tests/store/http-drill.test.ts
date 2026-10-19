@@ -50,7 +50,7 @@ describe('GET /v1/recall/drill/:id', () => {
       confidence: 'inferred',
       dagLevel: 2,
     });
-    summary.descendant_count = 3;
+    summary.descendantCount = 3;
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {
       writeEntry(

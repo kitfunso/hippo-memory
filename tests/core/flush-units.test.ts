@@ -48,7 +48,7 @@ const moveOf = (entry: MemoryEntry) => ({
 describe('groupFlush', () => {
   it('joins every op on a unit into one component and orders components by their first queued op', () => {
     const decayA = withId('A');
-    const demotedA = { ...decayA, half_life_days: 3 };
+    const demotedA = { ...decayA, halfLifeDays: 3 };
     const [R, S, M, B, D] = ['R', 'S', 'M', 'B', 'D'].map((id) => withId(id));
 
     const ops = {
@@ -72,9 +72,9 @@ describe('groupFlush', () => {
   });
 
   it("puts a child in its DAG parent's unit when the run removes the parent", () => {
-    const parent = withId('P', { dag_level: 2 });
-    const child = withId('C', { dag_parent_id: 'P' });
-    const other = withId('O', { dag_parent_id: 'Q' });
+    const parent = withId('P', { dagLevel: 2 });
+    const child = withId('C', { dagParentId: 'P' });
+    const other = withId('O', { dagParentId: 'Q' });
     const loadedParent = new Map([
       ['C', 'P'],
       ['O', 'Q'],
@@ -104,7 +104,7 @@ describe('commitInChunks', () => {
     const semantic = createMemory('merged text of five sources', { layer: Layer.Semantic, source: 'consolidation' });
     const largest: FlushComponent = {
       refreshes: [],
-      writes: [semantic, ...sources.map((e) => ({ ...e, half_life_days: 3 }))],
+      writes: [semantic, ...sources.map((e) => ({ ...e, halfLifeDays: 3 }))],
       deletes: retired.map((e) => e.id),
       dormant: [],
     };

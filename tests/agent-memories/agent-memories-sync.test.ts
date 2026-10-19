@@ -81,7 +81,7 @@ describe('agent memory sync', () => {
       kind: 'distilled',
       layer: Layer.Episodic,
       confidence: 'observed',
-      origin_project: 'proj',
+      originProject: 'proj',
     });
     expect(rows[0].source).toBe(
       `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(DEPLOY).slice(0, 16)}`,
@@ -113,7 +113,7 @@ describe('agent memory sync', () => {
     const [now] = liveRows(w.local);
     expect(now.id).not.toBe(old.id);
     expect(now.content).toBe(old.content);
-    expect(readEntry(w.local, old.id)?.superseded_by).toBe(now.id);
+    expect(readEntry(w.local, old.id)?.supersededBy).toBe(now.id);
   });
 
   it('a deleted note is set aside through the real SQL, as source-deleted, and can be restored', async () => {
@@ -180,11 +180,11 @@ describe('agent memory sync', () => {
     expect(claude(sync())).toMatchObject({ adopted: 1, replaced: 1, imported: 0 });
     expect(readEntry(w.local, renamed.id)).toMatchObject({
       source: `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(DEPLOY).slice(0, 16)}`,
-      superseded_by: null,
+      supersededBy: null,
     });
     const staging = liveRows(w.local).find((e) => e.content === STAGING);
-    expect(readEntry(w.local, edited.id)?.superseded_by).toBe(staging?.id);
-    expect(readEntry(w.local, foreign.id)).toMatchObject({ source: 'claude-memory:billing.md', superseded_by: null });
+    expect(readEntry(w.local, edited.id)?.supersededBy).toBe(staging?.id);
+    expect(readEntry(w.local, foreign.id)).toMatchObject({ source: 'claude-memory:billing.md', supersededBy: null });
     expect(liveTexts(w.local)).toEqual([DEPLOY, STAGING].sort());
   });
 
@@ -205,7 +205,7 @@ describe('agent memory sync', () => {
 
     // replaced: the plan still held the row, so the import did reach its supersede step with a stale copy.
     expect(claude(report)).toMatchObject({ replaced: 1, imported: 0 });
-    expect(readEntry(w.local, edited.id)?.superseded_by).toBe(winner.successorId);
+    expect(readEntry(w.local, edited.id)?.supersededBy).toBe(winner.successorId);
     expect(auditCount(w.local, 'supersede')).toBe(1);
   });
 
@@ -216,7 +216,7 @@ describe('agent memory sync', () => {
     note(dir, 'release.md', MAIL);
     const renamed = legacyRow(MAIL, 'old-release-name.md');
     expect(claude(sync())).toMatchObject({ adopted: 1, imported: 0 });
-    expect(readEntry(w.local, renamed.id)?.superseded_by).toBeNull();
+    expect(readEntry(w.local, renamed.id)?.supersededBy).toBeNull();
 
     note(dir, 'mail.md', MAIL.replace('Release', 'Weekly'));
     sync();
@@ -232,7 +232,7 @@ describe('agent memory sync', () => {
 
     sync();
     const copy = liveRows(w.local).find((e) => e.content === MASKED.replace('Release', 'Weekly'));
-    expect(readEntry(w.local, stale.id)?.superseded_by).toBe(copy?.id);
+    expect(readEntry(w.local, stale.id)?.supersededBy).toBe(copy?.id);
     expect(liveRows(w.local).filter((e) => e.content.includes('Weekly'))).toHaveLength(1);
   });
 
@@ -335,7 +335,7 @@ describe('agent memory sync', () => {
     const origin = deriveOriginProject(cwd);
     expect(origin).not.toBe('');
     expect(liveTexts(w.global)).toEqual([DEPLOY, QUEUE].sort());
-    expect(liveRows(w.global).map((e) => e.origin_project)).toEqual([origin, origin]);
+    expect(liveRows(w.global).map((e) => e.originProject)).toEqual([origin, origin]);
     expect(isInitialized(join(cwd, '.hippo'))).toBe(false);
     expect(liveRows(w.local)).toEqual([]);
   });

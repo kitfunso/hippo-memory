@@ -27,12 +27,12 @@ describe('schema v13: DAG fields', () => {
     writeEntry(hippoRoot, fact);
 
     const loadedFact = readEntry(hippoRoot, fact.id);
-    expect(loadedFact!.dag_level).toBe(1);
-    expect(loadedFact!.dag_parent_id).toBe(summary.id);
+    expect(loadedFact!.dagLevel).toBe(1);
+    expect(loadedFact!.dagParentId).toBe(summary.id);
 
     const loadedSummary = readEntry(hippoRoot, summary.id);
-    expect(loadedSummary!.dag_level).toBe(2);
-    expect(loadedSummary!.dag_parent_id).toBeNull();
+    expect(loadedSummary!.dagLevel).toBe(2);
+    expect(loadedSummary!.dagParentId).toBeNull();
   });
 
   it('defaults dag_level to 0 and dag_parent_id to null', () => {
@@ -40,7 +40,7 @@ describe('schema v13: DAG fields', () => {
     writeEntry(hippoRoot, entry);
 
     const loaded = readEntry(hippoRoot, entry.id);
-    expect(loaded!.dag_level).toBe(0);
-    expect(loaded!.dag_parent_id).toBeNull();
+    expect(loaded!.dagLevel).toBe(0);
+    expect(loaded!.dagParentId).toBeNull();
   });
 });

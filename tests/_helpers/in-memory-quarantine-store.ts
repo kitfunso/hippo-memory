@@ -85,7 +85,7 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
   const { memories, records } = copyRows(hippoRoot);
   const owned = (tenantId: string, id: string): MemoryEntry | undefined => {
     const entry = memories.get(id);
-    return entry?.tenant_id === tenantId ? entry : undefined;
+    return entry?.tenantId === tenantId ? entry : undefined;
   };
   const pendingOrRefusal = (tenantId: string, id: string): QuarantineRow | QuarantineRefusal => {
     const row = records.find((r) => r.tenantId === tenantId && r.memoryId === id);
@@ -139,7 +139,7 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
       const found = [...memories.values()].filter(
-        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenant_id === tenantId),
+        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenantId === tenantId),
       );
       return structuredClone(
         found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),

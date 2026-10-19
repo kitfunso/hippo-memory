@@ -12,9 +12,9 @@ export function eligibleSummaryParents(
 ): MemoryEntry[] {
   return parents.filter(
     (p) =>
-      (p.dag_level ?? 0) === DAG_LEVEL.topic &&
-      !p.superseded_by &&
+      (p.dagLevel ?? 0) === DAG_LEVEL.topic &&
+      !p.supersededBy &&
       passesScopeFilterForRecall(p.scope ?? null, scope, own) &&
-      (!project || classifyOriginProject(p.origin_project, project) !== 'cross-project'),
+      (!project || classifyOriginProject(p.originProject, project) !== 'cross-project'),
   );
 }

@@ -152,7 +152,7 @@ function storedKeysInView(
   return storedTextKeys(
     origin === undefined
       ? stored
-      : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'),
+      : stored.filter((e) => classifyOriginProject(e.originProject, origin) !== 'cross-project'),
   );
 }
 
@@ -274,7 +274,7 @@ function previewCapture(
   const refused = rejections.refusedAmong(
     fresh.map((item) => {
       const entry = captureEntry(item, options, baseHalfLifeDays);
-      return { tenantId: entry.tenant_id, entryId: entry.id, content: entry.content };
+      return { tenantId: entry.tenantId, entryId: entry.id, content: entry.content };
     }),
   );
   let next = 0;
@@ -309,5 +309,5 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
     baseHalfLifeDays,
   });
   if (options.originProject === undefined) return created;
-  return { ...created, origin_project: projectId(options.originProject) };
+  return { ...created, originProject: projectId(options.originProject) };
 }

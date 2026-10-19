@@ -72,8 +72,8 @@ export function familyUnits(
     if (parentId && removing.has(parentId)) units.push([id, parentId]);
   };
   for (const { id } of refreshes) link(id, loadedParent(id));
-  for (const entry of writes) link(entry.id, entry.dag_parent_id);
+  for (const entry of writes) link(entry.id, entry.dagParentId);
   for (const id of deletes) link(id, loadedParent(id));
-  for (const move of dormant) link(move.entry.id, move.entry.dag_parent_id);
+  for (const move of dormant) link(move.entry.id, move.entry.dagParentId);
   return units;
 }

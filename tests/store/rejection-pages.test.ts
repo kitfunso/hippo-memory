@@ -43,7 +43,7 @@ const SPECIAL: ReadonlyMap<number, Partial<MemoryEntry>> = new Map<number, Parti
   [700, { content: VALUE, kind: 'raw' }],
   [800, { content: mergedText(HEADER, [VALUE, OTHER]), source: 'consolidation', layer: Layer.Semantic }],
   [900, { content: VALUE, scope: 'personal:private:someone-else' }],
-  [1000, { content: VALUE, tenant_id: 'other' }],
+  [1000, { content: VALUE, tenantId: 'other' }],
 ]);
 
 function seed(): string[] {

@@ -50,7 +50,7 @@ export class SleepRows {
 
   private loaded(row: MemoryEntry): MemoryEntry {
     const halfLife = this.preview.get(row.id);
-    return halfLife === undefined ? row : { ...row, half_life_days: halfLife };
+    return halfLife === undefined ? row : { ...row, halfLifeDays: halfLife };
   }
 }
 

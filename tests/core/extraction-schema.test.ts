@@ -17,12 +17,12 @@ describe('extracted_from field', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
     });
-    expect(entry.extracted_from).toBeNull();
+    expect(entry.extractedFrom).toBeNull();
 
     writeEntry(dir, entry);
     const loaded = readEntry(dir, entry.id);
     expect(loaded).not.toBeNull();
-    expect(loaded!.extracted_from).toBeNull();
+    expect(loaded!.extractedFrom).toBeNull();
   });
 
   it('persists through write/read cycle', () => {
@@ -38,11 +38,11 @@ describe('extracted_from field', () => {
       layer: Layer.Semantic,
       extractedFrom: source.id,
     });
-    expect(extracted.extracted_from).toBe(source.id);
+    expect(extracted.extractedFrom).toBe(source.id);
 
     writeEntry(dir, extracted);
     const loaded = readEntry(dir, extracted.id);
     expect(loaded).not.toBeNull();
-    expect(loaded!.extracted_from).toBe(source.id);
+    expect(loaded!.extractedFrom).toBe(source.id);
   });
 });

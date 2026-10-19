@@ -18,8 +18,8 @@ beforeEach(() => {
 
 function at(entry: MemoryEntry, iso: string): MemoryEntry {
   entry.created = iso;
-  entry.valid_from = iso;
-  entry.last_retrieved = iso;
+  entry.validFrom = iso;
+  entry.lastRetrieved = iso;
   return entry;
 }
 
@@ -31,12 +31,12 @@ function seed(): void {
   const rawGap = at(createMemory('slack: owner and ref missing', { kind: 'raw' }), '2026-04-01T11:00:00.000Z');
   const oldFact = at(createMemory('belief: tier is 100'), '2026-03-15T00:00:00.000Z');
   const newFact = at(createMemory('belief: tier is 120', { extractedFrom: raw.id }), '2026-04-01T10:30:00.000Z');
-  oldFact.superseded_by = newFact.id;
+  oldFact.supersededBy = newFact.id;
   const oldManual = at(createMemory('belief: seats are 5'), '2026-03-16T00:00:00.000Z');
   const newManual = at(createMemory('belief: seats are 6'), '2026-04-02T00:00:00.000Z');
-  oldManual.superseded_by = newManual.id;
+  oldManual.supersededBy = newManual.id;
   const dangling = at(createMemory('belief: replaced by a deleted row'), '2026-03-17T00:00:00.000Z');
-  dangling.superseded_by = 'mem_gone';
+  dangling.supersededBy = 'mem_gone';
   const lone = at(createMemory('belief: never corrected'), '2026-03-18T00:00:00.000Z');
   for (const e of [raw, rawGap, oldFact, newFact, oldManual, newManual, dangling, lone]) writeEntry(root, e);
   for (let i = 0; i < 30; i++) writeEntry(root, createMemory(`filler memory number ${i}`));

@@ -75,8 +75,8 @@ describe('Slack connector — provenance coverage parity', () => {
     for (const e of slackEntries) {
       expect(e.owner).not.toBeNull();
       expect(e.owner).toMatch(/^user:U/);
-      expect(e.artifact_ref).not.toBeNull();
-      expect(e.artifact_ref?.startsWith('slack://')).toBe(true);
+      expect(e.artifactRef).not.toBeNull();
+      expect(e.artifactRef?.startsWith('slack://')).toBe(true);
     }
   });
 

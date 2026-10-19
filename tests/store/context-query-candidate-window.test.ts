@@ -28,7 +28,7 @@ function fill(root: string, count: number, label: string, origin: (i: number) =>
     for (let i = 0; i < count; i++) {
       writeEntryDbOnly(db, {
         ...createMemory(`${label} note ${i} about the deploy step w${i % 97}`, { tags: [`t${i % 7}`] }),
-        origin_project: origin(i),
+        originProject: origin(i),
       });
     }
     db.exec('COMMIT');
@@ -128,7 +128,7 @@ describe('contextGet with a query reads the FTS candidate window', () => {
     });
 
     expect(result.entries).toHaveLength(OWN_ROWS);
-    expect(result.entries.every((r) => r.entry.origin_project === 'proj')).toBe(true);
+    expect(result.entries.every((r) => r.entry.originProject === 'proj')).toBe(true);
     expect(counter.calls()).toBe(OWN_ROWS);
   });
 });

@@ -122,7 +122,7 @@ describe('CLI end to end', () => {
     const work = mkdirs('home', 'projectless');
     initStore(globalStore);
     const entry = createMemory('projectless-orbit release staging flag', { pinned: true });
-    entry.origin_project = '';
+    entry.originProject = '';
     writeEntry(globalStore, entry);
     const foreignFolder = mkdirs('other-project');
     saveActiveTaskSnapshot(globalStore, 'default', {
@@ -163,7 +163,7 @@ describe('CLI end to end', () => {
     expect(autoContext).not.toContain('Foreign global event trail');
     expect(autoContext).not.toContain('Resume unrelated global action');
 
-    const before = readEntry(globalStore, entry.id)!.retrieval_count;
+    const before = readEntry(globalStore, entry.id)!.retrievalCount;
     const beforeDb = openHippoDb(globalStore);
     const priorTraces = beforeDb.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all().length;
     closeHippoDb(beforeDb);
@@ -173,7 +173,7 @@ describe('CLI end to end', () => {
     expect(queriedContext).not.toContain('Foreign global snapshot summary');
     expect(queriedContext).not.toContain('Foreign global event trail');
     expect(queriedContext).not.toContain('Resume unrelated global action');
-    expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
+    expect(readEntry(globalStore, entry.id)!.retrievalCount).toBe(before + 1);
     const db = openHippoDb(globalStore);
     try {
       const contextAudits = queryAuditEvents(db, { tenantId: 'default', op: 'recall' }).filter(
@@ -203,7 +203,7 @@ describe('CLI end to end', () => {
     } finally {
       closeHippoDb(missedDb);
     }
-    expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
+    expect(readEntry(globalStore, entry.id)!.retrievalCount).toBe(before + 1);
     expect(fs.existsSync(path.join(work, '.hippo'))).toBe(false);
     const contextJson = JSON.parse(await runCliOut(['context', 'projectless-orbit', '--format', 'json'], opts));
     expect(contextJson.memories[0].global).toBe(true);

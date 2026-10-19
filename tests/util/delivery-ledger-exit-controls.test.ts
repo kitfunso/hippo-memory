@@ -209,7 +209,7 @@ describe('negative controls', () => {
       });
     }
     const target = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', {
-      origin_project: 'some-other-project',
+      originProject: 'some-other-project',
       created: '2026-07-01T00:00:00.000Z',
     });
     fire(p, 'n8', P1);

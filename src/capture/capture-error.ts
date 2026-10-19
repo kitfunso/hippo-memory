@@ -97,7 +97,7 @@ export async function storeLesson(
   const write =
     caller === undefined
       ? { entry, actor: CLI_ACTOR }
-      : { entry: { ...entry, origin_project: caller.originProject }, actor: caller.actor };
+      : { entry: { ...entry, originProject: caller.originProject }, actor: caller.actor };
   await store.entryWrites.writeEntry(write);
   return 'stored';
 }

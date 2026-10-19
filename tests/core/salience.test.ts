@@ -3,9 +3,9 @@ import { type MemoryEntry, type EmotionalValence } from '../../src/core/memory.j
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { computeSalience } from '../../src/core/salience.js';
 
-function mem(content: string, opts: { tags?: string[]; emotional_valence?: EmotionalValence } = {}): MemoryEntry {
+function mem(content: string, opts: { tags?: string[]; emotionalValence?: EmotionalValence } = {}): MemoryEntry {
   const entry = createMemory(content, { tags: opts.tags ?? [] });
-  if (opts.emotional_valence) entry.emotional_valence = opts.emotional_valence;
+  if (opts.emotionalValence) entry.emotionalValence = opts.emotionalValence;
   return entry;
 }
 
@@ -46,7 +46,7 @@ describe('computeSalience', () => {
     const recent = Array.from({ length: 5 }, (_, i) =>
       mem(`Error ${i}: connection timeout on database`, {
         tags: ['error'],
-        emotional_valence: 'negative',
+        emotionalValence: 'negative',
       }),
     );
     const result = computeSalience('Error 5: connection timeout on database', ['error'], recent);

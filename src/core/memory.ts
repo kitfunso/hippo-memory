@@ -31,67 +31,67 @@ export type MemoryKind = (typeof MEMORY_KINDS)[number];
 // chronologically.
 // A markdown rebuild keeps legacy offsets as written, so importers should normalize on write.
 
-// Row fields stay snake_case because they match the stored and wire shape; option types are camelCase.
+// Fields are camelCase in memory; src/core/memory-wire.ts keeps the snake_case keys of every stored and wire format.
 export interface MemoryEntry {
   id: string;
   created: string; // ISO 8601
-  last_retrieved: string; // ISO 8601
-  retrieval_count: number;
+  lastRetrieved: string; // ISO 8601
+  retrievalCount: number;
   strength: number; // 0..1, current computed strength
-  half_life_days: number;
+  halfLifeDays: number;
   layer: Layer;
   tags: string[];
-  emotional_valence: EmotionalValence;
-  schema_fit: number; // 0..1
+  emotionalValence: EmotionalValence;
+  schemaFit: number; // 0..1
   source: string;
-  outcome_score: number | null; // null = no feedback yet
-  outcome_positive: number; // cumulative positive outcome count
-  outcome_negative: number; // cumulative negative outcome count
-  conflicts_with: string[];
+  outcomeScore: number | null; // null = no feedback yet
+  outcomePositive: number; // cumulative positive outcome count
+  outcomeNegative: number; // cumulative negative outcome count
+  conflictsWith: string[];
   pinned: boolean;
   confidence: ConfidenceLevel; // epistemic confidence tier
   content: string; // the actual memory text
   parents: string[]; // IDs of source memories this was consolidated from (may be empty)
   starred: boolean; // user-bookmarked
-  trace_outcome: TraceOutcome; // final outcome for trace-layer entries; null otherwise
-  source_session_id: string | null; // set by auto-promote and session digests; null for everything else
-  valid_from: string; // ISO 8601 timestamp when this belief became true
-  superseded_by: string | null; // ID of the memory that replaced this one; null = current
-  extracted_from: string | null;
-  dag_level: number; // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
-  dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
+  traceOutcome: TraceOutcome; // final outcome for trace-layer entries; null otherwise
+  sourceSessionId: string | null; // set by auto-promote and session digests; null for everything else
+  validFrom: string; // ISO 8601 timestamp when this belief became true
+  supersededBy: string | null; // ID of the memory that replaced this one; null = current
+  extractedFrom: string | null;
+  dagLevel: number; // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
+  dagParentId: string | null; // ID of parent summary node in the DAG; null = root level
   // Cached DAG metadata for level-2+ summaries so recall can bound scope without re-walking; always 0 / null on leaves
   // and facts.
-  descendant_count?: number;
-  earliest_at?: string | null;
-  latest_at?: string | null;
+  descendantCount?: number;
+  earliestAt?: string | null;
+  latestAt?: string | null;
   /**
    * True when a child was invalidated, superseded, forgotten or archived since the last rebuild; sleep clears it.
    * Always false below level 2.
    */
-  summary_dirty?: boolean;
+  summaryDirty?: boolean;
   /** ISO 8601 time of the last successful rebuild, or null if never rebuilt. */
-  last_rebuilt_at?: string | null;
+  lastRebuiltAt?: string | null;
   /** Count of successful rebuilds: 0 at the first buildDag write, bumped by each rebuild. */
-  rebuild_count?: number;
+  rebuildCount?: number;
   /** Reserved: ISO 8601 time the level-3 entity profile was built; only set on dag_level=3 rows. */
-  dag_level_3_built_at?: string | null;
+  dagLevel3BuiltAt?: string | null;
   // Provenance envelope
   kind: MemoryKind; // raw | distilled | superseded | archived
   scope: string | null; // e.g. 'team:eng', 'project:foo'; null = global
   owner: string | null; // 'user:<id>' or 'agent:<id>'
-  artifact_ref: string | null; // URI to source artifact (slack://, gh://, file://)
-  tenant_id: string; // 'default' for single-tenant deployments
+  artifactRef: string | null; // URI to source artifact (slack://, gh://, file://)
+  tenantId: string; // 'default' for single-tenant deployments
   /**
    * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write),
    * denied by ambient context.
    *  Stamped at write time by stampOriginProject (src/store/entry-row.ts); undefined only before the first write. */
-  origin_project?: string | null;
+  originProject?: string | null;
   /**
    * Raw FTS5 bm25() from the search path (negative, lower = better); set only for a non-empty query the FTS join
    * answered.
    *  Not comparable to the JS scorer in src/search/bm25.ts, so read it as rank metadata only. */
-  bm25_score?: number;
+  bm25Score?: number;
 }
 
 /** Named dag_level values; level 0 is a raw leaf. */
@@ -152,13 +152,13 @@ export function applyLossAversionRatio(
  * half-life.
  */
 export function calculateRewardFactor(
-  entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>,
+  entry: Pick<MemoryEntry, 'outcomePositive' | 'outcomeNegative'>,
   ablation: StrengthAblation = NO_STRENGTH_ABLATION,
 ): number {
   // EVAL-ONLY ablation (see ablation.ts): the slow outcome channel.
   if (ablation.outcomeSlow) return 1.0;
-  const pos = entry.outcome_positive ?? 0;
-  const neg = entry.outcome_negative ?? 0;
+  const pos = entry.outcomePositive ?? 0;
+  const neg = entry.outcomeNegative ?? 0;
   if (pos === 0 && neg === 0) return 1.0;
   const ratio = (pos - neg) / (pos + neg + 1);
   return 1 + REWARD_SLOPE * ratio;
@@ -177,11 +177,11 @@ export const RETRIEVAL_BOOST_SLOPE = 0.1;
  * correction outranks pinning.
  */
 export function netWrong(
-  entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>,
+  entry: Pick<MemoryEntry, 'outcomePositive' | 'outcomeNegative'>,
   ablation: StrengthAblation = NO_STRENGTH_ABLATION,
 ): number {
   if (ablation.outcomeSlow || ablation.decay) return 0;
-  return Math.max(0, (entry.outcome_negative ?? 0) - (entry.outcome_positive ?? 0));
+  return Math.max(0, (entry.outcomeNegative ?? 0) - (entry.outcomePositive ?? 0));
 }
 
 /** What calculateStrength reads, so a caller can score a row without loading its text. */
@@ -189,12 +189,12 @@ export type StrengthInputs = Pick<
   MemoryEntry,
   | 'pinned'
   | 'created'
-  | 'last_retrieved'
-  | 'half_life_days'
-  | 'retrieval_count'
-  | 'emotional_valence'
-  | 'outcome_positive'
-  | 'outcome_negative'
+  | 'lastRetrieved'
+  | 'halfLifeDays'
+  | 'retrievalCount'
+  | 'emotionalValence'
+  | 'outcomePositive'
+  | 'outcomeNegative'
 >;
 
 /**
@@ -231,11 +231,11 @@ export function calculateStrength(
 
   // EVAL-ONLY ablation (see ablation.ts): anchor decay at creation so clock resets from earlier unflagged runs cannot
   // leak in.
-  const lastRetrieved = new Date(ablation.recallBoost ? entry.created : entry.last_retrieved);
+  const lastRetrieved = new Date(ablation.recallBoost ? entry.created : entry.lastRetrieved);
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
   const rewardFactor = calculateRewardFactor(entry, ablation);
-  const effectiveHalfLife = entry.half_life_days * rewardFactor;
+  const effectiveHalfLife = entry.halfLifeDays * rewardFactor;
 
   // Guard: zero half-life causes 0/0 = NaN in the exponent
   if (effectiveHalfLife <= 0) return 0.0;
@@ -247,9 +247,9 @@ export function calculateStrength(
 
   const retrievalBoost = retrievalBoostFor(entry, ablation);
 
-  const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotional_valence] ?? 1.0;
+  const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotionalValence] ?? 1.0;
   const ratio = options.lossAversionRatio === undefined ? undefined : parseLossAversionRatio(options.lossAversionRatio);
-  const emotionalMultiplier = applyLossAversionRatio(entry.emotional_valence, baseMultiplier, ratio);
+  const emotionalMultiplier = applyLossAversionRatio(entry.emotionalValence, baseMultiplier, ratio);
 
   const raw = decay * retrievalBoost * emotionalMultiplier;
 
@@ -282,7 +282,7 @@ function decayExponentFor(options: DecayOptions, daysSince: number, halfLifeDays
 function retrievalBoostFor(entry: StrengthInputs, ablation: StrengthAblation): number {
   return ablation.recallBoost || netWrong(entry, ablation) > 0
     ? 1.0
-    : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
+    : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrievalCount + 1);
 }
 
 /** A memory counts as high schema fit strictly above this. */
@@ -308,11 +308,11 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
     hl *= ERROR_TAG_HALF_LIFE_FACTOR;
   }
 
-  if (entry.schema_fit !== undefined && entry.schema_fit > HIGH_SCHEMA_FIT) {
+  if (entry.schemaFit !== undefined && entry.schemaFit > HIGH_SCHEMA_FIT) {
     hl *= HIGH_FIT_HALF_LIFE_FACTOR;
   }
 
-  if (entry.schema_fit !== undefined && entry.schema_fit < LOW_SCHEMA_FIT) {
+  if (entry.schemaFit !== undefined && entry.schemaFit < LOW_SCHEMA_FIT) {
     hl *= LOW_FIT_HALF_LIFE_FACTOR;
   }
 
@@ -326,9 +326,9 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
 export function applyOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
   const updated: MemoryEntry = {
     ...entry,
-    outcome_score: good ? 1 : -1,
-    outcome_positive: (entry.outcome_positive ?? 0) + (good ? 1 : 0),
-    outcome_negative: (entry.outcome_negative ?? 0) + (good ? 0 : 1),
+    outcomeScore: good ? 1 : -1,
+    outcomePositive: (entry.outcomePositive ?? 0) + (good ? 1 : 0),
+    outcomeNegative: (entry.outcomeNegative ?? 0) + (good ? 0 : 1),
   };
   updated.strength = calculateStrength(updated);
   return updated;
@@ -347,14 +347,14 @@ export function generateId(prefix: string = 'mem'): string {
 }
 
 /** What the confidence facets read, so a caller can derive them from a row it loaded only in part. */
-export type ConfidenceInputs = Pick<MemoryEntry, 'pinned' | 'confidence' | 'last_retrieved'>;
+export type ConfidenceInputs = Pick<MemoryEntry, 'pinned' | 'confidence' | 'lastRetrieved'>;
 
 // Days without a retrieval before trust lapses; pinned and verified rows are exempt by policy.
 const AGED_OUT_AFTER_DAYS = 30;
 
 function isAgedOut(entry: ConfidenceInputs, now: Date): boolean {
   if (entry.pinned || entry.confidence === 'verified') return false;
-  const lastRetrieved = new Date(entry.last_retrieved);
+  const lastRetrieved = new Date(entry.lastRetrieved);
   return (now.getTime() - lastRetrieved.getTime()) / DAY_MS > AGED_OUT_AFTER_DAYS;
 }
 
@@ -411,19 +411,17 @@ export const KEEP_PAIRS: readonly KeepPair[] = AGENT_MEMORY_TOOLS.map((t) => ({
   sourcePrefix: toolSourcePrefix(t.id),
 }));
 
-export function isKeptForGood(entry: Pick<MemoryEntry, 'tags' | 'source' | 'superseded_by'>): boolean {
+export function isKeptForGood(entry: Pick<MemoryEntry, 'tags' | 'source' | 'supersededBy'>): boolean {
   return (
-    !entry.superseded_by &&
-    KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix))
+    !entry.supersededBy && KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix))
   );
 }
 export function canAutoDelete(
-  entry: Pick<MemoryEntry, 'pinned' | 'kind' | 'tags' | 'source' | 'superseded_by'>,
+  entry: Pick<MemoryEntry, 'pinned' | 'kind' | 'tags' | 'source' | 'supersededBy'>,
 ): boolean {
   return !entry.pinned && entry.kind !== 'raw' && !isKeptForGood(entry);
 }
 
-/** Options are camelCase; `MemoryEntry` keeps the snake_case stored-row names. */
 export interface CreateMemoryOptions {
   layer?: Layer;
   tags?: string[];
@@ -460,44 +458,44 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
-  const emotional_valence = options.emotionalValence ?? inferValence(tags);
-  const schema_fit = options.schemaFit ?? DEFAULT_SCHEMA_FIT;
+  const emotionalValence = options.emotionalValence ?? inferValence(tags);
+  const schemaFit = options.schemaFit ?? DEFAULT_SCHEMA_FIT;
 
-  const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, { tags, schema_fit });
+  const halfLifeDays = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, { tags, schemaFit });
 
   const entry: MemoryEntry = {
     id: generateId(layer === Layer.Semantic ? 'sem' : 'mem'),
     created: now,
-    last_retrieved: now,
-    retrieval_count: 0,
+    lastRetrieved: now,
+    retrievalCount: 0,
     strength: 1.0,
-    half_life_days,
+    halfLifeDays,
     layer,
     tags,
-    emotional_valence,
-    schema_fit,
+    emotionalValence,
+    schemaFit,
     source: options.source ?? 'cli',
-    outcome_score: null,
-    outcome_positive: 0,
-    outcome_negative: 0,
-    conflicts_with: [],
+    outcomeScore: null,
+    outcomePositive: 0,
+    outcomeNegative: 0,
+    conflictsWith: [],
     pinned: options.pinned ?? false,
     confidence: options.confidence ?? 'verified',
     content,
     parents: [],
     starred: false,
-    trace_outcome: options.traceOutcome ?? null,
-    source_session_id: options.sourceSessionId ?? null,
-    valid_from: options.validFrom ?? now,
-    superseded_by: null,
-    extracted_from: options.extractedFrom ?? null,
-    dag_level: options.dagLevel ?? 0,
-    dag_parent_id: options.dagParentId ?? null,
+    traceOutcome: options.traceOutcome ?? null,
+    sourceSessionId: options.sourceSessionId ?? null,
+    validFrom: options.validFrom ?? now,
+    supersededBy: null,
+    extractedFrom: options.extractedFrom ?? null,
+    dagLevel: options.dagLevel ?? 0,
+    dagParentId: options.dagParentId ?? null,
     kind: options.kind ?? 'distilled',
     scope: options.scope ?? null,
     owner: options.owner ?? null,
-    artifact_ref: options.artifactRef ?? null,
-    tenant_id: options.tenantId ?? DEFAULT_TENANT_ID,
+    artifactRef: options.artifactRef ?? null,
+    tenantId: options.tenantId ?? DEFAULT_TENANT_ID,
   };
 
   entry.strength = calculateStrength(entry);
@@ -535,12 +533,12 @@ export function createSuccessor(
     confidence: 'verified',
     tenantId: opts.tenantId,
     scope: old.scope,
-    sourceSessionId: old.source_session_id,
+    sourceSessionId: old.sourceSessionId,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   });
   // A legacy null origin has nothing to carry, so the store stamps it from its own location.
-  if (isJsonString(old.origin_project)) {
-    next.origin_project = old.origin_project;
+  if (isJsonString(old.originProject)) {
+    next.originProject = old.originProject;
   }
   return next;
 }
@@ -647,15 +645,15 @@ export function markRetrieved(
   const ablation = options.ablation ?? NO_STRENGTH_ABLATION;
   if (ablation.recallBoost) return entries;
   return entries.map((e) => {
-    if (e.superseded_by) return e;
+    if (e.supersededBy) return e;
     const wrong = netWrong(e, ablation) > 0;
     // Confidence stays untouched: it is an epistemic tier, not a recency signal.
     const updated: MemoryEntry = {
       ...e,
-      retrieval_count: e.retrieval_count + 1,
+      retrievalCount: e.retrievalCount + 1,
       // A wrong memory keeps both, since last_retrieved is the decay anchor.
-      last_retrieved: wrong ? e.last_retrieved : now.toISOString(),
-      half_life_days: wrong ? e.half_life_days : e.half_life_days + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
+      lastRetrieved: wrong ? e.lastRetrieved : now.toISOString(),
+      halfLifeDays: wrong ? e.halfLifeDays : e.halfLifeDays + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
     };
     updated.strength = calculateStrength(updated, now, { ablation });
     return updated;

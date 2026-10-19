@@ -1,0 +1,5 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`HTTP memory wire golden > GET /v1/memories body, plain and with explain=1 1`] = `"{"results":[{"id":"mem-golden-recall","content":"the haddock wire golden reads back through recall","score":1,"layer":"episodic","strength":0.8125}],"total":1,"tokens":13,"windowSize":200,"suppressionSummary":{"totalCandidates":1,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}"`;
+
+exports[`HTTP memory wire golden > GET /v1/memories body, plain and with explain=1 2`] = `"{"results":[{"id":"mem-golden-recall","content":"the haddock wire golden reads back through recall","score":1,"layer":"episodic","strength":1,"rerankPipeline":"api"}],"total":1,"tokens":13,"windowSize":200,"suppressionSummary":{"totalCandidates":1,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}"`;

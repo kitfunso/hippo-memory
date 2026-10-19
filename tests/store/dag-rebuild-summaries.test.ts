@@ -102,7 +102,7 @@ function makeSummary(
     confidence: 'inferred',
     dagLevel: 2,
   });
-  s.tenant_id = tenantId;
+  s.tenantId = tenantId;
   return s;
 }
 
@@ -119,7 +119,7 @@ function makeChild(
     dagLevel: 1,
     dagParentId: parentId,
   });
-  c.tenant_id = tenantId;
+  c.tenantId = tenantId;
   return c;
 }
 
@@ -477,9 +477,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Smoke test the function actually applies the patch in one round-trip
     const result = applyRebuildResult(hippoRoot, summary, {
       content: 'one-shot-content-xyzabc',
-      descendant_count: 0,
-      earliest_at: null,
-      latest_at: null,
+      descendantCount: 0,
+      earliestAt: null,
+      latestAt: null,
       bumpRebuildCount: true,
       zeroChildren: false,
       actor: 'test',
@@ -671,9 +671,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const result = applyRebuildResult(hippoRoot, summary, {
       content: 'should-not-land',
-      descendant_count: 5,
-      earliest_at: '2026-05-25T10:00:00Z',
-      latest_at: '2026-05-25T11:00:00Z',
+      descendantCount: 5,
+      earliestAt: '2026-05-25T10:00:00Z',
+      latestAt: '2026-05-25T11:00:00Z',
       bumpRebuildCount: true,
       zeroChildren: false,
       actor: 'test',
@@ -760,7 +760,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const rejectedContent = 'this-exact-content-was-already-rejected-XYZ';
-    rejectValue(hippoRoot, summary.tenant_id, rejectedContent);
+    rejectValue(hippoRoot, summary.tenantId, rejectedContent);
 
     // Fetcher regenerates content byte-identical to the tombstoned value —
     // the deterministic-summarization scenario the AT1 P1a fix guards.

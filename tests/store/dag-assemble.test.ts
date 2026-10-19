@@ -34,11 +34,11 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
     sourceSessionId: sessionId,
     tags: opts.tags ?? [],
-    dagLevel: opts.dag_level ?? 0,
-    dagParentId: opts.dag_parent_id ?? undefined,
+    dagLevel: opts.dagLevel ?? 0,
+    dagParentId: opts.dagParentId ?? undefined,
   });
   if (opts.created) e.created = opts.created;
   if (opts.strength !== undefined) e.strength = opts.strength;
@@ -53,7 +53,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     dagLevel: 2,
     tags: ['dag-summary'],
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
   });
   return s;
 }
@@ -76,7 +76,7 @@ describe('loadSessionRawMemories', () => {
     b.created = '2026-01-02T00:00:00.000Z';
     const c = makeRaw('third message text', 'sess-b');
     c.created = '2026-01-03T00:00:00.000Z';
-    const d = makeRaw('other tenant content', 'sess-a', { tenant_id: 'other' });
+    const d = makeRaw('other tenant content', 'sess-a', { tenantId: 'other' });
     d.created = '2026-01-04T00:00:00.000Z';
     [a, b, c, d].forEach((e) => writeEntry(root, e));
     const got = loadSessionRawMemories(root, 'sess-a', 'default');
@@ -85,7 +85,7 @@ describe('loadSessionRawMemories', () => {
 
   it('excludes superseded rows', () => {
     const a = makeRaw('superseded content body', 'sess-x');
-    a.superseded_by = 'mem_succ';
+    a.supersededBy = 'mem_succ';
     writeEntry(root, a);
     expect(loadSessionRawMemories(root, 'sess-x', 'default')).toHaveLength(0);
   });
@@ -124,16 +124,16 @@ describe('api.assemble', () => {
 
   it('4. older raws under shared parent get substituted; tail kept raw', async () => {
     const summary = makeSummary('topic alpha rollup');
-    summary.descendant_count = 4;
-    summary.earliest_at = '2026-01-01T00:00:00.000Z';
-    summary.latest_at = '2026-01-04T00:00:00.000Z';
+    summary.descendantCount = 4;
+    summary.earliestAt = '2026-01-01T00:00:00.000Z';
+    summary.latestAt = '2026-01-04T00:00:00.000Z';
     writeEntry(root, summary);
 
     // 4 older raws under parent
     for (let i = 0; i < 4; i++) {
       const e = makeRaw(`older detail ${i}`, 'sess-s', {
-        dag_level: 1,
-        dag_parent_id: summary.id,
+        dagLevel: 1,
+        dagParentId: summary.id,
       });
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
@@ -184,7 +184,7 @@ describe('api.assemble', () => {
   });
 
   it('6. tenant isolation: rows from another tenant are not loaded', async () => {
-    const e = makeRaw('cross tenant content', 'sess-x', { tenant_id: 'other' });
+    const e = makeRaw('cross tenant content', 'sess-x', { tenantId: 'other' });
     writeEntry(root, e);
     const r = await assemble(ctxFor(root, 'default'), 'sess-x');
     expect(r.items).toEqual([]);
@@ -212,8 +212,8 @@ describe('api.assemble', () => {
     writeEntry(root, summary);
     for (let i = 0; i < 3; i++) {
       const e = makeRaw(`older detail ${i}`, 'sess-no-sub', {
-        dag_level: 1,
-        dag_parent_id: summary.id,
+        dagLevel: 1,
+        dagParentId: summary.id,
       });
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);

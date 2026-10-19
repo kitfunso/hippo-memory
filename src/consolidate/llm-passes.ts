@@ -39,16 +39,16 @@ type SleepLlm = ReturnType<typeof sleepLlm>;
 /** Counts the survivors extraction could read and returns the first `limit` of them, holding no others. */
 function extractionBatch(run: SleepRun, limit: number): MemoryEntry[] {
   const extractedFromIds = new Set<string>();
-  for (const e of run.survivors.rows()) if (e.extracted_from) extractedFromIds.add(e.extracted_from);
+  for (const e of run.survivors.rows()) if (e.extractedFrom) extractedFromIds.add(e.extractedFrom);
   const batch: MemoryEntry[] = [];
   let candidates = 0;
   for (const e of run.survivors.rows()) {
     const candidate =
       e.layer === Layer.Episodic &&
-      !e.superseded_by &&
+      !e.supersededBy &&
       !extractedFromIds.has(e.id) &&
       !keptAsWritten(e) &&
-      e.trace_outcome === null &&
+      e.traceOutcome === null &&
       e.source !== 'auto-promote' &&
       isReusable(e);
     if (!candidate) continue;
@@ -120,11 +120,11 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   const extractedFacts: MemoryEntry[] = [];
   let facts = 0;
   for (const e of run.survivors.rows()) {
-    if (!(e.tags.includes('extracted') && e.dag_level === DAG_LEVEL.extracted && !e.superseded_by && isReusable(e))) {
+    if (!(e.tags.includes('extracted') && e.dagLevel === DAG_LEVEL.extracted && !e.supersededBy && isReusable(e))) {
       continue;
     }
     facts++;
-    if (!e.dag_parent_id) extractedFacts.push(e);
+    if (!e.dagParentId) extractedFacts.push(e);
   }
   if (facts < 3) return;
   try {

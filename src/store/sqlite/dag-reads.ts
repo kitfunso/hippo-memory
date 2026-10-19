@@ -74,10 +74,12 @@ function keyedLevel(
 ): LevelRead {
   const byParent = new Map<string, ChildKey[]>();
   for (const chunk of chunked([...parents])) {
-    // SAFETY: the SELECT names exactly ChildKey's four columns, and the WHERE keeps dag_parent_id a string.
+    // SAFETY: the SELECT names ChildKey's four fields, origin_project aliased to the entry's name; the WHERE keeps
+    // dag_parent_id a string.
     const keys = db
       .prepare(
-        `SELECT id, dag_parent_id, scope, origin_project FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ` +
+        `SELECT id, dag_parent_id, scope, origin_project AS originProject FROM memories ` +
+          `WHERE dag_parent_id IN (${marks(chunk)}) AND ` +
           `${TENANT_IS} ORDER BY created ASC, id ASC`,
       )
       .all(...chunk, walk.tenantId) as ChildKey[];
@@ -111,10 +113,11 @@ function countedLevel(
 ): LevelRead | null {
   const perParent = new Map<string, number>();
   for (const chunk of chunked([...parents])) {
-    // SAFETY: the SELECT names exactly ChildGroup's four fields, and the WHERE keeps dag_parent_id a string.
+    // SAFETY: the SELECT names ChildGroup's four fields, origin_project aliased to the entry's name; the WHERE keeps
+    // dag_parent_id a string.
     const groups = db
       .prepare(
-        `SELECT dag_parent_id, scope, origin_project, COUNT(*) AS n FROM memories ` +
+        `SELECT dag_parent_id, scope, origin_project AS originProject, COUNT(*) AS n FROM memories ` +
           `WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? GROUP BY dag_parent_id, scope, ` +
           `origin_project`,
       )
@@ -204,7 +207,7 @@ function summaryWithDescendantsAt(
   const summary = selectEntriesByIds(db, [id], tenantId).get(id);
   if (!summary) return null;
   const readable = (row: DescendantOrigin): boolean => descendantAdmits(row, admit);
-  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dag_level ?? 0) >= minSummaryLevel);
+  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
   if (page) return pagedDescendants(db, { tenantId, summary, depth, rows: page.rows, admit: readable }, walked);
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([id]);

@@ -34,9 +34,9 @@ export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext):
   let unlinked = 0;
 
   for (const entry of entries) {
-    const level = entry.dag_level ?? 0;
+    const level = entry.dagLevel ?? 0;
     byLevel.set(level, (byLevel.get(level) ?? 0) + 1);
-    if (level === DAG_LEVEL.extracted && !entry.dag_parent_id) unlinked++;
+    if (level === DAG_LEVEL.extracted && !entry.dagParentId) unlinked++;
   }
 
   if (isStats) {
@@ -59,25 +59,25 @@ function printDagStats(byLevel: ReadonlyMap<number, number>, unlinked: number): 
 function groupByParent(entries: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
   const byParent = new Map<string, MemoryEntry[]>();
   for (const e of entries) {
-    if (!e.dag_parent_id) continue;
-    const list = byParent.get(e.dag_parent_id) ?? [];
+    if (!e.dagParentId) continue;
+    const list = byParent.get(e.dagParentId) ?? [];
     list.push(e);
-    byParent.set(e.dag_parent_id, list);
+    byParent.set(e.dagParentId, list);
   }
   return byParent;
 }
 
 function printDagTree(entries: readonly MemoryEntry[]): void {
   // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
-  const profiles = entries.filter((e) => e.dag_level === DAG_LEVEL.entity);
-  const l2List = entries.filter((e) => e.dag_level === DAG_LEVEL.topic);
-  const orphanL2 = l2List.filter((e) => !e.dag_parent_id);
+  const profiles = entries.filter((e) => e.dagLevel === DAG_LEVEL.entity);
+  const l2List = entries.filter((e) => e.dagLevel === DAG_LEVEL.topic);
+  const orphanL2 = l2List.filter((e) => !e.dagParentId);
   const childL2ByProfile = new Map<string, typeof l2List>();
   for (const l2 of l2List) {
-    if (!l2.dag_parent_id) continue;
-    const list = childL2ByProfile.get(l2.dag_parent_id) ?? [];
+    if (!l2.dagParentId) continue;
+    const list = childL2ByProfile.get(l2.dagParentId) ?? [];
     list.push(l2);
-    childL2ByProfile.set(l2.dag_parent_id, list);
+    childL2ByProfile.set(l2.dagParentId, list);
   }
 
   const childrenByParent = groupByParent(entries);

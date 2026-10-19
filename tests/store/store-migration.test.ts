@@ -35,8 +35,8 @@ describe('schema v3: trace columns', () => {
     writeEntry(tmpDir, t);
     const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === t.id);
     expect(loaded).toBeDefined();
-    expect(loaded!.trace_outcome).toBe('success');
-    expect(loaded!.source_session_id).toBe('sess-1');
+    expect(loaded!.traceOutcome).toBe('success');
+    expect(loaded!.sourceSessionId).toBe('sess-1');
     expect(loaded!.layer).toBe(Layer.Trace);
   });
 
@@ -45,8 +45,8 @@ describe('schema v3: trace columns', () => {
     const m = createMemory('plain episodic memory content', { layer: Layer.Episodic });
     writeEntry(tmpDir, m);
     const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === m.id);
-    expect(loaded!.trace_outcome).toBeNull();
-    expect(loaded!.source_session_id).toBeNull();
+    expect(loaded!.traceOutcome).toBeNull();
+    expect(loaded!.sourceSessionId).toBeNull();
   });
 
   // T-crit: the v2 → v3 migration on existing data.
@@ -84,7 +84,7 @@ describe('schema v3: trace columns', () => {
     const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === 'mem_legacy_v2');
     expect(loaded).toBeDefined();
     expect(loaded!.content).toContain('pre-migration content body');
-    expect(loaded!.trace_outcome).toBeNull();
-    expect(loaded!.source_session_id).toBeNull();
+    expect(loaded!.traceOutcome).toBeNull();
+    expect(loaded!.sourceSessionId).toBeNull();
   });
 });

@@ -40,8 +40,8 @@ function seedGlobal(
     ...made,
     id,
     created: CREATED,
-    last_retrieved: CREATED,
-    valid_from: CREATED,
+    lastRetrieved: CREATED,
+    validFrom: CREATED,
     strength: 1,
     ...fields,
   });
@@ -140,10 +140,10 @@ describe('hippo inspect (built CLI, no server)', () => {
       LONG,
       { tags: ['billing', 'error'], pinned: true },
       {
-        outcome_positive: 2,
-        outcome_negative: 1,
-        conflicts_with: ['mem_inspect_plain'],
-        retrieval_count: 4,
+        outcomePositive: 2,
+        outcomeNegative: 1,
+        conflictsWith: ['mem_inspect_plain'],
+        retrievalCount: 4,
       },
     );
     s.settle();

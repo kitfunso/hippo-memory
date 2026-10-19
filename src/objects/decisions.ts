@@ -84,8 +84,8 @@ export function weakenSupersededMemory(
   actor: string = CLI_ACTOR,
 ): Promise<void> {
   const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
-  const halved = Math.max(1, Math.floor(entry.half_life_days / 2));
-  return writes.writeEntry({ entry: { ...entry, half_life_days: halved, confidence: 'stale', tags }, actor });
+  const halved = Math.max(1, Math.floor(entry.halfLifeDays / 2));
+  return writes.writeEntry({ entry: { ...entry, halfLifeDays: halved, confidence: 'stale', tags }, actor });
 }
 
 /** Close (retire) an active decision with no successor; the memory mirror is not mutated. */

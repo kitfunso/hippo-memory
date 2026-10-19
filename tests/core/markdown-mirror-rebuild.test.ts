@@ -20,14 +20,14 @@ afterEach(() => {
 
 describe('a store rebuilt from its markdown mirror', () => {
   it('keeps supersession, the validity start and the DAG links', () => {
-    const summary = { ...createMemory('the team ships on Fridays'), dag_level: 2 };
+    const summary = { ...createMemory('the team ships on Fridays'), dagLevel: 2 };
     const fact = {
       ...createMemory('alice said the team ships on Thursdays'),
-      valid_from: '2026-01-02T03:04:05.000Z',
-      superseded_by: summary.id,
-      extracted_from: 'session-42',
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      validFrom: '2026-01-02T03:04:05.000Z',
+      supersededBy: summary.id,
+      extractedFrom: 'session-42',
+      dagLevel: 1,
+      dagParentId: summary.id,
     };
     for (const entry of [summary, fact]) {
       fs.writeFileSync(path.join(storeRoot, 'episodic', `${entry.id}.md`), serializeEntry(entry));
@@ -37,11 +37,11 @@ describe('a store rebuilt from its markdown mirror', () => {
 
     const byId = new Map(loadAllEntries(storeRoot, 'default').map((e) => [e.id, e]));
     const back = byId.get(fact.id);
-    expect(back?.valid_from).toBe('2026-01-02T03:04:05.000Z');
-    expect(back?.superseded_by).toBe(summary.id);
-    expect(back?.extracted_from).toBe('session-42');
-    expect(back?.dag_level).toBe(1);
-    expect(back?.dag_parent_id).toBe(summary.id);
-    expect(byId.get(summary.id)?.dag_level).toBe(2);
+    expect(back?.validFrom).toBe('2026-01-02T03:04:05.000Z');
+    expect(back?.supersededBy).toBe(summary.id);
+    expect(back?.extractedFrom).toBe('session-42');
+    expect(back?.dagLevel).toBe(1);
+    expect(back?.dagParentId).toBe(summary.id);
+    expect(byId.get(summary.id)?.dagLevel).toBe(2);
   });
 });

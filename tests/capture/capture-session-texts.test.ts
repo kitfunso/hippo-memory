@@ -100,9 +100,9 @@ describe('captureSessionTexts', () => {
     for (const r of rows) {
       expect(r).toMatchObject({
         source: 'capture',
-        tenant_id: 't1',
-        origin_project: 'acme-web',
-        source_session_id: 'sess-1',
+        tenantId: 't1',
+        originProject: 'acme-web',
+        sourceSessionId: 'sess-1',
       });
     }
     expect(auditActors('remember', 't1')).toEqual([ACTOR, ACTOR, ACTOR]);
@@ -119,7 +119,7 @@ describe('captureSessionTexts', () => {
       initStore(homeStore);
       expect(deriveOriginProject(home)).toBe('');
       captureSessionTexts(ctxFor(homeStore), req(TEXTS));
-      expect(loadAllEntries(homeStore, 'default').map((r) => r.origin_project)).toEqual([
+      expect(loadAllEntries(homeStore, 'default').map((r) => r.originProject)).toEqual([
         'acme-web',
         'acme-web',
         'acme-web',
@@ -132,7 +132,7 @@ describe('captureSessionTexts', () => {
   it('writes under the context tenant whatever else the request carries', () => {
     const smuggled = { ...req(TEXTS), global: true, tenantId: undefined, dryRun: true };
     expect(captureSessionTexts(ctxFor(root, 't9'), smuggled).captured).toBe(3);
-    expect(loadEveryTenantEntries(root).map((r) => r.tenant_id)).toEqual(['t9', 't9', 't9']);
+    expect(loadEveryTenantEntries(root).map((r) => r.tenantId)).toEqual(['t9', 't9', 't9']);
   });
 
   it('throws on an empty project name and writes nothing', () => {
@@ -157,7 +157,7 @@ describe('captureSessionTexts', () => {
   it('captures for a lower-case name with aliases beside an upper-case legacy name', () => {
     const project = { name: 'api', legacyName: 'Api', aliases: ['acme-api', 'api-old'] };
     expect(captureSessionTexts(ctxFor(root), req(TEXTS, { project })).captured).toBe(3);
-    expect(loadEveryTenantEntries(root).map((r) => r.origin_project)).toEqual(['api', 'api', 'api']);
+    expect(loadEveryTenantEntries(root).map((r) => r.originProject)).toEqual(['api', 'api', 'api']);
   });
 
   it.each([
@@ -192,13 +192,13 @@ describe('captureSessionTexts', () => {
   });
 
   it('is blocked by the caller project and user-global copies, never by another project', () => {
-    writeEntry(root, { ...createMemory(ITEMS[0]!), origin_project: 'other' });
-    writeEntry(root, { ...createMemory(ITEMS[1]!), origin_project: '' });
-    writeEntry(root, { ...createMemory(ITEMS[2]!), origin_project: 'web' });
+    writeEntry(root, { ...createMemory(ITEMS[0]!), originProject: 'other' });
+    writeEntry(root, { ...createMemory(ITEMS[1]!), originProject: '' });
+    writeEntry(root, { ...createMemory(ITEMS[2]!), originProject: 'web' });
     expect(captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 1, skipped: 2, rejected: 0 });
     expect(
       loadAllEntries(root, 'default')
-        .filter((r) => r.origin_project === 'acme-web')
+        .filter((r) => r.originProject === 'acme-web')
         .map((r) => r.content),
     ).toEqual([ITEMS[0]]);
   });
@@ -208,8 +208,8 @@ describe('captureSessionTexts', () => {
       ITEMS[0]!,
       'The search service reindexes nightly at two.',
     ]);
-    writeEntry(root, { ...createMemory(merged), source: 'consolidation', origin_project: 'acme-web' });
-    writeEntry(root, { ...createMemory(ITEMS[1]!, { tenantId: 'someone-else' }), origin_project: 'acme-web' });
+    writeEntry(root, { ...createMemory(merged), source: 'consolidation', originProject: 'acme-web' });
+    writeEntry(root, { ...createMemory(ITEMS[1]!, { tenantId: 'someone-else' }), originProject: 'acme-web' });
     expect(captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 2, skipped: 1, rejected: 0 });
   });
 

@@ -88,7 +88,7 @@ function ingestFixture(root: string, pathTag: string): void {
     });
     const ts = new Date(NOW.getTime() + TS_OFFSET_MS[i]).toISOString();
     entry.created = ts;
-    entry.last_retrieved = ts;
+    entry.lastRetrieved = ts;
     writeEntry(root, entry);
   });
 }

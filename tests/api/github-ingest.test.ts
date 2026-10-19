@@ -156,7 +156,7 @@ describe('ingestEvent', () => {
     expect(entry.kind).toBe('raw');
     expect(entry.scope).toBe('github:public:acme/demo');
     expect(entry.owner).toBe('user:github:alice');
-    expect(entry.artifact_ref).toBe('github://acme/demo/issue/42');
+    expect(entry.artifactRef).toBe('github://acme/demo/issue/42');
 
     // github_event_log row written.
     const db = openHippoDb(root);
@@ -277,7 +277,7 @@ describe('ingestEvent', () => {
     expect(r4.status).toBe('ingested');
 
     const entries = loadAllEntries(root, 'default');
-    const refs = new Set(entries.map((e) => e.artifact_ref).filter((r): r is string => !!r));
+    const refs = new Set(entries.map((e) => e.artifactRef).filter((r): r is string => !!r));
     expect(refs.has('github://acme/demo/issue/42')).toBe(true);
     expect(refs.has('github://acme/demo/issue/42/comment/999')).toBe(true);
     expect(refs.has('github://acme/demo/pull/7')).toBe(true);

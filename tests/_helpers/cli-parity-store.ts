@@ -147,7 +147,7 @@ export class Store {
     options: Partial<CreateMemoryOptions> = {},
     fields: Partial<MemoryEntry> = {},
   ): void {
-    this.seed(content, options, { id, created, last_retrieved: created, valid_from: created, strength: 1, ...fields });
+    this.seed(content, options, { id, created, lastRetrieved: created, validFrom: created, strength: 1, ...fields });
   }
 
   private record(args: readonly string[], r: { status: number | null; stdout: string; stderr: string }): void {

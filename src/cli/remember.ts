@@ -159,7 +159,7 @@ function printRemembered(entry: MemoryEntry, useGlobal: boolean, warnings: reado
   const prefix = useGlobal ? '[global] ' : '';
   console.log(`${prefix}Remembered [${entry.id}]`);
   console.log(
-    `   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | ` +
+    `   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.halfLifeDays}d | ` +
       `Confidence: ${entry.confidence}`,
   );
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
@@ -185,7 +185,7 @@ async function alreadySupersededLine(
   tenantId: string,
   conflict: ConflictError,
 ): Promise<string> {
-  const by = (await memoryGet(cliApiContext(hippoRoot, tenantId), oldId))?.superseded_by;
+  const by = (await memoryGet(cliApiContext(hippoRoot, tenantId), oldId))?.supersededBy;
   return by
     ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.`
     : `Error: ${conflict.message}`;
@@ -325,12 +325,12 @@ type TraceView = ReturnType<typeof traceStats> &
 function traceStats(entry: MemoryEntry) {
   const now = evalNow();
   const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
-  const halfLife = entry.half_life_days;
+  const halfLife = entry.halfLifeDays;
   const rewardFactor = calculateRewardFactor(entry, strengthAblation());
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
   const ageDays = (now.getTime() - createdMs) / DAY_MS;
-  const lastMs = new Date(entry.last_retrieved).getTime();
+  const lastMs = new Date(entry.lastRetrieved).getTime();
   const sinceLast = (now.getTime() - lastMs) / DAY_MS;
   const facets = confidenceFacets(entry, now);
   const conf = confidenceLabel(entry, now).text;
@@ -379,17 +379,17 @@ function printTraceJson(t: TraceView): void {
         content: entry.content,
         created: entry.created,
         age_days: t.ageDays,
-        last_retrieved: entry.last_retrieved,
+        last_retrieved: entry.lastRetrieved,
         days_since_last_retrieval: t.sinceLast,
-        retrieval_count: entry.retrieval_count,
+        retrieval_count: entry.retrievalCount,
         strength_now: t.strength,
         half_life_days: t.halfLife,
         reward_factor: t.rewardFactor,
         effective_half_life_days: t.effHalfLife,
         projected_strength_30d: t.projectedAt(30),
         projected_strength_90d: t.projectedAt(90),
-        outcome_positive: entry.outcome_positive,
-        outcome_negative: entry.outcome_negative,
+        outcome_positive: entry.outcomePositive,
+        outcome_negative: entry.outcomeNegative,
         parents: t.parentPreviews,
         open_conflicts: t.myConflicts,
       },
@@ -422,10 +422,10 @@ function printTraceText(t: TraceView): void {
   );
   console.log();
   console.log(`Retrieval:`);
-  console.log(`  count:      ${entry.retrieval_count}`);
-  console.log(`  last:       ${entry.last_retrieved}  (${fmt(sinceLast, 1)} days ago)`);
+  console.log(`  count:      ${entry.retrievalCount}`);
+  console.log(`  last:       ${entry.lastRetrieved}  (${fmt(sinceLast, 1)} days ago)`);
   console.log();
-  console.log(`Outcomes:   +${entry.outcome_positive} / -${entry.outcome_negative}`);
+  console.log(`Outcomes:   +${entry.outcomePositive} / -${entry.outcomeNegative}`);
   if (parentPreviews.length > 0) {
     console.log();
     console.log(`Parents (consolidation lineage):`);

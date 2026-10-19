@@ -45,9 +45,9 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
     tags: opts.tags ?? [],
-    sourceSessionId: opts.source_session_id ?? null,
+    sourceSessionId: opts.sourceSessionId ?? null,
   });
 }
 
@@ -91,12 +91,12 @@ describe('fresh-tail policy', () => {
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     const sess = 'sess-A';
     for (let i = 0; i < 3; i++) {
-      const e = makeRaw(`session A event ${i}`, { source_session_id: sess });
+      const e = makeRaw(`session A event ${i}`, { sourceSessionId: sess });
       writeEntry(root, e);
     }
     // Different session — should NOT surface as fresh-tail.
     for (let i = 0; i < 2; i++) {
-      const e = makeRaw(`session B event ${i}`, { source_session_id: 'sess-B' });
+      const e = makeRaw(`session B event ${i}`, { sourceSessionId: 'sess-B' });
       writeEntry(root, e);
     }
     const r = await retrieve(ctxFor(root), {

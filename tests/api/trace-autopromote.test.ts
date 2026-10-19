@@ -43,8 +43,8 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(result.details.some((l) => l.includes(`from session ${sid} (success)`))).toBe(true);
     const traces = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(1);
-    expect(traces[0].trace_outcome).toBe('success');
-    expect(traces[0].source_session_id).toBe(sid);
+    expect(traces[0].traceOutcome).toBe('success');
+    expect(traces[0].sourceSessionId).toBe(sid);
     // Provenance lives in source_session_id; parents is NOT polluted.
     expect(traces[0].parents).toEqual([]);
     expect(traces[0].tags).toContain('auto-promoted');
@@ -106,7 +106,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     await consolidate(tmpDir, { now: new Date() });
 
     const traces = loadAllEntries(tmpDir, 'default').filter(
-      (e) => e.layer === Layer.Trace && e.source_session_id === sid,
+      (e) => e.layer === Layer.Trace && e.sourceSessionId === sid,
     );
     expect(traces).toHaveLength(1);
   });

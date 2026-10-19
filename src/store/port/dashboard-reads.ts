@@ -5,7 +5,7 @@ import type { ConflictRow } from './conflicts.js';
 /** One live row as the dashboard lists it. `head` is the whole content or at least its first 241 characters. */
 export type DashboardRow = StrengthInputs &
   ConfidenceInputs &
-  Pick<MemoryEntry, 'id' | 'layer' | 'scope' | 'origin_project' | 'kind' | 'superseded_by'> & {
+  Pick<MemoryEntry, 'id' | 'layer' | 'scope' | 'originProject' | 'kind' | 'supersededBy'> & {
     readonly head: string;
     readonly embedded: boolean;
   };

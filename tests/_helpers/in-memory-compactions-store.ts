@@ -131,33 +131,33 @@ function writeItem(batch: Batch, entry: MemoryEntry, actor: string): void {
   const match = held.find((h) => restates(words, h.words));
   if (match) {
     tally.repeats++;
-    if (match.id !== null && match.sessionId !== entry.source_session_id) tally.restated.add(match.id);
+    if (match.id !== null && match.sessionId !== entry.sourceSessionId) tally.restated.add(match.id);
     return;
   }
   const digest = rejectionDigest(entry.content);
-  const tombstone = batch.tombstones.get(tombstoneKey(entry.tenant_id, digest));
+  const tombstone = batch.tombstones.get(tombstoneKey(entry.tenantId, digest));
   if (!isContentWorthStoring(entry.content) || detectSecret(entry).flagged) {
     tally.refused++;
   } else if (tombstone) {
     tally.refused++;
     tx.audit.push({
-      tenantId: entry.tenant_id,
+      tenantId: entry.tenantId,
       actor,
       op: 'reject_refusal',
       targetId: entry.id,
       metadata: { digest, reason: tombstone.reason },
     });
   } else {
-    tx.rows.set(entry.id, { ...structuredClone(entry), summary_dirty: false });
+    tx.rows.set(entry.id, { ...structuredClone(entry), summaryDirty: false });
     tx.audit.push({
-      tenantId: entry.tenant_id,
+      tenantId: entry.tenantId,
       actor,
       op: 'remember',
       targetId: entry.id,
       metadata: { kind: 'distilled', scope: null },
     });
     tally.written++;
-    held.push({ id: null, sessionId: entry.source_session_id ?? null, words });
+    held.push({ id: null, sessionId: entry.sourceSessionId ?? null, words });
   }
 }
 
@@ -173,7 +173,7 @@ function compactionsOn(base: InMemoryEntryWritesStore, records: Rec[]): Compacti
       tenantId,
       baseHalfLifeDays: req.baseHalfLifeDays,
     }),
-    origin_project: origin,
+    originProject: origin,
   });
   return {
     async start(tenantId: string, start: CompactionStart) {
@@ -210,14 +210,14 @@ function compactionsOn(base: InMemoryEntryWritesStore, records: Rec[]): Compacti
         const held: Held[] = [...tx.rows.values()]
           .filter(
             (e) =>
-              e.tenant_id === tenantId &&
-              e.origin_project != null &&
-              req.origins.includes(e.origin_project) &&
-              (e.superseded_by ?? null) === null &&
+              e.tenantId === tenantId &&
+              e.originProject != null &&
+              req.origins.includes(e.originProject) &&
+              (e.supersededBy ?? null) === null &&
               e.kind !== 'raw' &&
               admitted(e.scope),
           )
-          .map((e) => ({ id: e.id, sessionId: e.source_session_id ?? null, words: itemWords(e.content) }));
+          .map((e) => ({ id: e.id, sessionId: e.sourceSessionId ?? null, words: itemWords(e.content) }));
         const batch: Batch = { tx, held, tally, tombstones: base.tombstones };
         for (const text of rows) {
           if (text.trim().length < 3) tally.refused++;
@@ -225,7 +225,7 @@ function compactionsOn(base: InMemoryEntryWritesStore, records: Rec[]): Compacti
         }
         for (const id of tally.restated) {
           const row = tx.rows.get(id);
-          if (row?.tenant_id === tenantId) tx.rows.set(id, markRetrieved([row])[0]!);
+          if (row?.tenantId === tenantId) tx.rows.set(id, markRetrieved([row])[0]!);
         }
       });
       Object.assign(record, { status: 'done', itemsWritten: tally.written });

@@ -83,7 +83,7 @@ function row(i: number): MemoryEntry {
   return {
     ...createMemory(`index state memory ${ROWS - i} about release ${i % 11}`, options),
     created,
-    last_retrieved: created,
+    lastRetrieved: created,
   };
 }
 
@@ -197,7 +197,7 @@ describe('embedAll backfill on hippo.db', () => {
     const embedded = new Set(before.vectors.map((v) => v.memory_id));
     const pending = entries.filter((e) => !embedded.has(e.id));
     expect([entries.length, before.vectors.length, pending.length]).toEqual([ROWS, 180, 120]);
-    expect(new Set(pending.map((e) => e.tenant_id))).toEqual(new Set(TENANTS));
+    expect(new Set(pending.map((e) => e.tenantId))).toEqual(new Set(TENANTS));
 
     const calls: string[][] = [];
     expect(
@@ -339,7 +339,7 @@ describe('rows held while embedding hippo.db', () => {
     const embedded = Object.keys(loadEmbeddingIndex(root)).sort();
     const log = recordStatements(() => resetStoredParticles(root));
     const { particles } = indexOn(root);
-    const tenantOf = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e.tenant_id]));
+    const tenantOf = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e.tenantId]));
     expect([log.result, particles.length]).toEqual([180, 180]);
     expect(particles.map((p) => p.memoryId)).toEqual(embedded);
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));

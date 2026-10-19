@@ -54,8 +54,8 @@ describe('sampleForReplay', () => {
     // 1 high-reward memory
     const hero = fakeEntry({
       content: 'high-reward',
-      outcome_positive: 20,
-      outcome_negative: 0,
+      outcomePositive: 20,
+      outcomeNegative: 0,
     });
     entries.push(hero);
 
@@ -74,7 +74,7 @@ describe('sampleForReplay', () => {
   it('prefers critical-valence memories over neutral peers (expected rate check)', () => {
     const entries: MemoryEntry[] = [];
     for (let i = 0; i < 10; i++) entries.push(fakeEntry({ content: `neutral-${i}` }));
-    const critical = fakeEntry({ content: 'critical', emotional_valence: 'critical' });
+    const critical = fakeEntry({ content: 'critical', emotionalValence: 'critical' });
     entries.push(critical);
 
     const TRIALS = 500;
@@ -94,9 +94,9 @@ describe('sampleForReplay', () => {
   it('prefers under-retrieved memories over heavily retrieved peers', () => {
     const entries: MemoryEntry[] = [];
     for (let i = 0; i < 10; i++) {
-      entries.push(fakeEntry({ content: `busy-${i}`, retrieval_count: 50 }));
+      entries.push(fakeEntry({ content: `busy-${i}`, retrievalCount: 50 }));
     }
-    const fresh = fakeEntry({ content: 'fresh', retrieval_count: 0 });
+    const fresh = fakeEntry({ content: 'fresh', retrievalCount: 0 });
     entries.push(fresh);
 
     const counts = new Map<string, number>();
@@ -120,7 +120,7 @@ describe('replayPriority', () => {
   it('returns a positive finite number for a plain entry', () => {
     // createMemory's strength drifts with the clock it runs on, so it is set; at its own last_retrieved every factor is 1.
     const e = fakeEntry({ content: 'x', strength: 1 });
-    const p = replayPriority(e, new Date(e.last_retrieved), false);
+    const p = replayPriority(e, new Date(e.lastRetrieved), false);
     expect(Number.isFinite(p)).toBe(true);
     expect(p).toBe(1);
   });
@@ -128,21 +128,21 @@ describe('replayPriority', () => {
   it('critical valence > neutral valence', () => {
     const now = new Date();
     const neutral = fakeEntry({ content: 'n' });
-    const critical = fakeEntry({ content: 'c', emotional_valence: 'critical' });
+    const critical = fakeEntry({ content: 'c', emotionalValence: 'critical' });
     expect(replayPriority(critical, now, false)).toBeGreaterThan(replayPriority(neutral, now, false));
   });
 
   it('more positive outcomes > fewer', () => {
     const now = new Date();
-    const low = fakeEntry({ content: 'l', outcome_positive: 0, outcome_negative: 0 });
-    const high = fakeEntry({ content: 'h', outcome_positive: 5, outcome_negative: 0 });
+    const low = fakeEntry({ content: 'l', outcomePositive: 0, outcomeNegative: 0 });
+    const high = fakeEntry({ content: 'h', outcomePositive: 5, outcomeNegative: 0 });
     expect(replayPriority(high, now, false)).toBeGreaterThan(replayPriority(low, now, false));
   });
 
   it('under-retrieved > heavily retrieved', () => {
     const now = new Date();
-    const fresh = fakeEntry({ content: 'f', retrieval_count: 0 });
-    const busy = fakeEntry({ content: 'b', retrieval_count: 50 });
+    const fresh = fakeEntry({ content: 'f', retrievalCount: 0 });
+    const busy = fakeEntry({ content: 'b', retrievalCount: 50 });
     expect(replayPriority(fresh, now, false)).toBeGreaterThan(replayPriority(busy, now, false));
   });
 
@@ -151,7 +151,7 @@ describe('replayPriority', () => {
     // clamp, which went negative for neg >> pos. Negative weights broke the
     // weighted-sample-without-replacement picker in sampleForReplay.
     const now = new Date();
-    const doomed = fakeEntry({ content: 'doom', outcome_positive: 0, outcome_negative: 100, strength: 1 });
+    const doomed = fakeEntry({ content: 'doom', outcomePositive: 0, outcomeNegative: 100, strength: 1 });
     // `now` predates the entry, so it has no idle time; the reward sits at its 0.1 floor and every other factor is 1.
     expect(replayPriority(doomed, now, false)).toBe(0.1);
   });
@@ -160,7 +160,7 @@ describe('replayPriority', () => {
     const now = new Date();
     const bad = fakeEntry({ content: 'bad', strength: 1 });
     // Force an invalid timestamp post-construction to exercise NaN guard.
-    const mutated = { ...bad, last_retrieved: 'not-a-date' };
+    const mutated = { ...bad, lastRetrieved: 'not-a-date' };
     const p = replayPriority(mutated, now, false);
     expect(Number.isFinite(p)).toBe(true);
     // The guard reads an unparseable time as zero idle hours, which leaves every factor at 1.

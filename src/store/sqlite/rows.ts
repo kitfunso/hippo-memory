@@ -42,7 +42,7 @@ export interface MemoryRow {
   half_life_days: number;
   layer: string;
   tags_json: string;
-  emotional_valence: MemoryEntry['emotional_valence'];
+  emotional_valence: MemoryEntry['emotionalValence'];
   schema_fit: number;
   source: string;
   outcome_score: number | null;
@@ -54,7 +54,7 @@ export interface MemoryRow {
   content: string;
   parents_json: string;
   starred: number;
-  trace_outcome: MemoryEntry['trace_outcome'];
+  trace_outcome: MemoryEntry['traceOutcome'];
   source_session_id: string | null;
   valid_from: string | null;
   superseded_by: string | null;
@@ -179,47 +179,47 @@ type RetrievalFields = Pick<
   MemoryEntry,
   | 'id'
   | 'created'
-  | 'last_retrieved'
-  | 'retrieval_count'
+  | 'lastRetrieved'
+  | 'retrievalCount'
   | 'strength'
-  | 'half_life_days'
+  | 'halfLifeDays'
   | 'layer'
   | 'tags'
-  | 'emotional_valence'
-  | 'schema_fit'
+  | 'emotionalValence'
+  | 'schemaFit'
   | 'source'
-  | 'outcome_score'
-  | 'outcome_positive'
-  | 'outcome_negative'
-  | 'conflicts_with'
+  | 'outcomeScore'
+  | 'outcomePositive'
+  | 'outcomeNegative'
+  | 'conflictsWith'
   | 'pinned'
   | 'confidence'
   | 'content'
   | 'parents'
   | 'starred'
-  | 'trace_outcome'
+  | 'traceOutcome'
 >;
 type PlacementFields = Pick<
   MemoryEntry,
-  | 'source_session_id'
-  | 'valid_from'
-  | 'superseded_by'
-  | 'extracted_from'
-  | 'dag_level'
-  | 'dag_parent_id'
+  | 'sourceSessionId'
+  | 'validFrom'
+  | 'supersededBy'
+  | 'extractedFrom'
+  | 'dagLevel'
+  | 'dagParentId'
   | 'kind'
   | 'scope'
   | 'owner'
-  | 'artifact_ref'
-  | 'tenant_id'
-  | 'origin_project'
-  | 'descendant_count'
-  | 'earliest_at'
-  | 'latest_at'
-  | 'summary_dirty'
-  | 'last_rebuilt_at'
-  | 'rebuild_count'
-  | 'dag_level_3_built_at'
+  | 'artifactRef'
+  | 'tenantId'
+  | 'originProject'
+  | 'descendantCount'
+  | 'earliestAt'
+  | 'latestAt'
+  | 'summaryDirty'
+  | 'lastRebuiltAt'
+  | 'rebuildCount'
+  | 'dagLevel3BuiltAt'
 >;
 
 function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
@@ -229,19 +229,19 @@ function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
   return {
     id: row.id,
     created: row.created,
-    last_retrieved: row.last_retrieved,
-    retrieval_count: Number(row.retrieval_count ?? 0),
+    lastRetrieved: row.last_retrieved,
+    retrievalCount: Number(row.retrieval_count ?? 0),
     strength: Number(row.strength ?? 1),
-    half_life_days: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
+    halfLifeDays: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
     layer: row.layer as Layer,
     tags: parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' }),
-    emotional_valence: row.emotional_valence ?? 'neutral',
-    schema_fit: Number(row.schema_fit ?? DEFAULT_SCHEMA_FIT),
+    emotionalValence: row.emotional_valence ?? 'neutral',
+    schemaFit: Number(row.schema_fit ?? DEFAULT_SCHEMA_FIT),
     source: row.source ?? 'cli',
-    outcome_score: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
-    outcome_positive: Number(row.outcome_positive ?? 0),
-    outcome_negative: Number(row.outcome_negative ?? 0),
-    conflicts_with: parseJsonArray(row.conflicts_with_json, {
+    outcomeScore: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
+    outcomePositive: Number(row.outcome_positive ?? 0),
+    outcomeNegative: Number(row.outcome_negative ?? 0),
+    conflictsWith: parseJsonArray(row.conflicts_with_json, {
       table: 'memories',
       id: row.id,
       column: 'conflicts_with_json',
@@ -251,32 +251,32 @@ function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
     content: row.content,
     parents: parseJsonArray(row.parents_json, { table: 'memories', id: row.id, column: 'parents_json' }),
     starred: Boolean(row.starred),
-    trace_outcome: (row.trace_outcome as MemoryEntry['trace_outcome']) ?? null,
+    traceOutcome: (row.trace_outcome as MemoryEntry['traceOutcome']) ?? null,
   };
 }
 
 function rowToPlacementFields(row: MemoryRow): PlacementFields {
   // SAFETY: the `as MemoryKind` narrows a column the DB layer only writes from that enum.
   return {
-    source_session_id: row.source_session_id ?? null,
-    valid_from: row.valid_from ?? row.created,
-    superseded_by: row.superseded_by ?? null,
-    extracted_from: row.extracted_from ?? null,
-    dag_level: Number(row.dag_level ?? 0),
-    dag_parent_id: row.dag_parent_id ?? null,
+    sourceSessionId: row.source_session_id ?? null,
+    validFrom: row.valid_from ?? row.created,
+    supersededBy: row.superseded_by ?? null,
+    extractedFrom: row.extracted_from ?? null,
+    dagLevel: Number(row.dag_level ?? 0),
+    dagParentId: row.dag_parent_id ?? null,
     kind: (row.kind ?? 'distilled') as MemoryKind,
     scope: row.scope ?? null,
     owner: row.owner ?? null,
-    artifact_ref: row.artifact_ref ?? null,
-    tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
-    origin_project: row.origin_project ?? null,
-    descendant_count: Number(row.descendant_count ?? 0),
-    earliest_at: row.earliest_at ?? null,
-    latest_at: row.latest_at ?? null,
-    summary_dirty: Number(row.summary_dirty) === 1,
-    last_rebuilt_at: row.last_rebuilt_at ?? null,
-    rebuild_count: Number(row.rebuild_count ?? 0),
-    dag_level_3_built_at: row.dag_level_3_built_at ?? null,
+    artifactRef: row.artifact_ref ?? null,
+    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
+    originProject: row.origin_project ?? null,
+    descendantCount: Number(row.descendant_count ?? 0),
+    earliestAt: row.earliest_at ?? null,
+    latestAt: row.latest_at ?? null,
+    summaryDirty: Number(row.summary_dirty) === 1,
+    lastRebuiltAt: row.last_rebuilt_at ?? null,
+    rebuildCount: Number(row.rebuild_count ?? 0),
+    dagLevel3BuiltAt: row.dag_level_3_built_at ?? null,
   };
 }
 
@@ -285,7 +285,7 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
   // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column
   // (non-FTS path) from a present one.
   if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {
-    entry.bm25_score = Number(row.bm25_score);
+    entry.bm25Score = Number(row.bm25_score);
   }
   return entry;
 }

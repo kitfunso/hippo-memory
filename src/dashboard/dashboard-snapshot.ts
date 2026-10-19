@@ -49,10 +49,8 @@ const COALESCE_MS = 10_000;
 const TTL_MS = 5 * 60_000;
 
 /** The one predicate for "shown on the dashboard": not superseded, not archived, not quarantined. */
-export function isLiveMemory(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): boolean {
-  return (
-    !entry.superseded_by && (entry.kind === 'raw' || entry.kind === 'distilled') && !isQuarantineScope(entry.scope)
-  );
+export function isLiveMemory(entry: Pick<MemoryEntry, 'supersededBy' | 'kind' | 'scope'>): boolean {
+  return !entry.supersededBy && (entry.kind === 'raw' || entry.kind === 'distilled') && !isQuarantineScope(entry.scope);
 }
 
 /** Wire key, display name and kind of a project. */
@@ -126,7 +124,7 @@ export function memoryFacts(
     band,
     layer: layerIndex(entry.layer),
     ageDays: daysBetween(entry.created, nowMs),
-    lastRetrievedDays: daysBetween(entry.last_retrieved, nowMs),
+    lastRetrievedDays: daysBetween(entry.lastRetrieved, nowMs),
     confidence: facets.tier,
     agedOut: facets.agedOut,
     wrong: netWrong(entry) > 0,
@@ -298,7 +296,7 @@ function toFact(row: DashboardRow, f: MemoryFacts, project: number, createdMs: n
     strength: f.strength,
     strength7d: f.strength7d,
     strength30d: f.strength30d,
-    retrievals: row.retrieval_count,
+    retrievals: row.retrievalCount,
     lastRetrievedDays: f.lastRetrievedDays,
     ageDays: f.ageDays,
     confidence: f.confidence,
@@ -313,9 +311,9 @@ function toFact(row: DashboardRow, f: MemoryFacts, project: number, createdMs: n
   };
 }
 
-function tallyExcluded(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>, excluded: ExcludedCounts): void {
+function tallyExcluded(entry: Pick<MemoryEntry, 'supersededBy' | 'kind' | 'scope'>, excluded: ExcludedCounts): void {
   if (isQuarantineScope(entry.scope)) excluded.quarantined++;
-  else if (entry.superseded_by || entry.kind === 'superseded') excluded.superseded++;
+  else if (entry.supersededBy || entry.kind === 'superseded') excluded.superseded++;
   else if (entry.kind === 'archived') excluded.archived++;
 }
 
@@ -351,7 +349,7 @@ class SnapshotDraft {
 
   addRow(row: DashboardRow): void {
     if (!isLiveMemory(row)) return tallyExcluded(row, this.excluded);
-    const p = draftIndexFor(projectIdentity(row.origin_project), this.projectIndex, this.drafts);
+    const p = draftIndexFor(projectIdentity(row.originProject), this.projectIndex, this.drafts);
     const f = memoryFacts(row, this.nowMs);
     const parsedCreated = Date.parse(row.created);
     const draft = this.drafts[p];

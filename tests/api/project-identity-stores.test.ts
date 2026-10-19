@@ -68,7 +68,7 @@ function globalConfig(remote: boolean): void {
 function pinned(root: string, content: string, origin: string): MemoryEntry {
   const entry = {
     ...createMemory(content, { tenantId: T, baseHalfLifeDays: 30, pinned: true }),
-    origin_project: origin,
+    originProject: origin,
   };
   writeEntry(root, entry);
   return entry;
@@ -216,7 +216,7 @@ describe('the upgrade re-sync', () => {
       unlinkSync(join(projectNotes(w, api), 'n2.md'));
       expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
       const before = liveRows(w.global);
-      expect(before.map((e) => e.origin_project)).toEqual(['api', 'api']);
+      expect(before.map((e) => e.originProject)).toEqual(['api', 'api']);
 
       globalConfig(true);
       expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
@@ -224,13 +224,13 @@ describe('the upgrade re-sync', () => {
       expect(after.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort());
       for (const e of after) {
         expect(e).toMatchObject({
-          origin_project: 'github.com/acme/api',
+          originProject: 'github.com/acme/api',
           source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
         });
       }
       const [snap] = withDb(w.global, (db) => listDormantSnapshots(db, T));
       expect(snap.entry).toMatchObject({
-        origin_project: 'github.com/acme/api',
+        originProject: 'github.com/acme/api',
         source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
       });
 
@@ -256,7 +256,7 @@ describe('the upgrade re-sync', () => {
       expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
       expect(liveRows(w.global)).toMatchObject([
         {
-          origin_project: 'github.com/acme/api',
+          originProject: 'github.com/acme/api',
           source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
         },
       ]);
@@ -305,7 +305,7 @@ describe('the upgrade re-sync', () => {
 
       expect(toolTally(sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
       expect(liveRows(w.global)).toMatchObject([
-        { content: NOTES[0], origin_project: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
+        { content: NOTES[0], originProject: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
       ]);
     },
     RESYNC_MS,
@@ -318,11 +318,11 @@ describe('a project store with an id', () => {
     const store = join(svc, '.hippo');
     initStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
-    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('svc');
 
     const r = projectNameRepair(cliApiContext(store, T), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
-    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('github.com/acme/svc');
     expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([]);
   });
 
@@ -351,7 +351,7 @@ describe('repair on sleep', () => {
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     const first = projectNameRepairOnce(cliApiContext(store, T));
     expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
-    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('github.com/acme/svc');
     pinned(store, 'A later row under the old name.', 'svc');
     expect(projectNameRepairOnce(cliApiContext(store, T))).toBeNull();
   });
@@ -362,7 +362,7 @@ describe('repair on sleep', () => {
     pinned(w.global, 'OLD-API rows under the folder name.', 'api');
     compaction('c-a', 'api', a);
     expect(projectNameRepairOnce(cliApiContext(w.global, T))).toBeNull();
-    expect(loadAllEntries(w.global, 'default').map((e) => e.origin_project)).toEqual(['api']);
+    expect(loadAllEntries(w.global, 'default').map((e) => e.originProject)).toEqual(['api']);
     expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).folds).toEqual([
       { from: 'api', into: 'github.com/acme-pay/api' },
     ]);

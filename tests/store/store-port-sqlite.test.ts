@@ -161,30 +161,30 @@ const ALICE_A: ContinuityKey = { owner: 'alice', project: ['proj-a'] };
 /** A second tenant where alice and bob share proj-a and alice also works in proj-b, so each narrowed read has rows to skip. */
 function seedTeam(root: string): void {
   const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) =>
-    seeded(content, id, created, { tenant_id: TEAM, ...extra });
+    seeded(content, id, created, { tenantId: TEAM, ...extra });
   const rows = [
-    team('lighthouse runbook for project a', 'mem_t_a', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-a' }),
-    team('lighthouse runbook for project b', 'mem_t_b', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-b' }),
-    team('lighthouse notes for every project', 'mem_t_global', '2026-01-20T00:00:00.000Z', { origin_project: '' }),
+    team('lighthouse runbook for project a', 'mem_t_a', '2026-01-20T00:00:00.000Z', { originProject: 'proj-a' }),
+    team('lighthouse runbook for project b', 'mem_t_b', '2026-01-20T00:00:00.000Z', { originProject: 'proj-b' }),
+    team('lighthouse notes for every project', 'mem_t_global', '2026-01-20T00:00:00.000Z', { originProject: '' }),
     team('lighthouse notes alice keeps to herself', 'mem_t_mine', '2026-01-20T00:00:00.000Z', {
-      origin_project: 'proj-a',
+      originProject: 'proj-a',
       scope: ALICE_SCOPE,
     }),
     team('lighthouse notes bob keeps to himself', 'mem_t_theirs', '2026-01-20T00:00:00.000Z', {
-      origin_project: 'proj-a',
+      originProject: 'proj-a',
       scope: 'personal:private:bob',
     }),
     team('raw capture in project a', 'mem_t_raw_a', '2026-01-26T00:00:00.000Z', {
       kind: 'raw',
-      origin_project: 'proj-a',
+      originProject: 'proj-a',
     }),
     team('raw capture in project b', 'mem_t_raw_b', '2026-01-27T00:00:00.000Z', {
       kind: 'raw',
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     }),
     team('raw capture outside any project', 'mem_t_raw_global', '2026-01-28T00:00:00.000Z', {
       kind: 'raw',
-      origin_project: '',
+      originProject: '',
     }),
   ];
   for (const row of rows) writeEntry(root, row);

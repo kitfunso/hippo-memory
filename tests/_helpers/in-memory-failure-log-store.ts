@@ -104,7 +104,7 @@ export function inMemoryFailureLogStore(hippoRoot: string): InMemoryFailureLogSt
       return base
         .allRows()
         .filter(
-          (e) => e.tenant_id === tenantId && e.tags.includes(tag) && inProject(e.origin_project) && admitted(e.scope),
+          (e) => e.tenantId === tenantId && e.tags.includes(tag) && inProject(e.originProject) && admitted(e.scope),
         )
         .map((e) => e.content);
     },

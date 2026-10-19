@@ -23,7 +23,7 @@ describe('api.remember', () => {
     expect(result.tenantId).toBe('default');
     const stored = readEntry(home, result.id);
     expect(stored?.content).toBe('api-canary-remember-77');
-    expect(stored?.tenant_id).toBe('default');
+    expect(stored?.tenantId).toBe('default');
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -67,7 +67,7 @@ describe("api.remember stamps the caller's project", () => {
   }
 
   const originOf = (ctx: FullContext, id: string): string | null | undefined =>
-    readEntry(ctx.hippoRoot, id)?.origin_project;
+    readEntry(ctx.hippoRoot, id)?.originProject;
 
   it('a shared store with no project stamps NULL', async () => {
     const ctx = storeCtx(true);

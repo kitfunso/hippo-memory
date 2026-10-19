@@ -26,7 +26,7 @@ export function mergedSuccessor(
     id: generateId('sem'),
     content: mergedText(header, kept),
     parents: row.parents.filter((id) => !retiredIds.has(id)),
-    conflicts_with: [],
+    conflictsWith: [],
   };
 }
 
@@ -39,9 +39,9 @@ export function successorAfterRetirement(
   byId: ReadonlyMap<string, MemoryEntry>,
   rejected: (text: string) => boolean,
 ): MemoryEntry | null | undefined {
-  if (row.source !== 'consolidation' || row.superseded_by) return undefined;
+  if (row.source !== 'consolidation' || row.supersededBy) return undefined;
   const sources = row.parents.flatMap((id) => byId.get(id) ?? []);
-  const retiredIds = new Set(sources.filter((s) => Boolean(s.superseded_by) || rejected(s.content)).map((s) => s.id));
+  const retiredIds = new Set(sources.filter((s) => Boolean(s.supersededBy) || rejected(s.content)).map((s) => s.id));
   const live = new Set(sources.filter((s) => !retiredIds.has(s.id)).map((s) => duplicateKey(s.content)));
   const gone = new Set(sources.filter((s) => retiredIds.has(s.id)).map((s) => duplicateKey(s.content)));
   const retired = (text: string): boolean =>

@@ -284,7 +284,7 @@ function seedRowReads(dir: string): void {
     row('digest of session two', 2, { ...digest, sourceSessionId: 's2' }),
     row('digest with no session', 3, digest),
     row('digest extracted from a raw row', 4, { ...digest, extractedFrom: 'mem_r_9' }),
-    { ...row('digest replaced since', 5, digest), superseded_by: 'mem_r_2' },
+    { ...row('digest replaced since', 5, digest), supersededBy: 'mem_r_2' },
     row('digest tag only in content: session-digest', 6, { source: 'session-digest', tags: ['other'] }),
     row('digest of tenant b', 7, { ...digest, tenantId: TENANT_B }),
     row('vault note a', 8, { kind: 'raw', artifactRef: 'vault:notes:a.md', tags: ['vault', 'pipeline'] }),

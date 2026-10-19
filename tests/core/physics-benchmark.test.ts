@@ -301,10 +301,10 @@ beforeAll(() => {
       const conflictPairs = new Map<string, Set<string>>();
       const halfLives = new Map<string, number>();
       for (const entry of entries) {
-        halfLives.set(entry.id, entry.half_life_days);
-        if (entry.conflicts_with.length > 0) {
+        halfLives.set(entry.id, entry.halfLifeDays);
+        if (entry.conflictsWith.length > 0) {
           const set = new Set<string>();
-          for (const cid of entry.conflicts_with) set.add(cid);
+          for (const cid of entry.conflictsWith) set.add(cid);
           conflictPairs.set(entry.id, set);
         }
       }
@@ -578,7 +578,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
           if (particles.length === 0) break;
 
           const halfLives = new Map<string, number>();
-          for (const entry of entries) halfLives.set(entry.id, entry.half_life_days);
+          for (const entry of entries) halfLives.set(entry.id, entry.halfLifeDays);
 
           const ctx: ForceContext = {
             conflictPairs: new Map(),

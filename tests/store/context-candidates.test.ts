@@ -21,10 +21,10 @@ function row(id: string, ageDays: number, extra: Partial<MemoryEntry> = {}): Mem
     ...createMemory(`row ${id} body`, { tenantId: 'default' }),
     id,
     created: at,
-    valid_from: at,
-    last_retrieved: at,
-    half_life_days: 10,
-    origin_project: 'proj',
+    validFrom: at,
+    lastRetrieved: at,
+    halfLifeDays: 10,
+    originProject: 'proj',
     ...extra,
   };
 }
@@ -39,13 +39,13 @@ describe('loadContextCandidates over the cap', () => {
         row('a-old-pin', 90, { pinned: true }),
         row('b-fresh', 1),
         row('c-stale', 60),
-        row('d-rewarded', 25, { outcome_positive: 8 }),
+        row('d-rewarded', 25, { outcomePositive: 8 }),
         row('e-mid', 20),
         row('f-private', 0, { scope: 'slack:private:c1' }),
-        row('g-other', 0, { origin_project: 'other' }),
-        row('h-global', 2, { origin_project: '' }),
-        row('i-superseded', 0, { superseded_by: 'b-fresh' }),
-        row('j-acme', 0, { tenant_id: 'acme' }),
+        row('g-other', 0, { originProject: 'other' }),
+        row('h-global', 2, { originProject: '' }),
+        row('i-superseded', 0, { supersededBy: 'b-fresh' }),
+        row('j-acme', 0, { tenantId: 'acme' }),
         row('k-team', 0, { scope: 'team:x' }),
       ]) {
         writeEntry(root, e);
@@ -90,7 +90,7 @@ describe('loadContextCandidates over the cap', () => {
       'row e-mid body',
     ]);
     const scoped = loadTextsHoldingWords(root, 'default', ['e-mid', 'g-other', 'h-global', 'j-acme'], ['proj']);
-    expect(scoped.map((r) => [r.content, r.origin_project]).sort()).toEqual([
+    expect(scoped.map((r) => [r.content, r.originProject]).sort()).toEqual([
       ['row e-mid body', 'proj'],
       ['row h-global body', ''],
     ]);
@@ -127,8 +127,8 @@ describe('loadContextCandidates reward factor', () => {
   it('ranks asymmetric outcomes the way calculateStrength does', async () => {
     // 20 days old: rewarded x8 at slope 0.5 is 13.75 days against plain y's 14.5; a slope of 0.7 would give 15.25 and flip them.
     const { id, strongest } = await survivor([
-      row('x-rewarded', 20, { outcome_positive: 3 }),
-      row('y-plain', 20, { half_life_days: 14.5 }),
+      row('x-rewarded', 20, { outcomePositive: 3 }),
+      row('y-plain', 20, { halfLifeDays: 14.5 }),
     ]);
     expect(strongest).toBe('y-plain');
     expect(id).toBe(strongest);
@@ -138,8 +138,8 @@ describe('loadContextCandidates reward factor', () => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
     _resetAblationCacheForTests();
     const { id, strongest } = await survivor([
-      row('x-rewarded', 20, { outcome_positive: 3 }),
-      row('z-plain', 20, { half_life_days: 12 }),
+      row('x-rewarded', 20, { outcomePositive: 3 }),
+      row('z-plain', 20, { halfLifeDays: 12 }),
     ]);
     expect(strongest).toBe('z-plain');
     expect(id).toBe(strongest);

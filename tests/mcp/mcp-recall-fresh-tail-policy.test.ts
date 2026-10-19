@@ -188,7 +188,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
           kind: 'raw',
           sourceSessionId: 'sess-A',
         }),
-        origin_project: origin,
+        originProject: origin,
       };
       writeEntry(shared, entry);
       return entry;

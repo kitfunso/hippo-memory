@@ -99,7 +99,7 @@ describe('confidence facets', () => {
   it('splits an aged-out observed row into tier and agedOut', () => {
     const e = seed(hippoRoot, 'an observed row nobody has retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
     expect(confidenceFacets(e, NOW)).toEqual({ tier: 'observed', agedOut: true });
   });
@@ -107,7 +107,7 @@ describe('confidence facets', () => {
   it('reports a freshly rejected row as stale and not aged out', () => {
     const e = seed(hippoRoot, 'a row a human rejected through hippo invalidate', {
       confidence: 'stale',
-      last_retrieved: ago(1),
+      lastRetrieved: ago(1),
     });
     expect(confidenceFacets(e, NOW)).toEqual({ tier: 'stale', agedOut: false });
   });
@@ -115,19 +115,19 @@ describe('confidence facets', () => {
   it('reports a row that is both rejected and old as stale and aged out', () => {
     const e = seed(hippoRoot, 'a rejected row nobody has retrieved since', {
       confidence: 'stale',
-      last_retrieved: ago(400),
+      lastRetrieved: ago(400),
     });
     expect(confidenceFacets(e, NOW)).toEqual({ tier: 'stale', agedOut: true });
   });
 
   it('leaves resolveConfidence behaviour unchanged across every shape', () => {
     const cases: Array<[Partial<MemoryEntry>, string]> = [
-      [{ confidence: 'observed', last_retrieved: ago(45) }, 'stale'],
-      [{ confidence: 'observed', last_retrieved: ago(1) }, 'observed'],
-      [{ confidence: 'inferred', last_retrieved: ago(45) }, 'stale'],
-      [{ confidence: 'stale', last_retrieved: ago(1) }, 'stale'],
-      [{ confidence: 'verified', last_retrieved: ago(999) }, 'verified'],
-      [{ confidence: 'observed', last_retrieved: ago(999), pinned: true }, 'observed'],
+      [{ confidence: 'observed', lastRetrieved: ago(45) }, 'stale'],
+      [{ confidence: 'observed', lastRetrieved: ago(1) }, 'observed'],
+      [{ confidence: 'inferred', lastRetrieved: ago(45) }, 'stale'],
+      [{ confidence: 'stale', lastRetrieved: ago(1) }, 'stale'],
+      [{ confidence: 'verified', lastRetrieved: ago(999) }, 'verified'],
+      [{ confidence: 'observed', lastRetrieved: ago(999), pinned: true }, 'observed'],
     ];
     for (const [over, want] of cases) {
       const e = seed(hippoRoot, `shape ${want} ${JSON.stringify(over)}`, over);
@@ -138,11 +138,11 @@ describe('confidence facets', () => {
   it('ages out one millisecond past thirty days, not at thirty days', () => {
     const at = seed(hippoRoot, 'a row retrieved exactly thirty days ago', {
       confidence: 'observed',
-      last_retrieved: new Date(NOW.getTime() - 30 * DAY).toISOString(),
+      lastRetrieved: new Date(NOW.getTime() - 30 * DAY).toISOString(),
     });
     const past = seed(hippoRoot, 'a row retrieved a millisecond earlier than that', {
       confidence: 'observed',
-      last_retrieved: new Date(NOW.getTime() - 30 * DAY - 1).toISOString(),
+      lastRetrieved: new Date(NOW.getTime() - 30 * DAY - 1).toISOString(),
     });
     expect(confidenceFacets(at, NOW).agedOut).toBe(false);
     expect(confidenceFacets(past, NOW).agedOut).toBe(true);
@@ -152,8 +152,8 @@ describe('confidence facets', () => {
     const e = seed(hippoRoot, 'a row written once and never recalled again', {
       confidence: 'observed',
       created: ago(60),
-      last_retrieved: ago(60),
-      retrieval_count: 0,
+      lastRetrieved: ago(60),
+      retrievalCount: 0,
     });
     expect(confidenceFacets(e, NOW).agedOut).toBe(true);
   });
@@ -162,11 +162,11 @@ describe('confidence facets', () => {
     const pinned = seed(hippoRoot, 'a pinned rule untouched for a year', {
       confidence: 'observed',
       pinned: true,
-      last_retrieved: ago(365),
+      lastRetrieved: ago(365),
     });
     const verified = seed(hippoRoot, 'a verified fact untouched for a year', {
       confidence: 'verified',
-      last_retrieved: ago(365),
+      lastRetrieved: ago(365),
     });
     expect(confidenceFacets(pinned, NOW).agedOut).toBe(false);
     expect(confidenceFacets(verified, NOW).agedOut).toBe(false);
@@ -175,11 +175,11 @@ describe('confidence facets', () => {
   it('counts an aged-out observed row under Observed and Aged out, not Stale', async () => {
     seed(hippoRoot, 'an observed row nobody has retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
     seed(hippoRoot, 'a row a human rejected through hippo invalidate', {
       confidence: 'stale',
-      last_retrieved: ago(1),
+      lastRetrieved: ago(1),
     });
 
     const out = await hippo(home, ['status']);
@@ -192,7 +192,7 @@ describe('confidence facets', () => {
   it('reports the stored tier and aged_out from recall --why JSON', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
 
     const out: { results: Array<{ confidence: string; aged_out: boolean }> } = JSON.parse(
@@ -206,7 +206,7 @@ describe('confidence facets', () => {
   it('reports the stored tier and aged_out from explain --json', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
 
     const out: { results: Array<{ confidence: string; aged_out: boolean }> } = JSON.parse(
@@ -220,7 +220,7 @@ describe('confidence facets', () => {
   it('omits aged_out from context --format json, which reports post-retrieval state', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
 
     const payload: { memories: Array<{ content: string; confidence: string }> } = JSON.parse(
@@ -236,7 +236,7 @@ describe('confidence facets', () => {
   it('reports the stored tier and aged_out from the dashboard payload', async () => {
     const e = seed(hippoRoot, 'a dashboard row nobody has retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
 
     server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: 'default' });
@@ -260,7 +260,7 @@ describe('confidence facets', () => {
   it('renders the pair on hippo trace, the surface that reads without retrieving', async () => {
     const e = seed(hippoRoot, 'a traced row nobody has retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
 
     expect(await hippo(home, ['trace', e.id])).toContain('observed, aged');
@@ -273,11 +273,11 @@ describe('confidence facets', () => {
   it('keeps the Pinned column aligned when the label carries its aged suffix', async () => {
     const aged = seed(hippoRoot, 'a traced row nobody has retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
     const fresh = seed(hippoRoot, 'a traced row retrieved yesterday', {
       confidence: 'observed',
-      last_retrieved: ago(1),
+      lastRetrieved: ago(1),
     });
 
     const line = async (id: string): Promise<string> => /Confidence:.*/.exec(await hippo(home, ['trace', id]))![0];
@@ -290,11 +290,11 @@ describe('confidence facets', () => {
   it('renders the pair on hippo recall, while context un-ages what it returns', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
     seed(hippoRoot, 'a distinctive kipper fact nobody retrieved lately', {
       confidence: 'observed',
-      last_retrieved: ago(45),
+      lastRetrieved: ago(45),
     });
 
     expect(await hippo(home, ['recall', 'haddock'])).toContain('[observed, aged]');
@@ -305,7 +305,7 @@ describe('confidence facets', () => {
   it('renders the stored tier at the MCP compact label', async () => {
     seed(hippoRoot, 'a distinctive haddock fact a human rejected', {
       confidence: 'stale',
-      last_retrieved: ago(1),
+      lastRetrieved: ago(1),
     });
 
     const res = await handleMcpRequest(

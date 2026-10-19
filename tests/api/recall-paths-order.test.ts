@@ -95,7 +95,7 @@ function written(): Written {
     ROWS.map((r) => r.id),
     TENANT,
   )
-    .filter((e) => (e.retrieval_count ?? 0) > 0)
+    .filter((e) => (e.retrievalCount ?? 0) > 0)
     .map((e) => e.id)
     .sort();
   const traces = onDb(root, (db) =>

@@ -43,7 +43,7 @@ const COMMENT_REF = 'github://acme/demo/issue/1/comment/9';
 const ONLY_B_REF = 'github://globex/site/issue/3/comment/4';
 const REASON = 'source_deleted:github:issue_comment:d-1';
 
-type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind'>;
+type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind'>;
 type Archived = { readonly duplicate: boolean; readonly archived: number };
 type Letter = DeadLetterRows['slack'] | DeadLetterRows['github'];
 type Value =
@@ -197,7 +197,7 @@ const writeRaw =
 const readBack =
   (tenantId: string, ...ids: string[]): Call =>
   async (_g, store) =>
-    (await store.entriesByIds(ids, tenantId)).map((e) => ({ id: e.id, tenant_id: e.tenant_id, kind: e.kind }));
+    (await store.entriesByIds(ids, tenantId)).map((e) => ({ id: e.id, tenantId: e.tenantId, kind: e.kind }));
 const values = (side: Side): unknown[] => side.outcomes.map((o) => ('value' in o ? o.value : o));
 
 /** The audit rows a run added, without the ids and times both sides already matched on. */
@@ -368,8 +368,8 @@ describe('ConnectorEvents.archiveDeletedArtifact', () => {
       { outcome: 'written' },
       { duplicate: false, archived: 2 },
       { duplicate: true, archived: 0 },
-      [{ id: note.id, tenant_id: TENANT_A, kind: 'distilled' }],
-      [{ id: commentB.id, tenant_id: TENANT_B, kind: 'raw' }],
+      [{ id: note.id, tenantId: TENANT_A, kind: 'distilled' }],
+      [{ id: commentB.id, tenantId: TENANT_B, kind: 'raw' }],
     ]);
     expect(newEvents(side)).toEqual([loggedRow(github('key-deleted'), first.id)]);
     expect(added(side)).toEqual([remembered(first), remembered(edited), archivedRow(first), archivedRow(edited)]);
@@ -385,7 +385,7 @@ describe('ConnectorEvents.archiveDeletedArtifact', () => {
     expect(values(side)).toEqual([
       { duplicate: false, archived: 0 },
       { duplicate: true, archived: 0 },
-      [{ id: onlyB.id, tenant_id: TENANT_B, kind: 'raw' }],
+      [{ id: onlyB.id, tenantId: TENANT_B, kind: 'raw' }],
     ]);
     expect([newEvents(side), added(side)]).toEqual([[loggedRow(github('key-nothing'), null)], []]);
   });

@@ -184,10 +184,10 @@ async function substituteSummaries(
   let summarized = 0;
   const olderByParent = new Map<string, MemoryEntry[]>();
   for (const r of olderRows) {
-    if (!r.dag_parent_id) continue;
-    const list = olderByParent.get(r.dag_parent_id) ?? [];
+    if (!r.dagParentId) continue;
+    const list = olderByParent.get(r.dagParentId) ?? [];
     list.push(r);
-    olderByParent.set(r.dag_parent_id, list);
+    olderByParent.set(r.dagParentId, list);
   }
   const eligibleParentIds = Array.from(olderByParent.keys()).filter(
     (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
@@ -203,7 +203,7 @@ async function substituteSummaries(
     olderItems.push({
       id: parent.id,
       content: parent.content,
-      createdAt: parent.earliest_at ?? parent.created,
+      createdAt: parent.earliestAt ?? parent.created,
       isSummary: true,
       substitutedFor: claimed,
       strength: parent.strength,

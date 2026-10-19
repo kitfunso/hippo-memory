@@ -189,7 +189,7 @@ function createImportEntry(
 function writeOrProbeImport(target: OpenImport, entry: MemoryEntry, options: ImportOptions): boolean {
   const { learning, rejections } = target;
   if (options.dryRun) {
-    const check = { tenantId: entry.tenant_id ?? DEFAULT_TENANT_ID, entryId: entry.id, content: entry.content };
+    const check = { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, entryId: entry.id, content: entry.content };
     return !rejections.refusedAmong([check])[0];
   }
   // A rejection refuses one chunk, not the whole import, so siblings still land.

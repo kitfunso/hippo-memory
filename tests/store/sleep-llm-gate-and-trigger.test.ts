@@ -156,6 +156,6 @@ describe('the configured base half-life', () => {
     const root = newRoot(JSON.stringify({ defaultHalfLifeDays: 14 }));
     const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const { id } = await remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
-    expect(readEntry(root, id)?.half_life_days).toBe(14);
+    expect(readEntry(root, id)?.halfLifeDays).toBe(14);
   });
 });

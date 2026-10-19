@@ -75,14 +75,14 @@ function localRow(i: number): MemoryEntry {
     ...entry,
     id: `ctx-${String(i).padStart(3, '0')}`,
     created: iso(created),
-    valid_from: iso(created),
-    last_retrieved: iso(created + (i % 5) * DAY),
-    half_life_days: [3, 7, 30, 90][i % 4],
-    retrieval_count: i % 6,
-    outcome_positive: i % 7 === 0 ? 2 : 0,
-    outcome_negative: i % 11 === 0 ? 1 : 0,
-    superseded_by: i % 31 === 7 ? 'ctx-000' : null,
-    origin_project: i % 10 === 1 ? 'other' : i % 10 === 2 ? '' : i % 23 === 6 ? null : 'proj',
+    validFrom: iso(created),
+    lastRetrieved: iso(created + (i % 5) * DAY),
+    halfLifeDays: [3, 7, 30, 90][i % 4],
+    retrievalCount: i % 6,
+    outcomePositive: i % 7 === 0 ? 2 : 0,
+    outcomeNegative: i % 11 === 0 ? 1 : 0,
+    supersededBy: i % 31 === 7 ? 'ctx-000' : null,
+    originProject: i % 10 === 1 ? 'other' : i % 10 === 2 ? '' : i % 23 === 6 ? null : 'proj',
   };
 }
 
@@ -103,10 +103,10 @@ function globalRow(j: number): MemoryEntry {
     ...entry,
     id: `glob-${String(j).padStart(3, '0')}`,
     created: iso(created),
-    valid_from: iso(created),
-    last_retrieved: iso(created),
-    half_life_days: [7, 30][j % 2],
-    origin_project: j % 2 === 0 ? 'proj' : '',
+    validFrom: iso(created),
+    lastRetrieved: iso(created),
+    halfLifeDays: [7, 30][j % 2],
+    originProject: j % 2 === 0 ? 'proj' : '',
   };
 }
 
@@ -120,8 +120,8 @@ function merged(): MemoryEntry {
     ...entry,
     id: 'ctx-merged',
     created: iso(base - 2 * DAY),
-    last_retrieved: iso(base - 2 * DAY),
-    origin_project: 'proj',
+    lastRetrieved: iso(base - 2 * DAY),
+    originProject: 'proj',
   };
 }
 

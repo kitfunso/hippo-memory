@@ -72,7 +72,7 @@ export function inMemoryDagReadsStore(hippoRoot: string): InMemoryDagReadsStore 
       const summary = rowToEntry(found);
       const levels: MemoryEntry[][] = [];
       const listed = new Set<string>([id]);
-      const walked = descendantAdmits(summary, admit) && (summary.dag_level ?? 0) >= (minSummaryLevel ?? 0);
+      const walked = descendantAdmits(summary, admit) && (summary.dagLevel ?? 0) >= (minSummaryLevel ?? 0);
       let above = walked ? [id] : [];
       while (levels.length < depth && above.length > 0) {
         const level: MemoryEntry[] = [];

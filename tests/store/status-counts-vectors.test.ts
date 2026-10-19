@@ -160,7 +160,7 @@ function row(lastRetrieved: string, fields: Partial<MemoryEntry> = {}): string {
     ...base,
     id,
     created: daysAgo(500 - seq),
-    last_retrieved: lastRetrieved,
+    lastRetrieved: lastRetrieved,
     confidence: 'observed',
     ...fields,
   });
@@ -172,21 +172,21 @@ function seedEveryCase(): void {
   const fresh = row(daysAgo(1), { layer: Layer.Buffer, confidence: 'verified' });
   const aged = row(daysAgo(31));
   row(daysAgo(30), { layer: Layer.Semantic, confidence: 'inferred' });
-  row(daysAgo(10), { layer: Layer.Trace, confidence: 'stale', half_life_days: 2 });
+  row(daysAgo(10), { layer: Layer.Trace, confidence: 'stale', halfLifeDays: 2 });
   row(daysAgo(400), { pinned: true });
-  row(daysAgo(1), { layer: Layer.Semantic, confidence: 'verified', pinned: true, outcome_negative: 3 });
+  row(daysAgo(1), { layer: Layer.Semantic, confidence: 'verified', pinned: true, outcomeNegative: 3 });
   row('not-a-date', { confidence: 'inferred' });
   // JavaScript reads this date and SQLite's julianday does not, so only a JavaScript tally scores the row.
   row('Wed, 01 Apr 2026 00:00:00 GMT');
-  const otherA = row(daysAgo(90), { confidence: 'verified', tenant_id: 'other' });
-  const otherB = row(daysAgo(20), { layer: Layer.Buffer, half_life_days: 1, tenant_id: 'other' });
+  const otherA = row(daysAgo(90), { confidence: 'verified', tenantId: 'other' });
+  const otherB = row(daysAgo(20), { layer: Layer.Buffer, halfLifeDays: 1, tenantId: 'other' });
   const boosted = row(daysAgo(2), {
     layer: Layer.Semantic,
-    emotional_valence: 'critical',
-    retrieval_count: 5,
-    outcome_positive: 2,
+    emotionalValence: 'critical',
+    retrievalCount: 5,
+    outcomePositive: 2,
   });
-  row(daysAgo(45), { confidence: 'stale', half_life_days: 30, superseded_by: boosted });
+  row(daysAgo(45), { confidence: 'stale', halfLifeDays: 30, supersededBy: boosted });
   replaceDetectedConflicts(
     root,
     [
@@ -279,7 +279,7 @@ describe('reports.statusCounts', () => {
   it('equals a tally over every loaded entry, to the last bit of the average', () => {
     seedEveryCase();
     // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
-    for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), half_life_days: 0.5 * 1.18 ** i });
+    for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), halfLifeDays: 0.5 * 1.18 ** i });
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);
     const strengths = entries.map((e) => calculateStrength(e, now));

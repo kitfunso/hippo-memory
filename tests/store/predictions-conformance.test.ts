@@ -62,7 +62,7 @@ const at =
 const save =
   (input: PredictionSave): Call =>
   (g) =>
-    g.savePrediction(input.mirror.tenant_id, input, ACTOR);
+    g.savePrediction(input.mirror.tenantId, input, ACTOR);
 const close =
   (id: number, how: PredictionClose, tenantId = TENANT_A): Call =>
   (g) =>
@@ -88,7 +88,7 @@ const mirrorOf =
   async (_g, store) =>
     (await store.entriesByIds([input.mirror.id], tenantId)).map((e) => ({
       id: e.id,
-      tenantId: e.tenant_id,
+      tenantId: e.tenantId,
       content: e.content,
       tags: e.tags,
     }));
@@ -97,7 +97,7 @@ function openRow(id: number, input: PredictionSave, createdAt: string): Predicti
   return {
     id,
     memoryId: input.mirror.id,
-    tenantId: input.mirror.tenant_id,
+    tenantId: input.mirror.tenantId,
     classTag: input.classTag,
     claimText: input.claimText,
     estimateValue: input.estimateValue ?? null,

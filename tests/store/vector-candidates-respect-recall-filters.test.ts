@@ -29,9 +29,9 @@ function seed(
   const entries = rows.map((r) => {
     const entry = {
       ...createMemory(r.content, { tenantId: 'default', ...r.opts, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      superseded_by: r.supersededBy ?? null,
+      supersededBy: r.supersededBy ?? null,
     };
-    if ('origin' in r) entry.origin_project = r.origin;
+    if ('origin' in r) entry.originProject = r.origin;
     return entry;
   });
   batchWriteAndDelete(root, entries, []);

@@ -26,7 +26,7 @@ let globalPin: string;
 function seedPin(root: string, content: string): string {
   const entry = {
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    origin_project: PROJECT,
+    originProject: PROJECT,
     pinned: true,
   };
   writeEntry(root, entry);

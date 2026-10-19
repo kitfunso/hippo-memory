@@ -486,7 +486,7 @@ function unlistedRows(target: ImportTarget, options: UnlistedRowsOptions): numbe
   return target
     .liveBySourcePrefix(`${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`)
     .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p)))
-    .filter((row) => partition === null || partition.includes(row.origin_project ?? '')).length;
+    .filter((row) => partition === null || partition.includes(row.originProject ?? '')).length;
 }
 
 /**

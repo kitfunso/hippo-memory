@@ -18,7 +18,7 @@ import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
 function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
-  return loadAllDirtySummaries(root).filter((m) => m.tenant_id === tenantId);
+  return loadAllDirtySummaries(root).filter((m) => m.tenantId === tenantId);
 }
 
 /** One dirty-mark on its own handle, the way every child-write path calls the production marker. */

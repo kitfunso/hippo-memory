@@ -109,9 +109,9 @@ export interface RecallJsonRow {
   tags: SearchResult['entry']['tags'];
   content: string;
   layer: SearchResult['entry']['layer'];
-  trace_outcome?: SearchResult['entry']['trace_outcome'];
+  trace_outcome?: SearchResult['entry']['traceOutcome'];
   superseded?: boolean;
-  superseded_by?: SearchResult['entry']['superseded_by'];
+  superseded_by?: SearchResult['entry']['supersededBy'];
   graphVia?: SearchResult['graphVia'];
   confidence?: ReturnType<typeof confidenceFacets>['tier'];
   aged_out?: ReturnType<typeof confidenceFacets>['agedOut'];
@@ -134,11 +134,11 @@ export function recallJsonRow(r: SearchResult, query: string, showWhy: boolean, 
     layer: r.entry.layer,
   };
   if (r.entry.layer === Layer.Trace) {
-    base.trace_outcome = r.entry.trace_outcome;
+    base.trace_outcome = r.entry.traceOutcome;
   }
-  if (r.entry.superseded_by) {
+  if (r.entry.supersededBy) {
     base.superseded = true;
-    base.superseded_by = r.entry.superseded_by;
+    base.superseded_by = r.entry.supersededBy;
   }
   if (r.graphVia) {
     base.graphVia = r.graphVia;

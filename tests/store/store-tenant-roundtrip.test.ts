@@ -9,7 +9,7 @@ describe('store roundtrip with tenant_id', () => {
     const entry = createMemory('tenant test content', { tenantId: 'acme' });
     writeEntry(home, entry);
     const loaded = readEntry(home, entry.id);
-    expect(loaded?.tenant_id).toBe('acme');
+    expect(loaded?.tenantId).toBe('acme');
   });
 
   it('omitting tenantId defaults to "default" on read', () => {
@@ -17,6 +17,6 @@ describe('store roundtrip with tenant_id', () => {
     const entry = createMemory('no tenant content');
     writeEntry(home, entry);
     const loaded = readEntry(home, entry.id);
-    expect(loaded?.tenant_id).toBe('default');
+    expect(loaded?.tenantId).toBe('default');
   });
 });

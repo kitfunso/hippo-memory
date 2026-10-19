@@ -347,7 +347,7 @@ function compactionEntry(text: string, ctx: ItemContext, origin: string | null, 
       tenantId: ctx.tenantId,
       baseHalfLifeDays,
     }),
-    origin_project: origin,
+    originProject: origin,
   };
 }
 

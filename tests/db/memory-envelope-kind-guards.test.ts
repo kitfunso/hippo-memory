@@ -147,7 +147,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(e.kind).toBe('raw');
     expect(e.scope).toBe('team:eng');
     expect(e.owner).toBe('user:42');
-    expect(e.artifact_ref).toBe('slack://team/channel/1700000000.123');
+    expect(e.artifactRef).toBe('slack://team/channel/1700000000.123');
 
     writeEntry(home, e);
     const read = readEntry(home, e.id);
@@ -155,7 +155,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(read!.kind).toBe('raw');
     expect(read!.scope).toBe('team:eng');
     expect(read!.owner).toBe('user:42');
-    expect(read!.artifact_ref).toBe('slack://team/channel/1700000000.123');
+    expect(read!.artifactRef).toBe('slack://team/channel/1700000000.123');
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -165,14 +165,14 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(e.kind).toBe('distilled');
     expect(e.scope).toBeNull();
     expect(e.owner).toBeNull();
-    expect(e.artifact_ref).toBeNull();
+    expect(e.artifactRef).toBeNull();
 
     writeEntry(home, e);
     const read = readEntry(home, e.id);
     expect(read!.kind).toBe('distilled');
     expect(read!.scope).toBeNull();
     expect(read!.owner).toBeNull();
-    expect(read!.artifact_ref).toBeNull();
+    expect(read!.artifactRef).toBeNull();
     rmSync(home, { recursive: true, force: true });
   });
 

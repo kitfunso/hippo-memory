@@ -82,8 +82,8 @@ function seed(): void {
     ...STORED.map((text) => row(text)),
     row(mergedText('[Consolidated from 2 related memories, newest first]', parts), merge),
     row('[Consolidated from 2 related memories]\n\nUse the staging bucket for large uploads only', merge),
-    row('The acme deploy key rotates every ninety days', { tenant_id: 'acme' }),
-    row('Old advice: restart the worker on every deploy', { superseded_by: 'mem_newer' }),
+    row('The acme deploy key rotates every ninety days', { tenantId: 'acme' }),
+    row('Old advice: restart the worker on every deploy', { supersededBy: 'mem_newer' }),
   ]);
 }
 

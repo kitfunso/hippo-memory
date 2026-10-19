@@ -11,8 +11,8 @@ describe('bi-temporal schema v11', () => {
     writeEntry(home, e);
     const read = readEntry(home, e.id);
     expect(read).not.toBeNull();
-    expect(read!.valid_from).toBe(e.created);
-    expect(read!.superseded_by).toBeNull();
+    expect(read!.validFrom).toBe(e.created);
+    expect(read!.supersededBy).toBeNull();
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -24,10 +24,10 @@ describe('bi-temporal schema v11', () => {
       layer: Layer.Episodic,
       validFrom: pastDate,
     });
-    expect(e.valid_from).toBe(pastDate);
+    expect(e.validFrom).toBe(pastDate);
     writeEntry(home, e);
     const read = readEntry(home, e.id);
-    expect(read!.valid_from).toBe(pastDate);
+    expect(read!.validFrom).toBe(pastDate);
     rmSync(home, { recursive: true, force: true });
   });
 });

@@ -96,8 +96,8 @@ describe('GitHub connector — provenance coverage parity', () => {
     for (const e of githubEntries) {
       expect(e.owner).not.toBeNull();
       expect(e.owner).toMatch(/^user:github:/);
-      expect(e.artifact_ref).not.toBeNull();
-      expect(e.artifact_ref?.startsWith('github://')).toBe(true);
+      expect(e.artifactRef).not.toBeNull();
+      expect(e.artifactRef?.startsWith('github://')).toBe(true);
     }
   });
 });

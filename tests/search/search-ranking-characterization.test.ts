@@ -30,28 +30,28 @@ const ago = (days: number): string => new Date(NOW.getTime() - days * DAY).toISO
 function mk(id: string, content: string, ageDays: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const base = createMemory(content, { baseHalfLifeDays: 30, tenantId: TENANT });
   const t = ago(ageDays);
-  return { ...base, id, created: t, last_retrieved: t, valid_from: t, ...extra };
+  return { ...base, id, created: t, lastRetrieved: t, validFrom: t, ...extra };
 }
 
 const ENTRIES: MemoryEntry[] = [
   mk('d1', 'deploy pipeline uses blue green rollout', 2),
   mk('d2', 'deploy checklist says run migrations before every deploy', 10, { tags: ['decision'] }),
-  mk('d3', 'rollback the deploy when health checks fail twice', 40, { outcome_positive: 3 }),
+  mk('d3', 'rollback the deploy when health checks fail twice', 40, { outcomePositive: 3 }),
   mk('d4', 'pipeline caching speeds up the nightly builds', 1, { tags: [CHURN_STALE_TAG] }),
   mk('d5', 'deploy pipeline secrets live in the team vault', 5, { tags: ['scope:team-a'] }),
-  mk('d6', 'deploy pipeline secrets live in the shared vault', 5, { tags: ['scope:team-b'], outcome_negative: 2 }),
+  mk('d6', 'deploy pipeline secrets live in the shared vault', 5, { tags: ['scope:team-b'], outcomeNegative: 2 }),
   mk('d7', 'long thread: the deploy pipeline requires approval from ops before release', 12),
-  mk('x1', 'deploy pipeline requires ops approval', 11, { tags: ['extracted'], extracted_from: 'd7', dag_level: 1 }),
+  mk('x1', 'deploy pipeline requires ops approval', 11, { tags: ['extracted'], extractedFrom: 'd7', dagLevel: 1 }),
   mk('s1', 'deploy pipeline summary topic', 3, {
     tags: ['dag-summary'],
-    dag_level: 2,
-    descendant_count: 2,
-    last_rebuilt_at: ago(2),
-    rebuild_count: 4,
+    dagLevel: 2,
+    descendantCount: 2,
+    lastRebuiltAt: ago(2),
+    rebuildCount: 4,
   }),
-  mk('c1', 'child note about the weekend freeze', 3, { dag_parent_id: 's1' }),
-  mk('o1', 'old deploy pipeline used jenkins', 100, { superseded_by: 'n1' }),
-  mk('n1', 'new deploy pipeline uses github actions', 20, { valid_from: ago(20) }),
+  mk('c1', 'child note about the weekend freeze', 3, { dagParentId: 's1' }),
+  mk('o1', 'old deploy pipeline used jenkins', 100, { supersededBy: 'n1' }),
+  mk('n1', 'new deploy pipeline uses github actions', 20, { validFrom: ago(20) }),
   mk('z1', 'lunch menu on fridays has tacos', 4),
   mk('z2', 'ship to production with zero downtime', 6),
 ];

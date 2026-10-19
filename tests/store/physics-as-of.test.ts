@@ -26,7 +26,7 @@ const QUERY_VECTOR = [1, 0, 0];
 
 function mk(id: string, content: string, validFrom: string): MemoryEntry {
   const base = createMemory(content, { baseHalfLifeDays: 30, tenantId: TENANT });
-  return { ...base, id, created: validFrom, last_retrieved: validFrom, valid_from: validFrom };
+  return { ...base, id, created: validFrom, lastRetrieved: validFrom, validFrom: validFrom };
 }
 
 // pre1 and pre2 existed at the cut; post was written after it and sits right on the query with a heavy particle.
@@ -121,7 +121,7 @@ describe('physicsSearch with asOf', () => {
   });
 
   it('drops a superseded row from the physics pool unless includeSuperseded is set', async () => {
-    const superseded = { ...PRE1, superseded_by: 'post', tags: [...PRE1.tags] };
+    const superseded = { ...PRE1, supersededBy: 'post', tags: [...PRE1.tags] };
     const current = await physicsSearch('deploy pipeline', [superseded, ...pool(PRE2, POST)], {
       ...base(),
       asOf: undefined,

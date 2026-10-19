@@ -286,7 +286,7 @@ describe('backfillRepo', () => {
     const entries = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
     // Only the 3 non-PR items should have produced memories.
     expect(entries).toHaveLength(3);
-    const refs = entries.map((e) => e.artifact_ref).sort();
+    const refs = entries.map((e) => e.artifactRef).sort();
     expect(refs).toEqual([`github://${REPO}/issue/1`, `github://${REPO}/issue/3`, `github://${REPO}/issue/5`]);
   });
 

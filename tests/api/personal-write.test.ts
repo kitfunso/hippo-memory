@@ -55,7 +55,7 @@ describe('remember with personal', () => {
     });
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBe('personal:private:a');
-    expect(row?.origin_project).toBe('');
+    expect(row?.originProject).toBe('');
   });
 
   it('a team write with the same project still stamps that project, so the personal branch is what drops it', async () => {
@@ -65,7 +65,7 @@ describe('remember with personal', () => {
     });
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBeNull();
-    expect(row?.origin_project).toBe('alpha');
+    expect(row?.originProject).toBe('alpha');
   });
 
   const ownerless: ReadonlyArray<[string, Actor]> = [
@@ -206,7 +206,7 @@ describe('POST /v1/memories personal field', () => {
     const { id } = (await res.json()) as { id: string };
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBe('personal:private:oid-a');
-    expect(row?.origin_project).toBe('');
+    expect(row?.originProject).toBe('');
   });
 
   it('a malformed project is still a 400 with personal: true', async () => {

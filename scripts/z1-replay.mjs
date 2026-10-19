@@ -13,8 +13,8 @@ const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
 const { textOverlap } = await distImport('util/tokenize.js');
 const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('util/token-text.js'), distImport('core/skip-unchanged.js')]);
-const { isWorthSurfacing } = await distImport('core/memory-quality.js');
-const { ambientSecretAdmit } = await distImport('entry/testing.js');
+const { isWorthSurfacingWire: isWorthSurfacing } = await distImport('entry/testing.js');
+const { ambientSecretAdmitWire: ambientSecretAdmit } = await distImport('entry/testing.js');
 const { resolveProjectIdentity, classifyOriginProject } = await distImport('core/project-identity.js');
 const { passesScopeFilterForRecall } = await distImport('core/recall-scope.js');
 const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('core/prompt-recall.js');

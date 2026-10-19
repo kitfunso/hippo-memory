@@ -48,8 +48,8 @@ afterEach(() => {
 describe('supersede keeps provenance', () => {
   it('keeps a project row in its project when it is superseded in the global store', async () => {
     const old = seed(globalStore, 'the billing service retries a failed charge three times before it pages', {
-      origin_project: 'proj-a',
-      source_session_id: 'sess-old',
+      originProject: 'proj-a',
+      sourceSessionId: 'sess-old',
     });
 
     const { newId } = await supersede(
@@ -59,14 +59,14 @@ describe('supersede keeps provenance', () => {
     );
 
     const next = readEntry(globalStore, newId);
-    expect(next?.origin_project).toBe('proj-a');
-    expect(next?.source_session_id).toBe('sess-old');
-    expect(readEntry(globalStore, old.id)?.superseded_by).toBe(newId);
+    expect(next?.originProject).toBe('proj-a');
+    expect(next?.sourceSessionId).toBe('sess-old');
+    expect(readEntry(globalStore, old.id)?.supersededBy).toBe(newId);
   });
 
   it('keeps a user-global row user-global in a project store', async () => {
     const old = seed(projectStore, 'the release checklist lives in the wiki under the platform section', {
-      origin_project: '',
+      originProject: '',
     });
 
     const { newId } = await supersede(
@@ -76,15 +76,15 @@ describe('supersede keeps provenance', () => {
     );
 
     const next = readEntry(projectStore, newId);
-    expect(next?.origin_project).toBe('');
-    expect(next?.source_session_id).toBeNull();
+    expect(next?.originProject).toBe('');
+    expect(next?.sourceSessionId).toBeNull();
   });
 
   it('lets the store stamp the origin of a legacy row that has none', async () => {
     const old = seed(projectStore, 'the nightly export job writes its files to the shared archive bucket', {
-      origin_project: null,
+      originProject: null,
     });
-    expect(readEntry(projectStore, old.id)?.origin_project).toBeNull();
+    expect(readEntry(projectStore, old.id)?.originProject).toBeNull();
 
     const { newId } = await supersede(
       ctxFor(projectStore),
@@ -92,7 +92,7 @@ describe('supersede keeps provenance', () => {
       'the nightly export job writes its files to the cold archive bucket',
     );
 
-    expect(readEntry(projectStore, newId)?.origin_project).toBe('proj');
+    expect(readEntry(projectStore, newId)?.originProject).toBe('proj');
   });
 });
 
@@ -107,8 +107,8 @@ describe('createSuccessor', () => {
       source: 'compaction:sess-old',
       scope: 'project:billing',
     }),
-    source_session_id: 'sess-old',
-    origin_project: 'proj-a',
+    sourceSessionId: 'sess-old',
+    originProject: 'proj-a',
     ...extra,
   });
 
@@ -121,29 +121,28 @@ describe('createSuccessor', () => {
     expect(next.content).toBe('the deploy pipeline signs and scans every artifact before upload');
     expect(next.source).toBe('compaction:sess-old');
     expect(next.scope).toBe('project:billing');
-    expect(next.source_session_id).toBe('sess-old');
-    expect(next.origin_project).toBe('proj-a');
+    expect(next.sourceSessionId).toBe('sess-old');
+    expect(next.originProject).toBe('proj-a');
     expect(next.layer).toBe(Layer.Semantic);
     expect(next.tags).toEqual(['deploy', 'signing']);
     expect(next.tags).not.toBe(old.tags);
     expect(next.pinned).toBe(true);
     expect(next.confidence).toBe('verified');
-    expect(next.superseded_by).toBeNull();
+    expect(next.supersededBy).toBeNull();
   });
 
   it('keeps a user-global origin', () => {
     expect(
-      createSuccessor(oldRow({ origin_project: '' }), 'the deploy pipeline now signs twice', opts).origin_project,
+      createSuccessor(oldRow({ originProject: '' }), 'the deploy pipeline now signs twice', opts).originProject,
     ).toBe('');
   });
 
   it('leaves a legacy null or unset origin unset so the store stamps it', () => {
     expect(
-      createSuccessor(oldRow({ origin_project: null }), 'the deploy pipeline now signs twice', opts).origin_project,
+      createSuccessor(oldRow({ originProject: null }), 'the deploy pipeline now signs twice', opts).originProject,
     ).toBeUndefined();
     expect(
-      createSuccessor(oldRow({ origin_project: undefined }), 'the deploy pipeline now signs twice', opts)
-        .origin_project,
+      createSuccessor(oldRow({ originProject: undefined }), 'the deploy pipeline now signs twice', opts).originProject,
     ).toBeUndefined();
   });
 
@@ -158,13 +157,13 @@ describe('createSuccessor', () => {
     expect(next.layer).toBe(Layer.Episodic);
     expect(next.tags).toEqual([]);
     expect(next.pinned).toBe(false);
-    expect(next.source_session_id).toBe('sess-old');
-    expect(next.origin_project).toBe('proj-a');
+    expect(next.sourceSessionId).toBe('sess-old');
+    expect(next.originProject).toBe('proj-a');
   });
 
   it('takes the tenant from the options', () => {
     expect(
-      createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenant_id,
+      createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenantId,
     ).toBe('tenant-b');
   });
 });

@@ -187,7 +187,7 @@ function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<
 }
 
 // The child fields a level-2/3 summary is built from (loadChildrenOfSummary, generateDagSummary).
-const SUMMARY_INPUTS = ['content', 'created', 'dag_parent_id', 'kind'] as const;
+const SUMMARY_INPUTS = ['content', 'created', 'dagParentId', 'kind'] as const;
 
 function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry): MemoryEntry {
   const row: MemoryEntry = { ...live };
@@ -434,9 +434,9 @@ function applyBatchWrites(
     }
     // Hook for writes: a new child, or a change to what its summary reads, marks the parent dirty; decay alone does
     // not.
-    if (row.dag_parent_id && (!live || SUMMARY_INPUTS.some((k) => row[k] !== live[k]))) {
-      dirty.parents.add(row.dag_parent_id);
-      dirty.tenantById.set(row.dag_parent_id, row.tenant_id);
+    if (row.dagParentId && (!live || SUMMARY_INPUTS.some((k) => row[k] !== live[k]))) {
+      dirty.parents.add(row.dagParentId);
+      dirty.tenantById.set(row.dagParentId, row.tenantId);
     }
   }
 }
@@ -449,7 +449,7 @@ interface FtsChanges {
 
 /** True, after auditing the refusal, when the write would introduce a rejected value. */
 function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
-  const entryTenantId = row.tenant_id ?? DEFAULT_TENANT_ID;
+  const entryTenantId = row.tenantId ?? DEFAULT_TENANT_ID;
   // checkRejectionGuard, not a bare tombstone probe: a tombstone can coexist with a live same-content row,
   // and skipping every re-persist would starve it of decay/replay updates; only new or changed content is refused.
   try {

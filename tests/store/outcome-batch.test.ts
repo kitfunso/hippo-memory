@@ -70,24 +70,24 @@ function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeW
 function memory(i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const content = `outcome pin row ${i} about the zephyrine cache`;
   const base = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-  return { ...base, origin_project: 'pin-project', ...extra };
+  return { ...base, originProject: 'pin-project', ...extra };
 }
 
 /** Summary parents (one already dirty), churn-stale tags, three layers, an out-of-reach personal row, another tenant's
  * row, repeated ids and a missing one. */
 function fixture(count: number) {
-  const summaries = [0, 1, 2].map((i) => memory(10_000 + i, { dag_level: DAG_LEVEL.topic, layer: Layer.Semantic }));
+  const summaries = [0, 1, 2].map((i) => memory(10_000 + i, { dagLevel: DAG_LEVEL.topic, layer: Layer.Semantic }));
   const rows = Array.from({ length: count }, (_, i) =>
     memory(i, {
       tags: i % 7 === 0 ? ['alpha', CHURN_STALE_TAG] : ['alpha'],
-      dag_parent_id: i % 10 === 0 ? summaries[i % 3]!.id : null,
+      dagParentId: i % 10 === 0 ? summaries[i % 3]!.id : null,
       layer: [Layer.Buffer, Layer.Episodic, Layer.Semantic][i % 3]!,
       scope: i % 50 === 1 ? 'personal:private:someone-else' : null,
-      outcome_positive: i % 4,
-      outcome_negative: i % 3,
+      outcomePositive: i % 4,
+      outcomeNegative: i % 3,
     }),
   );
-  const foreign = memory(20_000, { tenant_id: 'other' });
+  const foreign = memory(20_000, { tenantId: 'other' });
   const repeats = [rows[3]!.id, rows[3]!.id, rows[4]!.id];
   const ids = [...rows.map((row) => row.id), summaries[0]!.id, foreign.id, ...repeats, 'mem_missing'];
   return { entries: [...summaries, ...rows, foreign], ids };
@@ -178,7 +178,7 @@ describe('outcome statement count', () => {
   it('runs the same statements over 10 ids as over 200', () => {
     const counts = [10, 200].map((n) => {
       const { entries } = fixture(n);
-      const ids = entries.filter((e) => e.tenant_id === 'default' && e.scope === null).map((e) => e.id);
+      const ids = entries.filter((e) => e.tenantId === 'default' && e.scope === null).map((e) => e.id);
       const { root, db } = seeded(`outcome-count-${n}`, entries);
       const { statements } = recordStatements(() => applyOutcomeAt(db, { hippoRoot: root }, outcomeOf(ids, false)));
       return statements.length;

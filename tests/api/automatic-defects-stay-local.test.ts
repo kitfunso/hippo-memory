@@ -56,7 +56,7 @@ describe('automatic rows with a certain defect stay local', () => {
         confidence: 'inferred',
         extractedFrom: source.id,
       }),
-      dag_level: 1,
+      dagLevel: 1,
     });
     for (const content of [1, 2, 3]
       .map((n) => `Upload fact ${n}: the storage token can expire mid-transfer.`)

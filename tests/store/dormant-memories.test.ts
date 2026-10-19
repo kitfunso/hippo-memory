@@ -56,9 +56,9 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
   const then = new Date(Date.now() - days * DAY_MS).toISOString();
   return {
     ...entry,
-    half_life_days: (entry.half_life_days * 7) / DEFAULT_HALF_LIFE_DAYS,
+    halfLifeDays: (entry.halfLifeDays * 7) / DEFAULT_HALF_LIFE_DAYS,
     created: then,
-    last_retrieved: then,
+    lastRetrieved: then,
   };
 }
 
@@ -462,7 +462,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
 
     expect(restored.id).toBe(ids[0]);
     expect(entryMirrorFiles(home, ids[0])).toHaveLength(1);
-    expect(Date.parse(restored.last_retrieved)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(restored.lastRetrieved)).toBeGreaterThanOrEqual(before - 1000);
     expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
     expect(await api.dormantList(ctxFor(home))).toEqual([]);
     expect(
