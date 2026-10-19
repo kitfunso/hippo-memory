@@ -124,7 +124,8 @@ function listSources(dir) {
 
 /** Exports of each declaration file that carry no value, so a TypeScript import of one without `type` is no miss. */
 function typeOnlyExports(dtsFiles) {
-  const program = ts.createProgram(dtsFiles, { noEmit: true, skipLibCheck: true, types: [] });
+  // Symbol flags need no lib types, and parsing the default libs cost seconds per call.
+  const program = ts.createProgram(dtsFiles, { noEmit: true, noLib: true, skipLibCheck: true, types: [] });
   const checker = program.getTypeChecker();
   return new Map(
     dtsFiles.map((file) => {
