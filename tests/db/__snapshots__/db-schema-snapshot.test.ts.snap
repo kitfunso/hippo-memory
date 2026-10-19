@@ -294,6 +294,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "index",
     },
     {
+      "name": "idx_memories_tenant_origin_created",
+      "sql": "CREATE INDEX idx_memories_tenant_origin_created ON memories(tenant_id, origin_project, created, id)",
+      "type": "index",
+    },
+    {
       "name": "idx_memory_conflicts_status_updated",
       "sql": "CREATE INDEX idx_memory_conflicts_status_updated
         ON memory_conflicts(status, updated_at DESC, id DESC)",
@@ -349,6 +354,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "sql": "CREATE INDEX idx_predictions_tenant_class
           ON predictions(tenant_id, class_tag, closure_state)
         ",
+      "type": "index",
+    },
+    {
+      "name": "idx_predictions_tenant_created",
+      "sql": "CREATE INDEX idx_predictions_tenant_created ON predictions(tenant_id, created_at DESC, id DESC)",
       "type": "index",
     },
     {
@@ -2109,6 +2119,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "trigger",
     },
   ],
-  "userVersion": 60,
+  "userVersion": 61,
 }
 `;
