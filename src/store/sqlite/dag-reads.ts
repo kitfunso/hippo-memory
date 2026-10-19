@@ -16,6 +16,7 @@ import { placeholders } from '../../util/sql.js';
 import { descendantAdmits } from '../../core/read-admission.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
+import { bound } from './bound.js';
 
 interface PagedWalk {
   readonly tenantId: string;
@@ -187,14 +188,15 @@ function childrenInOrder(
 }
 
 export function sqliteDagReads(on: OnHandle): Sync<DagReads> {
-  return {
-    sessionRawEntries: ({ tenantId, sessionId, cap, origins }) =>
-      on((db) => loadSessionRawMemoriesAt(db, sessionId, tenantId, cap, origins), openStore),
-    sessionRawCount: ({ tenantId, sessionId, scope, ownScope, origins }) =>
-      on((db) => countSessionRawMemoriesAt(db, sessionId, tenantId, scope, ownScope, origins), openStore),
-    summaryWithDescendants: (tenantId, id, walk) =>
-      on((db) => summaryWithDescendantsAt(db, tenantId, id, walk), openStore),
-  };
+  return bound<DagReads>(
+    on,
+    {
+      sessionRawEntries: loadSessionRawMemoriesAt,
+      sessionRawCount: countSessionRawMemoriesAt,
+      summaryWithDescendants: summaryWithDescendantsAt,
+    },
+    openStore,
+  );
 }
 
 // dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or walked in a loop.

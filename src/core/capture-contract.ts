@@ -1,9 +1,7 @@
 // The shared shape every agent adapter turns a host payload into, so capture code is written once for all runtimes.
 // Field meanings, statuses and how to add a runtime: docs/integrations/agent-inventory.md.
 
-import { isJsonObject, isJsonString, tryParseJson, type JsonValue } from '../util/json.js';
-
-type JsonObject = { [key: string]: JsonValue };
+import { isJsonObject, isJsonString, tryParseJson, type JsonObject } from '../util/json.js';
 
 /** A host lifecycle moment hippo can capture from. */
 export type CaptureEvent =

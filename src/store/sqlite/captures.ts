@@ -9,6 +9,7 @@ import type { StoreFiles, OnHandle } from './open.js';
 import type { CaptureItem, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/captures.js';
 import { EVERY_SCOPE, loadTextsHoldingWordsAt } from './candidates.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles, type Bodies } from './bound.js';
 
 /** One outcome per item, in order, on a handle opened with openStore. `keys` holds the texts already stored and gains
  * each one written, so a repeat inside the batch is skipped. */
@@ -35,13 +36,14 @@ function writeCapturedItemsAt(
   });
 }
 
+const capturedTextsAt: Bodies<Pick<Captures, 'textsHolding'>> = {
+  textsHolding: (db, tenantId, words, { project, everyScope } = {}) =>
+    loadTextsHoldingWordsAt(db, tenantId, words, project, everyScope ? EVERY_SCOPE : undefined),
+};
+
 export function sqliteCaptures(on: OnHandle): Captures {
   return {
-    write: (items, keys, opts) => on((db, files) => writeCapturedItemsAt(db, files, items, keys, opts), openStore),
-    textsHolding: (tenantId, words, { project, everyScope } = {}) =>
-      on(
-        (db) => loadTextsHoldingWordsAt(db, tenantId, words, project, everyScope ? EVERY_SCOPE : undefined),
-        openStore,
-      ),
+    ...boundWithFiles<Pick<Captures, 'write'>>(on, { write: writeCapturedItemsAt }, openStore),
+    ...bound(on, capturedTextsAt, openStore),
   };
 }

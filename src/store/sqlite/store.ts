@@ -4,7 +4,7 @@ import { ambientRefusal } from '../../core/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEventsAt, queryAuditEvents } from './audit.js';
-import { getHippoDbPath } from '../../db/index.js';
+import { getHippoDbPath, type DatabaseSyncLike } from '../../db/index.js';
 import { activeGoalsWithPoliciesAt, sqliteGoals } from './goals.js';
 import { planningFallacyEvidenceAt } from './planning-fallacy-evidence.js';
 import { sqlitePredictions } from './predictions.js';
@@ -52,8 +52,9 @@ import { loadLatestHandoffAt } from './handoffs.js';
 import { updateStatsAt } from './index-and-stats.js';
 import { flushHeldMirrors } from './mirrors.js';
 import { sqliteKeyAudit, sqliteKeyGrants, sqliteKeyWrites } from './keys.js';
-import type { Handles, OnHandle } from './open.js';
+import type { Handles, OnHandle, StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
+import { bound, boundWithFiles, skipEmpty, type Bodies } from './bound.js';
 import {
   type AuditLog,
   type AuditMaintenance,
@@ -183,17 +184,23 @@ type SqliteBaseReads = Pick<
   | 'planningFallacyEvidence'
 >;
 
+const baseReadsAt: Bodies<Pick<HippoStore, 'findApiKey' | 'activeGoals' | 'planningFallacyEvidence'>> = {
+  findApiKey: readApiKeyRecord,
+  activeGoals: activeGoalsWithPoliciesAt,
+  planningFallacyEvidence: planningFallacyEvidenceAt,
+};
+
+const entryReadsAt: Bodies<Pick<HippoStore, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>> = {
+  searchRecallEntries: loadRecallEntriesAt,
+  entriesByIds: loadEntriesByIdsAt,
+  freshRawEntries: loadFreshRawMemoriesAt,
+};
+
 function sqliteBaseReads(on: OnHandle): SqliteBaseReads {
   return {
-    findApiKey: (keyId) => on((db) => readApiKeyRecord(db, keyId)),
-    searchRecallEntries: (query, args) => on((db) => loadRecallEntriesAt(db, query, args), openStore),
-    entriesByIds: (ids, tenantId) => on((db) => loadEntriesByIdsAt(db, ids, tenantId), openStore),
-    activeGoals: (opts) => on((db) => activeGoalsWithPoliciesAt(db, opts)),
-    freshRawEntries: (count, tenantId, sessionId, origins) =>
-      on((db) => loadFreshRawMemoriesAt(db, count, tenantId, sessionId, origins ?? undefined), openStore),
-    continuity: (tenantId, eventLimit, key) => continuityAt(on, tenantId, eventLimit, key),
-    planningFallacyEvidence: (tenantId, classQueryTokens) =>
-      on((db) => planningFallacyEvidenceAt(db, tenantId, classQueryTokens)),
+    ...bound(on, baseReadsAt),
+    ...bound(on, entryReadsAt, openStore),
+    ...boundWithFiles<Pick<HippoStore, 'continuity'>>(on, { continuity: continuityAt }, openStore),
   };
 }
 
@@ -202,41 +209,37 @@ type SqliteRecallWrites = Pick<
   'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
 >;
 
+const recallWritesAt: Bodies<Pick<HippoStore, 'appendAuditEvents' | 'finishRecall' | 'recordTokens'>> = {
+  appendAuditEvents: appendAuditEventsAt,
+  finishRecall: (db, writes) => {
+    finishRecallAt(db, writes);
+  },
+  recordTokens: recordTokenUse,
+};
+
 function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
+  const writes = bound(on, recallWritesAt);
   return {
-    appendAuditEvents(events) {
-      if (events.length === 0) return;
-      on((db) => appendAuditEventsAt(db, events));
-    },
-    finishRecall(writes) {
-      on((db) => finishRecallAt(db, writes));
-    },
-    bumpRecallStats(recalled) {
-      on((db, files) => updateStatsAt(db, files, { recalled }), openStore);
-    },
-    recordTokens(use) {
-      on((db) => recordTokenUse(db, use));
-    },
+    ...writes,
+    appendAuditEvents: skipEmpty(writes.appendAuditEvents, () => undefined),
+    ...boundWithFiles<Pick<HippoStore, 'bumpRecallStats'>>(
+      on,
+      { bumpRecallStats: (db, files, recalled) => updateStatsAt(db, files, { recalled }) },
+      openStore,
+    ),
   };
 }
 
 function sqliteVectorViews(on: OnHandle): Sync<VectorViews> {
-  return {
-    storedVectorViews: (ids) => on((db) => loadStoredVectorViewsAt(db, ids)),
-  };
+  return bound<VectorViews>(on, { storedVectorViews: loadStoredVectorViewsAt });
 }
 
 function sqliteVectorWrites(on: OnHandle): Sync<VectorWrites> {
-  return {
-    entriesWithoutVector: (query) => on((db) => entriesWithoutVectorAt(db, query)),
-    writeVectors: (write) => on((db) => writeVectorsAt(db, write)),
-  };
+  return bound<VectorWrites>(on, { entriesWithoutVector: entriesWithoutVectorAt, writeVectors: writeVectorsAt });
 }
 
 function sqliteAuditLog(on: OnHandle): Sync<AuditLog> {
-  return {
-    listAuditEvents: (query) => on((db) => queryAuditEvents(db, query)),
-  };
+  return bound<AuditLog>(on, { listAuditEvents: queryAuditEvents });
 }
 
 function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
@@ -366,46 +369,38 @@ function baseMethodsOf(sync: SqliteSyncStore): Sync<ServedBaseMethods> {
   };
 }
 
+const contextReadsAt: Bodies<ContextReads> = {
+  unfinishedHandoff: (db, tenantId, maxAgeMs, key) =>
+    loadLatestHandoffAt(db, tenantId, undefined, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key),
+  ambientCandidates: (db, tenantId, { admit, ...request }) =>
+    loadAmbientCandidatesAt(db, tenantId, { ...request, judge: (e) => ambientRefusal(e, admit) }),
+  contextCandidates: loadContextCandidatesAt,
+  ambientTallies: loadAmbientTalliesAt,
+  newestEntries: newestEntriesAt,
+  schemaFit: schemaFitAt,
+  liveContentsBySourceAndTag: liveContentsBySourceAndTagAt,
+  rawRowsUnderRef: rawRowsUnderRefAt,
+};
+
 function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
-  return {
-    unfinishedHandoff: (tenantId, maxAgeMs, key) =>
-      on(
-        (db) =>
-          loadLatestHandoffAt(
-            db,
-            tenantId,
-            undefined,
-            { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' },
-            key ?? undefined,
-          ),
-        openStore,
-      ),
-    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) =>
-      on(
-        (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, (e) => ambientRefusal(e, admit), recall, origins),
-        openStore,
-      ),
-    contextCandidates: (tenantId, filter) => on((db) => loadContextCandidatesAt(db, tenantId, filter), openStore),
-    ambientTallies: (tenantId, filter) => on((db) => loadAmbientTalliesAt(db, tenantId, filter), openStore),
-    newestEntries: (tenantId, limit) => on((db) => newestEntriesAt(db, tenantId, limit), openStore),
-    schemaFit: (tenantId, content, tags) => on((db) => schemaFitAt(db, tenantId, content, tags), openStore),
-    liveContentsBySourceAndTag: (tenantId, source, tag, exceptSessionId) =>
-      on((db) => liveContentsBySourceAndTagAt(db, tenantId, source, tag, exceptSessionId), openStore),
-    rawRowsUnderRef: (tenantId, refPrefix) => on((db) => rawRowsUnderRefAt(db, tenantId, refPrefix), openStore),
-  };
+  return bound(on, contextReadsAt, openStore);
 }
 
 /** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
-function continuityAt(on: OnHandle, tenantId: string, eventLimit: number, key: ContinuityKey | null): ContinuityBlock {
-  return on((db, files) => {
-    const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined);
-    const sessionId = activeSnapshot?.session_id ?? undefined;
-    return {
-      activeSnapshot,
-      sessionHandoff: sessionId ? loadLatestHandoffAt(db, tenantId, sessionId, {}, key ?? undefined) : null,
-      recentSessionEvents: sessionId
-        ? listSessionEventsAt(db, tenantId, { session_id: sessionId, limit: eventLimit })
-        : [],
-    };
-  }, openStore);
+function continuityAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  eventLimit: number,
+  key: ContinuityKey | null,
+): ContinuityBlock {
+  const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key);
+  const sessionId = activeSnapshot?.session_id ?? undefined;
+  return {
+    activeSnapshot,
+    sessionHandoff: sessionId ? loadLatestHandoffAt(db, tenantId, sessionId, {}, key) : null,
+    recentSessionEvents: sessionId
+      ? listSessionEventsAt(db, tenantId, { session_id: sessionId, limit: eventLimit })
+      : [],
+  };
 }

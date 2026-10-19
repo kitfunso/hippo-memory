@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { readyProbeFor } from '../../src/server/ready.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 beforeEach(() => {

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleRecall } from '../../src/cli/recall.js';
-import { resolveTenantId } from '../../src/server/host-tenant.js';
+import { resolveTenantId } from '../../src/server/boot.js';
 import { resetSessionRings, sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

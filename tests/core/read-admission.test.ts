@@ -286,7 +286,7 @@ describe('ambient admission as data', () => {
           const refused: AmbientRefusal[] = [];
           const oldAdmit = oldLoaderAdmit(admission, refused);
           const old = onDb((db) =>
-            loadAmbientCandidatesAt(db, tenantId, recentNeeded, (e) => (oldAdmit(e) ? null : 'admission')),
+            loadAmbientCandidatesAt(db, tenantId, { recentNeeded, judge: (e) => (oldAdmit(e) ? null : 'admission') }),
           );
           const want = { entries: old.entries.map((e) => e.id), refused };
           for (const store of [inProcess, onWorkers]) {

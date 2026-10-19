@@ -3,12 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import {
-  _readApiKeyVerifyStatsForTests,
-  createApiKey,
-  revokeApiKey,
-  type CreateApiKeyOptions,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/auth.js';
+import { _readApiKeyVerifyStatsForTests } from '../../src/server/api-key.js';
 import { serve, type AddonRoute, type ServeOpts } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';

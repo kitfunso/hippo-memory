@@ -23,6 +23,7 @@ import {
 } from '../../core/object-types.js';
 import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from './open.js';
 import { openStore } from './handles.js';
+import { bound, type Bodies } from './bound.js';
 import type {
   IncidentOpen,
   IncidentOpenRefusal,
@@ -63,21 +64,38 @@ interface SyncObjects {
 
 export function sqliteObjects(on: OnHandle): SyncObjects {
   return {
-    listObjects: (tenantId, kind, query) => on((db) => listRows(db, tenantId, kind, query)),
-    objectById(tenantId, kind, id) {
-      const row = on((db) => selectRow(db, kind, tenantId, id));
-      return row ? rowSpec(kind).rowTo(row) : null;
-    },
+    ...objectReads(on),
     closeObject: (tenantId, kind, id, close) => closeAt(on, tenantId, kind, id, close),
     saveObject: (tenantId, kind, save) => saveAt(on, tenantId, kind, save),
     openIncident: (tenantId, open) => openIncidentAt(on, tenantId, open),
-    resolveIncident: (tenantId, id, resolve) => on((db) => resolveRow(db, tenantId, id, resolve)),
-    policiesInForce: (tenantId, query) => on((db) => policiesInForce(db, tenantId, query)),
-    activeSkillsByName: (tenantId, limit) => on((db) => activeSkillsByName(db, tenantId, limit)),
-    briefReceipts: (tenantId, tag, limit) => on((db) => briefReceipts(db, tenantId, tag, limit)),
-    objectIdByMemory: (tenantId, kind, status, memoryId) =>
-      on((db) => idByMemory(db, tenantId, kind, status, memoryId)),
   };
+}
+
+type ObjectReads = Pick<
+  SyncObjects,
+  | 'listObjects'
+  | 'objectById'
+  | 'resolveIncident'
+  | 'policiesInForce'
+  | 'activeSkillsByName'
+  | 'briefReceipts'
+  | 'objectIdByMemory'
+>;
+
+const objectReadsAt: Bodies<ObjectReads> = {
+  listObjects: listRows,
+  objectById: rowById,
+  resolveIncident: resolveRow,
+  policiesInForce,
+  activeSkillsByName,
+  briefReceipts,
+  objectIdByMemory: idByMemory,
+};
+
+function objectReads(on: OnHandle): ObjectReads {
+  // SAFETY: listRows, rowById and idByMemory are generic in the kind, as ObjectReads is; the mapped Bodies type cannot
+  // carry a method's type parameter, so the bound group is typed back to the methods it binds.
+  return bound(on, objectReadsAt) as ObjectReads;
 }
 
 /** The newest object in `status` that a memory mirrors, for the CLI flags that name an object by its memory id. */
@@ -107,6 +125,16 @@ function selectRow<K extends ObjectKind>(
   return db
     .prepare(`SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`)
     .get<RowByKind[K] | undefined>(id, tenantId);
+}
+
+function rowById<K extends ObjectKind>(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  kind: K,
+  id: number,
+): ObjectByKind[K] | null {
+  const row = selectRow(db, kind, tenantId, id);
+  return row ? rowSpec(kind).rowTo(row) : null;
 }
 
 function listRows<K extends ObjectKind>(

@@ -38,13 +38,7 @@ import {
   selectEntriesByIds,
 } from './entry-reads.js';
 import { setHalfLivesAt, writeEntriesTogetherAt, writeEntryAt } from './entry-writes.js';
-import {
-  HALF_LIFE_BASE_META_KEY,
-  TYPED_HALF_LIFE_META_KEY,
-  type Handles,
-  type OnHandle,
-  waitingOpener,
-} from './open.js';
+import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, type Handles, waitingOpener } from './open.js';
 import { reportAuditWriteFailure } from '../../core/audit-report.js';
 import {
   commitInChunksAt,
@@ -58,6 +52,16 @@ import { appendConsolidationRunAt, incrementSleepCountAt, loadSessionDecayContex
 import { findPromotableSessionsAt, listSessionEventsAt, traceExistsForSessionAt } from './sessions.js';
 import { saveStoredParticlesAt, storedParticleIdsAt, storedParticlesByIdsAt } from './vector-index.js';
 import { openStore } from './handles.js';
+import {
+  bound,
+  boundAsync,
+  boundAsyncWithFiles,
+  boundWithFiles,
+  skipEmpty,
+  type Bodies,
+  type FileBodies,
+} from './bound.js';
+import type { AppendAuditOpts } from '../port/types.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private
 // MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
@@ -122,12 +126,12 @@ function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string, tenant
   return rows.map(rowToEntry);
 }
 
-/** loadChildrenOfSummary for many summaries in one IN query per tenant chunk; the map key is
- * `${tenantId}\u0000${summaryId}`, each list in created order. */
-function loadChildrenOfSummariesAt(
+/** loadChildrenOfSummary for many summaries in one IN query per tenant chunk, looked up per summary; each list in
+ * created order. */
+function childrenOfSummariesAt(
   db: DatabaseSyncLike,
   summaries: ReadonlyArray<{ id: string; tenantId: string }>,
-): Map<string, MemoryEntry[]> {
+): (summary: { id: string; tenantId: string }) => MemoryEntry[] {
   const byTenant = new Map<string, string[]>();
   for (const s of summaries) {
     assertTenantId('loadChildrenOfSummaries', s.tenantId);
@@ -158,10 +162,10 @@ function loadChildrenOfSummariesAt(
       }
     }
   }
-  return out;
+  return (summary) => out.get(childrenKey(summary.tenantId, summary.id)) ?? [];
 }
 
-/** Key into the map loadChildrenOfSummaries returns. */
+/** Key into the map childrenOfSummariesAt reads. */
 function childrenKey(tenantId: string, summaryId: string): string {
   return `${tenantId}\u0000${summaryId}`;
 }
@@ -336,14 +340,10 @@ function clearSummaryDirtyAfterBuildAt(
 /** The base every store used before the base was recorded. */
 const LEGACY_HALF_LIFE_BASE = 7;
 
-function readBase(db: DatabaseSyncLike): number {
-  const raw = Number(getMeta(db, HALF_LIFE_BASE_META_KEY, String(LEGACY_HALF_LIFE_BASE)));
-  return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;
-}
-
 /** The base this store's memories are on: 7 days when none was ever recorded. */
 function recordedHalfLifeBaseAt(db: DatabaseSyncLike): number {
-  return readBase(db);
+  const raw = Number(getMeta(db, HALF_LIFE_BASE_META_KEY, String(LEGACY_HALF_LIFE_BASE)));
+  return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;
 }
 
 function readRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
@@ -389,7 +389,7 @@ function moveHalfLivesAt<R>(
   plan: (rows: HalfLifeRows) => { moves: readonly HalfLifeMove[]; outcome: R },
 ): { from: number; outcome: R | null } {
   const run = () => {
-    const from = readBase(db);
+    const from = recordedHalfLifeBaseAt(db);
     const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
     if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) return { from, outcome: null };
     const rows = readRows(db, from, typedPending);
@@ -436,53 +436,98 @@ function lazyTombstoneChecks(open: () => DatabaseSyncLike, dryRun: boolean): Tom
   };
 }
 
-/** Sleep's store work on its hippo.db, each call on its own short-lived handle. */
+// The wait is sleep's own, not a server request's 250 ms.
+const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
+const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
+
+/** Writes each row in its own scope, logging each one that failed; returns how many failed. */
+function auditEachRowAt(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]): number {
+  const failed = recordAuditEventsRowByRowAt(db, events);
+  for (const { event, error } of failed) reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
+  return failed.length;
+}
+
+type StoreReads =
+  | 'entryIdsPage'
+  | 'entriesByIds'
+  | 'sessionDecayContext'
+  | 'moveHalfLives'
+  | 'promotableSessions'
+  | 'traceExists'
+  | 'sessionEvents'
+  | 'countSleep'
+  | 'entriesPage'
+  | 'currentDistilledEntries';
+type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteOneByOne' | 'writeEntry' | 'writeTogether';
+type Unbound = 'tombstoneChecks' | 'reportAuditFailure' | 'failedUnitOf' | 'commitFlush' | 'expireDormant';
+type BareRows = Exclude<keyof Consolidation, Unbound | StoreReads | StoreWrites | keyof SummaryOps>;
+
+const storeReadsAt: Bodies<Pick<Consolidation, StoreReads>> = {
+  entryIdsPage: (db, page) => loadEntryIdsPageAt(db, ALL_TENANTS, page),
+  entriesByIds: (db, ids) => selectEntriesByIds(db, ids, ALL_TENANTS),
+  sessionDecayContext: loadSessionDecayContextAt,
+  moveHalfLives: moveHalfLivesAt,
+  promotableSessions: findPromotableSessionsAt,
+  traceExists: traceExistsForSessionAt,
+  sessionEvents: listSessionEventsAt,
+  countSleep: incrementSleepCountAt,
+  entriesPage: (db, page) => loadEntriesPageAt(db, ALL_TENANTS, page),
+  currentDistilledEntries: loadCurrentDistilledEntriesAt,
+};
+
+const storeWritesAt: FileBodies<Pick<Consolidation, StoreWrites>> = {
+  replaceConflicts: replaceDetectedConflictsAt,
+  recordRun: appendConsolidationRunAt,
+  deleteOneByOne: deleteEntriesOneByOneAt,
+  writeEntry: writeEntryAt,
+  writeTogether: writeEntriesTogetherAt,
+};
+
+const bareRowsAt: Bodies<Pick<Consolidation, BareRows>> = {
+  objectBackedIds: memoriesBackingObjectsAt,
+  ftsDrift: ftsDriftAt,
+  halfLifeBase: recordedHalfLifeBaseAt,
+  particleIds: storedParticleIdsAt,
+  particlesByIds: storedParticlesByIdsAt,
+  saveParticles: saveStoredParticlesAt,
+  auditEachRow: auditEachRowAt,
+  dirtyGraphTenants: loadPendingExtractionTenantsAt,
+  markGraphDrained: markPendingProcessedUpToAt,
+};
+
+const summariesAt: Bodies<SummaryOps> = {
+  dirtySummaries: loadAllDirtySummariesAt,
+  childrenOfSummary: loadChildrenOfSummaryAt,
+  childrenOfSummaries: childrenOfSummariesAt,
+  applyRebuild: applyRebuildResultAt,
+  clearSummaryDirty: clearSummaryDirtyAfterBuildAt,
+  unprofiledTopicSummaries: loadAllL2SummariesAt,
+};
+
+/** Sleep's store work on its hippo.db, each call on its own short-lived handle; an empty batch opens none. */
 export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidation {
-  // The wait is sleep's own, not a server request's 250 ms.
-  const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
-  const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
+  const reads = bound(on, storeReadsAt, openStore);
+  const writes = boundWithFiles(on, storeWritesAt, openStore);
+  const bare = bound(on, bareRowsAt);
+  const { commitFlush } = boundAsyncWithFiles<Pick<Consolidation, 'commitFlush'>>(
+    onAsync,
+    { commitFlush: commitInChunksAt },
+    sleepStoreOpener,
+  );
   return {
-    entryIdsPage: (page) => on((db) => loadEntryIdsPageAt(db, ALL_TENANTS, page), openStore),
-    entriesByIds: (ids) =>
-      ids.length === 0 ? new Map() : on((db) => selectEntriesByIds(db, ids, ALL_TENANTS), openStore),
-    objectBackedIds: () => on((db) => memoriesBackingObjectsAt(db)),
-    ftsDrift: (repair) => on((db) => ftsDriftAt(db, repair)),
-    sessionDecayContext: () => on((db) => loadSessionDecayContextAt(db), openStore),
+    ...reads,
+    ...writes,
+    ...bare,
+    ...bound(on, summariesAt, openStore),
+    entriesByIds: skipEmpty(reads.entriesByIds, () => new Map()),
+    particlesByIds: skipEmpty(bare.particlesByIds, () => []),
+    deleteOneByOne: skipEmpty(writes.deleteOneByOne, () => []),
+    writeTogether: skipEmpty(writes.writeTogether, () => 0),
+    commitFlush: skipEmpty(commitFlush, async () => []),
+    ...boundAsync<Pick<Consolidation, 'expireDormant'>>(onAsync, { expireDormant: expireDormantBeforeAt }, sleepOpener),
     tombstoneChecks: (dryRun) => lazyTombstoneChecks(open, dryRun),
-    halfLifeBase: () => on((db) => recordedHalfLifeBaseAt(db)),
-    moveHalfLives: (to, opts, plan) => on((db) => moveHalfLivesAt(db, to, opts, plan), openStore),
-    promotableSessions: (tenantId, sinceMs) => on((db) => findPromotableSessionsAt(db, tenantId, sinceMs), openStore),
-    traceExists: (tenantId, sessionId) => on((db) => traceExistsForSessionAt(db, tenantId, sessionId), openStore),
-    sessionEvents: (tenantId, opts) => on((db) => listSessionEventsAt(db, tenantId, opts), openStore),
-    particleIds: () => on((db) => storedParticleIdsAt(db)),
-    particlesByIds: (ids) => (ids.length === 0 ? [] : on((db) => storedParticlesByIdsAt(db, ids))),
-    saveParticles: (particles) => on((db) => saveStoredParticlesAt(db, particles)),
-    commitFlush: async (components, opts) =>
-      components.length === 0
-        ? []
-        : onAsync((db, files) => commitInChunksAt(db, files, components, opts), sleepStoreOpener),
-    expireDormant: (cutoffIso, opts) => onAsync((db) => expireDormantBeforeAt(db, cutoffIso, opts), sleepOpener),
-    replaceConflicts: (detected, detectedAt) =>
-      on((db, files) => replaceDetectedConflictsAt(db, files, detected, detectedAt), openStore),
-    recordRun: (run) => on((db, files) => appendConsolidationRunAt(db, files, run), openStore),
-    countSleep: () => on((db) => incrementSleepCountAt(db), openStore),
-    auditEachRow(events) {
-      const failed = on((db) => recordAuditEventsRowByRowAt(db, events));
-      for (const { event, error } of failed) reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
-      return failed.length;
-    },
     reportAuditFailure: (op, reason) => reportAuditWriteFailure(op, reason),
-    entriesPage: (page) => on((db) => loadEntriesPageAt(db, ALL_TENANTS, page), openStore),
-    currentDistilledEntries: () => on((db) => loadCurrentDistilledEntriesAt(db), openStore),
-    deleteOneByOne: (targets, opts) =>
-      targets.length === 0 ? [] : on((db, files) => deleteEntriesOneByOneAt(db, files, targets, opts), openStore),
     failedUnitOf,
-    dirtyGraphTenants: () => on((db) => loadPendingExtractionTenantsAt(db)),
-    markGraphDrained: (tenantId, maxId) => on((db) => markPendingProcessedUpToAt(db, tenantId, maxId)),
-    writeEntry: (entry) => on((db, files) => writeEntryAt(db, files, entry), openStore),
-    writeTogether: (entries) =>
-      entries.length === 0 ? 0 : on((db, files) => writeEntriesTogetherAt(db, files, entries), openStore),
-    ...summaryOps(on),
   };
 }
 
@@ -495,18 +540,3 @@ type SummaryOps = Pick<
   | 'clearSummaryDirty'
   | 'unprofiledTopicSummaries'
 >;
-
-function summaryOps(on: OnHandle): SummaryOps {
-  return {
-    dirtySummaries: (limit) => on((db) => loadAllDirtySummariesAt(db, limit), openStore),
-    childrenOfSummary: (summaryId, tenantId) => on((db) => loadChildrenOfSummaryAt(db, summaryId, tenantId), openStore),
-    childrenOfSummaries(summaries) {
-      const byParent = on((db) => loadChildrenOfSummariesAt(db, summaries), openStore);
-      return (summary) => byParent.get(childrenKey(summary.tenantId, summary.id)) ?? [];
-    },
-    applyRebuild: (summary, patch) => on((db) => applyRebuildResultAt(db, summary, patch), openStore),
-    clearSummaryDirty: (summaryId, tenantId, actor, source) =>
-      on((db) => clearSummaryDirtyAfterBuildAt(db, summaryId, tenantId, actor, source), openStore),
-    unprofiledTopicSummaries: () => on((db) => loadAllL2SummariesAt(db), openStore),
-  };
-}

@@ -4,7 +4,7 @@
 
 import type { MemoryEntry } from '../core/memory.js';
 import type { SearchResult } from '../core/search-types.js';
-import { sqliteStore } from '../store/index.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 import type { OriginFilter } from '../store/port/types.js';
 import { loadRecallSearchEntries as loadRecallByOptions } from '../store/search-rows.js';
 import type { TenantId } from '../util/tenant.js';

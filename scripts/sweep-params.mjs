@@ -22,7 +22,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { runEval } from '../dist/eval/eval.js';
 import { isInitialized } from '../dist/core/project-identity.js';
-import { sqliteStore } from '../dist/store/index.js';
+import { sqliteStore } from '../dist/store/sqlite/store.js';
 import { loadConfig } from '../dist/core/config.js';
 
 const CORPUS_PATH =

@@ -3,14 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
 import { raiseMinBinary } from '../../src/db/meta.js';
-import {
-  createApiKey,
-  insertApiKey,
-  readApiKeyRecord,
-  validateApiKey,
-  verifyApiKeyCached,
-  _readApiKeyVerifyStatsForTests,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey, insertApiKey, readApiKeyRecord, validateApiKey } from '../../src/store/sqlite/auth.js';
+import { _readApiKeyVerifyStatsForTests, verifyApiKeyCached } from '../../src/server/api-key.js';
 import { mintApiKey } from '../../src/core/api-key.js';
 import {
   adminActor,
@@ -21,7 +15,8 @@ import {
 } from '../../src/api/index.js';
 import { handleAuth } from '../../src/cli/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { sqliteStore, type HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../src/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

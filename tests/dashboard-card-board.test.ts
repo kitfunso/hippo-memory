@@ -8,7 +8,7 @@ import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import { serveDashboard } from '../src/server/dashboard-listener.js';
 import type { ServerHandle } from '../src/server/types.js';
-import { resolveTenantId } from '../src/server/host-tenant.js';
+import { resolveTenantId } from '../src/server/boot.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
 import { runCliOut } from './_helpers/run-cli-as.js';

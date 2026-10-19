@@ -13,7 +13,8 @@ import type { McpHost } from '../../src/mcp/protocol.js';
 import { startStdioLoop } from '../../src/mcp/stdio.js';
 import { TOOLS } from '../../src/mcp/tools.js';
 import { cliStdioHost } from '../../src/cli/api-context.js';
-import { sqliteStore, type HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 
 let root: string;

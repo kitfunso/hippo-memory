@@ -223,16 +223,6 @@ export function loadRecallEntriesAt(
   query: string,
   options: RecallSearchEntriesOptions,
 ): MemoryEntry[] {
-  return loadRecallSearchEntriesFromDb(db, query, options);
-}
-
-// Split out so callers with an already-open db (the prompt-recall path) skip
-// the initStore+open/close cycle per store per call.
-export function loadRecallSearchEntriesFromDb(
-  db: DatabaseSyncLike,
-  query: string,
-  options: RecallSearchEntriesOptions,
-): MemoryEntry[] {
   const {
     limit = DEFAULT_SEARCH_CANDIDATE_LIMIT,
     tenantId,

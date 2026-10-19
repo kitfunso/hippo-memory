@@ -8,15 +8,10 @@ import {
 } from '../../db/index.js';
 import { errorFields, log } from '../../util/log.js';
 import type { HippoIndex } from './rows.js';
-import { readLastRecall, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
+import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { DAY_MS } from '../../util/time.js';
 import type { SessionDecayContext } from '../port/consolidation.js';
-
-/** The last recall's ids and its trace alone, for a caller that needs no index entry. */
-export function loadLastRecallAt(db: DatabaseSyncLike): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  return readLastRecall(db);
-}
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
  * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */

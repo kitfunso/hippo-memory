@@ -13,15 +13,15 @@ import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { originInSql } from '../../core/project-identity.js';
-import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
+import { pickRarestFtsQuery, loadRecallEntriesAt } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import { chunked } from '../../util/chunked.js';
 import type { AmbientRefusalReason } from '../../core/read-admission.js';
 import type {
+  AmbientCandidateRequest,
   AmbientCandidates,
-  AmbientRecallRequest,
   AmbientRefusal,
   ContextCandidateFilter,
   RecentOrigins,
@@ -122,16 +122,18 @@ function noting(judge: AmbientJudge, refused: AmbientRefusal[]): (e: MemoryEntry
   };
 }
 
+/** The port's ambient request with the row test already built from its admission settings. */
+export interface AmbientLoad extends Omit<AmbientCandidateRequest, 'admit'> {
+  readonly judge: AmbientJudge;
+}
+
 // The pins plus the `recentNeeded` newest rows `judge` keeps, for ambient injection, with each refusal in the order the
 // rows were read. One connection; `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the
 // recent rows past the first window.
 export function loadAmbientCandidatesAt(
   db: DatabaseSyncLike,
   tenantId: string,
-  recentNeeded: number,
-  judge: AmbientJudge,
-  recall?: AmbientRecallRequest,
-  origins?: RecentOrigins,
+  { recentNeeded, judge, recall, origins }: AmbientLoad,
 ): AmbientCandidates {
   const refused: AmbientRefusal[] = [];
   const admit = noting(judge, refused);
@@ -163,7 +165,7 @@ export function loadAmbientCandidatesAt(
   if (!recall) return { entries, refused };
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
   const recallEntries = ftsQuery
-    ? loadRecallSearchEntriesFromDb(db, ftsQuery, {
+    ? loadRecallEntriesAt(db, ftsQuery, {
         limit: recall.limit,
         tenantId,
         includeSuperseded: false,
@@ -372,17 +374,8 @@ export function tallySourcesAt(db: DatabaseSyncLike, tenantId: TenantId): Source
 export const jsonList = (column: string): string =>
   `(CASE WHEN json_valid(${column}) AND json_type(${column}) = 'array' THEN ${column} ELSE '[]' END)`;
 
-/** calculateStrength over every row of a tenant in one aggregate pass, no row loaded. */
-export function loadStrengthTalliesAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  now: Date,
-  atRiskBelow: number,
-): StrengthTallies {
-  return strengthTalliesAt(db, tenantId, now, atRiskBelow);
-}
-
-/** loadStrengthTallies on a handle the caller holds, so it can share a snapshot with other reads. */
+/** calculateStrength over every row of a tenant in one aggregate pass, no row loaded, on a handle the caller holds so
+ * it can share a snapshot with other reads. */
 export function strengthTalliesAt(
   db: DatabaseSyncLike,
   tenantId: string,

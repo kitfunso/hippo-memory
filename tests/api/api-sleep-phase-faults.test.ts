@@ -18,7 +18,7 @@ import { sleep, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { sleep as packageSleep } from '../../src/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';

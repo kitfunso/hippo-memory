@@ -9,8 +9,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { createRateLimiter } from '../../src/server/rate-limit.js';
 import { heartbeatVerdict } from '../../src/server/auth.js';
-import { sqliteStore } from '../../src/store/index.js';
-import { globalStoresFor } from '../../src/store/sqlite/worker-store.js';
+import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -140,7 +139,8 @@ describe('heartbeatVerdict', () => {
     const failedAuth = limiter(0.1);
     failedAuth.check('203.0.113.9');
     const store = sqliteStore(root);
-    const opts = { hippoRoot: root, store, globalStores: globalStoresFor(store), failedAuthLimiter: failedAuth };
+    const reachOf = (shared: boolean) => sqliteReach(root, store, shared);
+    const opts = { hippoRoot: root, store, reachOf, failedAuthLimiter: failedAuth };
     expect(await heartbeatVerdict(streamReq(plaintext, '203.0.113.9'), opts)).toBe('unavailable');
     const wrong = `${plaintext.slice(0, plaintext.indexOf('.'))}.${'a'.repeat(32)}`;
     expect(await heartbeatVerdict(streamReq(wrong, '198.51.100.1'), opts)).toBe('revoked');
