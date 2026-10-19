@@ -1,6 +1,6 @@
-import { calculateStrength, type MemoryEntry } from '../core/memory.js';
+import { calculateStrength, strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
 import { estimateTokens } from '../util/token-text.js';
-import { evalNow, isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
+import { evalNow } from '../core/ablation.js';
 import { indexedModel, indexNeedsRebuild } from '../embeddings/index-identity.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
@@ -104,7 +104,7 @@ export async function physicsSearch(
   const physicsMap = await loadCandidateParticles(store.vectors, pool);
   if (!physicsMap) return hybridSearch(query, pool, { ...hybrid, queryEmbedDeadline });
 
-  const pools = splitByParticle(pool, physicsMap, queryVector, now);
+  const pools = splitByParticle(pool, physicsMap, queryVector, now, strengthOptionsOf(options.runtime));
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const physicsResults = scorePhysicsPool(pools, queryVector, config, scoring);
   const classicResults =
@@ -184,8 +184,10 @@ function splitByParticle(
   physicsMap: Map<string, PhysicsParticle>,
   queryVector: number[],
   now: Date,
+  rules: StrengthOptions,
 ): PhysicsPools {
   const pools: PhysicsPools = { entries: [], particles: [], classic: [] };
+  const liveMass = rules.ablation?.recallBoost === true;
   for (const entry of pool) {
     const particle = physicsMap.get(entry.id);
     const usable =
@@ -201,10 +203,10 @@ function splitByParticle(
     // EVAL-ONLY ablation (see ablation.ts): persisted masses bake in recall history twice, so the flag recomputes mass
     // live.
     pools.particles.push(
-      isRecallBoostAblated()
+      liveMass
         ? {
             ...particle,
-            mass: computeMass(calculateStrength(entry, now, { ablation: strengthAblation() }), entry.retrievalCount),
+            mass: computeMass(calculateStrength(entry, now, rules), entry.retrievalCount, rules.ablation),
           }
         : particle,
     );

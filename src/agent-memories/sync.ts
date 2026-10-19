@@ -5,7 +5,7 @@ import { plural } from '../util/format.js';
 import type { Machine } from '../util/agent-homes.js';
 import { errorMessage } from '../util/log.js';
 import type { HippoConfig } from '../core/config.js';
-import type { MemoryEntry } from '../core/memory.js';
+import { strengthOptionsOf, type MemoryEntry } from '../core/memory.js';
 import { namesFoldedInto } from './project-folds.js';
 import {
   isGlobalStoreRoot,
@@ -307,10 +307,12 @@ function openTarget(ai: AgentImport, target: string, hasItems: boolean, opts: Sy
 }
 
 function storeSession(pass: Pass, store: OpenStore, opts: SyncOptions, legacy: LegacyWork | null): StoreSession {
+  const config = opts.configAt(store.target.root);
   return {
     target: store.target,
     tenantId: store.target.tenantId,
-    baseHalfLifeDays: opts.configAt(store.target.root).defaultHalfLifeDays,
+    baseHalfLifeDays: config.defaultHalfLifeDays,
+    strength: strengthOptionsOf(config.runtime),
     originProject: pass.originProject,
     isDuplicate: duplicateCheck(store, [pass.originProject ?? '', ...pass.legacyOrigins], legacy?.adopted ?? new Set()),
     dryRun: opts.dryRun === true,

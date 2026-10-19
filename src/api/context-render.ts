@@ -1,7 +1,14 @@
 // The strings a context block prints. The budget prices these same strings, so selection and print cannot drift.
 import { MINUTE_MS } from '../util/time.js';
-import { calculateStrength, confidenceFacets, confidenceLabel, type MemoryEntry } from '../core/memory.js';
-import { evalNow, strengthAblation } from '../core/ablation.js';
+import {
+  calculateStrength,
+  confidenceFacets,
+  confidenceLabel,
+  strengthOptionsOf,
+  type MemoryEntry,
+  type StrengthOptions,
+} from '../core/memory.js';
+import { evalNow } from '../core/ablation.js';
 import { estimateTokens } from '../util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../core/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
@@ -107,9 +114,12 @@ export function contextLine(
   framing: string,
   showStrength: boolean,
   now: Date,
-  strengthPct: number = Math.round(calculateStrength(item.entry, undefined, { ablation: strengthAblation() }) * 100),
+  // A number is the percent to print as is; options score the entry here.
+  strength: number | StrengthOptions = strengthOptionsOf(undefined),
 ): string {
   const e = item.entry;
+  const strengthPct =
+    typeof strength === 'number' ? strength : Math.round(calculateStrength(e, undefined, strength) * 100);
   const content = shownContent(e);
   const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
   const strengthStr = showStrength ? ` (${strengthPct}%)` : '';
@@ -135,13 +145,14 @@ export function contextBlockLines(
   items: ReadonlyArray<{ entry: MemoryEntry; isGlobal: boolean }>,
   totalTokens: number,
   framing: string,
-  opts: { showStrength?: boolean; heading?: string } = {},
+  opts: { showStrength?: boolean; heading?: string; strength?: StrengthOptions } = {},
 ): string[] {
   const now = evalNow();
   const showStrength = opts.showStrength !== false;
+  const strength = opts.strength ?? strengthOptionsOf(undefined);
   return [
     contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens),
-    ...items.map((item) => contextLine(item, framing, showStrength, now)),
+    ...items.map((item) => contextLine(item, framing, showStrength, now, strength)),
   ];
 }
 

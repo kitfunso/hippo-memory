@@ -1,7 +1,6 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run, and the shared entry
 // write path.
-import { strengthAblation } from '../../core/ablation.js';
-import { type MemoryEntry, markRetrieved, entryAfterOutcome } from '../../core/memory.js';
+import { type LossAversion, type MemoryEntry, markRetrieved, entryAfterOutcome, strengthOptionsOf } from '../../core/memory.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
 import { chunked } from '../../util/chunked.js';
 import { RejectedValueError, ConflictError, NotFoundError } from '../../core/api-errors.js';
@@ -211,10 +210,11 @@ export function strengthenRetrievedInOwnTx(
   db: DatabaseSyncLike,
   ids: readonly string[],
   opts: StrengthenOptions,
+  rules: LossAversion,
 ): Set<string> {
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   try {
-    return withWriteScope(db, 'strengthen_retrieved', () => strengthenRetrievedOn(db, ids, opts));
+    return withWriteScope(db, 'strengthen_retrieved', () => strengthenRetrievedOn(db, ids, opts, rules));
   } catch (error) {
     warnStrengthenFailed(error);
     return new Set();
@@ -233,12 +233,13 @@ export function strengthenRetrievedOn(
   db: DatabaseSyncLike,
   ids: readonly string[],
   opts: StrengthenOptions,
+  rules: LossAversion,
 ): Set<string> {
   const found = new Set<string>();
   if (ids.length === 0 || opts.recallBoostAblated) return found;
   const byId = selectEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
-  const updated = markRetrieved(live, undefined, { ablation: strengthAblation() });
+  const updated = markRetrieved(live, undefined, strengthOptionsOf(rules));
   // One UPDATE ... FROM per chunk of rows instead of one statement per row.
   for (const chunk of chunked(updated, RETRIEVAL_UPDATE_CHUNK)) {
     const values = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
@@ -394,7 +395,7 @@ export function applyOutcomeAt(
   outcome: OutcomeWrite,
   traceId?: number,
 ): string[] {
-  const memoryIds = applyOutcomeOn(db, outcome).map((entry) => entry.id);
+  const memoryIds = applyOutcomeOn(db, outcome, files).map((entry) => entry.id);
   if (traceId !== undefined && memoryIds.length > 0) {
     recordTraceOutcome(db, {
       traceId,
@@ -471,7 +472,7 @@ export function writeInOwnTenant(
 /** The read, row rewrites, audit rows and mirror marks share one BEGIN IMMEDIATE transaction, hippo.db's form of the
  * port's row lock, each a set statement whatever the id count. Returns one entry per applied id with repeats, as
  * callers count them. An outcome never changes content, so the rejected-value guard has nothing to check. */
-function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): readonly MemoryEntry[] {
+function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite, rules: LossAversion): readonly MemoryEntry[] {
   return withWriteScope(db, 'apply_outcome', () => {
     const read = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
     const latest = new Map<string, MemoryEntry>();
@@ -479,7 +480,7 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): readonly M
     for (const id of outcome.ids) {
       const entry = latest.get(id) ?? read.get(id);
       if (!entry || !ownScopeTouches(outcome.ownScope, entry.scope)) continue;
-      const updated = entryAfterOutcome(entry, outcome.good);
+      const updated = entryAfterOutcome(entry, outcome.good, rules);
       latest.set(id, updated);
       applied.push(updated);
     }

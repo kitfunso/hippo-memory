@@ -8,7 +8,7 @@ import { getMeta, pragmaUserVersion, setMeta } from '../../db/meta.js';
 import { tableColumns } from '../../db/tables.js';
 import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
-import { calculateStrength, type MemoryEntry } from '../../core/memory.js';
+import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
 import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../core/memory-audit.js';
 import {
   deleteEntryCore,
@@ -165,13 +165,21 @@ function plannedResult(db: DatabaseSyncLike, root: string, run: RepairRun): Qual
 
 // No rejection record, as in project repair: the writers refuse these defects themselves, and a record would also
 // refuse a person's copy.
-function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, now: Date, backup: string): boolean {
+/** When a repair moves its rows, the backup it took first, and the ratio the store scores strength by. */
+interface RepairMove {
+  readonly now: Date;
+  readonly backup: string;
+  readonly rules: LossAversion;
+}
+
+function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, move: RepairMove): boolean {
+  const { now, backup } = move;
   const actor = 'quality-repair';
   const removed = deleteEntryCore(db, entry.id, entry.tenantId, { actor, automatic: true, suppressForgetAudit: true });
   if (removed === null) return false;
   insertDormantRow(db, {
     entry,
-    strength: calculateStrength(entry, now),
+    strength: calculateStrength(entry, now, move.rules),
     reason: 'quality-repair',
     dormantAt: now.toISOString(),
   });
@@ -204,18 +212,19 @@ function applyPlan(
   run: RepairRun,
   plan: QualityRepairResult,
   backup: string,
+  rules: LossAversion,
 ): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
     const blockers = capabilityBlockers(db);
     if (blockers.length > 0) throw new Error(`Quality repair capability changed: ${blockers.join('; ')}`);
-    const now = new Date();
+    const move: RepairMove = { now: new Date(), backup, rules };
     const { ids, rows, issues: current } = rejudgeSetAsides(db, run, plan);
     const issues = plan.issues.flatMap((issue) => (ids.has(issue.id) ? (current.get(issue.id) ?? []) : [issue]));
     const appliedIds: string[] = [];
     const warnings: string[] = [];
     for (const issue of issues) {
       if (issue.disposition !== 'set-aside') continue;
-      if (setAsideIssue(db, rows.get(issue.id)!, issue.reason, now, backup)) appliedIds.push(issue.id);
+      if (setAsideIssue(db, rows.get(issue.id)!, issue.reason, move)) appliedIds.push(issue.id);
       else warnings.push(`Kept ${issue.id}: the store's delete guard protects it.`);
     }
     if (run.doneKey) setMeta(db, run.doneKey, '1');
@@ -223,13 +232,14 @@ function applyPlan(
   });
 }
 
-function repairOn(db: DatabaseSyncLike, root: string, run: RepairRun): QualityRepairResult {
+function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): QualityRepairResult {
+  const root = files.hippoRoot;
   const initial = withTrialScope(db, 'quality_repair_plan', () => plannedResult(db, root, run));
   if (!run.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) {
     return initial;
   }
   db.exec('PRAGMA foreign_keys = ON');
-  const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, run, initial, backup));
+  const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, run, initial, backup, files));
   const warnings = [...result.warnings];
   for (const id of result.appliedIds) {
     if (purgeMirrorBestEffort(root, id, false, 'quality repair')) continue;
@@ -242,10 +252,10 @@ function repairOn(db: DatabaseSyncLike, root: string, run: RepairRun): QualityRe
  * `db` is opened without running migrations, read-only for a preview. */
 function repairAutomaticMemoriesAt(
   db: DatabaseSyncLike,
-  { hippoRoot: root }: StoreFiles,
+  files: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
 ): QualityRepairResult {
-  return repairOn(db, root, opts);
+  return repairOn(db, files, opts);
 }
 
 const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
@@ -254,13 +264,13 @@ const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
  * null once done. `db` is opened writable without running migrations. */
 function repairQualityOnceAt(
   db: DatabaseSyncLike,
-  { hippoRoot: root }: StoreFiles,
+  files: StoreFiles,
   tenantId: string,
   protect: RepairProtection,
 ): QualityRepairResult | null {
   if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
   // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
-  const result = repairOn(db, root, { tenantId, protect, apply: true, doneKey: AUTO_REPAIR_META_KEY });
+  const result = repairOn(db, files, { tenantId, protect, apply: true, doneKey: AUTO_REPAIR_META_KEY });
   // An unsupported schema changed nothing, so the next run tries again once a migration has run.
   if (result.supported && result.backup === null) setMeta(db, AUTO_REPAIR_META_KEY, '1');
   return result;

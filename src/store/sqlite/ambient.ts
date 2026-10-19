@@ -4,7 +4,7 @@ import { SECRET_TAGS } from '../../util/secret-detect.js';
 import { originInSql } from '../../core/project-identity.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../core/ambient.js';
-import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT } from '../../core/memory.js';
+import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../core/memory.js';
 import { placeholders } from '../../util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 
@@ -43,6 +43,7 @@ export function loadAmbientTalliesAt(
   db: DatabaseSyncLike,
   tenantId: string,
   filter: AmbientStoreFilter,
+  rules: LossAversion,
 ): AmbientTallies {
   const { where, params } = contextRowsWhere(tenantId, filter, [`COALESCE(kind, '') != 'archived'`]);
   const secret = secretTaggedSql();
@@ -55,7 +56,7 @@ export function loadAmbientTalliesAt(
   const row = db
     .prepare(`SELECT
     COUNT(*) AS total,
-    COALESCE(SUM(${strengthSql(filter.now)}), 0) AS strengthSum,
+    COALESCE(SUM(${strengthSql(filter.now, rules)}), 0) AS strengthSum,
     COALESCE(SUM(julianday(created) > julianday(?)), 0) AS fresh,
     COALESCE(SUM(emotional_valence IN ('negative', 'critical')), 0) AS negative,
     COALESCE(SUM(COALESCE(schema_fit, ${DEFAULT_SCHEMA_FIT}) > ?), 0) AS highSchemaFit,

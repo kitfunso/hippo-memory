@@ -13,6 +13,7 @@ import * as api from '../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET, NO_QUERY } from '../api/context.js';
 import { cliApiContext, cliHookRequest } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
+import { strengthOptionsOf } from '../core/memory.js';
 import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
 import {
   additionalContextOutput,
@@ -284,7 +285,9 @@ function renderContextMarkdown(view: ContextView): void {
   const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
   const text = settleTokens((t) => {
     const lines = continuityTexts(result.activeSnapshot, result.sessionHandoff, result.recentEvents);
-    if (renderItems.length > 0) lines.push(...contextBlockLines(renderItems, t, framing));
+    if (renderItems.length > 0) {
+      lines.push(...contextBlockLines(renderItems, t, framing, { strength: strengthOptionsOf(view.config.runtime) }));
+    }
     lines.push(...crossProjectLines(crossEntries));
     if (result.ambientState) lines.push(`\n${renderAmbientSummary(result.ambientState)}`);
     return lines.join('\n');

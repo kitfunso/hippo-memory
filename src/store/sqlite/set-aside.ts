@@ -4,13 +4,19 @@ import { appendAuditEvent } from './audit.js';
 import { SYNC_ACTOR } from '../../core/agent-memory-tools.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { insertDormantRow } from './dormant-rows.js';
-import { calculateStrength, type MemoryEntry } from '../../core/memory.js';
+import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
 import type { SetAsideResult, SetAsideWhy } from '../port/project-tags.js';
 
 /** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other goes dormant,
  * restorable. */
-export function setAsideRow(db: DatabaseSyncLike, tag: string, row: MemoryEntry, why: SetAsideWhy): SetAsideResult {
+export function setAsideRow(
+  db: DatabaseSyncLike,
+  tag: string,
+  row: MemoryEntry,
+  why: SetAsideWhy,
+  rules: LossAversion,
+): SetAsideResult {
   const untagged: MemoryEntry = { ...row, tags: row.tags.filter((t) => t !== tag) };
   const audit = (metadata: Record<string, string | boolean>): void =>
     appendAuditEvent(db, {
@@ -29,7 +35,7 @@ export function setAsideRow(db: DatabaseSyncLike, tag: string, row: MemoryEntry,
   // Sleep's dormant move skips kept rows, so the steps are written out here without its filter.
   insertDormantRow(db, {
     entry: untagged,
-    strength: calculateStrength(row, now),
+    strength: calculateStrength(row, now, rules),
     reason: 'source-deleted',
     dormantAt: now.toISOString(),
   });

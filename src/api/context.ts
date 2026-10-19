@@ -5,8 +5,8 @@ import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../core/sessio
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
-import { markRetrieved, type MemoryEntry } from '../core/memory.js';
-import { evalNow, strengthAblation } from '../core/ablation.js';
+import { markRetrieved, strengthOptionsOf, type MemoryEntry } from '../core/memory.js';
+import { evalNow } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
@@ -561,7 +561,7 @@ async function recordRetrieval(
   activeSnapshot: TaskSnapshot | null,
 ): Promise<RecordedRetrieval> {
   const toUpdate = selected.map((s) => s.entry);
-  const updatedEntries = markRetrieved(toUpdate, undefined, { ablation: strengthAblation() });
+  const updatedEntries = markRetrieved(toUpdate, undefined, strengthOptionsOf(ctx.config.runtime));
   const retrievedIds = updatedEntries.map((u) => u.id);
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,

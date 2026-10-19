@@ -7,7 +7,7 @@ import { deduplicateStore } from '../../consolidate/dedupe.js';
 import { evalNow } from '../../core/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import { strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
 import type { Context, ContextWith } from '../types.js';
 import type { Consolidation, LocalFiles, StoreWith } from '../../store/port.js';
 import { auditRemoveErrors } from '../auth/audit.js';
@@ -256,11 +256,13 @@ function summarizeAmbient(
   // One running tally at one `now`, so the float sums match one whole read row for row.
   const now = evalNow();
   const tallies = tallyAmbientEntries([], now);
+  const rules = strengthOptionsOf(ctx.config.runtime);
   for (const page of pages()) {
     foldAmbientRows(
       tallies,
       page.filter((e) => !e.supersededBy),
       now,
+      rules,
     );
   }
   if (tallies.total === 0) return 0;

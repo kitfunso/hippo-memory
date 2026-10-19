@@ -321,15 +321,6 @@ export function readSessionScan(transcriptPath: string, log: (message: string) =
   }
 }
 
-let existsProbe: (p: string) => boolean = fs.existsSync;
-
-/**
- * Test-only seam, the scheduler's pattern: lets a test prove a network path never reaches the probe. Null restores it.
- */
-export function _setDigestExistsProbeForTests(probe: ((p: string) => boolean) | null): void {
-  existsProbe = probe ?? fs.existsSync;
-}
-
 /** A \\host or //host path would make existsSync open an SMB connection to a host named in transcript text. */
 function isNetworkPath(p: string): boolean {
   return /^[\\/]{2}(?:(?![?.][\\/])|[?.][\\/]UNC[\\/])/i.test(p);
@@ -345,7 +336,7 @@ function realFsPath(p: string): string | null {
   if (isNetworkPath(abs)) return null;
   const rest: string[] = [];
   let head = abs;
-  while (!existsProbe(head)) {
+  while (!fs.existsSync(head)) {
     const parent = path.dirname(head);
     if (parent === head) return abs;
     rest.unshift(path.basename(head));

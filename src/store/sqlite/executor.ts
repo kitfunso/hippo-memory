@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../../core/audit-report.js';
-import { lossAversionRatio } from '../../core/memory.js';
+import type { LossAversion } from '../../core/memory.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
 import { StoreBusyError } from '../port.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
@@ -43,7 +43,8 @@ export interface CallOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
-export interface ExecutorOptions {
+/** `lossAversionRatio` is the one the root read, which each thread's store scores strength by. */
+export interface ExecutorOptions extends LossAversion {
   /** Lock wait of each thread's connection; defaults to the server's. */
   readonly busyWaitMs?: number;
   /** Calls that may wait for one thread; the server passes HIPPO_STORE_QUEUE_MAX; defaults to 256. */
@@ -129,6 +130,7 @@ class WorkerPool implements SqliteExecutor {
   readonly #queueMax: number;
   readonly #writeGraceMs: number;
   readonly #vectorGraphThreshold: number | undefined;
+  readonly #lossAversionRatio: number | undefined;
   #nextId = 1;
   #closed = false;
   // 'done' once the writer has run the store's open-time setup, which a reader's connection could not write.
@@ -140,6 +142,7 @@ class WorkerPool implements SqliteExecutor {
     this.#queueMax = opts.queueMax ?? DEFAULT_QUEUE_MAX;
     this.#writeGraceMs = opts.writeGraceMs ?? DEFAULT_WRITE_GRACE_MS;
     this.#vectorGraphThreshold = opts.vectorGraphThreshold;
+    this.#lossAversionRatio = opts.lossAversionRatio;
   }
 
   call<T>(op: string, args: readonly unknown[], { mode, requestId, deadlineAt, signal }: CallOptions): Promise<T> {
@@ -356,7 +359,7 @@ class WorkerPool implements SqliteExecutor {
       hippoRoot: this.#hippoRoot,
       mode: lane.mode,
       busyWaitMs: this.#busyWaitMs,
-      lossAversionRatio: lossAversionRatio(),
+      lossAversionRatio: this.#lossAversionRatio,
       ...(shared && { commitFlag: shared }),
       ...(lane.pinned && { pinned: true, vectorGraphThreshold: this.#vectorGraphThreshold }),
     };

@@ -1,6 +1,6 @@
-import { calculateStrength, CHURN_STALE_TAG, DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
+import { calculateStrength, CHURN_STALE_TAG, DAG_LEVEL, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
 import type { RuntimeSettings } from '../core/config.js';
-import { isOutcomeFastAblated, isRecencyAblated, evalRecencyScaleDays } from '../core/ablation.js';
+import { isOutcomeFastAblated, type RankAblation } from '../core/ablation.js';
 import { pathBoostMultiplier } from './path-context.js';
 import { scopeMatch } from '../core/active-scope.js';
 import { temporalBoost, type TemporalDirection, type TemporalRange } from './temporal.js';
@@ -32,18 +32,18 @@ export function churnStaleFactor(entry: MemoryEntry): number {
   return entry.tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
 }
 
-function recencyBoost(entry: MemoryEntry, now: Date): number {
-  if (isRecencyAblated()) return 1; // EVAL-ONLY ablation (see ablation.ts)
+function recencyBoost(entry: MemoryEntry, now: Date, ablation: RankAblation): number {
+  if (ablation.recency) return 1; // EVAL-ONLY ablation (see ablation.ts)
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
-  return Math.exp(-ageDays / (evalRecencyScaleDays() ?? RECENCY_SCALE_DAYS));
+  return Math.exp(-ageDays / (ablation.recencyDays ?? RECENCY_SCALE_DAYS));
 }
 
 /** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it too. */
-export function outcomeMultiplier(entry: MemoryEntry): number {
+export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean = isOutcomeFastAblated()): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
-  if (isOutcomeFastAblated() || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
+  if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
   return Math.max(OUTCOME_NUDGE_MIN, Math.min(OUTCOME_NUDGE_MAX, 1 + OUTCOME_NUDGE_SLOPE * Math.tanh((pos - neg) / 2)));
 }
 
@@ -94,10 +94,10 @@ export function summaryMultipliers(entry: MemoryEntry, now: Date, s: SummaryScor
   return { deboost: s.deboost, freshness: s.freshness ? summaryFreshnessMultiplier(entry, now) : 1.0 };
 }
 
-export function strengthRecencyMultipliers(entry: MemoryEntry, now: Date) {
+export function strengthRecencyMultipliers(entry: MemoryEntry, ctx: Pick<BoostContext, 'now' | 'strength' | 'ablation'>) {
   return {
-    strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, now),
-    recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, now),
+    strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
+    recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),
   };
 }
 
@@ -114,6 +114,8 @@ export interface BoostContext {
   /** The sync BM25 path never applied the outcome nudge. */
   outcome: boolean;
   summary: SummaryScoring;
+  strength: StrengthOptions;
+  ablation: RankAblation;
 }
 
 export interface AppliedBoosts {
@@ -132,7 +134,7 @@ export function applyRankBoosts(score: number, entry: MemoryEntry, ctx: BoostCon
   const decisionBoost = entry.tags.includes('decision') ? DECISION_TAG_BOOST : 1.0;
   const churnStaleMultiplier = churnStaleFactor(entry);
   const pathBoost = pathBoostMultiplier(entry.tags, ctx.pathTags);
-  const outcomeBoost = ctx.outcome ? outcomeMultiplier(entry) : 1.0;
+  const outcomeBoost = ctx.outcome ? outcomeMultiplier(entry, ctx.ablation.outcomeFast) : 1.0;
   const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, ctx.scope));
   const extractionBoost = entry.tags.includes('extracted') ? EXTRACTION_TAG_BOOST : 1.0;
   const summary = summaryMultipliers(entry, ctx.now, ctx.summary);

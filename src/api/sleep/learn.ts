@@ -14,7 +14,14 @@ import {
   type InvalidationResult,
   type InvalidationTarget,
 } from '../../learn/invalidation.js';
-import { createMemory, Layer, schemaFitFrom, type MemoryEntry, type SchemaFitSource } from '../../core/memory.js';
+import {
+  createMemory,
+  Layer,
+  schemaFitFrom,
+  strengthOptionsOf,
+  type MemoryEntry,
+  type SchemaFitSource,
+} from '../../core/memory.js';
 import { extractPathTags } from '../../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../core/recall-scope.js';
 import { duplicateKey, heldTextKeys, longestWord, storedTextKeys } from '../../util/same-text.js';
@@ -124,7 +131,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   counts.added += landed.length;
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
-  const target = { hippoRoot: ctx.hippoRoot, store: ctx.store, embeddings: ctx.config.embeddings };
+  const strength = strengthOptionsOf(ctx.config.runtime);
+  const target = { hippoRoot: ctx.hippoRoot, store: ctx.store, embeddings: ctx.config.embeddings, strength };
   for (const entry of landed) embedMemoryDetached(target, entry);
 }
 

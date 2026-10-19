@@ -3,7 +3,7 @@
 
 import type { AmbientTallies } from '../../core/ambient.js';
 import type { SessionHandoff } from '../../core/handoff.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import type { LossAversion, MemoryEntry } from '../../core/memory.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb } from '../../db/index.js';
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
 import { loadAmbientTalliesAt } from './ambient.js';
@@ -69,7 +69,7 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
 }
 
 export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  return onHandle(hippoRoot, (db) => loadAmbientTalliesAt(db, tenantId, filter), openStore);
+  return onHandle(hippoRoot, (db) => loadAmbientTalliesAt(db, tenantId, filter, {}), openStore);
 }
 
 export function loadEntities(
@@ -123,7 +123,12 @@ export function batchWriteAndDelete(
 
 /** Strengthen what a read returned: update only the four retrieval columns on the live row, never a stale copy.
  *  Best effort: a failure logs and never fails the read. Returns the ids found in this store. */
-export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], opts: StrengthenOptions): Set<string> {
+export function strengthenRetrieved(
+  hippoRoot: string,
+  ids: readonly string[],
+  opts: StrengthenOptions,
+  rules: LossAversion,
+): Set<string> {
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   let db: DatabaseSyncLike;
   try {
@@ -134,7 +139,7 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], o
     return new Set();
   }
   try {
-    return strengthenRetrievedInOwnTx(db, ids, opts);
+    return strengthenRetrievedInOwnTx(db, ids, opts, rules);
   } finally {
     closeHippoDb(db);
   }

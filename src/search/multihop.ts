@@ -1,7 +1,7 @@
 import { compareScoresDesc } from '../core/compare.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { fitBudget } from './finalize.js';
-import { search } from './bm25-search.js';
+import { search, type SearchOptions } from './bm25-search.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
 
 const PASS1_TOP_K = 10;
@@ -23,16 +23,7 @@ function newEntitiesOf(topK: SearchResult[], query: string): string[] {
 export function multihopSearch(
   query: string,
   entries: MemoryEntry[],
-  options: {
-    budget?: number;
-    now?: Date;
-    hippoRoot?: string;
-    minResults?: number;
-    cost?: ResultCost;
-    includeSuperseded?: boolean;
-    asOf?: string;
-    scope?: string | null;
-  } = {},
+  options: SearchOptions = {},
 ): SearchResult[] {
   const budget = options.budget ?? DEFAULT_RECALL_BUDGET;
   // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search() does.

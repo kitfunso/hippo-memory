@@ -44,7 +44,7 @@ import {
 import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../../core/ablation.js';
 import { updateStatsAt } from './index-and-stats.js';
-import { type OnHandle, waitingOpener } from './open.js';
+import { type OnHandle, type StoreFiles, waitingOpener } from './open.js';
 import { errorFields, errorMessage, log as hippoLog, reportCompactionFailure } from '../../util/log.js';
 import type { CompactionStart } from '../port/compactions.js';
 import type {
@@ -407,11 +407,12 @@ function finishItemWrites(db: DatabaseSyncLike, hippoRoot: string, writes: ItemW
  * Mirrors after commit. */
 export function saveItems(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   ctx: ItemContext,
   log: Log,
   baseHalfLifeDays: number,
 ): number {
+  const { hippoRoot } = files;
   const rows = writableItemRows(ctx.items, log);
 
   let finishedItems = 0;
@@ -426,7 +427,8 @@ export function saveItems(
     }
     const written = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    strengthenRetrievedOn(db, written.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
+    const strengthen = { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() };
+    strengthenRetrievedOn(db, written.restated, strengthen, files);
     if (ctx.recordId !== null) {
       markCompactionDone(db, ctx.tenantId, ctx.recordId, written.written.length);
     }
@@ -442,7 +444,7 @@ export function saveItems(
 
 interface SaveStep {
   db: DatabaseSyncLike;
-  hippoRoot: string;
+  files: StoreFiles;
   tenantId: string;
   meta: Omit<CompactionStart, 'originProject'>;
   text: CompactionText;
@@ -454,7 +456,7 @@ interface SaveStep {
 
 function recordStep(step: SaveStep): CompactionRecord | null {
   try {
-    const record = recordSummary(step.db, step.hippoRoot, step.tenantId, {
+    const record = recordSummary(step.db, step.files.hippoRoot, step.tenantId, {
       meta: step.meta,
       text: step.text,
       at: step.at,
@@ -470,16 +472,16 @@ function recordStep(step: SaveStep): CompactionRecord | null {
 
 /** Busy with a saved record defers to sleep; any other failure goes to the caller. */
 function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
-  const { meta, hippoRoot, log } = step;
+  const { meta, files, log } = step;
   try {
     step.result.written = saveItems(
       step.db,
-      hippoRoot,
+      files,
       {
         tenantId: step.tenantId,
         recordId: record?.id ?? null,
         sessionId: meta.sessionId,
-        originProject: record?.originProject ?? compactionOrigin(hippoRoot, meta.cwd),
+        originProject: record?.originProject ?? compactionOrigin(files.hippoRoot, meta.cwd),
         cwd: meta.cwd,
         items: step.text.items,
       },
@@ -498,14 +500,14 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
  * independent. Never throws. */
 export function saveCompactionAt(
   on: OnHandle,
-  save: Omit<SaveStep, 'db' | 'hippoRoot' | 'result'>,
+  save: Omit<SaveStep, 'db' | 'files' | 'result'>,
 ): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
   let opened = false;
   try {
     on((db, files) => {
       opened = true;
-      const step: SaveStep = { ...save, db, hippoRoot: files.hippoRoot, result };
+      const step: SaveStep = { ...save, db, files, result };
       itemsStep(step, recordStep(step));
     }, waitingOpener(COMPACTION_DB_WAIT_MS));
   } catch (err) {
@@ -538,23 +540,23 @@ function itemContext(tenantId: string, record: CompactionRecord, items: string[]
 }
 
 /** Records a spooled summary, then writes its items. */
-function spoolRecorder(db: DatabaseSyncLike, hippoRoot: string, log: Log, baseHalfLifeDays: number): SpoolRecorder {
+function spoolRecorder(db: DatabaseSyncLike, files: StoreFiles, log: Log, baseHalfLifeDays: number): SpoolRecorder {
   return (spooled, recorded) => {
-    const record = recordSummary(db, hippoRoot, spooled.tenantId, {
+    const record = recordSummary(db, files.hippoRoot, spooled.tenantId, {
       meta: spooled.payload,
       text: spooled.text,
       at: spooled.at,
     });
     // The record holds the items now, so the file is done even if the write below fails.
     recorded();
-    saveItems(db, hippoRoot, itemContext(spooled.tenantId, record), log, baseHalfLifeDays);
+    saveItems(db, files, itemContext(spooled.tenantId, record), log, baseHalfLifeDays);
   };
 }
 
 /** What every replay step reads: the open store, who owns the rows, and the moment and deadline the run works to. */
 interface ReplayRun {
   readonly db: DatabaseSyncLike;
-  readonly hippoRoot: string;
+  readonly files: StoreFiles;
   readonly tenantId: string;
   readonly now: number;
   readonly sources: ReplaySources;
@@ -587,15 +589,15 @@ function replayEach(
 function replayStalled(run: ReplayRun): number {
   const stalled = stalledSummarizedRows(run.db, run.tenantId, new Date(run.now - REPLAY_AFTER_MS).toISOString());
   return replayEach(run, stalled, 'replay', (record) => {
-    saveItems(run.db, run.hippoRoot, itemContext(run.tenantId, record), run.log, run.baseHalfLifeDays);
+    saveItems(run.db, run.files, itemContext(run.tenantId, record), run.log, run.baseHalfLifeDays);
     return true;
   });
 }
 
 function replaySpool(run: ReplayRun): number {
   try {
-    const { db, hippoRoot, log, baseHalfLifeDays } = run;
-    return run.sources.importSpool(run.tenantId, run.deadline, spoolRecorder(db, hippoRoot, log, baseHalfLifeDays));
+    const { db, files, log, baseHalfLifeDays } = run;
+    return run.sources.importSpool(run.tenantId, run.deadline, spoolRecorder(db, files, log, baseHalfLifeDays));
   } catch (err) {
     run.log(`spool import failed: ${errorMessage(err)}`);
     return 0;
@@ -604,7 +606,7 @@ function replaySpool(run: ReplayRun): number {
 
 /** Fills one open record from its transcript; true when it saved items. */
 function fillFromTranscript(run: ReplayRun, record: CompactionRecord): boolean {
-  const { db, hippoRoot, tenantId, sources, log } = run;
+  const { db, files, tenantId, sources, log } = run;
   if (record.transcriptPath === null || !sources.transcriptExists(record.transcriptPath)) return false;
   const next = nextStartedAt(db, record);
   const found = sources.transcriptText(
@@ -623,7 +625,7 @@ function fillFromTranscript(run: ReplayRun, record: CompactionRecord): boolean {
     log(`${record.id} was filled by another process`);
     return false;
   }
-  saveItems(db, hippoRoot, itemContext(tenantId, record, text.items), log, run.baseHalfLifeDays);
+  saveItems(db, files, itemContext(tenantId, record, text.items), log, run.baseHalfLifeDays);
   return true;
 }
 
@@ -658,7 +660,7 @@ export function replayStoredCompactions(
       (db, files) =>
         replayCompactions({
           db,
-          hippoRoot: files.hippoRoot,
+          files,
           tenantId,
           now: Date.now(),
           sources,

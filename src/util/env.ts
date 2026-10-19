@@ -1,7 +1,7 @@
 // The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other read, and on an
 // import of this module outside the roots, the adapters and the eval switches. Accessors read at call time, so a test
 // that sets a variable between cases still holds.
-import type { RuntimeSettings } from '../core/config.js';
+import type { ClefSettings, RuntimeSettings } from '../core/config.js';
 import { DEFAULT_TENANT_ID } from './tenant.js';
 
 function raw(name: string): string | undefined {
@@ -94,7 +94,7 @@ export function envByName(name: string): string | undefined {
   return raw(name);
 }
 
-// Eval-only lifecycle switches; ablation.ts caches them per process.
+// Eval-only lifecycle switches; ablation.ts reads them at call time.
 export function envAblateDecay(): boolean {
   return flag('HIPPO_ABLATE_DECAY');
 }
@@ -129,8 +129,10 @@ export function envFakeNowMs(): number | null {
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : null;
 }
 
-export function envLossAversionRatio(): string | undefined {
-  return raw('HIPPO_LOSS_AVERSION_RATIO');
+/** HIPPO_LOSS_AVERSION_RATIO as a number, NaN for junk; strength scoring applies the floor and the 1.0 fallback. */
+export function envLossAversionRatio(): number | undefined {
+  const value = raw('HIPPO_LOSS_AVERSION_RATIO');
+  return value === undefined ? undefined : Number(value);
 }
 function envSummaryDeboost(): string | undefined {
   return raw('HIPPO_SUMMARY_DEBOOST');
@@ -160,6 +162,18 @@ export function envRuntimeSettings(): RuntimeSettings {
     queryEmbedTimeoutMs: envQueryEmbedTimeoutMs(),
     dagRebuildCap: envDagRebuildCap(),
     activeScope: envActiveScope() ?? undefined,
+    lossAversionRatio: envLossAversionRatio(),
+    clef: envClefSettings(),
+  };
+}
+
+export function envClefSettings(): ClefSettings {
+  return {
+    endpoint: envClefEndpoint(),
+    endpointToken: envClefEndpointToken(),
+    timeoutMs: envClefTimeoutMs(),
+    cloudflareAccountId: envCloudflareAccountId(),
+    cloudflareApiToken: envCloudflareApiToken(),
   };
 }
 

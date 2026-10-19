@@ -1,5 +1,5 @@
-import { isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
-import { MemoryEntry, Layer, createMemory, markRetrieved } from '../core/memory.js';
+import { isRecallBoostAblated } from '../core/ablation.js';
+import { MemoryEntry, Layer, clockBasisOf, createMemory, markRetrieved } from '../core/memory.js';
 import { rejectionDigest } from '../core/rejection-digest.js';
 import type { SessionEvent } from '../store/port/sessions.js';
 import { sampleForReplay } from './replay.js';
@@ -150,7 +150,7 @@ export function replayPass(run: SleepRun): void {
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
   const picked = survivors.get(sampleForReplay(survivors.rows(), replayCount, now, seed));
   if (picked.length === 0) return;
-  const rehearsed = markRetrieved(picked, now, { ablation: strengthAblation() });
+  const rehearsed = markRetrieved(picked, now, clockBasisOf(run.decayOpts));
   // Update survivors in place so downstream passes see rehearsed state.
   survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;

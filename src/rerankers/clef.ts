@@ -1,10 +1,4 @@
-import {
-  envClefEndpoint,
-  envClefEndpointToken,
-  envClefTimeoutMs,
-  envCloudflareAccountId,
-  envCloudflareApiToken,
-} from '../util/env.js';
+import type { ClefSettings } from '../core/config.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
@@ -58,17 +52,17 @@ function checkHeaderSafe(name: string, token: string): void {
   if (!/^[\x21-\x7e]+$/.test(token)) throw new Error(`${name} has characters a header cannot carry`);
 }
 
-/** Transport from trusted local env, never call arguments: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
-export function resolveClefRoute(model: ClefModel): ClefRoute {
-  const endpoint = envClefEndpoint();
+/** Transport from the root's settings, never a request's: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
+export function resolveClefRoute(model: ClefModel, settings: ClefSettings | undefined): ClefRoute {
+  const endpoint = settings?.endpoint;
   if (endpoint) {
     const parsed = parseOutboundUrl(endpoint, 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN');
-    const endpointToken = envClefEndpointToken();
+    const endpointToken = settings?.endpointToken;
     if (endpointToken) checkHeaderSafe('HIPPO_CLEF_ENDPOINT_TOKEN', endpointToken);
     return { url: parsed.href, token: endpointToken, backend: 'private-endpoint' };
   }
-  const account = envCloudflareAccountId();
-  const token = envCloudflareApiToken();
+  const account = settings?.cloudflareAccountId;
+  const token = settings?.cloudflareApiToken;
   if (!account || !token) throw new Error('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN not set');
   if (!ACCOUNT_ID.test(account)) throw new Error('CLOUDFLARE_ACCOUNT_ID is not a 32-character hex id');
   checkHeaderSafe('CLOUDFLARE_API_TOKEN', token);
@@ -126,10 +120,11 @@ async function requestScores(
   query: string,
   head: SearchResult[],
   route: ClefRoute,
+  timeoutRaw: string | undefined,
 ): Promise<ClefScores> {
   const { state, questions } = buildRelevanceRequest(query, head);
   // Strict parse: parseInt would read "15s" as 15 ms, and Node clamps a delay past 2^31-1 to 1 ms.
-  const requested = Number(envClefTimeoutMs());
+  const requested = Number(timeoutRaw);
   const timeoutMs =
     Number.isInteger(requested) && requested > 0 && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const headers = new Headers({ 'content-type': 'application/json' });
@@ -176,8 +171,8 @@ export function createClefReranker(model: ClefModel): RerankerFn {
     let got: ClefScores;
     try {
       if (head.length > MAX_CANDIDATES) throw new Error(`more than ${MAX_CANDIDATES} candidates`);
-      route = resolveClefRoute(model);
-      got = await requestScores(model, query, head, route);
+      route = resolveClefRoute(model, options?.clef);
+      got = await requestScores(model, query, head, route, options?.clef?.timeoutMs);
       outage.answered();
     } catch (err) {
       const reason = errorMessage(err);

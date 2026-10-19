@@ -7,6 +7,7 @@ import { errorFields, errorMessage, log } from '../../util/log.js';
 import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
 import { recoverDueMirrors } from './due-mirrors.js';
 import { bootstrapLegacyStore, type Handles, recordHalfLifeBaseForNewStore, type StoreFiles } from './open.js';
+import type { LossAversion } from '../../core/memory.js';
 
 export function initStore(hippoRoot: string): void {
   reproveStoreSchema(hippoRoot);
@@ -80,8 +81,8 @@ export async function onHandleAsync<T>(
 }
 
 /** The handles of the store under `hippoRoot`, which only the adapter's composition root builds. */
-export function handlesOf(hippoRoot: string): Handles {
-  const files: StoreFiles = { hippoRoot };
+export function handlesOf(hippoRoot: string, rules: LossAversion = {}): Handles {
+  const files: StoreFiles = { hippoRoot, lossAversionRatio: rules.lossAversionRatio };
   return {
     on: (fn, open) => onHandle(hippoRoot, (db) => fn(db, files), open),
     onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(db, files), open),

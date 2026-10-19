@@ -6,8 +6,14 @@
  * and nearby high-scoring memories amplify each other. */
 
 import { cosineOf } from './cosine.js';
-import { evalNow, isRecallBoostAblated, strengthAblation } from './ablation.js';
-import { calculateStrength, FALLBACK_HALF_LIFE_DAYS, type EmotionalValence, type MemoryEntry } from './memory.js';
+import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from './ablation.js';
+import {
+  calculateStrength,
+  FALLBACK_HALF_LIFE_DAYS,
+  type EmotionalValence,
+  type MemoryEntry,
+  type StrengthOptions,
+} from './memory.js';
 import { DAY_MS } from '../util/time.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { comparePhysicsResultsBy } from './compare.js';
@@ -102,12 +108,16 @@ const CHARGE_MAP = {
   critical: -1.0,
 } satisfies Record<EmotionalValence, number>;
 
-export function computeMass(strength: number, retrievalCount: number): number {
+export function computeMass(
+  strength: number,
+  retrievalCount: number,
+  ablation: StrengthAblation = NO_STRENGTH_ABLATION,
+): number {
   // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise
   // leak strengthening into the ablated
   // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in
   // physics-state.ts.
-  const effectiveCount = isRecallBoostAblated() ? 0 : retrievalCount;
+  const effectiveCount = ablation.recallBoost ? 0 : retrievalCount;
   return Math.max(MIN_MASS, strength * (1 + RETRIEVAL_MASS_GAIN * Math.log2(effectiveCount + 1)));
 }
 
@@ -413,15 +423,20 @@ function applyClusterAmplification(
  * Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the
  * caller must save).
  */
-export function initializeParticle(entry: MemoryEntry, embedding: number[], now: Date = evalNow()): PhysicsParticle {
-  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
+export function initializeParticle(
+  entry: MemoryEntry,
+  embedding: number[],
+  rules: StrengthOptions,
+  now: Date = evalNow(),
+): PhysicsParticle {
+  const strength = calculateStrength(entry, now, rules);
   const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
 
   return {
     memoryId: entry.id,
     position: [...embedding], // copy: position will diverge from original embedding
     velocity: vecZero(embedding.length),
-    mass: computeMass(strength, entry.retrievalCount),
+    mass: computeMass(strength, entry.retrievalCount, rules.ablation),
     charge: computeCharge(entry.emotionalValence),
     temperature: computeTemperature(ageDays, 1.0),
     lastSimulation: now.toISOString(),

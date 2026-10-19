@@ -6,7 +6,7 @@
 import { evalNow } from '../core/ablation.js';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
-import type { MemoryEntry } from '../core/memory.js';
+import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
 import { initializeParticle } from '../core/physics.js';
 import { chunked } from '../util/chunked.js';
@@ -137,8 +137,9 @@ export function resetAllPhysicsState(
   entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
   now: Date = evalNow(),
+  rules: StrengthOptions = strengthOptionsOf(undefined),
 ): number {
-  return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), now);
+  return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), rules, now);
 }
 
 function* seedsOf(entries: Iterable<MemoryEntry>, embeddingIndex: Record<string, number[]>): Generator<ParticleSeed> {
@@ -152,7 +153,12 @@ function* seedsOf(entries: Iterable<MemoryEntry>, embeddingIndex: Record<string,
 export type ParticleSeed = readonly [MemoryEntry, number[]];
 
 /** Drops every particle, then seeds one per pair in `seeds`, which may be read lazily, a batch at a time. */
-export function resetPhysicsFromSeeds(db: DatabaseSyncLike, seeds: Iterable<ParticleSeed>, now = evalNow()): number {
+export function resetPhysicsFromSeeds(
+  db: DatabaseSyncLike,
+  seeds: Iterable<ParticleSeed>,
+  rules: StrengthOptions,
+  now = evalNow(),
+): number {
   db.exec('DELETE FROM memory_physics');
 
   // One transaction for every batch, so a failure part way leaves no particles rather than some.
@@ -166,7 +172,7 @@ export function resetPhysicsFromSeeds(db: DatabaseSyncLike, seeds: Iterable<Part
     };
     for (const [entry, embedding] of seeds) {
       if (embedding.length === 0) continue;
-      if (batch.push(initializeParticle(entry, embedding, now)) === RESET_BATCH) flush();
+      if (batch.push(initializeParticle(entry, embedding, rules, now)) === RESET_BATCH) flush();
     }
     flush();
     return count;

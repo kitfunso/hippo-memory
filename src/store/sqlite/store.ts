@@ -1,5 +1,6 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTalliesAt } from './ambient.js';
+import type { LossAversion } from '../../core/memory.js';
 import { ambientRefusal } from '../../core/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
@@ -109,7 +110,7 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
   return {
     ensureFiles: () => on(() => undefined, openStore),
     consolidation: sqliteConsolidation(handles),
-    agentImport: sqliteAgentImport,
+    agentImport: sqliteAgentImport(handles.files),
     captures: sqliteCaptures(on),
     compactionHooks: sqliteCompactionHooks(on),
     promotion: sqlitePromotion(handles),
@@ -128,8 +129,9 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
  * held connection is the dashboard's reader, which close releases. */
 export function sqliteSyncStore(
   hippoRoot: string,
+  rules: LossAversion = {},
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
-  const handles = handlesOf(hippoRoot);
+  const handles = handlesOf(hippoRoot, rules);
   const { on } = handles;
   const localFiles = sqliteLocalFiles(handles);
   return {
@@ -153,7 +155,7 @@ export function sqliteSyncStore(
     connectorEvents: sqliteConnectorEvents(on),
     objects: sqliteObjects(on),
     readiness: sqliteReadiness(hippoRoot, on),
-    lastRecall: sqliteLastRecall(on),
+    lastRecall: sqliteLastRecall(handles),
     auditMaintenance: sqliteAuditMaintenance(handles),
     lessonWrites: sqliteLessonWrites(handles),
     sessions: sqliteSessions(on),
@@ -209,7 +211,7 @@ function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
       on((db) => appendAuditEventsAt(db, events));
     },
     finishRecall(writes) {
-      on((db) => finishRecallAt(db, writes));
+      on((db, files) => finishRecallAt(db, writes, files));
     },
     bumpRecallStats(recalled) {
       on((db, files) => updateStatsAt(db, files, { recalled }), openStore);
@@ -280,9 +282,9 @@ export function sqliteReach(
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
  * another store's would. */
-export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
-  const handles = handlesOf(hippoRoot);
-  const sync = sqliteSyncStore(hippoRoot);
+export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): HippoStore & StoreGroups {
+  const handles = handlesOf(hippoRoot, rules);
+  const sync = sqliteSyncStore(hippoRoot, rules);
   return {
     ...served<ServedBaseMethods>(baseMethodsOf(sync)),
     localFiles: sync.localFiles,
@@ -386,7 +388,7 @@ function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
         openStore,
       ),
     contextCandidates: (tenantId, filter) => on((db) => loadContextCandidatesAt(db, tenantId, filter), openStore),
-    ambientTallies: (tenantId, filter) => on((db) => loadAmbientTalliesAt(db, tenantId, filter), openStore),
+    ambientTallies: (tenantId, filter) => on((db, files) => loadAmbientTalliesAt(db, tenantId, filter, files), openStore),
     newestEntries: (tenantId, limit) => on((db) => newestEntriesAt(db, tenantId, limit), openStore),
     schemaFit: (tenantId, content, tags) => on((db) => schemaFitAt(db, tenantId, content, tags), openStore),
     liveContentsBySourceAndTag: (tenantId, source, tag, exceptSessionId) =>

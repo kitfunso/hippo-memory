@@ -2,7 +2,7 @@
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in cli/verbs.ts.
 // `hippo help` prints the verb list from that table, so no list is kept here.
 
-import { envLossAversionRatio, envSkipAutoIntegrations, envTenant, validateFlags } from './util/env.js';
+import { envSkipAutoIntegrations, envTenant, validateFlags } from './util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,6 @@ import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { exitAfterFlush } from './util/crash-handlers.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
-import { setLossAversionRatio } from './core/memory.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './store/port.js';
 import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
 import {
@@ -262,7 +261,6 @@ function warnUnknownFlagValues(): void {
 export async function runCli(argv: string[] = process.argv): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   warnUnknownFlagValues();
-  setLossAversionRatio(envLossAversionRatio());
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {

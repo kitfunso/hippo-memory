@@ -8,7 +8,7 @@ import {
   indexNeedsRebuild,
   replacesIndex,
 } from '../../embeddings/index-identity.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import { strengthOptionsOf, type LossAversion, type MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
 import {
   loadPhysicsState,
@@ -294,11 +294,17 @@ function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
 }
 
 /** Replaces every particle with a fresh one per memory that has a stored vector; returns how many. */
-export function resetStoredParticlesAt(db: DatabaseSyncLike): number {
-  return resetPhysicsFromSeeds(db, storedSeeds(db));
+export function resetStoredParticlesAt(db: DatabaseSyncLike, rules: LossAversion): number {
+  return resetPhysicsFromSeeds(db, storedSeeds(db), strengthOptionsOf(rules));
 }
 
 /** Stores a first particle for `entry`, placed at `vector`; a memory that has one keeps it. */
-export function seedStoredParticleAt(db: DatabaseSyncLike, entry: MemoryEntry, vector: number[]): void {
-  if (!loadPhysicsState(db, [entry.id]).has(entry.id)) savePhysicsState(db, [initializeParticle(entry, vector)]);
+export function seedStoredParticleAt(
+  db: DatabaseSyncLike,
+  entry: MemoryEntry,
+  vector: number[],
+  rules: LossAversion,
+): void {
+  if (loadPhysicsState(db, [entry.id]).has(entry.id)) return;
+  savePhysicsState(db, [initializeParticle(entry, vector, strengthOptionsOf(rules))]);
 }

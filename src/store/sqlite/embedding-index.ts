@@ -44,7 +44,7 @@ export function sqliteEmbeddingIndex({ on, open }: Handles): EmbeddingIndex {
     beginRebuild: () => beginRebuild(open),
     pruneOrphans: () => on((db) => pruneOrphanVectorsAt(db)),
     pendingIds: (page) => on((db) => pendingVectorIdsAt(db, page)),
-    resetParticles: () => on((db) => resetStoredParticlesAt(db)),
-    seedParticle: (entry, vector) => on((db) => seedStoredParticleAt(db, entry, vector)),
+    resetParticles: () => on((db, files) => resetStoredParticlesAt(db, files)),
+    seedParticle: (entry, vector) => on((db, files) => seedStoredParticleAt(db, entry, vector, files)),
   };
 }

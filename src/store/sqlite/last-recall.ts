@@ -6,7 +6,8 @@ import { strengthenRetrievedInOwnTx, applyOutcomeAt } from './entry-writes.js';
 import { strengthenRetrieved } from './folder-forms.js';
 import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
 import { loadLastRecallAt, saveIndexAt } from './index-and-stats.js';
-import type { OnHandle } from './open.js';
+import type { Handles } from './open.js';
+import type { LossAversion } from '../../core/memory.js';
 import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites, Sync } from '../port.js';
 import { writeRecallTrace } from './recall-trace.js';
@@ -19,11 +20,11 @@ interface RecallFinish {
 }
 
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecallAt(db: DatabaseSyncLike, writes: RecallWrites): RecallFinish {
+export function finishRecallAt(db: DatabaseSyncLike, writes: RecallWrites, rules: LossAversion): RecallFinish {
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen
-      ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts)
+      ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts, rules)
       : new Set<string>(),
   });
   // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them, never the read.
@@ -37,7 +38,7 @@ export function finishRecallAt(db: DatabaseSyncLike, writes: RecallWrites): Reca
   });
 }
 
-export function sqliteLastRecall(on: OnHandle): Sync<LastRecall> {
+export function sqliteLastRecall({ on, files }: Handles): Sync<LastRecall> {
   return {
     applyTracedOutcome: (outcome, traceId) => on((db, files) => applyOutcomeAt(db, files, outcome, traceId), openStore),
     applyOutcomeToLast: (target, good) =>
@@ -48,12 +49,13 @@ export function sqliteLastRecall(on: OnHandle): Sync<LastRecall> {
       }, openStore),
     finishRecall(writes, globalRoot) {
       const { ids, opts } = writes.strengthen;
-      const { traceId, strengthened } = on((db) => finishRecallAt(db, writes));
+      const { traceId, strengthened } = on((db) => finishRecallAt(db, writes, files));
       if (globalRoot !== undefined) {
         strengthenRetrieved(
           globalRoot,
           ids.filter((id) => !strengthened.has(id)),
           opts,
+          files,
         );
       }
       // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.

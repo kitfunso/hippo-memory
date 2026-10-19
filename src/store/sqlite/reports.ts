@@ -62,9 +62,9 @@ export function sqliteReports(on: OnHandle): Sync<Reports> {
     memoryStatus(tenantId, now, atRiskBelow) {
       // One snapshot, so the tallies and the conflict count never straddle another process's write.
       return on(
-        (db) =>
+        (db, files) =>
           withReadSnapshot(db, () => ({
-            ...strengthTalliesAt(db, tenantId, now, atRiskBelow),
+            ...strengthTalliesAt(db, tenantId, now, atRiskBelow, files),
             openConflicts: countOpenConflictsAt(db, tenantId),
           })),
         openStore,
@@ -73,7 +73,7 @@ export function sqliteReports(on: OnHandle): Sync<Reports> {
     entriesPage: (tenantId, page) => on((db) => loadEntriesPageAt(db, tenantId, page), openStore),
     countEntries: () => on((db) => countAllEntriesAt(db), openStore),
     stats: () => on(buildStatsFromDb, openStore),
-    statusCounts: (now, atRiskBelow) => on((db) => statusCountsAt(db, now, atRiskBelow), openStore),
+    statusCounts: (now, atRiskBelow) => on((db, files) => statusCountsAt(db, now, atRiskBelow, files), openStore),
     correctionEntries: () => on(correctionEntriesAt, openStore),
     rawEntries: () => on(rawEntriesAt, openStore),
     createdSinceLastSleep: (tenantId, now) => on((db) => createdSinceLastSleepAt(db, tenantId, now), openStore),

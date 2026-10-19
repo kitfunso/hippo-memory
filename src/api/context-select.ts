@@ -1,12 +1,12 @@
 // contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
 import { recallScopeFilter } from '../core/recall-scope.js';
-import { calculateStrength, type MemoryEntry } from '../core/memory.js';
+import { calculateStrength, strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
 import { auditQueryFields } from '../core/audit-report.js';
 import type { ContextReads, HippoStore } from '../store/port.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { rankBothStores } from '../sharing/search-both.js';
-import { evalNow, strengthAblation } from '../core/ablation.js';
+import { evalNow } from '../core/ablation.js';
 import { searchByEngine } from '../search/engine.js';
 import { vectorSourceOf } from '../search/hybrid.js';
 import type { HybridVectorCandidates, VectorSource } from '../search/vector.js';
@@ -87,9 +87,10 @@ export function oneCopyPerMemory(
   local: readonly MemoryEntry[],
   global: readonly MemoryEntry[],
   now: Date,
+  strength: StrengthOptions,
 ): [MemoryEntry[], MemoryEntry[]] {
   const score = (e: MemoryEntry, isGlobal: boolean): number =>
-    calculateStrength(e, now, { ablation: strengthAblation() }) * (isGlobal ? GLOBAL_DISCOUNT : 1);
+    calculateStrength(e, now, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1);
   const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
   const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
     const held = best.get(entry.content);
@@ -142,7 +143,7 @@ export function selectPinned(
   const globalEntries = pools.global.entries;
   obs?.offer(localEntries, primaryIsGlobal);
   obs?.offer(globalEntries, true);
-  const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP);
+  const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP, strengthOptionsOf(plan.config.runtime));
   obs?.dropMissing([...localEntries, ...globalEntries], [...localPool, ...globalPool], 'load', 'duplicate');
   const picked: Picked = { items: [], ids: new Set<string>(), used: 0 };
 
@@ -173,6 +174,7 @@ function rankPinned(
   pinnedGlobal: MemoryEntry[],
   nowP: Date,
 ): ContextResultEntry[] {
+  const strength = strengthOptionsOf(plan.config.runtime);
   return [
     ...pinnedLocal.map((e) => ({ entry: e, isGlobal: plan.primaryIsGlobal })),
     ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
@@ -182,7 +184,7 @@ function rankPinned(
       return {
         entry,
         score:
-          calculateStrength(entry, nowP, { ablation: strengthAblation() }) *
+          calculateStrength(entry, nowP, strength) *
           (isGlobal ? GLOBAL_DISCOUNT : 1) *
           scopeBoost,
         tokens: plan.price(entry, isGlobal),
@@ -295,7 +297,8 @@ function promptRecallCandidates(
   obs?.offer(pools.global.recall ?? [], true, 'prompt-recall');
   const localEligible = (pools.local.recall ?? []).filter(eligible);
   const globalEligible = (pools.global.recall ?? []).filter(eligible);
-  const [localCandidates, globalCandidates] = oneCopyPerMemory(localEligible, globalEligible, nowP);
+  const strength = strengthOptionsOf(plan.config.runtime);
+  const [localCandidates, globalCandidates] = oneCopyPerMemory(localEligible, globalEligible, nowP, strength);
   obs?.dropMissing(
     [...localEligible, ...globalEligible],
     [...localCandidates, ...globalCandidates],
@@ -336,6 +339,7 @@ interface BackfillRecentOptions {
 
 function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void {
   const { localPool, globalPool, picked, recentBudget, nowP } = options;
+  const strength = strengthOptionsOf(plan.config.runtime);
   const recent = [
     ...localPool.map((entry) => ({ entry, isGlobal: plan.primaryIsGlobal })),
     ...globalPool.map((entry) => ({ entry, isGlobal: true })),
@@ -351,7 +355,7 @@ function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void
     .slice(0, plan.includeRecent)
     .map(({ entry, isGlobal }) => ({
       entry,
-      score: calculateStrength(entry, nowP, { ablation: strengthAblation() }) * (isGlobal ? GLOBAL_DISCOUNT : 1),
+      score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1),
       tokens: plan.price(entry, isGlobal),
       isGlobal,
     }));
@@ -361,11 +365,12 @@ function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void
 /** No query: the strongest memories by strength, up to budget. */
 export function selectStrongest(plan: ContextPlan, left: number, pools: ContextPools): ContextResultEntry[] {
   const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const [localPool, globalPool] = oneCopyPerMemory(pools.local.entries, pools.global.entries, now);
+  const strength = strengthOptionsOf(plan.config.runtime);
+  const [localPool, globalPool] = oneCopyPerMemory(pools.local.entries, pools.global.entries, now, strength);
   const localRanked = localPool
     .map((e) => ({
       entry: e,
-      score: calculateStrength(e, now, { ablation: strengthAblation() }),
+      score: calculateStrength(e, now, strength),
       tokens: plan.price(e, plan.primaryIsGlobal),
       isGlobal: plan.primaryIsGlobal,
     }))
@@ -374,7 +379,7 @@ export function selectStrongest(plan: ContextPlan, left: number, pools: ContextP
   const globalRanked = globalPool
     .map((e) => ({
       entry: e,
-      score: calculateStrength(e, now, { ablation: strengthAblation() }) * GLOBAL_DISCOUNT,
+      score: calculateStrength(e, now, strength) * GLOBAL_DISCOUNT,
       tokens: plan.price(e, true),
       isGlobal: true,
     }))

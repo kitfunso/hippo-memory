@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { BadRequestError } from './api-errors.js';
-import { isSharedStore, loadConfig } from './config.js';
+import { configReader, isSharedStore } from './config.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { originRemoteId, projectFileId, readGitFilePointer } from './project-remote.js';
@@ -41,24 +41,16 @@ export interface ResolveProjectIdentityOpts {
 
 const MAX_WALK_DEPTH = 64;
 
-const identityCache = new Map<string, ProjectIdentity>();
+// A walk costs milliseconds and a batch write stamps every row, so each path resolves once per process and remote rule;
+// a test that needs a fresh walk names a fresh folder or a stopDir. `remote` is null where no root made the rule count.
+const identityCache = new Map<string, { readonly identity: ProjectIdentity; readonly remote: boolean | null }>();
 
-let remoteSwitch: { readonly globalRoot: string; readonly on: boolean } | null = null;
+// The global store's config only: a per-store switch would stamp one checkout two ways. Read here, since the published
+// resolveProjectIdentity has callers in every layer and none holds a config; the reader rereads an edited file.
+const globalConfig = configReader();
 
-/** Clear the per-process identity cache and the remote switch it read (test seam). */
-export function _resetProjectIdentityCacheForTests(): void {
-  identityCache.clear();
-  remoteSwitch = null;
-}
-
-// The global store's config only: a per-store switch would stamp one checkout two ways. Read here and cached, since
-// the published resolveProjectIdentity has callers in every layer and none holds a config.
 function remoteRuleOn(): boolean {
-  const globalRoot = resolveGlobalRootDir();
-  if (remoteSwitch?.globalRoot !== globalRoot) {
-    remoteSwitch = { globalRoot, on: loadConfig(globalRoot).projectIdentity.remote };
-  }
-  return remoteSwitch.on;
+  return globalConfig(resolveGlobalRootDir()).projectIdentity.remote;
 }
 
 /** The id a root names itself by plus every rung that resolves; only the root's own
@@ -107,7 +99,7 @@ export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdenti
   const cacheable = !opts?.homeDir && !opts?.stopDir;
   if (cacheable) {
     const cached = identityCache.get(startInput);
-    if (cached) return cached;
+    if (cached && (cached.remote === null || cached.remote === remoteRuleOn())) return cached.identity;
   }
 
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
@@ -131,7 +123,7 @@ export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdenti
     identity = { root: start, name: '', legacyName: '', isHome: false };
   }
 
-  if (cacheable) identityCache.set(startInput, identity);
+  if (cacheable) identityCache.set(startInput, { identity, remote: root === null ? null : remoteRuleOn() });
   return identity;
 }
 

@@ -10,8 +10,10 @@ import {
   MAX_WRONG_HALVINGS,
   RETRIEVAL_BOOST_SLOPE,
   applyLossAversionRatio,
+  parseLossAversionRatio,
   type EmotionalValence,
   type KeepPair,
+  type LossAversion,
 } from '../../core/memory.js';
 import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../core/recall-scope.js';
 import { placeholders } from '../../util/sql.js';
@@ -27,7 +29,8 @@ export function rewardFactorSql(): string {
 
 /** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in
  * step. An unparseable date scores NULL here and 0 in JS, so sums agree. */
-export function strengthSql(now: Date): string {
+export function strengthSql(now: Date, rules: LossAversion): string {
+  const ratio = parseLossAversionRatio(rules.lossAversionRatio);
   const num = (n: number): string => (Number.isInteger(n) ? n.toFixed(1) : String(n));
   const pos = 'COALESCE(outcome_positive, 0)';
   const neg = 'COALESCE(outcome_negative, 0)';
@@ -44,7 +47,7 @@ export function strengthSql(now: Date): string {
     EMOTIONAL_MULTIPLIERS,
   ) as EmotionalValence[];
   const emotion = `(CASE COALESCE(emotional_valence, 'neutral') ${valences
-    .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v]))}`)
+    .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v], ratio))}`)
     .join(' ')} ELSE 1.0 END)`;
   const penalty = `pow(${DECAY_BASE}, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
   return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0

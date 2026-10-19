@@ -21,19 +21,6 @@ import { EXPIRING_KEYS_MIN_BINARY } from '../../util/version.js';
 import type { ApiKeyRecord } from '../port/types.js';
 import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../port/key-writes.js';
 
-/** Counts since process start, so a flood of bad tokens shows as scrypt work, not just as 401s. */
-export interface ApiKeyVerifyStats {
-  readonly storeLookups: number;
-  readonly scryptRuns: number;
-}
-
-const verifyStats = { storeLookups: 0, scryptRuns: 0 };
-
-// Test hook: no production surface reads these counts yet.
-export function _readApiKeyVerifyStatsForTests(): ApiKeyVerifyStats {
-  return { ...verifyStats };
-}
-
 /** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value asks of a derivation,
  * with the one compare the sync and the pooled check share. */
 interface StoredScrypt {
@@ -83,7 +70,6 @@ function storedScrypt(stored: string): StoredScrypt | null {
 function verifyKey(plaintext: string, stored: string): boolean {
   const parsed = storedScrypt(stored);
   if (!parsed) return false;
-  verifyStats.scryptRuns++;
   return parsed.matches(scryptSync(plaintext, parsed.salt, parsed.keylen, parsed.params));
 }
 
@@ -280,10 +266,7 @@ async function secretMatches(
   const id = `${keyHash}\u0000${secretDigest(plaintext).toString('hex')}`;
   const running = checksInFlight.get(id);
   if (running) return running;
-  const derive = (): Promise<Buffer> => {
-    verifyStats.scryptRuns++;
-    return scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
-  };
+  const derive = (): Promise<Buffer> => scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
   const check = (bound ? bound(keyId, derive) : derive()).then((derived) => {
     const matched = parsed.matches(derived);
     // Only successes are kept: keeping misses would let junk tokens fill the cache and evict real keys.
@@ -307,7 +290,6 @@ export async function verifyApiKeyCached(
 ): Promise<VerifiedApiKey | null> {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
-  verifyStats.storeLookups++;
   const record = await store.findApiKey(keyId);
   if (!isUsable(record, Date.now())) return null;
   return (await secretMatches(keyId, plaintext, record.keyHash, bound)) ? verifiedKeyOf(keyId, record) : null;

@@ -6,6 +6,7 @@ import { currentDeadline, currentRequestId, currentSignal } from '../../util/req
 import type { HippoStore, LocalFiles, Readiness, StoreGroups, VectorReads, StoreWith } from '../port.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
+import type { LossAversion } from '../../core/memory.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
 import {
   type OpPlace,
@@ -163,12 +164,13 @@ function localFilesOn(executor: SqliteExecutor, inProcess: LocalFiles): LocalFil
 
 /** `sqliteStore` with every method the op table places on a worker answered from one; close() closes `executor` and
  * resolves once its threads have exited. `executor` defaults to threads of the store's own, with the server's lock
- * wait. */
+ * wait; `rules` must be the ones it was built with. */
 export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
+  rules: LossAversion = {},
 ): HippoStore & StoreGroups {
-  const inProcess = sqliteStore(hippoRoot);
+  const inProcess = sqliteStore(hippoRoot, rules);
   const store: HippoStore & StoreGroups = {
     ...inProcess,
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
@@ -192,13 +194,13 @@ export interface GlobalStores {
 /** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server
  * thread; each is built at first use, since the global store can appear while the server runs. */
 export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
-  if (!runsOffLoop(served)) return { open: sqliteStore, close: async () => {} };
+  if (!runsOffLoop(served)) return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
   const opened = new Map<string, StoreWith<'localFiles'>>();
   return {
     open(root) {
       const known = opened.get(root);
       if (known !== undefined) return known;
-      const made = workerSqliteStore(root, createSqliteExecutor(root, executorOpts));
+      const made = workerSqliteStore(root, createSqliteExecutor(root, executorOpts), executorOpts);
       opened.set(root, made);
       return made;
     },

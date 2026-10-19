@@ -2,8 +2,7 @@
 
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import type { DormantMemory, ListDormantOpts } from '../../store/port/dormant.js';
-import { strengthAblation } from '../../core/ablation.js';
-import { createMemory, calculateStrength, type MemoryEntry } from '../../core/memory.js';
+import { createMemory, calculateStrength, strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 import type { Context } from '../types.js';
 import type { DormantSnapshot } from '../../store/port/agent-import.js';
@@ -46,7 +45,7 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
     lastRetrieved: now.toISOString(),
   };
   if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
-  return { ...revived, strength: calculateStrength(revived, now, { ablation: strengthAblation() }) };
+  return { ...revived, strength: calculateStrength(revived, now, strengthOptionsOf(ctx.config.runtime)) };
 }
 
 /**
