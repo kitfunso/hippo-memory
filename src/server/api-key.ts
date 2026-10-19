@@ -11,19 +11,6 @@ import {
 } from '../core/api-key.js';
 import type { HippoStore } from '../store/port.js';
 
-/** Counts since process start, so a flood of bad tokens shows as scrypt work, not just as 401s. */
-export interface ApiKeyVerifyStats {
-  readonly storeLookups: number;
-  readonly scryptRuns: number;
-}
-
-const verifyStats = { storeLookups: 0, scryptRuns: 0 };
-
-// Test hook: no production surface reads these counts yet.
-export function _readApiKeyVerifyStatsForTests(): ApiKeyVerifyStats {
-  return { ...verifyStats };
-}
-
 const scryptOffLoop: (password: string, salt: Buffer, keylen: number, params: ScryptParams) => Promise<Buffer> =
   promisify(scrypt);
 
@@ -89,10 +76,7 @@ async function secretMatches(
   const id = `${keyHash}\u0000${secretDigest(plaintext).toString('hex')}`;
   const running = checksInFlight.get(id);
   if (running) return running;
-  const derive = (): Promise<Buffer> => {
-    verifyStats.scryptRuns++;
-    return scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
-  };
+  const derive = (): Promise<Buffer> => scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
   const check = (bound ? bound(keyId, derive) : derive()).then((derived) => {
     const matched = parsed.matches(derived);
     // Only successes are kept: keeping misses would let junk tokens fill the cache and evict real keys.
@@ -116,7 +100,6 @@ export async function verifyApiKeyCached(
 ): Promise<VerifiedApiKey | null> {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
-  verifyStats.storeLookups++;
   const record = await store.findApiKey(keyId);
   if (!isUsableKey(record, Date.now())) return null;
   return (await secretMatches(keyId, plaintext, record.keyHash, bound)) ? verifiedKeyOf(keyId, record) : null;

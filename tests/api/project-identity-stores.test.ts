@@ -1,5 +1,5 @@
 // Project ids in real stores: two `api` repos sharing a global store, the upgrade re-sync, folds the sync follows, and the repairs.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { contextGet } from '../../src/api/index.js';
@@ -11,10 +11,10 @@ import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { planProjectRepair } from '../../src/sharing/project-merge.js';
-import { projectNameMerge, projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
+import { projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { projectTagReads } from '../../src/store/sqlite/project-tags.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
-import { _resetProjectIdentityCacheForTests, resolveProjectIdentity } from '../../src/core/project-identity.js';
+import { resolveProjectIdentity } from '../../src/core/project-identity.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import {
   closeWorld,
@@ -41,10 +41,8 @@ let w: World;
 
 beforeEach(() => {
   w = openWorld();
-  _resetProjectIdentityCacheForTests();
 });
 afterEach(() => {
-  _resetProjectIdentityCacheForTests();
   closeWorld(w);
 });
 
@@ -62,7 +60,6 @@ function globalConfig(remote: boolean): void {
     join(w.global, 'config.json'),
     JSON.stringify({ projectIdentity: { remote }, embeddings: { enabled: false } }),
   );
-  _resetProjectIdentityCacheForTests();
 }
 
 function pinned(root: string, content: string, origin: string): MemoryEntry {
@@ -89,9 +86,32 @@ const sync = (cwd: string) =>
   importAtSessionEnd(cwd, undefined, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport,
+    agentImport: sqliteAgentImport({}),
     machine: w.machine,
   });
+/** The sync and merge a next process runs, over a fresh module graph that has resolved no project yet. */
+async function nextProcess() {
+  vi.resetModules();
+  const [syncMod, projects, roots, agentImport, config] = await Promise.all([
+    import('../../src/agent-memories/sync.js'),
+    import('../../src/api/objects/projects.js'),
+    import('../../src/cli/api-context.js'),
+    import('../../src/store/sqlite/agent-import.js'),
+    import('../../src/core/config.js'),
+  ]);
+  return {
+    sync: (cwd: string) =>
+      syncMod.importAtSessionEnd(cwd, undefined, {
+        configAt: config.loadConfig,
+        tenantId: 'default',
+        agentImport: agentImport.sqliteAgentImport({}),
+        machine: w.machine,
+      }),
+    merge: (from: string, into: string) =>
+      projects.projectNameMerge(roots.cliApiContext(w.global, T), { from, into, dryRun: false }),
+  };
+}
+
 const prefixFor = (cwd: string, origin: string): string =>
   containerPrefix('claude-code', containerId(projectNotes(w, cwd), 'project', process.platform, origin));
 
@@ -147,7 +167,7 @@ describe('two repos named api in one global store', () => {
     const written = withDb(w.global, (db) =>
       saveItems(
         db,
-        w.global,
+        { hippoRoot: w.global },
         {
           tenantId: T,
           recordId: null,
@@ -167,7 +187,7 @@ describe('two repos named api in one global store', () => {
     const written = withDb(w.global, (db) =>
       saveItems(
         db,
-        w.global,
+        { hippoRoot: w.global },
         {
           tenantId: T,
           recordId: null,
@@ -288,18 +308,16 @@ describe('the upgrade re-sync', () => {
 
   it(
     'follows a merge: imports under the merged name move on the next sync instead of coming back as copies',
-    () => {
+    async () => {
       const svc = checkout('file:///srv/git/svc.git', 'svc');
       note(projectNotes(w, svc), 'a.md', NOTES[0]);
       writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'old-svc' }));
-      _resetProjectIdentityCacheForTests();
       sync(svc);
       writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
-      _resetProjectIdentityCacheForTests();
-      const merged = projectNameMerge(cliApiContext(w.global, T), { from: 'old-svc', into: 'new-svc', dryRun: false });
-      expect(merged.setAside).toEqual([]);
+      const next = await nextProcess();
+      expect(next.merge('old-svc', 'new-svc').setAside).toEqual([]);
 
-      expect(toolTally(sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
+      expect(toolTally(next.sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
       expect(liveRows(w.global)).toMatchObject([
         { content: NOTES[0], originProject: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
       ]);

@@ -393,6 +393,7 @@ describe('strengthenRetrieved', () => {
           root,
           entries.map((e) => e.id),
           { tenantId: 'default', recallBoostAblated: false },
+          {},
         ),
       );
       expect(result.size).toBe(n);
@@ -405,7 +406,7 @@ describe('strengthenRetrieved', () => {
     const [entry] = rows(1, 'repeat');
     seed(ctxFor(root), [entry]);
     expect([
-      ...strengthenRetrieved(root, [entry.id, entry.id], { tenantId: 'default', recallBoostAblated: false }),
+      ...strengthenRetrieved(root, [entry.id, entry.id], { tenantId: 'default', recallBoostAblated: false }, {}),
     ]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);
     expect(after?.retrievalCount).toBe(entry.retrievalCount + 1);
@@ -676,7 +677,7 @@ describe('buildMemoryDetail', () => {
         ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
         { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
       ]);
-      const options = { snapshotId: 1, nowMs: Date.now(), embedded: false };
+      const options = { snapshotId: 1, nowMs: Date.now(), embedded: false, lossAversion: {} };
       const store = sqliteStore(root);
       const { result, statements } = await recordStatementsAsync(() =>
         buildMemoryDetail(store, 'default', subject, options),

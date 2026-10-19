@@ -1,11 +1,10 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
 import { graphEntityOf, graphRows } from '../../api/objects/graph.js';
-import { rawArchive, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
+import { rawArchive, forget, outcome, promote, remember, supersede } from '../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
-import { sleepInChild } from '../sleep-offload.js';
-import { withLastRecall } from '../store-edge.js';
+import { restClientKey } from '../client-key.js';
 import type { AuthedRouteRequest } from '../types.js';
 import {
   getCallerProject,
@@ -114,10 +113,9 @@ export async function handleForgetMemory(
   return;
 }
 
-// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it falls back to the last-recall
-// path (api.outcomeForLastRecall)
-// and returns {applied, ids}, so callers can tell "no recent recall" from "all ids skipped". Each applied id writes one
-// audit_log row (op='outcome').
+// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it lands on the ids this client's
+// last recall or context call showed, and returns {applied, ids}, so callers can tell "no recent recall" from "all ids
+// skipped". Each applied id writes one audit_log row (op='outcome').
 export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const good = body['good'];
@@ -148,9 +146,9 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    // Its own 501 text: a client of such a store can still apply the outcome by sending the ids its recall returned.
-    const result = await outcomeForLastRecall(withLastRecall(ctx), good);
-    sendJson(res, 200, result);
+    const shown = ctx.callers?.lastShown.get(restClientKey(req, ctx)) ?? [];
+    const { applied, appliedIds } = await outcome(ctx, shown, good);
+    sendJson(res, 200, { applied, ids: appliedIds });
   }
   return;
 }
@@ -158,7 +156,7 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
 // hippoRoot, cross-tenant by design, so the
 // row's host-admin-local gate is the trust boundary. Body {dry_run?, no_share?}; returns SleepResult JSON.
-export async function handleSleep({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
+export async function handleSleep({ req, res, ctx, opts }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const dryRunRaw = body['dry_run'];
   if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {
@@ -168,7 +166,7 @@ export async function handleSleep({ req, res, ctx }: AuthedRouteRequest): Promis
   if (noShareRaw !== undefined && !isJsonBoolean(noShareRaw)) {
     throw new HttpError(400, 'no_share must be a boolean');
   }
-  const result = await sleepInChild(ctx, {
+  const result = await opts.sleeps.sleep(ctx, {
     dryRun: dryRunRaw === true,
     noShare: noShareRaw === true,
   });

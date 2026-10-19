@@ -5,7 +5,6 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runCli } from '../../src/cli.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
@@ -18,7 +17,6 @@ const savedCwd = process.cwd();
 /** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
 async function runRecall(query: string, sessionId: string): Promise<void> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
-  resetSessionRings('cli');
   const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
   expect(res.status, res.stderr).toBe(0);
 }

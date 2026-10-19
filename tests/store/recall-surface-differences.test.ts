@@ -6,13 +6,10 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { handleRecall } from '../../src/cli/recall.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
-import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { retrieveRanking, RecallContractError, type RecallResult } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/core/config.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import {
   CLEARED_ENV,
@@ -35,9 +32,14 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
+import { createCallerState, type CallerState } from '../../src/api/callers.js';
+
+// Each case is one process: its CLI commands and MCP calls share one CallerState, whose rings keep surfaces apart.
+let callers: CallerState;
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+  callers = createCallerState();
 });
 
 type Surface = 'cli' | 'mcp' | 'http';
@@ -71,7 +73,9 @@ async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
   const flags: CliFlags = { ...c.cliFlags };
   if (c.session) flags['session-id'] = c.session;
   if (c.budget !== undefined) flags.budget = String(c.budget);
-  const out = await runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags }));
+  const out = await runInProcess(() =>
+    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  );
   const anchored = /\[anchored_on: ([^\]]+)\]/.exec(out.stdout);
   return { output: out, hint: anchored ? anchored[1]! : null };
 }
@@ -89,6 +93,7 @@ function callTool(root: string, name: string, args: ToolArgs): Promise<McpRespon
       hostAdmin: true,
       store: sqliteStore(root),
       config: loadConfig(root),
+      callers,
     },
   );
 }
@@ -175,15 +180,10 @@ describe('recall surface differences', () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    _resetAblationCacheForTests();
-    resetSessionRings('cli');
-    _resetSessionRecallHistoryMcpForTests();
-    __resetSessionRecallHistoryHttp();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetAblationCacheForTests();
   });
 
   // D1, D3, D5, D7, D9, D10: what one plain recall shows and writes, local and global store.
@@ -647,7 +647,6 @@ describe('shared store recall, MCP vs HTTP', () => {
     const home = makeRoot('parity-shared', { init: false });
     const root = join(home, 'store');
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    _resetSharedStoreCacheForTests();
     let handle: ServerHandle | undefined;
     try {
       initStore(root);
@@ -694,7 +693,6 @@ describe('shared store recall, MCP vs HTTP', () => {
     } finally {
       await handle?.stop();
       vi.unstubAllEnvs();
-      _resetSharedStoreCacheForTests();
     }
   });
 });

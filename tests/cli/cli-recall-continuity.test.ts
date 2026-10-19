@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'path';
 import { handleRecall } from '../../src/cli/recall.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -15,7 +14,6 @@ beforeEach(() => {
   tmpDir = makeRoot('cli-recall-cont', { init: false });
   hippoDir = path.join(tmpDir, '.hippo');
   vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
-  resetSessionRings('cli');
 });
 
 afterEach(() => {

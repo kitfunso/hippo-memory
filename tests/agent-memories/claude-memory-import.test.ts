@@ -15,7 +15,7 @@ const learnFromClaude = (hippoRoot: string, home: string): number =>
     importProjectMemories(hippoRoot, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport,
+      agentImport: sqliteAgentImport({}),
       machine: { home, env: {}, platform: process.platform },
     }),
   ).imported;

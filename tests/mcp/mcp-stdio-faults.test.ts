@@ -130,7 +130,7 @@ function crashScript(failure: string): string {
     [
       `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
       `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/cli/api-context.js')).href)});`,
-      'startStdioLoop(cliStdioHost);',
+      'startStdioLoop(cliStdioHost());',
       `setTimeout(() => { ${failure} }, 50);`,
     ].join('\n'),
   );

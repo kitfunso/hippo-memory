@@ -10,7 +10,6 @@ import { rejectionDigest } from '../../src/core/rejection-digest.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { computeAmbientState } from '../../src/core/ambient.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -26,7 +25,6 @@ const WHOLE_STORE_READ =
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  _resetAblationCacheForTests();
 });
 
 const wholeStoreReads = (statements: readonly string[]): number =>
@@ -40,7 +38,6 @@ describe('sleep after consolidation', () => {
     const home = makeRoot('batch-home', { init: false });
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
-    _resetAblationCacheForTests();
     const root = makeRoot('batch-sleep');
     // Every row shares the fake clock's timestamp, so ids in write order keep the merge and survivor picks off random UUIDs.
     let seq = 0;

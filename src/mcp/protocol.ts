@@ -14,7 +14,7 @@ import { type JsonValue, isJsonString } from '../util/json.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';
-import type { AutoSleepRunner } from '../api/sleep/auto-sleep.js';
+import type { CallerState } from '../api/callers.js';
 
 // ── Find hippo root ──
 
@@ -82,10 +82,8 @@ export interface McpContext {
   /** Set by the stdio host: the operator's own process, so no shared-store gate applies. */
   stdio?: true;
   reach?: ContextReach;
-  autoSleep?: false;
-  /** How an auto-sleep runs: the HTTP transport runs it off the server's event loop, stdio in its own process.
-   * Without one, no auto-sleep starts. */
-  autoSleepRunner?: AutoSleepRunner;
+  /** The transport root's per-caller state; without it no session ring, last-shown list or auto-sleep is kept. */
+  callers?: CallerState;
   /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP
    * (built in src/server/mcp-http.ts); defaults to `${tenantId}:default`. */
   clientKey?: string;
@@ -115,6 +113,7 @@ export function mcpApiContext(ctx: McpContext): ApiContext {
     store: ctx.store,
     reach: ctx.reach,
     config: ctx.config,
+    callers: ctx.callers,
   };
 }
 

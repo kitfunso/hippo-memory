@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { createRequire } from 'node:module';
 import { getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
@@ -38,7 +37,6 @@ beforeEach(() => {
   root = makeRoot('fts-fail');
   breakFtsIndex();
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  _resetLogOnceForTests();
 });
 
 afterEach(() => {

@@ -5,7 +5,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember as apiRemember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
+import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
@@ -35,8 +35,11 @@ function extractText(res: McpResponse | null): string {
 describe('mcp tenant + client-key isolation', () => {
   let home: string;
   let globalHome: string;
+  // The callers a transport root holds; each case gets its own, as each server or stdio loop does.
+  let callers: CallerState;
 
   beforeEach(() => {
+    callers = createCallerState();
     home = makeRoot('mcp-tenant');
     globalHome = makeRoot('mcp-tenant-global');
     vi.stubEnv('HIPPO_HOME', globalHome);
@@ -48,8 +51,8 @@ describe('mcp tenant + client-key isolation', () => {
     rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
-  // ---- Test 1: lastRecalledIds keyed by clientKey --------------------------
-  it('lastRecalledIds is keyed by clientKey — outcome from client B cannot touch client A', async () => {
+  // ---- Test 1: last-shown list keyed by clientKey --------------------------
+  it('last-shown list is keyed by clientKey: outcome from client B cannot touch client A', async () => {
     // Seed a memory in tenant alpha for both clients to recall.
     const seeded = await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'shared-canary lastRecalled keyed-by-clientKey alpha-tenant',
@@ -64,6 +67,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:tokenA:1.2.3.4',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
     const ctxB = {
       hippoRoot: home,
@@ -74,6 +78,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:tokenB:5.6.7.8',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
 
     // Both clients recall the same memory.
@@ -97,7 +102,7 @@ describe('mcp tenant + client-key isolation', () => {
     expect(before).toBeDefined();
 
     // Client B applies a positive outcome. With per-client keying, this
-    // touches B's lastRecalledIds set only — both happen to point at the
+    // touches B's last-shown list set only; both happen to point at the
     // same memory id since they both queried alpha, so this DOES update
     // the memory. The discriminating test: client B has no recalls and
     // client A has recalls → B's outcome must not touch A's set.
@@ -113,6 +118,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:tokenC:never-recalled',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
     const cOutcome = await callTool(3, 'hippo_outcome', { good: true }, ctxC);
     expect(extractText(cOutcome)).toMatch(/No recent recalls/i);
@@ -138,6 +144,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:t:addr',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
     await callTool(1, 'hippo_recall', { query: 'audit-canary', budget: 1500 }, ctx);
 
@@ -174,6 +181,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:t:addr',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
     const res = await callTool(1, 'hippo_remember', { text: 'audit-canary remember actor-mcp shape lock' }, ctx);
     expect(extractText(res)).toMatch(/Remembered \[mem_/);
@@ -200,8 +208,9 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:t:addr-outcome',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
-    // Seed a memory + recall it so lastRecalledIds is populated for clientKey.
+    // Seed a memory + recall it so last-shown list is populated for clientKey.
     await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'outcome-canary memory for audit shape lock',
     });
@@ -235,6 +244,7 @@ describe('mcp tenant + client-key isolation', () => {
       hostAdmin: true as const,
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
 
     // Recall sets the keyed Map under the stdio-${pid}:alpha fallback.
@@ -251,12 +261,12 @@ describe('mcp tenant + client-key isolation', () => {
   // Two HTTP-MCP simulated clients, same tenant but different bearers (so
   // their hash(bearer) prefixes differ → different clientKeys). Client B's
   // outcome on a key client B never recalled returns "No recent recalls".
-  it('two HTTP-MCP clients on the same tenant have isolated lastRecalledIds (buildMcpClientKey shape)', async () => {
+  it('two HTTP-MCP clients on the same tenant have isolated last-shown list (clientKeyOf shape)', async () => {
     await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'cross-client http-mcp simulated bearer-isolation',
     });
 
-    // Simulate exactly what server.ts:buildMcpClientKey produces:
+    // Simulate exactly what server/client-key.ts clientKeyOf produces:
     //   `http:${sha256(bearer).slice(0,16)}:${remoteAddr}`
     const bearerA = 'hk_test_alpha_A';
     const bearerB = 'hk_test_alpha_B';
@@ -274,6 +284,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: keyA,
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
     const ctxB = {
       hippoRoot: home,
@@ -284,6 +295,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: keyB,
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
 
     // Only A recalls.
@@ -299,7 +311,7 @@ describe('mcp tenant + client-key isolation', () => {
   });
 
   // One key held by a session in each repo: the project is part of the outcome key, so beta cannot rate acme's recall.
-  it('one clientKey with two projects keeps a lastRecalledIds entry per project', async () => {
+  it('one clientKey with two projects keeps a last-shown list entry per project', async () => {
     await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'per-project outcome key canary',
       project: { name: 'acme' },
@@ -313,6 +325,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:shared-key:1.2.3.4',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
     const acme: McpContext = { ...base, project: { name: 'acme', legacyName: 'acme' } };
     const beta: McpContext = { ...base, project: { name: 'beta', legacyName: 'beta' } };
@@ -324,16 +337,15 @@ describe('mcp tenant + client-key isolation', () => {
     );
   });
 
-  it('caps lastRecalledIds at MAX_RECALL_CLIENTS, dropping the client that recalled longest ago', async () => {
+  it('caps last-shown list at MAX_RECALL_CLIENTS, dropping the client that recalled longest ago', async () => {
     await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'recall client cap canary',
       project: { name: 'acme' },
     });
     const MAX_RECALL_CLIENTS = 4096;
-    lastRecalledIds.clear();
-    try {
-      for (let i = 0; i < MAX_RECALL_CLIENTS; i++) lastRecalledIds.set(`flood:${i}`, []);
-      lastRecalledIds.set('flood:0', []);
+    {
+      for (let i = 0; i < MAX_RECALL_CLIENTS; i++) callers.lastShown.set(`flood:${i}`, []);
+      callers.lastShown.set('flood:0', []);
       const acme: McpContext = {
         hippoRoot: home,
         tenantId: 'alpha',
@@ -344,16 +356,15 @@ describe('mcp tenant + client-key isolation', () => {
         project: { name: 'acme', legacyName: 'acme' },
         store: sqliteStore(home),
         config: loadConfig(home),
+        callers,
       };
       await callTool(1, 'hippo_recall', { query: 'client cap canary', budget: 1500 }, acme);
-      expect(lastRecalledIds.size).toBe(MAX_RECALL_CLIENTS);
-      expect(lastRecalledIds.has('flood:1')).toBe(false);
-      expect(lastRecalledIds.has('flood:0')).toBe(true);
+      expect(callers.lastShown.size).toBe(MAX_RECALL_CLIENTS);
+      expect(callers.lastShown.has('flood:1')).toBe(false);
+      expect(callers.lastShown.has('flood:0')).toBe(true);
       expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, acme))).toMatch(
         /Applied positive outcome to 1 memories/,
       );
-    } finally {
-      lastRecalledIds.clear();
     }
   });
 
@@ -381,6 +392,7 @@ describe('mcp tenant + client-key isolation', () => {
       store,
       reach,
       config: loadConfig(home),
+      callers,
     };
 
     let threwNotFound = false;
@@ -414,6 +426,7 @@ describe('mcp tenant + client-key isolation', () => {
       store,
       reach,
       config: loadConfig(home),
+      callers,
     };
     const okRes = await callTool(2, 'hippo_share', { id: a.id, force: true }, ctxA);
     expect(extractText(okRes)).toMatch(/Shared \[mem_|Shared \[g_/);
@@ -431,6 +444,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:alice:addr',
       store: sqliteStore(home),
       config: loadConfig(home),
+      callers,
     };
 
     const rememberRes = await callTool(
@@ -488,6 +502,7 @@ describe('mcp tenant + client-key isolation', () => {
         clientKey: 'http:no-actor:addr',
         store: sqliteStore(home),
         config: loadConfig(home),
+        callers,
       } as McpContext,
     );
     expect(extractText(res)).toMatch(/Remembered \[mem_/);

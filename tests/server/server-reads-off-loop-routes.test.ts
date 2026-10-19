@@ -2,12 +2,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { log } from '../../src/util/log.js';
-import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
@@ -116,21 +112,12 @@ function copy(): string {
   return made.root;
 }
 
-/** Recall keeps per-session rings and caches in the server's process, which both passes share. */
-function resetRecallState(): void {
-  __resetSessionRecallHistoryHttp();
-  _resetSessionRecallHistoryMcpForTests();
-  _resetAblationCacheForTests();
-  lastRecalledIds.clear();
-}
-
 /** `use` against a server on `root`, on the worker-backed store when `store` is absent; the server has stopped when it resolves, so every row it writes is in. */
 async function onServer<T>(
   root: string,
   store: HippoStore | undefined,
   use: (server: ServerHandle) => Promise<T>,
 ): Promise<T> {
-  resetRecallState();
   const server = await serve(store ? { hippoRoot: root, port: 0, store } : { hippoRoot: root, port: 0 });
   try {
     return await use(server);
@@ -178,7 +165,6 @@ beforeEach(() => {
 
 afterEach(async () => {
   await undoAll();
-  _resetAblationCacheForTests();
 });
 
 describe('the worker-backed graph, quarantine and recall routes against the in-process store', () => {

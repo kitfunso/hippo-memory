@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
+import { loadConfig } from '../../src/core/config.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
 import type { Context } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -47,8 +46,6 @@ beforeEach(() => {
   dir = makeRoot('caller-no-env', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   vi.stubEnv('HIPPO_TENANT', ENV_TENANT);
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });
   initStore(root);
@@ -63,7 +60,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(startCwd);
   vi.unstubAllEnvs();
-  _resetSharedStoreCacheForTests();
 });
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {

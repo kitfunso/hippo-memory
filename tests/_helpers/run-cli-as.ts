@@ -3,12 +3,7 @@
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { vi } from 'vitest';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runCli } from '../../src/cli.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
-import { _resetLossAversionRatioCacheForTests } from '../../src/core/memory.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { withHookStdin } from './hook-stdin.js';
 import { runInProcess, type InProcessResult } from './run-in-process.js';
 import { HIPPO_BIN } from './hippo-bin.js';
@@ -24,14 +19,6 @@ function replaceEnv(next: NodeJS.ProcessEnv): void {
   // Mutated in place: a module that kept a reference to process.env must see the swap too.
   for (const key of Object.keys(process.env)) delete process.env[key];
   for (const [key, value] of Object.entries(next)) if (value !== undefined) process.env[key] = value;
-}
-
-function resetProcessCaches(): void {
-  _resetAblationCacheForTests();
-  _resetLossAversionRatioCacheForTests();
-  _resetSharedStoreCacheForTests();
-  _resetLogOnceForTests();
-  resetSessionRings('cli');
 }
 
 /** A hook that writes fd 1 or 2 with writeSync, past the stream buffer, lands in the streams runInProcess reads. */
@@ -63,8 +50,6 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
   process.argv = argv;
   if (opts.cwd) process.chdir(opts.cwd);
   if (opts.env) replaceEnv(opts.env);
-  // A spawned hippo reads its env afresh and starts with nothing cached, so one run cannot leak into the next.
-  resetProcessCaches();
   const unrouteFdWrites = routeStdFdWrites();
   try {
     const r = await withHookStdin(opts.input, () => runInProcess(() => runCli(argv)));
@@ -75,7 +60,6 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
     process.argv = savedArgv;
     process.chdir(savedCwd);
     if (opts.env) replaceEnv(savedEnv);
-    resetProcessCaches();
   }
 }
 

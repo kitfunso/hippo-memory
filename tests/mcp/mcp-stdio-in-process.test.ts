@@ -52,7 +52,7 @@ function replies(): Reply[] {
 
 describe('startStdioLoop, in process', () => {
   it('answers bad frames, lists tools, saves a remembered row in a new global store, and exits 0 once stdin ends', async () => {
-    startStdioLoop(cliStdioHost);
+    startStdioLoop(cliStdioHost());
     feed(
       'not json',
       JSON.stringify({ jsonrpc: '2.0', id: 1 }),

@@ -1,6 +1,5 @@
 // One container's sync in one transaction on the target store: lookup, plan, then every write.
-import { strengthAblation } from '../core/ablation.js';
-import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
+import { Layer, calculateStrength, createMemory, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import type { ContainerTx, ImportTarget } from '../store/port/agent-import.js';
 import { itemHash } from './keys.js';
@@ -14,6 +13,8 @@ export interface StoreSession {
   readonly target: ImportTarget;
   readonly tenantId: string;
   readonly baseHalfLifeDays: number;
+  /** How a revived row is scored: the eval switches and the root's loss-aversion ratio. */
+  readonly strength: StrengthOptions;
   /** Stamped on written rows; undefined lets the store stamp its own project. */
   readonly originProject: string | undefined;
   /** Whether the text is already stored live by another path, as seen where the new row goes. */
@@ -269,7 +270,7 @@ class ContainerRun {
       !this.gated(
         this.tx.stampOrigin({
           ...revived,
-          strength: calculateStrength(revived, now, { ablation: strengthAblation() }),
+          strength: calculateStrength(revived, now, this.s.strength),
         }),
       )
     ) {

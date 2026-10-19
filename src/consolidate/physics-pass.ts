@@ -1,6 +1,6 @@
 import { refreshParticleProperties } from '../core/particle-refresh.js';
 import { simulate, type ForceContext } from '../core/physics.js';
-import type { MemoryEntry } from '../core/memory.js';
+import { clockBasisOf, type MemoryEntry } from '../core/memory.js';
 import type { SleepRun } from './run.js';
 import { errorMessage } from '../util/log.js';
 
@@ -31,7 +31,7 @@ function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
   const particles = run.store.particlesByIds(ids);
   // Only the simulated particles' rows: the refresh and every force lookup read no other id.
   const entryMap = new Map(survivors.get(particles.map((p) => p.memoryId)).map((e) => [e.id, e]));
-  refreshParticleProperties(particles, entryMap, run.now);
+  refreshParticleProperties(particles, entryMap, run.now, clockBasisOf(run.decayOpts));
 
   const stats = simulate(particles, survivorForces(run, entryMap));
   run.store.saveParticles(particles);

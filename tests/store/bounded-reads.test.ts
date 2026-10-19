@@ -187,7 +187,7 @@ describe('ambient tag tallies', () => {
     const now = new Date(Date.UTC(2026, 0, 2));
     const db = openHippoDb(root);
     try {
-      const sql = loadAmbientTalliesAt(db, 'default', { currentProject: [], now });
+      const sql = loadAmbientTalliesAt(db, {}, 'default', { currentProject: [], now });
       const js = tallyAmbientEntries(rows, now);
       expect(Object.fromEntries(sql.tagCounts)).toEqual(Object.fromEntries(js.tagCounts));
       expect(sql.errors).toBe(js.errors);

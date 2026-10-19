@@ -11,7 +11,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { generateProtocol } from '../../scripts/e1-lifecycle/generate.mjs';
 import { runArmSeed } from '../../scripts/e1-lifecycle/run.mjs';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
@@ -31,7 +30,6 @@ const ABLATION_ENV_VARS = [
 
 function clearAblationEnv(): void {
   for (const v of ABLATION_ENV_VARS) vi.stubEnv(v, undefined);
-  _resetAblationCacheForTests();
 }
 beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);

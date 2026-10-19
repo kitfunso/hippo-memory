@@ -13,7 +13,6 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { contextGet, adminActor } from '../../src/api/index.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -223,8 +222,8 @@ describe('test 3: round trip of new fields', () => {
       closeHippoDb(db);
     }
 
-    // The warn is once per row and column in a process, and the case above read the same row id in its own store.
-    _resetLogOnceForTests();
+    // A column an earlier case named at warn repeats at debug for the rest of the process, so this case reads at debug.
+    vi.stubEnv('HIPPO_LOG', 'debug');
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let logged: string;
     try {
@@ -233,10 +232,11 @@ describe('test 3: round trip of new fields', () => {
       logged = stderr.mock.calls.map((c) => String(c[0])).join('');
     } finally {
       stderr.mockRestore();
+      vi.unstubAllEnvs();
     }
     expect(logged).toMatch(
       new RegExp(
-        `warn: store: session_handoffs\\.artifacts_json is not valid JSON; read as empty .*table=session_handoffs id=${id} column=artifacts_json`,
+        `(warn|debug): store: session_handoffs\\.artifacts_json is not valid JSON; read as empty .*table=session_handoffs id=${id} column=artifacts_json`,
       ),
     );
     expect(logged).toMatch(

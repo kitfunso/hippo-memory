@@ -17,7 +17,7 @@ import {
 } from './vector-index.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
-import { bound, type Bodies } from './bound.js';
+import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import { upsertVectors } from '../../db/vector-store.js';
 
 // The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild keeps one open.
@@ -38,9 +38,18 @@ const entryRowsAt: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsPage' | '
   coverage: vectorCoverageAt,
 };
 
+type Particles = 'resetParticles' | 'seedParticle';
+
 type VectorRows = Omit<
   EmbeddingIndex,
-  'requiresReindex' | 'saveModel' | 'beginRebuild' | 'entryCount' | 'entryIdsPage' | 'entriesByIds' | 'coverage'
+  | 'requiresReindex'
+  | 'saveModel'
+  | 'beginRebuild'
+  | 'entryCount'
+  | 'entryIdsPage'
+  | 'entriesByIds'
+  | 'coverage'
+  | Particles
 >;
 
 const vectorRowsAt: Bodies<VectorRows> = {
@@ -49,6 +58,10 @@ const vectorRowsAt: Bodies<VectorRows> = {
   saveVectors: upsertVectors,
   pruneOrphans: pruneOrphanVectorsAt,
   pendingIds: pendingVectorIdsAt,
+};
+
+// A particle's start strength is scored, so these take the store's loss-aversion rules beside the handle.
+const particlesAt: FileBodies<Pick<EmbeddingIndex, Particles>> = {
   resetParticles: resetStoredParticlesAt,
   seedParticle: seedStoredParticleAt,
 };
@@ -59,6 +72,7 @@ export function sqliteEmbeddingIndex({ on, open }: Handles): EmbeddingIndex {
     saveModel: (providerId) => saveStoredEmbeddingModel(on, providerId),
     ...bound(on, entryRowsAt, openStore),
     ...bound(on, vectorRowsAt),
+    ...boundWithFiles(on, particlesAt),
     beginRebuild: () => beginRebuild(open),
   };
 }

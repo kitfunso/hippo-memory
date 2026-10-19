@@ -1,5 +1,6 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTalliesAt } from './ambient.js';
+import type { LossAversion } from '../../core/memory.js';
 import { ambientRefusal } from '../../core/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
@@ -54,7 +55,7 @@ import { flushHeldMirrors } from './mirrors.js';
 import { sqliteKeyAudit, sqliteKeyGrants, sqliteKeyWrites } from './keys.js';
 import type { Handles, OnHandle, StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
-import { bound, boundWithFiles, skipEmpty, type Bodies } from './bound.js';
+import { bound, boundWithFiles, skipEmpty, type Bodies, type FileBodies } from './bound.js';
 import {
   type AuditLog,
   type AuditMaintenance,
@@ -110,7 +111,7 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
   return {
     ensureFiles: () => on(() => undefined, openStore),
     consolidation: sqliteConsolidation(handles),
-    agentImport: sqliteAgentImport,
+    agentImport: sqliteAgentImport(handles.files),
     captures: sqliteCaptures(on),
     compactionHooks: sqliteCompactionHooks(on),
     promotion: sqlitePromotion(handles),
@@ -129,8 +130,9 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
  * held connection is the dashboard's reader, which close releases. */
 export function sqliteSyncStore(
   hippoRoot: string,
+  rules: LossAversion = {},
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
-  const handles = handlesOf(hippoRoot);
+  const handles = handlesOf(hippoRoot, rules);
   const { on } = handles;
   const localFiles = sqliteLocalFiles(handles);
   return {
@@ -154,7 +156,7 @@ export function sqliteSyncStore(
     connectorEvents: sqliteConnectorEvents(on),
     objects: sqliteObjects(on),
     readiness: sqliteReadiness(hippoRoot, on),
-    lastRecall: sqliteLastRecall(on),
+    lastRecall: sqliteLastRecall(handles),
     auditMaintenance: sqliteAuditMaintenance(handles),
     lessonWrites: sqliteLessonWrites(handles),
     sessions: sqliteSessions(on),
@@ -209,12 +211,16 @@ type SqliteRecallWrites = Pick<
   'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
 >;
 
-const recallWritesAt: Bodies<Pick<HippoStore, 'appendAuditEvents' | 'finishRecall' | 'recordTokens'>> = {
+const recallWritesAt: Bodies<Pick<HippoStore, 'appendAuditEvents' | 'recordTokens'>> = {
   appendAuditEvents: appendAuditEventsAt,
-  finishRecall: (db, writes) => {
-    finishRecallAt(db, writes);
-  },
   recordTokens: recordTokenUse,
+};
+
+// It strengthens, so it takes the store's loss-aversion rules beside the handle.
+const recallFinishAt: FileBodies<Pick<HippoStore, 'finishRecall'>> = {
+  finishRecall: (db, files, recall) => {
+    finishRecallAt(db, files, recall);
+  },
 };
 
 function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
@@ -222,6 +228,7 @@ function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
   return {
     ...writes,
     appendAuditEvents: skipEmpty(writes.appendAuditEvents, () => undefined),
+    ...boundWithFiles(on, recallFinishAt),
     ...boundWithFiles<Pick<HippoStore, 'bumpRecallStats'>>(
       on,
       { bumpRecallStats: (db, files, recalled) => updateStatsAt(db, files, { recalled }) },
@@ -283,9 +290,9 @@ export function sqliteReach(
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
  * another store's would. */
-export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
-  const handles = handlesOf(hippoRoot);
-  const sync = sqliteSyncStore(hippoRoot);
+export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): HippoStore & StoreGroups {
+  const handles = handlesOf(hippoRoot, rules);
+  const sync = sqliteSyncStore(hippoRoot, rules);
   return {
     ...served<ServedBaseMethods>(baseMethodsOf(sync)),
     localFiles: sync.localFiles,
@@ -369,13 +376,12 @@ function baseMethodsOf(sync: SqliteSyncStore): Sync<ServedBaseMethods> {
   };
 }
 
-const contextReadsAt: Bodies<ContextReads> = {
+const contextReadsAt: Bodies<Omit<ContextReads, 'ambientTallies'>> = {
   unfinishedHandoff: (db, tenantId, maxAgeMs, key) =>
     loadLatestHandoffAt(db, tenantId, undefined, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key),
   ambientCandidates: (db, tenantId, { admit, ...request }) =>
     loadAmbientCandidatesAt(db, tenantId, { ...request, judge: (e) => ambientRefusal(e, admit) }),
   contextCandidates: loadContextCandidatesAt,
-  ambientTallies: loadAmbientTalliesAt,
   newestEntries: newestEntriesAt,
   schemaFit: schemaFitAt,
   liveContentsBySourceAndTag: liveContentsBySourceAndTagAt,
@@ -383,7 +389,10 @@ const contextReadsAt: Bodies<ContextReads> = {
 };
 
 function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
-  return bound(on, contextReadsAt, openStore);
+  return {
+    ...bound(on, contextReadsAt, openStore),
+    ...boundWithFiles<Pick<ContextReads, 'ambientTallies'>>(on, { ambientTallies: loadAmbientTalliesAt }, openStore),
+  };
 }
 
 /** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */

@@ -1,7 +1,14 @@
 // The strings a context block prints. The budget prices these same strings, so selection and print cannot drift.
 import { MINUTE_MS } from '../util/time.js';
-import { calculateStrength, confidenceFacets, confidenceLabel, type MemoryEntry } from '../core/memory.js';
-import { evalNow, strengthAblation } from '../core/ablation.js';
+import {
+  calculateStrength,
+  confidenceFacets,
+  confidenceLabel,
+  strengthOptionsOf,
+  type MemoryEntry,
+  type StrengthOptions,
+} from '../core/memory.js';
+import { evalNow } from '../core/ablation.js';
 import { estimateTokens } from '../util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../core/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
@@ -107,7 +114,7 @@ export function contextLine(
   framing: string,
   showStrength: boolean,
   now: Date,
-  strengthPct: number = Math.round(calculateStrength(item.entry, undefined, { ablation: strengthAblation() }) * 100),
+  strengthPct: number,
 ): string {
   const e = item.entry;
   const content = shownContent(e);
@@ -135,13 +142,22 @@ export function contextBlockLines(
   items: ReadonlyArray<{ entry: MemoryEntry; isGlobal: boolean }>,
   totalTokens: number,
   framing: string,
-  opts: { showStrength?: boolean; heading?: string } = {},
+  opts: { showStrength?: boolean; heading?: string; strength?: StrengthOptions } = {},
 ): string[] {
   const now = evalNow();
   const showStrength = opts.showStrength !== false;
+  const strength = opts.strength ?? strengthOptionsOf(undefined);
   return [
     contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens),
-    ...items.map((item) => contextLine(item, framing, showStrength, now)),
+    ...items.map((item) =>
+      contextLine(
+        item,
+        framing,
+        showStrength,
+        now,
+        Math.round(calculateStrength(item.entry, undefined, strength) * 100),
+      ),
+    ),
   ];
 }
 

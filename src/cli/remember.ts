@@ -1,7 +1,7 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
 import { envActiveScope, envAnthropicApiKey } from '../util/env.js';
-import { evalNow, strengthAblation } from '../core/ablation.js';
+import { evalNow } from '../core/ablation.js';
 import * as fs from 'fs';
 import {
   calculateStrength,
@@ -10,7 +10,9 @@ import {
   confidenceLabel,
   Layer,
   ConfidenceLevel,
+  strengthOptionsOf,
   type MemoryEntry,
+  type StrengthOptions,
 } from '../core/memory.js';
 import * as api from '../api/index.js';
 import { memoryGet, memoryListByIds } from '../api/memories/memories.js';
@@ -22,7 +24,7 @@ import { extractPathTags } from '../search/path-context.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as client from './client.js';
-import { cliApiContext, cliInitGlobal } from './api-context.js';
+import { cliApiContext, cliConfig, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable } from './shared.js';
@@ -305,7 +307,7 @@ async function cmdTrace(hippoRoot: string, tenantId: string, id: string, flags: 
     entry,
     id,
     sourceLabel,
-    ...traceStats(entry),
+    ...traceStats(entry, strengthOptionsOf(cliConfig(hippoRoot).runtime)),
     ...(await traceLineage(hippoRoot, globalRoot, entry, id, tenantId)),
   };
   if (asJson) {
@@ -322,11 +324,11 @@ type TraceView = ReturnType<typeof traceStats> &
     sourceLabel: 'local' | 'global';
   };
 
-function traceStats(entry: MemoryEntry) {
+function traceStats(entry: MemoryEntry, rules: StrengthOptions) {
   const now = evalNow();
-  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
+  const strength = calculateStrength(entry, now, rules);
   const halfLife = entry.halfLifeDays;
-  const rewardFactor = calculateRewardFactor(entry, strengthAblation());
+  const rewardFactor = calculateRewardFactor(entry, rules.ablation);
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
   const ageDays = (now.getTime() - createdMs) / DAY_MS;
@@ -337,7 +339,7 @@ function traceStats(entry: MemoryEntry) {
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
-    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), { ablation: strengthAblation() });
+    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), rules);
   return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
 }
 

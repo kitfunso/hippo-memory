@@ -1,7 +1,7 @@
 // Sleep's flush commits whole units of work in short transactions and lets other writers in between,
 // a run stopped between two of them leaves a consistent store, and an uninterrupted run ends where one transaction would.
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -16,7 +16,6 @@ import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import {
   closeHippoDb,
   getHippoDbPath,
@@ -268,13 +267,8 @@ function storeFacts(fx: Fixture) {
   });
 }
 
-beforeEach(() => {
-  _resetAblationCacheForTests();
-});
-
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
 });
 
@@ -302,7 +296,6 @@ describe('chunked consolidation flush', () => {
 
   it('ends with the same store whether the flush commits per unit or all at once', async () => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW.toISOString());
-    _resetAblationCacheForTests();
     const fx = seed({ clusters: 30, dormant: 20, filler: 40 });
     const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-chunked-flush-'));
     roots.push(copy);

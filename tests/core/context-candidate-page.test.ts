@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { contextGet } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -42,7 +41,6 @@ function seed(): string[] {
 }
 
 beforeEach(() => {
-  _resetAblationCacheForTests();
   vi.stubEnv('HIPPO_HOME', undefined);
   root = makeRoot('ctx-page');
 });

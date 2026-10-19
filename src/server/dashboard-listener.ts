@@ -7,10 +7,11 @@ import { configReader } from '../core/config.js';
 import { evalNow } from '../core/ablation.js';
 import { builtStaticRoot } from '../dashboard/static-file.js';
 import type { HippoStore } from '../store/port.js';
+import { createSqliteExecutor } from '../store/sqlite/executor.js';
 import { createStoreHolder, offLoopFor } from '../store/sqlite/held-connection.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { installSignalHandlers } from '../util/crash-handlers.js';
-import { envRuntimeSettings } from '../util/env.js';
+import { envLossAversionRatio, envRuntimeSettings } from '../util/env.js';
 import { bodyDeadlineMs } from '../util/http-util.js';
 import { answerRequest, listenOn } from './boot.js';
 import { startDashboardReader } from './dashboard-reader.js';
@@ -70,15 +71,21 @@ function servingFor(opts: DashboardOpts, store: HippoStore): DashboardServing {
 /** Serves the dashboard on 127.0.0.1 behind the per-start `token`; it never claims the API server's pidfile, so both
  * can serve one store. */
 export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle> {
-  const store = workerSqliteStore(opts.hippoRoot);
+  const rules = { lossAversionRatio: envLossAversionRatio() };
+  const store = workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, rules), rules);
   const holder = createStoreHolder(opts.hippoRoot, store);
   const serving = servingFor(opts, store);
   const inflight = new Set<ServerResponse>();
+  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API server's.
+  const counts = { handlerDeadlines: 0 };
   const server = createListener(undefined, (req, res) => {
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => holder.runRequest(() => answerDashboard(serving, req, res)), undefined);
+    answerRequest(req, res, () => holder.runRequest(() => answerDashboard(serving, req, res)), {
+      slowWarnMs: undefined,
+      counts,
+    });
   });
   setKeepAliveTimeouts(server);
   // The reader thread and the store's workers close before the held connection, so its close is SQLite's last.

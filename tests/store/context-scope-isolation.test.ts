@@ -17,7 +17,6 @@ import * as path from 'path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { contextGet } from '../../src/api/index.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -52,7 +51,6 @@ beforeEach(() => {
   initStore(globalStore);
   origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalStore);
-  _resetProjectIdentityCacheForTests();
 
   writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
   writeEntry(globalStore, {

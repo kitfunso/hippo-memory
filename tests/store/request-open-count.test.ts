@@ -169,7 +169,7 @@ describe('stdio MCP tool calls', () => {
       config: loadConfig(root),
     };
     const reply = (id: number, query: string) =>
-      cliStdioHost.runRequest(() =>
+      cliStdioHost().runRequest(() =>
         handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx),
       );
     let replies: Array<McpResponse | null> = [];

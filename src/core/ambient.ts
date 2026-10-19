@@ -3,10 +3,10 @@
  * retrieving specific memories.
  */
 
-import { evalNow, strengthAblation } from './ablation.js';
+import { evalNow } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
 import { Layer } from './memory.js';
-import { calculateStrength, HIGH_SCHEMA_FIT } from './memory.js';
+import { calculateStrength, HIGH_SCHEMA_FIT, strengthOptionsOf, type StrengthOptions } from './memory.js';
 import { DAY_MS } from '../util/time.js';
 
 const STATE_DECIMALS = 3;
@@ -107,13 +107,18 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
 }
 
 /** Adds rows to `t` in order, so a store read a page at a time sums its floats exactly as one whole read does. */
-export function foldAmbientRows(t: AmbientTallies, entries: readonly MemoryEntry[], currentTime: Date): void {
+export function foldAmbientRows(
+  t: AmbientTallies,
+  entries: readonly MemoryEntry[],
+  currentTime: Date,
+  rules: StrengthOptions = strengthOptionsOf(undefined),
+): void {
   const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
   t.total += entries.length;
   for (const entry of entries) {
     if (entry.supersededBy) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
-    t.strengthSum += calculateStrength(entry, currentTime, { ablation: strengthAblation() });
+    t.strengthSum += calculateStrength(entry, currentTime, rules);
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
     if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;

@@ -84,7 +84,7 @@ function seedMemories(dir: string): void {
     );
     upsertVectors(db, [['mem_3', [0, 1, 0]]], OLD);
     setMeta(db, EMBEDDING_MODEL_META_KEY, MODEL);
-    savePhysicsState(db, [initializeParticle(rows[0], [1, 0, 0], SEEDED_AT)]);
+    savePhysicsState(db, [initializeParticle(rows[0], [1, 0, 0], {}, SEEDED_AT)]);
   } finally {
     closeHippoDb(db);
   }
@@ -111,7 +111,7 @@ const sorted = <V>(map: Map<string, V> | undefined): [string, V][] =>
 const stored: Call = async (_g, store) => sorted(await store.vectors?.storedVectors(ALL_IDS));
 const particles: Call = async (_g, store) => sorted(await store.vectors?.physicsParticles(ALL_IDS));
 const particleFor = (id: string, vector: number[]): PhysicsParticle =>
-  initializeParticle(entries.get(id) ?? memory(id, TENANT_A, 9), vector, SEEDED_AT);
+  initializeParticle(entries.get(id) ?? memory(id, TENANT_A, 9), vector, {}, SEEDED_AT);
 
 type Row = MemoryEntry | [string, number[]] | [string, PhysicsParticle];
 const isEntry = (row: Row): row is MemoryEntry => !Array.isArray(row);

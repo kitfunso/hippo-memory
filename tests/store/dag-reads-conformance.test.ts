@@ -5,7 +5,6 @@ import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
@@ -336,7 +335,6 @@ const SERVED: readonly (readonly [string, number])[] = [
 
 /** Every SERVED path over serve() on a fresh copy of the fixture, as the first tenant's admin. */
 async function runServed(makeStore?: (root: string) => HippoStore): Promise<Reply[]> {
-  _resetSharedStoreCacheForTests();
   const home = mkdtempSync(join(tmpdir(), 'hippo-dag-served-'));
   try {
     const root = join(home, 'store');
@@ -373,7 +371,6 @@ describe('assemble and drill over serve()', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetSharedStoreCacheForTests();
   });
 
   it('answer the same on hippo.db and on a store held in memory', async () => {

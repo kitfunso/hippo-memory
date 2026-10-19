@@ -17,7 +17,8 @@ export async function dashboardMemoryDetail(
   if (entry === null || !isLiveMemory(entry)) return null;
   const snapshotId = snapshots.get(ctx.tenantId, at.fresh).id;
   const embedded = snapshots.isEmbedded(entry.id);
-  return buildMemoryDetail(ctx.store, ctx.tenantId, entry, { snapshotId, nowMs: at.nowMs, embedded });
+  const lossAversion = { lossAversionRatio: ctx.config.runtime?.lossAversionRatio };
+  return buildMemoryDetail(ctx.store, ctx.tenantId, entry, { snapshotId, nowMs: at.nowMs, embedded, lossAversion });
 }
 
 /** What a dashboard write reports: whether it committed, and the live entry it acted on, if any. */
@@ -36,6 +37,12 @@ export async function dashboardDetailAfterWrite(
 ): Promise<MemoryDetail | null> {
   if (write.changed) snapshots.invalidate();
   if (write.entry === undefined) return null;
-  const options = { snapshotId: snapshots.currentId(), nowMs, embedded: snapshots.isEmbedded(write.entry.id) };
+  const embedded = snapshots.isEmbedded(write.entry.id);
+  const options = {
+    snapshotId: snapshots.currentId(),
+    nowMs,
+    embedded,
+    lossAversion: { lossAversionRatio: ctx.config.runtime?.lossAversionRatio },
+  };
   return buildMemoryDetail(ctx.store, ctx.tenantId, write.entry, options);
 }

@@ -13,20 +13,15 @@ import {
 } from '../../api/index.js';
 import { RECALL_RECORDING } from '../../api/recall/finish.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall/request.js';
-import { resetSessionRings } from '../../api/recall/finish.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
+import { restClientKey } from '../client-key.js';
 import { sharedStoreOf, type Context } from '../../api/types.js';
 import { MAX_LIST_LIMIT } from '../../util/limits.js';
 import { parseListLimit, validateIdSegment } from '../validation.js';
 
-/** Test-only: reset the HTTP recall rings. Call from beforeEach. */
-export function __resetSessionRecallHistoryHttp(): void {
-  resetSessionRings('http');
-}
-
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
-export async function handleRecallMemories({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
+export async function handleRecallMemories({ req, res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const { opts: recallOpts, limit, mode, explain } = parseRecallRequest(httpParams(query));
   const result = await retrieve(ctx, {
     ...recallOpts,
@@ -34,6 +29,10 @@ export async function handleRecallMemories({ res, ctx, query }: AuthedRouteReque
     mode,
     trace: { explain, recordAs: RECALL_RECORDING.http },
   });
+  ctx.callers?.lastShown.set(
+    restClientKey(req, ctx),
+    result.results.map((r) => r.id),
+  );
 
   // Continuity payloads should never be cached. The caller is asking for
   // session-state-aware data; intermediaries must not reuse it across users.
@@ -148,13 +147,17 @@ function contextReader(ctx: Context, query: URLSearchParams): ProjectRef {
 // Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one
 // 'recall' row.
-export async function handleGetContext({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
+export async function handleGetContext({ req, res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const result = await contextGet(ctx, {
     ...parsed,
     currentProject: contextReader(ctx, query),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
+  ctx.callers?.lastShown.set(
+    restClientKey(req, ctx),
+    result.entries.map((r) => r.entry.id),
+  );
   await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
   sendJson(res, 200, result);
   return;

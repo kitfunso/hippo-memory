@@ -5,20 +5,20 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import {
-  Layer,
-  _resetLossAversionRatioCacheForTests,
-  setLossAversionRatio,
-  type EmotionalValence,
-  type MemoryEntry,
-} from '../../src/core/memory.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
+import { Layer, strengthOptionsOf, type EmotionalValence, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { contextGet, adminActor } from '../../src/api/index.js';
-import { renderAmbientSummary, tallyAmbientEntries, ambientStateFromTallies } from '../../src/core/ambient.js';
+import {
+  renderAmbientSummary,
+  tallyAmbientEntries,
+  ambientStateFromTallies,
+  foldAmbientRows,
+} from '../../src/core/ambient.js';
+import { cliStore } from '../../src/cli/api-context.js';
+import { envRuntimeSettings } from '../../src/util/env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries, loadAmbientTallies } from '../_helpers/root-forms.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 
 let root = '';
@@ -110,20 +110,13 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     };
   }
 
-  afterEach(() => {
-    _resetAblationCacheForTests();
-    _resetLossAversionRatioCacheForTests();
-  });
-
   it.each([
     ['default flags', {}],
     ['decay ablated', { HIPPO_ABLATE_DECAY: '1' }],
     ['recall boost ablated', { HIPPO_ABLATE_RECALL_BOOST: '1' }],
-    ['outcome ablated, loss aversion 1.5', { HIPPO_ABLATE_OUTCOME: '1' }, '1.5'],
-  ])('%s', (_label, env: Record<string, string>, lossAversionRatio?: string) => {
+    ['outcome ablated, loss aversion 1.5', { HIPPO_ABLATE_OUTCOME: '1', HIPPO_LOSS_AVERSION_RATIO: '1.5' }],
+  ])('%s', async (_label, env: Record<string, string>) => {
     for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
-    _resetAblationCacheForTests();
-    setLossAversionRatio(lossAversionRatio);
     for (let i = 0; i < 60; i++) writeEntry(store, row(i));
     const db = openHippoDb(store);
     try {
@@ -135,11 +128,11 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
       closeHippoDb(db);
     }
 
-    const sql = loadAmbientTallies(store, 'default', { currentProject: [], now: NOW });
-    const js = tallyAmbientEntries(
-      loadAllEntries(store, 'default').filter((e) => !e.supersededBy),
-      NOW,
-    );
+    // Both sides score by the ratio the CLI root reads from the environment.
+    const sql = await cliStore(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW });
+    const js = tallyAmbientEntries([], NOW);
+    const live = loadAllEntries(store, 'default').filter((e) => !e.supersededBy);
+    foldAmbientRows(js, live, NOW, strengthOptionsOf(envRuntimeSettings()));
 
     expect({ ...sql, strengthSum: 0 }).toEqual({ ...js, strengthSum: 0 });
     expect(sql.strengthSum).toBeCloseTo(js.strengthSum, 9);

@@ -5,7 +5,6 @@ import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embedMemory } from '../../src/search/embed-memories.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -35,7 +34,6 @@ beforeEach(() => {
   useModel('m');
   vi.stubEnv(KEY_ENV, 'test-key-not-real');
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  _resetLogOnceForTests();
 });
 
 afterEach(() => {

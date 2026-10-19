@@ -6,7 +6,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
@@ -47,7 +46,6 @@ describe('recall --why rerankTrace', () => {
     const localRoot = join(home, '.hippo');
     vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    resetSessionRings('cli');
     await hippo(home, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
     // peer: matches the query and is referenced by the hero's conflicts_with,

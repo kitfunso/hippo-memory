@@ -7,7 +7,6 @@ import { buildMemoryPage, buildOverview, buildProjectDetail, buildSearch } from 
 import { createSnapshotService } from '../api/dashboard/snapshot.js';
 import type { ContextWith } from '../api/types.js';
 import { configReader } from '../core/config.js';
-import { setLossAversionRatio } from '../core/memory.js';
 import { isStoreBusy } from '../store/port.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../util/env.js';
@@ -17,16 +16,24 @@ import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboa
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
 
-function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
-  const store = sqliteStore(hippoRoot);
-  const loadConfig = configReader(envRuntimeSettings);
-  // Set from each call, so the snapshot is dated and aged by the clocks the server read when the request came in.
-  const clock = { nowMs: 0, wallMs: 0 };
+/** The thread is its own root, so it reads the ratio its store and snapshots score strength by. */
+function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonly wallMs: number }) {
+  const lossAversion = { lossAversionRatio: envLossAversionRatio() };
+  const store = sqliteStore(hippoRoot, lossAversion);
   const snapshots = createSnapshotService(
     store.localFiles.dashboard,
+    lossAversion,
     () => clock.nowMs,
     () => clock.wallMs,
   );
+  return { store, snapshots };
+}
+
+function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
+  const loadConfig = configReader(envRuntimeSettings);
+  // Set from each call, so the snapshot is dated and aged by the clocks the server read when the request came in.
+  const clock = { nowMs: 0, wallMs: 0 };
+  const { store, snapshots } = readerStore(hippoRoot, clock);
   // A fresh Context per call, so a config edit shows on the next request.
   const context = (): ContextWith<'localFiles'> => ({
     hippoRoot,
@@ -93,7 +100,6 @@ function answer(port: MessagePort, reply: ReaderReply): void {
 }
 
 if (parentPort) {
-  setLossAversionRatio(envLossAversionRatio());
   // SAFETY: dashboard-reader.ts is the only code that starts this file, and it passes a ReaderInit.
   serveReads(parentPort, workerData as ReaderInit);
 }

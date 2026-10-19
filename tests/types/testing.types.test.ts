@@ -1,28 +1,11 @@
-/** The types an integrator sees from `hippo-memory/testing` (src/entry/testing.ts): reset seams that take nothing, and
- * the eval kit. */
+/** The types an integrator sees from `hippo-memory/testing` (src/entry/testing.ts): the eval kit, with no reset seams. */
 
-import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import * as testing from '../../src/entry/testing.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import type { TenantId } from '../../src/util/tenant.js';
 
 describe('hippo-memory/testing entry types', () => {
-  it('the reset helpers take no arguments and return nothing', () => {
-    expectTypeOf(testing._resetAblationCacheForTests).toEqualTypeOf<() => void>();
-    expectTypeOf(testing._resetSharedStoreCacheForTests).toEqualTypeOf<() => void>();
-    expectTypeOf(testing._resetLossAversionRatioCacheForTests).toEqualTypeOf<() => void>();
-    expectTypeOf(testing._resetProjectIdentityCacheForTests).toEqualTypeOf<() => void>();
-    expectTypeOf(testing._resetLogOnceForTests).toEqualTypeOf<() => void>();
-    expectTypeOf(testing._resetSessionRecallHistoryMcpForTests).toEqualTypeOf<() => void>();
-    expectTypeOf(testing.__resetSessionRecallHistoryHttp).toEqualTypeOf<() => void>();
-  });
-
-  it('a reset helper rejects an argument', () => {
-    // @ts-expect-error the seam takes no arguments
-    typeOnly(() => testing._resetLogOnceForTests('x'));
-  });
-
   it('the eval kit takes a store folder', () => {
     expectTypeOf(testing.initStore).parameter(0).toEqualTypeOf<string>();
     expectTypeOf(testing.loadAllEntries).toEqualTypeOf<(hippoRoot: string) => MemoryEntry[]>();
@@ -51,17 +34,8 @@ describe('hippo-memory/testing entry types', () => {
     expectTypeOf(testing.createMemoryWire).returns.toEqualTypeOf<testing.MemoryWire>();
   });
 
-  it('the entry exports the nine published seams, the eval kit, its ten snake_case forms and nine handle helpers', () => {
+  it('the entry exports the eval kit, its ten snake_case forms and nine handle helpers', () => {
     expectTypeOf<keyof typeof testing>().toEqualTypeOf<
-      | '_resetAblationCacheForTests'
-      | '_setDigestExistsProbeForTests'
-      | '_resetSharedStoreCacheForTests'
-      | '_resetLossAversionRatioCacheForTests'
-      | '_resetProjectIdentityCacheForTests'
-      | '_resetSessionRecallHistoryMcpForTests'
-      | '__resetSessionRecallHistoryHttp'
-      | '_readApiKeyVerifyStatsForTests'
-      | '_resetLogOnceForTests'
       | 'ambientSecretAdmit'
       | 'initStore'
       | 'embedMemory'
@@ -89,6 +63,6 @@ describe('hippo-memory/testing entry types', () => {
       | 'recordTokenUse'
       | 'tokensBySession'
     >();
-    expect(Object.keys(testing)).toHaveLength(35);
+    expect(Object.keys(testing)).toHaveLength(26);
   });
 });

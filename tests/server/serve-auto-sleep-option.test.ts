@@ -1,4 +1,5 @@
-// serve({ autoSleep: false }): a host-tenant remember over POST /mcp never starts consolidation; unset, it runs in a child, never in the server process.
+// serve({ autoSleep: false }): a host-tenant remember over POST /mcp or POST /v1/memories never starts consolidation;
+// unset, it runs in a child, never in the server process.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -52,6 +53,16 @@ async function remember(url: string, key: string, text: string): Promise<void> {
   expect(res.status).toBe(200);
 }
 
+/** POST /v1/memories, which api remember serves as it serves hippo_remember. */
+async function rememberRest(url: string, key: string, text: string): Promise<void> {
+  const res = await fetch(`${url}/v1/memories`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+    body: JSON.stringify({ content: text }),
+  });
+  expect(res.status).toBe(200);
+}
+
 const NOTES = ['the deploy moved to friday', 'alice owns the billing service', 'bob reviews every schema change'];
 
 describe('serve autoSleep option', () => {
@@ -67,6 +78,25 @@ describe('serve autoSleep option', () => {
     const { root, url, key } = await startServer(undefined);
     for (const note of NOTES) await remember(url, key, note);
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
+  });
+
+  it('a REST remember past the threshold adds one consolidation run, as hippo_remember does', async () => {
+    const { root, url, key } = await startServer(undefined);
+    for (const note of NOTES) await rememberRest(url, key, note);
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
+  });
+
+  it('stop returns once the auto-sleep a write started has ended, so no sleep child still holds the store', async () => {
+    const { root, url, key } = await startServer(undefined);
+    for (const note of NOTES) await rememberRest(url, key, note);
+    for (const h of handles.splice(0)) await h.stop();
+    expect(sleepRuns(root)).toBe(1);
+  });
+
+  it('autoSleep: false stops a REST remember from starting one too', async () => {
+    const { root, url, key } = await startServer(false);
+    for (const note of NOTES) await rememberRest(url, key, note);
+    expect(sleepRuns(root)).toBe(0);
   });
 
   it('runs the consolidation in a child process under the sleep deadline, not on the server event loop', async () => {

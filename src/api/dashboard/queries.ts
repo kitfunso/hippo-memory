@@ -1,6 +1,6 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
-import { calculateStrength, type MemoryEntry } from '../../core/memory.js';
+import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
 import type { HippoStore, StoreGroups } from '../../store/port.js';
 import type { ConflictPair, DashboardText } from '../../store/port/dashboard-reads.js';
 import {
@@ -431,6 +431,7 @@ async function openConflictsOf(
   tenantId: string,
   entry: MemoryEntry,
   nowMs: number,
+  lossAversion: LossAversion,
 ): Promise<MemoryConflictDetail[]> {
   const conflicts = store.localFiles.dashboard.openConflictsOf(tenantId, entry.id).map((row) => row.conflict);
   const otherId = (c: ConflictPair): string => (c.memory_a_id === entry.id ? c.memory_b_id : c.memory_a_id);
@@ -442,7 +443,7 @@ async function openConflictsOf(
   for (const c of conflicts) {
     const other = others.get(otherId(c));
     if (!other || !isLiveMemory(other)) continue;
-    const strength = round3(calculateStrength(other, new Date(nowMs)));
+    const strength = round3(calculateStrength(other, new Date(nowMs), lossAversion));
     out.push({
       id: c.id,
       reason: c.reason,
@@ -457,6 +458,7 @@ export interface MemoryDetailOptions {
   readonly snapshotId: number;
   readonly nowMs: number;
   readonly embedded: boolean;
+  readonly lossAversion: LossAversion;
 }
 
 /** Full detail read fresh from the store, never from the snapshot, so the drawer is current inside the coalescing
@@ -467,8 +469,8 @@ export async function buildMemoryDetail(
   entry: MemoryEntry,
   options: MemoryDetailOptions,
 ): Promise<MemoryDetail> {
-  const { snapshotId, nowMs, embedded } = options;
-  const f = memoryFacts(entry, nowMs);
+  const { snapshotId, nowMs, embedded, lossAversion } = options;
+  const f = memoryFacts(entry, nowMs, lossAversion);
   const project = projectIdentity(entry.originProject);
   return {
     snapshotId,
@@ -497,6 +499,6 @@ export async function buildMemoryDetail(
     tenant: entry.tenantId,
     kind: entry.kind,
     embedded,
-    conflicts: await openConflictsOf(store, tenantId, entry, nowMs),
+    conflicts: await openConflictsOf(store, tenantId, entry, nowMs, lossAversion),
   };
 }

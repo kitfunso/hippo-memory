@@ -17,7 +17,7 @@ import { bound, boundWithFiles, type Bodies } from './bound.js';
  * and a `summarised` one is reused. */
 function writeCallerItemsAt(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   tenantId: string,
   req: CallerItems,
   log: Log,
@@ -28,7 +28,7 @@ function writeCallerItemsAt(
   const text = { summary: '', items: [...req.items] };
   const record =
     earlier ??
-    recordSummary(db, hippoRoot, tenantId, {
+    recordSummary(db, files.hippoRoot, tenantId, {
       meta,
       text,
       at: new Date(),
@@ -36,7 +36,7 @@ function writeCallerItemsAt(
     });
   return saveItems(
     db,
-    hippoRoot,
+    files,
     {
       tenantId,
       recordId: record.id,

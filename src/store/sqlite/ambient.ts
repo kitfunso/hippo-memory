@@ -4,7 +4,7 @@ import { SECRET_TAGS } from '../../util/secret-detect.js';
 import { originInSql } from '../../core/project-identity.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../core/ambient.js';
-import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT } from '../../core/memory.js';
+import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../core/memory.js';
 import { placeholders } from '../../util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../util/json.js';
@@ -45,6 +45,7 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
  *  rows (own compaction items, a printed handoff's digest) still count: only injection drops them. */
 export function loadAmbientTalliesAt(
   db: DatabaseSyncLike,
+  rules: LossAversion,
   tenantId: string,
   filter: AmbientStoreFilter,
 ): AmbientTallies {
@@ -59,7 +60,7 @@ export function loadAmbientTalliesAt(
   const row = db
     .prepare(`SELECT
     COUNT(*) AS total,
-    COALESCE(SUM(${strengthSql(filter.now)}), 0) AS strengthSum,
+    COALESCE(SUM(${strengthSql(filter.now, rules)}), 0) AS strengthSum,
     COALESCE(SUM(julianday(created) > julianday(?)), 0) AS fresh,
     COALESCE(SUM(emotional_valence IN ('negative', 'critical')), 0) AS negative,
     COALESCE(SUM(COALESCE(schema_fit, ${DEFAULT_SCHEMA_FIT}) > ?), 0) AS highSchemaFit,

@@ -3,11 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  _resetProjectIdentityCacheForTests,
-  projectNames,
-  resolveProjectIdentity,
-} from '../../src/core/project-identity.js';
+import { projectNames, resolveProjectIdentity } from '../../src/core/project-identity.js';
 import { normalizeRemote, originUrlFromConfig } from '../../src/core/project-remote.js';
 
 afterEach(() => {
@@ -41,11 +37,9 @@ beforeEach(() => {
   tmpRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remote-')));
   home = mkdirs('home');
   vi.stubEnv('HIPPO_HOME', mkdirs('global'));
-  _resetProjectIdentityCacheForTests();
 });
 
 afterEach(() => {
-  _resetProjectIdentityCacheForTests();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
@@ -135,7 +129,6 @@ describe('resolveProjectIdentity with an origin remote', () => {
     const root = repo('git@github.com:acme/api.git', 'home', 'api');
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'Acme-API' }));
     expect(identity(root)).toMatchObject({ name: 'acme-api', legacyName: 'api' });
-    _resetProjectIdentityCacheForTests();
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'has a space' }));
     expect(identity(root).name).toBe('github.com/acme/api');
   });
@@ -155,7 +148,6 @@ describe('resolveProjectIdentity with an origin remote', () => {
       path.join(process.env.HIPPO_HOME!, 'config.json'),
       JSON.stringify({ projectIdentity: { remote: false } }),
     );
-    _resetProjectIdentityCacheForTests();
     expect(projectNames(identity(root))).toEqual(['api', 'github.com/acme/api']);
   });
 
@@ -206,10 +198,8 @@ describe('resolveProjectIdentity with an origin remote', () => {
       path.join(process.env.HIPPO_HOME!, 'config.json'),
       JSON.stringify({ projectIdentity: { remote: false } }),
     );
-    _resetProjectIdentityCacheForTests();
     expect(identity(root)).toMatchObject({ name: 'api', legacyName: 'api' });
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'acme-api' }));
-    _resetProjectIdentityCacheForTests();
     expect(identity(root).name).toBe('acme-api');
   });
 });

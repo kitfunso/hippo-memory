@@ -1,13 +1,11 @@
 // Transcript text naming a network host never reaches the filesystem: existsSync on \\host opens an SMB connection.
 import * as fs from 'fs';
+import nodeFs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/core/config.js';
-import {
-  _setDigestExistsProbeForTests,
-  recordSessionDigest,
-  type DigestEdit,
-} from '../../src/capture/session-digest.js';
+import { recordSessionDigest, type DigestEdit } from '../../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { syncStore } from '../_helpers/cli-stores.js';
@@ -16,6 +14,7 @@ import { initStore } from '../../src/store/sqlite/handles.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];
+const realExists = nodeFs.existsSync;
 
 let tmp: string;
 let repo: string;
@@ -27,16 +26,17 @@ beforeEach(() => {
   repo = fs.realpathSync.native(path.join(tmp, 'repo'));
   hippoRoot = path.join(repo, '.hippo');
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  probes.length = 0;
   // A host-named probe answers false, so a broken guard fails the test without dialing out.
-  _setDigestExistsProbeForTests((p) => {
-    probes.push(p);
-    return HOST.test(p) ? false : fs.existsSync(p);
+  vi.spyOn(nodeFs, 'existsSync').mockImplementation((p) => {
+    probes.push(String(p));
+    return HOST.test(String(p)) ? false : realExists(p);
   });
+  syncBuiltinESMExports();
 });
 
 afterEach(() => {
-  _setDigestExistsProbeForTests(null);
+  vi.restoreAllMocks();
+  syncBuiltinESMExports();
   vi.unstubAllEnvs();
 });
 
@@ -46,10 +46,13 @@ const touched = (): string[] => probes.filter((p) => HOST.test(p));
 function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
   initStore(hippoRoot);
+  const store = syncStore(hippoRoot);
+  // Probes count from the session end itself, not the store set-up before it.
+  probes.length = 0;
   const log: string[] = [];
   recordSessionDigest(
     hippoRoot,
-    syncStore(hippoRoot),
+    store,
     { turns: [{ role: 'user', text: 'go' }], finalText, cwd, edits },
     {
       key: 's1',
@@ -68,8 +71,8 @@ const digest = (finalText: string, edits: DigestEdit[] = []): string => end(fina
 describe('network paths in a digest', () => {
   it('still probes a local repo path, so the checks below are live', () => {
     expect(digest('', [{ filePath: path.join(repo, 'src', 'a.ts'), base: null }])).toBe('Changed: src/a.ts');
-    // The store's repo and the cwd each resolve on the first probe; the missing file walks up to its folder.
-    expect(probes).toEqual([repo, repo, path.join(repo, 'src', 'a.ts'), path.join(repo, 'src')]);
+    // Every module's existsSync is recorded; the digest's own probes walk the missing file up to its folder.
+    expect(probes).toEqual(expect.arrayContaining([repo, path.join(repo, 'src', 'a.ts'), path.join(repo, 'src')]));
   });
 
   it.each([

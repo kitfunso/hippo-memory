@@ -8,7 +8,7 @@ import { isEmbeddingAvailable } from '../../embeddings/local.js';
 import { boostByGoals } from '../../search/goal-boost.js';
 import { graphExpandRecall } from '../../graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../graph/stream.js';
-import { Layer, type MemoryEntry } from '../../core/memory.js';
+import { Layer, strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
 import { multihopSearch } from '../../search/multihop.js';
 import type { PhysicsConfig } from '../../core/physics-config.js';
 import { passesCliRecallScopeFilter, recallScopeFilter } from '../../core/recall-scope.js';
@@ -184,7 +184,7 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): P
   if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
   applyPfcRerankers(opts, state);
   if (opts.haltBefore === 'rerank') return done(true);
-  if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results);
+  if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
   await applyGoalBoosts(ctx, opts, state);
   if (opts.haltBefore === 'salience') return done(true);
   if (opts.salienceThreshold !== undefined) state.results = applySalience(opts, opts.salienceThreshold, state.results);
@@ -275,7 +275,7 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: R
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
-  const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
+  const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow(), strengthOptionsOf(ctx.config.runtime)).flat();
   const globalIds = new Set(pool.global.map((e) => e.id));
   const localIds = new Set(pool.local.map((e) => e.id));
   const fromGlobal = (id: string): boolean => globalIds.has(id) && !localIds.has(id);
@@ -286,6 +286,7 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: R
     includeSuperseded,
     asOf,
     scope: ctx.config.runtime?.activeScope ?? null,
+    runtime: ctx.config.runtime,
   });
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
@@ -495,9 +496,11 @@ function applyRecallReranker(
   opts: RankRecallOptions,
   reranker: RecallReranker,
   results: SearchResult[],
+  config: HippoConfig,
 ): Promise<SearchResult[]> {
+  const rerankerOptions = { topK: reranker.topK, clef: config.runtime?.clef };
   // The reranker's score becomes `score` so later stages that sort by score keep its order.
-  return applyReranker(opts.query, results, reranker.fn, { topK: reranker.topK }, (r) =>
+  return applyReranker(opts.query, results, reranker.fn, rerankerOptions, (r) =>
     traced(
       opts,
       r,

@@ -4,15 +4,6 @@ import type { openHippoDb } from '../db/index.js';
 import { upsertEntryRow } from '../store/sqlite/entry-row.js';
 import type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
 import { batchWriteAndDelete, loadAllEntries, writeEntry } from '../store/sqlite/folder-forms.js';
-export { _resetAblationCacheForTests } from '../core/ablation.js';
-export { _setDigestExistsProbeForTests } from '../capture/session-digest.js';
-export { _resetSharedStoreCacheForTests } from '../core/config.js';
-export { _resetLossAversionRatioCacheForTests } from '../core/memory.js';
-export { _resetProjectIdentityCacheForTests } from '../core/project-identity.js';
-export { _resetSessionRecallHistoryMcpForTests } from '../mcp/session-state.js';
-export { __resetSessionRecallHistoryHttp } from '../server/routes/recall.js';
-export { _readApiKeyVerifyStatsForTests } from '../server/api-key.js';
-export { _resetLogOnceForTests } from '../util/log.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
 export { ambientSecretAdmit } from '../core/read-admission.js';
 export { initStore } from '../store/sqlite/handles.js';

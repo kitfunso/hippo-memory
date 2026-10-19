@@ -8,7 +8,7 @@ import { Socket } from 'node:net';
 import { ignoringCodes, PATH_UNREADABLE, tryDecodeUri } from '../../src/util/expected-errors.js';
 import { parseJson, tryParseJson, tryReadJsonFile } from '../../src/util/json.js';
 import { tryParseUrl } from '../../src/util/net.js';
-import { errorClassFields, errorFields, _resetLogOnceForTests } from '../../src/util/log.js';
+import { errorClassFields, errorFields } from '../../src/util/log.js';
 import { parseStoredObject } from '../../src/util/stored-json.js';
 import { endReply, writeChunk } from '../../src/server/request.js';
 
@@ -95,7 +95,6 @@ describe('what a failed reply or a damaged column leaves on stderr', () => {
   const logged = (): string[] => stderr.mock.calls.map((call) => String(call[0]));
 
   beforeEach(() => {
-    _resetLogOnceForTests();
     vi.stubEnv('HIPPO_LOG', 'warn');
     stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });

@@ -100,6 +100,7 @@ function sessionDecayOptions(store: Consolidation, config: SleepRun['config']): 
     avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
     sleepCount: sessionCtx.sleepCount,
     ablation: strengthAblation(),
+    lossAversionRatio: config.runtime?.lossAversionRatio,
   };
 }
 

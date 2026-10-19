@@ -3,7 +3,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockIns
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import type { JsonObject } from '../../src/store/port/types.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
@@ -40,7 +39,6 @@ const damageLines = (): string[] =>
   stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('read as empty'));
 
 beforeEach(() => {
-  _resetLogOnceForTests();
   vi.stubEnv('HIPPO_LOG', 'warn');
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
@@ -81,6 +79,8 @@ describe('a memory row with a damaged JSON column', () => {
   });
 
   it('names each damaged column of a row, and each damaged row, on its own line', () => {
+    // A column an earlier case named at warn repeats at debug for this process, so debug keeps this case its own.
+    vi.stubEnv('HIPPO_LOG', 'debug');
     const root = newRoot();
     const first = createMemory('first damaged row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
     const second = createMemory('second damaged row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });

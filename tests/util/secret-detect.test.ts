@@ -14,7 +14,6 @@ import { shareMemory, autoShare } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { contextGet } from '../../src/api/index.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -215,7 +214,6 @@ describe('producer + sync vetoes (real stores)', () => {
     initStore(globalStore);
     origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', globalStore);
-    _resetProjectIdentityCacheForTests();
   });
 
   afterEach(() => {

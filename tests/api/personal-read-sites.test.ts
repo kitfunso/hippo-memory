@@ -17,8 +17,6 @@ import { canReadScope, personalScopeOf, recallScopeFilter, type ScopeActor } fro
 import { touchableScopeSql } from '../../src/store/sqlite/rule-sql.js';
 import { briefFromReceipts } from '../../src/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../../src/store/sqlite/compactions-record.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -73,8 +71,6 @@ const keysOf = (entries: readonly MemoryEntry[]): string[] =>
 beforeEach(() => {
   dir = makeRoot('personal-sites', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });
   initStore(root);
@@ -83,7 +79,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetSharedStoreCacheForTests();
 });
 
 describe('owner-taking read sites', () => {
@@ -201,7 +196,7 @@ describe('deny-only read sites', () => {
     };
     const db = openHippoDb(root);
     try {
-      expect(saveItems(db, root, ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
+      expect(saveItems(db, { hippoRoot: root }, ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       // SAFETY: the SELECT names only the content column.
       const written = db.prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`).all() as Array<{
         content: string;

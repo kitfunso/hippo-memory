@@ -40,7 +40,7 @@ export async function handleMcp(): Promise<void> {
   // stdio loop here. (HTTP/SSE transport is wired in src/server.ts and
   // imports the same module without triggering stdin handlers.)
   const mod = await import('../mcp/server.js');
-  mod.startStdioLoop(cliStdioHost);
+  mod.startStdioLoop(cliStdioHost());
   // Server runs until stdin closes, so we never reach here
   await new Promise(() => {}); // hang forever
 }

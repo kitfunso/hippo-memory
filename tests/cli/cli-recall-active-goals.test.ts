@@ -4,7 +4,6 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -26,7 +25,6 @@ async function recallCli(
 ): Promise<RecallCliResult> {
   vi.stubEnv('HIPPO_SESSION_ID', '');
   for (const [key, value] of Object.entries(extraEnv)) vi.stubEnv(key, value);
-  resetSessionRings('cli');
   const res = await runInProcess(() =>
     runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000', ...extraArgs]),
   );

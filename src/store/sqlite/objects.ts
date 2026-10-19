@@ -4,7 +4,13 @@ import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index
 import { escapeLike } from '../../util/escape.js';
 import { keysetAfter } from '../../util/keyset.js';
 import { chunked } from '../../util/chunked.js';
-import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../core/memory.js';
+import {
+  calculateStrength,
+  deriveHalfLife,
+  LEGACY_TYPED_HALF_LIFE,
+  type LossAversion,
+  type MemoryEntry,
+} from '../../core/memory.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { stampOriginProjectIn, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrorsIn, auditingRefusal } from './entry-writes.js';
@@ -350,10 +356,10 @@ interface MirroredWrite {
 
 /** Until the typed migration has run, a mirror goes in on the flat half-life that migration
  * moves; the flag is read under the save's write lock, so the two cannot interleave. */
-function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry): MemoryEntry {
+function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry, rules: LossAversion): MemoryEntry {
   if (getMeta(db, TYPED_HALF_LIFE_META_KEY, '') !== '') return mirror;
   const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
-  return { ...legacy, strength: calculateStrength(legacy) };
+  return { ...legacy, strength: calculateStrength(legacy, undefined, rules) };
 }
 
 /** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link and every audit row, the
@@ -368,7 +374,7 @@ function withMirror<R extends object, F extends Refused>(
       auditingRefusal(db, write.actor, () => {
         let mirror = stampOriginProjectIn(files, write.mirror);
         const written = withWriteScopeOr(db, 'write_entry', (rollback) => {
-          mirror = onStoreHalfLife(db, mirror);
+          mirror = onStoreHalfLife(db, mirror, files);
           upsertEntryRow(db, mirror);
           const row = writeRow(db, mirror.id);
           if (refusalOf<R, F>(row)) return rollback(row);

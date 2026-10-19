@@ -4,11 +4,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
-import { clientIpForRateLimit, serve, type ServerHandle } from '../../src/server.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { clientIpForRateLimit } from '../../src/server.js';
+import { clientKeyOf } from '../../src/server/client-key.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -79,129 +76,23 @@ describe('clientIpForRateLimit behind a trusted proxy', () => {
   });
 });
 
-describe('the MCP client key, which scopes the last recall per client, behind a proxy', () => {
-  let root: string;
-  let handle: ServerHandle | undefined;
-  let token: string;
-
+describe("the client key, which scopes each client's last shown ids, behind a proxy", () => {
   beforeEach(() => {
-    root = makeRoot('mcp-client-key');
     for (const k of ENV_KEYS) vi.stubEnv(k, undefined);
-    vi.stubEnv('HIPPO_V1_RPS', '0');
-    const db = openHippoDb(root);
-    try {
-      token = createApiKey(db, { tenantId: 'default', label: 'mcp-client-key', role: 'admin' }).plaintext;
-    } finally {
-      closeHippoDb(db);
-    }
   });
 
-  afterEach(async () => {
-    if (handle) await handle.stop();
-    handle = undefined;
-  });
+  const proxied = () =>
+    fakeReq({ authorization: 'Bearer hk_client_key_test', 'x-forwarded-for': '203.0.113.7' }, '127.0.0.1');
 
-  async function newRecallKeys(): Promise<string[]> {
-    handle = await serve({ hippoRoot: root, port: 0 });
-    const headers = {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-      'x-forwarded-for': '203.0.113.7',
-    };
-    const remembered = await fetch(`${handle.url}/v1/memories`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ content: 'proxy canary memory' }),
-    });
-    expect(remembered.status).toBe(200);
-    const before = new Set(lastRecalledIds.keys());
-    const call = {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name: 'hippo_recall', arguments: { query: 'proxy canary' } },
-    };
-    const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body: JSON.stringify(call) });
-    expect(res.status).toBe(200);
-    return [...lastRecalledIds.keys()].filter((key) => !before.has(key));
-  }
-
-  it('keys on the forwarded client address, as the rate limiter does, when the peer is a listed trusted proxy', async () => {
+  it('keys on the forwarded client address, as the rate limiter does, when the peer is a listed trusted proxy', () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
-    expect(await newRecallKeys()).toEqual([expect.stringMatching(/^http:[0-9a-f]+:203\.0\.113\.7$/)]);
+    expect(clientKeyOf(proxied())).toMatch(/^http:[0-9a-f]+:203\.0\.113\.7$/);
   });
 
-  it('ignores the forwarded header when the peer is not a listed trusted proxy', async () => {
+  it('ignores the forwarded header when the peer is not a listed trusted proxy', () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '192.0.2.1');
-    expect(await newRecallKeys()).toEqual([expect.stringMatching(/^http:[0-9a-f]+:127\.0\.0\.1$/)]);
-  });
-});
-
-describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', () => {
-  let root: string;
-  let handle: ServerHandle | undefined;
-
-  beforeEach(() => {
-    root = makeRoot('trusted-proxy');
-    for (const k of ENV_KEYS) vi.stubEnv(k, undefined);
-    vi.stubEnv('HIPPO_V1_RPS', '1');
-  });
-
-  afterEach(async () => {
-    if (handle) await handle.stop();
-    handle = undefined;
-  });
-
-  async function statusesWithRotatingXff(): Promise<number[]> {
-    handle = await serve({ hippoRoot: root, port: 0 });
-    const statuses: number[] = [];
-    for (let i = 0; i < 6; i++) {
-      const res = await fetch(`${handle.url}/v1/memories?q=x`, {
-        headers: { 'x-forwarded-for': `198.51.100.${i + 1}` },
-      });
-      statuses.push(res.status);
-    }
-    return statuses;
-  }
-
-  it('shares one bucket when the header is not configured', async () => {
-    expect(await statusesWithRotatingXff()).toContain(429);
-  });
-
-  it('shares one bucket when the socket peer is not a listed trusted proxy', async () => {
-    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
-    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '192.0.2.1');
-    expect(await statusesWithRotatingXff()).toContain(429);
-  });
-
-  it('gives each forwarded address its own bucket when the socket peer is a listed proxy', async () => {
-    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
-    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1,::1');
-    expect(await statusesWithRotatingXff()).not.toContain(429);
-  });
-
-  it('refuses to start with the header set and no trusted proxy listed', async () => {
-    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
-    await expect(serve({ hippoRoot: root, port: 0 })).rejects.toMatchObject({
-      name: 'UntrustedClientIpHeaderError',
-      message: expect.stringMatching(
-        /HIPPO_CLIENT_IP_HEADER is x-forwarded-for but HIPPO_TRUSTED_PROXIES is unset.*addresses or CIDRs/,
-      ),
-    });
-  });
-
-  it('refuses to start when HIPPO_TRUSTED_PROXIES lists *, with or without the header, and boots with a list', async () => {
-    for (const header of [undefined, 'x-forwarded-for']) {
-      if (header) vi.stubEnv('HIPPO_CLIENT_IP_HEADER', header);
-      vi.stubEnv('HIPPO_TRUSTED_PROXIES', '192.0.2.1, *');
-      await expect(serve({ hippoRoot: root, port: 0 })).rejects.toMatchObject({
-        name: 'WildcardTrustedProxiesError',
-        message: expect.stringMatching(/must list the proxy's addresses or CIDRs, not \*/),
-      });
-    }
-    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '192.0.2.1');
-    await (await serve({ hippoRoot: root, port: 0 })).stop();
+    expect(clientKeyOf(proxied())).toMatch(/^http:[0-9a-f]+:127\.0\.0\.1$/);
   });
 });

@@ -30,6 +30,7 @@ import type {
 } from '../../src/api/index.js';
 import type { ConsolidationResult } from '../../src/consolidate/run.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';
+import type { LossAversion } from '../../src/core/memory.js';
 
 describe('hippo-memory entry types', () => {
   it('createMemory takes content then optional partial options and returns a MemoryEntry', () => {
@@ -55,7 +56,7 @@ describe('hippo-memory entry types', () => {
 
   it('strength and outcome helpers pin their scalar types', () => {
     expectTypeOf(calculateStrength).returns.toEqualTypeOf<number>();
-    expectTypeOf(applyOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean]>();
+    expectTypeOf(applyOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean, LossAversion?]>();
     expectTypeOf(applyOutcome).returns.toEqualTypeOf<MemoryEntry>();
     // @ts-expect-error the outcome is a boolean
     typeOnly(() => applyOutcome(createMemory('x'), 'good'));

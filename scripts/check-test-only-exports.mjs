@@ -15,8 +15,6 @@ const EXPORT_RE = /^export\s+(?:async\s+)?(?:function\*?|const|let|var|class|enu
 const IDENT_RE = /[A-Za-z_$][\w$]*/g;
 const DIST_RE = /dist\/[\w./-]+\.js/g;
 const SEAM_RE = /^_[a-z][A-Za-z0-9]*ForTests$/;
-// Published on hippo-memory/testing; add-ons import it by this name.
-const SEAM_EXEMPT = new Set(['__resetSessionRecallHistoryHttp']);
 const CALLER_DIRS = ['scripts', 'benchmarks'];
 const BUILD_DIRS = new Set(['node_modules', 'dist', '.git']);
 
@@ -110,7 +108,7 @@ export function seamNameViolations(root = '.') {
       .split(/\r?\n/)
       .forEach((line, i) => {
         const name = new RegExp(EXPORT_RE.source).exec(line)?.[1];
-        if (!name || SEAM_EXEMPT.has(name)) return;
+        if (!name) return;
         const seam = name.startsWith('_') || name.endsWith('ForTests');
         if (seam && !SEAM_RE.test(name)) bad.push(`${file}:${i + 1} ${name}`);
       });

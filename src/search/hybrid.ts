@@ -1,8 +1,8 @@
-import type { MemoryEntry } from '../core/memory.js';
+import { strengthOptionsOf, type MemoryEntry } from '../core/memory.js';
 import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../core/config.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { tokenize } from '../util/tokenize.js';
-import { evalNow } from '../core/ablation.js';
+import { evalNow, rankAblation } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
 import { compareScoredResults } from '../core/compare.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
@@ -158,6 +158,8 @@ function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, optio
     temporal: temporalContext(query, pool),
     outcome: true,
     summary: summaryScoring(options),
+    strength: strengthOptionsOf(options.runtime),
+    ablation: rankAblation(),
   };
 }
 

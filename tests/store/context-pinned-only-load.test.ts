@@ -8,7 +8,6 @@ import * as path from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { isContentWorthStoring } from '../../src/core/memory-quality.js';
 import { contextGet } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -41,7 +40,6 @@ function ids(result: { entries: Array<{ entry: { id: string } }> }) {
 }
 
 beforeEach(() => {
-  _resetAblationCacheForTests();
   tmpRoot = makeRoot('pinned-load', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
@@ -55,7 +53,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.stubEnv('HIPPO_HOME', undefined);
-  _resetAblationCacheForTests();
 });
 
 describe('pinned-only context loads a slice, not the corpus', () => {

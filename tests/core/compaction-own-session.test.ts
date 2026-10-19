@@ -12,7 +12,6 @@ import {
   type MemoryEntry,
 } from '../../src/core/memory.js';
 import { contextGet, retrieve } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
@@ -72,7 +71,6 @@ function enablePromptRecall(root: string): void {
 }
 
 beforeEach(() => {
-  _resetAblationCacheForTests();
   tmpRoot = makeRoot('own-session', { init: false });
   local = join(tmpRoot, 'local', '.hippo');
   const globalRoot = join(tmpRoot, 'global');
@@ -86,7 +84,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 describe('own-session compaction items in recent context', () => {

@@ -2,11 +2,12 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { insertApiKey } from '../../src/store/sqlite/auth.js';
-import { _readApiKeyVerifyStatsForTests, verifyApiKeyCached } from '../../src/server/api-key.js';
+import { verifyApiKeyCached } from '../../src/server/api-key.js';
 import { mintApiKey } from '../../src/core/api-key.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { scryptRuns } from '../_helpers/scrypt-count.js';
 
 describe('api key scrypt parameters', () => {
   let root: string;
@@ -54,18 +55,18 @@ describe('api key scrypt parameters', () => {
   it('rejects an oversized cost without running scrypt', async () => {
     const { keyId, plaintext } = mintApiKey();
     seed(`scrypt2$${2 ** 30}$8$1$${'ab'.repeat(16)}$${'cd'.repeat(32)}`, keyId);
-    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
+    const before = scryptRuns();
     expect(await verifyApiKeyCached(plaintext, store)).toBeNull();
-    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
+    expect(scryptRuns()).toBe(before);
   });
 
   it('rejects N that is not a power of two, and r or p above their caps', async () => {
     for (const bad of ['16383$8$1', '16384$33$1', '16384$8$17']) {
       const { keyId, plaintext } = mintApiKey();
       seed(`scrypt2$${bad}$${'ab'.repeat(16)}$${'cd'.repeat(32)}`, keyId);
-      const before = _readApiKeyVerifyStatsForTests().scryptRuns;
+      const before = scryptRuns();
       expect(await verifyApiKeyCached(plaintext, store)).toBeNull();
-      expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
+      expect(scryptRuns()).toBe(before);
     }
   });
 });

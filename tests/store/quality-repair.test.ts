@@ -354,7 +354,7 @@ describe('recoverable automatic memory quality repair', () => {
       importForStore(world.local, {
         configAt: loadConfig,
         tenantId: 'default',
-        agentImport: sqliteAgentImport,
+        agentImport: sqliteAgentImport({}),
         machine: world.machine,
       });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);

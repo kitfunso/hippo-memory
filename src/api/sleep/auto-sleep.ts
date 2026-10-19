@@ -1,10 +1,9 @@
-// When a write starts a background sleep; the MCP remember tool and the session-close hook share it.
+// When a write starts a background sleep; api remember and the session-close hook share it.
 
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import type { HippoStore } from '../../store/port.js';
 import type { HippoConfig } from '../../core/config.js';
-
-export const autoSleepInFlight = new Set<string>();
+import type { Context } from '../types.js';
 
 /**
  * Runs one auto-sleep consolidation of `hippoRoot`: the HTTP server passes one that runs it off its event loop, in a
@@ -19,15 +18,6 @@ export interface AutoSleepDue {
   due: boolean;
 }
 
-export interface AutoSleepGate {
-  readonly hippoRoot: string;
-  readonly tenantId: string;
-  /** The tenant that owns the host: consolidation is host-wide, so only this tenant's writes may start it. */
-  readonly hostTenantId: string;
-  readonly config: HippoConfig['autoSleep'];
-  readonly allowed: boolean;
-}
-
 /** Counts only when enabled: the count reads the store. */
 export async function autoSleepDue(
   store: HippoStore,
@@ -40,28 +30,32 @@ export async function autoSleepDue(
 }
 
 /**
- * One run per store at a time; `allowed` is the caller's own gate. Consolidation is host-wide, so only the host tenant
- * may start it. A failed count rejects; the run itself never does. */
-export async function startAutoSleepIfDue(
-  store: HippoStore,
-  { hippoRoot, tenantId, hostTenantId, config, allowed }: AutoSleepGate,
-  run: AutoSleepRunner,
+ * Starts the root's auto-sleep once enough new memories have landed. Consolidation is host-wide, so only the host
+ * tenant's writes start one, one per store at a time. Never rejects: the write it follows has landed.
+ */
+export async function autoSleepAfterWrite(
+  ctx: Pick<Context, 'hippoRoot' | 'tenantId' | 'store' | 'config' | 'callers'>,
 ): Promise<void> {
-  if (!allowed || !config.enabled || tenantId !== hostTenantId || autoSleepInFlight.has(hippoRoot)) return;
+  const host = ctx.callers?.autoSleep;
+  const { hippoRoot, tenantId, store, config } = ctx;
+  if (host === undefined || !config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
+  if (host.inFlight.has(hippoRoot)) return;
   // Held from the count on, so two writes landing together never both start a sleep.
-  autoSleepInFlight.add(hippoRoot);
+  host.inFlight.add(hippoRoot);
   let due = false;
   try {
-    due = (await autoSleepDue(store, tenantId, config)).due;
+    due = (await autoSleepDue(store, tenantId, config.autoSleep)).due;
+  } catch (err) {
+    log.warn(`auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`, errorFields(err));
   } finally {
-    if (!due) autoSleepInFlight.delete(hippoRoot);
+    if (!due) host.inFlight.delete(hippoRoot);
   }
   if (!due) return;
   // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
-  const started = run(hippoRoot);
-  started
+  host
+    .run(hippoRoot)
     .catch((err) => {
       log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`, errorFields(err));
     })
-    .finally(() => autoSleepInFlight.delete(hippoRoot));
+    .finally(() => host.inFlight.delete(hippoRoot));
 }
