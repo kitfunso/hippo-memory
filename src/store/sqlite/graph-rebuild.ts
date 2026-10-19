@@ -22,6 +22,7 @@ import {
   updateEntityRow,
 } from './graph-writes.js';
 import { type OnHandle, waitingOpener } from './open.js';
+import { bound } from './bound.js';
 
 function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
@@ -115,7 +116,7 @@ const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
 export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {
   return {
-    applyOps: (tenantId, ops, opts) => on((db) => applyGraphOpsAt(db, tenantId, ops, opts), openForChunk),
-    rebuild: (tenantId, memoryIds, diff) => on((db) => rebuildGraphAt(db, tenantId, memoryIds, diff)),
+    ...bound<Pick<GraphRebuild, 'applyOps'>>(on, { applyOps: applyGraphOpsAt }, openForChunk),
+    ...bound<Pick<GraphRebuild, 'rebuild'>>(on, { rebuild: rebuildGraphAt }),
   };
 }

@@ -19,6 +19,7 @@ import {
 } from './recall-trace.js';
 import type { LedgerTurn, Ledger } from '../port/ledger.js';
 import type { OnHandle } from './open.js';
+import { bound, type Bodies } from './bound.js';
 import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
@@ -140,13 +141,16 @@ function pilotArmAt(
 export function sqliteLedger(on: OnHandle): Ledger {
   // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
   const prune = deliveryPruneSchedule();
+  const ledgerAt: Bodies<Omit<Ledger, 'writeDeliveryEvent' | 'noteSkipped'>> = {
+    recordTurn: (db, turn) => recordLedgerTurnAt(db, turn, prune),
+    recordTokens: recordTokenUse,
+    lastSent: lastSentState,
+    pilotArm: pilotArmAt,
+    replaceRereads: recordRereadsAt,
+  };
   return {
-    recordTurn: (turn) => on((db) => recordLedgerTurnAt(db, turn, prune)),
-    recordTokens: (use) => on((db) => recordTokenUse(db, use)),
-    lastSent: (tenantId, sessionId, surface) => on((db) => lastSentState(db, tenantId, sessionId, surface)),
-    pilotArm: (tenantId, sessionId, rateBp, opts) => on((db) => pilotArmAt(db, tenantId, sessionId, rateBp, opts)),
+    ...bound(on, ledgerAt),
     writeDeliveryEvent: (input) => writeDeliveryEventVia(on, input, prune),
     noteSkipped: noteLedgerRowSkipped,
-    replaceRereads: (tenantId, sessionId, calls) => on((db) => recordRereadsAt(db, tenantId, sessionId, calls)),
   };
 }

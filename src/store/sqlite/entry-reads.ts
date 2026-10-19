@@ -4,7 +4,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } fro
 import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../../util/escape.js';
 import { originInSql } from '../../core/project-identity.js';
-import { scopeAdmitSql } from './rule-sql.js';
+import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { chunked, ID_CHUNK } from '../../util/chunked.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../util/tenant.js';
 import { placeholders } from '../../util/sql.js';
@@ -14,6 +14,7 @@ import type { EntryCursor, EntryIdPage, EntryPage } from '../port/consolidation.
 import type { RawRefRow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../port/project-tags.js';
 import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
+import type { SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/dag-reads.js';
 
 const MAX_FRESH_RAW = 200;
 
@@ -99,71 +100,46 @@ function originClause(origins: readonly string[] | undefined): string {
   return origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
 }
 
-/** All `kind='raw'` rows for a session, tenant-scoped, oldest-first, excluding superseded; `[]` for an empty sessionId.
- * With `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the newest and
- * break fresh-tail in assemble. */
-export function loadSessionRawMemoriesAt(
-  db: DatabaseSyncLike,
-  sessionId: string,
-  tenantId: TenantId,
-  cap?: number,
-  origins?: readonly string[],
-): MemoryEntry[] {
-  if (!sessionId) return [];
-  const params: Array<string | number> = [];
-  let sql =
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ` +
-    `AND source_session_id = ? AND superseded_by IS NULL`;
-  params.push(sessionId);
+/** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
+type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly tenantId: TenantId };
+
+/** The WHERE both session raw-row reads share: the session's unsuperseded raw rows in the tenant and origins. */
+function sessionRawWhere({ sessionId, tenantId, origins }: SessionRows<SessionRawQuery>): SqlFragment {
   const tenant = tenantAnd(tenantId);
-  sql += tenant.sql;
-  params.push(...tenant.args);
-  sql += originClause(origins);
-  params.push(...(origins ?? []));
-  if (cap !== undefined && cap > 0) {
-    sql += ' ORDER BY created DESC, id DESC LIMIT ?';
-    params.push(cap);
-    // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
-    const rows = db.prepare(sql).all(...params) as MemoryRow[];
-    return rows.reverse().map(rowToEntry);
-  }
-  sql += ' ORDER BY created ASC, id ASC';
+  return {
+    sql: `kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL${tenant.sql}${originClause(origins)}`,
+    params: [sessionId, ...tenant.args, ...(origins ?? [])],
+  };
+}
+
+/** All `kind='raw'` rows for a session, tenant-scoped, oldest-first, excluding superseded; `[]` for an empty sessionId.
+ * With a positive `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the
+ * newest and break fresh-tail in assemble. */
+export function loadSessionRawMemoriesAt(db: DatabaseSyncLike, query: SessionRows<SessionRawWindow>): MemoryEntry[] {
+  if (!query.sessionId) return [];
+  const where = sessionRawWhere(query);
+  const newest = query.cap > 0;
+  const order = newest ? 'ORDER BY created DESC, id DESC LIMIT ?' : 'ORDER BY created ASC, id ASC';
   // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
-  const rows = db.prepare(sql).all(...params) as MemoryRow[];
-  return rows.map(rowToEntry);
+  const rows = db
+    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where.sql} ${order}`)
+    .all(...where.params, ...(newest ? [query.cap] : [])) as MemoryRow[];
+  return (newest ? rows.reverse() : rows).map(rowToEntry);
 }
 
 /** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller
  * could not load. Mirrors
  * `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only `ownScope`. */
-export function countSessionRawMemoriesAt(
-  db: DatabaseSyncLike,
-  sessionId: string,
-  tenantId: TenantId,
-  scope?: string,
-  ownScope?: string,
-  origins?: readonly string[],
-): number {
-  if (!sessionId) return 0;
-  const params: Array<string> = [];
-  let sql =
-    `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' ` + `AND source_session_id = ? AND superseded_by IS NULL`;
-  params.push(sessionId);
-  const tenant = tenantAnd(tenantId);
-  sql += tenant.sql;
-  params.push(...tenant.args);
-  sql += originClause(origins);
-  params.push(...(origins ?? []));
-  if (scope !== undefined && scope !== '') {
-    sql += ' AND scope = ?';
-    params.push(scope);
-  } else {
-    const admit = scopeAdmitSql('', ownScope);
-    sql += ` AND ${admit.sql}`;
-    params.push(...admit.params);
-  }
+export function countSessionRawMemoriesAt(db: DatabaseSyncLike, query: SessionRows<SessionRawCount>): number {
+  if (!query.sessionId) return 0;
+  const where = sessionRawWhere(query);
+  const { scope, ownScope } = query;
+  const admit =
+    scope !== undefined && scope !== '' ? { sql: 'scope = ?', params: [scope] } : scopeAdmitSql('', ownScope);
   // SAFETY: row's shape matches the single `COUNT(*) AS c` column above.
-  const row = db.prepare(sql).get(...params) as { c?: number } | undefined;
+  const row = db
+    .prepare(`SELECT COUNT(*) AS c FROM memories WHERE ${where.sql} AND ${admit.sql}`)
+    .get(...where.params, ...admit.params) as { c?: number } | undefined;
   return Number(row?.c ?? 0);
 }
 

@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import { pragmaDataVersion } from '../../db/meta.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
+import { bound } from './bound.js';
 
 const PAGE_ROWS = 1000;
 // One past the list's 240-character cut, so the cut and its truncated flag come out as they would on the whole text.
@@ -166,11 +167,11 @@ export function sqliteDashboardReads({ on, files }: Handles): DashboardReads {
       const db = reader();
       return db === null ? null : pragmaDataVersion(db);
     },
-    scan: (tenantId, visit) => on((db) => scanAt(db, tenantId, visit), openStore),
-    scanText(tenantId, visit) {
-      on((db) => scanTextAt(db, tenantId, visit), openStore);
-    },
-    openConflictsOf: (tenantId, memoryId) => on((db) => openConflictsNamingAt(db, tenantId, memoryId), openStore),
+    ...bound<Pick<DashboardReads, 'scan' | 'scanText' | 'openConflictsOf'>>(
+      on,
+      { scan: scanAt, scanText: scanTextAt, openConflictsOf: openConflictsNamingAt },
+      openStore,
+    ),
     hasVector(id) {
       const db = reader();
       return db !== null && hasVectorAt(db, id);

@@ -67,12 +67,15 @@ describe('dashboard conflicts are tenant-scoped', () => {
   it('passes the running tenant to every conflict load, so later filters are not the only guard', async () => {
     const { a1 } = seedTwoTenants();
     const load = vi.spyOn(conflicts, 'conflictPageAt');
+    const loadOwn = vi.spyOn(conflicts, 'openConflictsNamingAt');
+    // A store binds its group bodies when it is built, so the dashboard restarts to build one on the spies.
+    await dash.close();
+    dash = await startDashboard(tmp.hippoRoot, () => Date.now());
 
     await get(dash.port, '/api/overview');
     expect(load).toHaveBeenCalled();
     expect(load.mock.calls.every(([, query]) => query.tenantId === 'tenant_a')).toBe(true);
 
-    const loadOwn = vi.spyOn(conflicts, 'openConflictsNamingAt');
     await get(dash.port, `/api/memory/${a1.id}`);
     expect(loadOwn).toHaveBeenCalled();
     expect(loadOwn.mock.calls.every(([, tenantId]) => tenantId === 'tenant_a')).toBe(true);

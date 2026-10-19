@@ -11,13 +11,14 @@ import {
   pruneOrphanVectorsAt,
   resetStoredParticlesAt,
   saveStoredEmbeddingModel,
-  saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
   vectorCoverageAt,
 } from './vector-index.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
+import { bound, type Bodies } from './bound.js';
+import { upsertVectors } from '../../db/vector-store.js';
 
 // The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild keeps one open.
 function beginRebuild(open: Handles['open']): VectorRebuild {
@@ -30,21 +31,34 @@ function beginRebuild(open: Handles['open']): VectorRebuild {
   }
 }
 
+const entryRowsAt: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsPage' | 'entriesByIds' | 'coverage'>> = {
+  entryCount: countAllEntriesAt,
+  entryIdsPage: (db, page) => loadEntryIdsPageAt(db, ALL_TENANTS, page),
+  entriesByIds: (db, ids) => loadEntriesByIdsAt(db, ids, ALL_TENANTS),
+  coverage: vectorCoverageAt,
+};
+
+type VectorRows = Omit<
+  EmbeddingIndex,
+  'requiresReindex' | 'saveModel' | 'beginRebuild' | 'entryCount' | 'entryIdsPage' | 'entriesByIds' | 'coverage'
+>;
+
+const vectorRowsAt: Bodies<VectorRows> = {
+  summary: storedVectorSummaryAt,
+  particles: loadStoredParticlesAt,
+  saveVectors: upsertVectors,
+  pruneOrphans: pruneOrphanVectorsAt,
+  pendingIds: pendingVectorIdsAt,
+  resetParticles: resetStoredParticlesAt,
+  seedParticle: seedStoredParticleAt,
+};
+
 export function sqliteEmbeddingIndex({ on, open }: Handles): EmbeddingIndex {
   return {
     requiresReindex: (providerId) => embeddingModelRequiresReindex(on, providerId),
     saveModel: (providerId) => saveStoredEmbeddingModel(on, providerId),
-    entryCount: () => on((db) => countAllEntriesAt(db), openStore),
-    entryIdsPage: (page) => on((db) => loadEntryIdsPageAt(db, ALL_TENANTS, page), openStore),
-    entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids, ALL_TENANTS), openStore),
-    summary: () => on((db) => storedVectorSummaryAt(db)),
-    coverage: () => on((db) => vectorCoverageAt(db), openStore),
-    particles: () => on((db) => loadStoredParticlesAt(db)),
-    saveVectors: (rows, model) => on((db) => saveStoredVectorsAt(db, rows, model)),
+    ...bound(on, entryRowsAt, openStore),
+    ...bound(on, vectorRowsAt),
     beginRebuild: () => beginRebuild(open),
-    pruneOrphans: () => on((db) => pruneOrphanVectorsAt(db)),
-    pendingIds: (page) => on((db) => pendingVectorIdsAt(db, page)),
-    resetParticles: () => on((db) => resetStoredParticlesAt(db)),
-    seedParticle: (entry, vector) => on((db) => seedStoredParticleAt(db, entry, vector)),
   };
 }

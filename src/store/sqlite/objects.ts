@@ -65,10 +65,6 @@ interface SyncObjects {
 export function sqliteObjects(on: OnHandle): SyncObjects {
   return {
     ...objectReads(on),
-    objectById(tenantId, kind, id) {
-      const row = on((db) => selectRow(db, kind, tenantId, id));
-      return row ? rowSpec(kind).rowTo(row) : null;
-    },
     closeObject: (tenantId, kind, id, close) => closeAt(on, tenantId, kind, id, close),
     saveObject: (tenantId, kind, save) => saveAt(on, tenantId, kind, save),
     openIncident: (tenantId, open) => openIncidentAt(on, tenantId, open),
@@ -77,11 +73,18 @@ export function sqliteObjects(on: OnHandle): SyncObjects {
 
 type ObjectReads = Pick<
   SyncObjects,
-  'listObjects' | 'resolveIncident' | 'policiesInForce' | 'activeSkillsByName' | 'briefReceipts' | 'objectIdByMemory'
+  | 'listObjects'
+  | 'objectById'
+  | 'resolveIncident'
+  | 'policiesInForce'
+  | 'activeSkillsByName'
+  | 'briefReceipts'
+  | 'objectIdByMemory'
 >;
 
 const objectReadsAt: Bodies<ObjectReads> = {
   listObjects: listRows,
+  objectById: rowById,
   resolveIncident: resolveRow,
   policiesInForce,
   activeSkillsByName,
@@ -90,8 +93,8 @@ const objectReadsAt: Bodies<ObjectReads> = {
 };
 
 function objectReads(on: OnHandle): ObjectReads {
-  // SAFETY: listRows and idByMemory are generic in the kind, as ObjectReads is; the mapped Bodies type cannot carry a
-  // method's type parameter, so the bound group is typed back to the methods it binds.
+  // SAFETY: listRows, rowById and idByMemory are generic in the kind, as ObjectReads is; the mapped Bodies type cannot
+  // carry a method's type parameter, so the bound group is typed back to the methods it binds.
   return bound(on, objectReadsAt) as ObjectReads;
 }
 
@@ -122,6 +125,16 @@ function selectRow<K extends ObjectKind>(
   return db
     .prepare(`SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`)
     .get<RowByKind[K] | undefined>(id, tenantId);
+}
+
+function rowById<K extends ObjectKind>(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  kind: K,
+  id: number,
+): ObjectByKind[K] | null {
+  const row = selectRow(db, kind, tenantId, id);
+  return row ? rowSpec(kind).rowTo(row) : null;
 }
 
 function listRows<K extends ObjectKind>(

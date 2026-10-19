@@ -23,6 +23,7 @@ import type {
 } from '../port/diagnostics.js';
 import type { OnHandle } from './open.js';
 import { projectTagReads } from './project-tags.js';
+import { bound, type Bodies } from './bound.js';
 
 function attempt<T>(read: () => T): Attempt<T> {
   try {
@@ -93,10 +94,14 @@ function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
   return { injected: Number(row?.n ?? 0), tokensSent: Number(row?.t ?? 0), tokensReread: Number(row?.r ?? 0) };
 }
 
+const diagnosticsAt: Bodies<Pick<Diagnostics, 'health' | 'inventory'>> = {
+  health: storeHealthAt,
+  inventory: storeInventoryAt,
+};
+
 export function sqliteDiagnostics(on: OnHandle): Diagnostics {
   return {
-    health: (cutoffs) => on((db) => storeHealthAt(db, cutoffs), openHippoDbReadOnly),
-    inventory: () => on(storeInventoryAt, openHippoDbReadOnly),
+    ...bound(on, diagnosticsAt, openHippoDbReadOnly),
     projectTags: (tenantId, read) => on((db) => read(projectTagReads(db, tenantId)), openHippoDbReadOnly),
   };
 }

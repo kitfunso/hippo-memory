@@ -23,9 +23,10 @@ import {
 } from '../port/graph-reads.js';
 import { chunked } from '../../util/chunked.js';
 import { placeholders } from '../../util/sql.js';
-import type { GraphRows, GraphReads, Sync } from '../port.js';
+import type { GraphRows, GraphReads, GraphViewQuery, Sync } from '../port.js';
 import { canReadScope } from '../../core/recall-scope.js';
 import type { OnHandle } from './open.js';
+import { bound, type Bodies } from './bound.js';
 
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
@@ -246,10 +247,6 @@ function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): Read
 }
 
 /** storedGraphOn on its own connection, outside any write lock. */
-function loadStoredGraphAt(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
-  return storedGraphOn(db, tenantId, memoryIds);
-}
-
 /** Run `fn` in ONE read transaction (a single WAL snapshot) so every `load*` read via `txDb` sees a consistent view
  * even if a rebuild commits concurrently (it clears and reinserts entities, so separate reads could mix old entity ids
  * with new relation ids). */
@@ -354,22 +351,24 @@ function graphViewRows(db: DatabaseSyncLike, tenantId: string, spec: GraphViewSp
   };
 }
 
+function graphRowsAt(db: DatabaseSyncLike, tenantId: string, { entity, limit, reader }: GraphViewQuery): GraphRows {
+  return withGraphReadSnapshotAt(db, (snapshot) =>
+    graphViewRows(snapshot, tenantId, {
+      entity,
+      limit,
+      canRead: reader && ((scope) => scope === null || canReadScope(reader, scope)),
+    }),
+  );
+}
+
+const graphReadsAt: Bodies<GraphReads> = {
+  graphRows: graphRowsAt,
+  entitiesForMemories: loadEntitiesByMemoryIdAt,
+  entitiesByIds: loadEntitiesByIdsAt,
+  neighborRelations: loadNeighborRelationsAt,
+  storedGraph: storedGraphOn,
+};
+
 export function sqliteGraphReads(on: OnHandle): Sync<GraphReads> {
-  return {
-    graphRows: (tenantId, { entity, limit, reader }) =>
-      on((db) =>
-        withGraphReadSnapshotAt(db, (snapshot) =>
-          graphViewRows(snapshot, tenantId, {
-            entity,
-            limit,
-            canRead: reader && ((scope) => scope === null || canReadScope(reader, scope)),
-          }),
-        ),
-      ),
-    entitiesForMemories: (tenantId, memoryIds) => on((db) => loadEntitiesByMemoryIdAt(db, tenantId, memoryIds)),
-    entitiesByIds: (tenantId, ids) => on((db) => loadEntitiesByIdsAt(db, tenantId, ids)),
-    neighborRelations: (tenantId, entityIds, { limit }) =>
-      on((db) => loadNeighborRelationsAt(db, tenantId, entityIds, { limit })),
-    storedGraph: (tenantId, memoryIds) => on((db) => loadStoredGraphAt(db, tenantId, memoryIds)),
-  };
+  return bound(on, graphReadsAt);
 }

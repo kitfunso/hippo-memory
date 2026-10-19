@@ -4,20 +4,27 @@ import { addTagToEntriesAt, writeEntriesTogetherAt, writeEntryAt } from './entry
 import type { Learning } from '../port/learning.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles, skipEmpty, type Bodies, type FileBodies } from './bound.js';
+
+const learningReadsAt: Bodies<Pick<Learning, 'entriesMentioning' | 'readEntry' | 'currentEntriesFromOrigins'>> = {
+  entriesMentioning: loadEntriesMentioningAt,
+  readEntry: readEntryAt,
+  currentEntriesFromOrigins: loadCurrentEntriesFromOriginsAt,
+};
+
+const learningWritesAt: FileBodies<Pick<Learning, 'writeEntry' | 'writeEntriesTogether' | 'addTagToEntries'>> = {
+  writeEntry: writeEntryAt,
+  writeEntriesTogether: writeEntriesTogetherAt,
+  addTagToEntries: addTagToEntriesAt,
+};
 
 /** The learn passes' store work on its hippo.db, each call on its own short-lived handle. */
 export function sqliteLearning(on: OnHandle): Learning {
+  const writes = boundWithFiles(on, learningWritesAt, openStore);
   return {
-    entriesMentioning: (tokens, tag, tenantId, page) =>
-      on((db) => loadEntriesMentioningAt(db, tokens, tag, tenantId, page), openStore),
-    readEntry: (id, tenantId) => on((db) => readEntryAt(db, id, tenantId), openStore),
-    currentEntriesFromOrigins: (tenantId, origins) =>
-      on((db) => loadCurrentEntriesFromOriginsAt(db, tenantId, origins), openStore),
-    writeEntry: (entry) => on((db, files) => writeEntryAt(db, files, entry), openStore),
-    writeEntriesTogether: (entries) =>
-      entries.length === 0 ? 0 : on((db, files) => writeEntriesTogetherAt(db, files, entries), openStore),
-    addTagToEntries: (tenantId, ids, tag) =>
-      on((db, files) => addTagToEntriesAt(db, files, tenantId, ids, tag), openStore),
-    confirmedOutcomeTimes: (tenantId) => on((db) => confirmedOutcomeTimesAt(db, tenantId)),
+    ...bound(on, learningReadsAt, openStore),
+    ...writes,
+    writeEntriesTogether: skipEmpty(writes.writeEntriesTogether, () => 0),
+    ...bound<Pick<Learning, 'confirmedOutcomeTimes'>>(on, { confirmedOutcomeTimes: confirmedOutcomeTimesAt }),
   };
 }

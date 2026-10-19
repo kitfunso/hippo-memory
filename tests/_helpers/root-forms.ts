@@ -24,6 +24,7 @@ import {
   openVectorStaging,
   replaceVectorsWithStaged,
   stageVectors,
+  upsertVectors,
 } from '../../src/db/vector-store.js';
 import {
   loadAmbientCandidatesAt,
@@ -72,12 +73,12 @@ import {
 } from '../../src/store/sqlite/handoffs.js';
 import {
   appendConsolidationRunAt,
-  loadLastRecallAt,
   loadSessionDecayContextAt,
   saveIndexAt,
   updateStatsUnlessBusyAt,
   updateStatsAt,
 } from '../../src/store/sqlite/index-and-stats.js';
+import { readLastRecall } from '../../src/store/sqlite/mirrors.js';
 import { waitingOpener, type StoreFiles } from '../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import type { RepairProtection } from '../../src/core/memory-audit.js';
@@ -116,7 +117,6 @@ import {
   loadStoredParticlesAt,
   loadStoredVectorsAt,
   resetStoredParticlesAt,
-  saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
 } from '../../src/store/sqlite/vector-index.js';
@@ -351,7 +351,11 @@ export function loadSessionRawMemories(
   cap?: number,
   origins?: readonly string[],
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadSessionRawMemoriesAt(db, sessionId, tenantId, cap, origins), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => loadSessionRawMemoriesAt(db, { sessionId, tenantId, cap: cap ?? 0, origins }),
+    openStore,
+  );
 }
 
 export function countSessionRawMemories(
@@ -364,7 +368,7 @@ export function countSessionRawMemories(
 ): number {
   return onHandle(
     hippoRoot,
-    (db) => countSessionRawMemoriesAt(db, sessionId, tenantId, scope, ownScope, origins),
+    (db) => countSessionRawMemoriesAt(db, { sessionId, tenantId, scope, ownScope, origins }),
     openStore,
   );
 }
@@ -470,7 +474,7 @@ export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHan
 }
 
 export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  return onHandle(hippoRoot, (db) => loadLastRecallAt(db), openStore);
+  return onHandle(hippoRoot, (db) => readLastRecall(db), openStore);
 }
 
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
@@ -662,7 +666,7 @@ export function saveStoredVectors(
   rows: Iterable<readonly [string, readonly number[]]>,
   model: string,
 ): number {
-  return onHandle(hippoRoot, (db) => saveStoredVectorsAt(db, rows, model));
+  return onHandle(hippoRoot, (db) => upsertVectors(db, rows, model));
 }
 
 export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {

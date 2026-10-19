@@ -13,7 +13,7 @@ import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { originInSql } from '../../core/project-identity.js';
-import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
+import { pickRarestFtsQuery, loadRecallEntriesAt } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../util/tenant.js';
 import { tenantAnd } from './tenant.js';
@@ -163,7 +163,7 @@ export function loadAmbientCandidatesAt(
   if (!recall) return { entries, refused };
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
   const recallEntries = ftsQuery
-    ? loadRecallSearchEntriesFromDb(db, ftsQuery, {
+    ? loadRecallEntriesAt(db, ftsQuery, {
         limit: recall.limit,
         tenantId,
         includeSuperseded: false,

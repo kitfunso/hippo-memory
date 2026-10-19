@@ -44,11 +44,6 @@ const AUTOMATIC_DELETE: SqlFragment = {
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing
  * from an older schema is skipped. */
 export function memoriesBackingObjectsAt(db: DatabaseSyncLike): Set<string> {
-  return memoriesBackingObjectsOn(db);
-}
-
-/** memoriesBackingObjects on the caller's handle. */
-export function memoriesBackingObjectsOn(db: DatabaseSyncLike): Set<string> {
   const ids = new Set<string>();
   for (const table of MEMORY_BACKED_TABLES) {
     try {
