@@ -372,8 +372,8 @@ function baseMethodsOf(sync: SqliteSyncStore): Sync<ServedBaseMethods> {
 const contextReadsAt: Bodies<ContextReads> = {
   unfinishedHandoff: (db, tenantId, maxAgeMs, key) =>
     loadLatestHandoffAt(db, tenantId, undefined, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key),
-  ambientCandidates: (db, tenantId, { recentNeeded, admit, recall, origins }) =>
-    loadAmbientCandidatesAt(db, tenantId, recentNeeded, (e) => ambientRefusal(e, admit), recall, origins),
+  ambientCandidates: (db, tenantId, { admit, ...request }) =>
+    loadAmbientCandidatesAt(db, tenantId, { ...request, judge: (e) => ambientRefusal(e, admit) }),
   contextCandidates: loadContextCandidatesAt,
   ambientTallies: loadAmbientTalliesAt,
   newestEntries: newestEntriesAt,

@@ -98,14 +98,17 @@ function heldUnderLock(db: DatabaseSyncLike, rejection: Rejection, holdsValue: H
   };
 }
 
-function removeLiveRows(
-  db: DatabaseSyncLike,
-  hippoRoot: string,
-  rejection: Rejection,
-  holdsValue: HoldsValue,
-  { live }: Holders,
-  removal: Removal,
-): void {
+/** One reject's removal pass: the value test, the rows found holding the value under the lock, and what went. */
+interface Sweep {
+  readonly rejection: Rejection;
+  readonly holdsValue: HoldsValue;
+  readonly holders: Holders;
+  readonly removal: Removal;
+}
+
+function removeLiveRows(db: DatabaseSyncLike, hippoRoot: string, sweep: Sweep): void {
+  const { rejection, holdsValue, removal } = sweep;
+  const { live } = sweep.holders;
   const { tenantId, actor, reason } = rejection;
   const { removedIds, removedRawIds, successors } = removal;
   for (const row of live.whole) {
@@ -132,13 +135,9 @@ function removeLiveRows(
 
 // Dormant copies go in the same write scope, so `hippo dormant restore` cannot bring the text back. They have no mirror
 // to purge.
-function removeDormantCopies(
-  db: DatabaseSyncLike,
-  rejection: Rejection,
-  holdsValue: HoldsValue,
-  { dormant }: Holders,
-  removal: Removal,
-): void {
+function removeDormantCopies(db: DatabaseSyncLike, sweep: Sweep): void {
+  const { rejection, holdsValue, removal } = sweep;
+  const { dormant } = sweep.holders;
   const { tenantId } = rejection;
   const { removedIds, dormantSuccessorIds } = removal;
   for (const id of dormant.whole) {
@@ -181,9 +180,9 @@ function removeHolders(
 ): Removal {
   const removal: Removal = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
   withWriteScope(db, 'reject_value', () => {
-    const holders = heldUnderLock(db, rejection, holdsValue, found);
-    removeLiveRows(db, hippoRoot, rejection, holdsValue, holders, removal);
-    removeDormantCopies(db, rejection, holdsValue, holders, removal);
+    const sweep = { rejection, holdsValue, holders: heldUnderLock(db, rejection, holdsValue, found), removal };
+    removeLiveRows(db, hippoRoot, sweep);
+    removeDormantCopies(db, sweep);
     // Still inside the write scope: a failed audit row is reported and the removal commits without it.
     const { tenantId, actor, memoryId } = rejection;
     const { removedIds } = removal;

@@ -1,7 +1,6 @@
 // The store functions capture code calls with a folder and plain values: each opens its own handle on a real store.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { latestCompactionRows } from '../../src/store/sqlite/compaction-rows.js';
 import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { Captures } from '../../src/store/port.js';
@@ -77,13 +76,15 @@ describe('compactions.start and compactions.markSnapshotSaved', () => {
       cwd: null,
       transcriptPath: null,
     });
-    expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]).toMatchObject({
-      id,
-      status: 'started',
-      snapshot_saved: 0,
-    });
+    const sessionRows = () =>
+      read((db) =>
+        db
+          .prepare(`SELECT id, status, snapshot_saved FROM compactions WHERE tenant_id = ? AND session_id = ?`)
+          .all('default', 's1'),
+      );
+    expect(sessionRows()).toEqual([{ id, status: 'started', snapshot_saved: 0 }]);
     compactions.markSnapshotSaved('default', id);
-    expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]?.snapshot_saved).toBe(1);
+    expect(sessionRows()).toEqual([{ id, status: 'started', snapshot_saved: 1 }]);
   });
 });
 

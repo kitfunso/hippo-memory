@@ -3,6 +3,8 @@ import * as fs from 'fs';
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
+export type JsonObject = { [key: string]: JsonValue };
+
 export function isJsonString(value: JsonValue | undefined): value is string {
   return typeof value === 'string';
 }

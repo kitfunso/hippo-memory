@@ -1,6 +1,6 @@
 // Port types that two or more groups, or the store itself, share.
 import type { AuditOp } from '../../core/audit-ops.js';
-import type { JsonValue } from '../../util/json.js';
+import type { JsonObject } from '../../util/json.js';
 import type { MemoryEntry } from '../../core/memory.js';
 
 /** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret, the role
@@ -117,7 +117,8 @@ export interface AuditEvent {
   metadata: JsonObject;
 }
 
-export type JsonObject = { [key: string]: JsonValue };
+// Defined beside JsonValue so the base layer (core's capture contract) shares it without importing the store.
+export type { JsonObject };
 
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject'>;
 

@@ -165,7 +165,7 @@ export function loadAmbientCandidates(
   const judge = (e: MemoryEntry) => (admit(e) ? null : ('admission' as const));
   return onHandle(
     hippoRoot,
-    (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, judge, recall, origins),
+    (db) => loadAmbientCandidatesAt(db, tenantId, { recentNeeded, judge, recall, origins }),
     openStore,
   );
 }
