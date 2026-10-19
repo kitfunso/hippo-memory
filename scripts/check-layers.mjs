@@ -197,7 +197,7 @@ const SQLITE_ROOTS = new Map([
   ['cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
   ['server/boot.ts', 'the HTTP server builds its store, its global stores and their reach probe here'],
   ['server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
-  ['server/dashboard-listener.ts', '`hippo dashboard` builds its worker store and held connection here, as boot.ts does'],
+  ['server/dashboard-listener.ts', '`hippo dashboard` builds its worker store and held connection here'],
   ['server/dashboard-reader-thread.ts', 'the dashboard reader is a thread entry of its own, handed only a folder'],
   ['index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
   ['server.ts', 'the ./server entry builds the store of the folder serve() names'],
