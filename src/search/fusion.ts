@@ -1,6 +1,11 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { rrfFuse } from './rrf.js';
-import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT, type GraphStreamOpts } from '../graph/stream.js';
+import {
+  graphRankStream,
+  selectGraphSeeds,
+  DEFAULT_GRAPH_SEED_COUNT,
+  type GraphRankStreamOptions,
+} from '../graph/stream.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import type { DenseScores } from './vector.js';
 
@@ -25,7 +30,7 @@ export interface FusionInput {
   bm25Weight: number;
   embeddingWeight: number;
   /** The stores the graph list walks; without them it ranks nothing. */
-  graph?: Pick<GraphStreamOpts, 'store' | 'global'>;
+  graph?: Pick<GraphRankStreamOptions, 'store' | 'global'>;
   graphStream?: GraphStreamOptions;
 }
 

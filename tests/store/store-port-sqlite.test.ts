@@ -282,18 +282,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
 
   it.each(SEARCHES)('searchRecallEntries: %s', async (_name, query, args, kind, reached) => {
     const { direct, port } = await parity(
-      (s) =>
-        loadRecallSearchEntries(
-          s.root,
-          query,
-          args.limit,
-          args.tenantId,
-          args.requestedScope,
-          args.explicitScopeMode,
-          args.includeSuperseded,
-          args.originProjects,
-          args.ownScope,
-        ),
+      (s) => loadRecallSearchEntries(s.root, query, args),
       (store) => store.searchRecallEntries(query, args),
       kind,
     );

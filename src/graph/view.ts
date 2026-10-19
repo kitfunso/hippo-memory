@@ -124,14 +124,17 @@ function addAttraction(
   }
 }
 
-function applyDisplacement(
-  nodes: GraphNode[],
-  pos: Map<number, Point>,
-  disp: Point[],
-  temp: number,
-  width: number,
-  height: number,
-): void {
+interface DisplacementOptions {
+  nodes: GraphNode[];
+  pos: Map<number, Point>;
+  disp: Point[];
+  temp: number;
+  width: number;
+  height: number;
+}
+
+function applyDisplacement(options: DisplacementOptions): void {
+  const { nodes, pos, disp, temp, width, height } = options;
   nodes.forEach((node, i) => {
     const p = pos.get(node.id)!;
     const dl = Math.hypot(disp[i].x, disp[i].y) || 0.01;
@@ -169,7 +172,7 @@ export function layoutGraph(
     addRepulsion(nodes, pos, disp, k);
     addAttraction(model.edges, idIndex, pos, disp, k);
     const temp = Math.max(1, (width / 10) * (1 - iter / iterations));
-    applyDisplacement(nodes, pos, disp, temp, width, height);
+    applyDisplacement({ nodes, pos, disp, temp, width, height });
   }
   return pos;
 }

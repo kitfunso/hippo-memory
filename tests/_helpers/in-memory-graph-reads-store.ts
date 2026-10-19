@@ -15,7 +15,13 @@ import {
   type EntityRow,
   type RelationRow,
 } from '../../src/store/sqlite/graph-rows.js';
-import type { Entity, EntityType, Relation, StoredGraph } from '../../src/store/port/graph-reads.js';
+import {
+  GRAPH_ID_BATCH,
+  type Entity,
+  type EntityType,
+  type Relation,
+  type StoredGraph,
+} from '../../src/store/port/graph-reads.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
@@ -72,7 +78,7 @@ function copyRows(hippoRoot: string): Copied {
 const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
 const newestFirst = (a: { createdAt: string; id: number }, b: { createdAt: string; id: number }): number =>
   byBytes(b.createdAt, a.createdAt) || b.id - a.id;
-const BATCH = 400;
+const BATCH = GRAPH_ID_BATCH;
 
 function batches<T>(items: readonly T[]): T[][] {
   const out: T[][] = [];
