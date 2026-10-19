@@ -10,6 +10,7 @@ export const SERVER_TESTS: readonly string[] = [
   'api/personal-write.test.ts',
   'api/recall-rankers-order.test.ts',
   'api/scope-grant-personal.test.ts',
+  'cli/per-row-query-counts.test.ts',
   'cli/remember-origin-parity.test.ts',
   'connectors/connector-events-store.test.ts',
   'connectors/slack-previous-secret-expiry.test.ts',
