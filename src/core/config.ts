@@ -350,7 +350,8 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
     budget: read('budget', count(P.budget)),
     skipUnchanged: read('skipUnchanged', flag(P.skipUnchanged)),
     refreshTurns: read('refreshTurns', count(P.refreshTurns)),
-    promptRecall: read('promptRecall', flag(P.promptRecall)),
+    // The hook turns prompt recall on only for `true`, so a malformed value reads as off, not as the default.
+    promptRecall: read('promptRecall', flag(false, P.promptRecall)),
     promptRecallMetric: read('promptRecallMetric', choice(P.promptRecallMetric, 'jaccard', 'cosine')),
     promptRecallThreshold: read('promptRecallThreshold', fraction(P.promptRecallThreshold)),
     promptRecallMinShared: read('promptRecallMinShared', count(P.promptRecallMinShared)),
@@ -377,11 +378,12 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
   configKey(
     'embeddings',
+    // `provider` is not read here: an unknown one must reach resolveEmbeddingProvider, which refuses it rather than
+    // falling back to local.
     block('an object like {"enabled": "auto"}', D.embeddings, (read) => ({
       enabled: read('enabled', flagOrAuto(D.embeddings.enabled)),
       model: read('model', text(D.embeddings.model)),
       hybridWeight: read('hybridWeight', fraction(D.embeddings.hybridWeight)),
-      provider: read('provider', choice(D.embeddings.provider, 'local', 'openai', 'voyage', 'cohere')),
       apiBaseUrl: read('apiBaseUrl', text(D.embeddings.apiBaseUrl)),
       batchSize: read('batchSize', positive(D.embeddings.batchSize)),
     })),

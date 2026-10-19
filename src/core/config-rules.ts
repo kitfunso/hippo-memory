@@ -61,7 +61,8 @@ function either<A extends JsonValue | undefined, B extends JsonValue | undefined
   return (value): value is A | B => first(value) || second(value);
 }
 
-export const flag = (fallback: boolean): Reader<boolean> => check('true or false', isJsonBoolean, fallback);
+export const flag = (fallback: boolean, absent: boolean = fallback): Reader<boolean> =>
+  check('true or false', isJsonBoolean, fallback, absent);
 export const count = (fallback: number): Reader<number> => check('a number, 0 or more', isCount, fallback);
 export const fraction = (fallback: number): Reader<number> => check('a number from 0 to 1', isFraction, fallback);
 export const finite = (fallback: number): Reader<number> => check('a finite number', isNumber, fallback);

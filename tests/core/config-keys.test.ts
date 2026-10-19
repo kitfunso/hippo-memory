@@ -45,7 +45,7 @@ const CASES: KeyCase[] = [
   {
     ...block('embeddings', { enabled: false, provider: 'openai' }),
     bad: 'on',
-    badField: { name: 'provider', value: 'x', reads: 'local' },
+    badField: { name: 'hybridWeight', value: 2, reads: DEFAULT_CONFIG.embeddings.hybridWeight },
   },
   { ...block('global', { enabled: false }), bad: true, badField: enabledField },
   { ...scalar('gitLearnPatterns', ['fix']), bad: 'fix' },
@@ -161,6 +161,20 @@ describe('every top-level config key is checked', () => {
       });
     },
   );
+
+  it('reads a malformed pinnedInject.promptRecall as off, with one warning', () => {
+    const { cfg, warnings } = load({ pinnedInject: { promptRecall: 'false' } });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(WARNING);
+    expect(warnings[0]).toContain('"pinnedInject.promptRecall"');
+    expect(cfg.pinnedInject.promptRecall).toBe(false);
+  });
+
+  it('lets an unknown embeddings.provider through, so the provider refuses it instead of falling back to local', () => {
+    const { cfg, warnings } = load({ embeddings: { provider: 'opneai' } });
+    expect(warnings).toEqual([]);
+    expect(cfg.embeddings.provider).toBe('opneai');
+  });
 
   it('keeps a block field it does not name, as written', () => {
     const { cfg, warnings } = load({ search: { rerank: 'none' } });
