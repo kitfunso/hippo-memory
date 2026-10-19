@@ -339,7 +339,7 @@ function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requ
  * Runs `handle` under the request's id and deadline; a failure becomes the reply, unless the deadline has already
  * answered.
  */
-function answerRequest(
+export function answerRequest(
   req: IncomingMessage,
   res: ServerResponse,
   handle: () => Promise<void>,
@@ -376,7 +376,7 @@ function answerRequest(
   );
 }
 
-function listenOn(server: Server, port: number, host: string): Promise<void> {
+export function listenOn(server: Server, port: number, host: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const onError = (err: Error): void => {
       server.removeListener('listening', onListening);

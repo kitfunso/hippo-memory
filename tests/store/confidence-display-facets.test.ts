@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import type { Server } from 'node:http';
 import {
   createMemory,
   confidenceFacets,
@@ -13,8 +12,8 @@ import {
   type MemoryEntry,
   DEFAULT_HALF_LIFE_DAYS,
 } from '../../src/core/memory.js';
-import { serveDashboard } from '../../src/dashboard/dashboard.js';
-import { boundPort } from '../_helpers/listen.js';
+import { serveDashboard } from '../../src/server/dashboard-listener.js';
+import type { ServerHandle } from '../../src/server/types.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -79,7 +78,7 @@ function get(port: number, path: string): Promise<string> {
 describe('confidence facets', () => {
   let home: string;
   let hippoRoot: string;
-  let server: Server | undefined;
+  let server: ServerHandle | undefined;
 
   beforeEach(() => {
     ({ base: home, root: hippoRoot } = makeStore('facets'));
@@ -90,7 +89,7 @@ describe('confidence facets', () => {
 
   afterEach(async () => {
     if (server) {
-      await new Promise<void>((res, rej) => server!.close((e) => (e ? rej(e) : res())));
+      await server.stop();
       server = undefined;
     }
     _resetAblationCacheForTests();
@@ -239,8 +238,8 @@ describe('confidence facets', () => {
       lastRetrieved: ago(45),
     });
 
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: 'default' });
-    const port = await boundPort(server);
+    server = await serveDashboard({ hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId: 'default' });
+    const { port } = server;
 
     // SAFETY: each route returns the dashboard-types.ts shape named in the cast.
     const overview = JSON.parse(await get(port, '/api/overview')) as { projects: Array<{ key: string }> };

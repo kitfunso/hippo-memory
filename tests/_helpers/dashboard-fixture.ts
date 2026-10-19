@@ -6,13 +6,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from './default-half-life-memory.js';
-import { serveDashboard } from '../../src/dashboard/dashboard.js';
-import { createSnapshotService, type SnapshotService } from '../../src/dashboard/dashboard-snapshot.js';
+import { serveDashboard } from '../../src/server/dashboard-listener.js';
+import { createSnapshotService, type SnapshotService } from '../../src/api/dashboard/snapshot.js';
 import type { DashboardRow } from '../../src/store/port/dashboard-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from './root-forms.js';
@@ -114,23 +113,16 @@ export async function startDashboard(
   opts: { bodyDeadlineMs?: number } = {},
 ): Promise<RunningDashboard> {
   // One test clock drives both the projections and the cache age; the tenant is read as the CLI root reads it.
-  const server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, {
+  const handle = await serveDashboard({
+    hippoRoot,
+    port: 0,
+    token: DASHBOARD_TOKEN,
     now,
     cacheClock: now,
     tenantId: envTenant(),
     ...opts,
   });
-  const port = await new Promise<number>((resolve) => {
-    const done = (): void => {
-      // SAFETY: serveDashboard binds a TCP port, so address() is an AddressInfo once listening.
-      resolve((server.address() as AddressInfo).port);
-    };
-    if (server.listening) done();
-    else server.once('listening', done);
-  });
-  const close = (): Promise<void> =>
-    new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
-  return { server, port, close };
+  return { server: handle.server!, port: handle.port, close: handle.stop };
 }
 
 export interface Reply {

@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
-import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
+import type { MemoryDetail, ResolveResult } from '../src/api/dashboard/types.js';
 import {
   NOW,
   call,
@@ -229,23 +229,24 @@ describe('request guards', () => {
     expect(readEntry(store.hippoRoot, target.id)).not.toBeNull();
   });
 
-  it('answers 400 for an oversized body and for malformed JSON', async () => {
+  it('answers 400 for malformed JSON and 413 for a body over 4 KB, and writes nothing', async () => {
     const target = seed(store.hippoRoot, 'body row');
     const path = `/api/memory/${target.id}/pin`;
     const json = { 'Content-Type': 'application/json' };
 
+    // The 413 closes its connection, so it goes last.
+    const broken = await call(dash.port, 'POST', path, { headers: json, body: '{"pinned": tru' });
     const big = await call(dash.port, 'POST', path, {
       headers: json,
       body: JSON.stringify({ pinned: true, pad: 'x'.repeat(5_000) }),
     });
-    const broken = await call(dash.port, 'POST', path, { headers: json, body: '{"pinned": tru' });
 
-    expect(big.status).toBe(400);
     expect(broken.status).toBe(400);
+    expect([big.status, JSON.parse(big.body)]).toEqual([413, { error: 'request body exceeds 4KB' }]);
     expect(row(target.id).pinned).toBe(false);
   });
 
-  it('answers 400 and drops the connection once a body passes the 64 KB drain ceiling', async () => {
+  it('answers 413 and drops the connection once a body passes 4 KB, as the API server does', async () => {
     const target = seed(store.hippoRoot, 'drain row');
     const chunk = Buffer.alloc(8 * 1024, 'x');
 
@@ -281,7 +282,7 @@ describe('request guards', () => {
       void send();
     });
 
-    expect(reply.status).toBe(400);
+    expect(reply.status).toBe(413);
     await reply.closed;
     expect(row(target.id).pinned).toBe(false);
     expect((await get(dash.port, '/api/overview')).status).toBe(200);

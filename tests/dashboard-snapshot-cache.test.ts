@@ -5,8 +5,8 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer } from '../src/core/memory.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
-import type { SnapshotService } from '../src/dashboard/dashboard-snapshot.js';
-import { buildOverview } from '../src/dashboard/dashboard-queries.js';
+import type { SnapshotService } from '../src/api/dashboard/snapshot.js';
+import { buildOverview } from '../src/api/dashboard/queries.js';
 import {
   NOW,
   call,
@@ -21,7 +21,7 @@ import {
   type RunningDashboard,
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
-import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
+import type { MemoryDetail, Overview } from '../src/api/dashboard/types.js';
 
 const COALESCE_MS = 10_000;
 const TTL_MS = 5 * 60_000;
@@ -275,18 +275,20 @@ describe('through the server', () => {
     expect(forced.total).toBe(2);
   });
 
-  it('ignores ?fresh=1 on a cross-site request but honours it on a same-origin one', async () => {
+  it('refuses a cross-site ?fresh=1 before it can force a rebuild, and honours a same-origin one', async () => {
     const first = parse<Overview>(await get(dash.port, '/api/overview'));
     seed(store.hippoRoot, 'written elsewhere');
 
-    const crossSite = parse<Overview>(
-      await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'cross-site' } }),
-    );
+    const crossSite = await call(dash.port, 'GET', '/api/overview?fresh=1', {
+      headers: { 'Sec-Fetch-Site': 'cross-site' },
+    });
+    const plain = parse<Overview>(await get(dash.port, '/api/overview'));
     const sameOrigin = parse<Overview>(
       await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'same-origin' } }),
     );
 
-    expect(crossSite.snapshotId).toBe(first.snapshotId);
+    expect(crossSite.status).toBe(403);
+    expect(plain.snapshotId).toBe(first.snapshotId);
     expect(sameOrigin.snapshotId).toBeGreaterThan(first.snapshotId);
   });
 });

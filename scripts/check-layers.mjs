@@ -6,6 +6,7 @@
 // So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // So does a runtime import from src/api/**, src/connectors/** or src/mcp/** into src/store/sqlite/**, unless SQLITE_PINNED names it with a reason: they take the store from the Context.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**): the api reads the store through the port and takes shared rules from src/core.
+// So does any import, runtime or type-only, from src/dashboard/** into src/store, src/db or src/cli: the dashboard reads through src/api, with no baseline.
 // layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
 
@@ -231,6 +232,27 @@ function sqliteReachProblems(srcDir) {
   ];
 }
 
+const DASHBOARD_BARRED = ['store/', 'db/', 'cli/', 'cli.ts'];
+
+/** Imports from src/dashboard into src/store, src/db or src/cli, runtime or type-only, as `file:line imports target`. */
+function findDashboardReaches(srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = [];
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!from.startsWith('dashboard/')) continue;
+    for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
+      const to = target && rel(target);
+      if (to && DASHBOARD_BARRED.some((barred) => to === barred || to.startsWith(barred))) {
+        out.push(`src/${from}:${line} imports src/${to}`);
+      }
+    }
+  }
+  return out;
+}
+
 /** Imports from `dbReach.layer` in a `dbReach.from` folder that `dbReach.allowed` does not name, then allowed entries nothing uses or that give no why. */
 function findDbReaches(map, srcDir) {
   const rule = map.dbReach;
@@ -304,6 +326,13 @@ if (sqliteProblems.length > 0 && !args.includes('--list')) {
     'The api, connectors, dashboard or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:',
   );
   for (const p of sqliteProblems) console.error(`  ${p}`);
+  process.exit(1);
+}
+
+const dashboardReaches = findDashboardReaches('src');
+if (dashboardReaches.length > 0 && !args.includes('--list')) {
+  console.error('The dashboard imports the store or the CLI; read and write through a src/api function instead:');
+  for (const r of dashboardReaches) console.error(`  ${r}`);
   process.exit(1);
 }
 

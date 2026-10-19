@@ -136,12 +136,12 @@ describe('hippo dashboard listener', () => {
     });
     children.push(child);
     const watched = watch(child);
-    // stdout is a pipe here, so the token is in the URL file the banner names rather than on stdout.
+    // The token is never on stdout; the banner names the URL file that holds it.
     const [, port, urlFile] = await watched.printed(
       /Hippo Dashboard running at http:\/\/localhost:(\d+)\/ \(open the URL with its token from (.+)\)/,
     );
     const token = /\?token=(\S+)/.exec(readFileSync(urlFile!.trim(), 'utf8'))?.[1];
-    // The snapshot store opens its connection on the first read, and the reply's kept-alive socket is one the stop has to close.
+    // A read wakes the reader thread, and the reply's kept-alive socket is one the stop has to close.
     const overview = await fetch(`http://127.0.0.1:${port}/api/overview`, {
       headers: { cookie: sessionCookie(Number(port), token ?? '') },
     });
