@@ -9,7 +9,6 @@ import { syncBuiltinESMExports } from 'node:module';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { loadConfig } from '../../src/core/config.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { runConsolidation } from '../../src/consolidate/sleep.js';
 import { closeHippoDb, getMeta, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
@@ -240,12 +239,10 @@ async function sleepAtEveryPageSize(config: { memoryValue?: { enabled: boolean }
 beforeEach(() => {
   vi.stubEnv('HIPPO_FAKE_NOW', NOW.toISOString());
   vi.stubEnv('HIPPO_TENANT', 'default');
-  _resetAblationCacheForTests();
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 describe('one sleep over three tenants', () => {

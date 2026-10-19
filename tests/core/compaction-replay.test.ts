@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { replayCompactions, saveCompaction } from '../../src/capture/compaction-record.js';
 import { compactionByRequest, saveItems } from '../../src/store/sqlite/compactions-record.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   compactionMemories,
@@ -21,6 +20,7 @@ import {
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { log as hippoLog } from '../../src/util/log.js';
 
 const MINUTE = 60_000;
 const ITEMS = [
@@ -138,8 +138,7 @@ describe('replay of records a killed hook left', () => {
   });
 
   it('warns about a stalled record with malformed items, naming its id, and still replays the others', () => {
-    _resetLogOnceForTests();
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const warned = vi.spyOn(hippoLog, 'warnThenDebug').mockImplementation(() => undefined);
     seed(s.hippoRoot, {
       id: 'cmp-bad',
       status: 'summarised',
@@ -162,24 +161,22 @@ describe('replay of records a killed hook left', () => {
         .map((r) => r.content)
         .sort(),
     ).toEqual([...ITEMS].sort());
-    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('compaction cmp-bad skipped');
+    expect(warned.mock.calls.map(([, message]) => message).join('')).toContain('compaction cmp-bad skipped');
   });
 
   it('warns once for several malformed records, so the once-only key set does not grow with the rows', () => {
-    _resetLogOnceForTests();
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const warned = vi.spyOn(hippoLog, 'warnThenDebug').mockImplementation(() => undefined);
     for (const id of ['cmp-bad-1', 'cmp-bad-2', 'cmp-bad-3']) {
       seed(s.hippoRoot, { id, status: 'summarised', startedMinutesAgo: 40, summarizedMinutesAgo: 30, items: ITEMS });
       run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json' WHERE id = '${id}'`);
     }
     expect(replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(0);
-    const warned = stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('items_json is not valid JSON'));
-    expect(warned).toHaveLength(1);
+    expect(warned).toHaveBeenCalledTimes(3);
+    expect(new Set(warned.mock.calls.map(([key]) => key)).size).toBe(1);
   });
 
   it('answers a request lookup that lands on a record with malformed items with null and a warning, not a throw', () => {
-    _resetLogOnceForTests();
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const warned = vi.spyOn(hippoLog, 'warnThenDebug').mockImplementation(() => undefined);
     seed(s.hippoRoot, { id: 'cmp-bad', status: 'summarised', startedMinutesAgo: 40, summarizedMinutesAgo: 30 });
     run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json', request_id = 'req-1' WHERE id = 'cmp-bad'`);
     const db = openHippoDb(s.hippoRoot);
@@ -188,7 +185,7 @@ describe('replay of records a killed hook left', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('compaction cmp-bad skipped');
+    expect(warned.mock.calls.map(([, message]) => message).join('')).toContain('compaction cmp-bad skipped');
   });
 
   it('leaves a record that is under 10 minutes old to its own hook', () => {
@@ -446,9 +443,9 @@ describe('two replayers working the same store', () => {
         cwd: null,
         items: ITEMS,
       };
-      expect(saveItems(db, s.hippoRoot, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(saveItems(db, { hippoRoot: s.hippoRoot }, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
       run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
-      expect(saveItems(db, s.hippoRoot, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(saveItems(db, { hippoRoot: s.hippoRoot }, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
     } finally {
       closeHippoDb(db);
     }

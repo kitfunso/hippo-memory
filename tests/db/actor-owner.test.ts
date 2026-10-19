@@ -1,9 +1,8 @@
 // Actor.owner is the person behind a call: an owned key's owner_subject or the resolver's subject, never set by plugin code.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
-  _readApiKeyVerifyStatsForTests,
   createApiKey,
   verifyApiKeyCached,
   type CreateApiKeyResult,
@@ -19,6 +18,11 @@ import {
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { ApiKeyRecord } from '../../src/store/port/types.js';
+import { scryptRuns } from '../_helpers/scrypt-count.js';
+
+vi.mock('node:crypto', async (importOriginal) =>
+  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
+);
 
 const WHOAMI = '/v1/x-whoami';
 
@@ -133,9 +137,9 @@ describe('Actor.owner', () => {
     const key = mint('alice@corp.example');
     const store = sqliteStore(home);
     expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
-    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
+    const before = scryptRuns();
     expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
-    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
+    expect(scryptRuns()).toBe(before);
   });
 
   it('store record with no ownerSubject reads as no owner', async () => {

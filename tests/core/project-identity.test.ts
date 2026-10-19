@@ -5,7 +5,6 @@ import * as path from 'path';
 import {
   resolveProjectIdentity,
   deriveOriginProject,
-  _resetProjectIdentityCacheForTests,
   assertCallerProject,
   MAX_PROJECT_ALIASES,
 } from '../../src/core/project-identity.js';
@@ -30,7 +29,6 @@ beforeEach(() => {
   home = mkdirs('home');
   // The global store lives in the home dir, like ~/.hippo on a real machine.
   fs.mkdirSync(path.join(home, '.hippo'), { recursive: true });
-  _resetProjectIdentityCacheForTests();
 });
 
 afterEach(() => {

@@ -16,7 +16,6 @@ import {
 import { serveDashboard } from '../../src/dashboard/dashboard.js';
 import { boundPort } from '../_helpers/listen.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
@@ -85,7 +84,6 @@ describe('confidence facets', () => {
     ({ base: home, root: hippoRoot } = makeStore('facets'));
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     vi.stubEnv('HIPPO_FAKE_NOW', NOW.toISOString());
-    _resetAblationCacheForTests();
   });
 
   afterEach(async () => {
@@ -93,7 +91,6 @@ describe('confidence facets', () => {
       await new Promise<void>((res, rej) => server!.close((e) => (e ? rej(e) : res())));
       server = undefined;
     }
-    _resetAblationCacheForTests();
   });
 
   it('splits an aged-out observed row into tier and agedOut', () => {

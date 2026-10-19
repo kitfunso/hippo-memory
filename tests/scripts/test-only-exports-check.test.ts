@@ -33,9 +33,6 @@ function seamRows(): Row[] {
     seamRow('a _verbThingForTests seam name passes', '_setThingForTests', 0, ['ratchet OK']),
     seamRow('a __setX seam name fails with file:line name', '__setThing', 1, ['src/a.ts:1 __setThing']),
     seamRow('a ForTests name without the underscore fails', 'setThingForTests', 1, ['src/a.ts:1 setThingForTests']),
-    seamRow('the published __resetSessionRecallHistoryHttp is exempt', '__resetSessionRecallHistoryHttp', 0, [
-      'ratchet OK',
-    ]),
   ];
 }
 

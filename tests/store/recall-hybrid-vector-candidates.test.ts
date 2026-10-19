@@ -11,7 +11,6 @@ import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { retrieve, contextGet } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -97,13 +96,11 @@ describe('hybrid recall candidates with stored vectors', () => {
   beforeEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-    _resetAblationCacheForTests();
   });
 
   afterEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', undefined);
     vi.stubEnv('OPENAI_API_KEY', undefined);
-    _resetAblationCacheForTests();
     vi.unstubAllGlobals();
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   });

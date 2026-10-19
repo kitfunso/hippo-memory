@@ -15,7 +15,6 @@ import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
 import { DAY_MS } from '../../src/util/time.js';
 import { handleStatus } from '../../src/cli/status.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -54,7 +53,6 @@ async function status(): Promise<string[]> {
     OPENAI_API_KEY: '',
   };
   for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
-  _resetAblationCacheForTests();
   const saved = process.cwd();
   process.chdir(home);
   try {
@@ -72,7 +70,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 describe('storedVectorSummary', () => {

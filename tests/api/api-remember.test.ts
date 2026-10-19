@@ -4,8 +4,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { remember } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
@@ -48,10 +46,7 @@ describe("api.remember stamps the caller's project", () => {
   let tmp: string;
   beforeEach(() => {
     tmp = makeRoot('api-rem-proj', { init: false });
-    _resetProjectIdentityCacheForTests();
-    _resetSharedStoreCacheForTests();
     return () => {
-      _resetSharedStoreCacheForTests();
       rmSync(tmp, { recursive: true, force: true });
     };
   });

@@ -6,7 +6,7 @@
  * - Renders `## Anchoring hint` block in text response when hint fires
  * - Bumps mcpSuppressionSummary.suppressedByInterference on R2
  * - Emits `recall_anchor_skipped_no_session` when sessionId absent
- * - Module-level Map is reset via _resetSessionRecallHistoryMcpForTests helper
+ * - Each case builds its own CallerState, so no ring carries over
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -16,7 +16,6 @@ import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   handleMcpRequest,
-  _resetSessionRecallHistoryMcpForTests,
   type McpContext,
   type McpResponse,
 } from '../../src/mcp/server.js';
@@ -25,6 +24,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
 import { cliConfig } from '../../src/cli/api-context.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { createCallerState } from '../../src/api/callers.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -67,7 +67,6 @@ describe('mcp hippo_recall anchoringHint', () => {
     home = makeRoot('mcp-j1');
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_ANCHORING', undefined);
-    _resetSessionRecallHistoryMcpForTests();
     // Seed a memory that matches the test query so MCP physics/hybrid
     // returns a non-null top-1.
     for (let i = 0; i < 3; i++) {
@@ -86,7 +85,6 @@ describe('mcp hippo_recall anchoringHint', () => {
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
     vi.stubEnv('HIPPO_ANCHORING', undefined);
-    _resetSessionRecallHistoryMcpForTests();
   });
 
   it('R2 fires after >=3 recalls with same query on same session (memory_dominance + suppressedByInterference bumped)', async () => {
@@ -98,6 +96,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      callers: createCallerState(),
     };
     // Three recalls with DIFFERENT queries on the same session — same top
     // memory should win each time and trigger R2 on the 3rd.
@@ -125,6 +124,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      callers: createCallerState(),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     const text = extractText(res);
@@ -140,6 +140,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      callers: createCallerState(),
     };
     expect(countAuditOps(home, 'recall_anchor_skipped_no_session')).toBe(0);
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux' }, ctx);
@@ -156,6 +157,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      callers: createCallerState(),
     };
     // Repeat 3 distinct queries — would normally fire R2.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);

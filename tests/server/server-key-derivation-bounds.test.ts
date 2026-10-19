@@ -3,10 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { _readApiKeyVerifyStatsForTests, createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { serve, type ServeOpts } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { scryptRuns } from '../_helpers/scrypt-count.js';
+
+vi.mock('node:crypto', async (importOriginal) =>
+  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
+);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -107,7 +112,6 @@ const UNAUTHORISED: Reply = { status: 401, retryAfter: null, refusal: { error: '
 /** The `n`th well-formed wrong secret for `key`'s id. */
 const wrongSecret = (key: string, n: number): string =>
   `${key.slice(0, key.indexOf('.'))}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n % 26).repeat(32)}`;
-const scryptRuns = (): number => _readApiKeyVerifyStatsForTests().scryptRuns;
 
 describe('key derivation bounds', () => {
   it('refuses one address its sixth wrong secret for a key id without deriving, while the right secret passes from another address', async () => {

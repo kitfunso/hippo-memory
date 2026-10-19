@@ -6,7 +6,6 @@ import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { adminActor, contextGet } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/util/log.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
@@ -97,7 +96,6 @@ async function mcpContext(
 }
 
 beforeEach(() => {
-  _resetSharedStoreCacheForTests();
   globalHome = makeRoot('shared-ctx-global');
   vi.stubEnv('HIPPO_HOME', globalHome);
 });
@@ -105,7 +103,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  _resetSharedStoreCacheForTests();
   rmSync(home, { recursive: true, force: true });
   rmSync(globalHome, { recursive: true, force: true });
 });

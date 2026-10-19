@@ -100,7 +100,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     const db = openHippoDb(tmpDir);
     try {
       // At its own last_retrieved an unretrieved neutral trace has strength 1, so its mass is 1.
-      const particle = initializeParticle(trace, fakeEmbedding, new Date(trace.lastRetrieved));
+      const particle = initializeParticle(trace, fakeEmbedding, {}, new Date(trace.lastRetrieved));
       savePhysicsState(db, [particle]);
       const map = loadPhysicsState(db, [trace.id]);
       expect(map.has(trace.id)).toBe(true);

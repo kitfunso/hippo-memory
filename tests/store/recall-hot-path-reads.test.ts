@@ -200,7 +200,7 @@ describe('finishRecallAt', () => {
             results: ids.map((memoryId) => ({ memoryId, score: 1 })),
           },
           strengthen: { ids, opts: { tenantId: 'default', recallBoostAblated: false } },
-        }),
+        }, {}),
       ),
     );
     expect(countMatching(statements, /^BEGIN/)).toBe(1);

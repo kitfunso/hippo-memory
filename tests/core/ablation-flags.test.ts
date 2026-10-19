@@ -27,7 +27,6 @@ import {
   evalNow,
   isOutcomeSlowAblated,
   strengthAblation,
-  _resetAblationCacheForTests,
 } from '../../src/core/ablation.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -53,7 +52,6 @@ const ABLATION_ENV_VARS = [
 
 function clearAblationEnv(): void {
   for (const v of ABLATION_ENV_VARS) vi.stubEnv(v, undefined);
-  _resetAblationCacheForTests();
 }
 
 beforeEach(clearAblationEnv);
@@ -109,7 +107,6 @@ describe('HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS', () => {
   };
   const setEnv = (k: string, v: string): void => {
     vi.stubEnv(k, v);
-    _resetAblationCacheForTests();
   };
 
   it('default: an older memory gets a recency multiplier below 1', async () => {
@@ -147,7 +144,6 @@ describe('HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS', () => {
 describe('HIPPO_ABLATE_DECAY', () => {
   beforeEach(() => {
     vi.stubEnv('HIPPO_ABLATE_DECAY', '1');
-    _resetAblationCacheForTests();
   });
 
   it('neutralizes decay: a 30-day-old memory equals a fresh one', () => {
@@ -200,7 +196,6 @@ describe('HIPPO_ABLATE_DECAY', () => {
 describe('HIPPO_ABLATE_RECALL_BOOST', () => {
   beforeEach(() => {
     vi.stubEnv('HIPPO_ABLATE_RECALL_BOOST', '1');
-    _resetAblationCacheForTests();
   });
 
   it('neutralizes ALL THREE strengthening sub-effects; entries returned unmutated', () => {
@@ -234,8 +229,8 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     hot.lastRetrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
     const cold = agedMemory(10);
     cold.created = created;
-    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrievalCount)).toBe(
-      computeMass(calculateStrength(cold, NOW, abl()), cold.retrievalCount),
+    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrievalCount, abl().ablation)).toBe(
+      computeMass(calculateStrength(cold, NOW, abl()), cold.retrievalCount, abl().ablation),
     );
   });
 
@@ -257,10 +252,10 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // retrieval_count; under the flag, mass must ignore retrieval history in
     // both the init and refresh paths (computeMass is the single shared site).
     const { computeMass } = await import('../../src/core/physics.js');
-    expect(computeMass(0.8, 16)).toBe(computeMass(0.8, 0));
+    expect(computeMass(0.8, 16, abl().ablation)).toBe(computeMass(0.8, 0, abl().ablation));
     // Sanity: WITHOUT the flag, history raises mass.
     clearAblationEnv();
-    expect(computeMass(0.8, 16)).toBeGreaterThan(computeMass(0.8, 0));
+    expect(computeMass(0.8, 16, abl().ablation)).toBeGreaterThan(computeMass(0.8, 0, abl().ablation));
   });
 
   it('anchors decay at created: prior clock resets cannot leak in', () => {
@@ -298,7 +293,6 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
 describe('HIPPO_ABLATE_OUTCOME', () => {
   beforeEach(() => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME', '1');
-    _resetAblationCacheForTests();
   });
 
   it('neutralizes the slow channel (rewardFactor = 1 despite outcomes)', () => {
@@ -352,7 +346,6 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
 describe('HIPPO_ABLATE_OUTCOME_SLOW (decomposition arm)', () => {
   beforeEach(() => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
-    _resetAblationCacheForTests();
   });
 
   it('slow off, fast still live', async () => {
@@ -367,7 +360,6 @@ describe('HIPPO_ABLATE_OUTCOME_SLOW (decomposition arm)', () => {
 describe('HIPPO_ABLATE_OUTCOME_FAST (decomposition arm)', () => {
   beforeEach(() => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_FAST', '1');
-    _resetAblationCacheForTests();
   });
 
   it('fast off, slow still live', async () => {
@@ -386,7 +378,6 @@ describe('HIPPO_ABLATE_OUTCOME_FAST (decomposition arm)', () => {
 describe('HIPPO_FAKE_NOW', () => {
   it('injects the fake clock as the default now', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
-    _resetAblationCacheForTests();
     expect(evalNow().toISOString()).toBe('2030-01-01T00:00:00.000Z');
     // Default-now path of calculateStrength uses the fake clock: a memory
     // dated 2026 decays hard against the 2030 clock. (createMemory itself now
@@ -413,7 +404,6 @@ describe('HIPPO_FAKE_NOW', () => {
     // Without the search-default wiring, scoring would use the REAL clock while
     // markRetrieved stamps the fake one - inconsistent simulated time.
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
-    _resetAblationCacheForTests();
     const m = createMemory('search scoring uses the fake clock', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
     m.lastRetrieved = '2026-06-11T00:00:00.000Z';
@@ -428,7 +418,6 @@ describe('HIPPO_FAKE_NOW', () => {
 
   it('invalid value falls back to the real clock', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', 'not-a-date');
-    _resetAblationCacheForTests();
     const before = Date.now();
     const now = evalNow().getTime();
     expect(now).toBeGreaterThanOrEqual(before);
@@ -450,7 +439,6 @@ describe('HIPPO_FAKE_NOW', () => {
       '2026-13-01T00:00:00.000Z', // rollover month
     ]) {
       vi.stubEnv('HIPPO_FAKE_NOW', junk);
-      _resetAblationCacheForTests();
       const before = Date.now();
       const now = evalNow().getTime();
       expect(now, `format '${junk}' must fall back to real clock`).toBeGreaterThanOrEqual(before);
@@ -463,7 +451,6 @@ describe('HIPPO_FAKE_NOW', () => {
     // into hybridSearch, so the inner fallback never runs - the wrapper default
     // itself must honor the fake clock.
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
-    _resetAblationCacheForTests();
     const { searchBothHybrid } = await import('../../src/sharing/search-both.js');
     const m = createMemory('wrapper clock consistency check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
@@ -484,7 +471,6 @@ describe('HIPPO_FAKE_NOW', () => {
 
   it('explicit now parameter always wins over the fake clock', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
-    _resetAblationCacheForTests();
     const m = agedMemory(0);
     expect(calculateStrength(m, NOW, abl())).toBe(1.0); // explicit NOW, not 2030
   });
@@ -493,7 +479,6 @@ describe('HIPPO_FAKE_NOW', () => {
 describe('core scoring does not read the environment', () => {
   it('calculateStrength ignores HIPPO_ABLATE_DECAY unless the options carry it', () => {
     vi.stubEnv('HIPPO_ABLATE_DECAY', '1');
-    _resetAblationCacheForTests();
     expect(calculateStrength(agedMemory(30), NOW)).toBeLessThan(calculateStrength(agedMemory(0), NOW));
     expect(calculateStrength(agedMemory(30), NOW, abl())).toBe(calculateStrength(agedMemory(0), NOW, abl()));
   });

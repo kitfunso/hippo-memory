@@ -6,13 +6,10 @@ import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
 import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/sqlite/goals.js';
 import { boostByGoals } from '../../src/search/goal-boost.js';
-import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../../src/store/sqlite/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
@@ -29,7 +26,6 @@ import {
   type RecallWrites,
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { loadLatestHandoffAt } from '../../src/store/sqlite/handoffs.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { listSessionEventsAt } from '../../src/store/sqlite/sessions.js';
@@ -247,7 +243,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 describe('sqliteStore reads equal the hippo.db functions they wrap and open no more handles', () => {
@@ -595,7 +590,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
         } finally {
           closeHippoDb(db);
         }
-        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts);
+        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts, {});
       },
       (store) => store.finishRecall(finishWrites()),
     );
@@ -721,11 +716,6 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
     await embeddings.close();
   });
 
-  beforeEach(() => {
-    __resetSessionRecallHistoryHttp();
-    _resetSessionRecallHistoryMcpForTests();
-    lastRecalledIds.clear();
-  });
 
   it.each(OPENS)('%s: %i opens', async (_name, opens, call, vectorArm = false) => {
     const s = freshStore(templates, 'local');
@@ -754,11 +744,6 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
 });
 
 describe('a recall whose store read fails mid-way', () => {
-  beforeEach(() => {
-    __resetSessionRecallHistoryHttp();
-    _resetSessionRecallHistoryMcpForTests();
-    lastRecalledIds.clear();
-  });
 
   // Continuity is read after the search, the goals and the fresh tail, so the earlier reads have run.
   it.each([

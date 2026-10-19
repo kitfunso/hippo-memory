@@ -445,7 +445,7 @@ describe('initializeParticle', () => {
     });
     const embedding = [0.5, -0.5, 0.7071];
 
-    const particle = initializeParticle(entry, embedding, NOW);
+    const particle = initializeParticle(entry, embedding, {}, NOW);
 
     expect(particle.memoryId).toBe('mem_init');
     // Position should be a copy of the embedding
@@ -472,14 +472,14 @@ describe('initializeParticle', () => {
   it('handles positive emotional valence', () => {
     const entry = makeMemoryEntry('mem_pos', { emotionalValence: 'positive' });
     const embedding = [1, 0, 0];
-    const particle = initializeParticle(entry, embedding, NOW);
+    const particle = initializeParticle(entry, embedding, {}, NOW);
     expect(particle.charge).toBeCloseTo(0.3, 10);
   });
 
   it('handles critical emotional valence', () => {
     const entry = makeMemoryEntry('mem_crit', { emotionalValence: 'critical' });
     const embedding = [1, 0, 0];
-    const particle = initializeParticle(entry, embedding, NOW);
+    const particle = initializeParticle(entry, embedding, {}, NOW);
     expect(particle.charge).toBeCloseTo(-1.0, 10);
   });
 
@@ -488,7 +488,7 @@ describe('initializeParticle', () => {
     const entry = makeMemoryEntry('mem_old', { created: threeDaysAgo.toISOString() });
     const embedding = [1, 0, 0];
 
-    const particle = initializeParticle(entry, embedding, NOW);
+    const particle = initializeParticle(entry, embedding, {}, NOW);
     // temperature = 1 / (ageDays * 1.0 + 1) = 1 / (3 + 1) = 0.25
     expect(particle.temperature).toBeCloseTo(0.25, 5);
   });

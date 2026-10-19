@@ -151,13 +151,13 @@ describe('replies the stdio loop writes', () => {
   const feed = (data: string | Buffer): void => fire(stdin, 'data', Buffer.from(data));
 
   it('a frame that is not JSON, with -32700', () => {
-    startStdioLoop(cliStdioHost);
+    startStdioLoop(cliStdioHost());
     feed('not json\n');
     expect(written).toEqual(['{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}\n']);
   });
 
   it('a frame with an id and no method, with -32600', () => {
-    startStdioLoop(cliStdioHost);
+    startStdioLoop(cliStdioHost());
     feed('{"jsonrpc":"2.0","id":12}\n');
     expect(written).toEqual([
       '{"jsonrpc":"2.0","id":12,"error":{"code":-32600,"message":"Invalid Request: method must be a string"}}\n',
@@ -165,7 +165,7 @@ describe('replies the stdio loop writes', () => {
   });
 
   it('a frame over 1 MB, with -32700', () => {
-    startStdioLoop(cliStdioHost);
+    startStdioLoop(cliStdioHost());
     const declared = 2 * 1024 * 1024;
     feed(`Content-Length: ${declared}\r\n\r\n`);
     // The refused body is dropped as it arrives, so the loop reads the next frame as itself.
@@ -177,8 +177,9 @@ describe('replies the stdio loop writes', () => {
 
   it('a call past its deadline, with -32001 and the request id', async () => {
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '40');
+    const real = cliStdioHost();
     const slow: McpHost = {
-      contextFor: (hippoRoot, tenantId) => cliStdioHost.contextFor(hippoRoot, tenantId),
+      contextFor: (hippoRoot, tenantId) => real.contextFor(hippoRoot, tenantId),
       runRequest: async (run) => {
         await new Promise((resolve) => setTimeout(resolve, 300));
         return run();

@@ -7,7 +7,6 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -144,7 +143,6 @@ describe('request-path output on a fixed store', () => {
     mkdirSync(join(tmp, 'proj'), { recursive: true });
     vi.stubEnv('HIPPO_HOME', globalRoot);
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
-    _resetAblationCacheForTests();
     initStore(localRoot);
     initStore(globalRoot);
     await withSharedStoreHandles(() => {
@@ -161,7 +159,6 @@ describe('request-path output on a fixed store', () => {
     vi.stubEnv('HIPPO_HOME', saved.home);
     if (saved.now === undefined) vi.stubEnv('HIPPO_FAKE_NOW', undefined);
     else vi.stubEnv('HIPPO_FAKE_NOW', saved.now);
-    _resetAblationCacheForTests();
   });
 
   const mcpCtx = (): McpContext => {

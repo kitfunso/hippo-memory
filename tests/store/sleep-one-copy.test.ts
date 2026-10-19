@@ -5,7 +5,6 @@ import { rmSync } from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { computeAmbientState } from '../../src/core/ambient.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -28,7 +27,6 @@ const ctxFor = (hippoRoot: string): FullContext =>
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
@@ -38,7 +36,6 @@ describe('sleep after consolidation', () => {
     roots.push(home);
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
-    _resetAblationCacheForTests();
     const root = newRoot();
     const kept = ['the deploy runs on friday', 'billing is owned by alice', 'staging restarts on sunday'];
     for (const text of kept) writeEntry(root, createMemory(text, { tags: ['ops'] }));
@@ -58,7 +55,6 @@ describe('sleep after consolidation', () => {
     roots.push(home);
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
-    _resetAblationCacheForTests();
     const wholeReads = async (noShare: boolean): Promise<number> => {
       const root = newRoot();
       for (const text of ['the deploy runs on friday', 'billing is owned by alice', 'staging restarts on sunday']) {

@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../../src/db/decay-key.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { contextRowsWhere } from '../../src/store/sqlite/candidates.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -104,7 +103,6 @@ function readOnce(cap: number, now: Date, tenant = 'default') {
 
 beforeEach(() => {
   home = makeRoot('context-decay-index');
-  _resetAblationCacheForTests();
   withDb((db) => {
     db.exec('BEGIN');
     for (const e of seedRows(600)) writeEntryDbOnly(db, e);
@@ -114,7 +112,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
-  _resetAblationCacheForTests();
   rmSync(home, { recursive: true, force: true });
 });
 
@@ -169,7 +166,6 @@ describe('loadContextCandidates past the cap', () => {
 
   it('ranks by the scan with the outcome-slow ablation on, and still matches it', () => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
-    _resetAblationCacheForTests();
     for (const now of NOWS) {
       for (const cap of CAPS) {
         const got = readOnce(cap, now);

@@ -4,7 +4,6 @@ import { rmSync } from 'node:fs';
 
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
-  _readApiKeyVerifyStatsForTests,
   createApiKey,
   verifyApiKeyCached,
   VerifiedKeyCache,
@@ -12,16 +11,34 @@ import {
 } from '../../src/store/sqlite/auth.js';
 import { authRevoke, authGrant } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { sqliteStore } from '../../src/store/index.js';
+import { sqliteStore, type HippoStore } from '../../src/store/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { scryptRuns } from '../_helpers/scrypt-count.js';
+
+vi.mock('node:crypto', async (importOriginal) =>
+  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
+);
+
+let lookups = 0;
+
+/** `store` with each key-row read counted. */
+function countingLookups(store: HippoStore): HippoStore {
+  return {
+    ...store,
+    findApiKey: (keyId) => {
+      lookups += 1;
+      return store.findApiKey(keyId);
+    },
+  };
+}
 
 /** Scrypt runs and store lookups made by `fn` alone. */
 async function counted<T>(fn: () => Promise<T>) {
-  const before = _readApiKeyVerifyStatsForTests();
+  const scryptBefore = scryptRuns();
+  const lookupsBefore = lookups;
   const value = await fn();
-  const after = _readApiKeyVerifyStatsForTests();
-  return { value, scrypt: after.scryptRuns - before.scryptRuns, dbOpen: after.storeLookups - before.storeLookups };
+  return { value, scrypt: scryptRuns() - scryptBefore, dbOpen: lookups - lookupsBefore };
 }
 
 /** Runs `work` on the store's file directly, as the CLI in another process would: nothing in this process hears of it. */
@@ -37,7 +54,7 @@ function onDb<T>(root: string, work: (db: ReturnType<typeof openHippoDb>) => T):
 describe('verified API key cache', () => {
   let home: string;
   const verify = (plaintext: string, root: string = home): Promise<VerifiedApiKey | null> =>
-    verifyApiKeyCached(plaintext, sqliteStore(root));
+    verifyApiKeyCached(plaintext, countingLookups(sqliteStore(root)));
 
   const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
@@ -157,7 +174,7 @@ describe('verified API key cache', () => {
 
   it('a throw from the bound refuses before scrypt runs, and the next check derives as if it never happened', async () => {
     const key = mint();
-    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
+    const before = scryptRuns();
     await expect(
       verifyApiKeyCached(key.plaintext, sqliteStore(home), () => {
         throw new Error('gate shut');
@@ -168,7 +185,7 @@ describe('verified API key cache', () => {
         throw new Error('queue full');
       }),
     ).rejects.toThrow('queue full');
-    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
+    expect(scryptRuns()).toBe(before);
     expect(await counted(() => verify(key.plaintext))).toMatchObject({ scrypt: 1 });
   });
 
@@ -287,9 +304,9 @@ describe('bearer requests through the server', () => {
   it('a repeat request skips scrypt, and a revoke through the API is a 401 on the very next request', async () => {
     const key = mint('member');
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
-    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
+    const before = scryptRuns();
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
-    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
+    expect(scryptRuns()).toBe(before);
 
     const revoked = await fetch(`${handle.url}/v1/auth/keys/${key.keyId}`, {
       method: 'DELETE',

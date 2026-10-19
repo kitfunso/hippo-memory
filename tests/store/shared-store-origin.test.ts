@@ -8,8 +8,7 @@ import { shareMemory } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { _resetProjectIdentityCacheForTests, originFromSource } from '../../src/core/project-identity.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { originFromSource } from '../../src/core/project-identity.js';
 import { projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { saveCompaction } from '../../src/capture/compaction-record.js';
@@ -31,13 +30,8 @@ let tmp: string;
 beforeEach(() => {
   tmp = makeRoot('shared-origin', { init: false });
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
 });
 
-afterEach(() => {
-  _resetSharedStoreCacheForTests();
-});
 
 interface Layout {
   readonly store: string;

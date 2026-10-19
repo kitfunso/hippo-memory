@@ -8,7 +8,6 @@ import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { RECALL_RECORDING } from '../../src/api/recall/finish.js';
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -116,7 +115,6 @@ const idsOf = (result: RecallResult): string[] => result.results.map((r) => r.id
 beforeEach(() => {
   for (const k of CLEARED_ENV) vi.stubEnv(k, '');
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
-  _resetAblationCacheForTests();
   root = makeRoot('recall-paths-order');
   vi.stubEnv('HIPPO_HOME', join(root, 'global-home'));
   for (const row of ROWS) writeEntry(root, row);
@@ -126,7 +124,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
   rmSync(root, { recursive: true, force: true });
 });
 

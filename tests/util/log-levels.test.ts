@@ -2,15 +2,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { _resetLogOnceForTests, errorFields, formatLogLine, isLevelEnabled, log } from '../../src/util/log.js';
+import { errorFields, formatLogLine, isLevelEnabled, log } from '../../src/util/log.js';
 import { runWithRequestId } from '../../src/util/request-scope.js';
-import { warnDamagedColumn } from '../../src/util/stored-json.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 
 const AT = '2026-01-02T03:04:05.678Z';
 let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+/** The logger of a fresh module graph, whose once-only keys start empty as a new process's do. */
+async function freshLog() {
+  vi.resetModules();
+  const [logModule, storedJson] = await Promise.all([
+    import('../../src/util/log.js'),
+    import('../../src/util/stored-json.js'),
+  ]);
+  return { log: logModule.log, warnDamagedColumn: storedJson.warnDamagedColumn };
+}
 
 function lines(): string[] {
   return stderrSpy.mock.calls.map((c: unknown[]) => String(c[0]));
@@ -21,7 +30,6 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_LOG_FORMAT', '');
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(AT) });
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  _resetLogOnceForTests();
 });
 
 afterEach(() => {
@@ -60,14 +68,16 @@ describe('log level filtering', () => {
     expect([isLevelEnabled('warn'), isLevelEnabled('info')]).toEqual([true, false]);
   });
 
-  it('once prints a key a single time per process', () => {
+  it('once prints a key a single time per process', async () => {
+    const { log } = await freshLog();
     log.once('k', 'warn', 'first');
     log.once('k', 'warn', 'second');
     log.once('other', 'warn', 'third');
     expect(lines()).toEqual([`[hippo] warn: first ts=${AT}\n`, `[hippo] warn: third ts=${AT}\n`]);
   });
 
-  it('caps the once-only keys at 1,000: the next new key writes one cap line, and new keys then log at debug unrecorded', () => {
+  it('caps the once-only keys at 1,000: the next new key writes one cap line, and new keys then log at debug unrecorded', async () => {
+    const { log } = await freshLog();
     vi.stubEnv('HIPPO_LOG', 'debug');
     for (let i = 0; i < 1_000; i++) log.warnThenDebug(`row-${i}`, `damaged ${i}`);
     expect(lines().filter((line) => line.startsWith('[hippo] warn: damaged '))).toHaveLength(1_000);
@@ -91,14 +101,15 @@ describe('log level filtering', () => {
     ]);
     stderrSpy.mockClear();
 
-    _resetLogOnceForTests();
-    log.warnThenDebug('row-1000', 'damaged 1000');
+    const nextProcess = await freshLog();
+    nextProcess.log.warnThenDebug('row-1000', 'damaged 1000');
     expect(lines()).toEqual([`[hippo] warn: damaged 1000 ts=${AT}\n`]);
   });
 });
 
 describe('damaged column warnings', () => {
-  it('spend one once-key on 2,000 damaged rows of one column, so a later failure class still logs at warn', () => {
+  it('spend one once-key on 2,000 damaged rows of one column, so a later failure class still logs at warn', async () => {
+    const { log, warnDamagedColumn } = await freshLog();
     vi.stubEnv('HIPPO_LOG', 'warn');
     for (let row = 0; row < 2_000; row++) {
       warnDamagedColumn({ table: 'memories', id: `m${row}`, column: 'tags_json' }, 'not valid JSON');
@@ -112,7 +123,8 @@ describe('damaged column warnings', () => {
 });
 
 describe('warnThenSample', () => {
-  it('warns on the first failure, then again with the count on every 100th', () => {
+  it('warns on the first failure, then again with the count on every 100th', async () => {
+    const { log } = await freshLog();
     vi.stubEnv('HIPPO_LOG', 'warn');
     for (let i = 0; i < 250; i++) log.warnThenSample('fts-sync', 'FTS update failed');
     expect(lines()).toEqual([

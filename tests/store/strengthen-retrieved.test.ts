@@ -27,7 +27,7 @@ describe('strengthenRetrieved', () => {
     const returned = readEntry(root, e.id)!;
     writeEntry(root, { ...returned, tags: ['edited-meanwhile'] });
 
-    const found = strengthenRetrieved(root, [e.id, 'no-such-id'], { tenantId: 'default', recallBoostAblated: false });
+    const found = strengthenRetrieved(root, [e.id, 'no-such-id'], { tenantId: 'default', recallBoostAblated: false }, {});
 
     expect([...found]).toEqual([e.id]);
     const after = readEntry(root, e.id)!;
@@ -41,7 +41,7 @@ describe('strengthenRetrieved', () => {
     const e = createMemory('the staging cluster restarts every sunday');
     writeEntry(root, e);
 
-    expect(strengthenRetrieved(root, [e.id], { tenantId: 'some-other-tenant', recallBoostAblated: false }).size).toBe(
+    expect(strengthenRetrieved(root, [e.id], { tenantId: 'some-other-tenant', recallBoostAblated: false }, {}).size).toBe(
       0,
     );
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
@@ -52,7 +52,7 @@ describe('strengthenRetrieved', () => {
     const e = createMemory('the release train leaves on tuesdays');
     writeEntry(root, e);
 
-    expect(strengthenRetrieved(root, [e.id], { tenantId: 'default', recallBoostAblated: true }).size).toBe(0);
+    expect(strengthenRetrieved(root, [e.id], { tenantId: 'default', recallBoostAblated: true }, {}).size).toBe(0);
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
   });
 
@@ -61,7 +61,7 @@ describe('strengthenRetrieved', () => {
     writeFileSync(notAStore, 'a plain file where the store should be');
     const errors = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    expect(strengthenRetrieved(notAStore, ['any-id'], { tenantId: 'default', recallBoostAblated: false }).size).toBe(0);
+    expect(strengthenRetrieved(notAStore, ['any-id'], { tenantId: 'default', recallBoostAblated: false }, {}).size).toBe(0);
     expect(errors).toHaveBeenCalledTimes(1);
     expect(String(errors.mock.calls[0]![0])).toMatch(/^\[hippo\] warn: retrieval stats not saved \(/);
   });

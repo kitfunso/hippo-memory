@@ -188,7 +188,6 @@ describe('MCP hippo_remember', () => {
         role: 'admin',
         hostAdmin: true,
         store,
-        autoSleep: false,
         config: loadConfig(root),
       },
     );

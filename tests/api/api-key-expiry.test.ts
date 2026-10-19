@@ -9,7 +9,6 @@ import {
   readApiKeyRecord,
   validateApiKey,
   verifyApiKeyCached,
-  _readApiKeyVerifyStatsForTests,
 } from '../../src/store/sqlite/auth.js';
 import { mintApiKey } from '../../src/core/api-key.js';
 import {
@@ -28,6 +27,11 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyRecord } from '../../src/store/port/types.js';
+import { scryptRuns } from '../_helpers/scrypt-count.js';
+
+vi.mock('node:crypto', async (importOriginal) =>
+  (await import('../_helpers/scrypt-count.js')).countingCrypto(await importOriginal()),
+);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -206,9 +210,9 @@ describe('API key expiry', () => {
     const key = mint(new Date(Date.now() + 10_000).toISOString());
     expect(await verifyApiKeyCached(key.plaintext, store)).not.toBeNull();
     vi.setSystemTime(Date.now() + 9_999);
-    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
+    const before = scryptRuns();
     expect(await verifyApiKeyCached(key.plaintext, store)).not.toBeNull();
-    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
+    expect(scryptRuns()).toBe(before);
     vi.setSystemTime(Date.now() + 1);
     expect(await verifyApiKeyCached(key.plaintext, store)).toBeNull();
   });

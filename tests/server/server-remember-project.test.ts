@@ -4,9 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import type { JsonValue } from '../../src/util/json.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -69,14 +67,11 @@ async function hookText(project: string): Promise<string> {
 beforeEach(() => {
   tmp = makeRoot('remember-project', { init: false });
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
 });
 
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  _resetSharedStoreCacheForTests();
 });
 
 describe('POST /v1/memories on a shared store', () => {

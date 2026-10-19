@@ -4,10 +4,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { createHmac, randomBytes } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
-import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -234,21 +230,12 @@ function copy() {
   return made;
 }
 
-/** Recall keeps per-session rings and caches in the server's process, which both passes share. */
-function resetRecallState(): void {
-  __resetSessionRecallHistoryHttp();
-  _resetSessionRecallHistoryMcpForTests();
-  _resetAblationCacheForTests();
-  lastRecalledIds.clear();
-}
-
 /** `use` against a server on `root`, on the worker-backed store when `store` is absent; it resolves once the server stopped. */
 async function onServer<T>(
   root: string,
   store: HippoStore | undefined,
   use: (server: ServerHandle) => Promise<T>,
 ): Promise<T> {
-  resetRecallState();
   const base = { hippoRoot: root, port: 0, rateLimits: { perCaller: 'off' as const } };
   const server = await serve(store ? { ...base, store } : base);
   try {
@@ -310,7 +297,6 @@ beforeEach(() => {
 
 afterEach(async () => {
   await undoAll();
-  _resetAblationCacheForTests();
 });
 
 describe('the routes moved off the server thread, on store workers against the in-process store', () => {
@@ -353,7 +339,7 @@ describe('the server-thread block of the routes this file covers', () => {
       outcome({ good: true, ids: ['mem_p_plain'] }),
       501,
     ],
-    ['POST /v1/outcome on the last recall', (p) => ({ lastRecall: p.lastRecall }), outcome({ good: true }), 501],
+    ['POST /v1/outcome on the last recall', (p) => ({ entryWrites: p.entryWrites }), outcome({ good: true }), 501],
     ['GET /v1/context', (p) => ({ contextReads: p.contextReads }), context('?q=deploy'), 501],
     [
       'POST /v1/connectors/slack/events',

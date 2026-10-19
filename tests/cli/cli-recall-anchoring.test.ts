@@ -1,15 +1,21 @@
-// `hippo recall` anchoring hint, run through handleRecall in this process: the rings live per process, so a spawned CLI never accumulates history.
+// `hippo recall` anchoring hint, run through handleRecall in this process. A command's callers start empty, as a spawned
+// hippo's do, so each case holds one CallerState across its recalls as a process that kept them would.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleRecall } from '../../src/cli/recall.js';
 import { resolveTenantId } from '../../src/server/host-tenant.js';
-import { resetSessionRings, sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
+import { sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
+import { freshCliCallers, heldCliCallers } from '../_helpers/held-cli-callers.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+
+vi.mock('../../src/cli/api-context.js', async (importOriginal) =>
+  (await import('../_helpers/held-cli-callers.js')).holdingCallers(await importOriginal()),
+);
 
 // Four phrasings that hash apart and all rank the one seeded memory first.
 const Q = [
@@ -53,7 +59,8 @@ async function recallJson(query: string, flags: Flags = { 'session-id': 's1' }):
 }
 
 // Reads a ring through its production entry; an empty ring for a surface that never recalled.
-const history = (surface: 'cli' | 'mcp', tenant: string) => snapshotRing(sessionRing({}, surface, tenant, 's1')!);
+const history = (surface: 'cli' | 'mcp', tenant: string) =>
+  snapshotRing(sessionRing({ config: {}, tenantId: tenant, callers: heldCliCallers() }, surface, 's1')!);
 
 describe('hippo recall anchoring hint', () => {
   beforeEach(() => {
@@ -61,7 +68,7 @@ describe('hippo recall anchoring hint', () => {
     // A global store that does not exist keeps the recall on the local store alone.
     vi.stubEnv('HIPPO_HOME', join(root, 'no-global'));
     for (const name of ['HIPPO_TENANT', 'HIPPO_SESSION_ID', 'HIPPO_ANCHORING']) vi.stubEnv(name, '');
-    resetSessionRings('cli');
+    freshCliCallers();
     memoryId = seed('default');
   });
 

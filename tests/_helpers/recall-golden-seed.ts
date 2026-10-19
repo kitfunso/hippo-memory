@@ -5,7 +5,6 @@ import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
@@ -269,7 +268,6 @@ export async function seedTemplates(extendLocal?: (root: string) => void | Promi
   // Rows made by createMemory (the prediction mirror) take evalNow, so a real-clock seed drifts against recall at FAKE_NOW.
   const prior = process.env.HIPPO_FAKE_NOW;
   process.env.HIPPO_FAKE_NOW = FAKE_NOW;
-  _resetAblationCacheForTests();
   try {
     const dir = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
     const goalId = seedLocal(join(dir, 'local'));
@@ -281,7 +279,6 @@ export async function seedTemplates(extendLocal?: (root: string) => void | Promi
   } finally {
     if (prior === undefined) delete process.env.HIPPO_FAKE_NOW;
     else process.env.HIPPO_FAKE_NOW = prior;
-    _resetAblationCacheForTests();
   }
 }
 

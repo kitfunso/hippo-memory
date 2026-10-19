@@ -6,12 +6,9 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { handleRecall } from '../../src/cli/recall.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { estimateTokens } from '../../src/util/token-text.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import {
   CLEARED_ENV,
@@ -30,9 +27,16 @@ import type { CliFlags } from '../../src/cli/flag-values.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { freshCliCallers } from '../_helpers/held-cli-callers.js';
+
+// Each case is one process, so its CLI commands share one CallerState.
+vi.mock('../../src/cli/api-context.js', async (importOriginal) =>
+  (await import('../_helpers/held-cli-callers.js')).holdingCallers(await importOriginal()),
+);
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+  freshCliCallers();
 });
 
 type Surface = 'http' | 'cli';
@@ -198,14 +202,10 @@ describe('what a recall records, HTTP and CLI', () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    _resetAblationCacheForTests();
-    resetSessionRings('cli');
-    __resetSessionRecallHistoryHttp();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetAblationCacheForTests();
   });
 
   it.each(SURFACES)('%s: a recall with no session id', async (surface) => {

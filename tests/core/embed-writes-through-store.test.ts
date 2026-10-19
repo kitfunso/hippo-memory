@@ -4,7 +4,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/embeddings/index-identity.js';
@@ -63,7 +62,7 @@ interface HippoDbIndex {
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
 function on(hippoRoot: string, store: HippoStore): EmbedTarget {
-  return { hippoRoot, store, embeddings: loadConfig(hippoRoot).embeddings };
+  return { hippoRoot, store, embeddings: loadConfig(hippoRoot).embeddings, strength: {} };
 }
 
 function markedFolder(config?: ConfigFile): string {
@@ -123,14 +122,12 @@ afterAll(async () => {
 beforeEach(() => {
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-  _resetAblationCacheForTests();
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  _resetAblationCacheForTests();
 });
 
 describe('embedAll with a store', () => {

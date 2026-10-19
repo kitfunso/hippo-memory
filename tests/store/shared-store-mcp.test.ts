@@ -4,12 +4,10 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor, learn, MCP_LEARN } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { cliStdioHost } from '../../src/cli/api-context.js';
 import { sharedStoreRefusal } from '../../src/mcp/shared-gate.js';
 import { TOOLS } from '../../src/mcp/tools.js';
-import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -74,14 +72,11 @@ function repoWithOneFix(): string {
 beforeEach(() => {
   tmp = makeRoot('shared-mcp', { init: false });
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  _resetProjectIdentityCacheForTests();
-  _resetSharedStoreCacheForTests();
 });
 
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  _resetSharedStoreCacheForTests();
 });
 
 describe('MCP writes on a shared store', () => {
@@ -164,7 +159,7 @@ describe('the MCP tool gate on a shared store', () => {
   });
 
   it('leaves stdio alone: the stdio host is never gated on a shared store', () => {
-    const ctx = cliStdioHost.contextFor(flaggedStore(), 'default');
+    const ctx = cliStdioHost().contextFor(flaggedStore(), 'default');
     for (const { name } of TOOLS) expect(sharedStoreRefusal(name, ctx), name).toBeUndefined();
   });
 });

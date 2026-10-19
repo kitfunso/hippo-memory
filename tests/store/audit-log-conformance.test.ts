@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
@@ -226,7 +225,6 @@ const SERVED: readonly (readonly [Asker, string, number])[] = [
 
 /** Every SERVED request over serve() on a fresh copy of the fixture; a query ending in `cursor=` takes the cursor the reply before it gave. */
 async function runServed(makeStore?: (root: string) => HippoStore): Promise<Reply[]> {
-  _resetSharedStoreCacheForTests();
   const home = mkdtempSync(join(tmpdir(), 'hippo-audit-served-'));
   try {
     const root = join(home, 'store');
@@ -269,7 +267,6 @@ describe('GET /v1/audit over serve()', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetSharedStoreCacheForTests();
   });
 
   it('answers the same on hippo.db and on a store held in memory', async () => {

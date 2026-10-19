@@ -5,7 +5,6 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { retrieve } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -25,14 +24,10 @@ function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
 }
 
-beforeEach(() => {
-  _resetSharedStoreCacheForTests();
-});
 
 afterEach(async () => {
   await handle?.stop();
   handle = undefined;
-  _resetSharedStoreCacheForTests();
   rmSync(home, { recursive: true, force: true });
 });
 

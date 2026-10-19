@@ -7,7 +7,6 @@ import { adminActor, recordTokens } from '../../src/api/index.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { folderFiles } from '../_helpers/cli-stores.js';
@@ -45,7 +44,6 @@ beforeEach(() => {
   // No global store, so the hook reads and writes this one alone.
   vi.stubEnv('HIPPO_HOME', path.join(root, 'no-global'));
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  _resetLogOnceForTests();
 });
 
 afterEach(() => {
@@ -63,6 +61,8 @@ describe('token ledger write failures', () => {
   });
 
   it('an MCP recall still answers and the ledger failure is warned', async () => {
+    // The case above spent the warn; a repeat logs at debug, which this case reads.
+    vi.stubEnv('HIPPO_LOG', 'debug');
     writeEntry(root, createMemory('ledger probe note about deploys'));
     const res = await handleMcpRequest(
       {

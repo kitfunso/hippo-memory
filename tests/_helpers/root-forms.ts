@@ -670,11 +670,11 @@ export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
 }
 
 export function resetStoredParticles(hippoRoot: string): number {
-  return onHandle(hippoRoot, (db) => resetStoredParticlesAt(db));
+  return onHandle(hippoRoot, (db) => resetStoredParticlesAt(db, {}));
 }
 
 export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
-  return onHandle(hippoRoot, (db) => seedStoredParticleAt(db, entry, vector));
+  return onHandle(hippoRoot, (db) => seedStoredParticleAt(db, entry, vector, {}));
 }
 
 export function wmPush(

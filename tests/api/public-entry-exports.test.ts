@@ -107,8 +107,7 @@ describe('package entry re-exports sleep', () => {
   });
 });
 
-/** What an eval or benchmark seeds a store with, reads it back by and scores against; the rest of the entry is reset
- * seams. */
+/** What an eval or benchmark seeds a store with, reads it back by and scores against: the whole entry. */
 const EVAL_KIT = [
   'ambientSecretAdmit',
   'ambientSecretAdmitWire',
@@ -138,9 +137,9 @@ const EVAL_KIT = [
   'writeIndexMirror',
 ];
 
-// The test seams live on their own subpath; a seam leaking back into /server or the root would ship test hooks to production callers.
+// The eval kit lives on its own subpath; a reset seam on /server or the root would ship test hooks to production callers.
 describe('hippo-memory/testing', () => {
-  it('resolves through the package exports map to dist/entry/testing.js and holds every test seam and the eval kit', () => {
+  it('resolves through the package exports map to dist/entry/testing.js and holds the eval kit and no reset seam', () => {
     const script = [
       "const url = import.meta.resolve('hippo-memory/testing');",
       "const m = await import('hippo-memory/testing');",
@@ -149,13 +148,7 @@ describe('hippo-memory/testing', () => {
     ].join('\n');
     const out = importBuiltEntry<{ url: string; names: string[]; onServer: boolean }>(script);
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')));
-    // The seam name rule of scripts/check-test-only-exports.mjs, which also admits a reader or a setter.
-    const seams = out.names.filter((n) => !EVAL_KIT.includes(n));
-    expect(seams.every((n) => /^_[a-z][A-Za-z0-9]*ForTests$/.test(n) || n === '__resetSessionRecallHistoryHttp')).toBe(
-      true,
-    );
-    expect(out.names).toEqual(expect.arrayContaining(EVAL_KIT));
-    expect(out.names).toContain('__resetSessionRecallHistoryHttp');
+    expect(out.names).toEqual([...EVAL_KIT].sort());
     expect(out.onServer).toBe(false);
     expect(existsSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.d.ts'))).toBe(true);
   });
@@ -279,8 +272,7 @@ describe('published runtime exports', () => {
       rankVectorRows rarestFtsQuery rejectionDigest repairKeeps replacesIndex requireGroup
       sqliteStore
       tallyAmbientEntries",
-        "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests _setDigestExistsProbeForTests
-      ambientSecretAdmit ambientSecretAdmitWire
+        "./testing": "ambientSecretAdmit ambientSecretAdmitWire
       batchWriteAndDeleteWire buildIndexFromDb
       calculateStrengthWire createMemoryWire
       embedMemory embedMemoryWire

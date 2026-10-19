@@ -10,7 +10,6 @@ import { retrieve } from '../../src/api/index.js';
 import { physicsSearch } from '../../src/entry/folder-search.js';
 import { embedQueryBy } from '../../src/search/vector.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
-import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -19,6 +18,7 @@ import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { log } from '../../src/util/log.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -81,7 +81,13 @@ afterAll(async () => {
 beforeEach(() => {
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  _resetLogOnceForTests();
+  // A once-only line reaches stderr once per process, so each case keeps its own keys as a fresh process would.
+  const seen = new Set<string>();
+  vi.spyOn(log, 'once').mockImplementation((key, level, message, fields) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    log[level](message, fields);
+  });
 });
 
 afterEach(() => {

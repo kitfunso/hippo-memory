@@ -6,13 +6,10 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { handleRecall } from '../../src/cli/recall.js';
-import { resetSessionRings } from '../../src/api/recall/finish.js';
-import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { retrieveRanking, RecallContractError, type RecallResult } from '../../src/api/index.js';
-import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/core/config.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import {
   CLEARED_ENV,
@@ -34,9 +31,16 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { freshCliCallers, heldCliCallers } from '../_helpers/held-cli-callers.js';
+
+// Each case is one process: its CLI commands and MCP calls share one CallerState, whose rings keep surfaces apart.
+vi.mock('../../src/cli/api-context.js', async (importOriginal) =>
+  (await import('../_helpers/held-cli-callers.js')).holdingCallers(await importOriginal()),
+);
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+  freshCliCallers();
 });
 
 type Surface = 'cli' | 'mcp' | 'http';
@@ -88,6 +92,7 @@ function callTool(root: string, name: string, args: ToolArgs): Promise<McpRespon
       hostAdmin: true,
       store: sqliteStore(root),
       config: loadConfig(root),
+      callers: heldCliCallers(),
     },
   );
 }
@@ -183,15 +188,10 @@ describe('recall surface parity goldens', () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    _resetAblationCacheForTests();
-    resetSessionRings('cli');
-    _resetSessionRecallHistoryMcpForTests();
-    __resetSessionRecallHistoryHttp();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    _resetAblationCacheForTests();
   });
 
   // D1-D5, D7, D9, D10: output, order, scores and every row one plain recall writes, local and global store.
@@ -443,7 +443,6 @@ describe('shared store recall, MCP vs HTTP', () => {
     const home = makeRoot('parity-shared', { init: false });
     const root = join(home, 'store');
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    _resetSharedStoreCacheForTests();
     let handle: ServerHandle | undefined;
     try {
       initStore(root);
@@ -490,7 +489,6 @@ describe('shared store recall, MCP vs HTTP', () => {
     } finally {
       await handle?.stop();
       vi.unstubAllEnvs();
-      _resetSharedStoreCacheForTests();
     }
   });
 });

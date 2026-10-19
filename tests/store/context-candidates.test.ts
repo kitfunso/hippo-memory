@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { calculateStrength, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { _resetAblationCacheForTests, strengthAblation } from '../../src/core/ablation.js';
+import { strengthAblation } from '../../src/core/ablation.js';
 import { ID_CHUNK } from '../../src/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadContextCandidates, tallySources, loadTextsHoldingWords, writeEntry } from '../_helpers/root-forms.js';
@@ -114,12 +114,10 @@ describe('loadContextCandidates reward factor', () => {
 
   beforeEach(() => {
     root = makeStore('ctx-reward').root;
-    _resetAblationCacheForTests();
   });
 
   afterEach(() => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
-    _resetAblationCacheForTests();
     rmSync(join(root, '..'), { recursive: true, force: true });
   });
 
@@ -148,7 +146,6 @@ describe('loadContextCandidates reward factor', () => {
 
   it('drops the reward factor from the rank when outcome-slow is ablated', async () => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
-    _resetAblationCacheForTests();
     const { id, strongest } = await survivor([
       row('x-rewarded', 20, { outcomePositive: 3 }),
       row('z-plain', 20, { halfLifeDays: 12 }),

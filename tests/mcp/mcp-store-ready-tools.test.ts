@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/core/config.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../src/util/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { TOOLS } from '../../src/mcp/tools.js';
@@ -114,7 +114,6 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_HOME', join(root, 'global'));
-    _resetSharedStoreCacheForTests();
     fixture = seedTwoTenants();
   });
 
@@ -122,7 +121,6 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     await handle?.stop();
     handle = undefined;
     vi.unstubAllEnvs();
-    _resetSharedStoreCacheForTests();
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 

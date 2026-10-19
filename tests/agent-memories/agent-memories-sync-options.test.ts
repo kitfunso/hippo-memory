@@ -57,7 +57,7 @@ const sync = (extra: Partial<SyncOptions> = {}): ImportReport =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport,
+    agentImport: sqliteAgentImport({}),
     machine: w.machine,
     ...extra,
   });
@@ -75,7 +75,7 @@ describe('agent memory sync: options, time and reporting', () => {
           importForStore(w.local, {
             configAt: loadConfig,
             tenantId: 'default',
-            agentImport: sqliteAgentImport,
+            agentImport: sqliteAgentImport({}),
             machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: off }),
           }),
         ).imported,
@@ -85,7 +85,7 @@ describe('agent memory sync: options, time and reporting', () => {
     const report = importForStore(w.local, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport,
+      agentImport: sqliteAgentImport({}),
       machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }),
     });
     expect([claude(report).imported, toolTally(report, 'codex').imported]).toEqual([1, 1]);
@@ -107,7 +107,7 @@ describe('agent memory sync: options, time and reporting', () => {
         importForStore(w.global, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport,
+          agentImport: sqliteAgentImport({}),
           machine: w.machine,
         }),
       ).imported,
@@ -169,7 +169,7 @@ describe('agent memory sync: options, time and reporting', () => {
     importForStore(w.local, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport,
+      agentImport: sqliteAgentImport({}),
       machine: altMachine,
     });
     note(dir, 'deploy.md', A);
@@ -180,7 +180,7 @@ describe('agent memory sync: options, time and reporting', () => {
       importForStore(w.local, {
         configAt: loadConfig,
         tenantId: 'default',
-        agentImport: sqliteAgentImport,
+        agentImport: sqliteAgentImport({}),
         machine: altMachine,
         dryRun: true,
       }).tools.find((t) => t.tool === 'claude-code')?.unlisted,

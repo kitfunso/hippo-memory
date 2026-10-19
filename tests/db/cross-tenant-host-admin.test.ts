@@ -9,12 +9,28 @@ import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { adminActor } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
-import { autoSleepInFlight } from '../../src/mcp/session-state.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { loadConfig } from '../../src/core/config.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
+
+// The stores each served auto-sleep was handed, recorded as the server's sleep queue is asked to consolidate one.
+const autoSleeps = vi.hoisted((): string[] => []);
+vi.mock('../../src/server/sleep-offload.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../src/server/sleep-offload.js')>();
+  const createSleepQueue: typeof real.createSleepQueue = () => {
+    const queue = real.createSleepQueue();
+    return {
+      ...queue,
+      consolidate: (hippoRoot) => {
+        autoSleeps.push(hippoRoot);
+        return queue.consolidate(hippoRoot);
+      },
+    };
+  };
+  return { ...real, createSleepQueue };
+});
 
 let home: string;
 let globalHome: string;
@@ -68,6 +84,7 @@ beforeEach(async () => {
   vi.stubEnv('HIPPO_HOME', globalHome);
   vi.stubEnv('HIPPO_TENANT', '');
   vi.stubEnv('ANTHROPIC_API_KEY', '');
+  autoSleeps.length = 0;
   handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
 });
 
@@ -169,8 +186,8 @@ describe('MCP auto-sleep stays with the host tenant', () => {
       key('acme', 'member'),
     );
     expect(res.error).toBeUndefined();
-    // hippo_remember decides before it answers, so a run it started is in flight or has its row by now.
-    expect(autoSleepInFlight.size).toBe(0);
+    // hippo_remember decides before it answers, so a sleep it started has been handed to the queue by now.
+    expect(autoSleeps).toEqual([]);
     expect(sleepRuns()).toBe(0);
 
     // The host tenant's write on the same server does start one, so the zeros above come from the tenant gate.
@@ -179,7 +196,7 @@ describe('MCP auto-sleep stays with the host tenant', () => {
       { text: 'the host deploys on thursdays after the freeze' },
       key('default', 'member'),
     );
-    await vi.waitFor(() => expect(autoSleepInFlight.size).toBe(0), { timeout: 20_000 });
-    expect(sleepRuns()).toBe(1);
+    expect(autoSleeps).toEqual([home]);
+    await vi.waitFor(() => expect(sleepRuns()).toBe(1), { timeout: 20_000 });
   });
 });
