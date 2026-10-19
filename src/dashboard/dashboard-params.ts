@@ -1,14 +1,12 @@
 // One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an unchecked id.
 
-import { LAYERS, type Chip } from './dashboard-snapshot.js';
+import { BadRequestError } from '../core/api-errors.js';
+import { LAYERS, type Chip } from '../api/dashboard/snapshot.js';
+import { SORT_KEYS, type MemoryQuery } from '../api/dashboard/queries.js';
 import { isJsonObject, isJsonString, tryParseJson } from '../util/json.js';
 
-/** A request field failed validation; the router answers 400 with this plain message. */
-export class ParamError extends Error {}
-
-export const SORT_KEYS = ['content', 'layer', 'strength', 'retrievals', 'last', 'age', 'confidence', 'scope'] as const;
-export type SortKey = (typeof SORT_KEYS)[number];
-export type SortDir = 'asc' | 'desc';
+/** A request field failed validation; the server answers 400 with this plain message. */
+export class ParamError extends BadRequestError {}
 
 const CHIPS: readonly Chip[] = ['all', 'risk', 'pinned', 'conflict'];
 const MEMORY_ID = /^[A-Za-z0-9_-]+$/;
@@ -17,26 +15,6 @@ export const LIMIT_DEFAULT = 100;
 export const LIMIT_MAX = 500;
 export const SEARCH_MIN = 2;
 export const SEARCH_MAX = 200;
-
-export interface Brush {
-  amin: number;
-  amax: number;
-  smin: number;
-  smax: number;
-}
-
-export interface MemoryQuery {
-  offset: number;
-  limit: number;
-  sort: SortKey;
-  dir: SortDir;
-  chip: Chip;
-  /** Layer indices in wire order, ascending, no duplicates. */
-  layers: number[];
-  brush: Brush;
-  /** Lowercased search text, or null when none or shorter than the minimum. */
-  q: string | null;
-}
 
 function integerParam(params: URLSearchParams, name: string, fallback: number, min: number, max: number): number {
   const raw = params.get(name);

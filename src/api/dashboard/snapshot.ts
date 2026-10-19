@@ -9,16 +9,16 @@ import {
   type ConfidenceInputs,
   type MemoryEntry,
   type StrengthInputs,
-} from '../core/memory.js';
-import { AT_RISK_BELOW, STRONG_FROM } from '../core/strength-bands.js';
-import { isQuarantineScope } from '../trust/quarantine.js';
+} from '../../core/memory.js';
+import { AT_RISK_BELOW, STRONG_FROM } from '../../core/strength-bands.js';
+import { isQuarantineScope } from '../../trust/quarantine.js';
 import type {
   ConflictPair,
   DashboardReads,
   DashboardRow,
   DashboardText,
   ExcludedCounts,
-} from '../store/port/dashboard-reads.js';
+} from '../../store/port/dashboard-reads.js';
 import type {
   Band,
   ChipCounts,
@@ -28,9 +28,9 @@ import type {
   ProjectSummary,
   ScatterGrid,
   ScatterPoints,
-} from './dashboard-types.js';
-import { DAY_MS } from '../util/time.js';
-import { round1 } from '../util/format.js';
+} from './types.js';
+import { DAY_MS } from '../../util/time.js';
+import { round1 } from '../../util/format.js';
 
 export { DAY_MS };
 export const LAYERS: readonly Layer[] = ['buffer', 'episodic', 'semantic', 'trace'];
@@ -164,7 +164,8 @@ export interface ProjectAgg {
 
 export type Chip = 'all' | 'risk' | 'pinned' | 'conflict';
 
-/** A filtered memory set over one project: indices in sort order, chip counts, decay buckets, and per-chip lists built on demand. */
+/** A filtered memory set over one project: indices in sort order, chip counts, decay buckets, and per-chip lists built
+ * on demand. */
 export interface FilteredSet {
   idx: Int32Array;
   counts: ChipCounts;
@@ -435,7 +436,8 @@ function cacheStillServes(
 }
 
 export interface SnapshotService {
-  /** The cached snapshot, or a new build when the cache key changed, the coalescing window allows it, or `fresh` is set. */
+  /** The cached snapshot, or a new build when the cache key changed, the coalescing window allows it, or `fresh` is
+   * set. */
   get(tenantId: string, fresh?: boolean): Snapshot;
   /** Drops the cache after a dashboard write commits, so the next read rebuilds. */
   invalidate(): void;
@@ -451,7 +453,8 @@ let highestIssuedId = 0;
 
 class SnapshotCacheService implements SnapshotService {
   private cached: CachedSnapshot | null = null;
-  // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower one.
+  // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a
+  // lower one.
   private lastId = Math.max(Date.now(), highestIssuedId);
   private last: Snapshot | null = null;
 
