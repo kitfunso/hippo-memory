@@ -1,12 +1,16 @@
 import type { ScopeActor } from '../../core/recall-scope.js';
 
+/** How many ids one graph read takes at a time: results come back in this order per batch, and a `limit` holds per
+ * batch, so every implementation must use the same size. */
+export const GRAPH_ID_BATCH = 400;
+
 /** What one graph view reads. `limit` is a positive integer capping each read on its own; newest means createdAt, then
  * id, both descending. A row shows when it cites no memory, or its memory is in the tenant with a null scope or one
  * `canReadScope(reader, scope)` admits; no `reader` shows every row. */
 export interface GraphViewQuery {
   /** Unset reads the whole graph. Set, the start entities are the first `limit` of exactly this name (lowest id first)
-   * that show; none left answers empty. Per 400 start ids, the newest `limit` relations with an end among them join in,
-   * each adding its other end to the ids held, until `limit` ids are held. */
+   * that show; none left answers empty. Per GRAPH_ID_BATCH start ids, the newest `limit` relations with an end among
+   * them join in, each adding its other end to the ids held, until `limit` ids are held. */
   readonly entity?: string;
   readonly limit: number;
   readonly reader?: ScopeActor;
@@ -24,8 +28,8 @@ export interface GraphRows {
 /** The rows behind GET /v1/graph. */
 export interface GraphReads {
   /** Every read from one snapshot, then rows that do not show are dropped. Whole graph: the tenant's newest `limit`
-   * entities and relations. From a name: the entities of the ids held (id ascending, 400 at a time) and the newest
-   * `limit` relations with both ends among those ids. */
+   * entities and relations. From a name: the entities of the ids held (id ascending, GRAPH_ID_BATCH at a time) and the
+   * newest `limit` relations with both ends among those ids. */
   graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
   entitiesForMemories(tenantId: string, memoryIds: readonly string[]): Promise<Entity[]>;
   entitiesByIds(tenantId: string, ids: readonly number[]): Promise<Entity[]>;

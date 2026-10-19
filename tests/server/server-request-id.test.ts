@@ -111,7 +111,7 @@ describe('X-Request-Id', () => {
       // A bad value makes the config reader warn from inside the request.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
       await send('/v1/context?q=anything', { 'x-request-id': 'req-deep-1' });
-      const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"pilot"'));
+      const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"pilot.holdoutRateBp"'));
       expect(warned.join('')).toMatch(
         /^\[hippo\] warn: .* ts=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z requestId=req-deep-1\n/,
       );

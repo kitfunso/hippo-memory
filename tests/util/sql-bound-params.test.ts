@@ -1,20 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { ID_CHUNK } from '../../src/util/chunked.js';
-import { idsPerStatement, rowsPerStatement } from '../../src/util/sql.js';
+import { GRAPH_ID_BATCH } from '../../src/store/port/graph-reads.js';
+import { rowsPerStatement } from '../../src/util/sql.js';
+
+// One-mark rows fill a statement exactly, so this is the bound-parameter limit itself.
+const LIMIT = rowsPerStatement(1);
 
 describe('the shared bound-parameter limit', () => {
-  it('sizes a list whose ids bind more than once, so the statement fills the limit and never passes it', () => {
-    const limit = idsPerStatement(1, 0);
-    const ids = idsPerStatement(2, 2);
-    expect(ids * 2 + 2).toBeLessThanOrEqual(limit);
-    expect((ids + 1) * 2 + 2).toBeGreaterThan(limit);
+  it('keeps the plain id chunk far under the limit, even with each id bound twice', () => {
+    expect(ID_CHUNK * 2 + 2).toBeLessThan(LIMIT);
   });
 
-  it('agrees with the row count a VALUES statement of the same width gets', () => {
-    expect(idsPerStatement(3, 0)).toBe(rowsPerStatement(3));
-  });
-
-  it('keeps the plain id chunk far under the limit', () => {
-    expect(ID_CHUNK).toBeLessThan(idsPerStatement(2, 2));
+  it('keeps the graph read batch, which a neighbour read binds twice, under the limit', () => {
+    expect(GRAPH_ID_BATCH * 2 + 2).toBeLessThan(LIMIT);
   });
 });

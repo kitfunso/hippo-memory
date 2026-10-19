@@ -12,9 +12,17 @@ import {
   ENTITY_COLS,
   RELATION_COLS,
 } from './graph-rows.js';
-import type { EntityType, Entity, Relation, StoredEntity, StoredGraph, StoredRelation } from '../port/graph-reads.js';
+import {
+  GRAPH_ID_BATCH,
+  type EntityType,
+  type Entity,
+  type Relation,
+  type StoredEntity,
+  type StoredGraph,
+  type StoredRelation,
+} from '../port/graph-reads.js';
 import { chunked } from '../../util/chunked.js';
-import { idsPerStatement, placeholders } from '../../util/sql.js';
+import { placeholders } from '../../util/sql.js';
 import type { GraphRows, GraphReads, Sync } from '../port.js';
 import { canReadScope } from '../../core/recall-scope.js';
 import type { OnHandle } from './open.js';
@@ -108,7 +116,7 @@ function loadEntitiesByIdsAt(db: DatabaseSyncLike, tenantId: string, ids: readon
   assertTenantId('loadEntitiesByIds', tenantId);
   if (ids.length === 0) return [];
   const out: Entity[] = [];
-  for (const slice of chunked(ids)) {
+  for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
     // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
     const rows = db
@@ -140,8 +148,7 @@ function loadNeighborRelationsAt(
   // `limit` applies PER CHUNK, so a frontier over one chunk of ids could return limit*chunks rows before the dedup
   // below; harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
   const byId = new Map<number, Relation>();
-  // Each id binds twice, beside the tenant and the limit.
-  for (const slice of chunked(entityIds, idsPerStatement(2, 2))) {
+  for (const slice of chunked(entityIds, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
     // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
     const rows = db
@@ -191,7 +198,7 @@ function loadEntitiesByMemoryIdAt(db: DatabaseSyncLike, tenantId: string, memory
   assertTenantId('loadEntitiesByMemoryId', tenantId);
   if (memoryIds.length === 0) return [];
   const out: Entity[] = [];
-  for (const slice of chunked(memoryIds)) {
+  for (const slice of chunked(memoryIds, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
     // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
     // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
@@ -275,7 +282,7 @@ function readableOnly<T extends { memoryId: string | null }>(
   if (!canRead) return items;
   const ids = [...new Set(items.flatMap((i) => (i.memoryId === null ? [] : [i.memoryId])))];
   const readable = new Set<string>();
-  for (const slice of chunked(ids)) {
+  for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
     // SAFETY: rows' shape matches the id and scope columns named in the SELECT.
     const rows = db
       .prepare(`SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(slice.length)})`)
