@@ -37,7 +37,7 @@ function proxyHeaderOf(req: IncomingMessage): string | undefined {
 
 /** A page in a browser on this machine: another site's request,
  * or a hostile name resolved to loopback (DNS rebinding). */
-function isForeignPage(req: IncomingMessage): boolean {
+export function isForeignPage(req: IncomingMessage): boolean {
   const host = req.headers.host;
   return (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req);
 }

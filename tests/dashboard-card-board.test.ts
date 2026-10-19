@@ -6,9 +6,8 @@ import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
-import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { serveDashboard } from '../src/dashboard/dashboard.js';
+import { serveDashboard } from '../src/server/dashboard-listener.js';
+import type { ServerHandle } from '../src/server/types.js';
 import { resolveTenantId } from '../src/server/boot.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
@@ -66,17 +65,8 @@ function dashboardRequest(
   });
 }
 
-function listenAndGetPort(server: Server): Promise<number> {
-  return new Promise((resolve) => {
-    const onListening = () => {
-      const addr = server.address();
-      // SAFETY: serveDashboard binds a TCP port, not a pipe, so address()
-      // is AddressInfo whenever the server is listening.
-      resolve((addr as AddressInfo).port);
-    };
-    if (server.listening) onListening();
-    else server.once('listening', onListening);
-  });
+function startFor(hippoRoot: string, tenantId: string): Promise<ServerHandle> {
+  return serveDashboard({ hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId });
 }
 
 function rawHttp10Get(port: number, path: string): Promise<string> {
@@ -96,21 +86,19 @@ function rawHttp10Get(port: number, path: string): Promise<string> {
 describe('dashboard entry', () => {
   let home: string;
   let hippoRoot: string;
-  let server: Server | undefined;
+  let server: ServerHandle | undefined;
   let port: number;
 
   beforeEach(async () => {
     ({ base: home, root: hippoRoot } = makeStore('dash-entry'));
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: 'default' });
-    port = await listenAndGetPort(server);
+    server = await startFor(hippoRoot, 'default');
+    port = server.port;
   });
 
   afterEach(async () => {
-    if (server) {
-      await new Promise<void>((resolve, reject) => server!.close((err) => (err ? reject(err) : resolve())));
-      server = undefined;
-    }
+    await server?.stop();
+    server = undefined;
   });
 
   it('E1: a loopback Host gets 200 with no ACAO, on API and static paths', async () => {
@@ -122,18 +110,17 @@ describe('dashboard entry', () => {
     expect(root.acaoPresent).toBe(false);
   });
 
-  it('E2: a foreign Host gets 403 Forbidden, on API, static and pin POST paths', async () => {
-    const stats = await dashboardRequest(port, '/api/overview', `evil.example:${port}`);
-    expect(stats.status).toBe(403);
-    expect(stats.body).toBe('Forbidden');
-
-    const root = await dashboardRequest(port, '/', `evil.example:${port}`);
-    expect(root.status).toBe(403);
-    expect(root.body).toBe('Forbidden');
-
-    const pin = await dashboardRequest(port, '/api/memory/mem_x/pin', `evil.example:${port}`, 'POST');
-    expect(pin.status).toBe(403);
-    expect(pin.body).toBe('Forbidden');
+  it('E2: a foreign Host gets 403, on API, static, pin POST and unrouted paths', async () => {
+    const refused = '{"error":"cross-site or non-local request refused"}';
+    for (const [path, method] of [
+      ['/api/overview', 'GET'],
+      ['/', 'GET'],
+      ['/api/memory/mem_x/pin', 'POST'],
+      ['/api/nope', 'GET'],
+    ]) {
+      const reply = await dashboardRequest(port, path!, `evil.example:${port}`, method);
+      expect([reply.status, reply.body]).toEqual([403, refused]);
+    }
   });
 
   it('E2b: a wrong POST from another site is 403 even with a loopback Host', async () => {
@@ -166,19 +153,13 @@ describe('dashboard entry', () => {
     expect(after.status).toBe(200);
   });
 
-  it('E5: GET // answers 500 and the server keeps serving', async () => {
-    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
+  it('E5: GET // is the 400 any request target the URL parser refuses gets, and the server keeps serving', async () => {
     const broken = await dashboardRequest(port, '//', `127.0.0.1:${port}`);
-    expect(broken.status).toBe(500);
-    expect(broken.body).toBe('{"error":"Internal error"}');
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('dashboard request failed'));
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/dashboard request failed.* stack=\S*Error.* at /));
+    expect(broken.status).toBe(400);
+    expect(JSON.parse(broken.body)).toEqual({ error: expect.any(String) });
 
     const after = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(after.status).toBe(200);
-
-    errorSpy.mockRestore();
   });
 
   it('E6: an HTTP/1.0 request with no Host header is routed as today', async () => {
@@ -191,7 +172,7 @@ describe('card routes', () => {
   let home: string;
   let cwd: string;
   let hippoRoot: string;
-  let server: Server;
+  let server: ServerHandle;
   let port: number;
   let tenant: string;
   let P: string;
@@ -247,24 +228,23 @@ describe('card routes', () => {
     showPJson = await runCliOut(['card', 'show', P, '--json'], { cwd, env: cliEnv });
     showCJson = await runCliOut(['card', 'show', C, '--json'], { cwd, env: cliEnv });
 
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: tenant });
-    port = await listenAndGetPort(server);
+    server = await startFor(hippoRoot, tenant);
+    port = server.port;
   }, 30_000);
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    await server.stop();
   });
 
   const host = () => `127.0.0.1:${port}`;
 
   // A dashboard serves the one tenant its CLI root resolved, so each tenant here gets its own server.
   async function onTenant(tenantId: string, use: (at: number, atHost: string) => Promise<void>): Promise<void> {
-    const other = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId });
+    const other = await startFor(hippoRoot, tenantId);
     try {
-      const at = await listenAndGetPort(other);
-      await use(at, `127.0.0.1:${at}`);
+      await use(other.port, `127.0.0.1:${other.port}`);
     } finally {
-      await new Promise<void>((resolve, reject) => other.close((err) => (err ? reject(err) : resolve())));
+      await other.stop();
     }
   }
 
@@ -341,12 +321,13 @@ describe('card routes', () => {
     expect(show.acaoPresent).toBe(false);
   });
 
-  it('R7: a broken tenant answers 500 and the server keeps serving', async () => {
+  it('R7: a broken tenant answers 500 with the request id, logs the stack, and the server keeps serving', async () => {
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     await onTenant('sess_x', async (at, atHost) => {
       const broken = await dashboardRequest(at, '/api/cards', atHost);
       expect(broken.status).toBe(500);
-      expect(broken.body).toBe('{"error":"Internal error"}');
+      expect(JSON.parse(broken.body)).toEqual({ error: 'internal server error', requestId: expect.any(String) });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/GET \/api\/cards failed.* stack=\S*Error.* at /));
       expect((await dashboardRequest(at, '/api/cards', atHost)).status).toBe(500);
     });
     const after = await dashboardRequest(port, '/api/cards', host());

@@ -490,7 +490,7 @@ export const V1_ROUTES: readonly Route[] = [
 ];
 
 /** The handler bound to this path's params, or null when the path differs. */
-function bindPath<R>(route: RouteEndpoint<R>, path: string): ((r: R) => Promise<void>) | null {
+export function bindPath<R>(route: RouteEndpoint<R>, path: string): ((r: R) => Promise<void>) | null {
   if ('path' in route) return path === route.path ? route.handler : null;
   if ('pattern' in route) {
     const params = matchPath(route.pattern, path);
@@ -536,7 +536,7 @@ async function passAuthGate(
 
 /** The route as the access line names it; a regex route reads
  * as its pattern would, so no line carries a caller's id. */
-export function routeLabel(route: Route): string {
+export function routeLabel(route: RouteEndpoint<never>): string {
   if ('path' in route) return route.path;
   if ('pattern' in route) return route.pattern;
   return route.regex.source

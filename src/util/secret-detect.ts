@@ -4,6 +4,7 @@
  * the global store or injected as ambient context outside their project; explicit recall is unaffected. Leaf module: no
  * imports from store/api/shared.
  */
+import { tryParseJson } from './json.js';
 
 /** Result of scanning one memory. `reason` names the tag or pattern that fired. */
 export interface SecretDetection {
@@ -133,12 +134,8 @@ export const DLQ_REDACTED_NOTE = 'secret-shaped text redacted, signature dropped
  * byte-identical so its signature still verifies.
  */
 export function redactPayload(raw: string): string {
-  try {
-    JSON.parse(raw);
-  } catch {
-    // Not JSON, so there is no structure to keep valid; redact the raw text.
-    return redactSecretsStrict(raw);
-  }
+  // Not JSON, so there is no structure to keep valid; redact the raw text.
+  if (tryParseJson(raw) === undefined) return redactSecretsStrict(raw);
   return raw.replace(JSON_STRING, (literal) => {
     const text: string = JSON.parse(literal);
     const kept = redactSecretsStrict(text);

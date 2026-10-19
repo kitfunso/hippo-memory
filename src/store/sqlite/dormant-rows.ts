@@ -2,11 +2,13 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import { fromWire, toWire, type MemoryWire } from '../../core/memory-wire.js';
+import { isObjectLike, isStringValue } from '../../core/capture-contract.js';
+import type { JsonValue } from '../../util/json.js';
 import type { SqlFragment } from './rule-sql.js';
 import { chunked } from '../../util/chunked.js';
 import { escapeLike } from '../../util/escape.js';
 import { placeholders } from '../../util/sql.js';
-import { warnDamagedColumn } from '../../util/stored-json.js';
+import { parseStoredJson, warnDamagedColumn } from '../../util/stored-json.js';
 import { cachedStatement } from './statement-cache.js';
 import type { DormantSnapshot } from '../port/agent-import.js';
 import type { DormantMove } from '../port/consolidation.js';
@@ -65,20 +67,27 @@ function toCurrentEntry(snapshot: StoredSnapshot): MemoryEntry {
 /** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it (edited by hand, or
  * truncated). */
 function parseSnapshot(row: DormantRow): MemoryEntry | null {
-  try {
-    // SAFETY: entry_json came from JSON.stringify of a MemoryWire, or of a 1.x entry; the id, tenant and content checks
-    // below reject a row edited out of shape.
-    const entry = toCurrentEntry(JSON.parse(row.entry_json) as StoredSnapshot);
-    if (entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
-      warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'wrong shape');
-      return null;
-    }
-    return entry;
-  } catch {
-    // A row that will not parse is out of shape, so it is not restorable.
-    warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'not valid JSON');
+  const site = { table: 'dormant_memories', id: row.id, column: 'entry_json' };
+  // A row that will not parse, or parses to another shape or identity, is not restorable.
+  const parsed = parseStoredJson(site, row.entry_json);
+  if (parsed === undefined) return null;
+  const entry = isStoredSnapshot(parsed) ? toCurrentEntry(parsed) : undefined;
+  if (entry === undefined || entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
+    warnDamagedColumn(site, 'wrong shape');
     return null;
   }
+  return entry;
+}
+
+/** The part of a parsed entry_json that toCurrentEntry reads without a guard; the row's tenant is compared after. */
+function isStoredSnapshot(value: JsonValue): value is JsonValue & StoredSnapshot {
+  return (
+    isObjectLike(value) &&
+    'id' in value &&
+    isStringValue(value.id) &&
+    'content' in value &&
+    isStringValue(value.content)
+  );
 }
 
 function rowToDormantMemory(row: DormantRow): DormantMemory {

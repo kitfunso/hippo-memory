@@ -24,6 +24,7 @@ import {
   SLACK_DLQ,
   upsertSlackWorkspaceAt,
 } from './connectors/slack.js';
+import { claimDeliveryAt, releaseDeliveryAt } from './connectors/replay.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import type {
@@ -80,6 +81,8 @@ const queueOf = (connector: DeadLetterConnector) => (connector === 'slack' ? SLA
 type DeliveryMethods =
   | 'eventRecord'
   | 'markEventSeen'
+  | 'claimDelivery'
+  | 'releaseDelivery'
   | 'deletionTarget'
   | 'archiveDeletedArtifact'
   | 'slackTeamRoute'
@@ -123,6 +126,8 @@ const connectorCursorsAt: Bodies<
 const deliveriesAt: Bodies<Pick<ConnectorEvents, Exclude<DeliveryMethods, 'parkDeadLetter'>>> = {
   eventRecord: eventRecordAt,
   markEventSeen: markEventSeenAt,
+  claimDelivery: claimDeliveryAt,
+  releaseDelivery: releaseDeliveryAt,
   deletionTarget: deletionTargetAt,
   archiveDeletedArtifact: archiveArtifactAt,
   slackTeamRoute: slackTeamRouteAt,

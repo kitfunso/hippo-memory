@@ -16,7 +16,7 @@ import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
 import { errorMessage, log } from './util/log.js';
-import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
+import { tryReadJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
 import { DAY_MS } from './util/time.js';
 import { plural } from './util/format.js';
 
@@ -74,13 +74,9 @@ function versionAtLeast(actual: string, min: string): boolean {
   return true;
 }
 
+// A missing or corrupt file is the finding doctor reports, so null is the answer.
 function readJson(file: string): JsonValue | null {
-  try {
-    return readJsonFile(file);
-  } catch {
-    // A missing or corrupt file is the finding doctor reports, so null is the answer.
-    return null;
-  }
+  return tryReadJsonFile(file) ?? null;
 }
 
 // Trust lives in Codex's own config.toml rows; doctor reads only the hooks file and reminds.

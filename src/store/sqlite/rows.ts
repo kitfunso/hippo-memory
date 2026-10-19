@@ -7,9 +7,9 @@ import {
   type ConfidenceLevel,
   type MemoryKind,
 } from '../../core/memory.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
-import { type JsonValue, isJsonObject } from '../../util/json.js';
-import { warnDamagedColumn, type StoredJsonSite } from '../../util/stored-json.js';
+import { log } from '../../util/log.js';
+import { type JsonValue, tryParseJson } from '../../util/json.js';
+import { parseStoredObject, warnDamagedColumn, type StoredJsonSite } from '../../util/stored-json.js';
 import type { SessionEvent, TaskSnapshot } from '../port/sessions.js';
 import type { MemoryConflict } from '../port/conflicts.js';
 
@@ -294,14 +294,13 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
  * the line stays at debug. */
 export function parseJsonArray(raw: string | null | undefined, site?: StoredJsonSite): string[] {
   if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
-  } catch (err) {
+  const parsed = tryParseJson(raw);
+  if (parsed === undefined) {
     if (site) warnDamagedColumn(site, 'not valid JSON');
-    else log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`, errorFields(err));
+    else log.debug('store: corrupt JSON array column read as empty');
     return [];
   }
+  return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
 }
 
 /** Strict parse for `last_trace_id`: Number(raw) turns '' or garbage into 0/NaN (a masked FK violation); require a
@@ -315,16 +314,7 @@ export function parseLastTraceId(raw: string | null | undefined): string | null 
 
 function parseJsonObject(raw: string | null | undefined, site: StoredJsonSite): Record<string, JsonValue> {
   if (!raw) return {};
-  try {
-    const parsed: JsonValue = JSON.parse(raw);
-    if (isJsonObject(parsed)) {
-      return parsed;
-    }
-    return {};
-  } catch {
-    warnDamagedColumn(site, 'not valid JSON');
-    return {};
-  }
+  return parseStoredObject(site, raw) ?? {};
 }
 
 export function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {

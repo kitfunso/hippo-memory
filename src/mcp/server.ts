@@ -15,16 +15,12 @@ import { startStdioLoop } from './stdio.js';
 // elsewhere (the HTTP/SSE wiring) must not
 // start stdio. Fallback: HIPPO_MCP_STDIO=1 or argv1 ending in /mcp/server.js also starts it.
 const isMainModule = (() => {
-  try {
-    const argv1 = process.argv[1] ?? '';
-    if (argv1.endsWith('mcp/server.js') || argv1.endsWith('mcp\\server.js')) return true;
-    if (envMcpStdio()) return true;
-    // ESM main-module check
-    const mainUrl = `file://${argv1.replace(/\\/g, '/')}`;
-    return import.meta.url === mainUrl || import.meta.url === `file:///${argv1.replace(/\\/g, '/')}`;
-  } catch {
-    return false; // an unreadable argv means this file was imported, not run; never start the stdio loop then
-  }
+  const argv1 = process.argv[1] ?? '';
+  if (argv1.endsWith('mcp/server.js') || argv1.endsWith('mcp\\server.js')) return true;
+  if (envMcpStdio()) return true;
+  // ESM main-module check
+  const mainUrl = `file://${argv1.replace(/\\/g, '/')}`;
+  return import.meta.url === mainUrl || import.meta.url === `file:///${argv1.replace(/\\/g, '/')}`;
 })();
 
 if (isMainModule) {

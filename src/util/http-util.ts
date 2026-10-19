@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { tryParseUrl } from './net.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
 
@@ -151,11 +152,7 @@ export function isCrossSite(req: IncomingMessage): boolean {
 
 // Scheme is ignored so an https page behind a TLS-terminating proxy still matches its own Host.
 function originHost(origin: string): string | null {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return null;
-  }
+  return tryParseUrl(origin)?.host ?? null;
 }
 
 /** Per-request values a connector webhook receiver reads; ServeOpts and the /v1 RouteRequest both satisfy it. */

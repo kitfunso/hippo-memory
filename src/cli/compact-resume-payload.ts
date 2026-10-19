@@ -1,7 +1,7 @@
 // The payload gate for `hippo compact-resume`.
 
 import { isSubagentPayload } from '../util/hook-payload.js';
-import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+import { isJsonObject, isJsonString, tryParseJson } from '../util/json.js';
 
 export interface CompactResumePayload {
   suppressOutput: boolean;
@@ -25,13 +25,8 @@ export function readCompactResumePayload(stdinText: string | undefined, stdinTim
   let boundary = !nonEmptyStdin && !stdinTimedOut;
 
   if (nonEmptyStdin) {
-    let payload: JsonValue = null;
-    try {
-      payload = JSON.parse(stdinText!.trim());
-    } catch {
-      // Malformed JSON is handled as a null payload by the fail-closed check below.
-      payload = null;
-    }
+    // Malformed JSON is handled as a missing payload by the fail-closed check below.
+    const payload = tryParseJson(stdinText!.trim());
     if (!isJsonObject(payload)) {
       // Fail closed on malformed non-empty stdin; only a TTY/no-stdin manual run, which never reaches here, prints.
       suppressOutput = true;

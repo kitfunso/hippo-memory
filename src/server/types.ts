@@ -125,9 +125,9 @@ export interface AuthedRouteRequest extends RouteRequest {
  * reason, or neither for a route that runs on any store; never both. */
 type StoreStatus = { storeReady?: OptionalGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
 
-/** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, or nothing, for
- * a route whose handler checks the sender's signature itself. */
-export type RouteAuth = 'caller' | 'admin' | 'host-admin-local' | 'webhook-signature';
+/** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for
+ * a route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
+export type RouteAuth = 'caller' | 'admin' | 'host-admin-local' | 'webhook-signature' | 'dashboard-session';
 
 export type RouteEndpoint<R> =
   | { path: string; handler: (r: R) => Promise<void> }
@@ -138,6 +138,6 @@ export type RouteEndpoint<R> =
  * store it runs only with its `storeReady` group; its SQLite work runs on a worker thread when the store has one. */
 export type Route = { method: string } & StoreStatus &
   (
-    | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest>)
+    | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & RouteEndpoint<AuthedRouteRequest>)
     | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
   );

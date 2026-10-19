@@ -1,6 +1,6 @@
 // What turns a compaction's summary into text the store keeps; the SQL is src/store/compactions-record.ts.
 import * as fs from 'fs';
-import { isStringValue } from '../core/capture-contract.js';
+import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems } from '../util/compaction-items.js';
 import { importSpool, spool } from './compaction-spool.js';
 import type {
@@ -15,6 +15,7 @@ import { loadConfig } from '../core/config.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
+import { type JsonValue, tryParseJson } from '../util/json.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
@@ -124,6 +125,9 @@ interface TranscriptLine {
   message?: { content?: string | Array<{ type?: string; text?: string }> };
 }
 
+// Every field is optional and read through a guard, so an object is all a line needs to be.
+const isTranscriptLine = (value: JsonValue | undefined): value is JsonValue & TranscriptLine => isObjectLike(value);
+
 function lineText(line: TranscriptLine): string {
   const content = line.message?.content;
   if (isStringValue(content)) return content;
@@ -138,11 +142,9 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
   for (const cap of TRANSCRIPT_TAIL_CAPS) {
     const lines: TranscriptLine[] = [];
     for (const raw of readTranscriptTail(transcriptPath, cap).split('\n')) {
-      try {
-        lines.push(JSON.parse(raw));
-      } catch {
-        continue; // the tail can start mid-line; a torn line holds no summary
-      }
+      // The tail can start mid-line; a torn line holds no summary.
+      const line = tryParseJson(raw);
+      if (isTranscriptLine(line)) lines.push(line);
     }
     const stamp = (line: TranscriptLine): number =>
       isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN;

@@ -5,6 +5,7 @@ import type { TaskSnapshot } from '../store/port/sessions.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 import { errorMessage } from '../util/log.js';
+import { tryParseJson } from '../util/json.js';
 import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
 import { humanUserText, summariseTranscript } from './transcript.js';
 import { copilotTurn } from './copilot-transcript.js';
@@ -89,12 +90,8 @@ function lastTurnText(
 ): string {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
-    let entry: unknown;
-    try {
-      entry = JSON.parse(lines[i]);
-    } catch {
-      continue; // the tail read can start mid-line; skip the torn fragment
-    }
+    // The tail read can start mid-line; a torn fragment parses to nothing.
+    const entry: unknown = tryParseJson(lines[i]);
     if (!isObjectLike(entry)) continue;
     if (!('type' in entry)) continue;
     const copilot = copilotTurn(entry);

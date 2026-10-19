@@ -3,10 +3,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../src/core/memory.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
-import { buildSnapshot } from '../src/dashboard/dashboard-snapshot.js';
+import { buildSnapshot } from '../src/api/dashboard/snapshot.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { storedVectorIds } from '../src/db/vector-store.js';
-import { buildOverview } from '../src/dashboard/dashboard-queries.js';
+import { buildOverview } from '../src/api/dashboard/queries.js';
 import {
   asDashboardRow,
   embed,

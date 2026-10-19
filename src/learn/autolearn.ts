@@ -1,7 +1,7 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { execFileSync, spawn, type ChildProcess, type SpawnOptions } from 'child_process';
+import { execFileSync, type ChildProcess, type SpawnOptions } from 'child_process';
 import { spawnArgv } from '../util/spawn-argv.js';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
 import { assessAutomaticMemory } from '../core/memory-quality.js';
@@ -125,15 +125,6 @@ export function runWatched(
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
 ): Promise<{ exitCode: number; stderr: string }> {
   return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
-}
-
-/** Run `line` as one shell command line, for text the caller wrote itself (`hippo watch --shell`); same result and
- * deadline as runWatched. */
-export function runWatchedLine(
-  line: string,
-  deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
-): Promise<{ exitCode: number; stderr: string }> {
-  return watchChild(spawn(line, { ...WATCHED_SPAWN_OPTIONS, windowsHide: true, shell: true }), deadlineMs);
 }
 
 const WATCHED_SPAWN_OPTIONS: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };

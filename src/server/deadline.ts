@@ -20,12 +20,13 @@ export function isAbandoned(res: ServerResponse): boolean {
   return abandoned.has(res);
 }
 
-/** The deadline of `req`, for every /v1 and /mcp route but the two exempt ones. */
+/** The deadline of `req`, for every /v1, /mcp and dashboard /api route but the two exempt ones. */
 export function requestDeadlineFor(req: IncomingMessage): RequestDeadline | undefined {
   const ms = requestDeadlineMs(envRequestDeadlineMs());
   const path = (req.url ?? '/').split('?')[0] ?? '/';
   if (ms === 0 || EXEMPT.has(`${req.method ?? 'GET'} ${path}`)) return undefined;
-  return path.startsWith('/v1/') || path === '/mcp' ? new RequestDeadline(Date.now() + ms) : undefined;
+  const timed = path.startsWith('/v1/') || path.startsWith('/api/') || path === '/mcp';
+  return timed ? new RequestDeadline(Date.now() + ms) : undefined;
 }
 
 /**

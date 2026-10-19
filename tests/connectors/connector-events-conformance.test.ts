@@ -596,3 +596,24 @@ describe('ConnectorEvents Slack workspace registry', () => {
     ]);
   });
 });
+
+describe('ConnectorEvents delivery holds', () => {
+  const claim =
+    (connector: ConnectorEvent['connector'], key: string, nowMs: number): Call =>
+    (g) =>
+      g.claimDelivery({ connector, key, nowMs, ttlMs: 1000 });
+
+  it('refuses a key while its hold lasts, frees it at expiry or on release, and keeps one key space per connector', async () => {
+    const side = await conforms([
+      claim('slack', 'sig-a', 0),
+      claim('slack', 'sig-a', 999),
+      claim('github', 'sig-a', 999),
+      claim('slack', 'sig-a', 1000),
+      (g) => g.releaseDelivery('slack', 'sig-a'),
+      claim('slack', 'sig-a', 1001),
+      (g) => g.releaseDelivery('slack', 'never-held'),
+    ]);
+    expect(values(side)).toEqual([true, false, true, true, undefined, true, undefined]);
+    expect([newEvents(side), added(side)]).toEqual([[], []]);
+  });
+});

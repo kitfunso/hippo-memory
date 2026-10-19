@@ -8,7 +8,7 @@ import { cliApiContext, type CliContext } from './api-context.js';
 import { type CliFlags, flagIsTrue, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
-import { errorMessage } from '../util/log.js';
+import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { GIT_CALL_TIMEOUT_MS } from '../util/time.js';
 
@@ -26,8 +26,10 @@ function worktreeNames(): Map<string, string> {
       .filter((l) => l.startsWith('worktree '))
       .map((l) => path.basename(l.slice('worktree '.length)));
     return new Map(paths.slice(1).map((name) => [name, paths[0]]));
-  } catch {
-    // Outside a git checkout, or no git on PATH: the list just has no worktree hints.
+  } catch (err) {
+    // Outside a git checkout (git exits 128) or no git on PATH (ENOENT): the list just has no worktree hints.
+    const expected = errorCode(err) === 'ENOENT' || (err instanceof Error && 'status' in err && err.status === 128);
+    if (!expected) log.once('projects:git-worktree-list', 'warn', 'git worktree list failed', errorFields(err));
     return new Map();
   }
 }

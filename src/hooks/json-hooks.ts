@@ -20,7 +20,7 @@ import {
   defaultPreCompactLogPath,
 } from './shared.js';
 import { claudeConfigDir, codexHomeDir, homeDir } from '../util/agent-homes.js';
-import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../util/json.js';
+import { type JsonValue, isJsonString, readJsonFile, tryReadJsonFile, isJsonObjectLiteral } from '../util/json.js';
 import { escapeRegex } from '../util/escape.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -284,11 +284,9 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
 
   let settings: JsonValue = {};
   if (fs.existsSync(settingsPath)) {
-    try {
-      settings = readJsonFile(settingsPath);
-    } catch {
-      return { ...nothingInstalled(target, settingsPath), invalidJson: true };
-    }
+    const read = tryReadJsonFile(settingsPath);
+    if (read === undefined) return { ...nothingInstalled(target, settingsPath), invalidJson: true };
+    settings = read;
   }
   if (target === 'codex') return installCodexHooks(settingsPath, settings);
   if (!isJsonObjectLiteral(settings)) return { ...nothingInstalled(target, settingsPath), invalidJson: true };
@@ -525,16 +523,12 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
 export function checkUninstallable(target: JsonHookTarget): Pick<InstallResult, 'settingsPath' | 'invalidJson'> {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return { settingsPath, invalidJson: false };
-  try {
-    const settings = readJsonFile(settingsPath);
-    return {
-      settingsPath,
-      invalidJson:
-        !isJsonObjectLiteral(settings) || (settings.hooks !== undefined && !isJsonObjectLiteral(settings.hooks)),
-    };
-  } catch {
-    return { settingsPath, invalidJson: true };
-  }
+  const settings = tryReadJsonFile(settingsPath);
+  return {
+    settingsPath,
+    invalidJson:
+      !isJsonObjectLiteral(settings) || (settings.hooks !== undefined && !isJsonObjectLiteral(settings.hooks)),
+  };
 }
 
 function uninstallClaudeCodeHooks(hooks: JsonObject): boolean {

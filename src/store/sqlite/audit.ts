@@ -2,7 +2,7 @@ import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter } from '../../util/keyset.js';
 import type { JsonValue } from '../../util/json.js';
-import { warnDamagedColumn } from '../../util/stored-json.js';
+import { parseStoredObject } from '../../util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent, JsonObject } from '../port/types.js';
 import type { AuditOp } from '../../core/audit-ops.js';
 import type { QueryAuditOptions } from '../port/audit-log.js';
@@ -115,18 +115,18 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
   return Number(result.changes ?? 0);
 }
 
-/** Latest time each target got a good outcome, from the audit rows, read on a handle of its own; unlike
- * queryAuditEvents it has no row cap. */
-export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
+/** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike queryAuditEvents it has
+ * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
+export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
   // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
   const rows = db
     .prepare(
       `SELECT target_id, MAX(ts) AS ts FROM audit_log
-       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+       WHERE tenant_id = ? AND ts >= ? AND op = 'outcome' AND target_id IS NOT NULL
          AND json_extract(metadata_json, '$.good') = 1
        GROUP BY target_id`,
     )
-    .all(tenantId) as { target_id: string; ts: string }[];
+    .all(tenantId, since) as { target_id: string; ts: string }[];
   return new Map(rows.map((r) => [r.target_id, r.ts]));
 }
 
@@ -157,16 +157,8 @@ function rowToAuditEvent(r: AuditRow): AuditEvent {
 }
 
 function safeJsonParse(raw: string, id: number): JsonObject {
-  try {
-    const v = JSON.parse(raw);
-    // SAFETY: JSON.parse returns only an object, array or primitive; `instanceof Object` is true for the first two,
-    // both valid JsonObject shapes here.
-    return v instanceof Object ? (v as JsonObject) : {};
-  } catch {
-    // Malformed metadata reads as empty so the audit row itself stays listable.
-    warnDamagedColumn({ table: 'audit_log', id, column: 'metadata_json' }, 'not valid JSON');
-    return {};
-  }
+  // Damaged metadata reads as empty so the audit row itself stays listable.
+  return parseStoredObject({ table: 'audit_log', id, column: 'metadata_json' }, raw) ?? {};
 }
 
 /** An audit row that did not land, with what its write threw. */

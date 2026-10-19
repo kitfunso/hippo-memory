@@ -162,11 +162,11 @@ export const SESSION_VERBS = {
     ],
   }),
   watch: verb(() => import('../transfer.js'), 'handleWatch', {
-    flags: { values: ['shell'] },
+    flags: {},
+    removedFlags: { shell: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.' },
     usage: [
       `
-  watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)
-    --shell "<line>"       Run one command line through the shell instead`,
+  watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)`,
     ],
   }),
   learn: verb(() => import('../transfer.js'), 'handleLearn', {

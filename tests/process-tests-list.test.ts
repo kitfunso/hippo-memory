@@ -6,9 +6,16 @@ import { SERVER_TESTS } from './_server-tests.js';
 
 // Built from pieces so this file matches neither pattern and stays in the fast class.
 const STARTS_A_CHILD = new RegExp(String.raw`\bchild_` + 'process\\b');
-// The worker store starts its threads inside src, so a test that builds one never imports the thread module itself.
+// The worker store and the dashboard start their threads inside src, so a test that builds one never imports the thread
+// module itself.
 const STARTS_A_SERVER = new RegExp(
-  String.raw`\bworker_` + 'threads\\b|' + String.raw`\bserve\(|` + String.raw`\bworkerSqlite` + 'Store\\(',
+  String.raw`\bworker_` +
+    'threads\\b|' +
+    String.raw`\bserve\(|` +
+    String.raw`\bserve` +
+    'Dashboard\\(|' +
+    String.raw`\bworkerSqlite` +
+    'Store\\(',
 );
 const tests = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(tests, file), 'utf8');

@@ -4,7 +4,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { dumpSchema } from '../_helpers/schema-dump.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-// Pins the exact DDL a fresh store ends with, so moving migration code cannot change one byte of schema.
+// Pins the DDL a fresh store ends with, less its comments and layout, so moving migration code cannot change the schema.
 describe('fresh store schema', () => {
   let root: string | undefined;
 

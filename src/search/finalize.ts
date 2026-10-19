@@ -7,33 +7,46 @@ import type { ResultCost, SearchResult } from '../core/search-types.js';
 /** When an extracted fact and its source both match, keep only the higher-scoring one (usually the fact). */
 export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
   const seenExtractedFrom = new Set<string>();
-  const deduped: SearchResult[] = [];
+  // A dropped source leaves a hole instead of splicing, so each result costs one map step however many came before.
+  const slots: Array<SearchResult | null> = [];
+  const slotsOfId = new Map<string, number[]>();
+  const keep = (result: SearchResult): void => {
+    const held = slotsOfId.get(result.entry.id);
+    if (held) held.push(slots.length);
+    else slotsOfId.set(result.entry.id, [slots.length]);
+    slots.push(result);
+  };
   for (const result of scored) {
     const entry = result.entry;
     if (entry.extractedFrom) {
       seenExtractedFrom.add(entry.extractedFrom);
-      const sourceIdx = deduped.findIndex((d) => d.entry.id === entry.extractedFrom);
-      if (sourceIdx >= 0) deduped.splice(sourceIdx, 1);
-      deduped.push(result);
+      const sourceSlot = slotsOfId.get(entry.extractedFrom)?.shift();
+      if (sourceSlot !== undefined) slots[sourceSlot] = null;
+      keep(result);
     } else if (!seenExtractedFrom.has(entry.id)) {
-      deduped.push(result);
+      keep(result);
     }
   }
-  return deduped;
+  return slots.filter((r): r is SearchResult => r !== null);
 }
 
 const DAG_CHILD_SCORE_FACTOR = 0.9;
 
 /** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts `results` in place. */
 export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): SearchResult[] {
-  const summaryIds = results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id);
-  if (summaryIds.length === 0) return results;
-  const children = pool.filter((e) => e.dagParentId && summaryIds.includes(e.dagParentId));
+  const summaryIds = new Set(results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id));
+  if (summaryIds.size === 0) return results;
+  const children = pool.filter((e) => e.dagParentId && summaryIds.has(e.dagParentId));
+  // The first result of an id wins, and a child added below counts for the rows after it.
+  const resultById = new Map<string, SearchResult>();
+  for (const r of results) if (!resultById.has(r.entry.id)) resultById.set(r.entry.id, r);
   for (const child of children) {
-    if (results.some((r) => r.entry.id === child.id)) continue;
-    const parentResult = results.find((r) => r.entry.id === child.dagParentId);
+    if (resultById.has(child.id)) continue;
+    const parentResult = child.dagParentId ? resultById.get(child.dagParentId) : undefined;
     const childScore = parentResult ? parentResult.score * DAG_CHILD_SCORE_FACTOR * churnStaleFactor(child) : 0;
-    results.push({ entry: child, score: childScore, bm25: 0, cosine: 0, tokens: estimateTokens(child.content) });
+    const added = { entry: child, score: childScore, bm25: 0, cosine: 0, tokens: estimateTokens(child.content) };
+    results.push(added);
+    resultById.set(child.id, added);
   }
   results.sort(compareScoredResults);
   return results;

@@ -7,6 +7,7 @@
 // So does any import, re-export or import() (type-only too) into src/store/sqlite/** from a file outside src/store that
 // SQLITE_ROOTS does not name, and so does naming sqliteSyncStore there: every other file takes its store handed down.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**): the api reads the store through the port and takes shared rules from src/core.
+// So does any import, runtime or type-only, from src/dashboard/** into src/store, src/db or src/cli: the dashboard reads through src/api, with no baseline.
 // layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
 
@@ -196,6 +197,8 @@ const SQLITE_ROOTS = new Map([
   ['cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
   ['server/boot.ts', 'the HTTP server builds its store, its global stores and their reach probe here'],
   ['server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
+  ['server/dashboard-listener.ts', '`hippo dashboard` builds its worker store and held connection here, as boot.ts does'],
+  ['server/dashboard-reader-thread.ts', 'the dashboard reader is a thread entry of its own, handed only a folder'],
   ['index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
   ['server.ts', 'the ./server entry builds the store of the folder serve() names'],
   ['entry/importers.ts', 'the published importers build the store of the folder their options name'],
@@ -252,6 +255,27 @@ function sqliteReachProblems(srcDir) {
       .filter((f) => existsSync(join(srcDir, f)) && !importers.has(f))
       .map((f) => `root: src/${f} no longer imports src/${SQLITE_DIR}; delete it from SQLITE_ROOTS`),
   ];
+}
+
+const DASHBOARD_BARRED = ['store/', 'db/', 'cli/', 'cli.ts'];
+
+/** Imports from src/dashboard into src/store, src/db or src/cli, runtime or type-only, as `file:line imports target`. */
+function findDashboardReaches(srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = [];
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!from.startsWith('dashboard/')) continue;
+    for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
+      const to = target && rel(target);
+      if (to && DASHBOARD_BARRED.some((barred) => to === barred || to.startsWith(barred))) {
+        out.push(`src/${from}:${line} imports src/${to}`);
+      }
+    }
+  }
+  return out;
 }
 
 /** Imports from `dbReach.layer` in a `dbReach.from` folder that `dbReach.allowed` does not name, then allowed entries nothing uses or that give no why. */
@@ -327,6 +351,13 @@ if (sqliteProblems.length > 0 && !args.includes('--list')) {
     'A file outside src/store and the composition roots reaches the SQLite adapter; a root builds the store and hands it down:',
   );
   for (const p of sqliteProblems) console.error(`  ${p}`);
+  process.exit(1);
+}
+
+const dashboardReaches = findDashboardReaches('src');
+if (dashboardReaches.length > 0 && !args.includes('--list')) {
+  console.error('The dashboard imports the store or the CLI; read and write through a src/api function instead:');
+  for (const r of dashboardReaches) console.error(`  ${r}`);
   process.exit(1);
 }
 

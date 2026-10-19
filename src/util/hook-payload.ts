@@ -1,16 +1,10 @@
-import { type JsonValue, isJsonObjectLiteral, isJsonString } from './json.js';
+import { type JsonValue, isJsonObjectLiteral, isJsonString, tryParseJson } from './json.js';
 
 /** A Claude Code hook payload on stdin as a JSON object; null when empty, malformed or not an object. */
 function parseHookPayload(stdinText: string | undefined): { [key: string]: JsonValue } | null {
   if (!stdinText || stdinText.trim() === '') return null;
-  try {
-    // SAFETY: JSON.parse returns a JSON value by definition.
-    const payload = JSON.parse(stdinText.trim()) as JsonValue;
-    return isJsonObjectLiteral(payload) ? payload : null;
-  } catch {
-    // Malformed is one of the null cases the docblock names.
-    return null;
-  }
+  const payload = tryParseJson(stdinText.trim());
+  return isJsonObjectLiteral(payload) ? payload : null;
 }
 
 /** A hook payload's non-empty `session_id`, or null; with `requiredSource`, also null when its `source` differs. */

@@ -5,6 +5,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { listDlq } from '../../src/connectors/dlq.js';
 import { slackDlq } from '../../src/connectors/slack/dlq.js';
 import { createReplayWindow } from '../../src/connectors/replay-window.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { JsonValue } from '../../src/util/json.js';
@@ -48,6 +49,31 @@ describe('POST /v1/connectors/slack/events replay', () => {
     expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'duplicate' } });
     expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(1);
+  });
+
+  it('refuses the second copy after the server restarts, since the hold lives in the store', async () => {
+    const ts = String(Math.floor(Date.now() / 1000));
+    expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
+    await handle.stop();
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'duplicate' } });
+    expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(1);
+  });
+
+  it('frees the hold when routing fails, so the retry is tried again and not answered as a duplicate', async () => {
+    const db = openHippoDb(root);
+    try {
+      db.exec('DROP TABLE slack_dlq');
+    } finally {
+      closeHippoDb(db);
+    }
+    const ts = String(Math.floor(Date.now() / 1000));
+    const first = await post(ts);
+    const second = await post(ts);
+
+    expect(first.body).not.toEqual({ ok: true, status: 'duplicate' });
+    expect(second.body).not.toEqual({ ok: true, status: 'duplicate' });
+    expect(second.status).toBe(first.status);
   });
 
   it('takes the same body under a new timestamp, since Slack signs each send afresh', async () => {

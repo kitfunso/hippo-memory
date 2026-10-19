@@ -3,11 +3,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as conflicts from '../src/store/sqlite/conflicts.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { replaceDetectedConflicts, writeEntry } from './_helpers/root-forms.js';
-import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
+import type { MemoryDetail, Overview } from '../src/api/dashboard/types.js';
+import { adminActor } from '../src/api/index.js';
+import { dashboardMemoryDetail } from '../src/api/dashboard/detail.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 import {
   get,
   makeStore,
   parse,
+  snapshotsOf,
   startDashboard,
   type RunningDashboard,
   type TmpStore,
@@ -68,15 +72,18 @@ describe('dashboard conflicts are tenant-scoped', () => {
     const { a1 } = seedTwoTenants();
     const load = vi.spyOn(conflicts, 'conflictPageAt');
     const loadOwn = vi.spyOn(conflicts, 'openConflictsNamingAt');
-    // A store binds its group bodies when it is built, so the dashboard restarts to build one on the spies.
-    await dash.close();
-    dash = await startDashboard(tmp.hippoRoot, () => Date.now());
+    // Served, these loads run on the reader thread, which no spy reaches, so the same api calls run here.
+    const snapshots = snapshotsOf(tmp.hippoRoot, () => Date.now());
+    try {
+      snapshots.get('tenant_a');
+      const ctx = apiCtx(tmp.hippoRoot, 'tenant_a', adminActor('dashboard'));
+      await dashboardMemoryDetail(ctx, snapshots, a1.id, { fresh: false, nowMs: Date.now() });
+    } finally {
+      snapshots.close();
+    }
 
-    await get(dash.port, '/api/overview');
     expect(load).toHaveBeenCalled();
     expect(load.mock.calls.every(([, query]) => query.tenantId === 'tenant_a')).toBe(true);
-
-    await get(dash.port, `/api/memory/${a1.id}`);
     expect(loadOwn).toHaveBeenCalled();
     expect(loadOwn.mock.calls.every(([, tenantId]) => tenantId === 'tenant_a')).toBe(true);
   });
