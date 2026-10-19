@@ -16,19 +16,24 @@ import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboa
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
 
-function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
-  // The thread is its own root, so it reads the ratio its store and snapshots score strength by.
+/** The thread is its own root, so it reads the ratio its store and snapshots score strength by. */
+function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonly wallMs: number }) {
   const lossAversion = { lossAversionRatio: envLossAversionRatio() };
   const store = sqliteStore(hippoRoot, lossAversion);
-  const loadConfig = configReader(envRuntimeSettings);
-  // Set from each call, so the snapshot is dated and aged by the clocks the server read when the request came in.
-  const clock = { nowMs: 0, wallMs: 0 };
   const snapshots = createSnapshotService(
     store.localFiles.dashboard,
     lossAversion,
     () => clock.nowMs,
     () => clock.wallMs,
   );
+  return { store, snapshots };
+}
+
+function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
+  const loadConfig = configReader(envRuntimeSettings);
+  // Set from each call, so the snapshot is dated and aged by the clocks the server read when the request came in.
+  const clock = { nowMs: 0, wallMs: 0 };
+  const { store, snapshots } = readerStore(hippoRoot, clock);
   // A fresh Context per call, so a config edit shows on the next request.
   const context = (): ContextWith<'localFiles'> => ({
     hippoRoot,

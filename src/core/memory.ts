@@ -189,7 +189,7 @@ export interface DecayOptions {
   sleepCount?: number;
   /** EVAL-ONLY switches resolved once at the entry layer (`strengthAblation()`); absent means production scoring. */
   ablation?: StrengthAblation;
-  /** Scales the negative multiplier under the HIPPO_LOSS_AVERSION_RATIO rules, as the root read it; absent means 1.0. */
+  /** Scales the negative multiplier under the HIPPO_LOSS_AVERSION_RATIO rules, as the root read it; absent is 1.0. */
   lossAversionRatio?: number;
 }
 
