@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockIns
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import type { JsonObject } from '../../src/store/port/types.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   listSessionEvents,
@@ -10,6 +11,8 @@ import {
   loadAllEntries,
   readEntry,
   appendSessionEvent,
+  wmPush,
+  wmRead,
 } from '../_helpers/root-forms.js';
 
 const TENANT = 'default';
@@ -132,5 +135,34 @@ describe('a session event with damaged metadata', () => {
         `warn: store: session_events\\.metadata_json is not valid JSON; read as empty .*table=session_events id=${event.id} column=metadata_json`,
       ),
     );
+  });
+});
+
+describe('a working-memory item with damaged metadata', () => {
+  it('lists with empty metadata and is named once at warn, for text that is not JSON or not an object', () => {
+    const root = newRoot();
+    const broken = wmPush(root, { scope: 'task', content: 'broken', metadata: { a: 1 } });
+    const flat = wmPush(root, { scope: 'task', content: 'flat', metadata: { a: 1 } });
+    const clean = wmPush(root, { scope: 'task', content: 'clean', metadata: { a: 1 } });
+    runSql(root, `UPDATE working_memory SET metadata_json = '{"a":' WHERE id = ?`, broken);
+    runSql(root, `UPDATE working_memory SET metadata_json = '[1]' WHERE id = ?`, flat);
+
+    const byContent = (): Array<[string, JsonObject]> =>
+      wmRead(root, { scope: 'task' })
+        .map((item): [string, JsonObject] => [item.content, item.metadata])
+        .sort(([a], [b]) => a.localeCompare(b));
+
+    expect(byContent()).toEqual([
+      ['broken', {}],
+      ['clean', { a: 1 }],
+      ['flat', {}],
+    ]);
+    expect(clean).toBeGreaterThan(0);
+    byContent();
+
+    const lines = damageLines().filter((line) => line.includes('table=working_memory'));
+    expect(lines.map((line) => /column=(\S+)/.exec(line)?.[1])).toEqual(['metadata_json', 'metadata_json']);
+    expect(lines.some((line) => line.includes('is not valid JSON'))).toBe(true);
+    expect(lines.some((line) => line.includes('is wrong shape'))).toBe(true);
   });
 });

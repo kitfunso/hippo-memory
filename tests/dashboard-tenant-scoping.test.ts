@@ -3,12 +3,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import type { Server } from 'node:http';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { serveDashboard } from '../src/dashboard/dashboard.js';
+import { serveDashboard } from '../src/server/dashboard-listener.js';
+import type { ServerHandle } from '../src/server/types.js';
 import { DASHBOARD_TOKEN, sessionCookie } from './_helpers/dashboard-fixture.js';
-import { boundPort } from './_helpers/listen.js';
 import { makeStore } from './_helpers/make-root.js';
 import { writeEntry } from './_helpers/root-forms.js';
 
@@ -43,7 +42,7 @@ function post(port: number, path: string, payload: string = '{}'): Promise<{ sta
 describe('dashboard tenant-scoping', () => {
   let home: string;
   let hippoRoot: string;
-  let server: Server | undefined;
+  let server: ServerHandle | undefined;
 
   beforeEach(() => {
     ({ base: home, root: hippoRoot } = makeStore('dash-tenant'));
@@ -53,10 +52,8 @@ describe('dashboard tenant-scoping', () => {
   });
 
   afterEach(async () => {
-    if (server) {
-      await new Promise<void>((resolve, reject) => server!.close((err) => (err ? reject(err) : resolve())));
-      server = undefined;
-    }
+    await server?.stop();
+    server = undefined;
   });
 
   it('POST /api/memory/:id/pin denies a cross-tenant mutation', async () => {
@@ -69,8 +66,8 @@ describe('dashboard tenant-scoping', () => {
     writeEntry(hippoRoot, a);
 
     // Run the dashboard as tenant_b on an ephemeral port.
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: 'tenant_b' });
-    const port = await boundPort(server);
+    server = await serveDashboard({ hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId: 'tenant_b' });
+    const { port } = server;
 
     const res = await post(port, `/api/memory/${a.id}/pin`, '{"pinned":true}');
     expect(res.status).toBe(404);

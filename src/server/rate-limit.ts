@@ -19,10 +19,7 @@ export interface RateLimiterOptions {
   burst: number;
   /** A bucket untouched for this many ms is dropped by the throttled sweep. */
   idleEvictMs: number;
-  /**
-   * Hard cap on tracked keys; at the cap the least-recently-used key is evicted only once it has refilled, else unseen
-   * keys share one overflow bucket.
-   */
+  /** Hard cap on tracked keys; at the cap an unseen key evicts the least-recently-used one and gets its own bucket. */
   maxKeys: number;
 }
 
@@ -54,16 +51,13 @@ function spend(b: Bucket): boolean {
 
 /**
  * Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys`
- * cap bounds the map,
- * so a client rotating source addresses can neither grow it without bound nor evict its own throttled bucket to get a
- * fresh one.
+ * cap bounds the map. A caller that keeps asking stays recent, so it only escapes its throttle by staying silent while
+ * `maxKeys` other keys arrive.
  */
 export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
   const { ratePerSec, burst, idleEvictMs, maxKeys } = opts;
   // Every request reaches these buckets because serve() holds the store's pidfile lock (claimPidfile).
   const buckets = new Map<string, Bucket>();
-  // Unseen keys draw from this while the map is full of buckets still below burst, so key churn buys no fresh bucket.
-  const overflow: Bucket = { tokens: burst, last: 0 };
   let lastSweep = 0;
 
   function sweep(now: number): void {
@@ -74,17 +68,10 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
     }
   }
 
-  /**
-   * Frees one slot for an unseen key; false when the least-recently-used bucket is still below burst, since dropping it
-   * would reset a throttled caller.
-   */
-  function makeRoom(now: number): boolean {
-    if (buckets.size < maxKeys) return true;
-    const lru = buckets.entries().next().value;
-    if (lru === undefined) return true;
-    if (tokensAt(lru[1], now, ratePerSec, burst) < burst) return false;
-    buckets.delete(lru[0]);
-    return true;
+  function makeRoom(): void {
+    if (buckets.size < maxKeys) return;
+    const lru = buckets.keys().next();
+    if (!lru.done) buckets.delete(lru.value);
   }
 
   return {
@@ -98,7 +85,7 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
         buckets.set(key, existing);
         return spend(refill(existing, now, ratePerSec, burst));
       }
-      if (!makeRoom(now)) return spend(refill(overflow, now, ratePerSec, burst));
+      makeRoom();
       // Unseen key: a full bucket, so a fresh client's first request passes.
       const bucket: Bucket = { tokens: burst, last: now };
       buckets.set(key, bucket);

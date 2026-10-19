@@ -86,12 +86,11 @@ export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[],
   const tenant = tenantAnd(tenantId, TENANT_IS);
   // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db
-    .prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(capped.length)})${tenant.sql} ` +
-        `ORDER BY created ASC, content ASC, id ASC`,
-    )
-    .all(...capped, ...tenant.args) as MemoryRow[];
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(capped.length)})${tenant.sql} ` +
+      `ORDER BY created ASC, content ASC, id ASC`,
+  ).all(...capped, ...tenant.args) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 

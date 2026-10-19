@@ -1,6 +1,8 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
+import { randomBytes } from 'crypto';
 import { installCrashHandlers } from '../util/crash-handlers.js';
+import { printDashboardBanner, reportListenFailure } from './dashboard-banner.js';
 import { envAllowKeylessLocal, envBodyTimeoutMs, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -14,10 +16,20 @@ import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from
 export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const port = numberFlag(flags, 'port') ?? DEFAULT_DASHBOARD_PORT;
-  const { serveDashboard } = await import('../dashboard/dashboard.js');
-  serveDashboard(hippoRoot, port, undefined, { tenantId, handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() });
-  // A later throw ends in one log line and exit 1, as it does for serve and mcp; a busy port is reported by the
-  // dashboard itself.
+  const { DashboardListenError, serveDashboard } = await import('../server/dashboard-listener.js');
+  const { builtStaticRoot } = await import('../dashboard/static-file.js');
+  const token = randomBytes(32).toString('base64url');
+  const opts = { hippoRoot, tenantId, port, token, handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() };
+  let bound: number;
+  try {
+    bound = (await serveDashboard(opts)).port;
+  } catch (err) {
+    if (!(err instanceof DashboardListenError) || !(err.cause instanceof Error)) throw err;
+    reportListenFailure(port, err.cause);
+    return;
+  }
+  printDashboardBanner(hippoRoot, bound, token, builtStaticRoot());
+  // A later throw ends in one log line and exit 1, as it does for serve and mcp.
   installCrashHandlers('dashboard');
   await new Promise(() => {}); // run until Ctrl+C
 }

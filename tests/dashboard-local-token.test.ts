@@ -1,15 +1,17 @@
 // The dashboard binds loopback, but any local process or user could still read every
-// memory through it, so each serve start mints a token the printed URL carries;
+// memory through it, so each start mints a token the URL in dashboard.url carries;
 // the first page load trades it for a cookie, and every reply pins what a browser may load.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { request, type Server } from 'node:http';
-import { serveDashboard } from '../src/dashboard/dashboard.js';
+import { request } from 'node:http';
+import { printDashboardBanner } from '../src/cli/dashboard-banner.js';
+import { serve } from '../src/server.js';
+import { serveDashboard } from '../src/server/dashboard-listener.js';
+import type { ServerHandle } from '../src/server/types.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
-import { boundPort } from './_helpers/listen.js';
 import { makeStore } from './_helpers/make-root.js';
 
 const TOKEN = 'test-dashboard-token-0123456789';
@@ -17,18 +19,18 @@ const TOKEN = 'test-dashboard-token-0123456789';
 describe('dashboard local access token', () => {
   let home: string;
   let hippoRoot: string;
-  let server: Server | undefined;
+  let server: ServerHandle | undefined;
   let port: number;
 
   beforeEach(async () => {
     ({ base: home, root: hippoRoot } = makeStore('dash-token'));
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
-    server = serveDashboard(hippoRoot, 0, TOKEN, { tenantId: 'default' });
-    port = await boundPort(server);
+    server = await serveDashboard({ hippoRoot, port: 0, token: TOKEN, tenantId: 'default' });
+    port = server.port;
   });
 
   afterEach(async () => {
-    if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
+    await server?.stop();
     server = undefined;
     vi.unstubAllEnvs();
   });
@@ -92,16 +94,24 @@ describe('dashboard local access token', () => {
     expect([offHost.status, offHost.headers.get('location')]).toEqual([303, '/x']);
   });
 
-  it('moves a visit another site started off the token URL with a refresh page, since a strict cookie skips that redirect', async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/memory/abc?token=${TOKEN}&q=a%26b`, {
-      redirect: 'manual',
-      headers: { 'sec-fetch-site': 'cross-site' },
-    });
-    const html = await res.text();
-    expect(res.status).toBe(200);
-    expect(res.headers.get('set-cookie')?.split(';')[0]).toBe(sessionCookie(port, TOKEN));
-    expect(html).toContain('<meta http-equiv="refresh" content="0;url=/memory/abc?q=a%26b">');
-    expect(html).not.toContain(TOKEN);
+  it('refuses a request another site started before it reads the token, and logs no token', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      for (const site of ['cross-site', 'same-site']) {
+        const res = await fetch(`http://127.0.0.1:${port}/memory/abc?token=${TOKEN}`, {
+          redirect: 'manual',
+          headers: { 'sec-fetch-site': site },
+        });
+        expect([res.status, res.headers.get('set-cookie'), await res.json()]).toEqual([
+          403,
+          null,
+          { error: 'cross-site or non-local request refused' },
+        ]);
+      }
+      expect(stderr.mock.calls.map((c) => String(c[0])).join('')).not.toContain(TOKEN);
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   it('sends the four security headers on every kind of reply, with a policy that loads code from this server only and that its own page fits', async () => {
@@ -139,6 +149,23 @@ describe('dashboard local access token', () => {
     }
   });
 
+  it('mounts no /v1 API, and its session authenticates nothing on the /v1 server', async () => {
+    const minted = await fetch(`http://127.0.0.1:${port}/api/overview?token=${TOKEN}`);
+    const pair = (minted.headers.get('set-cookie') ?? '').split(';')[0]!;
+    const onDashboard = await fetch(`http://127.0.0.1:${port}/v1/memories?q=x`, { headers: { cookie: pair } });
+    expect(onDashboard.headers.get('content-type')).toBe('text/html; charset=utf-8');
+
+    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '');
+    const v1 = await serve({ hippoRoot, port: 0 });
+    try {
+      const cookie = `${pair}; ${sessionCookie(v1.port, TOKEN)}`;
+      const res = await fetch(`${v1.url}/v1/memories?q=x`, { headers: { cookie } });
+      expect(res.status).toBe(401);
+    } finally {
+      await v1.stop();
+    }
+  });
+
   it('keeps the Host-header check ahead of the token', async () => {
     const status = await new Promise<number | undefined>((resolve, reject) => {
       const req = request(
@@ -154,8 +181,8 @@ describe('dashboard local access token', () => {
     expect(status).toBe(403);
   });
 
-  /** The lines a second dashboard prints at start with stdout's isTTY forced to `tty`, and the port it bound. */
-  async function startLines(tty: boolean): Promise<{ lines: string[]; port: number }> {
+  /** The lines the start banner prints with stdout's isTTY forced to `tty`. */
+  function bannerLines(tty: boolean): string[] {
     const lines: string[] = [];
     const spy = vi.spyOn(console, 'log').mockImplementation((...args) => {
       lines.push(args.join(' '));
@@ -163,34 +190,27 @@ describe('dashboard local access token', () => {
     const savedTty = process.stdout.isTTY;
     process.stdout.isTTY = tty;
     try {
-      const second = serveDashboard(hippoRoot, 0, 'another-token-abcdef', { tenantId: 'default' });
-      const secondPort = await boundPort(second);
-      await new Promise((r) => setImmediate(r));
-      await new Promise<void>((resolve) => second.close(() => resolve()));
-      return { lines, port: secondPort };
+      printDashboardBanner(hippoRoot, 4567, 'another-token-abcdef', null);
+      return lines;
     } finally {
       process.stdout.isTTY = savedTty;
       spy.mockRestore();
     }
   }
 
-  it('prints the dashboard URL with the token once at start on a terminal', async () => {
-    const { lines, port: secondPort } = await startLines(true);
-    const withToken = lines.filter((l) => l.includes('token=another-token-abcdef'));
-    expect(withToken).toEqual([
-      `Hippo Dashboard running at http://localhost:${secondPort}/?token=another-token-abcdef`,
-    ]);
-  });
-
-  it('keeps the token off a captured stdout and writes the full URL to an owner-only file in the hippo root', async () => {
-    const urlFile = join(hippoRoot, 'dashboard.url');
-    const { lines, port: secondPort } = await startLines(false);
-    expect(lines.join('\n')).not.toContain('token=');
-    expect(lines).toContain(
-      `Hippo Dashboard running at http://localhost:${secondPort}/ (open the URL with its token from ${urlFile})`,
-    );
-    expect(existsSync(urlFile)).toBe(true);
-    expect(readFileSync(urlFile, 'utf8')).toBe(`http://localhost:${secondPort}/?token=another-token-abcdef\n`);
-    if (process.platform !== 'win32') expect(statSync(urlFile).mode & 0o777).toBe(0o600);
-  });
+  it.each([true, false])(
+    'keeps the token off stdout (a terminal: %s) and writes the full URL to an owner-only file in the hippo root',
+    (tty) => {
+      const urlFile = join(hippoRoot, 'dashboard.url');
+      const lines = bannerLines(tty);
+      expect(lines.join('\n')).not.toContain('another-token-abcdef');
+      expect(lines).toEqual([
+        `Hippo Dashboard running at http://localhost:4567/ (open the URL with its token from ${urlFile})`,
+        'Press Ctrl+C to stop.',
+      ]);
+      expect(existsSync(urlFile)).toBe(true);
+      expect(readFileSync(urlFile, 'utf8')).toBe('http://localhost:4567/?token=another-token-abcdef\n');
+      if (process.platform !== 'win32') expect(statSync(urlFile).mode & 0o777).toBe(0o600);
+    },
+  );
 });

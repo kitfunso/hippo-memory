@@ -24,7 +24,7 @@ import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { invalidateMatching, detectChurnStale } from '../../src/learn/invalidation.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { buildDag } from '../../src/consolidate/dag.js';
-import { buildMemoryDetail } from '../../src/dashboard/dashboard-queries.js';
+import { buildMemoryDetail } from '../../src/api/dashboard/queries.js';
 import { snapshotsOf } from '../_helpers/dashboard-fixture.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';
@@ -677,7 +677,7 @@ describe('buildMemoryDetail', () => {
         ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
         { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
       ]);
-      const options = { snapshotId: 1, nowMs: Date.now(), embedded: false };
+      const options = { snapshotId: 1, nowMs: Date.now(), embedded: false, lossAversion: {} };
       const store = sqliteStore(root);
       const { result, statements } = await recordStatementsAsync(() =>
         buildMemoryDetail(store, 'default', subject, options),

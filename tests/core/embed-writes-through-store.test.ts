@@ -17,7 +17,7 @@ import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_
 import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { localIndex } from '../_helpers/cli-stores.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
@@ -108,7 +108,7 @@ beforeAll(async () => {
     created: SEEDED_AT,
     lastRetrieved: SEEDED_AT,
   }));
-  for (const entry of seeded) writeEntry(fixture.dir, entry);
+  writeEntriesTogether(fixture.dir, seeded);
   oldIndexed = copyOf();
   await embedAll(localIndex(oldIndexed), undefined, provider('fake-old'));
 });
@@ -173,9 +173,12 @@ describe('embedAll with a store', () => {
   it('keeps the pages written before the provider fails, and the next run finishes the rest', async () => {
     const root = join(home, `paged-${++n}`);
     initStore(root);
-    for (let i = 0; i < 70; i++) {
-      writeEntry(root, createMemory(`paged backfill memory number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    }
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 70 }, (_, i) =>
+        createMemory(`paged backfill memory number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ),
+    );
     let calls = 0;
     const flaky = provider('fake-a', async (texts) => {
       calls += 1;

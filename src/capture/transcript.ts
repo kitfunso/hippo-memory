@@ -4,6 +4,7 @@ import * as path from 'path';
 import { isObjectLike, isStringValue, readSessionEnd } from '../core/capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
 import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
+import { tryParseJson } from '../util/json.js';
 
 const RECENT_USER_TURNS = 20;
 const RECENT_ASSISTANT_TURNS = 10;
@@ -90,12 +91,8 @@ export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRe
   const turns: SessionTurn[] = [];
 
   for (const line of lines) {
-    let entry: unknown;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue; // a torn or partial transcript line carries no turn
-    }
+    // A torn or partial transcript line carries no turn.
+    const entry: unknown = tryParseJson(line);
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
 

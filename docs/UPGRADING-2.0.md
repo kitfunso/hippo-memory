@@ -19,7 +19,7 @@ The server prints its key rule at every start, so the keyless role in force is v
 `hippo watch` runs its command with **no shell**, so `;`, `&`, `|`, `$()` and `%VAR%` in an argument reach the program as written.
 
 - Write `hippo watch -- npm run build` in place of `hippo watch "npm run build"`. A single argument with a space in it is refused, since it would otherwise run as one program name.
-- To run a shell line on purpose, pass it after `--shell`: `hippo watch --shell "npm test && npm run build"`.
+- To run a shell line on purpose, name the shell: `hippo watch -- sh -c "npm test && npm run build"`. (2.x took `--shell`; 3.0 removed it.)
 
 The exported `runWatched` changes the same way:
 

@@ -3,8 +3,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { buildSnapshot } from '../src/dashboard/dashboard-snapshot.js';
-import { buildOverview, buildProjectDetail } from '../src/dashboard/dashboard-queries.js';
+import { buildSnapshot } from '../src/api/dashboard/snapshot.js';
+import { buildOverview, buildProjectDetail } from '../src/api/dashboard/queries.js';
 import type {
   MemoryDetail,
   MemoryPage,
@@ -13,7 +13,7 @@ import type {
   ScatterGrid,
   ScatterPoints,
   SearchResult,
-} from '../src/dashboard/dashboard-types.js';
+} from '../src/api/dashboard/types.js';
 import {
   NOW,
   asDashboardRow,
@@ -113,6 +113,7 @@ describe('overview and project', () => {
       entries: rows,
       openConflicts: [],
       scanText: () => {},
+      lossAversion: {},
     });
 
     // SAFETY: 4,001 members is over the cut-off, so the scatter is the grid shape.
@@ -135,6 +136,7 @@ describe('KPI series', () => {
       entries: rows,
       openConflicts: [],
       scanText: () => {},
+      lossAversion: {},
     });
     return buildOverview(snap).kpis.find((k) => k.id === id)!.series!;
   };

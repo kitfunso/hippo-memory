@@ -18,6 +18,6 @@ export function sqliteLearning(on: OnHandle): Learning {
       entries.length === 0 ? 0 : on((db, files) => writeEntriesTogetherAt(db, files, entries), openStore),
     addTagToEntries: (tenantId, ids, tag) =>
       on((db, files) => addTagToEntriesAt(db, files, tenantId, ids, tag), openStore),
-    confirmedOutcomeTimes: (tenantId) => on((db) => confirmedOutcomeTimesAt(db, tenantId)),
+    confirmedOutcomeTimes: (tenantId, since) => on((db) => confirmedOutcomeTimesAt(db, tenantId, since)),
   };
 }

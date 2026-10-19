@@ -16,6 +16,11 @@ export interface ConnectorEvents {
    * artifact (archive_raw row each, under `actor`) and logs the event naming the first, or no memory if none; one
    * failed archive undoes all and the log row. No reach check. */
   archiveDeletedArtifact(archive: ArtifactArchive): Promise<{ readonly duplicate: boolean; readonly archived: number }>;
+  /** Holds a signed delivery's key from `nowMs` for `ttlMs`; false when a hold on it has not run out. A hold outlives a
+   * restart and covers every process on the store. */
+  claimDelivery(claim: DeliveryClaim): Promise<boolean>;
+  /** Frees a hold whose delivery failed, so the sender's retry gets through. */
+  releaseDelivery(connector: ConnectorEvent['connector'], key: string): Promise<void>;
   /** The tenant a Slack team is registered to, or how many workspaces are registered when it is not. */
   slackTeamRoute(teamId: string): Promise<SlackTeamRoute>;
   /** The tenant of the installation, or of the repository when no installation is named, with the size of both routing
@@ -58,6 +63,14 @@ export type ConnectorEvent =
       readonly deliveryId: string;
       readonly eventName: string;
     };
+
+/** One signed delivery to hold, by the key its connector signs: Slack's signature, GitHub's delivery id. */
+export interface DeliveryClaim {
+  readonly connector: ConnectorEvent['connector'];
+  readonly key: string;
+  readonly nowMs: number;
+  readonly ttlMs: number;
+}
 
 /** What the event log holds for one event's key; `memoryId` is null for an event logged with no memory. */
 export type ConnectorEventRecord = { readonly seen: false } | { readonly seen: true; readonly memoryId: string | null };

@@ -1,14 +1,15 @@
 // A static asset that is missing falls through to the next route; one that exists but will not read is a logged 500.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+// Every URL path maps into the app's folder through one rule, which refuses any path that leaves it.
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { serveStaticFile } from '../src/dashboard/static-file.js';
+import { serveStaticFile, staticFileUnder } from '../src/dashboard/static-file.js';
 import { boundPort } from './_helpers/listen.js';
 
 let dir: string;
-let server: Server;
+let server: Server | undefined;
 let stderr: MockInstance<typeof process.stderr.write>;
 
 beforeEach(() => {
@@ -16,8 +17,11 @@ beforeEach(() => {
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 afterEach(async () => {
-  server.closeAllConnections();
-  await new Promise<void>((done) => server.close(() => done()));
+  if (server) {
+    server.closeAllConnections();
+    await new Promise<void>((done) => server!.close(() => done()));
+  }
+  server = undefined;
   vi.restoreAllMocks();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -55,5 +59,66 @@ describe('serveStaticFile', () => {
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(
       /error: dashboard: reading .*broken\.js failed \(EISDIR\)/,
     );
+  });
+});
+
+describe('staticFileUnder', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = join(dir, 'app');
+    mkdirSync(join(root, 'assets'), { recursive: true });
+    writeFileSync(join(root, 'assets', 'app.js'), 'console.log(1)');
+    mkdirSync(join(dir, 'app-sibling'));
+    writeFileSync(join(dir, 'app-sibling', 'x.js'), 'outside');
+    writeFileSync(join(dir, 'secret.js'), 'outside');
+  });
+
+  it('maps a path to the file under the root, and a folder or a missing file to null', () => {
+    expect(staticFileUnder(root, '/assets/app.js')).toBe(realpathSync(join(root, 'assets', 'app.js')));
+    expect(staticFileUnder(root, '/assets/%61pp.js')).toBe(realpathSync(join(root, 'assets', 'app.js')));
+    expect(staticFileUnder(root, '/')).toBeNull();
+    expect(staticFileUnder(root, '/assets')).toBeNull();
+    expect(staticFileUnder(root, '/nope.js')).toBeNull();
+  });
+
+  it.each([
+    '/../secret.js',
+    '/..%2Fsecret.js',
+    '/%2E%2E%2Fsecret.js',
+    '/assets/..%2F..%2Fsecret.js',
+    '/../app-sibling/x.js',
+  ])('refuses %s, which leaves the root, with a 403', (urlPath) => {
+    expect(() => staticFileUnder(root, urlPath)).toThrow(expect.objectContaining({ status: 403 }));
+  });
+
+  it('maps a path that starts with extra slashes under the root, so it never names a file elsewhere on disk', () => {
+    for (const urlPath of ['//etc/passwd', '/%2Fetc%2Fpasswd', '/%2F%2Fetc%2Fpasswd']) {
+      expect(staticFileUnder(root, urlPath)).toBeNull();
+    }
+  });
+
+  it('refuses, or maps under the root, a path that names an absolute file', () => {
+    const secret = join(dir, 'secret.js');
+    for (const urlPath of [`/${secret}`, `/${encodeURIComponent(secret)}`]) {
+      // A drive letter mid-path resolves outside the root on Windows; elsewhere the path joins under it.
+      if (process.platform === 'win32') {
+        expect(() => staticFileUnder(root, urlPath)).toThrow(expect.objectContaining({ status: 403 }));
+      } else {
+        expect(staticFileUnder(root, urlPath)).toBeNull();
+      }
+    }
+  });
+
+  it('refuses a link inside the root that points out of it', () => {
+    // A junction needs no privilege on Windows; elsewhere the type is ignored and this is a plain link.
+    symlinkSync(join(dir, 'app-sibling'), join(root, 'linked'), 'junction');
+    expect(() => staticFileUnder(root, '/linked/x.js')).toThrow(expect.objectContaining({ status: 403 }));
+  });
+
+  it('answers 400 for a malformed escape or a NUL byte', () => {
+    for (const urlPath of ['/%E0%A4%A', '/app.js%00.html']) {
+      expect(() => staticFileUnder(root, urlPath)).toThrow(expect.objectContaining({ status: 400 }));
+    }
   });
 });

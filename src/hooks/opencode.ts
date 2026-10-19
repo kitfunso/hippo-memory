@@ -2,8 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homeDir } from '../util/agent-homes.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
-import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
-import type { JsonObject } from '../store/port/types.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral, tryReadJsonFile } from '../util/json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
@@ -84,12 +83,9 @@ function migrateLegacyOpencodeHooksBlock() {
   const configPath = resolveOpencodeConfigPath();
   if (!fs.existsSync(configPath)) return { migrated: false, jsonRepairFailed: false };
 
-  let settings: JsonObject;
-  try {
-    settings = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  } catch {
-    return { migrated: false, jsonRepairFailed: true };
-  }
+  const settings = tryReadJsonFile(configPath);
+  if (settings === undefined) return { migrated: false, jsonRepairFailed: true };
+  if (!isJsonObjectLiteral(settings)) return { migrated: false, jsonRepairFailed: false };
 
   const hooks = settings.hooks;
   // Non-object hooks values (string, array, null) are user content we don't

@@ -67,6 +67,19 @@ const PORT_BASE = {
   'src/store/port/types.ts': 'export type T = 1;\n',
 };
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
+const DASHBOARD_MAP = {
+  order: ['low', 'high'],
+  folders: { sub: 'high', api: 'high', cli: 'high', dashboard: 'high', store: 'low' },
+  rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+};
+const DASHBOARD_BASE = {
+  'src/a.ts': '',
+  'src/b.ts': '',
+  'src/api/read.ts': 'export const read = 1;\n',
+  'src/cli/out.ts': 'export const cli = 1;\n',
+  'src/store/rows.ts': 'export const rule = 1;\n',
+  'src/store/port.ts': 'export type R = 1;\n',
+};
 
 type Row = {
   name: string;
@@ -269,6 +282,32 @@ const rows: Row[] = [
       ].join('\n'),
     },
     map: SQLITE_MAP,
+    status: 0,
+    output: ['Layer order OK'],
+  },
+  {
+    name: 'a dashboard import of the store or the CLI fails, runtime or type-only',
+    files: {
+      ...DASHBOARD_BASE,
+      'src/dashboard/a.ts': "import { rule } from '../store/rows.js';\nexport const a = rule;\n",
+      'src/dashboard/b.ts': "import type { R } from '../store/port.js';\nexport type B = R;\n",
+      'src/dashboard/c.ts': "export const c = 1;\nimport { cli } from '../cli/out.js';\n",
+    },
+    map: DASHBOARD_MAP,
+    status: 1,
+    output: [
+      'src/dashboard/a.ts:1 imports src/store/rows.ts',
+      'src/dashboard/b.ts:1 imports src/store/port.ts',
+      'src/dashboard/c.ts:2 imports src/cli/out.ts',
+    ],
+  },
+  {
+    name: 'a dashboard import of src/api passes',
+    files: {
+      ...DASHBOARD_BASE,
+      'src/dashboard/a.ts': "import { read } from '../api/read.js';\nexport const a = read;\n",
+    },
+    map: DASHBOARD_MAP,
     status: 0,
     output: ['Layer order OK'],
   },

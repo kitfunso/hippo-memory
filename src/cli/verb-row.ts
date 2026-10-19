@@ -16,6 +16,8 @@ export interface DryRunForm {
 export interface VerbRow {
   /** The flags this verb reads; any other flag still parses, and the verb says it ignores it. */
   readonly flags: VerbFlags;
+  /** Flags an earlier release took, each with what to do instead: typing one stops the run and names the removal. */
+  readonly removedFlags?: Readonly<Record<string, string>>;
   /** Help blocks, each opening with a newline so the full listing is their concatenation. */
   readonly usage?: readonly string[];
   /** Help blocks the full listing prints after every verb's own; `hippo <verb> --help` prints them last. */

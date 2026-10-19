@@ -3,6 +3,7 @@
 
 import { MINUTE_MS } from './time.js';
 import { errorCode, errorFields, log } from './log.js';
+import { tryParseUrl } from './net.js';
 
 export interface RetryPolicy {
   /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */
@@ -85,12 +86,8 @@ function isIdempotent(method: string | undefined): boolean {
 
 /** Host plus pathname only: a query string can carry a key. */
 function redactedTarget(url: string | URL): string {
-  try {
-    const u = new URL(url);
-    return `${u.host}${u.pathname}`;
-  } catch {
-    return 'unparseable-url';
-  }
+  const u = url instanceof URL ? url : tryParseUrl(url);
+  return u === undefined ? 'unparseable-url' : `${u.host}${u.pathname}`;
 }
 
 interface RetryLogEntry {

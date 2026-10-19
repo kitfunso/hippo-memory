@@ -7,14 +7,10 @@ import { readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container } from './types.js';
 import { errorMessage } from '../util/log.js';
+import { isJsonObject, isJsonString, parseJson } from '../util/json.js';
 import { vscodeDataFolders } from '../util/agent-homes.js';
 
 const MEMORY_TOOL = ['github.copilot-chat', 'memory-tool', 'memories'] as const;
-
-interface WorkspaceFile {
-  readonly folder?: string;
-  readonly workspace?: string;
-}
 
 /** A `file:` URI as a local path; null for any other scheme or a URI with a host part. */
 function fileUriToPath(uri: string, platform: NodeJS.Platform): string | null {
@@ -32,10 +28,11 @@ function workspaceFolder(file: string, platform: NodeJS.Platform, warnings: stri
     return null;
   }
   try {
-    // SAFETY: JSON.parse output; a non-string `folder` or a scalar file throws below and becomes a warning.
-    const json = JSON.parse(read.text) as WorkspaceFile | null;
-    if (json === null || Array.isArray(json)) throw new Error('not a JSON object');
+    // A scalar file or a non-string `folder` throws and becomes a warning.
+    const json = parseJson(read.text);
+    if (!isJsonObject(json)) throw new Error('not a JSON object');
     if ('workspace' in json || !json.folder) return null;
+    if (!isJsonString(json.folder)) throw new Error('folder is not a string');
     return fileUriToPath(json.folder, platform);
   } catch (err) {
     warnings.push(`${file}: ${errorMessage(err)}`);

@@ -18,7 +18,7 @@ import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { log } from '../../src/util/log.js';
+import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -81,13 +81,7 @@ afterAll(async () => {
 beforeEach(() => {
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  // A once-only line reaches stderr once per process, so each case keeps its own keys as a fresh process would.
-  const seen = new Set<string>();
-  vi.spyOn(log, 'once').mockImplementation((key, level, message, fields) => {
-    if (seen.has(key)) return;
-    seen.add(key);
-    log[level](message, fields);
-  });
+  onceKeysPerCase();
 });
 
 afterEach(() => {

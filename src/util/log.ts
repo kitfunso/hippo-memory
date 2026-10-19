@@ -131,6 +131,13 @@ export function errorFields<E>(err: E): LogFields {
   return { errorClass: err.constructor.name, stack: err.stack, cause: causeChain(err) };
 }
 
+/** The class and errno name of a thrown value without its text, for a line that must not carry caller data. */
+export function errorClassFields<E>(err: E): LogFields {
+  if (!(err instanceof Error)) return { errorClass: 'NonError' };
+  const code = errorCode(err);
+  return code === '' ? { errorClass: err.constructor.name } : { errorClass: err.constructor.name, errno: code };
+}
+
 export const log = {
   error: (message: string, fields?: LogFields): void => write('error', message, fields),
   warn: (message: string, fields?: LogFields): void => write('warn', message, fields),

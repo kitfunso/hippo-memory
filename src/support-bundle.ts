@@ -11,7 +11,9 @@ import { getGlobalRoot } from './sharing/global-store.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { loadConfig } from './core/config.js';
 import { redactSecretsStrict } from './util/secret-detect.js';
-import { type JsonValue, isJsonString, isJsonObject } from './util/json.js';
+import { type JsonValue, isJsonString, isJsonObject, tryReadJsonFile } from './util/json.js';
+import { tryParseUrl } from './util/net.js';
+import { ignoringCodes, PATH_UNREADABLE } from './util/expected-errors.js';
 import { escapeRegex } from './util/escape.js';
 import { errorMessage } from './util/log.js';
 import type { JsonObject } from './store/port/types.js';
@@ -45,6 +47,7 @@ const OTHER_ENV_NAMES: readonly string[] = [
   'SLACK_TEAM_ID',
   'SLACK_SIGNING_SECRET',
   'SLACK_SIGNING_SECRET_PREVIOUS',
+  'SLACK_SIGNING_SECRET_PREVIOUS_UNTIL',
   'SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK',
   'XDG_DATA_HOME',
   'MCP_SSE_HEARTBEAT_MS',
@@ -84,12 +87,7 @@ function readStoreConfig(storeDir: string): StoreConfigReport {
   const configPath = path.join(storeDir, 'config.json');
   let configFile: 'absent' | 'present' | 'invalid' = 'absent';
   if (fs.existsSync(configPath)) {
-    try {
-      JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      configFile = 'present';
-    } catch {
-      configFile = 'invalid';
-    }
+    configFile = tryReadJsonFile(configPath) === undefined ? 'invalid' : 'present';
   }
   // loadConfig always returns the effective config: its own defaults on a missing or broken file.
   const effective: JsonValue = JSON.parse(JSON.stringify(loadConfig(storeDir)));
@@ -191,13 +189,10 @@ function buildLogsSection(opts: SupportBundleOptions): JsonObject {
 
 // The native realpath is the only form that exposes a short-name (8.3) or symlinked alias for what it is.
 function nativeRealPathKey(p: string): string | null {
-  try {
-    const real = fs.realpathSync.native(p);
-    return process.platform === 'win32' ? real.toLowerCase() : real;
-  } catch {
-    // A path that does not exist has no alias to find.
-    return null;
-  }
+  // A path that does not exist, or that loops, has no alias to find.
+  const real = ignoringCodes([...PATH_UNREADABLE, 'ELOOP', 'ENAMETOOLONG'], () => fs.realpathSync.native(p));
+  if (real === undefined) return null;
+  return process.platform === 'win32' ? real.toLowerCase() : real;
 }
 
 function collectHomeAliases(home: string, probes: readonly string[]): Set<string> {
@@ -300,16 +295,13 @@ const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
 function redactUrlsInString(text: string): string {
   return text.replace(URL_RE, (match) => {
     const scheme = match.slice(0, match.indexOf('://'));
-    try {
-      const url = new URL(match);
-      url.username = '';
-      url.password = '';
-      url.search = '';
-      url.hash = '';
-      return url.toString();
-    } catch {
-      return `${scheme}://[REDACTED]`;
-    }
+    const url = tryParseUrl(match);
+    if (url === undefined) return `${scheme}://[REDACTED]`;
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
   });
 }
 

@@ -24,6 +24,7 @@ import {
   SLACK_DLQ,
   upsertSlackWorkspaceAt,
 } from './connectors/slack.js';
+import { claimDeliveryAt, releaseDeliveryAt } from './connectors/replay.js';
 import type { OnHandle } from './open.js';
 import type {
   ArtifactArchive,
@@ -79,6 +80,8 @@ const queueOf = (connector: DeadLetterConnector) => (connector === 'slack' ? SLA
 type DeliveryMethods =
   | 'eventRecord'
   | 'markEventSeen'
+  | 'claimDelivery'
+  | 'releaseDelivery'
   | 'deletionTarget'
   | 'archiveDeletedArtifact'
   | 'slackTeamRoute'
@@ -108,6 +111,8 @@ export function sqliteConnectorEvents(on: OnHandle): Sync<ConnectorEvents> {
   return {
     eventRecord: (event) => on((db) => eventRecordAt(db, event)),
     markEventSeen: (event) => on((db) => markEventSeenAt(db, event)),
+    claimDelivery: (claim) => on((db) => claimDeliveryAt(db, claim)),
+    releaseDelivery: (connector, key) => on((db) => releaseDeliveryAt(db, connector, key)),
     deletionTarget: (lookup) => on((db) => deletionTargetAt(db, lookup)),
     archiveDeletedArtifact: (archive) => on((db) => archiveArtifactAt(db, archive)),
     slackTeamRoute: (teamId) => on((db) => slackTeamRouteAt(db, teamId)),

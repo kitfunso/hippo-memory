@@ -231,6 +231,7 @@ const COMPOSITION_ROOTS = new Map([
   ['src/server/boot.ts', 'the HTTP server builds its store holder here'],
   ['src/mcp/stdio.ts', 'the stdio MCP server, the one entry with no store found yet'],
   ['src/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
+  ['src/server/dashboard-reader-thread.ts', 'the dashboard reader is a thread entry of its own, handed only a folder'],
   ['src/index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
   [
     'src/entry/folder-search.ts',

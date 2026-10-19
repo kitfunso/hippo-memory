@@ -2,6 +2,7 @@ import type { Learning } from '../store/port/learning.js';
 import type { EntryCursor } from '../store/port/consolidation.js';
 import type { HippoStore } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
+import { MINUTE_MS } from '../util/time.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
 import {
   GitReadError,
@@ -593,15 +594,24 @@ function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): stri
   return evidence;
 }
 
+/** An outcome row is stamped before it commits, so the recheck starts a little before the first read. */
+const CONFIRM_RECHECK_MARGIN_MS = MINUTE_MS;
+
 function tagChurnStale(
   learning: Learning,
   tenantId: string,
   toTag: readonly MemoryEntry[],
   confirmedAt: Map<string, string>,
+  firstReadAt: number,
 ): void {
-  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence.
-  const confirmedNow = learning.confirmedOutcomeTimes(tenantId);
-  const unconfirmed = toTag.filter((stale) => confirmedNow.get(stale.id) === confirmedAt.get(stale.id));
+  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence. Only
+  // outcomes since the first read can have landed, so that is all the recheck reads.
+  const recheckSince = new Date(firstReadAt - CONFIRM_RECHECK_MARGIN_MS).toISOString();
+  const confirmedSince = learning.confirmedOutcomeTimes(tenantId, recheckSince);
+  const unconfirmed = toTag.filter((stale) => {
+    const seen = confirmedSince.get(stale.id);
+    return seen === undefined || seen === confirmedAt.get(stale.id);
+  });
   if (unconfirmed.length === 0) return;
   learning.addTagToEntries(
     tenantId,
@@ -636,6 +646,24 @@ function recordChurnEvidence(
   return toTag;
 }
 
+/** The good-outcome times the candidates' anchors need, and the anchor of each: its last confirmation, if that is
+ * later than its creation. */
+function readChurnAnchors(learning: Learning, tenantId: string, candidates: readonly ChurnCandidate[]) {
+  const firstReadAt = Date.now();
+  // A confirmation older than the oldest candidate cannot move any anchor, so the read starts there.
+  const oldestCreated = candidates.reduce((oldest, c) => Math.min(oldest, Date.parse(c.entry.created)), Infinity);
+  const confirmedAt = learning.confirmedOutcomeTimes(tenantId, new Date(oldestCreated).toISOString());
+  // Compared as epoch ms, not strings: imported rows may carry offsets or other ISO forms.
+  const anchorOf = (entry: MemoryEntry): string => {
+    const confirmed = confirmedAt.get(entry.id);
+    const confirmedMs = confirmed ? Date.parse(confirmed) : NaN;
+    return confirmedMs > Date.parse(entry.created)
+      ? new Date(confirmedMs).toISOString()
+      : new Date(entry.created).toISOString();
+  };
+  return { confirmedAt, firstReadAt, anchorOf };
+}
+
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
  * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export function detectChurnStale(
@@ -651,15 +679,7 @@ export function detectChurnStale(
   const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
-  const confirmedAt = learning.confirmedOutcomeTimes(opts.tenantId);
-  // Compared as epoch ms, not strings: imported rows may carry offsets or other ISO forms.
-  const anchorOf = (entry: MemoryEntry): string => {
-    const confirmed = confirmedAt.get(entry.id);
-    const confirmedMs = confirmed ? Date.parse(confirmed) : NaN;
-    return confirmedMs > Date.parse(entry.created)
-      ? new Date(confirmedMs).toISOString()
-      : new Date(entry.created).toISOString();
-  };
+  const { confirmedAt, firstReadAt, anchorOf } = readChurnAnchors(learning, opts.tenantId, candidates);
 
   const needs: ChurnNeeds = {
     paths: candidates.some((c) => c.refs.paths.length > 0),
@@ -678,7 +698,7 @@ export function detectChurnStale(
     // leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
-    if (!dryRun && toTag.length > 0) tagChurnStale(learning, opts.tenantId, toTag, confirmedAt);
+    if (!dryRun && toTag.length > 0) tagChurnStale(learning, opts.tenantId, toTag, confirmedAt, firstReadAt);
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);
     throw err;

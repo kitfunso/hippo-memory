@@ -8,7 +8,8 @@ import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import type { HippoConfig } from '../core/config.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import { USER_SEGMENT } from '../util/home-path.js';
-import { errorMessage } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { tryParseJson } from '../util/json.js';
 import { SESSION_DIGEST_TAG } from '../core/session-digest-row.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -201,12 +202,8 @@ function addShellPatch<T>(state: ScanState, callId: string, command: T, workdir:
 
 function readCodexFunctionCall(item: TranscriptItem, state: ScanState): void {
   if (!isStringValue(item.call_id) || !isStringValue(item.arguments)) return;
-  let args: unknown;
-  try {
-    args = JSON.parse(item.arguments);
-  } catch {
-    return; // Codex stores the model's raw arguments; a malformed call ran nothing.
-  }
+  // Codex stores the model's raw arguments; a malformed call ran nothing.
+  const args: unknown = tryParseJson(item.arguments);
   if (!isObjectLike(args)) return;
   if (item.name === 'apply_patch') {
     if ('input' in args && isStringValue(args.input)) addPatch(state, item.call_id, args.input, state.cwd);
@@ -350,15 +347,16 @@ function realFsPath(p: string): string | null {
  * resolved.
  */
 function repoRelative(p: string, repoRoot: string): string | null {
-  let rel: string;
+  let real: string | null;
   try {
-    const real = realFsPath(p);
-    if (real === null) return null;
-    rel = path.relative(repoRoot, real);
-  } catch {
-    // SHORTCUT: an unresolvable path counts as outside the repo; only that path is lost, never the digest.
+    real = realFsPath(p);
+  } catch (err) {
+    // An unresolvable path counts as outside the repo: only that path is lost, never the digest.
+    log.warnThenDebug('digest:realpath', 'digest: a changed path could not be resolved', errorFields(err));
     return null;
   }
+  if (real === null) return null;
+  const rel = path.relative(repoRoot, real);
   if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return null;
   return rel.split(path.sep).join('/');
 }

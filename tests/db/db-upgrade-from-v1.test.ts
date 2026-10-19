@@ -16,6 +16,8 @@ const V1_DDL = `
     conflicts_with_json TEXT NOT NULL, pinned INTEGER NOT NULL, confidence TEXT NOT NULL,
     content TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX idx_memories_layer_created ON memories(layer, created);
+  CREATE INDEX idx_memories_last_retrieved ON memories(last_retrieved);
   CREATE TABLE consolidation_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
     decayed INTEGER NOT NULL, merged INTEGER NOT NULL, removed INTEGER NOT NULL
@@ -80,12 +82,20 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     expect(lesson.created).toBe('2025-01-02T03:04:05.000Z');
   });
 
-  it('ends with the pinned schema after the full migration chain', () => {
+  // A fresh store's schema is pinned in db-schema-snapshot, so the upgraded store must match it object for object.
+  it('ends with the fresh-store schema after the full migration chain', () => {
+    const freshDb = openHippoDb(makeRoot('upgrade-v1-fresh'));
     const db = openHippoDb(root);
     try {
-      expect(dumpSchema(db)).toMatchSnapshot();
+      const [fresh, upgraded] = [dumpSchema(freshDb), dumpSchema(db)];
+      expect(upgraded.userVersion).toBe(fresh.userVersion);
+      expect({
+        onlyFresh: fresh.objects.filter((o) => !upgraded.objects.includes(o)),
+        onlyUpgraded: upgraded.objects.filter((o) => !fresh.objects.includes(o)),
+      }).toEqual({ onlyFresh: [], onlyUpgraded: [] });
     } finally {
       closeHippoDb(db);
+      closeHippoDb(freshDb);
     }
   });
 

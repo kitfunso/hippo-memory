@@ -12,9 +12,10 @@ import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey } from './client-ip.js';
 import { clientKeyOf } from './client-key.js';
-import { noteAccess } from './request.js';
+import { endReply, noteAccess, writeChunk } from './request.js';
 import type { ResolvedServeOptions } from './types.js';
-import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
+import { type JsonValue, isJsonString, isJsonObject, tryParseJson } from '../util/json.js';
+import { tryDecodeUri } from '../util/expected-errors.js';
 import { blockHash } from '../util/token-text.js';
 import { MINUTE_MS } from '../util/time.js';
 
@@ -30,11 +31,9 @@ const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
 
 function decodeHeaderPiece(raw: string, header: string): string {
   if (!HEADER_PIECE.test(raw)) throw new HttpError(400, `${header} must be percent-encoded, with no empty names`);
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    throw new HttpError(400, `${header} holds a bad percent escape`);
-  }
+  const decoded = tryDecodeUri(raw);
+  if (decoded === undefined) throw new HttpError(400, `${header} holds a bad percent escape`);
+  return decoded;
 }
 
 /** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any
@@ -91,12 +90,8 @@ export async function handleMcpPost(
   noteAccess(req, { tenant: ctx.tenantId });
   const project = callerProjectFromHeaders(req, sharedStoreOf(ctx));
   const raw = await readBody(req, { deadlineMs: bodyDeadlineMs(envBodyTimeoutMs()) });
-  let mcpReq: JsonValue;
-  try {
-    mcpReq = JSON.parse(raw);
-  } catch {
-    throw new HttpError(400, 'invalid JSON-RPC body');
-  }
+  const mcpReq = tryParseJson(raw);
+  if (mcpReq === undefined) throw new HttpError(400, 'invalid JSON-RPC body');
   if (!isJsonObject(mcpReq) || !isJsonString(mcpReq.method)) {
     throw new HttpError(400, 'JSON-RPC body must include a method string');
   }
@@ -112,7 +107,7 @@ export async function handleMcpPost(
   if (mcpRes === null) {
     // Notification — no body, 202 Accepted.
     res.writeHead(202);
-    res.end();
+    endReply(res);
     return;
   }
   sendJson(res, 200, mcpRes);
@@ -221,23 +216,11 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
 
 /** False when the client hung up, so the caller stops pinging a dead socket. */
 function writePing(res: ServerResponse): boolean {
-  try {
-    res.write(': ping\n\n');
-    return true;
-  } catch {
-    return false;
-  }
+  return writeChunk(res, ': ping\n\n');
 }
 
 function endStreamWithReason(res: ServerResponse, reason: string): void {
-  try {
-    res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
-  } catch {
-    /* socket already gone */
-  }
-  try {
-    res.end();
-  } catch {
-    /* socket already gone */
-  }
+  // A socket that refused the write is already logged; end() on it would only log the same failure again.
+  if (writeChunk(res, `event: closed\ndata: ${JSON.stringify({ reason })}\n\n`)) endReply(res);
+  else res.destroy();
 }

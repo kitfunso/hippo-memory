@@ -34,7 +34,7 @@ import {
   sendJson,
   type WebhookRequest,
 } from '../../util/http-util.js';
-import type { JsonValue } from '../../util/json.js';
+import { type JsonValue, tryParseJson } from '../../util/json.js';
 
 /** Reads the raw body and refuses it unless the signature matches the current or the previous secret. */
 async function readSignedBody(request: WebhookRequest, secret: string, sigStr: string): Promise<string> {
@@ -228,14 +228,10 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
     return parkRaw(`unhandled event: ${d.eventName ?? '(missing X-GitHub-Event)'}`, 'unhandled');
   }
 
-  let body: JsonValue | undefined;
-  try {
-    body = JSON.parse(d.rawBody);
-  } catch {
-    return parkRaw('invalid JSON', 'parse_error');
-  }
+  const body = tryParseJson(d.rawBody);
+  if (body === undefined) return parkRaw('invalid JSON', 'parse_error');
 
-  if (body === undefined || !isGitHubWebhookEnvelope(body)) {
+  if (!isGitHubWebhookEnvelope(body)) {
     return parkRaw('not a GitHub webhook envelope', 'parse_error');
   }
   return body;
