@@ -14,7 +14,7 @@ import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import type { Reports } from '../port-groups.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 
 /** Every superseded row, the row that replaced it and that row's extraction source, in loadAllEntries' order: all a
  * correction-latency report reads. */

@@ -13,7 +13,8 @@ import type { EntryTarget } from '../port/entry-writes.js';
 import { bound, boundWithFiles, type FileBodies } from './bound.js';
 import type { LossAversion } from '../../core/memory.js';
 import { openStore } from './handles.js';
-import type { LastRecall, RecallWrites, Sync } from '../port.js';
+import type { LastRecall, RecallWrites } from '../port.js';
+import type { Sync } from './served.js';
 import { writeRecallTrace } from './recall-trace.js';
 
 /** What a finished recall wrote after its audit rows: the trace's id, null when none was asked or its write failed, and

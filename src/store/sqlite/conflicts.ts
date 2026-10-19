@@ -14,7 +14,7 @@ import type { StoreFiles, OnHandle } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { placeholders } from '../../util/sql.js';
 import type { KeysetClause } from '../../util/keyset.js';
-import type { DetectedConflict } from '../port/consolidation.js';
+import type { DetectedConflict } from '../local/consolidation.js';
 import type {
   ConflictListQuery,
   ConflictMember,
@@ -24,7 +24,7 @@ import type {
 } from '../port/conflicts.js';
 import { openStore } from './handles.js';
 import type { Conflicts } from '../port-groups.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.

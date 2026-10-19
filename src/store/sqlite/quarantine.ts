@@ -4,15 +4,8 @@ import { appendAuditEvent } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter, type KeysetPosition } from '../../util/keyset.js';
 import { selectEntriesByIds, readEntryAt } from './entry-reads.js';
-import type {
-  QuarantineApproval,
-  QuarantineListQuery,
-  QuarantineRefusal,
-  QuarantineRejection,
-  QuarantinedMemory,
-  Quarantine,
-  Sync,
-} from '../port.js';
+import type { QuarantineApproval, QuarantineListQuery, QuarantineRefusal, QuarantineRejection, QuarantinedMemory, Quarantine } from '../port.js';
+import type { Sync } from './served.js';
 import type { QuarantineRow, QuarantineStatus } from '../port/quarantine.js';
 import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../core/recall-scope.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';

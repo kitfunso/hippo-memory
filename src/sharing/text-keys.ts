@@ -1,7 +1,7 @@
 // A store's text keys a page at a time, so no one read returns every row.
-import type { EntryCursor } from '../store/port/consolidation.js';
-import type { EntryTextKey, Sharing } from '../store/port/sharing.js';
+import type { EntryTextKey, Sharing } from '../store/local/sharing.js';
 import type { TenantId } from '../util/tenant.js';
+import type { EntryCursor } from '../store/port/types.js';
 
 const TEXT_KEY_PAGE_ROWS = 500;
 

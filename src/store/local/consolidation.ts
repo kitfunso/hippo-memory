@@ -3,10 +3,10 @@
 import type { MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
 import type { WriteBudget } from '../../util/write-budget.js';
-import type { SessionEvent } from './sessions.js';
-import type { AppendAuditOpts } from './types.js';
+import type { SessionEvent } from '../port/sessions.js';
+import type { AppendAuditOpts, EntryCursor, EntryPage } from '../port/types.js';
 import type { AuditOp } from '../../core/audit-ops.js';
-import type { RejectedValueRow } from './rejections.js';
+import type { RejectedValueRow } from '../port/rejections.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
@@ -130,18 +130,6 @@ export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'qua
 
 /** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
 export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
-
-/** Where a page stopped: the `created`, `id` of its last row, in loadAllEntries' order. */
-export interface EntryCursor {
-  created: string;
-  id: string;
-}
-
-export interface EntryPage {
-  entries: MemoryEntry[];
-  /** The cursor that reads the page after this one, or null when this was the last. */
-  next: EntryCursor | null;
-}
 
 /** EntryPage with only each row's id. */
 export interface EntryIdPage {

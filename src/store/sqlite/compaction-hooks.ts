@@ -6,14 +6,13 @@ import {
   saveCompactionAt,
 } from './compactions-record.js';
 import type { OnHandle } from './open.js';
-import type { CompactionHooks } from '../port/compaction-hooks.js';
+import type { CompactionHooks } from '../local/compaction-hooks.js';
 
 export function sqliteCompactionHooks(on: OnHandle): CompactionHooks {
   return {
     start: (tenantId, start, log) => recordCompactionStart(on, tenantId, start, log),
     markSnapshotSaved: (tenantId, recordId, log) => recordSnapshotSaved(on, tenantId, recordId, log),
-    save: (tenantId, meta, text, at, log, baseHalfLifeDays) =>
-      saveCompactionAt(on, { tenantId, meta, text, at, log, baseHalfLifeDays }),
+    save: (save) => saveCompactionAt(on, save),
     replay: (tenantId, sources, log, opts) => replayStoredCompactions(on, tenantId, sources, log, opts),
   };
 }

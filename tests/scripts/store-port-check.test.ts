@@ -30,7 +30,6 @@ type Counts = {
   carrierFilesList: string[];
   storeFilesWithoutSql?: number;
   storeFilesWithoutSqlList?: string[];
-  portFunctionParams?: number;
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
 
@@ -599,12 +598,15 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('portFunctionParams fails once a function parameter is added above the baseline', () => {
+  it('portFunctionParams fails on one function parameter, with no baseline to raise', () => {
     const files = { 'src/store/port.ts': 'export interface Group { visit(each: () => void): void }\n' };
-    withFixture(files, { portFunctionParams: 0 }, ({ run }) => {
+    withFixture(files, {}, ({ run, baseline }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('portFunctionParams: 0 -> 1');
+      expect(r.stderr).toContain('src/store/port.ts:1 Group.visit(each)');
+      expect(run('--update').status).toBe(0);
+      expect(baseline()).not.toHaveProperty('portFunctionParams');
+      expect(run().status).toBe(1);
     });
   });
 

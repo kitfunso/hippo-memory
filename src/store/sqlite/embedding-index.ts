@@ -2,7 +2,7 @@
 import { closeHippoDb } from '../../db/index.js';
 import { ALL_TENANTS } from '../../util/tenant.js';
 import { countAllEntriesAt, loadEntriesByIdsAt, loadEntryIdsPageAt } from './entry-reads.js';
-import type { EmbeddingIndex, VectorRebuild } from '../port/embedding-index.js';
+import type { EmbeddingIndex, VectorRebuild } from '../local/embedding-index.js';
 import {
   beginVectorRebuildAt,
   embeddingModelRequiresReindex,

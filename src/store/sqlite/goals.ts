@@ -6,7 +6,7 @@ import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
 import type { Goals } from '../port-groups.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 

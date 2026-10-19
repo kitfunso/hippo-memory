@@ -15,13 +15,13 @@ import { upsertVectors } from '../../src/db/vector-store.js';
 import { projectTagReads } from '../../src/store/sqlite/project-tags.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import type { EntryCursor } from '../../src/store/port/consolidation.js';
 import { SleepRows } from '../../src/consolidate/survivors.js';
 import { rowsInPages } from '../../src/util/pages.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import type { EntryCursor } from '../../src/store/port/types.js';
 
 const ID_PAGE_READ = 'SELECT id, created FROM memories';
 

@@ -6,7 +6,7 @@
 // So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // So does any import, re-export or import() (type-only too) into src/store/sqlite/** from a file outside src/store that
 // SQLITE_ROOTS does not name, and so does naming sqliteSyncStore there: every other file takes its store handed down.
-// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**): the api reads the store through the port and takes shared rules from src/core.
+// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and the local files beside it (local/**): the api reads the store through those and takes shared rules from src/core.
 // So does any import, runtime or type-only, from src/dashboard/** into src/store, src/db or src/cli: the dashboard reads through src/api, with no baseline.
 // layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
@@ -183,7 +183,11 @@ function findApiStoreReaches(srcDir) {
     for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
       const target = resolveSpecifier(file, spec);
       const to = target && rel(target);
-      const outsidePort = to?.startsWith('store/') && !API_PORT_FILES.has(to) && !to.startsWith('store/port/');
+      const outsidePort =
+        to?.startsWith('store/') &&
+        !API_PORT_FILES.has(to) &&
+        !to.startsWith('store/port/') &&
+        !to.startsWith('store/local/');
       const key = `${from}\t${to}`;
       if (outsidePort && !out.has(key)) out.set(key, { file: from, target: to, line });
     }

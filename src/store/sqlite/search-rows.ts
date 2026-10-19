@@ -13,7 +13,7 @@ import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../../util/escape.js';
 import { placeholders } from '../../util/sql.js';
 import type { OriginFilter } from '../port/types.js';
-import type { RecallSearchEntriesOptions } from '../port/sharing.js';
+import type { RecallSearchEntriesOptions } from '../local/sharing.js';
 import type { VectorCandidateSpec } from '../port/vector-reads.js';
 import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
 import { tenantAnd } from './tenant.js';

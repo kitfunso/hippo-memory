@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../core/memory.js';
-import type { RecallSearchEntriesOptions } from './port/sharing.js';
+import type { RecallSearchEntriesOptions } from './local/sharing.js';
 import { onHandle, openStore } from './sqlite/handles.js';
 import { loadRecallEntriesAt } from './sqlite/search-rows.js';
 

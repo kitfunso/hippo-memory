@@ -17,7 +17,7 @@ import {
   type PromptHookRequest,
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
-import { hasGroup } from './store/port.js';
+import { isLocalStore } from './store/local/index.js';
 import { sqliteReach } from './store/sqlite/store.js';
 import { loadConfig } from './core/config.js';
 
@@ -29,7 +29,7 @@ async function promptHookContext(
   opts?: PromptHookOptions,
 ): ReturnType<typeof renderPromptHook> {
   // Only hippo.db has a global store beside it; an add-on's own store reads as one project.
-  const sqliteBacked = hasGroup(ctx.store, 'localFiles');
+  const sqliteBacked = isLocalStore(ctx.store);
   const reach =
     ctx.reach ??
     (sqliteBacked ? contextReach(sqliteReach(ctx.hippoRoot, ctx.store, opts?.sharedStore), loadConfig) : undefined);

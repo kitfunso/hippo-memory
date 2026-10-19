@@ -5,8 +5,8 @@
  * records the base, so it runs once.
  */
 import { deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../core/memory.js';
-import type { HalfLifeChange, HalfLifeRows } from '../store/port/consolidation.js';
-import type { Consolidation } from '../store/port.js';
+import type { HalfLifeChange, HalfLifeRows } from '../store/local/consolidation.js';
+import type { Consolidation } from '../store/local/index.js';
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set([
   'decision',

@@ -1,7 +1,7 @@
 import { confirmedOutcomeTimesAt } from './audit.js';
 import { loadCurrentEntriesFromOriginsAt, loadEntriesMentioningAt, readEntryAt } from './entry-reads.js';
 import { addTagToEntriesAt, writeEntriesTogetherAt, writeEntryAt } from './entry-writes.js';
-import type { Learning } from '../port/learning.js';
+import type { Learning } from '../local/learning.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, skipEmpty, type Bodies, type FileBodies } from './bound.js';

@@ -9,9 +9,10 @@ import { JEV_DEFAULT_TOP_K } from '../../rerankers/jev.js';
 import type { RerankerFn } from '../../rerankers/types.js';
 import { explainMatch } from '../../search/explain.js';
 import { fitBudget } from '../../search/finalize.js';
-import type { ContinuityBlock, LocalFiles } from '../../store/port.js';
+import type { ContinuityBlock } from '../../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../core/recall-scope.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context, ContextWith, LocalContext } from '../types.js';
+import type { LocalFiles } from '../../store/local/index.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../graph/recall.js';
 
@@ -45,7 +46,7 @@ export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRec
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
  *  window-capped, so this is a floor on a large store. */
 export function scopeHiddenCount(
-  ctx: ContextWith<'localFiles'>,
+  ctx: LocalContext,
   query: string,
   global: LocalFiles | undefined,
   requested: string | undefined,

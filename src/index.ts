@@ -9,14 +9,13 @@ import {
   type MemoryEntry,
 } from './core/memory.js';
 import { sqliteStore } from './store/sqlite/store.js';
-import { hasGroup, requireGroup, type HippoStore } from './store/port.js';
+import type { LocalStore } from './store/local/index.js';
 import { runConsolidation, type ConsolidateOptions } from './consolidate/sleep.js';
 import { loadConfig } from './core/config.js';
 import { DEFAULT_TENANT_ID } from './util/tenant.js';
-import { StoreNotPortedError } from './util/sqlite-blocked.js';
 import type { ConsolidationResult } from './consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
-import type { Context } from './api/types.js';
+import type { LocalContext } from './api/types.js';
 export {
   MemoryEntry,
   Layer,
@@ -66,23 +65,22 @@ export {
 } from './core/card.js';
 export { ConsolidationResult } from './consolidate/run.js';
 export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
-/** Sleeps the whole store under `ctx`; a store with no `localFiles` group throws `StoreNotPortedError`. */
-export async function sleep(ctx: Context, opts?: SleepOpts): Promise<SleepResult> {
-  if (!hasGroup(ctx.store, 'localFiles')) throw new StoreNotPortedError(ctx.store.kind, 'localFiles');
-  return sleepStore({ ...ctx, store: ctx.store }, opts);
+/** Sleeps the whole store under `ctx`, whose store carries the local files a sleep pass works on. */
+export async function sleep(ctx: LocalContext, opts?: SleepOpts): Promise<SleepResult> {
+  return sleepStore(ctx, opts);
 }
-/** Run a full consolidation pass on `store`, or on the hippo.db under a folder. A store with no `localFiles` group
- * throws `StoreNotPortedError`; with no `options.config`, a folder reads its config.json and a store the defaults. */
+/** Run a full consolidation pass on `store`, or on the hippo.db under a folder. With no `options.config`, a folder reads
+ * its config.json and a store the defaults. */
 export async function consolidate(
-  target: string | HippoStore,
+  target: string | LocalStore,
   options: ConsolidateOptions = {},
 ): Promise<ConsolidationResult> {
   const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
-  return runConsolidation(requireGroup(store, 'localFiles'), { ...options, config, tenantId });
+  return runConsolidation(store.localFiles, { ...options, config, tenantId });
 }
-function isFolder(target: string | HippoStore): target is string {
+function isFolder(target: string | LocalStore): target is string {
   return typeof target === 'string';
 }
 // The one dedupe.js export that is public; the rest of dedupe.js stays internal.

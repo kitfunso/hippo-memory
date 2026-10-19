@@ -3,7 +3,7 @@
  *  consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
 import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
-import type { SourceObjectRef } from '../store/port/graph-rebuild.js';
+import type { SourceObjectRef } from '../store/local/graph-rebuild.js';
 import type { EntityType, SourceObjectType } from '../store/port/graph-reads.js';
 import {
   diffGraph,
@@ -22,6 +22,7 @@ import { loadProjectBriefs } from '../objects/project-briefs.js';
 import type { Objects, StoreWith } from '../store/port.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { escapeRegex } from '../util/escape.js';
+import type { LocalStore } from '../store/local/index.js';
 
 /** Per-type load cap (the loaders default to 100); a type over it is truncated and
  *  `ExtractResult.truncated` records that. */
@@ -357,7 +358,7 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
 
 /** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
  *  Returns the derived counts and which types hit the per-type cap. */
-export async function extractGraph(store: StoreWith<'localFiles'>, tenantId: string): Promise<ExtractResult> {
+export async function extractGraph(store: LocalStore, tenantId: string): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
   // The rebuild's write lock is hippo.db's own, so it runs only through the local files.
   const { graphRebuild } = store.localFiles;
@@ -371,7 +372,7 @@ export async function extractGraph(store: StoreWith<'localFiles'>, tenantId: str
 /** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
  *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
 export async function extractGraphChunked(
-  store: StoreWith<'localFiles'>,
+  store: LocalStore,
   tenantId: string,
   budget: WriteBudget = WRITE_BUDGET,
 ): Promise<ExtractResult> {

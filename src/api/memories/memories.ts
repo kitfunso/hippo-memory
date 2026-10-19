@@ -5,8 +5,8 @@ import { NotFoundError } from '../../core/api-errors.js';
 import { canTouchScope } from '../../core/recall-scope.js';
 import type { HippoStore } from '../../store/port.js';
 import { requireHostAdmin, type Context } from '../types.js';
-import type { EntryCursor } from '../../store/port/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
+import type { EntryCursor } from '../../store/port/types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
 export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry | null> {

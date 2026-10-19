@@ -10,11 +10,12 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../util/tenant
 import { placeholders } from '../../util/sql.js';
 import { duplicateKey, longestWord } from '../../util/same-text.js';
 import { tenantAnd } from './tenant.js';
-import type { EntryCursor, EntryIdPage, EntryPage } from '../port/consolidation.js';
+import type { EntryIdPage } from '../local/consolidation.js';
 import type { RawRefRow } from '../port/context-reads.js';
-import type { OriginRows, OriginTally } from '../port/project-tags.js';
-import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
+import type { OriginRows, OriginTally } from '../local/project-tags.js';
+import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../local/sharing.js';
 import type { SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/dag-reads.js';
+import type { EntryCursor, EntryPage } from '../port/types.js';
 
 const MAX_FRESH_RAW = 200;
 

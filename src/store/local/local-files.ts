@@ -1,4 +1,5 @@
-// The LocalFiles group, kept apart from port.ts so each member only hippo.db has lands here.
+// The local files a hippo.db root reads and writes in process, beside the port: synchronous, so a sleep pass or a
+// hook's write scope never spans an await.
 import type { AgentImport } from './agent-import.js';
 import type { Captures } from './captures.js';
 import type { CompactionHooks } from './compaction-hooks.js';
@@ -12,6 +13,7 @@ import type { Ledger } from './ledger.js';
 import type { Promotion } from './promotion.js';
 import type { ProjectTags } from './project-tags.js';
 import type { Sharing } from './sharing.js';
+import type { RejectionCheck } from '../port/rejections.js';
 
 export type { AgentImport, ContainerTx, ImportTarget } from './agent-import.js';
 export type { Captures } from './captures.js';
@@ -52,6 +54,8 @@ export interface LocalFiles {
   readonly embeddingIndex: EmbeddingIndex;
   readonly ledger: Ledger;
   readonly dashboard: DashboardReads;
+  /** The rejected-value probe of a dry run that cannot await: the CLI's capture and the importers. */
+  readonly rejections: { refusedAmong(checks: readonly RejectionCheck[]): boolean[] };
 }
 
 /** hippo.db's files and the folder whose config.json governs them. */

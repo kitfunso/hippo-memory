@@ -3,7 +3,6 @@ import * as path from 'path';
 import type { TaskSnapshot } from '../store/port/sessions.js';
 import { isInitialized } from '../core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
-import type { LocalFiles, Sync } from '../store/port.js';
 import type { Sessions } from '../store/port-groups.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
@@ -17,6 +16,7 @@ import { errorCode, errorMessage, log as logger, errorFields } from '../util/log
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
+import type { LocalFiles } from '../store/local/index.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
@@ -80,16 +80,15 @@ function printPreCompactInstruction(logFile: string): string | null {
 /** The Copilot CLI accepts both preCompact and PreCompact, so hippo.json's pair can run twice for one compaction. */
 const TWIN_FIRE_MS = 10_000;
 
-/** The folder's store as a compaction hook reaches it, built by the CLI root; each call answers at once, since the hook
- * counts its own time. */
+/** The folder's store as a compaction hook reaches it, built by the CLI root. */
 export interface CompactionStore {
   readonly localFiles: LocalFiles;
-  readonly sessions: Sync<Sessions>;
+  readonly sessions: Sessions;
 }
 
-function snapshotJustSaved(sessions: Sync<Sessions>, tenantId: string, sessionId: string | null): boolean {
+async function snapshotJustSaved(sessions: Sessions, tenantId: string, sessionId: string | null): Promise<boolean> {
   if (sessionId === null || sessionId === '') return false;
-  const active = sessions.loadSnapshot(tenantId, null);
+  const active = await sessions.loadSnapshot(tenantId, null);
   return (
     active?.session_id === sessionId &&
     active.source === 'pre-compact' &&
@@ -99,7 +98,12 @@ function snapshotJustSaved(sessions: Sync<Sessions>, tenantId: string, sessionId
 
 /** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves a working-state
  * snapshot. Never extracts memories itself; SessionEnd capture owns that. */
-function runPreCompact(hippoRoot: string, store: CompactionStore, options: PreCompactOptions, logFile: string): void {
+async function runPreCompact(
+  hippoRoot: string,
+  store: CompactionStore,
+  options: PreCompactOptions,
+  logFile: string,
+): Promise<void> {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
   // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call
   // that would create a store.
@@ -121,7 +125,7 @@ function runPreCompact(hippoRoot: string, store: CompactionStore, options: PreCo
     appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');
     return;
   }
-  if (runtime === 'copilot' && snapshotJustSaved(store.sessions, options.tenantId, sessionId)) {
+  if (runtime === 'copilot' && (await snapshotJustSaved(store.sessions, options.tenantId, sessionId))) {
     appendPreCompactLog(
       logFile,
       `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`,
@@ -139,7 +143,7 @@ function runPreCompact(hippoRoot: string, store: CompactionStore, options: PreCo
   const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
   if (!derived) return;
 
-  saveDerivedSnapshot(store, options.tenantId, logFile, { sessionId, recordId }, derived);
+  await saveDerivedSnapshot(store, options.tenantId, logFile, { sessionId, recordId }, derived);
 }
 
 /** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed;
@@ -204,16 +208,16 @@ function resolvePreCompactTranscript(
   return transcriptPath;
 }
 
-function saveDerivedSnapshot(
+async function saveDerivedSnapshot(
   { localFiles: local, sessions }: CompactionStore,
   tenantId: string,
   logFile: string,
   { sessionId, recordId }: { sessionId: string | null; recordId: string | null },
   derived: WorkingState,
-): void {
+): Promise<void> {
   let existing: TaskSnapshot | null = null;
   try {
-    existing = sessions.loadSnapshot(tenantId, null);
+    existing = await sessions.loadSnapshot(tenantId, null);
   } catch (err) {
     logger.warn(
       `pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`,
@@ -231,7 +235,7 @@ function saveDerivedSnapshot(
     );
   } else {
     try {
-      sessions.saveSnapshot(tenantId, { ...merged, source: 'pre-compact', session_id: sessionId }, null);
+      await sessions.saveSnapshot(tenantId, { ...merged, source: 'pre-compact', session_id: sessionId }, null);
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) {
         local.compactionHooks.markSnapshotSaved(tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
@@ -263,7 +267,7 @@ export async function cmdPreCompact(
 ): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   try {
-    runPreCompact(hippoRoot, store, options, logFile);
+    await runPreCompact(hippoRoot, store, options, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
   }

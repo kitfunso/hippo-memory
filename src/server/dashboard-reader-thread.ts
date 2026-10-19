@@ -5,7 +5,7 @@ import { adminActor } from '../api/index.js';
 import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../api/dashboard/detail.js';
 import { buildMemoryPage, buildOverview, buildProjectDetail, buildSearch } from '../api/dashboard/queries.js';
 import { createSnapshotService } from '../api/dashboard/snapshot.js';
-import type { ContextWith } from '../api/types.js';
+import type { ContextWith, LocalContext } from '../api/types.js';
 import { configReader } from '../core/config.js';
 import { isStoreBusy } from '../store/port.js';
 import { sqliteStore } from '../store/sqlite/store.js';
@@ -35,7 +35,7 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
   const clock = { nowMs: 0, wallMs: 0 };
   const { store, snapshots } = readerStore(hippoRoot, clock);
   // A fresh Context per call, so a config edit shows on the next request.
-  const context = (): ContextWith<'localFiles'> => ({
+  const context = (): LocalContext => ({
     hippoRoot,
     tenantId,
     actor: adminActor(DASHBOARD_ACTOR),

@@ -139,20 +139,20 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../../src/store/port/context-reads.js';
-import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../src/store/port/sharing.js';
+import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../src/store/local/sharing.js';
 import type {
   DetectedConflict,
-  EntryCursor,
   FlushComponent,
   LoadedRows,
   SessionDecayContext,
   RebuildPatch,
-} from '../../src/store/port/consolidation.js';
+} from '../../src/store/local/consolidation.js';
 import type { Prediction, PredictionClose } from '../../src/store/port/predictions.js';
 import type { ClosureState } from '../../src/core/prediction.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
-import type { StoredVectorSummary } from '../../src/store/port/embedding-index.js';
+import type { StoredVectorSummary } from '../../src/store/local/embedding-index.js';
 import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import type { EntryCursor } from '../../src/store/port/types.js';
 
 export function loadAmbientCandidates(
   hippoRoot: string,

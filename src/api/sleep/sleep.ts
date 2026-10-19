@@ -1,7 +1,7 @@
 // The sleep cycle: decay, consolidation, dedupe, graph extraction and the other maintenance passes.
 
 import type { AmbientState } from '../../core/ambient.js';
-import type { ContextWith } from '../types.js';
+import type { ContextWith, LocalContext } from '../types.js';
 import { runSleep } from './sleep-run.js';
 
 /** Options for `sleep`, one consolidation cycle on a SQLite store that returns counts; unlike `hippo sleep` it skips
@@ -50,6 +50,6 @@ export interface SleepResult {
 
 /** Sleeps the WHOLE hippoRoot, every tenant, so /v1/sleep stays loopback-only; SQLite only; never auto-deletes pinned,
  * raw, kept or object-backing rows. */
-export async function sleep(ctx: ContextWith<'localFiles'>, opts: SleepOpts = {}): Promise<SleepResult> {
+export async function sleep(ctx: LocalContext, opts: SleepOpts = {}): Promise<SleepResult> {
   return runSleep(ctx, opts);
 }

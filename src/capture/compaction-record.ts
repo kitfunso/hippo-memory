@@ -9,13 +9,13 @@ import type {
   Log,
   ReplayOptions,
   ReplaySources,
-} from '../store/port/compaction-hooks.js';
-import type { FolderFiles } from '../store/port.js';
+} from '../store/local/compaction-hooks.js';
 import { loadConfig } from '../core/config.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
 import { type JsonValue, tryParseJson } from '../util/json.js';
+import type { FolderFiles } from '../store/local/index.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
@@ -104,7 +104,14 @@ export function saveCompaction(folder: CompactionFolder, payload: PostCompactPay
   if (!found) log('no memories section');
 
   const { defaultHalfLifeDays } = loadConfig(root);
-  const { result, spoolReason } = files.compactionHooks.save(tenantId, payload, text, at, log, defaultHalfLifeDays);
+  const { result, spoolReason } = files.compactionHooks.save({
+    tenantId,
+    meta: payload,
+    text,
+    at,
+    log,
+    baseHalfLifeDays: defaultHalfLifeDays,
+  });
   if (spoolReason !== null) spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
   return result;
 }

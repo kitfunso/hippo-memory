@@ -6,7 +6,8 @@ import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { longestWord, storedTextKeys } from '../util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
-import { requireGroup } from '../store/port.js';
+import { isLocalStore } from '../store/local/index.js';
+import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { extractFromTexts } from './extract.js';
 
@@ -50,8 +51,9 @@ export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): S
   // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
-  // The dedup read and the writes both sit in the request's own hippo.db.
-  const local = requireGroup(ctx.store, 'localFiles');
+  // The dedup read and the writes both sit in the request's own hippo.db; ./server publishes this with a plain Context.
+  if (!isLocalStore(ctx.store)) throw new StoreNotPortedError(ctx.store.kind, 'localFiles');
+  const local = ctx.store.localFiles;
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other
   // projects' rows do not.
   const held = local.captures.textsHolding(

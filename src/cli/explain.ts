@@ -8,7 +8,6 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { cliRecallOrigin, scopeHiddenCount } from '../api/recall/rows.js';
 import { cliConfig, cliApiContext, cliLocalFiles, cliSecondStore } from './api-context.js';
-import type { LocalFiles } from '../store/port.js';
 import type { RankRecallResult } from '../api/recall/pipeline.js';
 import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
@@ -26,6 +25,7 @@ import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
 import { fail } from './exit.js';
 import { plural } from '../util/format.js';
+import type { LocalFiles } from '../store/local/index.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 

@@ -1,14 +1,14 @@
 // The stores the CLI root hands its capture, digest and doctor code, for tests that call that code directly.
 import type { CaptureTarget } from '../../src/capture/command.js';
 import type { CompactionFolder } from '../../src/capture/compaction-record.js';
-import { cliLocalFiles, cliSyncStore } from '../../src/cli/api-context.js';
+import { cliLocalFiles, cliStore } from '../../src/cli/api-context.js';
 import type { EmbedTarget } from '../../src/search/embed-memories.js';
 import { loadConfig } from '../../src/core/config.js';
-import type { FolderFiles } from '../../src/store/port.js';
-import type { Diagnostics } from '../../src/store/port/diagnostics.js';
+import type { Diagnostics } from '../../src/store/local/diagnostics.js';
+import type { FolderFiles } from '../../src/store/local/index.js';
 
 export function captureTarget(root: string): CaptureTarget {
-  return { root, store: cliSyncStore(root), config: loadConfig(root) };
+  return { root, files: cliLocalFiles(root), config: loadConfig(root) };
 }
 
 export function diagnosticsAt(root: string): Diagnostics {
@@ -34,4 +34,5 @@ export function localIndex(root: string): EmbedTarget {
   };
 }
 
-export { cliSyncStore as syncStore };
+/** The store a CLI hook is handed: hippo.db with its local files. */
+export { cliStore as hookStore };

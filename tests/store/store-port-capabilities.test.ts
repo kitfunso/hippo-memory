@@ -15,13 +15,11 @@ import {
   memoryQualityRepair,
   memoryQualityRepairOnce,
 } from '../../src/api/index.js';
-import { sleep } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
-import { StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer } from '../../src/core/memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
@@ -111,15 +109,6 @@ describe.each([
     } finally {
       await store.close();
     }
-  });
-});
-
-describe('package-root sleep under a store without local files', () => {
-  it('answers StoreNotPortedError', async () => {
-    const root = newRoot('capability-sleep-api');
-    await expect(async () => sleep(ctxOn(root, portOnlyStore(root)))).rejects.toThrow(
-      new StoreNotPortedError('port-only', 'localFiles'),
-    );
   });
 });
 

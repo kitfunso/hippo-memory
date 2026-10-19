@@ -17,7 +17,7 @@ import {
 } from './entry-writes.js';
 import { loadEntitiesAt, loadRelationsAt } from './graph-reads.js';
 import { saveSessionHandoffAt } from './handoffs.js';
-import type { DormantMove, EntryCursor } from '../port/consolidation.js';
+import type { DormantMove } from '../local/consolidation.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import type { Entity, EntityType, Relation } from '../port/graph-reads.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
@@ -28,6 +28,7 @@ import { saveActiveTaskSnapshotAt } from './task-snapshots.js';
 import { loadEmbeddingIndexAt } from './vector-index.js';
 import { onHandle, openStore } from './handles.js';
 import { ALL_TENANTS } from '../../util/tenant.js';
+import type { EntryCursor } from '../port/types.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {

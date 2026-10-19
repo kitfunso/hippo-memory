@@ -4,7 +4,8 @@ import { withSqliteAllowed } from '../../src/db/index.js';
 import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
-const OPTIONAL_GROUPS: ReadonlySet<string> = new Set<OptionalGroup>([
+// The optional groups and the local files beside the port, which an add-on store at its smallest has none of.
+const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup | 'localFiles'>([
   'localFiles',
   'vectorViews',
   'readiness',
@@ -39,7 +40,7 @@ export function portOnlyStore(hippoRoot: string): HippoStore {
     recordTokens: allowed(inner.recordTokens),
     close: allowed(inner.close),
   };
-  const groups = Object.entries(inner).filter(([key]) => !(key in base) && !OPTIONAL_GROUPS.has(key));
+  const groups = Object.entries(inner).filter(([key]) => !(key in base) && !LEFT_OUT.has(key));
   // SAFETY: what is left of sqliteStore's own keys is its required groups, each wrapped whole.
   const required = Object.fromEntries(groups.map(([key, group]) => [key, allowedGroup(group)])) as Omit<
     StoreGroups,

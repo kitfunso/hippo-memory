@@ -6,14 +6,8 @@ import { markSlackEventSeenAt, slackEventMemoryAt } from './connectors/slack.js'
 import type { OnHandle, StoreFiles } from './open.js';
 import { boundWithFiles } from './bound.js';
 import { openStore } from './handles.js';
-import type {
-  ConnectorArchive,
-  ConnectorEvent,
-  ConnectorWrite,
-  ConnectorWriteOutcome,
-  ConnectorWrites,
-  Sync,
-} from '../port.js';
+import type { ConnectorArchive, ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites } from '../port.js';
+import type { Sync } from './served.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProjectIn } from './entry-row.js';
 import { writeEntryMirrorsIn, archiveRawAt, writeInOwnTenant } from './entry-writes.js';

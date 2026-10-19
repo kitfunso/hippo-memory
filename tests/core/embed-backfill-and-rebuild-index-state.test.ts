@@ -14,7 +14,6 @@ import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { cliLocalFiles } from '../../src/cli/api-context.js';
 import { loadConfig } from '../../src/core/config.js';
-import type { EmbeddingIndex } from '../../src/store/port.js';
 import { peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { localIndex } from '../_helpers/cli-stores.js';
@@ -26,6 +25,7 @@ import {
   loadEmbeddingIndex,
 } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import type { EmbeddingIndex } from '../../src/store/local/index.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';

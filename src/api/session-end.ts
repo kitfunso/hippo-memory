@@ -6,13 +6,13 @@ import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
 import type { ProjectRef } from '../core/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
-import type { LocalFiles } from '../store/port.js';
 import { readApiCalls, type TranscriptCalls } from '../core/transcript-calls.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
 import type { Context } from './types.js';
+import { isLocalStore, type LocalFiles } from '../store/local/index.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
 export interface SessionClose {
@@ -79,12 +79,13 @@ async function closeSnapshot(ctx: Context, sessionId: string | null, line: (mess
 
 /** The caller's hippo.db and the global one, each once; a store that is not hippo.db keeps no ledger. */
 function rereadLedgers(ctx: Context): LocalFiles[] {
-  const local = (ctx.reach?.hasLocal ?? true) ? ctx.store.localFiles : undefined;
+  const local = (ctx.reach?.hasLocal ?? true) && isLocalStore(ctx.store) ? ctx.store.localFiles : undefined;
   const global = ctx.reach?.global;
+  const globalFiles = global !== undefined && isLocalStore(global.store) ? global.store.localFiles : undefined;
   const byRoot = new Map<string, LocalFiles>();
   for (const [root, files] of [
     [ctx.hippoRoot, local],
-    [global?.root, global?.store.localFiles],
+    [global?.root, globalFiles],
   ] as const) {
     if (root !== undefined && files !== undefined) byRoot.set(path.resolve(root), files);
   }
@@ -167,7 +168,7 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   currentProject: () => ProjectRef;
   /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it failed, having said why. */
   capture: (into: Context, turns: readonly Turn[] | undefined, originProject: ProjectRef | undefined) => boolean;
-  digest: (scan: Scan | null, key: string, log: (line: string) => void) => void;
+  digest: (scan: Scan | null, key: string, log: (line: string) => void) => Promise<void>;
   workingState: (log: (line: string) => void) => ReturnType<SessionClose['workingState']>;
   evidence: () => HandoffEvidence;
 }
@@ -279,7 +280,7 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
   flushRereadLog();
   const scan = w.readScan((line) => w.log(line));
   captureStep(ctx, into, scan, w);
-  w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) => w.log(line));
+  await w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) => w.log(line));
   // Only this session's snapshot, and only after sleep and capture.
   const closeLog = (line: string): void => w.log(line);
   await closeEndedSession(into, {

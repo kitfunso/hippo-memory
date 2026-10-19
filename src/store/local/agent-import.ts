@@ -3,7 +3,7 @@
 import type { MemoryEntry } from '../../core/memory.js';
 import type { ProjectTagReads } from './project-tags.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
-import type { AppendAuditOpts } from './types.js';
+import type { AppendAuditOpts, DormantSnapshot } from '../port/types.js';
 
 /** The calls one container's sync makes inside its transaction, bound to the target store's handle and root. */
 export interface ContainerTx {
@@ -60,14 +60,6 @@ export interface AgentImport {
   openStandIn(tenantId: string): ImportTarget;
   /** True when `err` means another writer held the store past its wait. */
   isBusy<E>(err: E): boolean;
-}
-
-/** A dormant memory's stored snapshot plus when and why it went dormant. */
-export interface DormantSnapshot {
-  entry: MemoryEntry;
-  reason: string;
-  strength: number;
-  dormantAt: string;
 }
 
 export interface RenameSourceOptions {

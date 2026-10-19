@@ -9,7 +9,7 @@
 // buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
 // storeImportsInCli counts value imports of src/store or src/db in src/cli files other than the CLI's composition root.
 // groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
-// portFunctionParams counts parameters of methods on port interfaces whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data.
+// portFunctionParams fails outright on any parameter of a method on a port interface whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data. No baseline.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any but FOLDER_FORM_EXCEPTIONS fails outright.
 // A .ts file directly in src/store other than STORE_TOP_FILES fails outright: a group's SQL goes in src/store/sqlite, a pure rule in src/core.
@@ -42,7 +42,6 @@ const NUMBERS = [
   'portImportsFromSql',
   'buildsOutsideRoots',
   'groupChecksInApi',
-  'portFunctionParams',
 ];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
@@ -641,7 +640,7 @@ function measure() {
     if (buildsOutsideRootsHere(file)) sites.buildsOutsideRoots.push(...callsOf(file, sf, builderNames(file, sf)));
     if (checksGroupsHere(file)) sites.groupChecksInApi.push(...callsOf(file, sf, GROUP_CHECKS));
   }
-  for (const k of Object.keys(sites)) out[k] = sites[k].length;
+  for (const k of Object.keys(sites)) if (NUMBERS.includes(k)) out[k] = sites[k].length;
   out.storeFilesWithoutSql = storeFilesWithoutSqlList.length;
   return {
     ...out,
@@ -731,6 +730,7 @@ const total = NUMBERS.map((k) => `${k} ${current[k]}`).join(', ');
 if (args.includes('--list')) {
   for (const k of NUMBERS) console.log(`${current[k]}\t${k}`);
   console.log(`${current.carrierFiles}\tcarrierFiles`);
+  console.log(`${current.sites.portFunctionParams.length}\tportFunctionParams`);
   for (const [counter, where] of Object.entries(current.sites)) {
     for (const site of where) console.log(`${counter}\t${site}`);
   }
@@ -763,6 +763,13 @@ if (rose.length > 0) {
     'Reach the database through the store port instead of opening it, branching on the store, or adding a twin.',
   );
   console.error('`node scripts/check-store-port.mjs --list` shows every count.');
+  process.exit(1);
+}
+const functionParams = current.sites.portFunctionParams;
+if (functionParams.length > 0) {
+  console.error('Port methods that take a function, which no store worker can receive:');
+  for (const site of functionParams) console.error(`  ${site}`);
+  console.error('Send the rule as data and apply it inside the store.');
   process.exit(1);
 }
 const folderForms = folderFormsAboveAdapter();

@@ -1,10 +1,8 @@
 // A rejection over a tenant larger than one page: the same removals as one whole scan, and a write that lands while
 // the rows are walked cannot bring the value back.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { mergedSuccessor } from '../../src/core/merged-row.js';
-import { isPersonalScope } from '../../src/core/recall-scope.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
@@ -17,6 +15,19 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
+// The walk's page read, so a test can write while the rows are walked with no lock held.
+const walk = vi.hoisted(() => ({ onPage: undefined as (() => void) | undefined }));
+vi.mock('../../src/store/sqlite/entry-reads.js', async (importOriginal) => {
+  const reads = await importOriginal<typeof import('../../src/store/sqlite/entry-reads.js')>();
+  return {
+    ...reads,
+    selectTenantTextsPage: (...args: Parameters<typeof reads.selectTenantTextsPage>) => {
+      walk.onPage?.();
+      return reads.selectTenantTextsPage(...args);
+    },
+  };
+});
+
 const ROWS = 1100;
 const VALUE = 'The deploy window is Friday afternoon';
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -25,6 +36,9 @@ const OTHER = 'Release notes go out with every tagged build';
 let root: string;
 beforeEach(() => {
   root = makeRoot('rejection-pages');
+});
+afterEach(() => {
+  walk.onPage = undefined;
 });
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
@@ -86,9 +100,8 @@ function rejection(over: Partial<Rejection> = {}): Rejection {
     tenantId: 'default',
     actor: 'tester',
     reason: 'wrong',
-    textOf: () => VALUE,
-    inReach: (scope) => !isPersonalScope(scope),
-    successorOf: mergedSuccessor,
+    value: VALUE,
+    ownScope: null,
     ...over,
   };
 }
@@ -127,27 +140,20 @@ describe('rejections.apply across pages', () => {
     const ids = seed();
     const late = { holder: createMemory(VALUE, { tags: [] }), other: createMemory('a lesson written mid-walk') };
     let refused: unknown;
-    let walking = false;
-    const applied = sqliteSyncStore(root).rejections.apply(
-      rejection({
-        inReach: (scope) => {
-          if (!walking) {
-            walking = true;
-            // No wait for a lock: a write scope held across the walk would fail this write with SQLITE_BUSY.
-            withDb((db) => {
-              db.exec('PRAGMA busy_timeout = 0');
-              writeEntryDbOnly(db, late.other);
-              try {
-                writeEntryDbOnly(db, late.holder);
-              } catch (error) {
-                refused = error;
-              }
-            });
-          }
-          return !isPersonalScope(scope);
-        },
-      }),
-    );
+    walk.onPage = () => {
+      walk.onPage = undefined;
+      // No wait for a lock: a write scope held across the walk would fail this write with SQLITE_BUSY.
+      withDb((db) => {
+        db.exec('PRAGMA busy_timeout = 0');
+        writeEntryDbOnly(db, late.other);
+        try {
+          writeEntryDbOnly(db, late.holder);
+        } catch (error) {
+          refused = error;
+        }
+      });
+    };
+    const applied = sqliteSyncStore(root).rejections.apply(rejection());
 
     expect(refused).toBeInstanceOf(RejectedValueError);
     expect(readEntry(root, late.holder.id)).toBeNull();
