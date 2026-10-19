@@ -202,7 +202,7 @@ hippo capture --file conversation.md --dry-run
 
 ### Slack ingestion (E1.3)
 
-Hippo accepts Slack Events API webhooks at `POST /v1/connectors/slack/events`. Configure `SLACK_SIGNING_SECRET` (validated on every request) and point Slack at `https://<your-host>/v1/connectors/slack/events`. Messages land as `kind='raw'` memories with `slack://team/channel/ts` provenance and a `slack:public:Cxxx` or `slack:private:Cxxx` scope. Source deletions are honored (GDPR).
+Hippo accepts Slack Events API webhooks at `POST /v1/connectors/slack/events`. Configure `SLACK_SIGNING_SECRET` (validated on every request) and point Slack at `https://<your-host>/v1/connectors/slack/events`. Messages land as `kind='raw'` memories with `slack://team/channel/ts` provenance and a `slack:public:Cxxx` or `slack:private:Cxxx` scope. Source deletions are honored (GDPR). To rotate the secret, put the new one in `SLACK_SIGNING_SECRET` and the old one in `SLACK_SIGNING_SECRET_PREVIOUS`, and set `SLACK_SIGNING_SECRET_PREVIOUS_UNTIL` to an ISO date (`2026-12-01` means 00:00 UTC that day) or timestamp. From then on requests signed with the old secret are refused, with one warning in the log. Left unset, the old secret works for as long as it stays in the environment.
 
 Backfill an existing channel: `SLACK_BOT_TOKEN=xoxb-... hippo slack backfill --channel C0000`. Inspect malformed events: `hippo slack dlq list`.
 
@@ -680,7 +680,7 @@ hippo watch -- npm run build
 # next time an agent asks about build issues, the memory is there
 ```
 
-The command runs with no shell, so each argument reaches the program as written. To run a shell line with pipes or `&&`, pass it as one string after `--shell`: `hippo watch --shell "npm test && npm run build"`.
+The command runs with no shell, so each argument reaches the program as written. To run a shell line with pipes or `&&`, name the shell: `hippo watch -- sh -c "npm test && npm run build"`.
 
 ---
 
@@ -738,7 +738,7 @@ The command runs with no shell, so each argument reaches the program as written.
 | `hippo failures [--days n]` | Failed tool calls the capture-error hook saw, by outcome, and how many errors first happened in another session |
 | `hippo embed` | Embed all memories for semantic search |
 | `hippo embed --status` | Show embedding coverage |
-| `hippo watch -- <command> [args...]` | Run command with no shell, auto-learn from failures (`--shell "<line>"` runs one line through the shell) |
+| `hippo watch -- <command> [args...]` | Run command with no shell, auto-learn from failures |
 | `hippo learn --git` | Scan recent git commits for lessons |
 | `hippo learn --git --days <n>` | Scan N days back (default: 7) |
 | `hippo learn --git --repos <paths>` | Scan multiple repos (comma-separated) |

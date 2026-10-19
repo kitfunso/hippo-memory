@@ -162,11 +162,10 @@ export const SESSION_VERBS = {
     ],
   }),
   watch: verb(() => import('../transfer.js'), 'handleWatch', {
-    flags: { values: ['shell'] },
+    flags: {},
     usage: [
       `
-  watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)
-    --shell "<line>"       Run one command line through the shell instead`,
+  watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)`,
     ],
   }),
   learn: verb(() => import('../transfer.js'), 'handleLearn', {

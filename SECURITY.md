@@ -51,7 +51,7 @@ From 2.0 the HTTP server starts strict, and each default has one explicit opt-ou
 - `HIPPO_CLIENT_IP_HEADER` is read only from the peers in `HIPPO_TRUSTED_PROXIES`, and the server refuses to start with the header set and no proxy listed, or with `*` listed.
 - Each API key owner gets 20 requests a second, burst 40. `HIPPO_CALLER_RPS` sets the rate, and `0` turns the limit off.
 - An API key minted with no role is a member key.
-- `hippo watch` runs its command with no shell. `--shell` is the opt-in.
+- `hippo watch` runs its command with no shell, and 3.0 removed the `--shell` opt-in.
 
 `docs/UPGRADING-2.0.md` lists each default with its opt-out.
 

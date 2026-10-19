@@ -43,6 +43,7 @@ export type {
   ConnectorArchive,
   ConnectorWrites,
   ConnectorEventRecord,
+  DeliveryClaim,
   DeletionLookup,
   DeletionTarget,
   ArtifactArchive,

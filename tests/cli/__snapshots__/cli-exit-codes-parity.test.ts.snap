@@ -311,15 +311,6 @@ Hippo learned from failure: ""
 "
 `;
 
-exports[`hippo exit codes and output of failing invocations (built CLI) > watch of a failing command line through… 1`] = `
-"$ hippo watch --shell node -e "process.exit(3)" -> 3
---- stdout
---- stderr
-
-Hippo learned from failure: ""
-"
-`;
-
 exports[`hippo exit codes and output of failing invocations (built CLI) > watch of a failing command with no store 1`] = `
 "$ hippo watch -- node -e process.exit(3) -> 3
 --- stdout
@@ -332,7 +323,16 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > watch 
 "$ hippo watch node -e "process.exit(3)" -> 1
 --- stdout
 --- stderr
-hippo watch: "node -e "process.exit(3)"" is one argument with spaces. Use \`hippo watch -- cmd args\` or \`hippo watch --shell "<command line>"\`.
+hippo watch: "node -e "process.exit(3)"" is one argument with spaces. Use \`hippo watch -- cmd args\`.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > watch with the removed --shell 1`] = `
+"$ hippo watch --shell node -e "process.exit(3)" -> 1
+--- stdout
+--- stderr
+hippo: ignoring unknown flag --shell. A later release will reject it.
+hippo watch: --shell was removed in 3.0. To run a shell line, name the shell: \`hippo watch -- sh -c "<command line>"\`.
 "
 `;
 
@@ -340,6 +340,6 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > watch 
 "$ hippo watch -> 1
 --- stdout
 --- stderr
-Usage: hippo watch -- <command> [args...], or hippo watch --shell "<command line>"
+Usage: hippo watch -- <command> [args...]
 "
 `;

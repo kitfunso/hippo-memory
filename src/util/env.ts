@@ -372,6 +372,9 @@ export function envSlackSigningSecret(): string | undefined {
 export function envSlackSigningSecretPrevious(): string | undefined {
   return raw('SLACK_SIGNING_SECRET_PREVIOUS');
 }
+export function envSlackSigningSecretPreviousUntil(): string | undefined {
+  return raw('SLACK_SIGNING_SECRET_PREVIOUS_UNTIL');
+}
 export function envSlackAllowUnknownTeamFallback(): boolean {
   return flag('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK');
 }

@@ -6,7 +6,7 @@ import { isInitialized } from '../core/project-identity.js';
 import { toWire } from '../core/memory-wire.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { embedCoverage, memoryEmbedMissing } from '../api/embeddings.js';
-import { captureError, runWatched, runWatchedLine } from '../learn/autolearn.js';
+import { captureError, runWatched } from '../learn/autolearn.js';
 import { importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { currentMachine } from '../util/agent-homes.js';
 import { detailLines } from '../agent-memories/report.js';
@@ -54,40 +54,29 @@ const MAX_ENTRIES_SHOWN = 10;
 
 // Watch command
 
-const WATCH_USAGE = 'Usage: hippo watch -- <command> [args...], or hippo watch --shell "<command line>"';
+const WATCH_USAGE = 'Usage: hippo watch -- <command> [args...]';
 
-interface WatchedCommand {
-  readonly argv: string[];
-  readonly shell: boolean;
-}
-
-/** The argv to run and whether a shell parses it: `--shell` takes one command line, anything else is argv as given. */
-function watchedCommand(args: readonly string[], flags: CliFlags): WatchedCommand {
+/** The argv to run, which no shell parses. */
+function watchedCommand(args: readonly string[], flags: CliFlags): string[] {
   if (flags['shell'] !== undefined) {
-    const line = nonEmptyStringFlag(flags, 'shell');
-    if (line === undefined) {
-      fail(WATCH_USAGE);
-    }
-    // The shell is the feature here: the user's own command line, pipes and && included, opted into by name; argv runs
-    // with no shell.
-    return { argv: [line], shell: true };
+    fail(
+      'hippo watch: --shell was removed in 3.0. To run a shell line, name the shell: ' +
+        '`hippo watch -- sh -c "<command line>"`.',
+    );
   }
   if (args.length === 0) {
     fail(WATCH_USAGE);
   }
   // A quoted 1.x command line would now run as one program name, so it is refused rather than guessed at.
   if (args.length === 1 && /\s/.test(args[0]!)) {
-    fail(
-      `hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\` ` +
-        `or \`hippo watch --shell "<command line>"\`.`,
-    );
+    fail(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\`.`);
   }
-  return { argv: [...args], shell: false };
+  return [...args];
 }
 
-async function cmdWatch(argv: string[], shell: boolean, hippoRoot: string, tenantId: string): Promise<void> {
+async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Promise<void> {
   const command = argv.join(' ');
-  const { exitCode, stderr } = await (shell ? runWatchedLine(argv[0]!) : runWatched(argv));
+  const { exitCode, stderr } = await runWatched(argv);
 
   if (exitCode === 0) {
     // Success: no noise
@@ -429,8 +418,7 @@ export function handleSync({ hippoRoot, flags }: CommandContext): void {
 }
 
 export async function handleWatch({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
-  const { argv, shell } = watchedCommand(args, flags);
-  await cmdWatch(argv, shell, hippoRoot, tenantId);
+  await cmdWatch(watchedCommand(args, flags), hippoRoot, tenantId);
 }
 
 export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
