@@ -4,12 +4,28 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
+import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET } from './search-types.js';
 import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { isJsonObject, type JsonValue } from '../util/json.js';
+import {
+  basisPoints,
+  block,
+  choice,
+  count,
+  finite,
+  flag,
+  flagOrAuto,
+  fraction,
+  positive,
+  text,
+  textList,
+  textListOrAll,
+  type FieldReader,
+  type Reader,
+} from './config-rules.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -284,147 +300,172 @@ export const DEFAULT_CONFIG: HippoConfig = {
   sharedStore: false,
 };
 
-// Only `{"enabled": true}` turns it on; anything malformed warns and stays off.
-function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined): boolean {
-  if (value === undefined) return false;
-  const isObject = isJsonObject(value);
-  const enabled = isObject ? value.enabled : undefined;
-  if (enabled === true || enabled === false) return enabled;
-  if (isObject && enabled === undefined) return false;
-  log.warn(
-    `config.json's "deliveryLedger" must be an object like {"enabled": true} ` +
-      `(got ${JSON.stringify(value)}) - using false.`,
-  );
-  return false;
+type ConfigKey = Exclude<keyof HippoConfig, 'runtime'>;
+type ConfigFile = { [key: string]: JsonValue };
+
+interface ConfigEntry {
+  apply(raw: ConfigFile, into: HippoConfig): void;
 }
 
-// Only an integer 0..10000 counts; anything else warns and turns the pilot off.
-function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
-  if (value === undefined) return 0;
-  const rate = value?.holdoutRateBp;
-  if (rate === undefined && value !== null && value.constructor === Object) return 0;
-  if (Number.isInteger(rate) && rate >= 0 && rate <= 10000) return rate;
-  log.warn(
-    `config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
-      `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
-  );
-  return 0;
+function configKey<K extends ConfigKey>(key: K, read: Reader<HippoConfig[K]>): ConfigEntry {
+  return {
+    apply: (raw, into) => {
+      into[key] = read(raw[key], key);
+    },
+  };
 }
 
-// Only a real false turns the remote rule off; anything else malformed warns and keeps it on.
-function projectIdentityRemote(value: HippoConfig['projectIdentity'] | undefined): boolean {
-  const remote = value?.remote;
-  if (remote === true || remote === false) return remote;
-  if (value === undefined || (remote === undefined && value !== null && value.constructor === Object)) return true;
-  log.warn(
-    `config.json's "projectIdentity" must be an object like {"remote": false} ` +
-      `(got ${JSON.stringify(value)}) - using true (projects named by their origin remote).`,
-  );
-  return true;
+const D = DEFAULT_CONFIG;
+
+function enabledBlock(fallback: { enabled: boolean }): Reader<{ enabled: boolean }> {
+  return block('an object like {"enabled": true}', fallback, (read) => ({
+    enabled: read('enabled', flag(fallback.enabled)),
+  }));
 }
 
-function agentMemoryTools(value: string[] | null | undefined): string[] | null {
-  if (value === undefined || value === null) return null;
-  if (Array.isArray(value) && value.every((t) => String(t) === t)) return value;
-  log.warn(
-    `config.json's "agentMemories.tools" must be a list of tool ids like ["claude-code", "codex"] ` +
-      `(got ${JSON.stringify(value)}) - importing none.`,
-  );
-  return [];
+function physicsFields(read: FieldReader): PhysicsConfig {
+  const P = D.physics;
+  return {
+    enabled: read('enabled', flagOrAuto(P.enabled)),
+    G_query: read('G_query', finite(P.G_query)),
+    G_memory: read('G_memory', finite(P.G_memory)),
+    K_repulsion: read('K_repulsion', finite(P.K_repulsion)),
+    drag: read('drag', finite(P.drag)),
+    interference_gain: read('interference_gain', finite(P.interference_gain)),
+    momentum_weight: read('momentum_weight', finite(P.momentum_weight)),
+    max_velocity: read('max_velocity', finite(P.max_velocity)),
+    dt: read('dt', finite(P.dt)),
+    substeps: read('substeps', count(P.substeps)),
+    feedback_alpha: read('feedback_alpha', finite(P.feedback_alpha)),
+    temperature_decay: read('temperature_decay', finite(P.temperature_decay)),
+    cluster_threshold: read('cluster_threshold', finite(P.cluster_threshold)),
+    cluster_top_k: read('cluster_top_k', count(P.cluster_top_k)),
+  };
 }
 
-function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['memoryValue']> {
-  // Spreading a non-object raw.memoryValue (e.g. {"memoryValue": true}) silently leaves `enabled` false;
-  // this feature must never be silently off, so warn loudly and fall back to defaults instead.
-  const memoryValueRaw = raw.memoryValue;
-  const validMemoryValueConfig = memoryValueRaw === undefined || isJsonObject(memoryValueRaw);
-  if (!validMemoryValueConfig) {
-    log.warn(
-      `config.json's "memoryValue" must be an object like {"enabled": true} ` +
-        `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
-    );
-  }
-  return memoryValueRaw !== undefined && isJsonObject(memoryValueRaw) ? memoryValueRaw : {};
+function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
+  const P = D.pinnedInject;
+  return {
+    enabled: read('enabled', flag(P.enabled)),
+    budget: read('budget', count(P.budget)),
+    skipUnchanged: read('skipUnchanged', flag(P.skipUnchanged)),
+    refreshTurns: read('refreshTurns', count(P.refreshTurns)),
+    // The hook turns prompt recall on only for `true`, so a malformed value reads as off, not as the default.
+    promptRecall: read('promptRecall', flag(false, P.promptRecall)),
+    promptRecallMetric: read('promptRecallMetric', choice(P.promptRecallMetric, 'jaccard', 'cosine')),
+    promptRecallThreshold: read('promptRecallThreshold', fraction(P.promptRecallThreshold)),
+    promptRecallMinShared: read('promptRecallMinShared', count(P.promptRecallMinShared)),
+    promptRecallMaxItems: read('promptRecallMaxItems', count(P.promptRecallMaxItems)),
+    promptRecallCandidates: read('promptRecallCandidates', count(P.promptRecallCandidates)),
+  };
 }
 
-function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
-  // Same rule as memoryValue above: a malformed value never silently changes what sleep does; anything but a real
-  // object / boolean / number
-  // warns and falls back to the default, which keeps faded memories.
-  const dormantRaw = raw.dormant;
-  if (dormantRaw !== undefined && !isJsonObject(dormantRaw)) {
-    log.warn(
-      `config.json's "dormant" must be an object like {"enabled": false} ` +
-        `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
-    );
-  }
-  const dormantOverride: Partial<HippoConfig['dormant']> =
-    dormantRaw !== undefined && isJsonObject(dormantRaw) ? dormantRaw : {};
-  // Only a real boolean counts: {"enabled": "false"} is a truthy string.
-  let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
-  if (dormantEnabled !== true && dormantEnabled !== false) {
-    log.warn(
-      `config.json's "dormant.enabled" must be true or false ` +
-        `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
-    );
-    dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
-  }
-  let dormantRetentionDays = dormantOverride.retentionDays ?? DEFAULT_CONFIG.dormant.retentionDays;
-  if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
-    log.warn(
-      `config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
-        `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
-    );
-    dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
-  }
-  return { enabled: dormantEnabled, retentionDays: dormantRetentionDays };
-}
-
-function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
-  // Same "never silently wrong" rule as memoryValue/dormant above.
-  const churnStalenessRaw = raw.churnStaleness;
-  const validChurnStalenessConfig = churnStalenessRaw === undefined || isJsonObject(churnStalenessRaw);
-  if (!validChurnStalenessConfig) {
-    log.warn(
-      `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
-        `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
-    );
-  }
-  const enabled =
-    churnStalenessRaw !== undefined && isJsonObject(churnStalenessRaw)
-      ? churnStalenessRaw.enabled
-      : DEFAULT_CONFIG.churnStaleness.enabled;
-  if (enabled !== true && enabled !== false) {
-    log.warn(
-      `config.json's "churnStaleness.enabled" must be true or false ` +
-        `(got ${JSON.stringify(enabled)}) - using false.`,
-    );
-    return false;
-  }
-  return enabled;
-}
-
-function defaultHalfLifeDays(raw: Partial<HippoConfig>): number {
-  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire
-  // it.
-  const days = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
-  if (!Number.isFinite(days) || days <= 0) {
-    log.warn(
-      `config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
-        `(got ${JSON.stringify(days)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
-    );
-    return DEFAULT_CONFIG.defaultHalfLifeDays;
-  }
-  return days;
-}
-
-// Only a real true turns it on; anything else present warns and stays off.
-function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
-  const value = raw.sharedStore;
-  if (value === undefined || value === true || value === false) return value === true;
-  log.warn(`config.json's "sharedStore" must be true or false (got ${JSON.stringify(value)}) - using false.`);
-  return false;
-}
+// Every top-level key loadConfig reads. A bad value warns once, in one wording, and reads as the fallback.
+const CONFIG_TABLE: readonly ConfigEntry[] = [
+  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength.
+  configKey('defaultHalfLifeDays', positive(D.defaultHalfLifeDays)),
+  configKey('defaultBudget', count(D.defaultBudget)),
+  configKey('defaultContextBudget', count(D.defaultContextBudget)),
+  configKey('decayBasis', choice(D.decayBasis, 'clock', 'session', 'adaptive')),
+  configKey('autoLearnOnSleep', flag(D.autoLearnOnSleep)),
+  configKey('autoShareOnSleep', flag(D.autoShareOnSleep)),
+  configKey(
+    'autoSleep',
+    block('an object like {"enabled": true, "threshold": 50}', D.autoSleep, (read) => ({
+      enabled: read('enabled', flag(D.autoSleep.enabled)),
+      threshold: read('threshold', count(D.autoSleep.threshold)),
+    })),
+  ),
+  configKey(
+    'embeddings',
+    // `provider` is not read here: an unknown one must reach resolveEmbeddingProvider, which refuses it rather than
+    // falling back to local.
+    block('an object like {"enabled": "auto"}', D.embeddings, (read) => ({
+      enabled: read('enabled', flagOrAuto(D.embeddings.enabled)),
+      model: read('model', text(D.embeddings.model)),
+      hybridWeight: read('hybridWeight', fraction(D.embeddings.hybridWeight)),
+      apiBaseUrl: read('apiBaseUrl', text(D.embeddings.apiBaseUrl)),
+      batchSize: read('batchSize', positive(D.embeddings.batchSize)),
+    })),
+  ),
+  configKey('global', enabledBlock(D.global)),
+  configKey('gitLearnPatterns', textList(D.gitLearnPatterns)),
+  configKey('physics', block('an object of physics constants', D.physics, physicsFields)),
+  configKey(
+    'mmr',
+    block('an object like {"enabled": true, "lambda": 0.7}', D.mmr, (read) => ({
+      enabled: read('enabled', flag(D.mmr.enabled)),
+      lambda: read('lambda', fraction(D.mmr.lambda)),
+    })),
+  ),
+  configKey(
+    'search',
+    block('an object like {"localBump": 1.2}', D.search, (read) => ({
+      localBump: read('localBump', positive(D.search.localBump)),
+    })),
+  ),
+  configKey(
+    'replay',
+    block('an object like {"count": 5}', D.replay, (read) => ({ count: read('count', count(D.replay.count)) })),
+  ),
+  configKey('autoTraceCapture', flag(D.autoTraceCapture)),
+  configKey('autoTraceWindowDays', count(D.autoTraceWindowDays)),
+  configKey(
+    'pinnedInject',
+    block('an object like {"enabled": true, "budget": 1500}', D.pinnedInject, pinnedInjectFields),
+  ),
+  configKey('contextProjectIsolation', flag(D.contextProjectIsolation)),
+  configKey(
+    'extraction',
+    block('an object like {"enabled": "auto"}', D.extraction, (read) => ({
+      enabled: read('enabled', flagOrAuto(D.extraction.enabled)),
+      model: read('model', text(D.extraction.model)),
+    })),
+  ),
+  configKey('multihop', enabledBlock(D.multihop)),
+  configKey(
+    'salience',
+    block('an object like {"enabled": true}', D.salience, (read) => ({
+      enabled: read('enabled', flag(D.salience.enabled)),
+      recentWindow: read('recentWindow', count(D.salience.recentWindow)),
+      overlapThreshold: read('overlapThreshold', fraction(D.salience.overlapThreshold)),
+      minContentLength: read('minContentLength', count(D.salience.minContentLength)),
+      maxRepeatErrors: read('maxRepeatErrors', count(D.salience.maxRepeatErrors)),
+    })),
+  ),
+  configKey('ambient', enabledBlock(D.ambient)),
+  // A malformed value never silently turns a feature on or off: it warns and reads as the default.
+  configKey('memoryValue', enabledBlock(D.memoryValue)),
+  configKey(
+    'dormant',
+    block('an object like {"enabled": false}', D.dormant, (read) => ({
+      enabled: read('enabled', flag(D.dormant.enabled)),
+      retentionDays: read('retentionDays', count(D.dormant.retentionDays)),
+    })),
+  ),
+  configKey('churnStaleness', enabledBlock(D.churnStaleness)),
+  // Absent imports every tool; a malformed list imports none.
+  configKey(
+    'agentMemories',
+    block('an object like {"tools": ["claude-code"]}', D.agentMemories, (read) => ({
+      tools: read('tools', textListOrAll('a list of tool ids like ["claude-code", "codex"]')),
+    })),
+  ),
+  configKey('deliveryLedger', enabledBlock(D.deliveryLedger)),
+  configKey(
+    'pilot',
+    block('an object like {"holdoutRateBp": 2000}', D.pilot, (read) => ({
+      holdoutRateBp: read('holdoutRateBp', basisPoints(D.pilot.holdoutRateBp)),
+    })),
+  ),
+  configKey(
+    'projectIdentity',
+    block('an object like {"remote": false}', D.projectIdentity, (read) => ({
+      remote: read('remote', flag(D.projectIdentity.remote)),
+    })),
+  ),
+  configKey('sharedStore', flag(D.sharedStore)),
+];
 
 /** Reads the folder's config.json on every call; a root that loads often holds a configReader instead. */
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -482,7 +523,7 @@ function fileStamp(file: string): string | null {
 
 /** A config.json that exists must load: running on defaults would silently drop the user's settings, such as
  * `sharedStore`. */
-function readConfigFile(configPath: string): Partial<HippoConfig> {
+function readConfigFile(configPath: string): ConfigFile {
   let raw: JsonValue;
   try {
     raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -495,58 +536,17 @@ function readConfigFile(configPath: string): Partial<HippoConfig> {
   if (!isJsonObject(raw)) {
     throw new Error(`${configPath} must hold a JSON object. Fix the file or delete it to use the defaults.`);
   }
-  // SAFETY: an object is all the shape check proves; configOverDefaults validates each key it reads.
-  return raw as Partial<HippoConfig>;
+  return raw;
 }
 
 function parseConfigFile(configPath: string): HippoConfig {
   return configOverDefaults(readConfigFile(configPath));
 }
 
-function configOverDefaults(raw: Partial<HippoConfig>): HippoConfig {
-  const basis = raw.decayBasis;
-  const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
-  const memoryValue = memoryValueOverride(raw);
-  const dormant = dormantSettings(raw);
-  const churnEnabled = churnStalenessEnabled(raw);
-  const halfLifeDays = defaultHalfLifeDays(raw);
-  return {
-    defaultHalfLifeDays: halfLifeDays,
-    defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
-    defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
-    decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
-    autoLearnOnSleep: raw.autoLearnOnSleep ?? DEFAULT_CONFIG.autoLearnOnSleep,
-    autoShareOnSleep: raw.autoShareOnSleep ?? DEFAULT_CONFIG.autoShareOnSleep,
-    autoSleep: { ...DEFAULT_CONFIG.autoSleep, ...raw.autoSleep },
-    embeddings: { ...DEFAULT_CONFIG.embeddings, ...raw.embeddings },
-    global: { ...DEFAULT_CONFIG.global, ...raw.global },
-    gitLearnPatterns: raw.gitLearnPatterns ?? DEFAULT_CONFIG.gitLearnPatterns,
-    physics: mergePhysicsConfig(raw.physics),
-    mmr: { ...DEFAULT_CONFIG.mmr, ...raw.mmr },
-    search: { ...DEFAULT_CONFIG.search, ...raw.search },
-    replay: { ...DEFAULT_CONFIG.replay, ...raw.replay },
-    autoTraceCapture: raw.autoTraceCapture ?? DEFAULT_CONFIG.autoTraceCapture,
-    autoTraceWindowDays: raw.autoTraceWindowDays ?? DEFAULT_CONFIG.autoTraceWindowDays,
-    pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...raw.pinnedInject },
-    contextProjectIsolation: raw.contextProjectIsolation ?? DEFAULT_CONFIG.contextProjectIsolation,
-    extraction: { ...DEFAULT_CONFIG.extraction, ...raw.extraction },
-    multihop: { ...DEFAULT_CONFIG.multihop, ...raw.multihop },
-    salience: { ...DEFAULT_CONFIG.salience, ...raw.salience },
-    ambient: { ...DEFAULT_CONFIG.ambient, ...raw.ambient },
-    memoryValue: {
-      ...DEFAULT_CONFIG.memoryValue,
-      ...memoryValue,
-    },
-    dormant,
-    churnStaleness: {
-      enabled: churnEnabled,
-    },
-    agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
-    deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
-    pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
-    projectIdentity: { remote: projectIdentityRemote(raw.projectIdentity) },
-    sharedStore: sharedStoreFlag(raw),
-  };
+function configOverDefaults(raw: ConfigFile): HippoConfig {
+  const config: HippoConfig = { ...DEFAULT_CONFIG };
+  for (const entry of CONFIG_TABLE) entry.apply(raw, config);
+  return config;
 }
 
 const sharedStoreRoots = new Set<string>();

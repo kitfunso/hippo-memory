@@ -17,29 +17,41 @@ describe('two replayers over one spool', () => {
   it('the second one never imports a file the first holds, and each file lands once', () => {
     const ids = Array.from({ length: FILES }, (_, i) => `s${String(i).padStart(4, '0')}`);
     for (const id of ids) {
-      spool(
-        root,
-        'default',
-        { sessionId: id, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
-        { summary: id, items: [] },
-        new Date(),
-      );
+      spool({
+        hippoRoot: root,
+        tenantId: 'default',
+        payload: { sessionId: id, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
+        text: { summary: id, items: [] },
+        at: new Date(),
+      });
     }
     const logs: string[] = [];
     const log = (message: string): void => void logs.push(message);
     const imported: string[] = [];
     const nested: number[] = [];
 
-    const first = importSpool(root, 'default', log, Number.POSITIVE_INFINITY, (spooled, recorded) => {
-      imported.push(spooled.payload.sessionId);
-      // The rival starts while the first still holds its claim and the lock.
-      nested.push(
-        importSpool(root, 'default', log, Number.POSITIVE_INFINITY, (rival, done) => {
-          imported.push(rival.payload.sessionId);
-          done();
-        }),
-      );
-      recorded();
+    const first = importSpool({
+      hippoRoot: root,
+      tenantId: 'default',
+      log,
+      deadline: Number.POSITIVE_INFINITY,
+      importOne: (spooled, recorded) => {
+        imported.push(spooled.payload.sessionId);
+        // The rival starts while the first still holds its claim and the lock.
+        nested.push(
+          importSpool({
+            hippoRoot: root,
+            tenantId: 'default',
+            log,
+            deadline: Number.POSITIVE_INFINITY,
+            importOne: (rival, done) => {
+              imported.push(rival.payload.sessionId);
+              done();
+            },
+          }),
+        );
+        recorded();
+      },
     });
 
     expect(first).toBe(FILES);
@@ -51,20 +63,28 @@ describe('two replayers over one spool', () => {
   });
 
   it('a rival that starts after the first one is done finds nothing left', () => {
-    spool(
-      root,
-      'default',
-      { sessionId: 'only', trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
-      { summary: 'only', items: [] },
-      new Date(),
-    );
+    spool({
+      hippoRoot: root,
+      tenantId: 'default',
+      payload: { sessionId: 'only', trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
+      text: { summary: 'only', items: [] },
+      at: new Date(),
+    });
     const seen: string[] = [];
     const record = (s: { payload: { sessionId: string } }, done: () => void): void => {
       seen.push(s.payload.sessionId);
       done();
     };
-    expect(importSpool(root, 'default', () => undefined, Number.POSITIVE_INFINITY, record)).toBe(1);
-    expect(importSpool(root, 'default', () => undefined, Number.POSITIVE_INFINITY, record)).toBe(0);
+    const replay = (): number =>
+      importSpool({
+        hippoRoot: root,
+        tenantId: 'default',
+        log: () => undefined,
+        deadline: Number.POSITIVE_INFINITY,
+        importOne: record,
+      });
+    expect(replay()).toBe(1);
+    expect(replay()).toBe(0);
     expect(seen).toEqual(['only']);
   });
 });

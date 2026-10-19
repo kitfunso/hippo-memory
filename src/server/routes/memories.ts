@@ -23,6 +23,7 @@ import { MAX_ID_LEN } from '../../util/limits.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
+const MAX_OUTCOME_IDS = 1000;
 
 // POST /v1/memories
 export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
@@ -138,8 +139,8 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     }
     // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the count, and writes
     // the mirrors after its job. Auth runs first, so only a caller with a key reaches it.
-    if (idsRaw.length > 1000) {
-      throw new HttpError(400, 'ids exceeds 1000-id cap');
+    if (idsRaw.length > MAX_OUTCOME_IDS) {
+      throw new HttpError(400, `ids exceeds ${MAX_OUTCOME_IDS}-id cap`);
     }
     ids = idsRaw;
   }

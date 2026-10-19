@@ -21,6 +21,7 @@ import { searchByEngine } from '../../search/engine.js';
 import type { HippoConfig } from '../../core/config.js';
 import {
   CONFLICT_PEER_MULTIPLIER,
+  DEFAULT_SEARCH_CANDIDATE_LIMIT,
   SALIENCE_MIN_MULTIPLIER,
   UTILITY_LENGTH_PENALTY_CAP,
   UTILITY_LENGTH_TOKENS,
@@ -32,7 +33,6 @@ import {
   type SearchResult,
 } from '../../core/search-types.js';
 import { rankBothStores } from '../../sharing/search-both.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../core/search-types.js';
 import type { HippoStore } from '../../store/port.js';
 import { isJsonNumber } from '../../util/json.js';
 import { currentSignal } from '../../util/request-scope.js';
@@ -197,10 +197,19 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): P
   return done(false);
 }
 
+interface PoolScope {
+  /** An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half. */
+  requested: string | undefined;
+  /** An as-of read needs the rows a later write superseded. */
+  loadSuperseded: boolean;
+}
+
+function poolScope(opts: RankRecallOptions): PoolScope {
+  return { requested: opts.explicitScope || undefined, loadSuperseded: opts.includeSuperseded || Boolean(opts.asOf) };
+}
+
 async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOptions): Promise<RecallPool> {
-  // An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half below.
-  const requested = opts.explicitScope || undefined;
-  const loadSuperseded = opts.includeSuperseded || Boolean(opts.asOf);
+  const { requested, loadSuperseded } = poolScope(opts);
   const load = {
     limit: DEFAULT_SEARCH_CANDIDATE_LIMIT,
     tenantId: ctx.tenantId,
@@ -282,11 +291,11 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: R
 }
 
 function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOptions) {
-  const requested = opts.explicitScope || undefined;
+  const { requested, loadSuperseded } = poolScope(opts);
   return {
     tenantId: ctx.tenantId,
     scope: recallScopeFilter(requested, 'additive'),
-    includeSuperseded: opts.includeSuperseded || Boolean(opts.asOf),
+    includeSuperseded: loadSuperseded,
     admit: (e: MemoryEntry) => passesCliRecallScopeFilter(e.scope ?? null, requested),
   };
 }
@@ -347,6 +356,7 @@ async function expandGraph(
   state: RankState,
 ): Promise<void> {
   if (graph.hops <= 0) return;
+  const { requested } = poolScope(opts);
   // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would hide both.
   const beforeGraphIds = new Set(state.results.map((r) => r.entry.id));
   state.results = await graphExpandRecall(state.results, {
@@ -360,7 +370,7 @@ async function expandGraph(
     budget: opts.budget,
     cost: opts.cost,
     minResults: opts.search.minResults ?? 1,
-    recallScope: opts.explicitScope ? { requested: opts.explicitScope, additive: true } : {},
+    recallScope: requested ? { requested, additive: true } : {},
   });
   for (const r of state.results) {
     if (!beforeGraphIds.has(r.entry.id)) state.graphAdded++;

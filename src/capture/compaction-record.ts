@@ -70,17 +70,20 @@ export interface PostCompactPayload {
   compactSummary: string | null;
 }
 
-function spoolSummary(
-  { root, tenantId }: CompactionFolder,
-  payload: PostCompactPayload,
-  text: CompactionText,
-  at: Date,
-  reason: string,
-  result: CompactionSaveResult,
-  log: Log,
-): void {
+interface SpoolSummaryOptions {
+  folder: CompactionFolder;
+  payload: PostCompactPayload;
+  text: CompactionText;
+  at: Date;
+  reason: string;
+  result: CompactionSaveResult;
+  log: Log;
+}
+
+function spoolSummary(options: SpoolSummaryOptions): void {
+  const { folder, payload, text, at, reason, result, log } = options;
   try {
-    spool(root, tenantId, payload, text, at);
+    spool({ hippoRoot: folder.root, tenantId: folder.tenantId, payload, text, at });
     result.deferred = true;
     log(`store busy, summary spooled: ${reason}`);
   } catch (spoolErr) {
@@ -102,7 +105,7 @@ export function saveCompaction(folder: CompactionFolder, payload: PostCompactPay
 
   const { defaultHalfLifeDays } = loadConfig(root);
   const { result, spoolReason } = files.compactionHooks.save(tenantId, payload, text, at, log, defaultHalfLifeDays);
-  if (spoolReason !== null) spoolSummary(folder, payload, text, at, spoolReason, result, log);
+  if (spoolReason !== null) spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
   return result;
 }
 
@@ -155,7 +158,7 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
 
 function replaySources(hippoRoot: string, log: Log): ReplaySources {
   return {
-    importSpool: (tenantId, deadline, record) => importSpool(hippoRoot, tenantId, log, deadline, record),
+    importSpool: (tenantId, deadline, record) => importSpool({ hippoRoot, tenantId, log, deadline, importOne: record }),
     transcriptExists: (transcriptPath) => fs.existsSync(transcriptPath),
     transcriptText: (transcriptPath, afterMs, beforeMs) => {
       const found = transcriptSummary(transcriptPath, afterMs, beforeMs);

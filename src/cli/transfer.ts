@@ -214,7 +214,9 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
   // tenant-scoped api calls, so the tenant is resolved and passed through. --global is unsupported (the connector
   // raw-archive path is tenant-local).
   const vault = stringFlagOrExit(flags, 'vault');
-  if (vault) return await importVaultFolder(hippoRoot, tenantId, vault, flags, importOptions, useGlobal, dryRun);
+  if (vault) {
+    return await importVaultFolder({ hippoRoot, tenantId, folderPath: vault, flags, importOptions, useGlobal, dryRun });
+  }
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
@@ -327,15 +329,18 @@ function importAgentMemories(
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
 
-async function importVaultFolder(
-  hippoRoot: string,
-  tenantId: string,
-  folderPath: string,
-  flags: CliFlags,
-  importOptions: ImportOptions,
-  useGlobal: boolean,
-  dryRun: boolean,
-): Promise<void> {
+interface VaultFolderOptions {
+  hippoRoot: string;
+  tenantId: string;
+  folderPath: string;
+  flags: CliFlags;
+  importOptions: ImportOptions;
+  useGlobal: boolean;
+  dryRun: boolean;
+}
+
+async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
+  const { hippoRoot, tenantId, folderPath, flags, importOptions, useGlobal, dryRun } = options;
   checkVaultArgs(folderPath, flags, useGlobal);
   const vaultOptions: ImportOptions = {
     ...importOptions,

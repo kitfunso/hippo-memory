@@ -58,7 +58,7 @@ function withDb<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {
 async function nearest(query: readonly number[], k: number): Promise<VectorMatch[]> {
   const db = openHippoDb(root);
   try {
-    return await topVectorMatches(db, query, k, '', []);
+    return await topVectorMatches(db, { query, k, where: '', params: [] });
   } finally {
     closeHippoDb(db);
   }

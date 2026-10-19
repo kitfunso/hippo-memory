@@ -22,6 +22,7 @@ import {
   runPeersTool,
 } from './admin-tools.js';
 import { sharedStoreRefusal } from './shared-gate.js';
+import { errorReply, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, resultReply } from './json-rpc.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 // ── Token ledger ──
@@ -89,14 +90,10 @@ async function executeTool(name: string, args: Record<string, JsonValue>, ctx: M
 
 // The MCP spec reports input validation as a tool result with isError, so the model can read it and retry.
 function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly string[]): McpResponse {
-  return {
-    jsonrpc: '2.0',
-    id,
-    result: {
-      content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }],
-      isError: true,
-    },
-  };
+  return resultReply(id, {
+    content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }],
+    isError: true,
+  });
 }
 
 /** The tool and its ledger row run in the caller's request scope, which the host (server or stdio) opens.
@@ -114,19 +111,19 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx:
   const toolName = isJsonString(nameValue) ? nameValue : '';
   const tool = TOOLS_BY_NAME.get(toolName);
   if (!tool) {
-    return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
+    return errorReply(id, INVALID_PARAMS, `Unknown tool: ${toolName.slice(0, 128)}`);
   }
   // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
   if (!runsOn(ctx.store, toolName)) {
-    return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
+    return errorReply(id, INTERNAL_ERROR, STORE_NOT_PORTED_MESSAGE);
   }
   const refusal = sharedStoreRefusal(toolName, ctx);
   if (refusal !== undefined) {
-    return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
+    return resultReply(id, { content: [{ type: 'text', text: refusal }], isError: true });
   }
   const argumentsValue = params?.arguments;
   if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObject(argumentsValue)) {
-    return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
+    return errorReply(id, INVALID_PARAMS, `${toolName}: arguments must be an object`);
   }
   const toolArgs = isJsonObject(argumentsValue) ? argumentsValue : {};
   const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
@@ -138,13 +135,7 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx:
     if (!(err instanceof RecallRequestError)) throw err;
     return invalidArgs(id, toolName, [err.message]);
   }
-  return {
-    jsonrpc: '2.0',
-    id,
-    result: {
-      content: [{ type: 'text', text: output || 'Done.' }],
-    },
-  };
+  return resultReply(id, { content: [{ type: 'text', text: output || 'Done.' }] });
 }
 
 /** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through
@@ -155,21 +146,17 @@ export async function handleMcpRequest(req: McpRequest, ctx: McpContext | undefi
 
   switch (method) {
     case 'initialize':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          protocolVersion: '2024-11-05',
-          capabilities: { tools: {} },
-          serverInfo: { name: 'hippo-memory', version: PACKAGE_VERSION },
-        },
-      };
+      return resultReply(id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'hippo-memory', version: PACKAGE_VERSION },
+      });
 
     case 'notifications/initialized':
       return null;
 
     case 'tools/list': {
-      return { jsonrpc: '2.0', id, result: { tools: TOOLS.filter((t) => runsOn(ctx?.store, t.name)) } };
+      return resultReply(id, { tools: TOOLS.filter((t) => runsOn(ctx?.store, t.name)) });
     }
 
     case 'tools/call':
@@ -179,10 +166,6 @@ export async function handleMcpRequest(req: McpRequest, ctx: McpContext | undefi
     default:
       // Notifications (no id) must not receive a response
       if (method.startsWith('notifications/')) return null;
-      return {
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32601, message: `Method not found: ${method}` },
-      };
+      return errorReply(id, METHOD_NOT_FOUND, `Method not found: ${method}`);
   }
 }

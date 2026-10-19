@@ -4,7 +4,7 @@ import { SECRET_TAGS } from '../../util/secret-detect.js';
 import { originInSql } from '../../core/project-identity.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../core/ambient.js';
-import { HIGH_SCHEMA_FIT } from '../../core/memory.js';
+import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT } from '../../core/memory.js';
 import { placeholders } from '../../util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../util/json.js';
@@ -62,7 +62,7 @@ export function loadAmbientTalliesAt(
     COALESCE(SUM(${strengthSql(filter.now)}), 0) AS strengthSum,
     COALESCE(SUM(julianday(created) > julianday(?)), 0) AS fresh,
     COALESCE(SUM(emotional_valence IN ('negative', 'critical')), 0) AS negative,
-    COALESCE(SUM(COALESCE(schema_fit, 0.5) > ?), 0) AS highSchemaFit,
+    COALESCE(SUM(COALESCE(schema_fit, ${DEFAULT_SCHEMA_FIT}) > ?), 0) AS highSchemaFit,
     COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')})
       WHERE value IN ('error', 'critical') OR substr(value, 1, 6) = 'error:')), 0) AS errors,
     COALESCE(SUM(layer = 'semantic'), 0) AS semantic,

@@ -173,14 +173,17 @@ function spoolFile(hippoRoot: string): string {
   return path.join(hippoRoot, SPOOL_DIR, `${stamp(Date.now())}-${randomBytes(4).toString('hex')}.a0.json`);
 }
 
-export function spool(
-  hippoRoot: string,
-  tenantId: string,
-  payload: PostCompactPayload,
-  text: CompactionText,
-  at: Date,
-  fsx: SpoolFs = fs,
-): void {
+export interface SpoolOptions {
+  hippoRoot: string;
+  tenantId: string;
+  payload: PostCompactPayload;
+  text: CompactionText;
+  at: Date;
+  fsx?: SpoolFs;
+}
+
+export function spool(options: SpoolOptions): void {
+  const { hippoRoot, tenantId, payload, text, at, fsx = fs } = options;
   const file = spoolFile(hippoRoot);
   fsx.mkdirSync(path.dirname(file), { recursive: true });
   const body = {
@@ -370,8 +373,18 @@ function recoverStaleClaims(fsx: SpoolFs, dir: string, names: readonly string[],
   return putBackOne;
 }
 
+interface PutBackOptions {
+  fsx: SpoolFs;
+  dir: string;
+  claim: string;
+  stem: string;
+  attempt: number;
+  log: Log;
+}
+
 /** Returns a claim to the waiting files as `<stem>.a<attempt>.json`; one that stays busy is left for stale recovery. */
-function putBack(fsx: SpoolFs, dir: string, claim: string, stem: string, attempt: number, log: Log): void {
+function putBack(options: PutBackOptions): void {
+  const { fsx, dir, claim, stem, attempt, log } = options;
   const name = path.basename(claim);
   if (
     settle(
@@ -432,7 +445,7 @@ function moveBad(fsx: SpoolFs, dir: string, claim: string, options: MoveBadOptio
     return false;
   }
   if (!writeBad(fsx, dir, { stem, cause, text, log, what })) {
-    putBack(fsx, dir, claim, stem, attempt, log);
+    putBack({ fsx, dir, claim, stem, attempt, log });
     return false;
   }
   settle(() => fsx.unlinkSync(claim), log, what);
@@ -533,13 +546,13 @@ function importFailed(
     return busy ? 'stop' : 'skipped';
   }
   if (busy) {
-    putBack(fsx, dir, claim, entry.stem, entry.attempt, log);
+    putBack({ fsx, dir, claim, stem: entry.stem, attempt: entry.attempt, log });
     log(`spool file ${name} waits for the next run: the store is busy`);
     return 'stop';
   }
   const next = entry.attempt + 1;
   if (next < MAX_ATTEMPTS) {
-    putBack(fsx, dir, claim, entry.stem, next, log);
+    putBack({ fsx, dir, claim, stem: entry.stem, attempt: next, log });
     log(`spool file ${name} failed to import (try ${next} of ${MAX_ATTEMPTS}): ${errorMessage(cause)}`);
   } else if (moveBad(fsx, dir, claim, { stem: entry.stem, attempt: entry.attempt, cause: 'failed', log, raw: text })) {
     log(`spool file ${name} set aside as .bad after ${MAX_ATTEMPTS} tries: ${errorMessage(cause)}`);
@@ -547,15 +560,18 @@ function importFailed(
   return 'skipped';
 }
 
+interface ImportFileOptions {
+  fsx: SpoolFs;
+  dir: string;
+  entry: Waiting;
+  tenantId: string;
+  log: Log;
+  importOne: SpoolImporter;
+}
+
 /** Claims, reads and imports one waiting file; `stop` ends the run because the store is busy. */
-function importFile(
-  fsx: SpoolFs,
-  dir: string,
-  entry: Waiting,
-  tenantId: string,
-  log: Log,
-  importOne: SpoolImporter,
-): FileOutcome {
+function importFile(options: ImportFileOptions): FileOutcome {
+  const { fsx, dir, entry, tenantId, log, importOne } = options;
   const { name } = entry;
   const claim = path.join(dir, `${entry.stem}.a${entry.attempt}.claim-${stamp(Date.now())}`);
   const taken = settleCode(() => fsx.renameSync(path.join(dir, name), claim), log, `spool file ${name} not claimed`);
@@ -570,7 +586,7 @@ function importFile(
     `spool file ${name} not read`,
   );
   if (read === 'gone') log(`spool file ${name} vanished`);
-  if (read === 'busy') putBack(fsx, dir, claim, entry.stem, entry.attempt, log);
+  if (read === 'busy') putBack({ fsx, dir, claim, stem: entry.stem, attempt: entry.attempt, log });
   if (read !== 'done') return 'skipped';
   const spooled = parseSpooled(text, tenantId);
   if (spooled === null) {
@@ -636,18 +652,21 @@ export function spoolCounts(hippoRoot: string, now: Date, waitingAfterMs: number
   return counts;
 }
 
+export interface ImportSpoolOptions {
+  hippoRoot: string;
+  tenantId: string;
+  log: Log;
+  deadline: number;
+  importOne: SpoolImporter;
+  fsx?: SpoolFs;
+}
+
 /**
  * One replayer at a time holds `replay.lock`, so only one process claims a file even where Windows lets two renames of
  * it both land.
  */
-export function importSpool(
-  hippoRoot: string,
-  tenantId: string,
-  log: Log,
-  deadline: number,
-  importOne: SpoolImporter,
-  fsx: SpoolFs = fs,
-): number {
+export function importSpool(options: ImportSpoolOptions): number {
+  const { hippoRoot, tenantId, log, deadline, importOne, fsx = fs } = options;
   const dir = path.join(hippoRoot, SPOOL_DIR);
   if (!fsx.existsSync(dir)) return 0;
   const mine = takeLock(fsx, dir, log);
@@ -661,7 +680,7 @@ export function importSpool(
     // Only promotion and recovery add waiting names, so the folder is listed again only after one of them did.
     for (const entry of waitingFiles(promoted || recovered ? fsx.readdirSync(dir) : names)) {
       if (Date.now() > deadline || !ownsLock(fsx, dir, mine.token, log)) break;
-      const outcome = importFile(fsx, dir, entry, tenantId, log, importOne);
+      const outcome = importFile({ fsx, dir, entry, tenantId, log, importOne });
       if (outcome === 'imported') finished++;
       if (outcome === 'stop') break;
     }

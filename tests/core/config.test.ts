@@ -80,14 +80,15 @@ describe('loadConfig characterization', () => {
       }),
     );
     expect(warnings.map((w) => w.slice(0, w.indexOf(' must ')))).toEqual([
+      'config.json\'s "defaultHalfLifeDays"',
+      'config.json\'s "decayBasis"',
       'config.json\'s "memoryValue"',
       'config.json\'s "dormant.enabled"',
       'config.json\'s "dormant.retentionDays"',
       'config.json\'s "churnStaleness.enabled"',
-      'config.json\'s "defaultHalfLifeDays"',
       'config.json\'s "agentMemories.tools"',
       'config.json\'s "deliveryLedger"',
-      'config.json\'s "pilot"',
+      'config.json\'s "pilot.holdoutRateBp"',
     ]);
     const defaults = load(null).cfg;
     expect(cfg.decayBasis).toBe(defaults.decayBasis);

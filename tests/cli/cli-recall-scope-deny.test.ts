@@ -167,7 +167,7 @@ describe('cli recall scope default-deny', () => {
       );
     });
 
-    const entries = loadRecallSearchEntries(hippoDir, 'windowstarve', undefined, 'default');
+    const entries = loadRecallSearchEntries(hippoDir, 'windowstarve', { tenantId: 'default' });
     const contents = entries.map((e) => e.content);
     expect(contents).toContain('windowstarve admitted public row');
     expect(contents.some((c) => c.includes('private filler'))).toBe(false);

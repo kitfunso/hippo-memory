@@ -31,7 +31,7 @@ export interface GraphSeed {
 
 type GraphStore = Pick<HippoStore, 'graphReads'>;
 
-export interface GraphStreamOpts {
+export interface GraphRankStreamOptions {
   store: GraphStore;
   tenantId: string;
   /** The global store, when distinct (where global seeds' graph lives). */
@@ -221,7 +221,7 @@ async function accumulateForStore(
 export async function graphRankStream(
   entries: ReadonlyArray<MemoryEntry>,
   seeds: ReadonlyArray<GraphSeed>,
-  opts: GraphStreamOpts,
+  opts: GraphRankStreamOptions,
 ): Promise<number[]> {
   if (seeds.length === 0 || entries.length === 0) return [];
   const hops = Math.min(Math.max(opts.hops ?? DEFAULT_GRAPH_HOPS, 1), MAX_HOPS);

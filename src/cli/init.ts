@@ -72,15 +72,20 @@ function initScannedRepo(repo: string, tenantId: string, globalRoot: string): bo
   return alreadyExists;
 }
 
+interface LearnScannedRepoOptions {
+  repo: string;
+  tenantId: string;
+  seedDays: number;
+  learn: boolean;
+  machine: ReturnType<typeof currentMachine>;
+  agentImport: ReturnType<typeof emptyReport>;
+}
+
 /** Seeds one scanned repo from git history and its agents' notes, unless --no-learn. */
 async function learnScannedRepo(
-  repo: string,
-  tenantId: string,
-  seedDays: number,
-  learn: boolean,
-  machine: ReturnType<typeof currentMachine>,
-  agentImport: ReturnType<typeof emptyReport>,
+  options: LearnScannedRepoOptions,
 ): Promise<Pick<Awaited<ReturnType<typeof learnFromRepo>>, 'added' | 'lowInfo'>> {
+  const { repo, tenantId, seedDays, learn, machine, agentImport } = options;
   const repoHippo = path.join(repo, '.hippo');
   let added = 0;
   let lowInfo = 0;
@@ -145,7 +150,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
 
   for (const repo of repos) {
     const alreadyExists = initScannedRepo(repo, tenantId, globalRoot);
-    const { added, lowInfo } = await learnScannedRepo(repo, tenantId, seedDays, learn, machine, agentImport);
+    const { added, lowInfo } = await learnScannedRepo({ repo, tenantId, seedDays, learn, machine, agentImport });
     totalLessons += added;
     totalLowInfo += lowInfo;
 

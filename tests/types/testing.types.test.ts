@@ -5,6 +5,7 @@ import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import * as testing from '../../src/entry/testing.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
+import type { TenantId } from '../../src/util/tenant.js';
 
 describe('hippo-memory/testing entry types', () => {
   it('the reset helpers take no arguments and return nothing', () => {
@@ -28,6 +29,19 @@ describe('hippo-memory/testing entry types', () => {
     expectTypeOf(testing.loadEmbeddingIndex).toEqualTypeOf<(hippoRoot: string) => Record<string, number[]>>();
     expectTypeOf(testing.writeEntry).parameters.toEqualTypeOf<
       [hippoRoot: string, entry: MemoryEntry, opts?: testing.WriteEntryOptions]
+    >();
+    expectTypeOf(testing.loadRecallSearchEntries).parameters.toEqualTypeOf<
+      [
+        hippoRoot: string,
+        query: string,
+        limit: number | undefined,
+        tenantId: TenantId,
+        requestedScope?: string,
+        explicitScopeMode?: 'exact' | 'additive',
+        includeSuperseded?: boolean,
+        originProjects?: string | readonly string[],
+        ownScope?: string,
+      ]
     >();
   });
 
@@ -53,6 +67,7 @@ describe('hippo-memory/testing entry types', () => {
       | 'embedMemory'
       | 'loadAllEntries'
       | 'loadEmbeddingIndex'
+      | 'loadRecallSearchEntries'
       | 'writeEntry'
       | 'ambientSecretAdmitWire'
       | 'batchWriteAndDeleteWire'
@@ -74,6 +89,6 @@ describe('hippo-memory/testing entry types', () => {
       | 'recordTokenUse'
       | 'tokensBySession'
     >();
-    expect(Object.keys(testing)).toHaveLength(34);
+    expect(Object.keys(testing)).toHaveLength(35);
   });
 });
