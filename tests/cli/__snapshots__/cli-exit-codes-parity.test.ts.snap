@@ -331,7 +331,6 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > watch 
 "$ hippo watch --shell node -e "process.exit(3)" -> 1
 --- stdout
 --- stderr
-hippo: ignoring unknown flag --shell. A later release will reject it.
 hippo watch: --shell was removed in 3.0. To run a shell line, name the shell: \`hippo watch -- sh -c "<command line>"\`.
 "
 `;

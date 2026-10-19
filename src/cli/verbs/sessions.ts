@@ -163,6 +163,7 @@ export const SESSION_VERBS = {
   }),
   watch: verb(() => import('../transfer.js'), 'handleWatch', {
     flags: {},
+    removedFlags: { shell: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.' },
     usage: [
       `
   watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)`,

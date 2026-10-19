@@ -57,13 +57,7 @@ const MAX_ENTRIES_SHOWN = 10;
 const WATCH_USAGE = 'Usage: hippo watch -- <command> [args...]';
 
 /** The argv to run, which no shell parses. */
-function watchedCommand(args: readonly string[], flags: CliFlags): string[] {
-  if (flags['shell'] !== undefined) {
-    fail(
-      'hippo watch: --shell was removed in 3.0. To run a shell line, name the shell: ' +
-        '`hippo watch -- sh -c "<command line>"`.',
-    );
-  }
+function watchedCommand(args: readonly string[]): string[] {
   if (args.length === 0) {
     fail(WATCH_USAGE);
   }
@@ -422,8 +416,8 @@ export function handleSync({ hippoRoot, flags }: CommandContext): void {
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
 
-export async function handleWatch({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
-  await cmdWatch(watchedCommand(args, flags), hippoRoot, tenantId);
+export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
+  await cmdWatch(watchedCommand(args), hippoRoot, tenantId);
 }
 
 export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
