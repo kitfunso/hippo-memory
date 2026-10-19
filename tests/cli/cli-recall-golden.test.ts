@@ -1,6 +1,5 @@
-// Pins `hippo recall` and `hippo explain` stdout, stderr and exit code over a flag matrix, plus the rows a recall
-// writes, so a refactor of the recall pipeline that changes any byte fails here. The cases in SPAWNED run the built CLI; the
-// rest run it in process.
+// Pins the published stdout, stderr and exit code of `hippo recall` and `hippo explain` over a flag matrix, and asserts
+// the rows a goal-stack recall writes. The cases in SPAWNED run the built CLI; the rest run it in process.
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -242,20 +241,23 @@ async function run(c: Case): Promise<RunResult> {
   };
 }
 
+type Row = Record<string, string | number | null>;
+
 interface WrittenRows {
-  audit: unknown[];
-  goalRecallLog: unknown[];
-  stats: unknown[];
-  traces: unknown[];
-  traceResults: unknown[];
-  ledger: unknown[];
-  memories: unknown[];
+  audit: Row[];
+  goalRecallLog: Row[];
+  stats: Row[];
+  traces: Row[];
+  traceResults: Row[];
+  ledger: Row[];
+  memories: Row[];
 }
 
 function writtenRows(hippoRoot: string): WrittenRows {
   const db = openHippoDb(hippoRoot);
   try {
-    const q = (sql: string): unknown[] => db.prepare(sql).all();
+    // SAFETY: node:sqlite answers each row as a plain column-keyed object.
+    const q = (sql: string): Row[] => db.prepare(sql).all() as Row[];
     return {
       audit: q('SELECT ts, tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id'),
       goalRecallLog: q(
@@ -276,20 +278,37 @@ function writtenRows(hippoRoot: string): WrittenRows {
   }
 }
 
-interface RowsAfter<T> {
+interface RowsAfter {
   status: number | null;
-  rows: T;
+  rows: WrittenRows;
 }
 
-async function rowsAfter<T>(c: Case, pick: (rows: WrittenRows) => T): Promise<RowsAfter<T>> {
+async function rowsAfter(c: Case): Promise<RowsAfter> {
   const { home, out } = await run(c);
   try {
-    const rows = pick(writtenRows(join(home, '.hippo')));
-    return { status: out.status, rows: JSON.parse(normalize(JSON.stringify(rows), home)) };
+    const rows = writtenRows(join(home, '.hippo'));
+    // SAFETY: normalize rewrites text inside the JSON strings only, so the parse keeps the WrittenRows shape.
+    return { status: out.status, rows: JSON.parse(normalize(JSON.stringify(rows), home)) as WrittenRows };
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
 }
+
+const SHOWN = ['goal', 'plain', 'scoped', 'pinned', 'trace', 'new'].map((n) => `mem_golden_${n}`);
+// The seed's own writes, one audit row per seeded memory.
+const SEEDED = ['plain', 'pinned', 'scoped', 'private', 'old', 'new', 'goal', 'trace', 'noise'].map(
+  (n) => `remember mem_golden_${n}`,
+);
+const auditOps = (rows: WrittenRows): string[] =>
+  rows.audit.map((a) => `${String(a['op'])} ${String(a['target_id'] ?? '-')}`);
+const goalLogged = (score: number) => ({
+  goal_id: '<goal>',
+  memory_id: 'mem_golden_goal',
+  tenant_id: 'default',
+  session_id: SESSION,
+  recalled_at: '<ts>',
+  score,
+});
 
 describe('cli recall and explain golden output', () => {
   beforeAll(() => {
@@ -307,20 +326,71 @@ describe('cli recall and explain golden output', () => {
   });
 
   it('rows one goal-stack recall writes', async () => {
-    const got = await rowsAfter(
-      { name: 'writes', args: ['recall', 'deploy', '--json', '--why'], session: true },
-      (rows) => rows,
+    const { status, rows } = await rowsAfter({
+      name: 'writes',
+      args: ['recall', 'deploy', '--json', '--why'],
+      session: true,
+    });
+    expect(status).toBe(0);
+    expect(auditOps(rows)).toEqual([...SEEDED, 'recall -']);
+    const trace = { tenant_id: 'default', session_id: SESSION, pipeline: 'cli', query_length: 6, result_count: 6 };
+    expect(rows.traces).toEqual([expect.objectContaining({ ...trace, explain_mode: 1 })]);
+    expect(JSON.parse(String(rows.audit.at(-1)!['metadata_json']))).toEqual({
+      query_hash: rows.traces[0]!['query_hash'],
+      query_length: 6,
+      results: 6,
+    });
+    // The session goal doubles its row's score, which lifts it to the top; no other stage reranks.
+    expect(rows.traceResults.map((t) => [t['result_rank'], t['memory_id']])).toEqual(SHOWN.map((id, i) => [i + 1, id]));
+    const scores = rows.traceResults.map((t) => Number(t['score']));
+    expect(scores.every((s, i) => s > 0 && (i === 0 || s < scores[i - 1]!))).toBe(true);
+    const reranks = rows.traceResults.map((t) =>
+      // SAFETY: rerank_json holds a JSON array of flat stage objects.
+      t['rerank_json'] === null ? null : (JSON.parse(String(t['rerank_json'])) as Row[]),
     );
-    expect(got.status).toBe(0);
-    expect(got.rows).toMatchSnapshot();
+    expect(reranks.slice(1)).toEqual(SHOWN.slice(1).map(() => null));
+    expect(reranks[0]).toEqual([
+      { stage: 'goal-boost', multiplier: 2, scoreBefore: expect.any(Number), scoreAfter: scores[0] },
+    ]);
+    expect(Number(reranks[0]![0]!['scoreAfter'])).toBeCloseTo(2 * Number(reranks[0]![0]!['scoreBefore']), 12);
+    expect(rows.goalRecallLog).toEqual([goalLogged(scores[0]!)]);
+    expect(rows.ledger).toEqual([
+      {
+        ts: '<ts>',
+        tenant_id: 'default',
+        session_id: SESSION,
+        surface: 'recall',
+        event: 'inject',
+        items: 6,
+        tokens: expect.any(Number),
+      },
+    ]);
+    expect(Number(rows.ledger[0]!['tokens'])).toBeGreaterThan(0);
+    expect(rows.stats).toEqual([
+      { key: 'total_forgotten', value: '0' },
+      { key: 'total_recalled', value: '6' },
+      { key: 'total_remembered', value: '0' },
+    ]);
+    // Each shown row counts one retrieval; the goal row's seed starts at 3.
+    const counts = Object.fromEntries(rows.memories.map((m) => [m['id'], m['retrieval_count']]));
+    expect(counts).toEqual({
+      ...Object.fromEntries(['noise', 'old', 'private'].map((n) => [`mem_golden_${n}`, 0])),
+      ...Object.fromEntries(SHOWN.map((id) => [id, id === 'mem_golden_goal' ? 4 : 1])),
+    });
+    expect(rows.memories.every((m) => m['strength'] === 1)).toBe(true);
   });
 
   it('rows a goal-stack recall with an invalid late flag writes', async () => {
-    const got = await rowsAfter(
-      { name: 'late-invalid', args: ['recall', 'deploy', '--layer', 'bogus'], session: true },
-      (rows) => ({ goalRecallLog: rows.goalRecallLog, audit: rows.audit, traces: rows.traces }),
-    );
-    expect(got.status).toBe(1);
-    expect(got.rows).toMatchSnapshot();
+    const { status, rows } = await rowsAfter({
+      name: 'late-invalid',
+      args: ['recall', 'deploy', '--layer', 'bogus'],
+      session: true,
+    });
+    expect(status).toBe(1);
+    // The goal stage logs its row before the late flag is checked; nothing after that point writes.
+    expect(rows.goalRecallLog).toEqual([goalLogged(expect.any(Number))]);
+    expect(Number(rows.goalRecallLog[0]!['score'])).toBeGreaterThan(0);
+    expect(auditOps(rows)).toEqual(SEEDED);
+    expect([rows.traces, rows.traceResults, rows.ledger]).toEqual([[], [], []]);
   });
 });
