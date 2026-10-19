@@ -466,7 +466,7 @@ export function stampHandoffOutcome(
 }
 
 export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHandoffRequest): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => writeSessionEndHandoffAt(db, { hippoRoot }, request), openStore);
+  return onHandle(hippoRoot, (db) => writeSessionEndHandoffAt(db, { hippoRoot }, request.tenantId, request), openStore);
 }
 
 export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {

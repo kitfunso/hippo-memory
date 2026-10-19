@@ -12,8 +12,9 @@ import { type ClosureState, VALID_CLOSURE_STATES } from '../../core/prediction.j
 import { plural } from '../../util/format.js';
 import { CLI_ACTOR } from '../../core/actor.js';
 import type { PredictionBaserate } from '../port/types.js';
-import type { Prediction, SavePredictionOptions } from '../port/predictions.js';
+import type { Prediction, PredictionListQuery, SavePredictionOptions } from '../port/predictions.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 
 /** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
  * the memory row only mirrors the claim. Every helper requires tenantId; `trg_predictions_tenant_match_*` triggers
@@ -484,18 +485,27 @@ function loadOpenPredictionsAt(
   return rows.map(rowToPrediction);
 }
 
+/** One page of the tenant's predictions: the open ones, every one, or one class's, as the query names. */
+function listPredictionsAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  { classTag, closureState, limit, after }: PredictionListQuery,
+): Prediction[] {
+  if (closureState === 'open') return loadOpenPredictionsAt(db, tenantId, { classTag, limit, after });
+  if (classTag === undefined) return loadAllPredictionsAt(db, tenantId, { limit, after });
+  return loadPredictionsByClassAt(db, tenantId, classTag, { closureState, limit, after });
+}
+
+const predictionsAt: Bodies<Omit<Predictions, 'savePrediction'>> = {
+  closePrediction: closePredictionAt,
+  predictionById: loadPredictionByIdAt,
+  listPredictions: listPredictionsAt,
+  predictionBaserate: computePredictionBaserateAt,
+};
+
+// The save writes the prediction's mirror, so it alone opens the store with its mirror folders.
+const predictionSaveAt: FileBodies<Pick<Predictions, 'savePrediction'>> = { savePrediction: writePredictionAt };
+
 export function sqlitePredictions(on: OnHandle): Sync<Predictions> {
-  return {
-    savePrediction: (tenantId, input, actor) =>
-      on((db, files) => writePredictionAt(db, files, tenantId, input, actor), openStore),
-    closePrediction: (tenantId, id, close, actor) => on((db) => closePredictionAt(db, tenantId, id, close, actor)),
-    predictionById: (tenantId, id) => on((db) => loadPredictionByIdAt(db, tenantId, id)),
-    listPredictions(tenantId, { classTag, closureState, limit, after }) {
-      if (closureState === 'open') return on((db) => loadOpenPredictionsAt(db, tenantId, { classTag, limit, after }));
-      if (classTag === undefined) return on((db) => loadAllPredictionsAt(db, tenantId, { limit, after }));
-      return on((db) => loadPredictionsByClassAt(db, tenantId, classTag, { closureState, limit, after }));
-    },
-    predictionBaserate: (tenantId, classTag, actor) =>
-      on((db) => computePredictionBaserateAt(db, tenantId, classTag, actor)),
-  };
+  return { ...bound(on, predictionsAt), ...boundWithFiles(on, predictionSaveAt, openStore) };
 }

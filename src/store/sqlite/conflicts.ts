@@ -25,6 +25,7 @@ import type {
 import { openStore } from './handles.js';
 import type { Conflicts } from '../port-groups.js';
 import type { Sync } from '../port.js';
+import { bound, boundWithFiles, type Bodies } from './bound.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -593,10 +594,11 @@ export function resolvedConflictsAt(
   }[];
 }
 
+const conflictsAt: Bodies<Omit<Conflicts, 'resolve'>> = { list: conflictPageAt, get: conflictByIdAt };
+
 export function sqliteConflicts(on: OnHandle): Sync<Conflicts> {
   return {
-    list: (query) => on((db) => conflictPageAt(db, query), openStore),
-    get: (tenantId, conflictId) => on((db) => conflictByIdAt(db, tenantId, conflictId), openStore),
-    resolve: (tenantId, resolution) => on((db, files) => resolveConflictAt(db, files, tenantId, resolution), openStore),
+    ...bound(on, conflictsAt, openStore),
+    ...boundWithFiles<Pick<Conflicts, 'resolve'>>(on, { resolve: resolveConflictAt }, openStore),
   };
 }

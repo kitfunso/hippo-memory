@@ -3,9 +3,8 @@ import type { MemoryEntry } from '../../core/memory.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { summarizeTokenUse } from './token-ledger.js';
-import type { TokenSummary } from '../port/token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
-import type { FailureSummary } from '../port/failure-log.js';
+import type { StrengthTallies } from '../port/reports.js';
 import { statusCountsAt, strengthTalliesAt } from './candidates.js';
 import { countOpenConflictsAt } from './conflicts.js';
 import { countAllEntriesAt, loadEntriesPageAt } from './entry-reads.js';
@@ -13,6 +12,7 @@ import { createdSinceLastSleepAt } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
+import { bound, type Bodies } from './bound.js';
 import type { Reports } from '../port-groups.js';
 import type { Sync } from '../port.js';
 
@@ -45,37 +45,36 @@ function rawEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
   return rows.map(rowToEntry);
 }
 
-/** One tenant's token ledger totals since `sinceIso`. */
-function tokenUseSummaryAt(db: DatabaseSyncLike, tenantId: string, sinceIso: string): TokenSummary {
-  return summarizeTokenUse(db, tenantId, sinceIso);
+/** Strength tallies and the open-conflict count on one snapshot, so they never straddle another process's write. */
+function memoryStatusAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  now: Date,
+  atRiskBelow: number,
+): StrengthTallies & { openConflicts: number } {
+  return withReadSnapshot(db, () => ({
+    ...strengthTalliesAt(db, tenantId, now, atRiskBelow),
+    openConflicts: countOpenConflictsAt(db, tenantId),
+  }));
 }
 
-/** One tenant's failure log totals since `sinceIso`. */
-function failureLogSummaryAt(db: DatabaseSyncLike, tenantId: string, sinceIso: string): FailureSummary {
-  return summarizeFailures(db, tenantId, sinceIso);
-}
+// The two totals read side tables only, so they skip the mirror setup the memory reads open with.
+const reportTotalsAt: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
+  tokenUse: summarizeTokenUse,
+  failures: summarizeFailures,
+};
+
+const reportReadsAt: Bodies<Omit<Reports, 'tokenUse' | 'failures'>> = {
+  memoryStatus: memoryStatusAt,
+  entriesPage: loadEntriesPageAt,
+  countEntries: countAllEntriesAt,
+  stats: buildStatsFromDb,
+  statusCounts: statusCountsAt,
+  correctionEntries: correctionEntriesAt,
+  rawEntries: rawEntriesAt,
+  createdSinceLastSleep: createdSinceLastSleepAt,
+};
 
 export function sqliteReports(on: OnHandle): Sync<Reports> {
-  return {
-    tokenUse: (tenantId, sinceIso) => on((db) => tokenUseSummaryAt(db, tenantId, sinceIso)),
-    failures: (tenantId, sinceIso) => on((db) => failureLogSummaryAt(db, tenantId, sinceIso)),
-    memoryStatus(tenantId, now, atRiskBelow) {
-      // One snapshot, so the tallies and the conflict count never straddle another process's write.
-      return on(
-        (db) =>
-          withReadSnapshot(db, () => ({
-            ...strengthTalliesAt(db, tenantId, now, atRiskBelow),
-            openConflicts: countOpenConflictsAt(db, tenantId),
-          })),
-        openStore,
-      );
-    },
-    entriesPage: (tenantId, page) => on((db) => loadEntriesPageAt(db, tenantId, page), openStore),
-    countEntries: () => on((db) => countAllEntriesAt(db), openStore),
-    stats: () => on(buildStatsFromDb, openStore),
-    statusCounts: (now, atRiskBelow) => on((db) => statusCountsAt(db, now, atRiskBelow), openStore),
-    correctionEntries: () => on(correctionEntriesAt, openStore),
-    rawEntries: () => on(rawEntriesAt, openStore),
-    createdSinceLastSleep: (tenantId, now) => on((db) => createdSinceLastSleepAt(db, tenantId, now), openStore),
-  };
+  return { ...bound(on, reportTotalsAt), ...bound(on, reportReadsAt, openStore) };
 }

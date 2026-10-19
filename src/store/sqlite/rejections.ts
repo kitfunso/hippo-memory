@@ -24,6 +24,7 @@ import type { EntryCursor } from '../port/consolidation.js';
 import type { AppliedRejection, HoldsValue, LiftedRejection, Rejection, Rejections } from '../port/rejections.js';
 import { RejectedValueError } from '../../core/api-errors.js';
 import { openStore } from './handles.js';
+import { bound, boundWithFiles } from './bound.js';
 import type { Sync } from '../port.js';
 
 /** Rows a rejection reads per page while it looks for the rows that hold its text. */
@@ -255,9 +256,8 @@ function liftRejectionAt(db: DatabaseSyncLike, tenantId: string, digestPrefix: s
 
 export function sqliteRejections(on: OnHandle): Sync<Rejections> {
   return {
-    apply: (rejection) => on((db, files) => applyRejectionAt(db, files, rejection), openStore),
-    lift: (tenantId, digestPrefix, actor) => on((db) => liftRejectionAt(db, tenantId, digestPrefix, actor), openStore),
-    list: (tenantId) => on((db) => listRejectedValues(db, tenantId), openStore),
+    ...boundWithFiles<Pick<Rejections, 'apply'>>(on, { apply: applyRejectionAt }, openStore),
+    ...bound<Pick<Rejections, 'lift' | 'list'>>(on, { lift: liftRejectionAt, list: listRejectedValues }, openStore),
     refusedAmong: (checks) =>
       on((db) =>
         checks.map(({ tenantId, entryId, content }) => {

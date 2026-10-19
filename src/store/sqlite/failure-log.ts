@@ -7,6 +7,7 @@ import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '.
 import { FAILURE_LOG_RETENTION_DAYS } from '../../core/failure-log-retention.js';
 import { failuresPerSession, type SessionFailures } from '../../core/failure-repeats.js';
 import type { OnHandle } from './open.js';
+import { bound, type Bodies } from './bound.js';
 import type { Sync } from '../port.js';
 
 /** Longest session id or tool name kept; the hook payload is not trusted to be short. */
@@ -125,10 +126,12 @@ export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceI
   };
 }
 
+const failureLogAt: Bodies<FailureLog> = {
+  record: recordFailure,
+  requestOutcome,
+  settleOutcome: settleFailureOutcome,
+};
+
 export function sqliteFailureLog(on: OnHandle): Sync<FailureLog> {
-  return {
-    record: (event) => on((db) => recordFailure(db, event)),
-    requestOutcome: (tenantId, requestId, sessionId) => on((db) => requestOutcome(db, tenantId, requestId, sessionId)),
-    settleOutcome: (tenantId, requestId, outcome) => on((db) => settleFailureOutcome(db, tenantId, requestId, outcome)),
-  };
+  return bound(on, failureLogAt);
 }

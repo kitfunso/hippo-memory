@@ -25,6 +25,7 @@ import {
   upsertSlackWorkspaceAt,
 } from './connectors/slack.js';
 import type { OnHandle } from './open.js';
+import { bound, type Bodies } from './bound.js';
 import type {
   ArtifactArchive,
   ConnectorEvent,
@@ -92,26 +93,45 @@ function sqliteConnectorState(on: OnHandle): Omit<Sync<ConnectorEvents>, Deliver
     deadLetter: (connector, id): DeadLetterRows[DeadLetterConnector] | null =>
       on((db) => queueOf(connector).get(db, id)),
     markDeadLetterRetried: (connector, id) => on((db) => queueOf(connector).markRetried(db, id)),
-    slackCursor: (tenantId, channelId) => on((db) => slackCursorAt(db, tenantId, channelId)),
-    saveSlackCursor: (tenantId, channelId, latestTs) =>
-      on((db) => saveSlackCursorAt(db, tenantId, channelId, latestTs)),
-    githubCursors: (tenantId, repo) => on((db) => githubCursorsAt(db, tenantId, repo)),
-    saveGitHubHwm: (tenantId, repo, column, value) => on((db) => saveGitHubHwmAt(db, tenantId, repo, column, value)),
-    seedGitHubCursors: (tenantId, repo, since) => on((db) => seedGitHubCursorsAt(db, tenantId, repo, since)),
-    slackWorkspaces: () => on(listSlackWorkspacesAt),
-    registerSlackWorkspace: (teamId, tenantId) => on((db) => upsertSlackWorkspaceAt(db, teamId, tenantId)),
-    removeSlackWorkspace: (teamId) => on((db) => removeSlackWorkspaceAt(db, teamId)),
+    ...bound(on, connectorCursorsAt),
   };
 }
 
+const connectorCursorsAt: Bodies<
+  Pick<
+    ConnectorEvents,
+    | 'slackCursor'
+    | 'saveSlackCursor'
+    | 'githubCursors'
+    | 'saveGitHubHwm'
+    | 'seedGitHubCursors'
+    | 'slackWorkspaces'
+    | 'registerSlackWorkspace'
+    | 'removeSlackWorkspace'
+  >
+> = {
+  slackCursor: slackCursorAt,
+  saveSlackCursor: saveSlackCursorAt,
+  githubCursors: githubCursorsAt,
+  saveGitHubHwm: saveGitHubHwmAt,
+  seedGitHubCursors: seedGitHubCursorsAt,
+  slackWorkspaces: listSlackWorkspacesAt,
+  registerSlackWorkspace: upsertSlackWorkspaceAt,
+  removeSlackWorkspace: removeSlackWorkspaceAt,
+};
+
+const deliveriesAt: Bodies<Pick<ConnectorEvents, Exclude<DeliveryMethods, 'parkDeadLetter'>>> = {
+  eventRecord: eventRecordAt,
+  markEventSeen: markEventSeenAt,
+  deletionTarget: deletionTargetAt,
+  archiveDeletedArtifact: archiveArtifactAt,
+  slackTeamRoute: slackTeamRouteAt,
+  githubRouting: githubRoutingAt,
+};
+
 export function sqliteConnectorEvents(on: OnHandle): Sync<ConnectorEvents> {
   return {
-    eventRecord: (event) => on((db) => eventRecordAt(db, event)),
-    markEventSeen: (event) => on((db) => markEventSeenAt(db, event)),
-    deletionTarget: (lookup) => on((db) => deletionTargetAt(db, lookup)),
-    archiveDeletedArtifact: (archive) => on((db) => archiveArtifactAt(db, archive)),
-    slackTeamRoute: (teamId) => on((db) => slackTeamRouteAt(db, teamId)),
-    githubRouting: (query) => on((db) => githubRoutingAt(db, query)),
+    ...bound(on, deliveriesAt),
     parkDeadLetter: (letter) =>
       on((db) => (letter.connector === 'slack' ? SLACK_DLQ.insert(db, letter) : GITHUB_DLQ.insert(db, letter))),
     ...sqliteConnectorState(on),
