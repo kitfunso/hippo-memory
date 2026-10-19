@@ -1,5 +1,5 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
-import { randomUUID } from 'node:crypto';
+import { generateId } from '../../core/memory.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { placeholders } from '../../util/sql.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
@@ -8,6 +8,9 @@ import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
 import type { Goals } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import type { OnHandle } from './open.js';
+
+// The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.
+const GOAL_ID_CHARS = 16;
 
 export interface GoalRow {
   id: string;
@@ -78,7 +81,7 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
 }
 
 function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
-  const id = `g_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+  const id = generateId('g', GOAL_ID_CHARS);
   const createdAt = new Date().toISOString();
   let policyId: string | null = null;
 
@@ -146,7 +149,7 @@ function insertRetrievalPolicy(
   goalId: string,
   policy: NonNullable<PushGoalOpts['policy']>,
 ): string {
-  const policyId = `rp_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+  const policyId = generateId('rp', GOAL_ID_CHARS);
   db.prepare(`
     INSERT INTO retrieval_policy
       (id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority)

@@ -43,6 +43,7 @@ import {
 } from './dashboard-params.js';
 import type { MemoryDetail } from './dashboard-types.js';
 import { runWithRequestId } from '../util/request-scope.js';
+import { DEFAULT_DASHBOARD_PORT } from '../server/defaults.js';
 import { installSignalHandlers } from '../util/crash-handlers.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
@@ -484,7 +485,7 @@ function dashboardRequestHandler(
 /** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
 export function serveDashboard(
   hippoRoot: string,
-  port: number = 3333,
+  port: number = DEFAULT_DASHBOARD_PORT,
   token: string = randomBytes(32).toString('base64url'),
   opts: DashboardOptions,
 ): http.Server {

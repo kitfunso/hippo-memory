@@ -192,14 +192,17 @@ export interface DagRebuildResult {
 }
 
 /** Regenerate one dirty summary from its children and tally the outcome; throws reach the caller's isolation. */
-async function rebuildOneSummary(
-  store: Consolidation,
-  summary: MemoryEntry,
-  opts: DagSummaryOptions,
-  result: DagRebuildResult,
-  preloaded: readonly MemoryEntry[],
-  queuedIds: ReadonlySet<string>,
-): Promise<void> {
+interface RebuildOneSummaryOptions {
+  store: Consolidation;
+  summary: MemoryEntry;
+  opts: DagSummaryOptions;
+  result: DagRebuildResult;
+  preloaded: readonly MemoryEntry[];
+  queuedIds: ReadonlySet<string>;
+}
+
+async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<void> {
+  const { store, summary, opts, result, preloaded, queuedIds } = options;
   // A queued child may have been rebuilt earlier in this drain, so its preloaded content is stale: reread then.
   const children = preloaded.some((c) => queuedIds.has(c.id))
     ? store.childrenOfSummary(summary.id, summary.tenantId)
@@ -297,7 +300,7 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      await rebuildOneSummary(store, summary, opts, result, childrenOf(summary), queuedIds);
+      await rebuildOneSummary({ store, summary, opts, result, preloaded: childrenOf(summary), queuedIds });
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic
       // failure (SQLite I/O, prepare), since audit() already catches its own.

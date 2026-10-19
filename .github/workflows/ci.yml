@@ -67,6 +67,9 @@ jobs:
       # Files over 800 lines and functions over 50 in src/ (80 in scripts/) may shrink but never grow, and no new one may appear.
       - name: Size ratchet
         run: node scripts/check-size-ratchet.mjs
+      # Six or more positional parameters on a src declaration become one options object; there is no baseline.
+      - name: Positional parameters
+        run: node scripts/check-positional-params.mjs
       - name: API root-keyed store call ratchet
         run: node scripts/check-api-root-calls.mjs
       - name: config.json read only by the surface layer

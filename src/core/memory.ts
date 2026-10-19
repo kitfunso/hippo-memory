@@ -341,9 +341,9 @@ export function entryAfterOutcome(entry: MemoryEntry, good: boolean): MemoryEntr
   return { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
 }
 
-/** A new id: `prefix_` plus the first ID_SUFFIX_CHARS hex characters of a random UUID. */
-export function generateId(prefix: string = 'mem'): string {
-  return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, ID_SUFFIX_CHARS)}`;
+/** A new id: `prefix_` plus the first `chars` hex characters of a random UUID. */
+export function generateId(prefix: string = 'mem', chars: number = ID_SUFFIX_CHARS): string {
+  return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, chars)}`;
 }
 
 /** What the confidence facets read, so a caller can derive them from a row it loaded only in part. */

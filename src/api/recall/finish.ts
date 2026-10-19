@@ -9,6 +9,7 @@ import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
+import { chunked } from '../../util/chunked.js';
 import type { AuditOp } from '../../core/audit-ops.js';
 
 /**
@@ -278,14 +279,11 @@ export function biasHintEnabled(config: HintConfig, kind: 'anchoring' | 'availab
   return on !== false;
 }
 
-// entriesByIds reads at most this many ids a call.
-const ID_READ_CHUNK = 500;
-
 /** The ids among `ids` that a tenant's rows in `store` hold. */
 export async function heldIds(store: HippoStore, ids: readonly string[], tenantId: string): Promise<Set<string>> {
   const held = new Set<string>();
-  for (let i = 0; i < ids.length; i += ID_READ_CHUNK) {
-    for (const entry of await store.entriesByIds(ids.slice(i, i + ID_READ_CHUNK), tenantId)) held.add(entry.id);
+  for (const chunk of chunked(ids)) {
+    for (const entry of await store.entriesByIds(chunk, tenantId)) held.add(entry.id);
   }
   return held;
 }
