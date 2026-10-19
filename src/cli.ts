@@ -3,11 +3,11 @@
 // `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envLossAversionRatio, envSkipAutoIntegrations, envTenant, validateFlags } from './util/env.js';
-import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './core/project-identity.js';
+import { readPackageVersion } from './core/package-root.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { exitAfterFlush } from './util/crash-handlers.js';
@@ -166,12 +166,7 @@ function printHelp(command: string, args: string[]): void {
 }
 
 function printVersion(): never {
-  const __filename_local = fileURLToPath(import.meta.url);
-  const __dirname_local = path.dirname(__filename_local);
-  const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
-  // SAFETY: package.json ships with the build, and npm refuses to pack a package without a string version.
-  const { version } = JSON.parse(pkgJson) as { version: string };
-  console.log(version);
+  console.log(readPackageVersion());
   throw new CliExit(0);
 }
 
@@ -271,8 +266,10 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
     // The message alone rarely says where it came from; debug is the level that asks for the rest.
     if (isLevelEnabled('debug')) {
-      const { errorClass, stack } = errorFields(err);
-      printError(`  thrown as ${errorClass}${stack ? `\n${stack}` : ''}`);
+      const fields = errorFields(err);
+      const stack = fields.stack ? `\n${fields.stack}` : '';
+      const cause = fields.cause ? `\n  caused by ${fields.cause}` : '';
+      printError(`  thrown as ${fields.errorClass}${stack}${cause}`);
     }
     exitAfterFlush(1);
   }

@@ -9,6 +9,7 @@ import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../util/log.js';
 import { placeholders } from '../util/sql.js';
+import { tryParseJson } from '../util/json.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
@@ -350,12 +351,8 @@ function moveAside(fp: string, aside: string): boolean {
 // The old writer only wrote a plain object of id to number[]; any other shape is corrupt, and non-numeric entries are
 // dropped.
 function parseLegacyIndex(raw: string): Map<string, number[]> | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null; // the caller quarantines the corrupt file and logs it
-  }
+  // Text that is not JSON reads as corrupt: the caller quarantines the file and logs it.
+  const parsed: unknown = tryParseJson(raw);
   if (!(parsed instanceof Object) || Array.isArray(parsed)) return null;
   const index = new Map<string, number[]>();
   for (const [id, value] of Object.entries(parsed)) {

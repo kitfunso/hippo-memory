@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Per-file count of log calls inside a catch block, a `.catch` callback or an 'error' event listener that omit
 // errorFields() may fall, never rise, so an operator reading the log sees the error class and stack of every failure.
+// A call that reads one field of errorFields(...) fails anywhere in src, with no baseline: it drops the rest.
 // Usage: check-caught-error-logs.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -19,14 +20,21 @@ const isLogCall = (n) =>
   ts.isIdentifier(n.expression.expression) &&
   LOGGERS.has(n.expression.expression.text);
 
+const isErrorFieldsCall = (n) =>
+  ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorFields';
+
+/** True for `errorFields(x).errorClass`, `errorFields(x)['errorClass']` and `const { errorClass } = errorFields(x)`. */
+function readsOneField(call) {
+  const p = call.parent;
+  if ((ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === call) return true;
+  return ts.isVariableDeclaration(p) && p.initializer === call && ts.isObjectBindingPattern(p.name);
+}
+
 /** True when the call hands the whole errorFields(...) result on; `errorFields(x).errorClass` drops the stack and cause. */
 function carriesErrorFields(call) {
   let found = false;
   const visit = (n) => {
-    const isFields = ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorFields';
-    const p = n.parent;
-    const isRead = (ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === n;
-    if (isFields && !isRead) found = true;
+    if (isErrorFieldsCall(n) && !readsOneField(n)) found = true;
     ts.forEachChild(n, visit);
   };
   visit(call);
@@ -93,6 +101,25 @@ export function unfieldedLogLines(text) {
   return [...hits.values()].sort((a, b) => a - b);
 }
 
+/**
+ * Returns the 1-based line of every errorFields(...) call whose result is read for one field.
+ * @param {string} text
+ * @returns {number[]}
+ */
+export function partialPickLines(text) {
+  if (!text.includes('errorFields')) return [];
+  const sf = ts.createSourceFile('x.ts', stripComments(text), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const lines = [];
+  const visit = (node) => {
+    if (isErrorFieldsCall(node) && readsOneField(node)) {
+      lines.push(sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return lines;
+}
+
 function listSourceFiles(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
@@ -118,6 +145,20 @@ export function countUnfieldedLogs(srcDir) {
   return counts;
 }
 
+/**
+ * Lists `path:line` for every partial errorFields pick under srcDir.
+ * @param {string} srcDir
+ * @returns {string[]}
+ */
+export function findPartialPicks(srcDir) {
+  const root = resolve(srcDir);
+  return listSourceFiles(root)
+    .sort()
+    .flatMap((p) =>
+      partialPickLines(readFileSync(p, 'utf8')).map((line) => `${relative(root, p).replace(/\\/g, '/')}:${line}`),
+    );
+}
+
 /** The committed counts, or none when the file is absent; one read, so no exists-then-read race. */
 function readBaseline() {
   try {
@@ -133,6 +174,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const counts = Object.fromEntries(Object.entries(countUnfieldedLogs('src')).map(([f, n]) => [`src/${f}`, n]));
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const base = readBaseline();
+  const picks = findPartialPicks('src');
+  if (picks.length > 0) {
+    for (const where of picks) console.error(`src/${where}: reads one field of errorFields(...) and drops the rest`);
+    console.error('Fix: hand errorFields(err) on whole, or use errorClassFields(err) where the text must stay out.');
+    process.exit(1);
+  }
   const risen = Object.entries(counts).filter(([f, n]) => n > (base[f] ?? 0));
   if (process.argv.includes('--update')) {
     if (risen.length > 0) {

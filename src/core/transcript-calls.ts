@@ -1,6 +1,6 @@
 // The model calls of a Claude Code transcript, read for the re-read count and the session digest.
 import { open } from 'node:fs/promises';
-import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
+import { isJsonString, isJsonObjectLiteral, tryParseJson } from '../util/json.js';
 
 /** One model API call in a host transcript, for `recordRereads`. */
 export interface ApiCall {
@@ -38,11 +38,8 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
     for await (const line of file.readLines({ encoding: 'utf8' })) {
       // Transcripts can pass 100 MB, so only lines that can be a call or a boundary are parsed.
       if (!line.includes('"usage"') && !line.includes('"compact_boundary"')) continue;
-      let entry: JsonValue;
-      try {
-        // SAFETY: JSON.parse returns a JSON value by definition.
-        entry = JSON.parse(line) as JsonValue;
-      } catch {
+      const entry = tryParseJson(line);
+      if (entry === undefined) {
         malformed += 1; // reported by the caller: one torn line must not void the session
         continue;
       }

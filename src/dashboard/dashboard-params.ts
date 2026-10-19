@@ -1,6 +1,7 @@
 // One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an unchecked id.
 
 import { LAYERS, type Chip } from './dashboard-snapshot.js';
+import { isJsonObject, isJsonString, tryParseJson } from '../util/json.js';
 
 /** A request field failed validation; the router answers 400 with this plain message. */
 export class ParamError extends Error {}
@@ -132,18 +133,13 @@ export interface ActionBody {
 
 /** Parses a POST body once at the boundary; an empty body is `{}` and invalid JSON is a 400. */
 export function parseActionBody(text: string): ActionBody {
-  let raw;
-  try {
-    raw = JSON.parse(text === '' ? '{}' : text);
-  } catch {
-    throw new ParamError('Body is not valid JSON');
-  }
-  const pinned = raw?.pinned;
-  const keep = raw?.keep;
-  // String(x) === x is true only for a string, which is the check without a typeof.
+  const raw = tryParseJson(text === '' ? '{}' : text);
+  if (raw === undefined) throw new ParamError('Body is not valid JSON');
+  const pinned = isJsonObject(raw) ? raw.pinned : undefined;
+  const keep = isJsonObject(raw) ? raw.keep : undefined;
   return {
     pinned: pinned === true || pinned === false ? pinned : undefined,
-    keep: String(keep) === keep ? keep : undefined,
+    keep: isJsonString(keep) ? keep : undefined,
   };
 }
 

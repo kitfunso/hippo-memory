@@ -1,5 +1,6 @@
 import type { Migration } from './types.js';
-import { warnDamagedColumn } from '../../util/stored-json.js';
+import { isJsonString } from '../../util/json.js';
+import { parseStoredObject } from '../../util/stored-json.js';
 
 export const v20: Migration = {
   version: 20,
@@ -16,22 +17,10 @@ export const v20: Migration = {
     }>;
     const update = db.prepare(`UPDATE raw_archive SET payload_json = ? WHERE id = ?`);
     for (const row of rows) {
-      let tenant = 'unknown';
-      let kind = 'unknown';
-      try {
-        // SAFETY: parsed is a best-effort JSON.parse of legacy payload_json;
-        // an unexpected shape only yields undefined fields (falling back to
-        // 'unknown' below), and a parse failure is caught, so this never crashes.
-        const parsed = JSON.parse(row.payload_json) as {
-          tenant_id?: string;
-          kind?: string;
-        };
-        tenant = parsed.tenant_id ?? 'unknown';
-        kind = parsed.kind ?? 'unknown';
-      } catch {
-        // The row is still redacted, with unknowns; the line says which one lost its tenant and kind.
-        warnDamagedColumn({ table: 'raw_archive', id: row.id, column: 'payload_json' }, 'not valid JSON');
-      }
+      // A damaged row is still redacted, with unknowns; the warning says which one lost its tenant and kind.
+      const payload = parseStoredObject({ table: 'raw_archive', id: row.id, column: 'payload_json' }, row.payload_json);
+      const tenant = isJsonString(payload?.tenant_id) ? payload.tenant_id : 'unknown';
+      const kind = isJsonString(payload?.kind) ? payload.kind : 'unknown';
       const redacted = JSON.stringify({
         redacted: true,
         archived_at: row.archived_at,

@@ -26,7 +26,7 @@ import {
   sendJson,
   type WebhookRequest,
 } from '../../util/http-util.js';
-import { type JsonValue, isJsonObject } from '../../util/json.js';
+import { type JsonValue, isJsonObject, tryParseJson } from '../../util/json.js';
 
 /** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
  * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
@@ -149,10 +149,8 @@ function answerUrlVerification(res: ServerResponse, body: JsonValue | undefined)
 async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   const { rawBody, res } = d;
   const teamIdFromRaw = teamIdInRawBody(rawBody);
-  let body: JsonValue | undefined;
-  try {
-    body = JSON.parse(rawBody);
-  } catch {
+  const body = tryParseJson(rawBody);
+  if (body === undefined) {
     await parkUnparseable(d, teamIdFromRaw);
     return;
   }
@@ -160,7 +158,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   // Fail closed: resolveTenantForSlackTeam returns null for an unknown team on a non-empty slack_workspaces; park it in
   // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
-  if (body !== undefined && isSlackEventEnvelope(body)) {
+  if (isSlackEventEnvelope(body)) {
     resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id, hostFallback());
     if (resolvedTenant === null) {
       await parkAndAck(d, {
@@ -182,7 +180,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     store: d.store,
     config: d.config,
   };
-  if (body === undefined || !isSlackEventEnvelope(body)) {
+  if (!isSlackEventEnvelope(body)) {
     await parkAndAck(d, {
       tenantId: ctx.tenantId,
       teamId: teamIdFromRaw,

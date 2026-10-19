@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { isJsonString } from '../util/json.js';
+import { isJsonObjectLiteral, isJsonString, parseJson } from '../util/json.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
-import type { JsonObject } from '../store/port/types.js';
 
 export interface CodexSessionTranscriptOptions {
   codexHome: string;
@@ -41,8 +40,8 @@ function readCodexSessionIdsFromHistoryDelta(historyPath: string, startOffsetByt
   for (const line of delta.split('\n')) {
     if (!line.trim()) continue;
     try {
-      const parsed: JsonObject = JSON.parse(line);
-      const sessionId = parsed.session_id;
+      const parsed = parseJson(line);
+      const sessionId = isJsonObjectLiteral(parsed) ? parsed.session_id : undefined;
       if (isJsonString(sessionId) && sessionId && !seen.has(sessionId)) {
         seen.add(sessionId);
         ordered.push(sessionId);

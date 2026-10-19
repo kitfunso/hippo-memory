@@ -2,7 +2,7 @@ import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter } from '../../util/keyset.js';
 import type { JsonValue } from '../../util/json.js';
-import { warnDamagedColumn } from '../../util/stored-json.js';
+import { parseStoredObject } from '../../util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent, JsonObject } from '../port/types.js';
 import type { AuditOp } from '../../core/audit-ops.js';
 import type { QueryAuditOptions } from '../port/audit-log.js';
@@ -157,16 +157,8 @@ function rowToAuditEvent(r: AuditRow): AuditEvent {
 }
 
 function safeJsonParse(raw: string, id: number): JsonObject {
-  try {
-    const v = JSON.parse(raw);
-    // SAFETY: JSON.parse returns only an object, array or primitive; `instanceof Object` is true for the first two,
-    // both valid JsonObject shapes here.
-    return v instanceof Object ? (v as JsonObject) : {};
-  } catch {
-    // Malformed metadata reads as empty so the audit row itself stays listable.
-    warnDamagedColumn({ table: 'audit_log', id, column: 'metadata_json' }, 'not valid JSON');
-    return {};
-  }
+  // Damaged metadata reads as empty so the audit row itself stays listable.
+  return parseStoredObject({ table: 'audit_log', id, column: 'metadata_json' }, raw) ?? {};
 }
 
 /** An audit row that did not land, with what its write threw. */

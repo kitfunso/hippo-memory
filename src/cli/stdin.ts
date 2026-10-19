@@ -1,5 +1,6 @@
 import { envStdinWaitMs } from '../util/env.js';
-import { isJsonString, type JsonValue, isJsonObjectLiteral } from '../util/json.js';
+import { isJsonString, type JsonValue, isJsonObjectLiteral, tryParseJson } from '../util/json.js';
+import { errorFields, log } from '../util/log.js';
 import type { JsonObject } from '../store/port/types.js';
 
 const DEFAULT_STDIN_WAIT_MS = 1000;
@@ -25,8 +26,9 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
   let stdin: NodeJS.ReadStream;
   try {
     stdin = process.stdin;
-  } catch {
+  } catch (err) {
     // Reading process.stdin can throw when the handle is closed; that is the same as no input.
+    log.debug('stdin could not be opened', errorFields(err));
     return Promise.resolve({ timedOut: false });
   }
   if (stdin.isTTY) return Promise.resolve({ timedOut: false });
@@ -71,13 +73,9 @@ const CAMEL_TO_SNAKE: ReadonlyArray<readonly [string, string]> = [
  */
 function parsedToolArgs(value: JsonValue): JsonValue {
   if (!isJsonString(value)) return value;
-  try {
-    // SAFETY: JSON.parse returns a JSON value by definition.
-    return JSON.parse(value) as JsonValue;
-  } catch {
-    // Arguments that are not JSON stay the string the model wrote.
-    return value;
-  }
+  // Arguments that are not JSON stay the string the model wrote.
+  const parsed = tryParseJson(value);
+  return parsed === undefined ? value : parsed;
 }
 
 /** The snake_case keys a payload lacks, filled from its camelCase twins; a snake_case key already present wins. */
@@ -97,14 +95,8 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
  * so the sessionStart reply can follow the sender's casing; text that needs no change comes back exactly as sent. */
 export function normalizeHookPayload(text: string | undefined): string | undefined {
   if (text === undefined || text.trim() === '') return text;
-  let payload: JsonValue;
-  try {
-    // SAFETY: JSON.parse returns a JSON value by definition.
-    payload = JSON.parse(text.trim()) as JsonValue;
-  } catch {
-    // Not JSON: each reader already treats that as a malformed payload, so it passes through untouched.
-    return text;
-  }
+  // Not JSON: each reader already treats that as a malformed payload, so it passes through untouched.
+  const payload = tryParseJson(text.trim());
   if (!isJsonObjectLiteral(payload)) return text;
   const added = snakeCaseFields(payload);
   return Object.keys(added).length === 0 ? text : JSON.stringify({ ...payload, ...added });

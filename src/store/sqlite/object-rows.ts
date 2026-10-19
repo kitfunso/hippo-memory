@@ -2,7 +2,7 @@
 // writes, its insert values and audit keys. A status column carries a CHECK constraint, so a row declares it as the
 // kind's status union.
 import { isJsonString } from '../../util/json.js';
-import { warnDamagedColumn } from '../../util/stored-json.js';
+import { parseStoredJson, warnDamagedColumn } from '../../util/stored-json.js';
 import type { SourceObjectType } from '../port/graph-reads.js';
 import type {
   BriefStatus,
@@ -130,19 +130,9 @@ function rowToDecision(row: DecisionRow): Decision {
 }
 
 function parseLinkedMemoryIds(raw: string, id: number): string[] {
-  try {
-    // SAFETY: JSON.parse output is arbitrary; narrowed by Array.isArray plus
-    // the per-element string check below before use as string[].
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.filter((x): x is string => typeof x === 'string');
-    }
-    return [];
-  } catch {
-    // A malformed list column reads as empty instead of failing the incident read.
-    warnDamagedColumn({ table: 'incidents', id, column: 'linked_memory_ids' }, 'not valid JSON');
-    return [];
-  }
+  // A malformed list column reads as empty instead of failing the incident read.
+  const parsed = parseStoredJson({ table: 'incidents', id, column: 'linked_memory_ids' }, raw);
+  return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
 }
 
 function rowToIncident(row: IncidentRow): Incident {
@@ -162,18 +152,13 @@ function rowToIncident(row: IncidentRow): Incident {
 /** A malformed stored steps value warns and reads back as no steps. */
 function parseSteps(raw: string, id: number): string[] {
   const site = { table: 'processes', id, column: 'steps' };
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every(isJsonString)) {
-      return parsed;
-    }
-    warnDamagedColumn(site, 'wrong shape');
-    return [];
-  } catch {
-    // Unreadable steps read back as none instead of failing the process read.
-    warnDamagedColumn(site, 'not valid JSON');
-    return [];
+  const parsed = parseStoredJson(site, raw);
+  if (parsed === undefined) return [];
+  if (Array.isArray(parsed) && parsed.every(isJsonString)) {
+    return parsed;
   }
+  warnDamagedColumn(site, 'wrong shape');
+  return [];
 }
 
 const rowToProcess = (row: ProcessRow): Process => ({

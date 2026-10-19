@@ -7,6 +7,7 @@ import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../core/ambient
 import { HIGH_SCHEMA_FIT } from '../../core/memory.js';
 import { placeholders } from '../../util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
+import { isJsonNumber, isJsonString, parseJson } from '../../util/json.js';
 
 /** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot
  * match. */
@@ -32,9 +33,12 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
       SELECT CAST(j.value AS TEXT) AS tag, COUNT(*) AS n, MIN(r) AS first_r, MIN(j.key) AS first_key
       FROM kept, json_each(${jsonList('kept.tags_json')}) AS j GROUP BY tag)`)
     .get(...params) as { pairs: string | null };
-  // SAFETY: json_group_array of json_array(tag, n) parses to [string, number] pairs.
-  const pairs = JSON.parse(row.pairs ?? '[]') as Array<[string, number]>;
-  return new Map(pairs.map(([tag, n]) => [tag, Number(n)]));
+  const pairs = parseJson(row.pairs ?? '[]');
+  const tallies = new Map<string, number>();
+  for (const pair of Array.isArray(pairs) ? pairs : []) {
+    if (Array.isArray(pair) && isJsonString(pair[0]) && isJsonNumber(pair[1])) tallies.set(pair[0], pair[1]);
+  }
+  return tallies;
 }
 
 /** Whole-store ambient tallies in two aggregate passes, no row loaded. Content-pattern secrets and session-local

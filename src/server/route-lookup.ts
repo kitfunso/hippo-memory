@@ -1,4 +1,5 @@
 import type { Route, RouteRequest } from './types.js';
+import { tryDecodeUri } from '../util/expected-errors.js';
 
 /** A route's run for one request, bound to the path's params, or null when method or path differ. */
 export type RouteMatcher = (route: Route, method: string, path: string) => ((r: RouteRequest) => Promise<void>) | null;
@@ -23,12 +24,7 @@ function firstMatch(rows: readonly Route[], matches: RouteMatcher, method: strin
 /** Whether a `%` escape in the path fails to decode, which is what makes a pattern row's path matcher throw. */
 function hasMalformedEscape(path: string): boolean {
   if (!path.includes('%')) return false;
-  try {
-    decodeURIComponent(path);
-    return false;
-  } catch {
-    return true;
-  }
+  return tryDecodeUri(path) === undefined;
 }
 
 /** First-match lookup: a literal path is one Map read, any other tests only its own method's pattern and regex rows in

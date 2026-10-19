@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { countUnfieldedLogs, unfieldedLogLines } from '../../scripts/check-caught-error-logs.mjs';
+import {
+  countUnfieldedLogs,
+  findPartialPicks,
+  partialPickLines,
+  unfieldedLogLines,
+} from '../../scripts/check-caught-error-logs.mjs';
 
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-caught-error-logs.mjs');
 const BASELINE = '.caught-error-logs-baseline.json';
@@ -79,6 +84,28 @@ describe('check-caught-error-logs', () => {
       '}',
     ].join('\n');
     expect(unfieldedLogLines(text)).toEqual([2, 3]);
+  });
+
+  it('lists every errorFields(x) call read for one field, by property, index or destructuring, with its line', () => {
+    const text = [
+      'log.warn(`a`, { errorClass: errorFields(err).errorClass });',
+      "log.warn(`b`, { code: errorFields(err)['errorClass'] });",
+      'const { errorClass } = errorFields(err);',
+      'log.warn(`kept whole`, errorFields(err));',
+      'log.warn(`spread`, { id, ...errorFields(err) });',
+      '// log.warn(errorFields(err).errorClass);',
+    ].join('\n');
+    expect(partialPickLines(text)).toEqual([1, 2, 3]);
+  });
+
+  it('fails the run on a partial pick even when the baseline allows every unfielded call', () => {
+    file('src/pick.ts', 'export const f = (err: Error) => ({ errorClass: errorFields(err).errorClass });\n');
+    file('src/whole.ts', 'export const g = (err: Error) => errorFields(err);\n');
+    expect(findPartialPicks(join(dir, 'src'))).toEqual(['pick.ts:1']);
+    writeFileSync(join(dir, BASELINE), '{}\n');
+    const r = run();
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('src/pick.ts:1: reads one field of errorFields(...) and drops the rest');
   });
 
   it('counts a log call in a catch nested in another catch once', () => {

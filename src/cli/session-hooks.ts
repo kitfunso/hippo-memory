@@ -72,7 +72,8 @@ import {
   inPilotHoldout,
   hostSessionId,
 } from './hook-runtime.js';
-import type { JsonValue } from '../util/json.js';
+import { parseJson } from '../util/json.js';
+import { ignoringCodes } from '../util/expected-errors.js';
 import { CliExit, fail } from './exit.js';
 
 const captureTarget = (root: string): CaptureTarget => ({ root, store: cliSyncStore(root), config: cliConfig(root) });
@@ -484,12 +485,11 @@ function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> 
 
 function exitLikeChild(code: number | null, signal: NodeJS.Signals | null): void {
   if (signal) {
-    try {
-      process.kill(process.pid, signal);
-    } catch {
-      // Cannot re-raise the child's signal on this platform; a non-zero exit still reports the failure.
-      process.exit(1);
-    }
+    // Cannot re-raise the child's signal on this platform; a non-zero exit still reports the failure.
+    const raised = ignoringCodes(['ESRCH', 'EPERM', 'ENOSYS', 'ERR_UNKNOWN_SIGNAL'], () =>
+      process.kill(process.pid, signal),
+    );
+    if (raised === undefined) process.exit(1);
     return;
   }
   process.exit(code ?? 0);
@@ -639,8 +639,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
     const root = hookStoreRoot(payloadCwdRoot(hippoRoot, text, hookRuntime(flags)));
     const payload = (text ?? '').trim();
     if (isInitialized(root) && payload) {
-      // SAFETY: JSON.parse returns a JSON value by definition.
-      const failure = JSON.parse(payload) as JsonValue;
+      const failure = parseJson(payload);
       const ctx = cliApiContext(root, tenantId);
       const rec = startToolFailureRecorder(ctx, {
         stdinText: text,

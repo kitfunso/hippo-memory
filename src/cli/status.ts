@@ -5,7 +5,6 @@ import { evalNow, strengthAblation } from '../core/ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { fileURLToPath } from 'node:url';
 import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer } from '../core/memory.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../core/physics.js';
@@ -35,6 +34,7 @@ import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } fro
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { isJsonObject } from '../util/json.js';
+import { readPackageVersion } from '../core/package-root.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../util/time.js';
 import { CliExit, fail } from './exit.js';
@@ -87,8 +87,9 @@ function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total
   const embedProvider = (() => {
     try {
       return resolveEmbeddingProvider(cliConfig(ctx.hippoRoot).embeddings);
-    } catch {
+    } catch (err) {
       // Status reports a bad provider config as "misconfigured" below instead of failing.
+      log.warn('status: the embedding provider config is not usable', errorFields(err));
       return null;
     }
   })();
@@ -338,10 +339,7 @@ export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandCo
 }
 
 export function handleDoctor({ tenantId, flags }: CommandContext): void {
-  const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json');
-  // SAFETY: package.json always carries a string "version" (checked at release by check-manifest-versions).
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version: string };
-  const report = runDoctor({ version: pkg.version, tenantId, diagnosticsAt });
+  const report = runDoctor({ version: readPackageVersion(), tenantId, diagnosticsAt });
   console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
 }
