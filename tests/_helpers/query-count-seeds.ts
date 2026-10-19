@@ -8,7 +8,7 @@ import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { adminActor } from '../../src/api/types.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
-import { writeEntry } from './root-forms.js';
+import { writeEntriesTogether } from './root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 
 export const SIZES = [10, 200] as const;
@@ -39,18 +39,17 @@ export function memory(content: string, extra: Partial<MemoryEntry> = {}): Memor
   return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
 }
 
-/** Seeds in one store scope, which opens the store once, so a 200-row fixture stays fast. */
+/** Seeds in one batch write, so a 200-row fixture stays well inside the test timeout on a loaded Windows runner. */
 export function seed(
   ctx: FullContext,
   entries: readonly MemoryEntry[],
   after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void,
 ): void {
   withRequestStoresSync(() => {
+    writeEntriesTogether(ctx.hippoRoot, entries);
+    if (!after) return;
     const db = openStore(ctx.hippoRoot);
-    for (const e of entries) {
-      writeEntry(ctx.hippoRoot, e);
-      after?.(db, e);
-    }
+    for (const e of entries) after(db, e);
   });
 }
 
