@@ -1,5 +1,5 @@
-// Pins what a recall records once it has ranked, on HTTP (GET /v1/memories) and the CLI (`hippo recall`): the audit rows,
-// the recalled counter, the token ledger row and the session ring. The bookkeeping may move; none of this may change with it.
+// What a recall records once it has ranked, on HTTP (GET /v1/memories) and the CLI (`hippo recall`): the audit rows,
+// the recalled counter, the trace, the token ledger row, the stats mirror and the session ring.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -30,6 +30,7 @@ import type { CliFlags } from '../../src/cli/flag-values.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -121,6 +122,45 @@ function recorded(s: Store) {
   return { ...rowsOf(s.root), mirror: statsMirror(s.root) };
 }
 
+/** The rows a test asserts: audit ops, writes, and the recalled count the stats mirror holds, or null with no mirror. */
+function summarised(s: Store) {
+  const mirror = statsMirror(s.root);
+  // SAFETY: stats.json is the object writeStatsMirror serialises, total_recalled among its keys.
+  const mirrored = mirror === null ? null : (JSON.parse(mirror) as { total_recalled: number }).total_recalled;
+  return { audit: recallAuditOps(s.root), ...recallWrites(s.root), mirrored };
+}
+
+const HTTP_SHOWN = [
+  'mem_p_pinned',
+  'mem_p_plain',
+  'mem_p_fill0',
+  'mem_p_fill1',
+  'mem_p_fill2',
+  'mem_p_fill3',
+  'mem_p_fill4',
+  'mem_p_fill5',
+  'mem_p_trace',
+  'mem_p_scoped',
+];
+const CLI_LOCAL = [
+  'mem_p_plain',
+  'mem_p_pinned',
+  'mem_p_fill5',
+  'mem_p_fill4',
+  'mem_p_fill3',
+  'mem_p_fill2',
+  'mem_p_trace',
+  'mem_p_fill1',
+  'mem_p_fill0',
+  'mem_p_scoped',
+  'mem_p_new',
+];
+/** Each row shown `times` times; the goal row starts the seed at 3. */
+const bumped = (shown: readonly string[], times: number, goal: number) => ({
+  ...Object.fromEntries(shown.map((id) => [id, times])),
+  mem_p_goal: goal,
+});
+
 function ledgerOf(s: Store): LedgerRow[] {
   // SAFETY: rowsOf selects exactly the six token_ledger columns LedgerRow declares.
   return rowsOf(s.root).ledger as LedgerRow[];
@@ -211,9 +251,10 @@ describe('what a recall records, HTTP and CLI', () => {
   it.each(SURFACES)('%s: a recall with no session id', async (surface) => {
     const got = await onSeeded(async (s) => {
       const [reply] = await recallOn(surface, s, [{ query: 'deploy' }]);
-      return { reply, rows: recorded(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
+      return { reply, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
     });
     expect(got.reply!.status).toBe(surface === 'http' ? 200 : 0);
+    expect(got.reply!.hint).toBeNull();
     expect(got.ledger).toHaveLength(1);
     expect(got.ledger[0]).toMatchObject({
       tenant_id: TENANT,
@@ -224,21 +265,79 @@ describe('what a recall records, HTTP and CLI', () => {
     expect(got.recalled).toBe(got.ledger[0]!.items);
     // 12 local deploy rows are neither superseded nor private; HTTP caps them at its limit of 10, the CLI adds the global row.
     expect(got.recalled).toBe(surface === 'http' ? 10 : 13);
-    expect({ ...got, ledger: undefined }).toMatchSnapshot();
+    expect(got.rows).toEqual(
+      surface === 'http'
+        ? {
+            audit: ['localhost:cli recall_anchor_skipped_no_session', 'localhost:cli recall 10'],
+            recalled: '10',
+            traces: ['api 10 -'],
+            ranked: HTTP_SHOWN,
+            ledger: ['http_recall 10 -'],
+            bumped: bumped(HTTP_SHOWN, 1, 3),
+            goalLog: [],
+            mirrored: 10,
+          }
+        : {
+            audit: ['cli recall_anchor_skipped_no_session', 'cli recall 13'],
+            recalled: '13',
+            traces: ['cli 13 -'],
+            ranked: ['mem_p_global', ...CLI_LOCAL, 'mem_p_goal'],
+            ledger: ['recall 13 -'],
+            bumped: bumped(CLI_LOCAL, 1, 4),
+            goalLog: [],
+            mirrored: 13,
+          },
+    );
   });
 
   it.each(SURFACES)('%s: two recalls in one session, the second carries the hint the first fed', async (surface) => {
     const got = await onSeeded(async (s) => {
       const call: RecallCall = { query: 'deploy', session: SESSION };
       const replies = await recallOn(surface, s, [call, call]);
-      return { replies, rows: recorded(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
+      return { replies, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
     });
     expect(got.replies.map((r) => r.hint === null)).toEqual([true, false]);
     expect(got.ledger).toHaveLength(2);
     // HTTP books the recall's session; the CLI books the host agent's, and none is set here.
     expect(got.ledger.map((row) => row.session_id)).toEqual(surface === 'http' ? [SESSION, SESSION] : [null, null]);
     expect(got.recalled).toBe(got.ledger[0]!.items + got.ledger[1]!.items);
-    expect({ ...got, ledger: undefined }).toMatchSnapshot();
+    const { ranked, ...rows } = got.rows;
+    if (surface === 'http') {
+      expect(got.replies[1]!.hint).toBe('mem_p_pinned');
+      expect(ranked).toEqual([...HTTP_SHOWN, ...HTTP_SHOWN]);
+      expect(rows).toEqual({
+        audit: [
+          'localhost:cli recall 10',
+          'localhost:cli recall 10',
+          'localhost:cli recall_anchor_detected_query_repeat mem_p_pinned',
+        ],
+        recalled: '20',
+        traces: [`api 10 ${SESSION}`, `api 10 ${SESSION}`],
+        ledger: [`http_recall 10 ${SESSION}`, `http_recall 10 ${SESSION}`],
+        bumped: bumped(HTTP_SHOWN, 2, 3),
+        goalLog: [],
+        mirrored: 20,
+      });
+      return;
+    }
+    expect(String(got.replies[1]!.body)).toMatch(
+      /^\[anchored_on: mem_p_global\] Same query phrasing as a recent recall returned the same top result \(mem_p_global\); you may be re-asking the same question\.\n\nFound 13 memories/,
+    );
+    // The goal row leads the local rows once the session's goal boosts it, on both recalls.
+    expect([ranked.slice(0, 2), ranked.slice(13, 15)]).toEqual([
+      ['mem_p_global', 'mem_p_goal'],
+      ['mem_p_global', 'mem_p_goal'],
+    ]);
+    expect(new Set(ranked)).toEqual(new Set(['mem_p_global', 'mem_p_goal', ...CLI_LOCAL]));
+    expect(rows).toEqual({
+      audit: ['cli recall 13', 'cli recall_anchor_detected_query_repeat mem_p_global', 'cli recall 13'],
+      recalled: '26',
+      traces: [`cli 13 ${SESSION}`, `cli 13 ${SESSION}`],
+      ledger: ['recall 13 -', 'recall 13 -'],
+      bumped: bumped(CLI_LOCAL, 2, 5),
+      goalLog: [`mem_p_goal ${SESSION}`],
+      mirrored: 26,
+    });
   });
 
   it('cli: the ledger row names the host agent session while the ring follows --session-id', async () => {
@@ -254,7 +353,12 @@ describe('what a recall records, HTTP and CLI', () => {
       ['recall', HOST_SESSION],
       ['recall', HOST_SESSION],
     ]);
-    expect({ ...got, ledger: undefined }).toMatchSnapshot();
+    // SAFETY: rowsOf selects session_id and pipeline among the recall_traces columns.
+    const traces = got.traces as { session_id: string; pipeline: string }[];
+    expect(traces.map((t) => [t.pipeline, t.session_id])).toEqual([
+      ['cli', SESSION],
+      ['cli', SESSION],
+    ]);
   });
 
   it.each(SURFACES)('%s: a recall with continuity', async (surface) => {
@@ -264,9 +368,11 @@ describe('what a recall records, HTTP and CLI', () => {
       ]);
       // Priced before the times in the printed block are normalized; console.log adds the one newline the estimate leaves out.
       const printed = surface === 'cli' ? estimateTokens(String(reply!.body).replace(/\n$/, '')) : null;
-      return { reply, printed, rows: recorded(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
+      return { reply, printed, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
     });
     expect(got.ledger).toHaveLength(1);
+    // Continuity changes what is printed, never which rows a recall writes.
+    const { audit, recalled, traces, ranked, mirrored } = got.rows;
     if (surface === 'http') {
       // SAFETY: a 200 from /v1/memories is a serialised RecallResult.
       const body = got.reply!.body as RecallResult;
@@ -278,12 +384,36 @@ describe('what a recall records, HTTP and CLI', () => {
         items: body.results.length,
         tokens: body.tokens + (body.continuityTokens ?? 0),
       });
-    } else {
-      // The CLI books the block it printed.
-      expect(got.ledger[0]).toMatchObject({ surface: 'recall', tokens: got.printed });
-      expect(String(got.reply!.body)).toContain('ship the eu cluster');
+      expect(body.continuity?.activeSnapshot).toMatchObject({ task: 'ship the eu cluster', status: 'active' });
+      expect(body.continuity?.sessionHandoff).toMatchObject({ summary: 'handoff after the canary' });
+      expect(body.continuity?.recentSessionEvents.map((e) => e.content)).toEqual(['canary passed']);
+      expect({ audit, recalled, traces, ranked, mirrored }).toEqual({
+        audit: ['localhost:cli recall_anchor_skipped_no_session', 'localhost:cli recall 10'],
+        recalled: '10',
+        traces: ['api 10 -'],
+        ranked: HTTP_SHOWN,
+        mirrored: 10,
+      });
+      return;
     }
-    expect({ ...got, ledger: undefined }).toMatchSnapshot();
+    // The CLI books the block it printed.
+    expect(got.ledger[0]).toMatchObject({ surface: 'recall', tokens: got.printed });
+    const printed = String(got.reply!.body);
+    expect(printed).toMatch(/^## Active Task Snapshot\n\n- Task: ship the eu cluster\n- Status: active\n/);
+    for (const block of [
+      '### Summary\ncutover planned\n\n### Next step\nrun the canary\n\n## Session Handoff\n',
+      '### Summary\nhandoff after the canary\n\n### Next action\npromote it\n\n## Recent Session Trail\n',
+      '- [<ts>] (note) canary passed\n\nFound 13 memories',
+    ]) {
+      expect(printed).toContain(block);
+    }
+    expect({ audit, recalled, traces, ranked, mirrored }).toEqual({
+      audit: ['cli recall_anchor_skipped_no_session', 'cli recall 13'],
+      recalled: '13',
+      traces: ['cli 13 -'],
+      ranked: ['mem_p_global', ...CLI_LOCAL, 'mem_p_goal'],
+      mirrored: 13,
+    });
   });
 
   it.each(SURFACES)('%s: a recall that fails validation records nothing and feeds no ring', async (surface) => {
@@ -307,8 +437,12 @@ describe('what a recall records, HTTP and CLI', () => {
     expect({ ...got.after, goalRecallLog: [] }).toEqual({ ...got.before, goalRecallLog: [] });
     // Had the failed call reached the ring, the first good recall would read as a repeat.
     expect(got.laterHints[0]).toBeNull();
-    expect(got.laterHints[1]).not.toBeNull();
-    expect({ failed: got.failed, laterHints: got.laterHints }).toMatchSnapshot();
+    expect(got.laterHints[1]).toBe(surface === 'http' ? 'mem_p_pinned' : 'mem_p_global');
+    expect([got.failed!.body, got.failed!.stderr]).toEqual(
+      surface === 'http'
+        ? [{ error: 'limit must be a positive integer <= 1000' }, '']
+        : ['', 'Invalid --layer: "no-such-layer". Must be one of: buffer, episodic, semantic, trace.\n'],
+    );
   });
 
   it('http: a recall the store refuses to audit answers 500, records nothing and feeds no ring', async () => {
@@ -366,13 +500,18 @@ describe('what a recall records, HTTP and CLI', () => {
       // Removed first, so the file is back only if this recall went to the stats write.
       rmSync(join(s.root, 'stats.json'), { force: true });
       const [reply] = await recallOn(surface, s, [{ query: 'deploy' }]);
-      return { reply, rows: recorded(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
+      return { reply, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
     });
     expect(got.recalled).toBe(0);
     expect(got.ledger).toHaveLength(1);
     expect(got.ledger[0]!.items).toBe(0);
     // HTTP sends an empty count to the stats write, which rewrites the mirror; the CLI skips the write for an empty list.
-    expect(got.rows.mirror === null).toBe(surface === 'cli');
-    expect({ ...got, ledger: undefined }).toMatchSnapshot();
+    expect(got.rows.mirrored).toBe(surface === 'cli' ? null : 0);
+    const actor = surface === 'http' ? 'localhost:cli' : 'cli';
+    expect(got.rows.audit).toEqual([`${actor} recall_anchor_skipped_no_session`, `${actor} recall 0`]);
+    expect(got.rows.traces).toEqual([surface === 'http' ? 'api 0 -' : 'cli 0 -']);
+    expect([got.rows.ranked, got.rows.bumped]).toEqual([[], {}]);
+    if (surface === 'cli') expect(got.reply!.body).toBe('No memories found for: deploy\n');
+    else expect(got.reply!.body).toMatchObject({ results: [], total: 0, tokens: 0 });
   });
 });

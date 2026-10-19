@@ -1,5 +1,5 @@
-// Pins `hippo auth revoke|grant|ungrant` and `hippo goal` stdout, stderr, exit codes and the rows they leave,
-// in process on a real store, so routing these verbs through the api layer cannot change a byte or a row.
+// The published stdout, stderr and exit codes of `hippo auth revoke|grant|ungrant` and `hippo goal`, in process on a
+// real store, and the key, grant, audit, goal and policy rows each run leaves.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleAuth } from '../../src/cli/auth.js';
@@ -13,6 +13,20 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 type Flags = Record<string, string | boolean | string[]>;
+
+/** The goal_stack columns the goal case reads back. */
+interface GoalRow {
+  id: string;
+  tenant_id: string;
+  goal_name: string;
+  level: number;
+  parent_goal_id: string | null;
+  status: string;
+  success_condition: string | null;
+  has_policy: number;
+  completed: number;
+  outcome_score: number | null;
+}
 
 let root = '';
 
@@ -50,7 +64,7 @@ function rows(sql: string, ...params: string[]): unknown[] {
 }
 
 describe('hippo auth revoke, grant and ungrant (in process)', () => {
-  it('prints the same bytes and exit codes and leaves the same rows', async () => {
+  it('prints each command output and exit code, and leaves these rows', async () => {
     const mint = async (tenantId: string): Promise<api.AuthCreateResult> =>
       await api.authCreate(apiCtx(root, tenantId, api.adminActor('cli')), { label: tenantId, role: 'member' });
     const home = await mint('default');
@@ -88,17 +102,36 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     await step('revoke (own tenant)', ['revoke', home.keyId], { json: true });
 
     expect(transcript.join('\n')).toMatchSnapshot();
-    const keys = rows(`SELECT key_id, tenant_id, revoked_at IS NOT NULL AS revoked FROM api_keys ORDER BY id`);
-    const grants = rows(`SELECT key_id, scope FROM api_key_scope_grants ORDER BY key_id, scope`);
+    expect(rows(`SELECT key_id, tenant_id, revoked_at IS NOT NULL AS revoked FROM api_keys ORDER BY id`)).toEqual([
+      { key_id: home.keyId, tenant_id: 'default', revoked: 1 },
+      { key_id: acme.keyId, tenant_id: 'acme', revoked: 1 },
+      { key_id: spare.keyId, tenant_id: 'acme', revoked: 0 },
+    ]);
+    expect(rows(`SELECT key_id, scope FROM api_key_scope_grants`)).toEqual([]);
     const audit = rows(
       `SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE op LIKE 'auth_%' AND op != 'auth_create' ORDER BY id`,
     );
-    expect(mask(JSON.stringify({ keys, grants, audit }, null, 1))).toMatchSnapshot();
+    // Each grant and ungrant is audited under the key's tenant, a repeat of one too.
+    const scoped = (op: string) => ({
+      tenant_id: 'acme',
+      actor: 'cli',
+      op,
+      target_id: spare.keyId,
+      metadata_json: '{"scope":"unknown:legacy"}',
+    });
+    expect(audit).toEqual([
+      scoped('auth_grant'),
+      scoped('auth_grant'),
+      scoped('auth_ungrant'),
+      scoped('auth_ungrant'),
+      { tenant_id: 'acme', actor: 'cli', op: 'auth_revoke', target_id: acme.keyId, metadata_json: '{}' },
+      { tenant_id: 'default', actor: 'cli', op: 'auth_revoke', target_id: home.keyId, metadata_json: '{}' },
+    ]);
   });
 });
 
 describe('hippo goal (in process)', () => {
-  it('prints the same bytes and exit codes and leaves the same rows', async () => {
+  it('prints each command output and exit code, and leaves these rows', async () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
@@ -128,7 +161,7 @@ describe('hippo goal (in process)', () => {
       parent: top,
       level: '1',
     });
-    await step('push (other tenant)', ['push', 'acme goal'], { ...s, 'tenant-id': 'acme' });
+    const other = await step('push (other tenant)', ['push', 'acme goal'], { ...s, 'tenant-id': 'acme' });
     vi.stubEnv('HIPPO_SESSION_ID', 's1');
     const third = await step('push (session from env)', ['push', 'write docs']);
     await step('list (empty session)', ['list'], { 'session-id': 's2' });
@@ -150,11 +183,45 @@ describe('hippo goal (in process)', () => {
 
     expect(transcript.join('\n')).toMatchSnapshot();
     const goals = rows(
-      `SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status, success_condition,
+      `SELECT id, tenant_id, goal_name, level, parent_goal_id, status, success_condition,
               retrieval_policy_id IS NOT NULL AS has_policy, completed_at IS NOT NULL AS completed, outcome_score
        FROM goal_stack ORDER BY rowid`,
     );
-    const policies = rows(`SELECT id, goal_id, policy_type FROM retrieval_policy ORDER BY rowid`);
-    expect(mask(JSON.stringify({ goals, policies }, null, 1))).toMatchSnapshot();
+    const goal = (id: string, name: string, more: Partial<GoalRow> = {}): GoalRow => ({
+      id,
+      tenant_id: 'default',
+      goal_name: name,
+      level: 0,
+      parent_goal_id: null,
+      status: 'active',
+      success_condition: null,
+      has_policy: 0,
+      completed: 0,
+      outcome_score: null,
+      ...more,
+    });
+    // The repeat complete keeps the first outcome; the control character is stored as `?`.
+    expect(goals).toEqual([
+      goal(top, 'ship the release', {
+        status: 'completed',
+        success_condition: 'CI green',
+        has_policy: 1,
+        completed: 1,
+        outcome_score: 0.5,
+      }),
+      goal(child, 'fix?[31m ci', {
+        level: 1,
+        parent_goal_id: top,
+        status: 'completed',
+        completed: 1,
+        outcome_score: 0.9,
+      }),
+      goal(other, 'acme goal', { tenant_id: 'acme' }),
+      goal(third, 'write docs'),
+    ]);
+    expect(rows(`SELECT goal_id, policy_type FROM retrieval_policy`)).toEqual([
+      { goal_id: top, policy_type: 'error-prioritized' },
+    ]);
+    expect(rows(`SELECT DISTINCT session_id FROM goal_stack`)).toEqual([{ session_id: 's1' }]);
   });
 });
