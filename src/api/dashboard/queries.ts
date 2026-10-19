@@ -1,8 +1,8 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
-import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import type { HippoStore, StoreGroups } from '../store/port.js';
-import type { ConflictPair, DashboardText } from '../store/port/dashboard-reads.js';
+import { calculateStrength, type MemoryEntry } from '../../core/memory.js';
+import type { HippoStore, StoreGroups } from '../../store/port.js';
+import type { ConflictPair, DashboardText } from '../../store/port/dashboard-reads.js';
 import {
   BANDS,
   DAY_MS,
@@ -15,11 +15,10 @@ import {
   type FilteredSet,
   type ProjectAgg,
   type Snapshot,
-} from './dashboard-snapshot.js';
-import { AT_RISK_BELOW, STRONG_FROM } from '../core/strength-bands.js';
-import { chunked } from '../util/chunked.js';
-import { pct, plural, round1 } from '../util/format.js';
-import type { MemoryQuery, SortDir, SortKey } from './dashboard-params.js';
+} from './snapshot.js';
+import { AT_RISK_BELOW, STRONG_FROM } from '../../core/strength-bands.js';
+import { chunked } from '../../util/chunked.js';
+import { pct, plural, round1 } from '../../util/format.js';
 import type {
   ChipCounts,
   DecayOutlook,
@@ -33,7 +32,32 @@ import type {
   ScatterGrid,
   ScatterPoints,
   SearchResult,
-} from './dashboard-types.js';
+} from './types.js';
+
+export const SORT_KEYS = ['content', 'layer', 'strength', 'retrievals', 'last', 'age', 'confidence', 'scope'] as const;
+export type SortKey = (typeof SORT_KEYS)[number];
+export type SortDir = 'asc' | 'desc';
+
+interface Brush {
+  amin: number;
+  amax: number;
+  smin: number;
+  smax: number;
+}
+
+/** A parsed memory page query; the dashboard's params parser builds it from the URL. */
+export interface MemoryQuery {
+  offset: number;
+  limit: number;
+  sort: SortKey;
+  dir: SortDir;
+  chip: Chip;
+  /** Layer indices in wire order, ascending, no duplicates. */
+  layers: number[];
+  brush: Brush;
+  /** Lowercased search text, or null when none or shorter than the minimum. */
+  q: string | null;
+}
 
 const SERIES_DAYS = 90;
 /** The server words each delta for this range; the client re-slices the series for 7d and 90d. */
@@ -435,7 +459,8 @@ export interface MemoryDetailOptions {
   readonly embedded: boolean;
 }
 
-/** Full detail read fresh from the store, never from the snapshot, so the drawer is current inside the coalescing window. */
+/** Full detail read fresh from the store, never from the snapshot, so the drawer is current inside the coalescing
+ * window. */
 export async function buildMemoryDetail(
   store: DetailStore,
   tenantId: string,

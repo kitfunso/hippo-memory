@@ -24,7 +24,7 @@ import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { invalidateMatching, detectChurnStale } from '../../src/learn/invalidation.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { buildDag } from '../../src/consolidate/dag.js';
-import { buildMemoryDetail } from '../../src/dashboard/dashboard-queries.js';
+import { buildMemoryDetail } from '../../src/api/dashboard/queries.js';
 import { snapshotsOf } from '../_helpers/dashboard-fixture.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';

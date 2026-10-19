@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Request-path work at 10,000 memories per store: contextGet, the MCP tools that read whole stores, and the HTTP recall.
+// Request-path work at 10,000 memories per store: contextGet, the MCP tools that read whole stores, the HTTP recall and the dashboard.
 // Fails when a request runs more statements, reads more rows or opens more stores than its ceiling; the time is printed and fails nothing. Run after `npm run build`:
 //   node scripts/check-request-path-timing.mjs [--memories 10000]
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -42,6 +43,7 @@ const { handleMcpRequest } = await load('mcp/server.js');
 const { runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/store.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
+const { serveDashboard } = await load('server/dashboard-listener.js');
 
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite');
 
@@ -213,6 +215,16 @@ const httpTool =
     }
   };
 
+// The dashboard builds its snapshot on a reader thread, so a statement on this thread during one of its reads fails here.
+const dashboardToken = randomBytes(16).toString('hex');
+const dashboard = await serveDashboard({ hippoRoot: localRoot, port: 0, token: dashboardToken, tenantId: 'default' });
+const minted = await fetch(`${dashboard.url}/api/overview?token=${dashboardToken}`);
+const dashboardCookie = (minted.headers.get('set-cookie') ?? '').split(';')[0];
+const dashboardRead = (pathAndQuery) => async () => {
+  const res = await fetch(`${dashboard.url}${pathAndQuery}`, { headers: { cookie: dashboardCookie } });
+  if (!res.ok) throw new Error(`GET ${pathAndQuery} failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+};
+
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
   ['contextGet, no query', () => contextGet(ctx, { currentProject: 'proj' }), [330, 5335, 11]],
@@ -253,6 +265,8 @@ const cases = [
   ['served http context', httpContext(server.url), [0, 0, 0]],
   ['served mcp hippo_context', httpTool(server.url, 'hippo_context'), [0, 0, 0]],
   ['served mcp hippo_recall', httpTool(server.url, 'hippo_recall', { query: 'kafka redis' }), [0, 0, 0]],
+  ['dashboard overview, fresh', dashboardRead('/api/overview?fresh=1'), [0, 0, 0]],
+  ['dashboard search', dashboardRead(`/api/search?q=${encodeURIComponent('kafka redis')}`), [0, 0, 0]],
 ];
 
 let overworked = false;
@@ -290,6 +304,7 @@ try {
 } finally {
   // The threads hold the store's files until they exit, and Windows cannot remove a folder with an open file.
   await server.stop();
+  await dashboard.stop();
   await inProcessServer.stop();
   await inProcess.close();
   await served.close();
