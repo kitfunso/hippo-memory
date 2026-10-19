@@ -4,12 +4,13 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import type { Sync } from '../port.js';
 import type { HandleOpener, OnHandle, OnHandleAsync, StoreFiles } from './open.js';
 
+// A void method's body returns nothing too: `void` alone would let a value through to callers the port promised none.
 type BodyOf<M, Lead extends unknown[]> = M extends (...args: infer A) => infer R
-  ? (...args: [...Lead, ...A]) => Awaited<R>
+  ? (...args: [...Lead, ...A]) => [Awaited<R>] extends [void] ? void | undefined : Awaited<R>
   : never;
 
 type AsyncBodyOf<M, Lead extends unknown[]> = M extends (...args: infer A) => Promise<infer R>
-  ? (...args: [...Lead, ...A]) => Promise<R>
+  ? (...args: [...Lead, ...A]) => Promise<[R] extends [void] ? void | undefined : R>
   : never;
 
 type Db = [db: DatabaseSyncLike];

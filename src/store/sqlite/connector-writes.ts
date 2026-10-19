@@ -3,9 +3,17 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { githubEventMemoryAt, markGitHubEventSeenAt } from './connectors/github.js';
 import { markSlackEventSeenAt, slackEventMemoryAt } from './connectors/slack.js';
-import type { OnHandle } from './open.js';
+import type { OnHandle, StoreFiles } from './open.js';
+import { boundWithFiles } from './bound.js';
 import { openStore } from './handles.js';
-import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites, Sync } from '../port.js';
+import type {
+  ConnectorArchive,
+  ConnectorEvent,
+  ConnectorWrite,
+  ConnectorWriteOutcome,
+  ConnectorWrites,
+  Sync,
+} from '../port.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProjectIn } from './entry-row.js';
 import { writeEntryMirrorsIn, archiveRawAt, writeInOwnTenant } from './entry-writes.js';
@@ -54,6 +62,14 @@ function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteO
   }
 }
 
+/** archiveRaw with the event logged in its write; the log write's answer is unread: a key logged before keeps its row
+ * and the archive stands. */
+function archiveConnectorEntryAt(db: DatabaseSyncLike, files: StoreFiles, archive: ConnectorArchive): string {
+  return archiveRawAt(db, files, archive, (handle, archivedId) => {
+    logEvent(handle, archive.event, archivedId);
+  });
+}
+
 /** Each call on its own handle; the mirror follows the commit, so a duplicate or a rolled-back write leaves none. */
 export function sqliteConnectorWrites(on: OnHandle): Sync<ConnectorWrites> {
   return {
@@ -64,12 +80,8 @@ export function sqliteConnectorWrites(on: OnHandle): Sync<ConnectorWrites> {
         if (result.outcome === 'written') writeEntryMirrorsIn(files, entry);
         return result;
       }, openStore),
-    // The log write's answer is unread: a key logged before keeps its row and the archive stands.
-    archiveConnectorEntry: (archive) =>
-      on((db, files) =>
-        archiveRawAt(db, files, archive, (handle, archivedId) => {
-          logEvent(handle, archive.event, archivedId);
-        }),
-      ),
+    ...boundWithFiles<Pick<ConnectorWrites, 'archiveConnectorEntry'>>(on, {
+      archiveConnectorEntry: archiveConnectorEntryAt,
+    }),
   };
 }

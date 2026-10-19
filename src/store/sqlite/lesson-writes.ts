@@ -38,7 +38,9 @@ const lessonReadsAt: Bodies<Pick<LessonWrites, 'textsHoldingWords' | 'contentsWi
 
 const lessonWritesAt: FileBodies<Omit<LessonWrites, 'textsHoldingWords' | 'contentsWithTag'>> = {
   writeSkippingRejected: writeSkippingRejectedAt,
-  writeTogether: writeEntriesTogetherAt,
+  writeTogether: (db, files, entries) => {
+    writeEntriesTogetherAt(db, files, entries);
+  },
   bumpRemembered: (db, files, count) => updateStatsAt(db, files, { remembered: count }),
 };
 

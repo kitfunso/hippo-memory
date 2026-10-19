@@ -96,8 +96,8 @@ export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[],
   return rows.map(rowToEntry);
 }
 
-function originClause(origins: readonly string[] | undefined): string {
-  return origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
+function originClause(origins: readonly string[] | null | undefined): string {
+  return origins == null ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
 }
 
 /** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
@@ -152,7 +152,7 @@ export function loadFreshRawMemoriesAt(
   count: number,
   tenantId: TenantId,
   sessionId?: string,
-  origins?: readonly string[],
+  origins?: readonly string[] | null,
 ): MemoryEntry[] {
   if (count <= 0) return [];
   const capped = Math.min(count, MAX_FRESH_RAW);
