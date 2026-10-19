@@ -105,6 +105,34 @@ describe('check-size-ratchet.mjs', () => {
     });
   });
 
+  it('fails on an 801-line test file, naming it, and passes a test file of 800 lines and a long helper', () => {
+    const lines = (n: number) => 'export const x = 1;\n'.repeat(n);
+    const files = {
+      'tests/a/long.test.ts': lines(801),
+      'tests/a/edge.test.ts': lines(800),
+      'tests/_helpers/big.ts': lines(801),
+    };
+    withFixture(files, {}, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('tests/a/long.test.ts: 801');
+      expect(r.stderr).not.toContain('edge.test.ts');
+      expect(r.stderr).not.toContain('big.ts');
+    });
+  });
+
+  it('exempts the Z0 test file the script names, and no baseline entry excuses another test file', () => {
+    const long = 'export const x = 1;\n'.repeat(801);
+    withFixture({ 'tests/token-eval-z0-homes.test.ts': long }, {}, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('0 test files over 800 lines');
+    });
+    withFixture({ 'tests/other.test.ts': long }, { files: { 'tests/other.test.ts': 801 } }, ({ run }) => {
+      expect(run().status).toBe(1);
+    });
+  });
+
   it('keys methods, nested and anonymous functions by name, not line number', () => {
     const body = '  void 0;\n'.repeat(85);
     const code = [

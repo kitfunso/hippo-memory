@@ -133,11 +133,30 @@ function findOffenders() {
   return { files: sorted(files), functions: sorted(functions), longLines: sorted(longLines) };
 }
 
+// Test files have no baseline: one past FILE_LIMIT fails. A named exception belongs to another owner, with the reason.
+const TEST_FILE_EXCEPTIONS = {
+  'tests/token-eval-z0-homes.test.ts': 'owned by the Z0 session (602cafe5); split it there',
+};
+
+/** { path: lines } of the .test.ts files under tests/ that pass FILE_LIMIT and that no exception covers. */
+function oversizedTests() {
+  const out = {};
+  if (!existsSync('tests')) return out;
+  for (const file of tsFiles('tests')) {
+    if (!file.endsWith('.test.ts') || file in TEST_FILE_EXCEPTIONS) continue;
+    const lines = physicalLines(readFileSync(file, 'utf8'));
+    if (lines > FILE_LIMIT) out[file] = lines;
+  }
+  return out;
+}
+
 const current = findOffenders();
+const oversized = oversizedTests();
 const args = process.argv.slice(2);
 const total =
   `${Object.keys(current.files).length} files over ${FILE_LIMIT} lines, ${Object.keys(current.functions).length} functions over ${LIMITS_TEXT}` +
-  `, ${Object.values(current.longLines).reduce((a, b) => a + b, 0)} src lines over ${LINE_LIMIT} characters`;
+  `, ${Object.values(current.longLines).reduce((a, b) => a + b, 0)} src lines over ${LINE_LIMIT} characters` +
+  `, ${Object.keys(oversized).length} test files over ${FILE_LIMIT} lines`;
 
 if (args.includes('--update')) {
   writeFileSync(BASELINE, JSON.stringify(current, null, 2) + '\n');
@@ -149,7 +168,16 @@ if (args.includes('--list')) {
   for (const kind of ['files', 'functions']) {
     for (const [key, n] of Object.entries(current[kind]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${key}`);
   }
+  for (const [key, n] of Object.entries(oversized).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${key}`);
   process.exit(0);
+}
+
+if (Object.keys(oversized).length > 0) {
+  console.error(
+    `Test files over ${FILE_LIMIT} lines (no baseline; split by behaviour, share setup in tests/_helpers):`,
+  );
+  for (const [key, n] of Object.entries(oversized)) console.error(`  ${key}: ${n}`);
+  process.exit(1);
 }
 
 const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};

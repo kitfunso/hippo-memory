@@ -32,7 +32,7 @@ targetRules = ["jwt"]
 
 [[allowlists]]
 description = "pre-compact e2e test: dummy RSA private key header with no key body"
-paths = ['''^tests/core/pre-compact-e2e\.test\.ts$''']
+paths = ['''^tests/core/pre-compact-e2e-regressions\.test\.ts$''']
 targetRules = ["private-key"]
 
 [[allowlists]]
