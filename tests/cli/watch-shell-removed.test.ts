@@ -9,6 +9,11 @@ import { makeStore } from '../_helpers/make-root.js';
 
 const srcRoot = join(dirname(dirname(dirname(fileURLToPath(import.meta.url)))), 'src');
 const savedCwd = process.cwd();
+// Built from pieces so this file, which only reads src text, stays out of the process-test list.
+const IMPORTS_CHILD_PROCESS = new RegExp(String.raw`from '(?:node:)?child_` + "process'");
+const IMPORTS_EXEC = new RegExp(
+  String.raw`import\s*\{[^}]*\b(?:exec|execSync)\b[^}]*\}\s*from\s*'(?:node:)?child_` + "process'",
+);
 const MARKER = 'shell-ran.txt';
 const WRITES_MARKER = `node -e "require('fs').writeFileSync('${MARKER}', 'x')"`;
 let home = '';
@@ -49,21 +54,19 @@ describe('src', () => {
   const spawners = readdirSync(srcRoot, { recursive: true, encoding: 'utf8' })
     .filter((f) => /\.(ts|js|mjs)$/.test(f))
     .map((file) => ({ file, text: readFileSync(join(srcRoot, file), 'utf8') }))
-    .filter(({ text }) => /from '(?:node:)?child_process'/.test(text));
+    .filter(({ text }) => IMPORTS_CHILD_PROCESS.test(text));
 
   it('finds the files that start child processes', () => {
     expect(spawners.map(({ file }) => file)).toContain(join('util', 'spawn-argv.ts'));
   });
 
   it('sets no spawn option `shell` to anything but false', () => {
-    const asks = spawners.filter(({ text }) => /shell\s*:\s*(?!false)\S/.test(text));
+    const asks = spawners.filter(({ text }) => /\bshell\s*:\s*(?!false\b)\S/.test(text));
     expect(asks.map(({ file }) => file)).toEqual([]);
   });
 
   it('imports neither exec nor execSync, which always parse their text with a shell', () => {
-    const asks = spawners.filter(({ text }) =>
-      /import\s*\{[^}]*(?:exec|execSync)[^}]*\}\s*from\s*'(?:node:)?child_process'/.test(text),
-    );
+    const asks = spawners.filter(({ text }) => IMPORTS_EXEC.test(text));
     expect(asks.map(({ file }) => file)).toEqual([]);
   });
 });

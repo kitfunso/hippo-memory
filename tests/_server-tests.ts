@@ -11,6 +11,7 @@ export const SERVER_TESTS: readonly string[] = [
   'api/scope-grant-personal.test.ts',
   'cli/remember-origin-parity.test.ts',
   'connectors/connector-events-store.test.ts',
+  'connectors/slack-previous-secret-expiry.test.ts',
   'connectors/slack-webhook-multi-workspace-tenant.test.ts',
   'connectors/slack-webhook-parse-failure-tenant.test.ts',
   'connectors/slack-webhook-replay.test.ts',
