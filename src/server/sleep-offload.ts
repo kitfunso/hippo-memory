@@ -108,6 +108,8 @@ export interface SleepQueue {
   readonly sleep: (ctx: Context, opts: SleepOpts) => Promise<SleepResult>;
   /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
   readonly consolidate: (hippoRoot: string) => Promise<void>;
+  /** Resolves once every sleep in line has ended, each by its deadline at the latest; it never rejects. */
+  readonly settled: () => Promise<void>;
 }
 
 export function createSleepQueue(): SleepQueue {
@@ -145,5 +147,6 @@ export function createSleepQueue(): SleepQueue {
     consolidate: async (hippoRoot) => {
       await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
     },
+    settled: () => turn,
   };
 }

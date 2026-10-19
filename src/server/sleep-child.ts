@@ -16,7 +16,7 @@ import type { ConsolidationResult } from '../consolidate/run.js';
 type JobResult = SleepResult | ConsolidationResult;
 
 const loadConfig = configReader(envRuntimeSettings);
-const openStore = (root: string) => sqliteStore(root, { lossAversionRatio: envLossAversionRatio() });
+const storeAt = (root: string) => sqliteStore(root, { lossAversionRatio: envLossAversionRatio() });
 
 function failed<E>(err: E): SleepReply<never> {
   return {
@@ -29,8 +29,8 @@ function failed<E>(err: E): SleepReply<never> {
 
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
 function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
-  const store = openStore(hippoRoot);
-  const reach = contextReach(sqliteReach(hippoRoot, store, undefined, openStore), loadConfig);
+  const store = storeAt(hippoRoot);
+  const reach = contextReach(sqliteReach(hippoRoot, store, undefined, storeAt), loadConfig);
   const config = loadConfig(hippoRoot);
   return sleep({ hippoRoot, tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
 }

@@ -4,7 +4,8 @@ import { RecentRecalls } from './recall/last-recalled.js';
 import type { RecallSurface, RingBuffer } from './recall/finish.js';
 import type { AutoSleepRunner } from './sleep/auto-sleep.js';
 
-/** How a write starts a background sleep: the server runs it in its sleep queue's child, stdio in its own process. */
+/** How a write starts a background sleep: the server runs it in its sleep queue's child, stdio in its own process.
+ * Consolidation runs on hippo.db, so only a root whose store is hippo.db holds one. */
 export interface AutoSleepHost {
   readonly run: AutoSleepRunner;
   /** The tenant that owns the host: consolidation is host-wide, so only its writes start one. */

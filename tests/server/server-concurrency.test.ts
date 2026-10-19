@@ -127,7 +127,8 @@ describe('server concurrency — recall + write under single-writer', () => {
       });
     }
     vi.stubEnv('HIPPO_V1_RPS', '0');
-    const handle: ServerHandle = await serve({ hippoRoot: home, port: 0 });
+    // The count below is the rows this test wrote; a sleep a REST write starts would add its own.
+    const handle: ServerHandle = await serve({ hippoRoot: home, port: 0, autoSleep: false });
     const lockedErrors: string[] = [];
 
     try {

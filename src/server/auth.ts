@@ -99,7 +99,9 @@ type AuthOptions = Pick<
 > &
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
-type ContextOptions = AuthOptions & Pick<ResolvedServeOptions, 'configAt'> & Partial<Pick<ResolvedServeOptions, 'callers'>>;
+type ContextOptions = AuthOptions &
+  Pick<ResolvedServeOptions, 'configAt'> &
+  Partial<Pick<ResolvedServeOptions, 'callers'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [

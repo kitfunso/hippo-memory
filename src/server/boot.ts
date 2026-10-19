@@ -13,7 +13,7 @@ import {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../store/index.js';
-import { isStoreBusy } from '../store/port.js';
+import { hasGroup, isStoreBusy } from '../store/port.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { createSqliteExecutor } from '../store/sqlite/executor.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
@@ -66,7 +66,14 @@ import {
   dispatchV1Route,
   HOST_ROUTES,
 } from './route-table.js';
-import type { RateLimitSpec, ResolvedServeOptions, RouteRequest, ServeOpts, ServerHandle } from './types.js';
+import type {
+  RateLimitSpec,
+  ResolvedServeOptions,
+  RouteRequest,
+  ServeOpts,
+  ServerCounts,
+  ServerHandle,
+} from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
 // listening, a string only for pipe/unix-socket listeners (never used here).
@@ -78,12 +85,6 @@ function isAddressInfo(a: string | import('node:net').AddressInfo | null): a is 
 // daemon to its install path,
 // which tests that mkdtemp a hippoRoot avoid.
 const VERSION = PACKAGE_VERSION;
-
-/** Counts this server's /health reports. */
-interface ServerCounts {
-  /** Requests answered 504 by the handler deadline since the server started. */
-  handlerDeadlines: number;
-}
 
 interface HandleRequestOptions {
   readonly startedAt: string;
@@ -154,6 +155,7 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, { startedAt, coun
       store_jobs_expired: workerCounts.jobsExpired,
       store_workers_replaced: workerCounts.workersReplaced,
       handler_deadlines: counts.handlerDeadlines,
+      auto_sleeps: counts.autoSleeps,
     });
   } else {
     sendJson(res, 200, { ok: true });
@@ -349,7 +351,7 @@ export function answerRequest(
   req: IncomingMessage,
   res: ServerResponse,
   handle: () => Promise<void>,
-  { slowWarnMs, counts }: { slowWarnMs: number | undefined; counts: ServerCounts },
+  { slowWarnMs, counts }: { slowWarnMs: number | undefined; counts: Pick<ServerCounts, 'handlerDeadlines'> },
 ): void {
   const requestId = openRequest(req, res, slowWarnMs);
   const deadline = requestDeadlineFor(req);
@@ -457,8 +459,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
-  const counts: ServerCounts = { handlerDeadlines: 0 };
-  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts };
+  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts: served.counts };
   const server = acceptingServer(served, holder, inflight, options);
 
   setKeepAliveTimeouts(server);
@@ -473,6 +474,8 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
     if (stopping) return;
     stopping = true;
     await stopListening(opts, server, inflight, startedAt);
+    // An auto-sleep answers no request, so draining skips it; its child must leave the store before the store closes.
+    await served.sleeps.settled();
     // The store's worker threads close their connections first, so the held one is still SQLite's last.
     if (!opts.store) await served.store.close();
     await served.globalStores.close();
@@ -510,7 +513,13 @@ function servedOptsFor(
   const store =
     opts.store ?? workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, executorOpts), executorOpts);
   const sleeps = createSleepQueue();
-  const autoSleep = opts.autoSleep === false ? undefined : { run: sleeps.consolidate, hostTenantId: envTenant() };
+  const counts: ServerCounts = { handlerDeadlines: 0, autoSleeps: 0 };
+  const run = (root: string): Promise<void> => {
+    counts.autoSleeps += 1;
+    return sleeps.consolidate(root);
+  };
+  const sleepsHere = opts.autoSleep !== false && hasGroup(store, 'localFiles');
+  const autoSleep = sleepsHere ? { run, hostTenantId: envTenant() } : undefined;
   return {
     ...opts,
     routes,
@@ -524,6 +533,7 @@ function servedOptsFor(
     authResolver: outsideRouteBlock(opts.authResolver),
     callers: createCallerState(autoSleep),
     sleeps,
+    counts,
   };
 }
 
@@ -537,12 +547,10 @@ function acceptingServer(
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(
-      req,
-      res,
-      () => holder.runRequest(() => handleRequest(req, res, served, options)),
-      { slowWarnMs: served.slowRequestWarnMs, counts: options.counts },
-    );
+    answerRequest(req, res, () => holder.runRequest(() => handleRequest(req, res, served, options)), {
+      slowWarnMs: served.slowRequestWarnMs,
+      counts: options.counts,
+    });
   });
 }
 

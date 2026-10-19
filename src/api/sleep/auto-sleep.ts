@@ -1,7 +1,7 @@
 // When a write starts a background sleep; api remember and the session-close hook share it.
 
 import { errorFields, errorMessage, log } from '../../util/log.js';
-import { hasGroup, type HippoStore } from '../../store/port.js';
+import type { HippoStore } from '../../store/port.js';
 import type { HippoConfig } from '../../core/config.js';
 import type { Context } from '../types.js';
 
@@ -30,9 +30,8 @@ export async function autoSleepDue(
 }
 
 /**
- * Starts the root's auto-sleep once enough new memories have landed. Consolidation is host-wide and runs on hippo.db,
- * so only the host tenant's writes to a hippo.db store start one, one per store at a time. Never rejects: the write it
- * follows has landed.
+ * Starts the root's auto-sleep once enough new memories have landed. Consolidation is host-wide, so only the host
+ * tenant's writes start one, one per store at a time. Never rejects: the write it follows has landed.
  */
 export async function autoSleepAfterWrite(
   ctx: Pick<Context, 'hippoRoot' | 'tenantId' | 'store' | 'config' | 'callers'>,
@@ -40,7 +39,7 @@ export async function autoSleepAfterWrite(
   const host = ctx.callers?.autoSleep;
   const { hippoRoot, tenantId, store, config } = ctx;
   if (host === undefined || !config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
-  if (!hasGroup(store, 'localFiles') || host.inFlight.has(hippoRoot)) return;
+  if (host.inFlight.has(hippoRoot)) return;
   // Held from the count on, so two writes landing together never both start a sleep.
   host.inFlight.add(hippoRoot);
   let due = false;

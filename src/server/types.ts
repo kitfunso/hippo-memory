@@ -94,6 +94,14 @@ export interface ServeOpts {
   };
 }
 
+/** Counts this server's /health reports, since it started. */
+export interface ServerCounts {
+  /** Requests answered 504 by the handler deadline. */
+  handlerDeadlines: number;
+  /** Background sleeps its writes started. */
+  autoSleeps: number;
+}
+
 export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
   /** The operator's global store a request reaches beside `store`. */
@@ -108,6 +116,7 @@ export type ResolvedServeOptions = ServeOpts & {
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
   sleeps: SleepQueue;
+  counts: ServerCounts;
 };
 
 /** Per-request values the /v1 route handlers read. */

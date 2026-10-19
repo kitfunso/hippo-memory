@@ -86,6 +86,13 @@ describe('serve autoSleep option', () => {
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
   });
 
+  it('stop returns once the auto-sleep a write started has ended, so no sleep child still holds the store', async () => {
+    const { root, url, key } = await startServer(undefined);
+    for (const note of NOTES) await rememberRest(url, key, note);
+    for (const h of handles.splice(0)) await h.stop();
+    expect(sleepRuns(root)).toBe(1);
+  });
+
   it('autoSleep: false stops a REST remember from starting one too', async () => {
     const { root, url, key } = await startServer(false);
     for (const note of NOTES) await rememberRest(url, key, note);
