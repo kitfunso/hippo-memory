@@ -289,15 +289,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, shard: 1/2, variant: K1000 }
-          - { os: windows-latest, shard: 2/2, variant: K1000 }
-          - { os: windows-latest, shard: 1/2, variant: N1000 }
-          - { os: windows-latest, shard: 2/2, variant: N1000 }
-          - { os: windows-latest, shard: 1/2, variant: D100 }
-          - { os: windows-latest, shard: 2/2, variant: D100 }
-          - { os: macos-latest, shard: 1/1, variant: K1000 }
+          - { os: windows-latest, shard: 1/2, variant: H100 }
+          - { os: windows-latest, shard: 2/2, variant: H100 }
+          - { os: windows-latest, shard: 1/2, variant: H1000 }
+          - { os: windows-latest, shard: 2/2, variant: H1000 }
+          - { os: macos-latest, shard: 1/1, variant: H100 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -306,29 +304,16 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Variant (throwaway)
+        if: matrix.variant == 'H1000'
         shell: bash
         run: |
-          case "${{ matrix.variant }}" in
-            K1000) sed -i 's/^const INLINE_CHECKPOINT_PAGES = 100;/const INLINE_CHECKPOINT_PAGES = 1000;/' src/db/wal-checkpointer.ts ;;
-            N1000) sed -i 's/^const INLINE_CHECKPOINT_PAGES = 100;/const INLINE_CHECKPOINT_PAGES = 1000;/' src/db/wal-checkpointer.ts
-                   sed -i "/runner: 'tests\/_held-stores-runner.ts',/d" vitest.config.ts
-                   sed -i 's/^  holdUntilTestEnds(hippoRoot);$//' tests/_helpers/store-template.ts ;;
-            D100) sed -i "/runner: 'tests\/_held-stores-runner.ts',/d" vitest.config.ts
-                  sed -i 's/^  holdUntilTestEnds(hippoRoot);$//' tests/_helpers/store-template.ts
-                  echo "TEMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
-                  echo "TMP=$RUNNER_TEMP" >> "$GITHUB_ENV" ;;
-          esac
+          sed -i 's/^const INLINE_CHECKPOINT_PAGES = 100;/const INLINE_CHECKPOINT_PAGES = 1000;/' src/db/wal-checkpointer.ts
           git diff --stat
       - run: npm run build
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
-          NODE_OPTIONS: --require ${{ github.workspace }}/.diag/count.cjs
-          DIAG_OUT: ${{ runner.temp }}/diag
-      - name: Diag summary (throwaway)
-        if: always()
-        run: node .diag/summary.mjs "${{ runner.temp }}/diag"
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
