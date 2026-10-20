@@ -1,4 +1,4 @@
-import { MemoryEntry } from '../base/memory/memory.js';
+import type { CorrectionLink } from '../store/port/reports.js';
 
 export interface CorrectionPair {
   oldId: string;
@@ -35,38 +35,17 @@ function percentile(sorted: number[], q: number): number {
  * Correction latency = `new.created` minus the observation time (the extracted-from row's `created`, else
  * `new.created`).
  * Manual supersedes have latency 0 and are excluded from percentiles so they do not mask real lag. */
-export function buildCorrectionLatency(entries: MemoryEntry[]): CorrectionLatencyReport {
-  const byId = new Map<string, MemoryEntry>();
-  for (const e of entries) byId.set(e.id, e);
-
+export function buildCorrectionLatency(links: readonly CorrectionLink[]): CorrectionLatencyReport {
   const pairs: CorrectionPair[] = [];
-  for (const oldEntry of entries) {
-    if (!oldEntry.supersededBy) continue;
-    const newEntry = byId.get(oldEntry.supersededBy);
-    if (!newEntry) continue;
-
-    const correctedAt = newEntry.created;
-    let observedAt = newEntry.created;
-    let via: CorrectionPair['via'] = 'manual';
-    if (newEntry.extractedFrom) {
-      const source = byId.get(newEntry.extractedFrom);
-      if (source) {
-        observedAt = source.created;
-        via = 'extraction';
-      }
-    }
+  for (const link of links) {
+    const { correctedAt } = link;
+    const observedAt = link.sourceCreated ?? correctedAt;
+    const via: CorrectionPair['via'] = link.sourceCreated === null ? 'manual' : 'extraction';
     const correctedMs = new Date(correctedAt).getTime();
     const observedMs = new Date(observedAt).getTime();
     if (!Number.isFinite(correctedMs) || !Number.isFinite(observedMs)) continue;
     const latencyMs = Math.max(0, correctedMs - observedMs);
-    pairs.push({
-      oldId: oldEntry.id,
-      newId: newEntry.id,
-      correctedAt,
-      observedAt,
-      latencyMs,
-      via,
-    });
+    pairs.push({ oldId: link.oldId, newId: link.newId, correctedAt, observedAt, latencyMs, via });
   }
 
   const extractionPairs = pairs.filter((p) => p.via === 'extraction');

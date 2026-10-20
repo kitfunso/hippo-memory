@@ -145,7 +145,14 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('connectorEvents.slackCursor', (s) => s.connectorEvents.slackCursor(TENANT, 'C-seeded'), '1700000000.000100'),
   read('connectorEvents.githubCursors', (s) => s.connectorEvents.githubCursors(TENANT, REPO), '2026-01-01T00:00:00Z'),
   read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),
-  read('auditMaintenance.objectBackedIds', (s) => s.auditMaintenance.objectBackedIds(), /'sem_/),
+  read(
+    'auditMaintenance.objectBackedAmong',
+    async (s) =>
+      s.auditMaintenance.objectBackedAmong(
+        (await s.reports.entriesPage(TENANT, { limit: 100 })).entries.map((e) => e.id),
+      ),
+    /'sem_/,
+  ),
   read('lessonWrites.textsHoldingWords', (s) => s.lessonWrites.textsHoldingWords(TENANT, ['deploy'], null), PLAIN),
   read(
     'lessonWrites.contentsWithTag',
@@ -184,8 +191,8 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('reports.countEntries', (s) => s.reports.countEntries(), /^[1-9]\d*$/),
   read('reports.stats', (s) => s.reports.stats(), /total_recalled/),
   read('reports.statusCounts', (s) => s.reports.statusCounts(NOW, 0.1), /total/),
-  read('reports.correctionEntries', (s) => s.reports.correctionEntries(), /id: 'mem_/),
-  read('reports.rawEntries', (s) => s.reports.rawEntries(), 'mem_x_raw'),
+  read('reports.correctionLinks', (s) => s.reports.correctionLinks(), /oldId: 'mem_/),
+  read('reports.rawProvenance', (s) => s.reports.rawProvenance(), /total: [1-9]/),
   read('reports.createdSinceLastSleep', (s) => s.reports.createdSinceLastSleep(TENANT, NOW), /^[1-9]\d*$/),
   read('rejections.list', (s) => s.rejections.list(TENANT), "reason: 'wrong'"),
   read(

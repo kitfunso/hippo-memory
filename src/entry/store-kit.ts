@@ -118,7 +118,7 @@ export type { CallerItems } from '../store/port/compactions.js';
 export type { CompactionStart } from '../store/port/compactions.js';
 export type { MemoryConflict } from '../store/port/conflicts.js';
 export type { SessionEventInput, SnapshotInput } from '../store/port/sessions.js';
-export type { StatusCounts, StrengthTallies } from '../store/port/reports.js';
+export type { CorrectionLink, RawProvenance, StatusCounts, StrengthTallies } from '../store/port/reports.js';
 export type { LegacyStats } from '../store/port/reports.js';
 export type { TokenSummary } from '../store/port/token-ledger.js';
 export type { WorkingMemoryItem } from '../store/port/sessions.js';

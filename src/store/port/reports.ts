@@ -37,3 +37,18 @@ export interface StatusCounts {
   /** Rows that have a stored vector. */
   embedded: number;
 }
+
+/** One superseded row and its successor; `sourceCreated` is the `created` of the successor's extraction source, null
+ * when it names none that exists. */
+export interface CorrectionLink {
+  oldId: string;
+  newId: string;
+  correctedAt: string;
+  sourceCreated: string | null;
+}
+
+/** How many kind='raw' rows the store holds, and each one missing an owner or an artifact ref. */
+export interface RawProvenance {
+  total: number;
+  gaps: Array<{ id: string; owner: string | null; artifactRef: string | null }>;
+}

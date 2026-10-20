@@ -13,7 +13,7 @@ import {
   strengthOptionsOf,
 } from '../../base/memory/memory.js';
 import { resolveEmbeddingProvider } from '../../base/embeddings/provider.js';
-import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../../base/rank/physics.js';
+import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor } from '../../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../../support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -26,11 +26,12 @@ import {
   embeddingReindexNeeded,
   provenanceCoverageReport,
   storeStatus,
-  storedParticles,
+  storedParticleStats,
   vectorSummary,
 } from '../../api/status.js';
 import type { StatusCounts } from '../../store/port/reports.js';
 import type { Diagnostics } from '../../store/local/diagnostics.js';
+import type { ParticleStats } from '../../store/local/embedding-index.js';
 import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 
 const diagnosticsAt = (hippoRoot: string): Diagnostics => cliLocalFiles(hippoRoot).diagnostics;
@@ -134,15 +135,12 @@ const PHYSICS_ENERGY_STATUS_MAX = 2000;
 
 function printPhysicsStatus(ctx: CliContext): void {
   try {
-    const particles = storedParticles(ctx);
-    if (particles.length > 0) {
-      let sumVelMag = 0;
-      for (const p of particles) sumVelMag += vecNorm(p.velocity);
-      const avgVelMag = sumVelMag / particles.length;
+    const stats = storedParticleStats(ctx, PHYSICS_ENERGY_STATUS_MAX);
+    if (stats.count > 0) {
       console.log('');
       console.log(
-        `Physics: ${particles.length} particles, ` +
-          `${physicsEnergyText(particles, cliConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`,
+        `Physics: ${stats.count} particles, ` +
+          `${physicsEnergyText(stats, cliConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(stats.meanSpeed, 4)}`,
       );
     }
   } catch (err) {
@@ -151,9 +149,9 @@ function printPhysicsStatus(ctx: CliContext): void {
   }
 }
 
-export function physicsEnergyText(particles: PhysicsParticle[], gMemory: number): string {
-  if (particles.length > PHYSICS_ENERGY_STATUS_MAX) return `energy: skipped (${particles.length} particles)`;
-  const energy = computeSystemEnergy(particles, gMemory);
+export function physicsEnergyText(stats: Pick<ParticleStats, 'count' | 'particles'>, gMemory: number): string {
+  if (stats.particles === null) return `energy: skipped (${stats.count} particles)`;
+  const energy = computeSystemEnergy(stats.particles, gMemory);
   return `energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)})`;
 }
 

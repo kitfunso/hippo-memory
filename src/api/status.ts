@@ -1,12 +1,11 @@
 // Store-wide status reads: counts, stats, vector index state and the correction and provenance reports.
 
-import type { PhysicsParticle } from '../base/rank/physics.js';
 import type { LegacyStats } from '../store/port/reports.js';
 import type { StatusCounts } from '../store/port/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, type Context, type LocalContext } from './types.js';
-import type { StoredVectorSummary } from '../store/local/embedding-index.js';
+import type { ParticleStats, StoredVectorSummary } from '../store/local/embedding-index.js';
 
 export interface StoreStatus {
   stats: LegacyStats;
@@ -34,20 +33,21 @@ export function embeddingReindexNeeded(ctx: LocalContext, providerId: string): b
   return ctx.store.localFiles.embeddingIndex.requiresReindex(providerId);
 }
 
-/** Every stored physics particle. Every tenant, so the host admin only. */
-export function storedParticles(ctx: LocalContext): PhysicsParticle[] {
+/** The stored particles' count and mean speed, and the particles while at most `fullUpTo`. Every tenant, so the host
+ * admin only. */
+export function storedParticleStats(ctx: LocalContext, fullUpTo: number): ParticleStats {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.localFiles.embeddingIndex.particles();
+  return ctx.store.localFiles.embeddingIndex.particleStats(fullUpTo);
 }
 
 /** Correction latency over every superseded row in the store. Every tenant, so the host admin only. */
 export async function correctionLatencyReport(ctx: Context): Promise<CorrectionLatencyReport> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return buildCorrectionLatency(await ctx.store.reports.correctionEntries());
+  return buildCorrectionLatency(await ctx.store.reports.correctionLinks());
 }
 
 /** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin only. */
 export async function provenanceCoverageReport(ctx: Context): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return buildProvenanceCoverage(await ctx.store.reports.rawEntries());
+  return buildProvenanceCoverage(await ctx.store.reports.rawProvenance());
 }

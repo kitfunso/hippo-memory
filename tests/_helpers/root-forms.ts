@@ -35,8 +35,8 @@ import {
 import { replaceDetectedConflictsAt } from '../../src/store/sqlite/conflicts.js';
 import {
   commitInChunksAt,
-  deleteEntriesOneByOneAt,
-  memoriesBackingObjectsAt,
+  deleteEntriesInBatchesAt,
+  memoriesBackingAmongAt,
 } from '../../src/store/sqlite/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../src/store/port/dormant.js';
 import { EVERY_SCOPE, listDormantRows } from '../../src/store/sqlite/dormant-rows.js';
@@ -114,7 +114,7 @@ import { freshActiveSnapshot } from '../../src/base/session/session-snapshot.js'
 import type { ApiCall } from '../../src/base/session/transcript-calls.js';
 import { recordRereadsAt } from '../../src/store/sqlite/token-ledger.js';
 import {
-  loadStoredParticlesAt,
+  particleStatsAt,
   loadStoredVectorsAt,
   resetStoredParticlesAt,
   seedStoredParticleAt,
@@ -310,8 +310,8 @@ export function resolveConflictKeeping(
   });
 }
 
-export function memoriesBackingObjects(hippoRoot: string): Set<string> {
-  return onHandle(hippoRoot, (db) => memoriesBackingObjectsAt(db));
+export function memoriesBackingAmong(hippoRoot: string, ids: readonly string[]): Set<string> {
+  return onHandle(hippoRoot, (db) => memoriesBackingAmongAt(db, ids));
 }
 
 export function deleteEntry(
@@ -322,7 +322,7 @@ export function deleteEntry(
   const targets = [{ id, reason: opts?.reason ?? '' }];
   return onHandle(
     hippoRoot,
-    (db) => deleteEntriesOneByOneAt(db, { hippoRoot }, targets, opts ?? {})[0] ?? false,
+    (db) => deleteEntriesInBatchesAt(db, { hippoRoot }, targets, opts ?? {})[0] ?? false,
     openStore,
   );
 }
@@ -670,7 +670,7 @@ export function saveStoredVectors(
 }
 
 export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
-  return onHandle(hippoRoot, (db) => loadStoredParticlesAt(db));
+  return onHandle(hippoRoot, (db) => particleStatsAt(db, Infinity).particles ?? []);
 }
 
 export function resetStoredParticles(hippoRoot: string): number {

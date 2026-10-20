@@ -232,6 +232,8 @@ const STORE_KIT_TYPES = [
   'FailureOutcome',
   'LegacyStats',
   'StatusCounts',
+  'CorrectionLink',
+  'RawProvenance',
   'RawRefRow',
   'RepairProtection',
   'HippoConfig',

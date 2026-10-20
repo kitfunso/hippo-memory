@@ -1,5 +1,6 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
+import { isoInstant } from '../../base/memory/created-stamp.js';
 import { type DatabaseSyncLike, ftsRowCounts, isFtsAvailable, repairFtsDrift, setFtsInSync } from '../../db/index.js';
 import { fallbackOrigin, originFromSource } from '../../base/scope/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
@@ -52,9 +53,11 @@ export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryE
 
 /** Bind values for MEMORY_ROW_COLUMNS, in its order. */
 function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
+  // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by time in SQL.
+  const created = isoInstant(entry.created) ?? entry.created;
   return [
     entry.id,
-    entry.created,
+    created,
     entry.lastRetrieved,
     entry.retrievalCount,
     entry.strength,
@@ -75,7 +78,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.starred ? 1 : 0,
     entry.traceOutcome ?? null,
     entry.sourceSessionId ?? null,
-    entry.validFrom ?? entry.created,
+    entry.validFrom ?? created,
     entry.supersededBy ?? null,
     entry.extractedFrom ?? null,
     entry.dagLevel ?? 0,

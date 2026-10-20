@@ -49,9 +49,8 @@ export async function runConsolidation(
   // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read a page at a time.
   const preview = dryRun ? halfLife.halfLives : new Map<string, number>();
   const rows = new SleepRows(store, preview, options.pageRows ?? SLEEP_PAGE_ROWS);
-  const backingObjects = store.objectBackedIds();
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
-  const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
+  const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !rows.backsObject(entry.id);
 
   const { config } = options;
   const decayOpts = sessionDecayOptions(store, config);

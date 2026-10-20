@@ -54,9 +54,9 @@ export async function auditRemoveErrors(
 /** The caller's memories run through the quality audit a page at a time, as each row is judged alone; a memory that
  * backs an object is never marked for removal. */
 export async function auditMemoryQuality(ctx: Context, opts: { pageSize?: number } = {}): Promise<AuditResult> {
-  const backing = await maintenanceOf(ctx).objectBackedIds();
   const audit: AuditResult = { total: 0, issues: [], clean: 0 };
   for await (const page of memoryPages(ctx.store, ctx.tenantId, opts.pageSize)) {
+    const backing = await maintenanceOf(ctx).objectBackedAmong(page.map((e) => e.id));
     const part = auditMemories(page, backing);
     audit.total += part.total;
     audit.clean += part.clean;

@@ -8,7 +8,10 @@ import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether, loadAllEntries, loadStoredParticles } from '../_helpers/root-forms.js';
+import { vecNorm } from '../../src/base/rank/physics.js';
+import { correctionLinksOf, rawProvenanceOf } from '../_helpers/in-memory-reports-store.js';
+import { recordStatements } from '../_helpers/count-statements.js';
 
 let root: string;
 
@@ -46,42 +49,86 @@ function seed(): void {
 }
 
 describe('status report reads', () => {
-  it('builds the same correction-latency report from the narrow read as from every row', () => {
+  it('builds the same correction-latency report from the join as from every row', () => {
     seed();
-    const narrow = sqliteSyncStore(root).reports.correctionEntries();
-    expect(narrow.length).toBeLessThan(loadAllEntries(root, 'default').length);
-    const report = buildCorrectionLatency(narrow);
-    expect(report).toEqual(buildCorrectionLatency(loadAllEntries(root, 'default')));
+    const report = buildCorrectionLatency(sqliteSyncStore(root).reports.correctionLinks());
+    expect(report).toEqual(buildCorrectionLatency(correctionLinksOf(loadAllEntries(root, 'default'))));
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
   });
 
-  it('builds the same provenance report from the raw rows as from every row', () => {
+  it('builds the same provenance report from the count and the gaps as from every row', () => {
     seed();
-    const report = buildProvenanceCoverage(sqliteSyncStore(root).reports.rawEntries());
-    expect(report).toEqual(buildProvenanceCoverage(loadAllEntries(root, 'default')));
+    const report = buildProvenanceCoverage(sqliteSyncStore(root).reports.rawProvenance());
+    expect(report).toEqual(buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default'))));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
   });
+
+  it('reads the same rows when the store holds five times more rows outside the reports', () => {
+    seed();
+    const reports = () => {
+      const { correctionLinks, rawProvenance } = sqliteSyncStore(root).reports;
+      return { links: correctionLinks(), raw: rawProvenance() };
+    };
+    const before = recordStatements(reports);
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 200 }, (_, i) => createMemory(`more filler memory ${i}`)),
+    );
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 20 }, (_, i) =>
+        createMemory(`raw receipt ${i}`, { kind: 'raw', owner: 'o', artifactRef: 'r' }),
+      ),
+    );
+    const after = recordStatements(reports);
+    expect(after.reads.map((r) => r.rows)).toEqual(before.reads.map((r) => r.rows));
+    expect(after.result.raw.total).toBe(22);
+    expect(after.result.links).toEqual(before.result.links);
+  });
 });
 
-describe('physicsEnergyText', () => {
-  const particles = (n: number): PhysicsParticle[] =>
-    Array.from({ length: n }, (_, i) => ({
-      memoryId: `m${i}`,
+describe('physics status stats', () => {
+  const particles = (ids: readonly string[]): PhysicsParticle[] =>
+    ids.map((memoryId, i) => ({
+      memoryId,
       position: [1, 0],
-      velocity: [0, 0],
+      velocity: [i * 0.5, 0.25],
       mass: 1,
       charge: 0,
       temperature: 1,
       lastSimulation: '2026-01-01T00:00:00.000Z',
     }));
 
-  it('computes the energy at 2000 particles', () => {
-    expect(physicsEnergyText(particles(2000), 1)).toMatch(/^energy: -?\d.*\(KE: .*, PE: .*\)$/);
+  function seedParticles(n: number): PhysicsParticle[] {
+    const entries = Array.from({ length: n }, (_, i) => createMemory(`particle memory ${i}`));
+    writeEntriesTogether(root, entries);
+    const saved = particles(entries.map((e) => e.id));
+    sqliteSyncStore(root).localFiles.consolidation.saveParticles(saved);
+    return saved;
+  }
+
+  it('averages the speeds a whole read averages, and loads the particles only up to the limit', () => {
+    seedParticles(3);
+    const index = sqliteSyncStore(root).localFiles.embeddingIndex;
+    const whole = loadStoredParticles(root);
+    const mean = whole.reduce((sum, p) => sum + vecNorm(p.velocity), 0) / whole.length;
+    expect(index.particleStats(3)).toEqual({ count: 3, meanSpeed: mean, particles: whole });
+    expect(index.particleStats(2)).toEqual({ count: 3, meanSpeed: mean, particles: null });
   });
 
-  it('skips the energy above 2000 particles', () => {
-    expect(physicsEnergyText(particles(2001), 1)).toBe('energy: skipped (2001 particles)');
+  it('reads one column past the limit, whatever the particle count', () => {
+    seedParticles(4);
+    const stats = () => sqliteSyncStore(root).localFiles.embeddingIndex.particleStats(2);
+    const reads = recordStatements(stats).reads.filter((r) => r.sql.includes('memory_physics'));
+    expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
+  });
+
+  it('prints the energy for loaded particles and skips it past the limit', () => {
+    expect(physicsEnergyText({ count: 2, particles: particles(['a', 'b']) }, 1)).toMatch(
+      /^energy: -?\d.*\(KE: .*, PE: .*\)$/,
+    );
+    expect(physicsEnergyText({ count: 2001, particles: null }, 1)).toBe('energy: skipped (2001 particles)');
   });
 });
