@@ -4,7 +4,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { writeFileAtomic } from '../../src/util/atomic-write.js';
+import { writeFileAtomic } from '../../src/base/util/atomic-write.js';
 
 const WINDOWS = process.platform === 'win32';
 const NEW_TEXT = 'new content';

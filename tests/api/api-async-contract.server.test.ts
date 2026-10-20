@@ -27,7 +27,7 @@ import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 const ACME = 'acme';

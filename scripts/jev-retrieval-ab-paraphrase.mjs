@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { hybridSearchWire as hybridSearch } from '../dist/entry/testing.js';
-import { buildCorpus } from '../dist/search/bm25.js';
+import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { loadAllEntriesWire as loadAllEntries } from '../dist/entry/testing.js';
 
 const BOOTSTRAP_DRAWS = 2000;

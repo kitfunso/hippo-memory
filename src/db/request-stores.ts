@@ -9,7 +9,7 @@ import {
   currentSignal,
   requestScopes,
   type RequestScope,
-} from '../util/request-scope.js';
+} from '../base/util/request-scope.js';
 
 export interface RequestStoresOptions {
   /** Lock wait of every open in the scope that does not pass its own. */

@@ -1,7 +1,7 @@
 // The daily-runner install reaches schtasks and crontab as argv with no shell between; a stand-in runner records the calls, so no real scheduler runs.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { setupDailySchedule } from '../../src/cli/install-steps.js';
-import { DAILY_TASK_NAME } from '../../src/cli/scheduler.js';
+import { setupDailySchedule } from '../../src/surface/cli/install-steps.js';
+import { DAILY_TASK_NAME } from '../../src/surface/cli/scheduler.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -2,13 +2,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { normalizeHookPayload } from '../../src/cli/stdin.js';
-import { hookPayloadSessionId } from '../../src/util/hook-payload.js';
+import { normalizeHookPayload } from '../../src/surface/cli/stdin.js';
+import { hookPayloadSessionId } from '../../src/base/util/hook-payload.js';
 import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
-import type { DeliveryEventInput, DeliveryRuntime } from '../../src/core/delivery.js';
-import { readClaudeCodePreCompact } from '../../src/core/capture-contract.js';
-import { lessonFromFailure, payloadString } from '../../src/capture/failure-reading.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { DeliveryEventInput, DeliveryRuntime } from '../../src/base/session/delivery.js';
+import { readClaudeCodePreCompact } from '../../src/base/session/capture-contract.js';
+import { lessonFromFailure, payloadString } from '../../src/surface/capture/failure-reading.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { claudeCodePayload, copilotPayload } from '../_helpers/copilot-hooks.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 

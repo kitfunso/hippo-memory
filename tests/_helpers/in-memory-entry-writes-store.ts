@@ -18,7 +18,7 @@ import {
 } from '../../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface Tombstone {
   readonly reason: string | null;

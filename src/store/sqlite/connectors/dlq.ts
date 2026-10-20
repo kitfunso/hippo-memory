@@ -2,7 +2,7 @@
 // item type.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
-import { placeholders } from '../../../util/sql.js';
+import { placeholders } from '../../../base/util/sql.js';
 
 export type DlqTable = 'slack_dlq' | 'github_dlq';
 

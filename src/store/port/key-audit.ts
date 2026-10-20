@@ -1,5 +1,5 @@
 import type { AuditEvent } from './types.js';
-import type { TenantId } from '../../util/tenant.js';
+import type { TenantId } from '../../base/util/tenant.js';
 
 export interface KeyRevoke {
   readonly tenantId: string;

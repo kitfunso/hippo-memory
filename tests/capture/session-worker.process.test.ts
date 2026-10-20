@@ -12,8 +12,8 @@ import {
   turnPosition,
   turnsAfter,
   type WorkerMode,
-} from '../../src/capture/session-worker.js';
-import type { SessionTurn } from '../../src/capture/transcript.js';
+} from '../../src/surface/capture/session-worker.js';
+import type { SessionTurn } from '../../src/surface/capture/transcript.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 const ID = 'vscode-sess-1';

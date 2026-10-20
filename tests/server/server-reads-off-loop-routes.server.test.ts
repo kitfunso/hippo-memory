@@ -2,7 +2,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { log } from '../../src/util/log.js';
+import { log } from '../../src/base/util/log.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

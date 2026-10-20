@@ -28,7 +28,7 @@ interface LockFixture {
 function makeRepo(version: string, overrides: Overrides = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'hippo-vgate-'));
   mkdirSync(join(root, 'extensions', 'openclaw-plugin'), { recursive: true });
-  mkdirSync(join(root, 'src', 'util'), { recursive: true });
+  mkdirSync(join(root, 'src', 'base', 'util'), { recursive: true });
   for (const path of [
     'package.json',
     'openclaw.plugin.json',
@@ -38,7 +38,7 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
   ]) {
     writeFileSync(join(root, path), JSON.stringify({ name: 'fixture', version }));
   }
-  writeFileSync(join(root, 'src', 'util', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
+  writeFileSync(join(root, 'src', 'base', 'util', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
   if (overrides.rawLockfile !== undefined) {
     writeFileSync(join(root, 'package-lock.json'), overrides.rawLockfile);
   } else if (!overrides.omitLockfile) {

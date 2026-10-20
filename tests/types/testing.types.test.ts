@@ -2,8 +2,8 @@
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import * as testing from '../../src/entry/testing.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
-import type { TenantId } from '../../src/util/tenant.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { TenantId } from '../../src/base/util/tenant.js';
 
 describe('hippo-memory/testing entry types', () => {
   it('the eval kit takes a store folder', () => {

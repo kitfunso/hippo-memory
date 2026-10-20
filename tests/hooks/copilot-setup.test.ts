@@ -5,23 +5,23 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { copilotHomeDir, detectInstalledTools } from '../../src/hooks/shared.js';
+import { copilotHomeDir, detectInstalledTools } from '../../src/domain/hooks/shared.js';
 import {
   VSCODE_MCP,
   copilotMcpSnippet,
   copilotPaths,
   installCopilot,
   uninstallCopilot,
-} from '../../src/hooks/copilot.js';
-import { HOOKS } from '../../src/hooks/hook-blocks.js';
+} from '../../src/domain/hooks/copilot.js';
+import { HOOKS } from '../../src/domain/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-// The committed text installCopilot must write; edit it with the instructions in src/hooks/copilot.ts.
+// The committed text installCopilot must write; edit it with the instructions in src/domain/hooks/copilot.ts.
 const COPILOT_INSTRUCTIONS = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'copilot', 'instructions.md'),

@@ -8,13 +8,13 @@ import {
   storedScrypt,
   verifiedKeyOf,
   type VerifiedApiKey,
-} from '../../core/api-key.js';
+} from '../../base/scope/api-key.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
-import { keysetAfter } from '../../util/keyset.js';
-import { DAY_MS } from '../../util/time.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
-import { EXPIRING_KEYS_MIN_BINARY } from '../../util/version.js';
+import { keysetAfter } from '../../base/util/keyset.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
+import { EXPIRING_KEYS_MIN_BINARY } from '../../base/util/version.js';
 import type { ApiKeyRecord } from '../port/types.js';
 import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../port/key-writes.js';
 

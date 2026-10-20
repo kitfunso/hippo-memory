@@ -36,14 +36,14 @@ describe('light subpath import closures', () => {
     // The walk follows re-exports, so every module the entry names is in it.
     expect(closure).toEqual(
       expect.arrayContaining([
-        'capture/transcript.ts',
-        'capture/share-scrub.ts',
-        'util/home-path.ts',
-        'util/secret-detect.ts',
-        'capture/working-state.ts',
-        'capture/failure-reading.ts',
-        'capture/handoff-evidence.ts',
-        'util/compaction-items.ts',
+        'surface/capture/transcript.ts',
+        'surface/capture/share-scrub.ts',
+        'base/util/home-path.ts',
+        'base/util/secret-detect.ts',
+        'surface/capture/working-state.ts',
+        'surface/capture/failure-reading.ts',
+        'surface/capture/handoff-evidence.ts',
+        'base/util/compaction-items.ts',
       ]),
     );
     expect(closure.filter((f) => HEAVY.test(f))).toEqual([]);

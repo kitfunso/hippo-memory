@@ -21,7 +21,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeStore } from '../_helpers/make-root.js';
 

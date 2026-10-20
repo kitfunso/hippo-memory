@@ -1,7 +1,7 @@
 // The ids each client was last shown, so its next outcome lands on them. Keyed per client, so two HTTP clients on one
 // tenant cannot poison each other; the root's CallerState holds the map.
 
-import { DEFAULT_TENANT_ID } from '../../util/tenant.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 
 const MAX_RECALL_CLIENTS = 4096;
 

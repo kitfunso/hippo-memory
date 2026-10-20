@@ -1,11 +1,11 @@
 // LC2-E3 memory-value decay-pass wiring: rescue semantics, the pinned exemption and a malformed weights constant.
 import { describe, it, expect, vi } from 'vitest';
 import { consolidate } from '../../src/index.js';
-import { Layer, resolveConfidence } from '../../src/core/memory.js';
+import { Layer, resolveConfidence } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { rescueSet, validateWeights } from '../../src/consolidate/memory-value.js';
-import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/consolidate/memory-value-weights.js';
+import { rescueSet, validateWeights } from '../../src/domain/consolidate/memory-value.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
 import { loadEveryTenantEntries, listMemoryConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {

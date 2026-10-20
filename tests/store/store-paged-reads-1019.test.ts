@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { serializeEntry } from '../../src/core/markdown.js';
+import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { syncMirrorFiles } from '../../src/store/sqlite/mirrors.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';

@@ -16,7 +16,7 @@ import { isLocalStore } from '../local/index.js';
 import { runSqliteRequest } from './request-scope.js';
 import { runsOffLoop } from './worker-store.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../../db/wal-checkpointer.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 
 /** What the server calls around its responses to keep its store connection. */
 export interface StoreHolder {

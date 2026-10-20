@@ -1,11 +1,11 @@
 // hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a handle
 // of its own.
-import { ConflictError } from '../../core/api-errors.js';
+import { ConflictError } from '../../base/errors/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { DAY_MS } from '../../util/time.js';
+import { DAY_MS } from '../../base/util/time.js';
 import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/failure-log.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../../core/failure-log-retention.js';
-import { failuresPerSession, type SessionFailures } from '../../core/failure-repeats.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
+import { failuresPerSession, type SessionFailures } from '../../base/records/failure-repeats.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import type { Sync } from './served.js';
@@ -77,7 +77,7 @@ function settleFailureOutcome(
   );
 }
 
-/** The tenant's rated failures per session since `sinceIso`, under the rule in core/failure-repeats.ts. */
+/** The tenant's rated failures per session since `sinceIso`, under the rule in base/records/failure-repeats.ts. */
 function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
   const rows = db
     .prepare(

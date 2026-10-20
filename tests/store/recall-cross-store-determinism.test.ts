@@ -10,7 +10,7 @@
  * `entries.some((e) => (idx[e.id]?.length ?? 0) > 0)` gate keeps
  * `useEmbeddings` false regardless of whether @xenova/transformers happens
  * to be installed in the test environment — every assertion here exercises
- * the BM25-only path and, specifically, src/core/compare.ts's tiebreak. The
+ * the BM25-only path and, specifically, src/base/rank/compare.ts's tiebreak. The
  * embedding-text-contamination fix (T1, src/store/embeddings/index.ts) is unit-tested
  * separately; LoCoMo smoke is the cross-fix integration evidence (plan
  * verify-stage item 4).
@@ -21,14 +21,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as os from 'os';
 import * as path from 'path';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { searchBothHybrid } from '../../src/sharing/search-both.js';
+import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 // Fixed clock: pins calculateStrength/recencyBoost so two stores produce
 // byte-identical composite scores for byte-identical content — otherwise

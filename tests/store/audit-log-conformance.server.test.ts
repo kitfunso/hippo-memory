@@ -20,9 +20,9 @@ import {
   type GroupCall,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
-import type { AuditOp } from '../../src/core/audit-ops.js';
+import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const HOST = '__host__';
 const at = (second: number): string => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;

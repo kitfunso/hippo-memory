@@ -1,8 +1,8 @@
 // Pins the status and JSON body of every dashboard read and write the SPA makes, on a fixed store and clock, so a
 // change to how the dashboard is served moves no byte. Snapshot ids, card ids and card timestamps are masked.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Layer } from '../src/core/memory.js';
-import { quarantineScopeFor } from '../src/trust/quarantine.js';
+import { Layer } from '../src/base/memory/memory.js';
+import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
 import { createCard, replaceDetectedConflicts } from './_helpers/root-forms.js';
 import {
   embed,

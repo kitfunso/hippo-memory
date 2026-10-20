@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { adminActor, goalPush, outcome } from '../../dist/api/index.js';
-import { loadConfig } from '../../dist/core/config.js';
+import { loadConfig } from '../../dist/base/config/config.js';
 import { createMemoryWire as createMemory } from '../../dist/entry/testing.js';
 import { writeEntryWire as writeEntry } from '../../dist/entry/testing.js';
 import { loadRecallSearchEntries } from '../../dist/entry/testing.js';

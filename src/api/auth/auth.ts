@@ -1,13 +1,13 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
-import { BadRequestError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
-import { isRestrictedScope } from '../../core/recall-scope.js';
-import { DEFAULT_KEY_TTL_DAYS, mintApiKey } from '../../core/api-key.js';
-import type { KeysetPosition } from '../../util/keyset.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
+import { isRestrictedScope } from '../../base/scope/recall-scope.js';
+import { DEFAULT_KEY_TTL_DAYS, mintApiKey } from '../../base/scope/api-key.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { KeyMint, SelfKeyMint, HippoStore } from '../../store/port.js';
 import type { ApiKeyOwner } from '../../store/port/types.js';
-import { DAY_MS } from '../../util/time.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
 import type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../../store/port/key-writes.js';
 import type { ApiKeyRecord } from '../../store/port/types.js';

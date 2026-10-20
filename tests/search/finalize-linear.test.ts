@@ -1,9 +1,9 @@
 // dedupeExtracted and withDagChildren do one map step per result, so a large result list costs a linear count of reads.
 import { describe, expect, it } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { dedupeExtracted, withDagChildren } from '../../src/search/finalize.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
-import type { SearchResult } from '../../src/core/search-types.js';
+import { dedupeExtracted, withDagChildren } from '../../src/domain/search/finalize.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
 
 const N = 3000;
 

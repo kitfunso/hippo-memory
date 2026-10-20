@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createMemory } from '../../dist/core/memory.js';
+import { createMemory } from '../../dist/base/memory/memory.js';
 import { writeIndexMirror, buildIndexFromDb } from '../../dist/entry/testing.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { writeEntryDbOnly } from '../../dist/entry/testing.js';

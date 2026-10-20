@@ -1,8 +1,8 @@
 // hippo.db's GraphReads group: one read snapshot around the CLI's graph walks, and the rows a view or a traversal reads
 // on the handle that snapshot runs on.
-import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
+import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
-import { assertTenantId } from '../../core/tenant-id.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
 import {
   GRAPH_ENTITY_TYPES,
   type EntityRow,
@@ -21,11 +21,11 @@ import {
   type StoredGraph,
   type StoredRelation,
 } from '../port/graph-reads.js';
-import { chunked } from '../../util/chunked.js';
-import { placeholders } from '../../util/sql.js';
+import { chunked } from '../../base/util/chunked.js';
+import { placeholders } from '../../base/util/sql.js';
 import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
 import type { Sync } from './served.js';
-import { canReadScope } from '../../core/recall-scope.js';
+import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 

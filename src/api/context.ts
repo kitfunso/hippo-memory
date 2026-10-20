@@ -1,23 +1,28 @@
 // Ambient context injection: the admission policy and contextGet.
 
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../core/search-types.js';
-import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../core/session-snapshot.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../base/rank/search-types.js';
+import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../base/session/session-snapshot.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
-import type { SessionHandoff } from '../core/handoff.js';
-import { estimateTokens } from '../util/token-text.js';
-import { markRetrieved, strengthOptionsOf, type MemoryEntry } from '../core/memory.js';
-import { evalNow } from '../core/ablation.js';
-import { dropHeldCopies } from '../util/same-text.js';
-import { BadRequestError } from '../core/api-errors.js';
-import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
-import { errorMessage, log, errorFields } from '../util/log.js';
-import { classifyOriginProject, projectId, projectNames } from '../core/project-identity.js';
-import { DEFAULT_CONFIG } from '../core/config.js';
-import { promptTokens } from '../core/prompt-recall.js';
-import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../core/read-admission.js';
-import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
+import type { SessionHandoff } from '../base/session/handoff.js';
+import { estimateTokens, tokenPurse } from '../base/util/token-text.js';
+import { markRetrieved, strengthOptionsOf, type MemoryEntry } from '../base/memory/memory.js';
+import { evalNow } from '../base/memory/ablation.js';
+import { dropHeldCopies } from '../base/util/same-text.js';
+import { BadRequestError } from '../base/errors/api-errors.js';
+import { rethrowIfSqliteBlocked } from '../base/util/sqlite-blocked.js';
+import { errorMessage, log, errorFields } from '../base/util/log.js';
+import { classifyOriginProject, projectId, projectNames } from '../base/scope/project-identity.js';
+import { DEFAULT_CONFIG } from '../base/config/config.js';
+import { promptTokens } from '../base/rank/prompt-recall.js';
+import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../base/scope/read-admission.js';
+import {
+  addAmbientTallies,
+  ambientStateFromTallies,
+  type AmbientState,
+  type AmbientTallies,
+} from '../base/memory/ambient.js';
 import type { HippoStore } from '../store/port.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
 import {
   finiteOr,
   globalStoreInReach,
@@ -31,7 +36,6 @@ import {
 } from './context-select.js';
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
-import { tokenPurse } from './recall/render.js';
 import { type Context, ownerOrSubject } from './types.js';
 import type {
   ContextCandidateFilter,

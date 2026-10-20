@@ -1,4 +1,4 @@
-/** src/util/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
+/** src/base/util/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   envClaudeCodeSessionId,
@@ -11,7 +11,7 @@ import {
   envRequireServer,
   envRuntimeSettings,
   envTypesafeApiKey,
-} from '../../src/util/env.js';
+} from '../../src/base/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

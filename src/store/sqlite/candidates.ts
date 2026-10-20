@@ -6,20 +6,20 @@ import {
   confidenceFacets,
   schemaFitFrom,
   type LossAversion,
-} from '../../core/memory.js';
+} from '../../base/memory/memory.js';
 import { strengthSql } from './rule-sql.js';
-import { isOutcomeSlowAblated } from '../../core/ablation.js';
+import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { originInSql } from '../../core/project-identity.js';
+import { originInSql } from '../../base/scope/project-identity.js';
 import { pickRarestFtsQuery, loadRecallEntriesAt } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
-import type { TenantId } from '../../util/tenant.js';
+import type { TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
-import { chunked } from '../../util/chunked.js';
-import type { AmbientRefusalReason } from '../../core/read-admission.js';
+import { chunked } from '../../base/util/chunked.js';
+import type { AmbientRefusalReason } from '../../base/scope/read-admission.js';
 import type {
   AmbientCandidateRequest,
   AmbientCandidates,

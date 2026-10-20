@@ -7,10 +7,10 @@ import {
   isSqliteBusy,
   noteStoreBusy,
 } from '../../db/index.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
 import { recordTokenUse, lastSentState, recordRereadsAt } from './token-ledger.js';
-import { hashArm, type PilotArm } from '../../core/pilot-arm.js';
+import { hashArm, type PilotArm } from '../../base/session/pilot-arm.js';
 import {
   type DeliveryPruneSchedule,
   writeDeliveryEventOnHandle,
@@ -20,7 +20,7 @@ import {
 import type { LedgerTurn, Ledger } from '../local/ledger.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
 // `items`; readers outside this repo depend on these rows, so their shape is fixed.

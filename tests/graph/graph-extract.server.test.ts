@@ -11,12 +11,12 @@ import { cpSync, rmSync } from 'node:fs';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
-import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
-import { savePolicy } from '../../src/objects/policies.js';
-import { saveCustomerNote } from '../../src/objects/customer-notes.js';
-import { saveProjectBrief } from '../../src/objects/project-briefs.js';
+import { saveDecision, closeDecision } from '../../src/domain/objects/decisions.js';
+import { savePolicy } from '../../src/domain/objects/policies.js';
+import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
+import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import type { Entity } from '../../src/store/port/graph-reads.js';
-import { extractGraph, extractGraphChunked } from '../../src/graph/extract.js';
+import { extractGraph, extractGraphChunked } from '../../src/domain/graph/extract.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -25,11 +25,11 @@ import {
   withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { WRITE_BUDGET, type WriteBudget } from '../../src/util/write-budget.js';
+import { WRITE_BUDGET, type WriteBudget } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { deleteEntry, loadNeighborRelations, loadEntities, loadRelations } from '../_helpers/root-forms.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.

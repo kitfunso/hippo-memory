@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { scopeFromRepository } from '../../src/connectors/github/scope.js';
-import type { GitHubRepository } from '../../src/connectors/github/types.js';
+import { scopeFromRepository } from '../../src/surface/connectors/github/scope.js';
+import type { GitHubRepository } from '../../src/surface/connectors/github/types.js';
 
 describe('scopeFromRepository', () => {
   it('public repo → github:public:<full_name>', () => {

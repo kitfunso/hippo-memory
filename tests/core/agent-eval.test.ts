@@ -16,9 +16,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { search } from '../../src/search/bm25-search.js';
-import { markRetrieved } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { search } from '../../src/domain/search/bm25-search.js';
+import { markRetrieved } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';

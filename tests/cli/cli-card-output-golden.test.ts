@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { handleCard } from '../../src/cli/card.js';
+import { handleCard } from '../../src/surface/cli/card.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';

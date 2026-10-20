@@ -10,7 +10,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   Layer,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

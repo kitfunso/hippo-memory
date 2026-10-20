@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';

@@ -53,12 +53,12 @@ describe('check-cli-fail', () => {
     expect(failPairLines(text)).toEqual([]);
   });
 
-  it('scans cli.ts and cli/ only, and reports files with their lines', () => {
+  it('scans cli.ts and surface/cli/ only, and reports files with their lines', () => {
     file('cli.ts', "export const ok = fail('x');\n");
-    file('cli/bad.ts', "import { x } from './x.js';\nprintError('no');\nthrow new CliExit(1);\n");
-    file('cli/sub/good.ts', "fail('yes');\n");
-    file('core/other.ts', "printError('no');\nthrow new CliExit(1);\n");
-    expect(findFailPairs(dir)).toEqual([{ file: 'cli/bad.ts', line: 2 }]);
+    file('surface/cli/bad.ts', "import { x } from './x.js';\nprintError('no');\nthrow new CliExit(1);\n");
+    file('surface/cli/sub/good.ts', "fail('yes');\n");
+    file('base/other.ts', "printError('no');\nthrow new CliExit(1);\n");
+    expect(findFailPairs(dir)).toEqual([{ file: 'surface/cli/bad.ts', line: 2 }]);
   });
 
   it('passes on the real src tree', () => {

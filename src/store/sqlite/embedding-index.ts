@@ -1,6 +1,6 @@
 // hippo.db's EmbeddingIndex. The model checks take the opener, since an unreadable index there reads as none.
 import { closeHippoDb } from '../../db/index.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { countAllEntriesAt, loadEntriesByIdsAt, loadEntryIdsPageAt } from './entry-reads.js';
 import type { EmbeddingIndex, VectorRebuild } from '../local/embedding-index.js';
 import {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadChildrenOfSummary } from '../_helpers/root-forms.js';

@@ -14,8 +14,8 @@ describe('distImports', () => {
       "import { local } from './util.js';",
       "const { e, f: g } = await import('../../dist/w.js');",
       "const lazy = import(new URL('../dist/v.js', import.meta.url));",
-      "const { h } = await import(pathToFileURL(path.join(REPO, 'dist', 'core/u.js')).href);",
-      "const { i } = await distImport('core/t.js');",
+      "const { h } = await import(pathToFileURL(path.join(REPO, 'dist', 'base/u.js')).href);",
+      "const { i } = await distImport('base/t.js');",
       "const fixture = `import { zz } from '../dist/none.js'`;",
     ].join('\n');
     expect(distImports(text, 'probe.ts')).toEqual([
@@ -24,8 +24,8 @@ describe('distImports', () => {
       { line: 4, spec: '../dist/z.js', fromRepo: false, names: ['d'] },
       { line: 6, spec: '../../dist/w.js', fromRepo: false, names: ['e', 'f'] },
       { line: 7, spec: '../dist/v.js', fromRepo: false, names: [] },
-      { line: 8, spec: 'dist/core/u.js', fromRepo: true, names: ['h'] },
-      { line: 9, spec: 'dist/core/t.js', fromRepo: true, names: ['i'] },
+      { line: 8, spec: 'dist/base/u.js', fromRepo: true, names: ['h'] },
+      { line: 9, spec: 'dist/base/t.js', fromRepo: true, names: ['i'] },
     ]);
   });
 });

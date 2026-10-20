@@ -1,13 +1,13 @@
 // The one write path for text no person typed into hippo: capture, compaction items and imported agent memories.
-import { isContentWorthStoring } from '../../core/memory-quality.js';
+import { isContentWorthStoring } from '../../base/memory/memory-quality.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import { RejectedValueError } from '../../core/api-errors.js';
-import { detectSecret } from '../../util/secret-detect.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
+import { detectSecret } from '../../base/util/secret-detect.js';
 import { auditRejectionRefusal } from './audit-event.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly } from './entry-writes.js';
-import { CLI_ACTOR } from '../../core/actor.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { GatedWriteResult } from '../local/agent-import.js';
 
 /** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait

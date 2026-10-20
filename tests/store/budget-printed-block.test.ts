@@ -3,19 +3,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { estimateTokens } from '../../src/util/token-text.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 import { assemble, drillDown, type Context } from '../../src/api/index.js';
 import { assembleCost, drillCost } from '../../src/api/context-render.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha',
   'database-migration-rollback-procedure',

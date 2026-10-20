@@ -617,7 +617,7 @@ export function drawMismatch(fresh, stored, pinSha) {
   return null;
 }
 
-export const PIN_DIST = ['capture.js', 'util/same-text.js', 'util/secret-detect.js'];
+export const PIN_DIST = ['capture.js', 'base/util/same-text.js', 'base/util/secret-detect.js'];
 export const PIN_PROMPTS = ['judge-prompt.txt', 'judge-system.txt', 'recheck-prompt.txt', 'rule-arm-prompt.txt'];
 
 // Reads the prereg's "## Pins" section: hashes keyed by file name, the two list pins and the claude version.

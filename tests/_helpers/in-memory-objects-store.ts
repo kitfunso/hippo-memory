@@ -1,13 +1,19 @@
 // A store other than hippo.db for the Objects group: it keeps the typed-object rows and the mirrors it is handed in Maps and never reads
 // hippo.db's object tables, so a conformance test shows the port's own words are enough to build on.
-import { passesScopeFilterForRecall } from '../../src/core/recall-scope.js';
+import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js';
 import type { AppendAuditOpts, AuditEvent, HippoStore, MemoryEntry } from '../../src/entry/store-kit.js';
-import type { Incident, ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../../src/core/object-types.js';
+import type {
+  Incident,
+  ObjectByKind,
+  ObjectFields,
+  ObjectKind,
+  SavableKind,
+} from '../../src/base/records/object-types.js';
 import type { Objects } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
-import type { AuditOp } from '../../src/core/audit-ops.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import type { AuditOp } from '../../src/base/records/audit-ops.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface InMemoryObjectsStore extends StoreSide {
   readonly store: HippoStore & { readonly objects: Objects };

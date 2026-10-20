@@ -1,6 +1,6 @@
 import type { Migration } from './types.js';
-import { isJsonString } from '../../util/json.js';
-import { parseStoredObject } from '../../util/stored-json.js';
+import { isJsonString } from '../../base/util/json.js';
+import { parseStoredObject } from '../../base/util/stored-json.js';
 
 export const v20: Migration = {
   version: 20,

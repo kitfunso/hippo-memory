@@ -1,16 +1,16 @@
 // hippo.db's half of the Objects store group: every statement the typed objects run, each call on a handle of its own.
 import { appendAuditEvent } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
-import { escapeLike } from '../../util/escape.js';
-import { keysetAfter } from '../../util/keyset.js';
-import { chunked } from '../../util/chunked.js';
+import { escapeLike } from '../../base/util/escape.js';
+import { keysetAfter } from '../../base/util/keyset.js';
+import { chunked } from '../../base/util/chunked.js';
 import {
   calculateStrength,
   deriveHalfLife,
   LEGACY_TYPED_HALF_LIFE,
   type LossAversion,
   type MemoryEntry,
-} from '../../core/memory.js';
+} from '../../base/memory/memory.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { stampOriginProjectIn, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrorsIn, auditingRefusal } from './entry-writes.js';
@@ -26,7 +26,7 @@ import {
   type Policy,
   type SavableKind,
   type Skill,
-} from '../../core/object-types.js';
+} from '../../base/records/object-types.js';
 import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
@@ -40,8 +40,8 @@ import type {
   PoliciesInForceQuery,
 } from '../port.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
-import { placeholders } from '../../util/sql.js';
-import type { JsonObject } from '../port/types.js';
+import { placeholders } from '../../base/util/sql.js';
+import type { JsonObject } from '../../base/util/json.js';
 
 /** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every
  * kind. */

@@ -1,8 +1,8 @@
 // A store other than hippo.db for the Rejections group, built on the in-memory entry-writes store: it copies the tombstones out
-// of hippo.db once and removes rows from the memories that store holds, with store-kit and the two text rules in src/core.
+// of hippo.db once and removes rows from the memories that store holds, with store-kit and the two text rules in src/base.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { mergedSuccessor } from '../../src/core/merged-row.js';
-import { rejectedText } from '../../src/core/rejection-text.js';
+import { mergedSuccessor } from '../../src/base/memory/merged-row.js';
+import { rejectedText } from '../../src/base/records/rejection-text.js';
 import {
   heldTexts,
   normalizeValueForRejection,

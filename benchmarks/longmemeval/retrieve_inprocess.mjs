@@ -14,10 +14,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hybridSearch } from '../../dist/index.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
-import { buildCorpus } from '../../dist/search/bm25.js';
-import { loadConfig } from '../../dist/core/config.js';
+import { buildCorpus } from '../../dist/domain/search/bm25.js';
+import { loadConfig } from '../../dist/base/config/config.js';
 import { loadAllEntries } from '../../dist/entry/testing.js';
-import { cliReranker as getReranker } from '../../dist/cli/api-context.js';
+import { cliReranker as getReranker } from '../../dist/surface/cli/api-context.js';
 
 function flag(name, fallback) {
   const i = process.argv.indexOf(name);

@@ -1,11 +1,11 @@
 // The store work of one sleep, kept apart from port.ts. Plain return values: the passes and their write scopes are
 // synchronous, and only the two chunked writers yield between chunks.
-import type { MemoryEntry } from '../../core/memory.js';
-import type { PhysicsParticle } from '../../core/physics.js';
-import type { WriteBudget } from '../../util/write-budget.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { PhysicsParticle } from '../../base/rank/physics.js';
+import type { WriteBudget } from '../../base/util/write-budget.js';
 import type { SessionEvent } from '../port/sessions.js';
 import type { AppendAuditOpts, EntryCursor, EntryPage } from '../port/types.js';
-import type { AuditOp } from '../../core/audit-ops.js';
+import type { AuditOp } from '../../base/records/audit-ops.js';
 import type { RejectedValueRow } from '../port/rejections.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */

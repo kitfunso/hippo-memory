@@ -39,19 +39,19 @@ describe('check-env-reads', () => {
   });
 
   it('flags a util/env import outside the roots and adapters, typed, dynamic or tenant-only', () => {
-    file('util/env.ts', 'export const envX = () => 1;\n');
-    file('cli/verb.ts', "import { envX } from '../util/env.js';\n");
-    file('rerankers/a.ts', "import { envX } from '../util/env.js';\n");
-    file('core/flag.ts', "import { envX } from '../util/env.js';\n");
-    file('core/typed.ts', "export {};\nimport type { EnvShape } from '../util/env.js';\n");
-    file('api/lazy.ts', "export async function f() {\n  return import('../util/env.js');\n}\n");
-    file('store/tenant-only.ts', "import { envTenant } from '../util/env.js';\n");
-    file('server/tenant.ts', "import { envTenant } from '../util/env.js';\n");
-    file('core/other-env.ts', "import { x } from './env.js';\n");
+    file('base/util/env.ts', 'export const envX = () => 1;\n');
+    file('surface/cli/verb.ts', "import { envX } from '../../base/util/env.js';\n");
+    file('domain/rerankers/a.ts', "import { envX } from '../../base/util/env.js';\n");
+    file('base/memory/flag.ts', "import { envX } from '../util/env.js';\n");
+    file('base/memory/typed.ts', "export {};\nimport type { EnvShape } from '../util/env.js';\n");
+    file('api/lazy.ts', "export async function f() {\n  return import('../base/util/env.js');\n}\n");
+    file('store/tenant-only.ts', "import { envTenant } from '../base/util/env.js';\n");
+    file('surface/server/tenant.ts', "import { envTenant } from '../../base/util/env.js';\n");
+    file('base/memory/other-env.ts', "import { x } from './env.js';\n");
     expect(findEnvImports(dir)).toEqual([
       { file: 'api/lazy.ts', line: 2 },
-      { file: 'core/flag.ts', line: 1 },
-      { file: 'core/typed.ts', line: 2 },
+      { file: 'base/memory/flag.ts', line: 1 },
+      { file: 'base/memory/typed.ts', line: 2 },
       { file: 'store/tenant-only.ts', line: 1 },
     ]);
   });

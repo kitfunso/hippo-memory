@@ -1,24 +1,24 @@
 // Ranking core shared by `hippo recall` and `hippo explain`: load, search, expand, re-rank and filter, with no writes
 // and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
 
-import { evalNow } from '../../core/ablation.js';
+import { evalNow } from '../../base/memory/ablation.js';
 import { oneCopyPerMemory } from '../context-select.js';
-import { compareEntryIdentity, compareScoresDesc } from '../../core/compare.js';
-import { isEmbeddingAvailable } from '../../embeddings/local.js';
-import { boostByGoals } from '../../search/goal-boost.js';
-import { graphExpandRecall } from '../../graph/recall.js';
-import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../graph/stream.js';
-import { Layer, strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
-import { multihopSearch } from '../../search/multihop.js';
-import type { PhysicsConfig } from '../../core/physics-config.js';
-import { passesCliRecallScopeFilter, recallScopeFilter } from '../../core/recall-scope.js';
-import type { RerankerFn } from '../../rerankers/types.js';
-import { currentEntries } from '../../search/as-of.js';
-import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../search/boosts.js';
-import { hybridSearch, vectorSourceOf } from '../../search/hybrid.js';
-import { applyReranker } from '../../search/rerank.js';
-import { searchByEngine } from '../../search/engine.js';
-import type { HippoConfig } from '../../core/config.js';
+import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
+import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
+import { boostByGoals } from '../../domain/search/goal-boost.js';
+import { graphExpandRecall } from '../../domain/graph/recall.js';
+import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
+import { Layer, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
+import { multihopSearch } from '../../domain/search/multihop.js';
+import type { PhysicsConfig } from '../../base/rank/physics-config.js';
+import { passesCliRecallScopeFilter, recallScopeFilter } from '../../base/scope/recall-scope.js';
+import type { RerankerFn } from '../../domain/rerankers/types.js';
+import { currentEntries } from '../../domain/search/as-of.js';
+import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
+import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
+import { applyReranker } from '../../domain/search/rerank.js';
+import { searchByEngine } from '../../domain/search/engine.js';
+import type { HippoConfig } from '../../base/config/config.js';
 import {
   CONFLICT_PEER_MULTIPLIER,
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
@@ -31,12 +31,12 @@ import {
   type RerankStep,
   type ResultCost,
   type SearchResult,
-} from '../../core/search-types.js';
-import { rankBothStores } from '../../sharing/search-both.js';
+} from '../../base/rank/search-types.js';
+import { rankBothStores } from '../../domain/sharing/search-both.js';
 import type { HippoStore } from '../../store/port.js';
-import { isJsonNumber } from '../../util/json.js';
-import { currentSignal } from '../../util/request-scope.js';
-import { textOverlap, tokenize as tokenizeQuery } from '../../util/tokenize.js';
+import { isJsonNumber } from '../../base/util/json.js';
+import { currentSignal } from '../../base/util/request-scope.js';
+import { textOverlap, tokenize as tokenizeQuery } from '../../base/util/tokenize.js';
 import type { RecallBoostOptions, RecallWindowOptions } from './types.js';
 import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
 

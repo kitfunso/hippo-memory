@@ -1,5 +1,5 @@
 // hippo.db's key groups: KeyWrites, KeyGrants and KeyAudit.
-import { ConflictError, NotFoundError } from '../../core/api-errors.js';
+import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { appendAuditEvent, listAuditEventsAfter } from './audit.js';
 import { grantScope, insertApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';

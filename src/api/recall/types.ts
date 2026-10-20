@@ -1,13 +1,13 @@
 // Option and result shapes for recall and retrieve.
 
 import type { ContinuityBlock } from '../../store/port.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import type { RerankStep, SearchResult } from '../../core/search-types.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
 import type {
   PlanningFallacyHint,
   PlanningFallacyOutput,
   PlanningFallacyWatching,
-} from '../../predictions/planning-fallacy.js';
+} from '../../domain/predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from './finish.js';
 import type { AvailabilityHint } from '../availability.js';
 import type { LastRecall } from '../../store/port.js';

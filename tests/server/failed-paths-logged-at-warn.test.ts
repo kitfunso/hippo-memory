@@ -2,14 +2,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
-import { logRequestFailure } from '../../src/server/request.js';
-import { mcpErrorResponse } from '../../src/mcp/protocol.js';
-import { runWithRequestId } from '../../src/util/request-scope.js';
+import { logRequestFailure } from '../../src/surface/server/request.js';
+import { mcpErrorResponse } from '../../src/surface/mcp/protocol.js';
+import { runWithRequestId } from '../../src/base/util/request-scope.js';
 import { StoreBusyError } from '../../src/store/port.js';
-import { HttpError } from '../../src/util/http-util.js';
-import { judgeAll } from '../../src/eval/judgment.js';
-import { createLocalEmbedder } from '../../src/embeddings/local.js';
-import { installOpencodePlugin, resolveOpencodePluginPath } from '../../src/hooks/opencode.js';
+import { HttpError } from '../../src/base/util/http-util.js';
+import { judgeAll } from '../../src/domain/eval/judgment.js';
+import { createLocalEmbedder } from '../../src/base/embeddings/local.js';
+import { installOpencodePlugin, resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
 import * as fs from 'node:fs';
 import { withFakeHome } from '../_helpers/with-fake-home.js';
 

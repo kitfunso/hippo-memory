@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { remember } from '../../src/api/index.js';
-import type { SleepJob, SleepReply } from '../../src/server/sleep-offload.js';
+import type { SleepJob, SleepReply } from '../../src/surface/server/sleep-offload.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
@@ -37,7 +37,7 @@ beforeEach(async () => {
   listeners = recordListeners(process, 'once');
   exit = stubExit();
   vi.resetModules();
-  await import('../../src/server/sleep-child.js');
+  await import('../../src/surface/server/sleep-child.js');
 });
 
 afterEach(() => {

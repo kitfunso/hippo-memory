@@ -1,13 +1,13 @@
 // Generated ids, cursors and argv through the CLI and server parsers: what was written comes back, and a bad input ends in the parser's own refusal and nothing else.
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseArgs } from '../../src/cli.js';
-import { flagKind, type VerbFlags } from '../../src/cli/flags.js';
-import { COMMANDS } from '../../src/cli/verbs.js';
-import { parsePositiveId, type CliFlags } from '../../src/cli/flag-values.js';
-import { CliExit } from '../../src/cli/exit.js';
-import { HttpError } from '../../src/util/http-util.js';
-import type { KeysetPosition } from '../../src/util/keyset.js';
-import { pageOf, parseCursor } from '../../src/server/cursor.js';
+import { flagKind, type VerbFlags } from '../../src/surface/cli/flags.js';
+import { COMMANDS } from '../../src/surface/cli/verbs.js';
+import { parsePositiveId, type CliFlags } from '../../src/surface/cli/flag-values.js';
+import { CliExit } from '../../src/surface/cli/exit.js';
+import { HttpError } from '../../src/base/util/http-util.js';
+import type { KeysetPosition } from '../../src/base/util/keyset.js';
+import { pageOf, parseCursor } from '../../src/surface/server/cursor.js';
 import { arr, both, forAll, int, just, map, oneOf, pick, str, type Gen } from '../_helpers/property.js';
 
 /** The id the parser returned, or the exit code its refusal carries. */

@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeStore } from '../_helpers/make-root.js';

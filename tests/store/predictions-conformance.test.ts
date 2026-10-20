@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/store/port.js';
-import { predictionMirror } from '../../src/core/prediction.js';
+import { predictionMirror } from '../../src/base/records/prediction.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
 import {
   onBothStores,

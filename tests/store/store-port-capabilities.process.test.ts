@@ -16,15 +16,15 @@ import {
   memoryQualityRepairOnce,
 } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-worker-server.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(undoAll);

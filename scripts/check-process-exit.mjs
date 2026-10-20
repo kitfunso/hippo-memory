@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Fails when src/ gains a process.exit call outside the list below: a CLI verb stops its command by throwing CliExit
-// (src/cli/exit.ts), so runCli stays the one place that picks the exit code and every caller's cleanup still runs.
+// (src/surface/cli/exit.ts), so runCli stays the one place that picks the exit code and every caller's cleanup still runs.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -11,17 +11,17 @@ const OTHER_PR = 'owned by an open pull request';
 
 /** Files under src/ that may call process.exit, each with how many calls and why. A count may fall, never rise. */
 export const ALLOWED = {
-  'util/crash-handlers.ts': {
+  'base/util/crash-handlers.ts': {
     count: 1,
     reason: 'ends the process after a crash or a signal, where no command is left to unwind',
   },
-  'server/sleep-child.ts': { count: 1, reason: 'ends the forked sleep child once its reply is sent' },
-  'cli/session-hooks.ts': {
+  'surface/server/sleep-child.ts': { count: 1, reason: 'ends the forked sleep child once its reply is sent' },
+  'surface/cli/session-hooks.ts': {
     count: 3,
     reason: 'child-process event callbacks of the Codex wrapper, where a throw has no caller',
   },
-  'cli/shared.ts': { count: 1, reason: OTHER_PR },
-  'capture/compact.ts': { count: 1, reason: OTHER_PR },
+  'surface/cli/shared.ts': { count: 1, reason: OTHER_PR },
+  'surface/capture/compact.ts': { count: 1, reason: OTHER_PR },
 };
 
 /**
@@ -76,7 +76,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error(`  ${srcDir}/${h.file}:${h.line} (${h.found} in this file, ${h.allowed} allowed)`);
     }
     console.error(
-      '\nFix: print the message, then `throw new CliExit(code)` from src/cli/exit.ts; runCli exits with that code.',
+      '\nFix: print the message, then `throw new CliExit(code)` from src/surface/cli/exit.ts; runCli exits with that code.',
     );
     console.error(
       'A call that must end the process itself goes in ALLOWED in this script, with its count and reason.\n',

@@ -48,8 +48,8 @@ describe('staleSources', () => {
   });
 
   it('names a source file the build has no output for', () => {
-    put('src/server/routes/new-route.ts', BEFORE);
-    expect(stale()).toEqual(['server/routes/new-route.ts']);
+    put('src/surface/server/routes/new-route.ts', BEFORE);
+    expect(stale()).toEqual(['surface/server/routes/new-route.ts']);
   });
 
   it('lists every stale file, sorted, and ignores files that are not TypeScript', () => {

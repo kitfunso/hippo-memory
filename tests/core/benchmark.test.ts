@@ -11,7 +11,7 @@
  *   MRR         - 1/rank of first correct result (0 if none in top-10)
  */
 import { describe, it, expect } from 'vitest';
-import { search } from '../../src/search/bm25-search.js';
+import { search } from '../../src/domain/search/bm25-search.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, seedIds, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
 

@@ -1,5 +1,5 @@
 /**
- * Snapshot tests for the CLI render helpers exported from src/cli/context.ts and src/cli/sleep.ts.
+ * Snapshot tests for the CLI render helpers exported from src/surface/cli/context.ts and src/surface/cli/sleep.ts.
  *
  * Locks the byte-identical output of printContextMarkdown + renderSleepResult
  * across all render branches. Without these, refactors to the render layer
@@ -21,8 +21,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { contextBlockLines } from '../../src/api/context-render.js';
-import { sleepResultLines } from '../../src/cli/sleep-render.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { SleepResult } from '../../src/api/index.js';
 
 function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {

@@ -1,9 +1,9 @@
 // The reader's tool-failure listing, lesson link and origin field, on rows the built `hippo capture-error` wrote.
 import { describe, it, expect } from 'vitest';
-import type { DeliveryEventInput } from '../../src/core/delivery.js';
+import type { DeliveryEventInput } from '../../src/base/session/delivery.js';
 import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/recall-trace.js';
-import { blockHash } from '../../src/util/token-text.js';
-import { realpathOrResolve } from '../../src/util/real-path.js';
+import { blockHash } from '../../src/base/util/token-text.js';
+import { realpathOrResolve } from '../../src/base/util/real-path.js';
 import { hippoIn, withDb, type Project } from '../_helpers/delivery-boundary.js';
 import { configure, expectVerdict, fireIn } from '../_helpers/host-transcript.js';
 import {

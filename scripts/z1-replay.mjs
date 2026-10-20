@@ -11,13 +11,13 @@ import { mulberry32 } from './lib/prng.mjs';
 
 const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..', 'dist');
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
-const { textOverlap } = await distImport('util/tokenize.js');
-const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('util/token-text.js'), distImport('core/skip-unchanged.js')]);
+const { textOverlap } = await distImport('base/util/tokenize.js');
+const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('base/util/token-text.js'), distImport('base/session/skip-unchanged.js')]);
 const { isWorthSurfacingWire: isWorthSurfacing } = await distImport('entry/testing.js');
 const { ambientSecretAdmitWire: ambientSecretAdmit } = await distImport('entry/testing.js');
-const { resolveProjectIdentity, classifyOriginProject } = await distImport('core/project-identity.js');
-const { passesScopeFilterForRecall } = await distImport('core/recall-scope.js');
-const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('core/prompt-recall.js');
+const { resolveProjectIdentity, classifyOriginProject } = await distImport('base/scope/project-identity.js');
+const { passesScopeFilterForRecall } = await distImport('base/scope/recall-scope.js');
+const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('base/rank/prompt-recall.js');
 
 const PIN_BUDGET = 1500;
 const REFRESH_TURNS = 10;

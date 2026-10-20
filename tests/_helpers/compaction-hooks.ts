@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { COMPACTION_MEMORY_TAG } from '../../src/core/memory.js';
+import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/memory.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';
 const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');

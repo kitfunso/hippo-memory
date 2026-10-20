@@ -1,14 +1,14 @@
 // A thrown error crosses the worker boundary as plain data and arrives as an instance of its class: the server's
 // mappers test `instanceof`, `errcode` and fields.
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
-import { RawAppendOnlyError } from '../../core/raw-append-only.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
+import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { IncompatibleBinaryError } from '../../db/index.js';
 import { StoreBusyError } from '../port.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../util/http-util.js';
-import { errorMessage, log } from '../../util/log.js';
-import { ScopeForbiddenError } from '../../core/recall-scope.js';
-import { RejectedValueError } from '../../core/api-errors.js';
-import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../util/sqlite-blocked.js';
+import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../base/util/http-util.js';
+import { errorMessage, log } from '../../base/util/log.js';
+import { ScopeForbiddenError } from '../../base/scope/recall-scope.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
+import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../base/util/sqlite-blocked.js';
 
 type FieldValue = string | number | boolean | null;
 

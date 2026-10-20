@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { createRequire } from 'module';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { countMatching, recordStatements, STORE_OPEN } from '../_helpers/count-statements.js';

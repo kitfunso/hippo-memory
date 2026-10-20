@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import { boundPort } from '../_helpers/listen.js';
-import { createLlmReranker } from '../../src/rerankers/llm.js';
-import { getReranker } from '../../src/rerankers/index.js';
+import { createLlmReranker } from '../../src/domain/rerankers/llm.js';
+import { getReranker } from '../../src/domain/rerankers/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/core/search-types.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

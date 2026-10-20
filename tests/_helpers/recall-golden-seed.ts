@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';

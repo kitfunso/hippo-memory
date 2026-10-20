@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { Layer, strengthOptionsOf, type EmotionalValence, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, strengthOptionsOf, type EmotionalValence, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { contextGet, adminActor } from '../../src/api/index.js';
 import {
@@ -13,9 +13,9 @@ import {
   tallyAmbientEntries,
   ambientStateFromTallies,
   foldAmbientRows,
-} from '../../src/core/ambient.js';
-import { cliStore } from '../../src/cli/api-context.js';
-import { envRuntimeSettings } from '../../src/util/env.js';
+} from '../../src/base/memory/ambient.js';
+import { cliStore } from '../../src/surface/cli/api-context.js';
+import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';

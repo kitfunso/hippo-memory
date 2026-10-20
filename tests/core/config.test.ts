@@ -4,9 +4,9 @@ import * as path from 'path';
 import * as os from 'os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { configReader, loadConfig, isSharedStore, type HippoConfig } from '../../src/core/config.js';
+import { configReader, loadConfig, isSharedStore, type HippoConfig } from '../../src/base/config/config.js';
 import * as storeKit from '../../src/entry/store-kit.js';
-import { log } from '../../src/util/log.js';
+import { log } from '../../src/base/util/log.js';
 
 describe('config.pinnedInject', () => {
   it('defaults to enabled=true budget=1500', () => {
@@ -206,7 +206,7 @@ describe('config.sharedStore', () => {
     expect(isSharedStore(tmp)).toBe(true);
     // A fresh module graph stands in for the next process, which has not seen the folder.
     vi.resetModules();
-    const nextProcess = await import('../../src/core/config.js');
+    const nextProcess = await import('../../src/base/config/config.js');
     expect(() => nextProcess.isSharedStore(tmp)).toThrow(/config\.json could not be loaded/);
   });
 

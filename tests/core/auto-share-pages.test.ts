@@ -1,12 +1,12 @@
 // autoShare over a store larger than one page: the same picks, skips and writes as one whole read gave.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { autoShare } from '../../src/sharing/share.js';
-import { getGlobalRoot } from '../../src/sharing/global-store.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { autoShare } from '../../src/domain/sharing/share.js';
+import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { mergedText } from '../../src/util/same-text.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';

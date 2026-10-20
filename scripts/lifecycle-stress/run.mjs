@@ -41,15 +41,15 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory } from '../../dist/core/memory.js';
+import { createMemory } from '../../dist/base/memory/memory.js';
 import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
 import { embedMemory } from '../../dist/entry/testing.js';
-import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
+import { isEmbeddingAvailable } from '../../dist/base/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
 import { consolidate } from '../../dist/index.js';
 import { resetAllPhysicsState } from '../../dist/db/physics-state.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db/index.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../../dist/core/physics-config.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../../dist/base/rank/physics-config.js';
 
 import { injectStream, writeLabelSidecar } from './inject.mjs';
 import { mulberry32 } from '../lib/prng.mjs';

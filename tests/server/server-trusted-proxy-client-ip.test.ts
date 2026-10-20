@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { clientIpForRateLimit } from '../../src/server.js';
-import { clientKeyOf } from '../../src/server/client-key.js';
+import { clientKeyOf } from '../../src/surface/server/client-key.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

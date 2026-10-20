@@ -8,11 +8,11 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { detectSecret, redactSecretsStrict } from '../../src/util/secret-detect.js';
+import { detectSecret, redactSecretsStrict } from '../../src/base/util/secret-detect.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { shareMemory, autoShare } from '../../src/sharing/share.js';
-import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { getGlobalRoot } from '../../src/sharing/global-store.js';
+import { shareMemory, autoShare } from '../../src/domain/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
+import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
 import { contextGet } from '../../src/api/index.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
@@ -21,7 +21,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

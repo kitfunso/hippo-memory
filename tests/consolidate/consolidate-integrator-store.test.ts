@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { consolidate } from '../../src/index.js';
 import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb, ftsRowCounts, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';

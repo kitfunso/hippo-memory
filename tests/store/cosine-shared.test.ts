@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { cosineOf } from '../../src/core/cosine.js';
-import { queryGravityMagnitude, type PhysicsParticle } from '../../src/core/physics.js';
+import { cosineOf } from '../../src/base/rank/cosine.js';
+import { queryGravityMagnitude, type PhysicsParticle } from '../../src/base/rank/physics.js';
 
 function particleAt(position: number[]): PhysicsParticle {
   return {

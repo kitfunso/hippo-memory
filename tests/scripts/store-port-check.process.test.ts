@@ -66,7 +66,7 @@ function withFixture(
     writeFileSync(join(root, p), text);
   };
   try {
-    write('layers.json', JSON.stringify({ folders: { consolidate: 'domain', trust: 'domain', cli: 'surface' } }));
+    write('layers.json', JSON.stringify({ folders: { domain: 'domain', surface: 'surface' } }));
     for (const [p, text] of Object.entries(files)) write(p, text);
     if (baseline) write(BASELINE, JSON.stringify({ ...zero, ...baseline }));
     // SAFETY: the script only ever writes the Counts shape to the baseline.
@@ -113,13 +113,13 @@ describe('check-store-port.mjs', () => {
         'src/b.ts': comment,
         'src/store/c.ts': holder,
         'src/db/d.ts': holder,
-        'src/cli/e.ts': holder,
+        'src/surface/cli/e.ts': holder,
       },
       null,
       ({ run, baseline }) => {
-        expect(list(run)).toMatchObject({ handleHoldersOutside: '2', 'src/a.ts': '1', 'src/cli/e.ts': '1' });
+        expect(list(run)).toMatchObject({ handleHoldersOutside: '2', 'src/a.ts': '1', 'src/surface/cli/e.ts': '1' });
         run('--update');
-        expect(baseline().handleHoldersOutsideByFile).toEqual({ 'src/a.ts': 1, 'src/cli/e.ts': 1 });
+        expect(baseline().handleHoldersOutsideByFile).toEqual({ 'src/a.ts': 1, 'src/surface/cli/e.ts': 1 });
       },
     );
   });
@@ -133,13 +133,13 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('does not count calls under src/db, src/store, src/cli or src/db/index.ts in number 1', () => {
+  it('does not count calls under src/db, src/store, src/surface/cli or src/db/index.ts in number 1', () => {
     const call = "export const f = () => openStore('r');\n";
     withFixture(
       {
         'src/db/a.ts': call,
         'src/store/b.ts': call,
-        'src/cli/c.ts': call,
+        'src/surface/cli/c.ts': call,
         'src/cli.ts': call,
         'src/db/index.ts': call,
       },
@@ -171,7 +171,7 @@ describe('check-store-port.mjs', () => {
       "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\nexport const h = ({ store }: any) => (store ? 1 : 2);\n";
     const server =
       "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n];\n";
-    withFixture({ 'src/api/a.ts': api, 'src/server/route-table.ts': server }, null, ({ run }) => {
+    withFixture({ 'src/api/a.ts': api, 'src/surface/server/route-table.ts': server }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesNeedingHippoDb: '1' });
     });
   });
@@ -248,10 +248,10 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('counts resolveTenantId calls under src/cli/ only, not the import or other folders', () => {
+  it('counts resolveTenantId calls under src/surface/cli/ only, not the import or other folders', () => {
     const call = "import { resolveTenantId } from './t.js';\nexport const f = () => resolveTenantId({});\n";
     withFixture(
-      { 'src/cli/a.ts': call, 'src/cli.ts': call, 'src/api/b.ts': call },
+      { 'src/surface/cli/a.ts': call, 'src/cli.ts': call, 'src/api/b.ts': call },
       { tenantResolvesInCli: 0 },
       ({ run }) => {
         expect(list(run).tenantResolvesInCli).toBe('1');
@@ -262,23 +262,23 @@ describe('check-store-port.mjs', () => {
     );
   });
 
-  it('counts value imports from src/store and src/db under src/cli/, not type-only lines or other folders', () => {
+  it('counts value imports from src/store and src/db under src/surface/cli/, not type-only lines or other folders', () => {
     const cli = [
-      "import { readEntry } from '../store/entry-reads.js';",
-      "import { openHippoDb } from '../db/index.js';",
-      "import { loadStats, type Stats } from '../store/stats.js';",
-      "import * as store from '../store/index.js';",
-      "import type { MemoryEntry } from '../store/rows.js';",
-      "import { type TaskSnapshot, type SessionEvent } from '../store/rows.js';",
-      "import { getMemory } from '../api/memories.js';",
+      "import { readEntry } from '../../store/entry-reads.js';",
+      "import { openHippoDb } from '../../db/index.js';",
+      "import { loadStats, type Stats } from '../../store/stats.js';",
+      "import * as store from '../../store/index.js';",
+      "import type { MemoryEntry } from '../../store/rows.js';",
+      "import { type TaskSnapshot, type SessionEvent } from '../../store/rows.js';",
+      "import { getMemory } from '../../api/memories.js';",
       "import { x } from './store/local.js';",
     ].join('\n');
-    const nested = "import { readEntry } from '../../store/entry-reads.js';\n";
+    const nested = "import { readEntry } from '../../../store/entry-reads.js';\n";
     const files = {
-      'src/cli/a.ts': cli,
-      'src/cli/deep/b.ts': nested,
+      'src/surface/cli/a.ts': cli,
+      'src/surface/cli/deep/b.ts': nested,
       'src/cli.ts': "import { y } from './store/index.js';\n",
-      'src/api/c.ts': cli,
+      'src/api/c.ts': cli.replaceAll('../../', '../'),
     };
     withFixture(files, { storeImportsInCli: 4 }, ({ run }) => {
       expect(list(run).storeImportsInCli).toBe('5');
@@ -290,8 +290,8 @@ describe('check-store-port.mjs', () => {
 
   it('storeImportsInCli skips the CLI composition root, which builds the store', () => {
     const files = {
-      'src/cli/api-context.ts': "import { sqliteStore } from '../store/sqlite/store.js';\n",
-      'src/cli/a.ts': "import { readEntry } from '../store/entry-reads.js';\n",
+      'src/surface/cli/api-context.ts': "import { sqliteStore } from '../../store/sqlite/store.js';\n",
+      'src/surface/cli/a.ts': "import { readEntry } from '../../store/entry-reads.js';\n",
     };
     withFixture(files, null, ({ run }) => {
       expect(list(run).storeImportsInCli).toBe('1');
@@ -299,7 +299,7 @@ describe('check-store-port.mjs', () => {
   });
 
   it('a baseline without storeImportsInCli passes and --update writes it', () => {
-    const files = { 'src/cli/a.ts': "import { readEntry } from '../store/entry-reads.js';\n" };
+    const files = { 'src/surface/cli/a.ts': "import { readEntry } from '../../store/entry-reads.js';\n" };
     withFixture(files, { storeImportsInCli: undefined }, ({ run, baseline }) => {
       expect(run().status).toBe(0);
       expect(run('--update').status).toBe(0);
@@ -333,11 +333,11 @@ describe('check-store-port.mjs', () => {
   it('reads route status from the syntax tree: localFiles and sqliteOnly rows need hippo.db, a comment does not', () => {
     const table =
       "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'vectorViews', handler: e },\n  { method: 'POST', path: '/c', sqliteOnly: 'runs the local process', handler: c },\n];\n";
-    withFixture({ 'src/server/route-table.ts': table }, null, ({ run }) => {
+    withFixture({ 'src/surface/server/route-table.ts': table }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', sqliteOnlyRoutes: '1' });
     });
     const listed = { routesNeedingHippoDb: 1, sqliteOnlyRoutes: 1, sqliteOnlyRoutesList: ['POST /c'] };
-    withFixture({ 'src/server/route-table.ts': table }, listed, ({ run }) => {
+    withFixture({ 'src/surface/server/route-table.ts': table }, listed, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('routesNeedingHippoDb: 1 -> 2');
@@ -354,7 +354,7 @@ describe('check-store-port.mjs', () => {
       ['...MORE_ROUTES,', 'spread'],
     ];
     for (const [row, named] of cases) {
-      withFixture({ 'src/server/route-table.ts': bad(row) }, null, ({ run }) => {
+      withFixture({ 'src/surface/server/route-table.ts': bad(row) }, null, ({ run }) => {
         const r = run();
         expect(r.status, row).toBe(1);
         expect(r.stderr).toContain(named);
@@ -366,7 +366,7 @@ describe('check-store-port.mjs', () => {
     const table =
       "const V1_ROUTES = [\n  { method: 'POST', path: '/x', sqliteOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', sqliteOnly: 'local only', handler: y },\n];\n";
     withFixture(
-      { 'src/server/route-table.ts': table },
+      { 'src/surface/server/route-table.ts': table },
       { sqliteOnlyRoutes: 2, sqliteOnlyRoutesList: ['POST /x'] },
       ({ run, baseline }) => {
         const r = run();
@@ -380,15 +380,17 @@ describe('check-store-port.mjs', () => {
   });
 
   it('counts a store import from a domain folder that layers.json marks, outside the first three', () => {
-    const files = { 'src/trust/a.ts': "import { openHippoDb } from '../db/busy.js';\nexport const f = openHippoDb;\n" };
+    const files = {
+      'src/domain/trust/a.ts': "import { openHippoDb } from '../../db/busy.js';\nexport const f = openHippoDb;\n",
+    };
     withFixture(files, { storeImportsInDomain: 0 }, ({ run }) => {
       expect(list(run).storeImportsInDomain).toBe('1');
       expect(run().stderr).toContain('storeImportsInDomain: 0 -> 1');
     });
   });
 
-  it('exits 1 when src/server/route-table.ts has no V1_ROUTES', () => {
-    withFixture({ 'src/server/route-table.ts': 'export const ROUTES = [];\n' }, null, ({ run }) => {
+  it('exits 1 when src/surface/server/route-table.ts has no V1_ROUTES', () => {
+    withFixture({ 'src/surface/server/route-table.ts': 'export const ROUTES = [];\n' }, null, ({ run }) => {
       const r = run('--list');
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('V1_ROUTES');
@@ -416,27 +418,27 @@ describe('check-store-port.mjs', () => {
 
   it('fails and names each surface file that records a recall itself, in a route or a CLI verb', () => {
     const route = [
-      "import { noteRecall as n } from '../../api/recall/finish.js';",
+      "import { noteRecall as n } from '../../../api/recall/finish.js';",
       'export const f = (s: any, ctx: any) => {',
       '  s.bumpRecallStats(1);',
       "  recordTokens(ctx, 'http_recall', {});",
       '};',
     ].join('\n');
     const verb = "export const g = (store: any) => store.recordTokens({ surface: 'recall', items: 1 });\n";
-    withFixture({ 'src/server/routes/recall.ts': route, 'src/cli/recall.ts': verb }, {}, ({ run }) => {
+    withFixture({ 'src/surface/server/routes/recall.ts': route, 'src/surface/cli/recall.ts': verb }, {}, ({ run }) => {
       for (const args of [[], ['--list'], ['--update']]) {
         const r = run(...args);
         expect(r.status, args.join()).toBe(1);
-        expect(r.stderr).toContain('src/server/routes/recall.ts:1 noteRecall');
-        expect(r.stderr).toContain('src/server/routes/recall.ts:3 bumpRecallStats');
-        expect(r.stderr).toContain('src/server/routes/recall.ts:4 recordTokens with a recall label');
-        expect(r.stderr).toContain('src/cli/recall.ts:1 recordTokens with a recall label');
+        expect(r.stderr).toContain('src/surface/server/routes/recall.ts:1 noteRecall');
+        expect(r.stderr).toContain('src/surface/server/routes/recall.ts:3 bumpRecallStats');
+        expect(r.stderr).toContain('src/surface/server/routes/recall.ts:4 recordTokens with a recall label');
+        expect(r.stderr).toContain('src/surface/cli/recall.ts:1 recordTokens with a recall label');
         expect(r.stderr).toContain('recall/finish.ts');
       }
     });
   });
 
-  it('lets src/api and src/mcp record a recall, and a route book another label or name a recorder in a comment or string', () => {
+  it('lets src/api and src/surface/mcp record a recall, and a route book another label or name a recorder in a comment or string', () => {
     const records = [
       'export const f = (s: any, ring: any, ctx: any) => {',
       '  noteRecall(ring);',
@@ -450,7 +452,11 @@ describe('check-store-port.mjs', () => {
       "export const g = (ctx: any) => recordTokens(ctx, 'http_context', { note: 'recalled' });",
     ].join('\n');
     withFixture(
-      { 'src/api/recall/finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route },
+      {
+        'src/api/recall/finish.ts': records,
+        'src/surface/mcp/recall-tools.ts': records,
+        'src/surface/server/routes/recall.ts': route,
+      },
       {},
       ({ run }) => {
         const r = run();
@@ -523,31 +529,33 @@ describe('check-store-port.mjs', () => {
   it('buildsOutsideRoots counts an imported store builder outside the roots, and skips a same-named local function', () => {
     const files = {
       'src/store/open.ts': 'export const initStore = (r: string) => r;\n',
-      'src/capture/a.ts': "import { initStore } from '../store/open.js';\nexport const f = () => initStore('r');\n",
-      'src/capture/b.ts': "function initStore(r: string) { return r; }\nexport const g = () => initStore('r');\n",
-      'src/cli/api-context.ts':
-        "import { initStore } from '../store/open.js';\nexport const h = () => initStore('r');\n",
+      'src/surface/capture/a.ts':
+        "import { initStore } from '../../store/open.js';\nexport const f = () => initStore('r');\n",
+      'src/surface/capture/b.ts':
+        "function initStore(r: string) { return r; }\nexport const g = () => initStore('r');\n",
+      'src/surface/cli/api-context.ts':
+        "import { initStore } from '../../store/open.js';\nexport const h = () => initStore('r');\n",
     };
     withFixture(files, null, ({ run }) => {
       const l = list(run);
       expect(l.buildsOutsideRoots).toBe('1');
-      expect(l['src/capture/a.ts:2']).toBe('buildsOutsideRoots');
-      expect(l['src/capture/b.ts:2']).toBeUndefined();
+      expect(l['src/surface/capture/a.ts:2']).toBe('buildsOutsideRoots');
+      expect(l['src/surface/capture/b.ts:2']).toBeUndefined();
     });
   });
 
   it('groupChecksInApi counts requireGroup and hasGroup in the api and domain layers only', () => {
     const files = {
-      'layers.json': JSON.stringify({ folders: { api: 'api', consolidate: 'domain', cli: 'surface' } }),
+      'layers.json': JSON.stringify({ folders: { api: 'api', domain: 'domain', surface: 'surface' } }),
       'src/api/a.ts': "export const f = (s: any) => requireGroup(s, 'localFiles');\n",
-      'src/consolidate/b.ts': "export const g = (s: any) => hasGroup(s, 'localFiles');\n",
-      'src/cli/c.ts': "export const h = (s: any) => requireGroup(s, 'localFiles');\n",
+      'src/domain/consolidate/b.ts': "export const g = (s: any) => hasGroup(s, 'localFiles');\n",
+      'src/surface/cli/c.ts': "export const h = (s: any) => requireGroup(s, 'localFiles');\n",
     };
     withFixture(files, null, ({ run }) => {
       const l = list(run);
       expect(l.groupChecksInApi).toBe('2');
       expect(l['src/api/a.ts:1']).toBe('groupChecksInApi');
-      expect(l['src/cli/c.ts:1']).toBeUndefined();
+      expect(l['src/surface/cli/c.ts:1']).toBeUndefined();
     });
   });
 

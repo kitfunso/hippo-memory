@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
-import { refineStore } from '../../src/cli/refine-llm.js';
-import { Layer } from '../../src/core/memory.js';
+import { refineStore } from '../../src/surface/cli/refine-llm.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import * as fs from 'fs';
 import { makeRoot } from '../_helpers/make-root.js';

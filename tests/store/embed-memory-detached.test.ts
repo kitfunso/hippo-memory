@@ -1,11 +1,11 @@
 // A write that fires its embedding and moves on must log a rejection from the embed path, never leave it unhandled.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../../src/core/config.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { sharedLocalEmbedder } from '../../src/embeddings/local.js';
-import { embedMemoryDetached, type EmbedTarget } from '../../src/search/embed-memories.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { sharedLocalEmbedder } from '../../src/base/embeddings/local.js';
+import { embedMemoryDetached, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import type { HippoStore } from '../../src/store/port.js';
-import { log } from '../../src/util/log.js';
+import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {

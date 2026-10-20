@@ -1,12 +1,12 @@
 // DAG E3 rebuild regressions: born-dirty buildDag, tenant partitioning, race-loser no-op, cap clamp and tombstone counts.
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { openHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { rebuildDirtySummaries, buildDag } from '../../src/consolidate/dag.js';
-import * as dagModule from '../../src/consolidate/dag.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { rebuildDirtySummaries, buildDag } from '../../src/domain/consolidate/dag.js';
+import * as dagModule from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
-import { configReader } from '../../src/core/config.js';
-import { envRuntimeSettings } from '../../src/util/env.js';
+import { configReader } from '../../src/base/config/config.js';
+import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';

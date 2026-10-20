@@ -6,11 +6,11 @@ import {
   pruneConsolidationRuns,
   getMeta,
 } from '../../db/index.js';
-import { errorFields, log } from '../../util/log.js';
+import { errorFields, log } from '../../base/util/log.js';
 import type { HippoIndex } from './rows.js';
 import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
-import { DAY_MS } from '../../util/time.js';
+import { DAY_MS } from '../../base/util/time.js';
 import type { SessionDecayContext } from '../local/consolidation.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit

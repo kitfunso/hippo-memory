@@ -7,9 +7,9 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { hybridSearch } from '../dist/index.js';
-import { buildCorpus } from '../dist/search/bm25.js';
+import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { loadAllEntries } from '../dist/entry/testing.js';
-import { getReranker } from '../dist/rerankers/index.js';
+import { getReranker } from '../dist/domain/rerankers/index.js';
 
 const BOOTSTRAP_DRAWS = 2000;
 const CANDIDATE_TOPK = 40;

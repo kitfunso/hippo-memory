@@ -1,14 +1,14 @@
 // A store worker's thrown error crosses to the server as plain data: for generated errors of every listed class the server still gets the class, the message, the fields and the cause chain.
 import { describe, it, expect } from 'vitest';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/core/api-errors.js';
-import { RawAppendOnlyError } from '../../src/core/raw-append-only.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
+import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
 import { IncompatibleBinaryError } from '../../src/db/index.js';
 import { StoreBusyError } from '../../src/store/port.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/util/http-util.js';
-import { ScopeForbiddenError } from '../../src/core/recall-scope.js';
-import { RejectedValueError } from '../../src/core/api-errors.js';
+import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/base/util/http-util.js';
+import { ScopeForbiddenError } from '../../src/base/scope/recall-scope.js';
+import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { decodeError, encodeError } from '../../src/store/sqlite/error-codec.js';
-import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
+import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../src/base/util/sqlite-blocked.js';
 import { arr, both, forAll, int, map, pick, str, type Gen } from '../_helpers/property.js';
 
 // One way to throw each class the codec lists; HttpError twice, with and without its optional field.

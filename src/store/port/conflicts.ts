@@ -1,6 +1,6 @@
 // The Conflicts group's types: a conflict read with both members' columns, and the keyset page that carries them.
-import type { KeysetPosition } from '../../util/keyset.js';
-import type { TenantId } from '../../util/tenant.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import type { TenantId } from '../../base/util/tenant.js';
 
 /** The columns of one member that the api's reach, liveness and project rules read. */
 export interface ConflictMember {

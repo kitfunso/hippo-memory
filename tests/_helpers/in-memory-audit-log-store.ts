@@ -7,7 +7,7 @@ import { withSqliteAllowed } from '../../src/db/open.js';
 import type { AuditLog } from '../../src/store/port.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface InMemoryAuditLogStore extends StoreSide {
   readonly store: HippoStore & { readonly auditLog: AuditLog };

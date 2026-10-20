@@ -1,8 +1,8 @@
 // Personal scopes answer to their owner alone, and an HttpError can carry Retry-After.
 import { afterAll, beforeAll, describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
-import { BadRequestError } from '../../src/core/api-errors.js';
-import { HttpError } from '../../src/util/http-util.js';
-import { MAX_ID_LEN } from '../../src/util/limits.js';
+import { BadRequestError } from '../../src/base/errors/api-errors.js';
+import { HttpError } from '../../src/base/util/http-util.js';
+import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import {
   assertClientScope,
   assertScopeRequestAllowed,
@@ -14,7 +14,7 @@ import {
   personalScopeOf,
   ScopeForbiddenError,
   type ScopeActor,
-} from '../../src/core/recall-scope.js';
+} from '../../src/base/scope/recall-scope.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

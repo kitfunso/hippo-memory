@@ -1,7 +1,7 @@
 // The HNSW graphs of one store's vectors, one per vector length, held by the store worker thread that answers its
 // nearest-row reads. Built off the request path; until a graph is ready, and whenever it falls behind, reads scan.
-import { errorFields, log } from '../util/log.js';
-import { requestScopes } from '../util/request-scope.js';
+import { errorFields, log } from '../base/util/log.js';
+import { requestScopes } from '../base/util/request-scope.js';
 import { openHippoDbReadOnly } from './open.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import {

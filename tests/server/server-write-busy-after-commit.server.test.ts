@@ -12,8 +12,8 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
-import * as client from '../../src/cli/client.js';
-import { mcpErrorResponse } from '../../src/mcp/server.js';
+import * as client from '../../src/surface/cli/client.js';
+import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { updateStatsUnlessBusy, copyToGlobal } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember, conflictListOpen, type Actor } from '../../src/api/index.js';
 import { memoryStatusGet, memoryGetTouchable } from '../../src/api/memories/memories.js';
-import { NotFoundError } from '../../src/core/api-errors.js';
+import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { replaceDetectedConflicts } from '../_helpers/root-forms.js';

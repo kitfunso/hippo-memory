@@ -17,13 +17,13 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { listApiKeys, writeEntry } from '../_helpers/root-forms.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import * as api from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

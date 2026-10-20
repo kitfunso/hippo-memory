@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { conflictResolve } from '../../src/api/index.js';
-import { BadRequestError, ConflictError, NotFoundError } from '../../src/core/api-errors.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';

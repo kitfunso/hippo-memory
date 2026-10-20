@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

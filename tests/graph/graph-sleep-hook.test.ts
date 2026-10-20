@@ -13,25 +13,25 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
-import { savePolicy } from '../../src/objects/policies.js';
-import { saveProjectBrief, refreshedBrief } from '../../src/objects/project-briefs.js';
+import { saveDecision, closeDecision } from '../../src/domain/objects/decisions.js';
+import { savePolicy } from '../../src/domain/objects/policies.js';
+import { saveProjectBrief, refreshedBrief } from '../../src/domain/objects/project-briefs.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';
 import {
   extractGraph as realExtractGraph,
   extractGraphChunked,
   deriveGraph,
   loadGraphSources,
-} from '../../src/graph/extract.js';
+} from '../../src/domain/graph/extract.js';
 import type { EntityType } from '../../src/store/port/graph-reads.js';
-import { readGraphDelta } from '../../src/graph/delta.js';
-import { WRITE_BUDGET } from '../../src/util/write-budget.js';
+import { readGraphDelta } from '../../src/domain/graph/delta.js';
+import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { sleep, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,

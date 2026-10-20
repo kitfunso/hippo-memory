@@ -23,7 +23,7 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../../src/api/index.js';
-import { personalScopeOf } from '../../src/core/recall-scope.js';
+import { personalScopeOf } from '../../src/base/scope/recall-scope.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

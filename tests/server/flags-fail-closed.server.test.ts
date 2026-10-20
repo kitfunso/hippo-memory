@@ -8,7 +8,7 @@ import {
   envRequireAuth,
   envRuntimeSettings,
   validateFlags,
-} from '../../src/util/env.js';
+} from '../../src/base/util/env.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {

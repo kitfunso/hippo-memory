@@ -1,8 +1,8 @@
 // hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with their audit rows.
-import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
+import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { appendAuditEvent } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
-import { keysetAfter, type KeysetPosition } from '../../util/keyset.js';
+import { keysetAfter, type KeysetPosition } from '../../base/util/keyset.js';
 import { selectEntriesByIds, readEntryAt } from './entry-reads.js';
 import type {
   QuarantineApproval,
@@ -14,8 +14,8 @@ import type {
 } from '../port.js';
 import type { Sync } from './served.js';
 import type { QuarantineRow, QuarantineStatus } from '../port/quarantine.js';
-import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../core/recall-scope.js';
-import { errorFields, errorMessage, log } from '../../util/log.js';
+import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../base/scope/recall-scope.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { OnHandle, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';

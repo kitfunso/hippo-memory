@@ -1,10 +1,10 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
-// hook route's call). promptHookContext keeps the server-side copy of the CLI's contextGet flags (cli/context.ts); the
-// CLI parity case in tests/store/prompt-hook-context.process.test.ts is all that ties the two.
+// hook route's call). promptHookContext keeps the server-side copy of the CLI's contextGet flags
+// (surface/cli/context.ts); only the CLI parity case in tests/store/prompt-hook-context.process.test.ts ties the two.
 import { contextGet, type Context, type ContextResult, type ContextResultEntry } from './index.js';
 import { sharedStoreOf } from './types.js';
-import { BadRequestError } from '../core/api-errors.js';
-import type { HippoConfig } from '../core/config.js';
+import { BadRequestError } from '../base/errors/api-errors.js';
+import type { HippoConfig } from '../base/config/config.js';
 import {
   contextBlockLines,
   contextCost,
@@ -15,11 +15,11 @@ import {
   snapshotText,
 } from './context-render.js';
 import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from './delivery-recorder.js';
-import type { DeliveryEventType } from '../core/delivery.js';
-import type { HookRuntime } from '../core/capture-contract.js';
-import { realpathOrResolve } from '../util/real-path.js';
-import { MAX_ID_LEN } from '../util/limits.js';
-import { isJsonString, type JsonValue } from '../util/json.js';
+import type { DeliveryEventType } from '../base/session/delivery.js';
+import type { HookRuntime } from '../base/session/capture-contract.js';
+import { realpathOrResolve } from '../base/util/real-path.js';
+import { MAX_ID_LEN } from '../base/util/limits.js';
+import { isJsonString, type JsonValue } from '../base/util/json.js';
 import {
   bookLedgerTurn,
   bookLedgerTurnPerRow,
@@ -28,16 +28,16 @@ import {
   ledgerReachOf,
   type LedgerReach,
 } from './ledger-db.js';
-import type { MemoryEntry } from '../core/memory.js';
+import type { MemoryEntry } from '../base/memory/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
-import type { PilotArm } from '../core/pilot-arm.js';
-import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
+import type { PilotArm } from '../base/session/pilot-arm.js';
+import { assertCallerProject, MAX_PROJECT_ALIASES } from '../base/scope/project-identity.js';
 import type { DeliveryWrite } from '../store/local/ledger.js';
-import { shouldSkipUnchanged } from '../core/skip-unchanged.js';
+import { shouldSkipUnchanged } from '../base/session/skip-unchanged.js';
 import type { TokenSurface, TokenUse } from '../store/port/token-ledger.js';
-import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
-import { blockHash, estimateTokens } from '../util/token-text.js';
-import { errorMessage, log, errorFields } from '../util/log.js';
+import { hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
+import { blockHash, estimateTokens } from '../base/util/token-text.js';
+import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { DEFAULT_CONTEXT_BUDGET } from './context.js';
 
 /** What a hook's delivery row says about the call it records. */

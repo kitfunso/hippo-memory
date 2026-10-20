@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { parkInDlq } from '../../src/connectors/dlq.js';
-import { slackDlq } from '../../src/connectors/slack/dlq.js';
+import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';

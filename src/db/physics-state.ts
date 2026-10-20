@@ -3,15 +3,15 @@
  * columns for 384-dim vectors.
  */
 
-import { evalNow } from '../core/ablation.js';
+import { evalNow } from '../base/memory/ablation.js';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
-import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
-import type { PhysicsParticle } from '../core/physics.js';
-import { initializeParticle } from '../core/physics.js';
-import { chunked } from '../util/chunked.js';
-import { placeholders } from '../util/sql.js';
-import { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
+import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../base/memory/memory.js';
+import type { PhysicsParticle } from '../base/rank/physics.js';
+import { initializeParticle } from '../base/rank/physics.js';
+import { chunked } from '../base/util/chunked.js';
+import { placeholders } from '../base/util/sql.js';
+import { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 
 /** Create the memory_physics table (migration v8). */
 export function createPhysicsTable(db: DatabaseSyncLike): void {

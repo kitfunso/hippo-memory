@@ -2,8 +2,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import type { JsonObject } from '../../src/store/port/types.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import type { JsonObject } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   listSessionEvents,

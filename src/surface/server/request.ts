@@ -1,0 +1,219 @@
+// Request plumbing: request ids, error replies, URL parsing and path matching.
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../../store/port.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { mapApiError } from '../../api/error-reply.js';
+import { HttpError, sendJson } from '../../base/util/http-util.js';
+import { MINUTE_MS } from '../../base/util/time.js';
+
+// The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
+const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+/** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
+function resolveRequestId(header: string | string[] | undefined): string {
+  const value = Array.isArray(header) ? undefined : header;
+  return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
+}
+
+/**
+ * One line per failed request, naming the route template since a path can hold caller data; 4xx is the caller's
+ * mistake, a busy 503 is back-pressure and a 501 is a route not on this store, so none logs as an error.
+ */
+export function logRequestFailure<E>(req: IncomingMessage, err: E, status: number): void {
+  const message = errorMessage(err);
+  const line = `${req.method ?? 'GET'} ${accessRouteOf(req)} failed: ${message}`;
+  // A 5xx that tells the caller when to retry is back-pressure too.
+  if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) {
+    log.warn(line, { status });
+  } else if (status >= 500 && status !== 501) {
+    log.error(line, { status, ...errorFields(err) });
+  } else if (status === 401 || status === 403) {
+    // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the
+    // request scope.
+    log.warn(line, { status });
+  } else {
+    log.info(line, { status });
+  }
+}
+
+/** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */
+export function replyFor<E>(err: E): { status: number; message: string } {
+  return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
+}
+
+// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called
+// slow.
+const SLOW_REQUEST_WARN_MS = MINUTE_MS;
+
+/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or touches the reply; the timer
+ * goes when the reply finishes or the socket closes. */
+function watchSlowRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  afterMs: number = SLOW_REQUEST_WARN_MS,
+): void {
+  const startedAt = Date.now();
+  const timer = setTimeout(() => {
+    // A reply already under way is a stream doing its job, not a stuck request.
+    if (res.headersSent) return;
+    log.warn(`${req.method ?? 'GET'} ${accessRouteOf(req)} is still running`, {
+      requestId,
+      elapsedMs: Date.now() - startedAt,
+    });
+  }, afterMs);
+  // The watchdog alone must never keep the process alive.
+  timer.unref();
+  const clear = (): void => clearTimeout(timer);
+  res.once('finish', clear);
+  res.once('close', clear);
+}
+
+/** What the route layer learned about a request, for its access line. */
+interface AccessNote {
+  route?: string;
+  tenant?: string;
+}
+
+const accessNotes = new WeakMap<IncomingMessage, AccessNote>();
+
+// A path that matched no route is caller data, so the access line never repeats it.
+const UNMATCHED_ROUTE = 'unmatched';
+
+/**
+ * Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the request's access
+ * line.
+ */
+export function noteAccess(req: IncomingMessage, note: AccessNote): void {
+  const held = accessNotes.get(req);
+  if (held) Object.assign(held, note);
+}
+
+/** The route name the request's access line carries, for a line about the same request logged after its reply. */
+export function accessRouteOf(req: IncomingMessage): string {
+  return accessNotes.get(req)?.route ?? UNMATCHED_ROUTE;
+}
+
+/**
+ * One info line per finished request. A path id and a query string can both hold caller data, so the line carries
+ * neither.
+ */
+function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, requestId: string): void {
+  const note: AccessNote = {};
+  accessNotes.set(req, note);
+  const startedAt = performance.now();
+  res.once('finish', () => {
+    log.info('request', {
+      requestId,
+      method: req.method ?? 'GET',
+      route: note.route ?? UNMATCHED_ROUTE,
+      status: res.statusCode,
+      durationMs: Math.round(performance.now() - startedAt),
+      tenant: note.tenant,
+    });
+  });
+}
+
+/**
+ * The request's id, after stamping the headers every reply carries and starting the slow-request watchdog and the
+ * access line.
+ */
+export function openRequest(req: IncomingMessage, res: ServerResponse, slowWarnMs?: number): string {
+  const requestId = resolveRequestId(req.headers['x-request-id']);
+  res.setHeader('X-Request-Id', requestId);
+  // Memory text is caller-written, so no browser may guess a reply into HTML or script.
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  watchSlowRequest(req, res, requestId, slowWarnMs);
+  logAccessWhenFinished(req, res, requestId);
+  return requestId;
+}
+
+export function sendError(res: ServerResponse, status: number, message: string): void {
+  sendJson(res, status, { error: message });
+}
+
+/** Ends the reply; a socket that refuses is logged under the request's id, once, since no other reply can follow. */
+export function endReply(res: ServerResponse): void {
+  try {
+    res.end();
+  } catch (err) {
+    log.warn('could not end the reply', errorFields(err));
+  }
+}
+
+/** True when the socket took the chunk; one that refuses is logged under the request's id and is not written again. */
+export function writeChunk(res: ServerResponse, chunk: string): boolean {
+  try {
+    res.write(chunk);
+    return true;
+  } catch (err) {
+    log.warn('could not write to the reply', errorFields(err));
+    return false;
+  }
+}
+
+interface ParsedRoute {
+  method: string;
+  path: string;
+  query: URLSearchParams;
+}
+
+export function parseRequest(req: IncomingMessage): ParsedRoute {
+  let url: URL;
+  try {
+    url = new URL(req.url ?? '/', 'http://placeholder');
+  } catch (e) {
+    // A request target the URL parser rejects is the caller's fault, not a server failure.
+    if (e instanceof TypeError) throw new HttpError(400, e.message);
+    throw e;
+  }
+  return {
+    method: req.method ?? 'GET',
+    path: url.pathname,
+    query: url.searchParams,
+  };
+}
+
+/**
+ * Pattern matcher for /v1/memories/:id/<action> (no router dependency); null if `path` does not match, else each :param
+ * name mapped to its value.
+ */
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch (e) {
+    if (e instanceof URIError) throw new HttpError(400, e.message);
+    throw e;
+  }
+}
+
+export function matchPath(pattern: string, path: string): Record<string, string> | null {
+  const patternParts = pattern.split('/');
+  const pathParts = path.split('/');
+  if (patternParts.length !== pathParts.length) return null;
+  const params: Record<string, string> = {};
+  for (let i = 0; i < patternParts.length; i++) {
+    const pp = patternParts[i]!;
+    const ap = pathParts[i]!;
+    if (pp.startsWith(':')) {
+      if (ap.length === 0) return null;
+      params[pp.slice(1)] = decodePathSegment(ap);
+    } else if (pp !== ap) {
+      return null;
+    }
+  }
+  return params;
+}
+
+/**
+ * Rejects URL-encoded slashes in path segments BEFORE the URL parser decodes them (`%2F` would become `/` and 404 or
+ * match the wrong template).
+ * Only the PATHNAME is scanned, so recall queries like `?q=https%3A%2F%2Fexample.com` are not rejected. */
+export function rejectEncodedSlash(rawUrl: string): void {
+  const queryIdx = rawUrl.indexOf('?');
+  const pathname = queryIdx === -1 ? rawUrl : rawUrl.slice(0, queryIdx);
+  if (/%2[Ff]/.test(pathname)) {
+    throw new HttpError(400, 'URL-encoded slash (%2F) not allowed in path segments');
+  }
+}

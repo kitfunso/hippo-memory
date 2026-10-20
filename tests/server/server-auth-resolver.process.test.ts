@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   serve,
@@ -26,7 +26,7 @@ import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {

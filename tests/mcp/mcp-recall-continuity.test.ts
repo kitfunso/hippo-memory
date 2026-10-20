@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 
 afterEach(() => {
@@ -42,7 +42,7 @@ function extractText(res: McpResponse | null): string {
   if (res === null || res.result === undefined) return '';
   // SAFETY: every call in this file dispatches method 'tools/call', whose
   // result shape is always `{ content: [{ type: 'text', text }] }` per the
-  // 'tools/call' branch of handleMcpRequest (src/mcp/server.ts).
+  // 'tools/call' branch of handleMcpRequest (src/surface/mcp/server.ts).
   const result = res.result as McpToolCallResult;
   return result.content?.[0]?.text ?? '';
 }

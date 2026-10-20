@@ -21,8 +21,8 @@ import {
   computeSystemEnergy,
   type PhysicsParticle,
   type ForceContext,
-} from '../../src/core/physics.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
+} from '../../src/base/rank/physics.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

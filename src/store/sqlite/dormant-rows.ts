@@ -1,14 +1,14 @@
 // The dormant_memories rows: the snapshot sleep keeps of a faded memory, read and written on the caller's handle.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import { fromWire, toWire, type MemoryWire } from '../../core/memory-wire.js';
-import { isObjectLike, isStringValue } from '../../core/capture-contract.js';
-import type { JsonValue } from '../../util/json.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import { fromWire, toWire, type MemoryWire } from '../../base/memory/memory-wire.js';
+import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
+import type { JsonValue } from '../../base/util/json.js';
 import type { SqlFragment } from './rule-sql.js';
-import { chunked } from '../../util/chunked.js';
-import { escapeLike } from '../../util/escape.js';
-import { placeholders } from '../../util/sql.js';
-import { parseStoredJson, warnDamagedColumn } from '../../util/stored-json.js';
+import { chunked } from '../../base/util/chunked.js';
+import { escapeLike } from '../../base/util/escape.js';
+import { placeholders } from '../../base/util/sql.js';
+import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from './statement-cache.js';
 import type { DormantMove } from '../local/consolidation.js';
 import type { DormantMemory, ListDormantOpts } from '../port/dormant.js';

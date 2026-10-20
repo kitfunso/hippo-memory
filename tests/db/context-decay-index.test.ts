@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../../src/db/decay-key.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { contextRowsWhere } from '../../src/store/sqlite/candidates.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { rewardFactorSql } from '../../src/store/sqlite/rule-sql.js';

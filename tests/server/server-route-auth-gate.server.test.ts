@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { V1_ROUTES } from '../../src/server/route-table.js';
+import { V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';

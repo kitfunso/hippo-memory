@@ -24,8 +24,8 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const [, , syncUrl, root, home, barrier, index, total] = process.argv;
 const { importForStore } = await import(syncUrl);
-const { loadConfig } = await import(new URL('../core/config.js', syncUrl).href);
-const { sqliteAgentImport } = await import(new URL('../store/sqlite/agent-import.js', syncUrl).href);
+const { loadConfig } = await import(new URL('../../base/config/config.js', syncUrl).href);
+const { sqliteAgentImport } = await import(new URL('../../store/sqlite/agent-import.js', syncUrl).href);
 mkdirSync(barrier, { recursive: true });
 const arrivedAt = Date.now();
 writeFileSync(join(barrier, 'ready-' + index), '');
@@ -84,7 +84,7 @@ async function race(roots: readonly string[]): Promise<WorkerOut[]> {
   const barrier = join(w.dir, 'barrier');
   const done = await Promise.all(
     roots.map((root, i) =>
-      runWorker([distUrl('agent-memories/sync.js'), root, w.home, barrier, String(i), String(roots.length)]),
+      runWorker([distUrl('domain/agent-memories/sync.js'), root, w.home, barrier, String(i), String(roots.length)]),
     ),
   );
   for (const d of done) expect(d.code, d.stderr).toBe(0);

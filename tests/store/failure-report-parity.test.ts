@@ -2,10 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { captureToolFailure } from '../../src/capture/capture-error.js';
+import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { failureHash, failureReport, lessonFromFailure } from '../../src/capture/failure-reading.js';
-import type { JsonValue } from '../../src/util/json.js';
+import { failureHash, failureReport, lessonFromFailure } from '../../src/surface/capture/failure-reading.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 

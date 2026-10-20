@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { assertNonEmpty, RECALL_DEFAULT_DENY_SCOPES } from '../../src/core/recall-scope.js';
+import { assertNonEmpty, RECALL_DEFAULT_DENY_SCOPES } from '../../src/base/scope/recall-scope.js';
 
 const thrownBy = (fn: () => void): Error | undefined => {
   try {

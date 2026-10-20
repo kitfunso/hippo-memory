@@ -2,7 +2,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { supersede } from '../../src/api/index.js';

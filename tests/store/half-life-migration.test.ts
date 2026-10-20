@@ -16,21 +16,21 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   LEGACY_TYPED_HALF_LIFE,
   type CreateMemoryOptions,
-} from '../../src/core/memory.js';
-import { migrateDefaultHalfLife } from '../../src/consolidate/half-life-migration.js';
+} from '../../src/base/memory/memory.js';
+import { migrateDefaultHalfLife } from '../../src/domain/consolidate/half-life-migration.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { consolidate } from '../../src/index.js';
-import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
-import { openIncident, resolveOpenIncident } from '../../src/objects/incidents.js';
-import { saveCustomerNote } from '../../src/objects/customer-notes.js';
+import { saveDecision, closeDecision } from '../../src/domain/objects/decisions.js';
+import { openIncident, resolveOpenIncident } from '../../src/domain/objects/incidents.js';
+import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { supersede, adminActor } from '../../src/api/index.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { recordStatements, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { allocatedBytes } from '../_helpers/allocated-bytes.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   replaceDetectedConflicts,

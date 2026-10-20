@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFromTexts } from '../../src/capture/extract.js';
+import { extractFromTexts } from '../../src/surface/capture/extract.js';
 
 const contents = (text: string) => extractFromTexts([text]).map((item) => item.content);
 const TAG_RULE = 'Always tag releases from main because CI publishes tags.';

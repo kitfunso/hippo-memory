@@ -7,12 +7,12 @@
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
 // portImportsFromSql counts imports and re-exports in src/store/port.ts, src/store/port-groups.ts and src/store/port/ of a src/store file outside those, or of a src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
 // buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
-// storeImportsInCli counts value imports of src/store or src/db in src/cli files other than the CLI's composition root.
+// storeImportsInCli counts value imports of src/store or src/db in src/surface/cli files other than the CLI's composition root.
 // groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // portFunctionParams fails outright on any parameter of a method on a port interface whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data. No baseline.
-// A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
+// A file under src/surface/server/routes or src/surface/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any but FOLDER_FORM_EXCEPTIONS fails outright.
-// A .ts file directly in src/store other than STORE_TOP_FILES fails outright: a group's SQL goes in src/store/sqlite, a pure rule in src/core.
+// A .ts file directly in src/store other than STORE_TOP_FILES fails outright: a group's SQL goes in src/store/sqlite, a pure rule in src/base.
 // A src/store function or port method whose tenant, or an argument's tenant property, is optional, defaulted or admits undefined or null fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -57,10 +57,10 @@ const DB_DEFINITION_FILES = {
 const DB_TOUCH_NAMES = new Set([...OPENERS, ...HANDLE_TYPES, 'withWriteScope', 'withWriteScopeOr']);
 const TX_OWNER = 'src/db/busy.ts';
 const CARRIER_NAMES = new Set(['andThen', 'onStore', 'StoreReply']);
-// What src/api/recall/finish.ts does for a surface that passes `recordAs`. No baseline: one hit fails. src/mcp is pending and not read.
+// What src/api/recall/finish.ts does for a surface that passes `recordAs`. No baseline: one hit fails. src/surface/mcp is pending and not read.
 const RECALL_RECORDERS = new Set(['bumpRecallStats', 'noteRecall']);
 const RECALL_LEDGER_LABELS = new Set(['recall', 'http_recall', 'mcp_recall']);
-const recordsItsOwnRecall = (f) => f.startsWith('src/server/routes/') || f.startsWith('src/cli/');
+const recordsItsOwnRecall = (f) => f.startsWith('src/surface/server/routes/') || f.startsWith('src/surface/cli/');
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -71,7 +71,7 @@ function tsFiles(dir, out = []) {
   return out.sort();
 }
 
-const isCli = (f) => f.startsWith('src/cli/') || f === 'src/cli.ts';
+const isCli = (f) => f.startsWith('src/surface/cli/') || f === 'src/cli.ts';
 const isDataLayer = (f) => f.startsWith('src/db/') || f.startsWith('src/store/') || f === 'src/db/index.ts';
 
 /** Names that open a database in this file: the opener names plus every local alias bound to one. */
@@ -227,11 +227,11 @@ const STORE_BUILDERS = new Set(['sqliteStore', 'sqliteSyncStore', 'initStore']);
 const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup']);
 // Where a store may be built, each with why: every other file takes its store as a parameter or from the Context.
 const COMPOSITION_ROOTS = new Map([
-  ['src/cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
-  ['src/server/boot.ts', 'the HTTP server builds its store holder here'],
-  ['src/mcp/stdio.ts', 'the stdio MCP server, the one entry with no store found yet'],
-  ['src/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
-  ['src/server/dashboard-reader-thread.ts', 'the dashboard reader is a thread entry of its own, handed only a folder'],
+  ['src/surface/cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
+  ['src/surface/server/boot.ts', 'the HTTP server builds its store holder here'],
+  ['src/surface/mcp/stdio.ts', 'the stdio MCP server, the one entry with no store found yet'],
+  ['src/surface/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
+  ['src/surface/server/dashboard-reader-thread.ts', 'a thread entry of its own, handed only a folder'],
   ['src/index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
   [
     'src/entry/folder-search.ts',
@@ -339,7 +339,7 @@ function countTwins(sf) {
   return n;
 }
 
-const routeFail = (why, file = 'src/server/route-table.ts') => {
+const routeFail = (why, file = 'src/surface/server/route-table.ts') => {
   console.error(
     `check-store-port: ${file} ${why}; the route count would read low. Declare each route as an object literal whose storeReady and sqliteOnly, if any, are string literals, or update readRoutes.`,
   );
@@ -440,7 +440,7 @@ function recallRecordsIn(file, sf) {
   return hits;
 }
 
-/** Every surface file outside src/mcp that records a recall itself. */
+/** Every surface file outside src/surface/mcp that records a recall itself. */
 function strayRecallRecords() {
   return (existsSync('src') ? tsFiles('src') : [])
     .filter(recordsItsOwnRecall)
@@ -617,8 +617,8 @@ function measure() {
       if (prepares > 0) sqlByFile[file] = prepares;
     }
     if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
-    if (file.startsWith('src/cli/')) out.tenantResolvesInCli += countTenantResolves(sf);
-    if (file.startsWith('src/cli/') && !COMPOSITION_ROOTS.has(file)) {
+    if (file.startsWith('src/surface/cli/')) out.tenantResolvesInCli += countTenantResolves(sf);
+    if (file.startsWith('src/surface/cli/') && !COMPOSITION_ROOTS.has(file)) {
       out.storeImportsInCli += countStoreImports(file, sf);
     }
     if (isDomain(file)) out.storeImportsInDomain += countDomainStoreImports(file, sf);
@@ -628,7 +628,7 @@ function measure() {
     if (file.startsWith('src/store/') && !isDbDefinitionFile(file) && !touchesHippoDb(sf)) {
       storeFilesWithoutSqlList.push(file);
     }
-    if (file === 'src/server/route-table.ts') {
+    if (file === 'src/surface/server/route-table.ts') {
       const routes = readRoutes(sf);
       out.routesNeedingHippoDb = routes.needsHippoDb;
       out.sqliteOnlyRoutes = routes.sqliteOnly.length;
@@ -709,7 +709,7 @@ if (strays.length > 0) {
 const loose = existsSync('src/store') ? tsFiles('src/store').flatMap(looseTenants) : [];
 if (loose.length > 0) {
   console.error(`A store function or port method can be called without its tenant:\n  ${loose.join('\n  ')}`);
-  console.error('Take `tenantId: string`, or `TenantId` when a real caller passes ALL_TENANTS (src/util/tenant.ts).');
+  console.error('Take `tenantId: string`, or `TenantId` if a real caller sends ALL_TENANTS (src/base/util/tenant.ts).');
   process.exit(1);
 }
 
@@ -783,7 +783,7 @@ if (strayTop.length > 0) {
   console.error(`Files directly in src/store besides ${[...STORE_TOP_FILES].join(', ')}:`);
   for (const f of strayTop) console.error(`  ${f}`);
   console.error(
-    'Put a store group and the SQL only it runs in src/store/sqlite/<feature>.ts, and a rule with no SQL in src/core.',
+    'Put a store group and the SQL only it runs in src/store/sqlite/<feature>.ts, and a rule with no SQL in src/base.',
   );
   process.exit(1);
 }

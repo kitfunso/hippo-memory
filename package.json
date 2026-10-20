@@ -33,7 +33,7 @@
   ],
   "scripts": {
     "baseline": "npm run build && npm test",
-    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node -e \"require('fs').copyFileSync('src/graph/view-client.js','dist/graph/view-client.js')\" && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node -e \"require('fs').copyFileSync('src/domain/graph/view-client.js','dist/domain/graph/view-client.js')\" && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
     "typecheck:tests": "tsc -p tsconfig.tests.json",
     "check:dts": "node scripts/check-dts-diff.mjs --check",
     "dev": "tsc --watch",

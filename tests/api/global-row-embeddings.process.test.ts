@@ -4,15 +4,15 @@ import * as path from 'path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promote } from '../../src/api/memories/promote.js';
-import { shareMemory, autoShare } from '../../src/sharing/share.js';
-import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { embedAll } from '../../src/search/embed-memories.js';
-import { isEmbeddingAvailable } from '../../src/embeddings/local.js';
+import { shareMemory, autoShare } from '../../src/domain/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { embedAll } from '../../src/domain/search/embed-memories.js';
+import { isEmbeddingAvailable } from '../../src/base/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
-import { loadConfig } from '../../src/core/config.js';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -20,7 +20,7 @@ import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's

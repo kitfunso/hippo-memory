@@ -3,13 +3,19 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
-import { captureError, extractLessons, partitionLessons, fetchGitLog, isGitRepo } from '../../src/learn/autolearn.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { extractInvalidationTarget, invalidateMatching } from '../../src/learn/invalidation.js';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import {
+  captureError,
+  extractLessons,
+  partitionLessons,
+  fetchGitLog,
+  isGitRepo,
+} from '../../src/domain/learn/autolearn.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 // ---------------------------------------------------------------------------
@@ -379,7 +385,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
       },
     );
 
-    // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/mcp/request.ts:173).
+    // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/surface/mcp/request.ts:173).
     const text = (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
     expect(text).toMatch(/low-information subjects dropped/);
 

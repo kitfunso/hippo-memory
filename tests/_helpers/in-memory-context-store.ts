@@ -2,7 +2,7 @@
 // each read from memory with the rules hippo-memory/store-kit exports, so a test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/core/handoff.js';
+import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/base/session/handoff.js';
 import {
   ambientRefusal,
   ftsTermParts,
@@ -25,11 +25,11 @@ import {
 import { withSqliteAllowed } from '../../src/db/open.js';
 import { HANDOFF_COLUMNS } from '../../src/store/sqlite/handoffs.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
-import { assertTenantId } from '../../src/core/tenant-id.js';
+import { assertTenantId } from '../../src/base/scope/tenant-id.js';
 import { computeSchemaFit } from '../../src/index.js';
 import { inMemoryVectorStore } from './in-memory-vector-store.js';
 import type { StoreSide } from './store-conformance.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface InMemoryContextStore extends StoreSide {
   readonly store: HippoStore & { readonly contextReads: ContextReads; readonly vectors: VectorReads };

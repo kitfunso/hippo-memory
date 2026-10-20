@@ -1,7 +1,7 @@
 // Route rules every typed object shares over HTTP, one table row per kind; a rule only one kind has stays in its
 // http-<kind> test. One server serves the whole file, so the request limits are off and every test makes its own rows.
 import { describe, it, expect, vi } from 'vitest';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { type Body, handle, apiKeyB, useObjectsServer, jsonAs, post, get } from '../_helpers/http-objects-server.js';
 
 useObjectsServer();

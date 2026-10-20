@@ -1,8 +1,8 @@
 // clusterFacts compares a fact only with facts sharing an entity tag, and still returns what the all-pairs scan returned.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
-import { clusterFacts } from '../../src/consolidate/dag.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import { clusterFacts } from '../../src/domain/consolidate/dag.js';
 
 /** The all-pairs scan clusterFacts used to run, kept as the oracle for its output. */
 function allPairsClusters(facts: MemoryEntry[]) {

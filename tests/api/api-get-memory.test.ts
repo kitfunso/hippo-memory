@@ -10,7 +10,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type CreateMemoryOptions,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';

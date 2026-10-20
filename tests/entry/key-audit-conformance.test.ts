@@ -13,7 +13,7 @@ import {
   type SideResult,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
-import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const AT = '2026-03-01T12:00:00.000Z';

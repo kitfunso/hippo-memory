@@ -25,7 +25,7 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 type Call = GroupCall<'contextReads', unknown>;
 type Named = readonly [string, Call];

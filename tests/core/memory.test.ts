@@ -6,7 +6,7 @@ import {
   Layer,
   type MemoryEntry,
   type TraceOutcome,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { strengthSql } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

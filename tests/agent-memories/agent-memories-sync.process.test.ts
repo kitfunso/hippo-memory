@@ -5,13 +5,13 @@ import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { consolidate } from '../../src/index.js';
-import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/agent-memories/sync.js';
-import type { Machine } from '../../src/util/agent-homes.js';
-import type { ImportReport } from '../../src/agent-memories/report.js';
+import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/domain/agent-memories/sync.js';
+import type { Machine } from '../../src/base/util/agent-homes.js';
+import type { ImportReport } from '../../src/domain/agent-memories/report.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
+import { deriveOriginProject, isInitialized } from '../../src/base/scope/project-identity.js';
 import { removeEntryMirrors } from '../../src/store/sqlite/mirrors.js';
 import { deleteEntryRowInTx } from '../../src/store/sqlite/entry-writes.js';
 import {
@@ -32,7 +32,7 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 

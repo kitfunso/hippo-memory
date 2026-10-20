@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { handleEval } from '../../src/cli/eval.js';
-import { handleShare } from '../../src/cli/transfer.js';
-import { numberFlag } from '../../src/cli/flag-values.js';
+import { handleEval } from '../../src/surface/cli/eval.js';
+import { handleShare } from '../../src/surface/cli/transfer.js';
+import { numberFlag } from '../../src/surface/cli/flag-values.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';

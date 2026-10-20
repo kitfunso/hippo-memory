@@ -1,7 +1,7 @@
 // The agent work board: create, claim, review and complete cards, scoped to the caller's tenant.
 
-import type { Card, CardComment, CardRun, CardStatus } from '../../core/card.js';
-import type { HandoffOutcome } from '../../core/handoff.js';
+import type { Card, CardComment, CardRun, CardStatus } from '../../base/records/card.js';
+import type { HandoffOutcome } from '../../base/session/handoff.js';
 import type { CardDetail } from '../../store/port/cards.js';
 import type { CardCreate } from '../../store/port-groups.js';
 import type { Context } from '../types.js';

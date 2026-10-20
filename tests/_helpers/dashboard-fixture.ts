@@ -8,15 +8,15 @@ import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from './default-half-life-memory.js';
-import { serveDashboard } from '../../src/server/dashboard-listener.js';
+import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
 import { createSnapshotService, type SnapshotService } from '../../src/api/dashboard/snapshot.js';
 import type { DashboardRow } from '../../src/store/local/dashboard-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from './root-forms.js';
 import { initTestStore } from './store-template.js';
-import { envTenant } from '../../src/util/env.js';
+import { envTenant } from '../../src/base/util/env.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
 export const DAY = 86_400_000;

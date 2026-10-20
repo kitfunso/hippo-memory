@@ -7,22 +7,22 @@
  */
 import { describe, it, expect, expectTypeOf, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
-import { createMemory, Layer } from '../../src/core/memory.js';
-import { invalidateMatching } from '../../src/learn/invalidation.js';
-import { refineStore } from '../../src/cli/refine-llm.js';
-import { cmdCapture } from '../../src/capture/command.js';
+import { createMemory, Layer } from '../../src/base/memory/memory.js';
+import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
+import { refineStore } from '../../src/surface/cli/refine-llm.js';
+import { cmdCapture } from '../../src/surface/capture/command.js';
 import { captureTarget, localIndex, hookStore } from '../_helpers/cli-stores.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../../src/entry/importers.js';
-import { autoShare } from '../../src/sharing/share.js';
+import { autoShare } from '../../src/domain/sharing/share.js';
 import { consolidate } from '../../src/index.js';
-import { listPeers } from '../../src/sharing/share.js';
-import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { embedAll } from '../../src/search/embed-memories.js';
+import { listPeers } from '../../src/domain/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
+import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

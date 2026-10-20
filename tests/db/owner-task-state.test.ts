@@ -4,7 +4,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import type { SessionHandoff } from '../../src/core/handoff.js';
+import type { SessionHandoff } from '../../src/base/session/handoff.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   clearActiveTaskSnapshot,

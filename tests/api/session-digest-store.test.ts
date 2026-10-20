@@ -1,24 +1,24 @@
 // The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'path';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { adminActor, reject } from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
-import { storeExtractedFacts } from '../../src/learn/extract.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { autoShare, neverAutoShareTags } from '../../src/sharing/share.js';
-import { getGlobalRoot } from '../../src/sharing/global-store.js';
+import { autoShare, neverAutoShareTags } from '../../src/domain/sharing/share.js';
+import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
 import { listMemoryConflicts, writeEntry, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { recordSessionDigest, sessionDigestId, type SessionScan } from '../../src/capture/session-digest.js';
-import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/core/session-digest-row.js';
+import { recordSessionDigest, sessionDigestId, type SessionScan } from '../../src/surface/capture/session-digest.js';
+import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

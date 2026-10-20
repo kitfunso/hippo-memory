@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

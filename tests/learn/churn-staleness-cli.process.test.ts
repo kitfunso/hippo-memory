@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';

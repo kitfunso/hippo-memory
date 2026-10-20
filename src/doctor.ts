@@ -3,22 +3,22 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { findHippoStoreDir, isInitialized } from './core/project-identity.js';
-import { getGlobalRoot } from './sharing/global-store.js';
+import { findHippoStoreDir, isInitialized } from './base/scope/project-identity.js';
+import { getGlobalRoot } from './domain/sharing/global-store.js';
 import type { StoreHealth } from './store/local/diagnostics.js';
 import type { Diagnostics } from './store/local/diagnostics.js';
-import { loadConfig } from './core/config.js';
+import { loadConfig } from './base/config/config.js';
 import { getCurrentSchemaVersion, IncompatibleBinaryError } from './db/index.js';
-import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './core/compaction-timing.js';
-import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './capture/compaction-spool.js';
-import { isEmbeddingAvailable } from './embeddings/local.js';
-import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
-import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
-import { planProjectRepair } from './sharing/project-merge.js';
-import { errorMessage, log } from './util/log.js';
-import { tryReadJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
-import { DAY_MS } from './util/time.js';
-import { plural } from './util/format.js';
+import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './base/session/compaction-timing.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './surface/capture/compaction-spool.js';
+import { isEmbeddingAvailable } from './base/embeddings/local.js';
+import { CODEX_TRUST_LINE, isCodexPresent } from './domain/hooks/shared.js';
+import { claudeConfigDir, codexHomeDir } from './base/util/agent-homes.js';
+import { planProjectRepair } from './domain/sharing/project-merge.js';
+import { errorMessage, log } from './base/util/log.js';
+import { tryReadJsonFile, type JsonValue, isJsonObjectLiteral } from './base/util/json.js';
+import { DAY_MS } from './base/util/time.js';
+import { plural } from './base/util/format.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';

@@ -2,7 +2,7 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { previousSecretInForce } from '../../src/connectors/slack/signature.js';
+import { previousSecretInForce } from '../../src/surface/connectors/slack/signature.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 

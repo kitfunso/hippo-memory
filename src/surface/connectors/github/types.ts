@@ -1,0 +1,146 @@
+/**
+ * GitHub webhook event shapes for the ingestion connector
+ * (https://docs.github.com/en/webhooks/webhook-events-and-payloads).
+ * Each guard is gated on the X-GitHub-Event header so a misrouted payload cannot satisfy a guard for the wrong event
+ * type.
+ */
+
+import { type JsonValue, isJsonString, isJsonNumber } from '../../../base/util/json.js';
+
+/**
+ * `private` MUST stay optional: scope.ts maps `private: undefined` to private, and a strict boolean would reject the
+ * payload before scope can fail closed.
+ */
+export interface GitHubRepository {
+  full_name: string;
+  private?: boolean;
+  owner: { login: string };
+  name: string;
+  id?: number;
+}
+
+export interface GitHubSender {
+  login: string;
+  id: number;
+}
+
+export interface GitHubInstallation {
+  id: number;
+}
+
+export interface GitHubWebhookEnvelope {
+  action?: string;
+  repository?: GitHubRepository;
+  sender?: GitHubSender;
+  installation?: GitHubInstallation;
+}
+
+export interface GitHubIssueEvent extends GitHubWebhookEnvelope {
+  action: 'opened' | 'edited' | 'closed' | 'reopened' | 'deleted';
+  issue: {
+    number: number;
+    title: string;
+    body: string | null;
+    user: GitHubSender;
+    updated_at?: string;
+  };
+}
+
+export interface GitHubIssueCommentEvent extends GitHubWebhookEnvelope {
+  action: 'created' | 'edited' | 'deleted';
+  issue: { number: number };
+  comment: {
+    id: number;
+    body: string | null;
+    user: GitHubSender;
+    updated_at?: string;
+  };
+}
+
+export interface GitHubPullRequestEvent extends GitHubWebhookEnvelope {
+  action: 'opened' | 'edited' | 'closed' | 'reopened' | 'synchronize' | 'ready_for_review';
+  pull_request: {
+    number: number;
+    title: string;
+    body: string | null;
+    user: GitHubSender;
+    updated_at?: string;
+  };
+}
+
+export interface GitHubPullRequestReviewCommentEvent extends GitHubWebhookEnvelope {
+  action: 'created' | 'edited' | 'deleted';
+  pull_request: { number: number };
+  comment: {
+    id: number;
+    body: string | null;
+    user: GitHubSender;
+    updated_at?: string;
+  };
+}
+
+function isObjectOrArray(x: JsonValue): x is Record<string, JsonValue> {
+  return x !== null && typeof x === 'object';
+}
+
+function isGitHubSender(x: JsonValue): x is JsonValue & GitHubSender {
+  if (!isObjectOrArray(x)) return false;
+  return isJsonString(x.login) && isJsonNumber(x.id);
+}
+
+export function isGitHubWebhookEnvelope(x: JsonValue): x is JsonValue & GitHubWebhookEnvelope {
+  if (!isObjectOrArray(x)) return false;
+  // Duck-type: an envelope must at least carry an action OR a repository field.
+  return isJsonString(x.action) || isObjectOrArray(x.repository);
+}
+
+export function isGitHubIssueEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubIssueEvent {
+  if (evtHeader !== 'issues') return false;
+  if (!isObjectOrArray(x)) return false;
+  if (!isJsonString(x.action)) return false;
+  const issue = x.issue;
+  if (!isObjectOrArray(issue)) return false;
+  if (!isJsonNumber(issue.number)) return false;
+  if (!isGitHubSender(issue.user)) return false;
+  return true;
+}
+
+export function isGitHubIssueCommentEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubIssueCommentEvent {
+  if (evtHeader !== 'issue_comment') return false;
+  if (!isObjectOrArray(x)) return false;
+  if (!isJsonString(x.action)) return false;
+  const issue = x.issue;
+  if (!isObjectOrArray(issue) || !isJsonNumber(issue.number)) return false;
+  const comment = x.comment;
+  if (!isObjectOrArray(comment)) return false;
+  if (!isJsonNumber(comment.id)) return false;
+  if (!isGitHubSender(comment.user)) return false;
+  return true;
+}
+
+export function isGitHubPullRequestEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubPullRequestEvent {
+  if (evtHeader !== 'pull_request') return false;
+  if (!isObjectOrArray(x)) return false;
+  if (!isJsonString(x.action)) return false;
+  const pr = x.pull_request;
+  if (!isObjectOrArray(pr)) return false;
+  if (!isJsonNumber(pr.number)) return false;
+  if (!isGitHubSender(pr.user)) return false;
+  return true;
+}
+
+export function isGitHubPullRequestReviewCommentEvent(
+  x: JsonValue,
+  evtHeader: string,
+): x is JsonValue & GitHubPullRequestReviewCommentEvent {
+  if (evtHeader !== 'pull_request_review_comment') return false;
+  if (!isObjectOrArray(x)) return false;
+  if (!isJsonString(x.action)) return false;
+  const pr = x.pull_request;
+  if (!isObjectOrArray(pr) || !isJsonNumber(pr.number)) return false;
+  const comment = x.comment;
+  if (!isObjectOrArray(comment)) return false;
+  if (!isJsonNumber(comment.id)) return false;
+  if (!isGitHubSender(comment.user)) return false;
+  return true;
+}

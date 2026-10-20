@@ -2,9 +2,9 @@
  * paraphrase matching is out of scope. db-agnostic (helpers take a `DatabaseSyncLike`) and imports nothing from the
  * store layer above it, which imports this (the reverse is a cycle). */
 
-import { rejectionDigest } from '../../core/rejection-digest.js';
+import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { RejectedValueError } from '../../core/api-errors.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { RejectedValueRow } from '../port/rejections.js';
 
 // SAFETY: every read cast to this row selects REJECTED_VALUE_COLUMNS; scripts/check-row-casts.mjs proves it.

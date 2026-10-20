@@ -11,11 +11,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sessionGoalBoost } from '../_helpers/session-goal-boost.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
-import type { RerankStep } from '../../src/core/search-types.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { RerankStep } from '../../src/base/rank/search-types.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 

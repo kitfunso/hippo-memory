@@ -1,7 +1,7 @@
 // Completing a card promotes exactly its backlog children whose parents are all done, in card_deps order, and touches no other child.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import type { Card } from '../../src/core/card.js';
+import type { Card } from '../../src/base/records/card.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';

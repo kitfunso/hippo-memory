@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { embedMemory } from '../../src/search/embed-memories.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { embedMemory } from '../../src/domain/search/embed-memories.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
@@ -82,7 +82,7 @@ describe('embedMemory provider failure', () => {
   it('warns once and resolves when the config names an unknown provider', async () => {
     // A fresh module, since the test above already spent this process's one warning.
     vi.resetModules();
-    const fresh = await import('../../src/search/embed-memories.js');
+    const fresh = await import('../../src/domain/search/embed-memories.js');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
     const entry = createMemory('a memory under a typo in the provider name', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -98,7 +98,7 @@ describe('embedMemory provider failure', () => {
 
   it('warns again for a different failure after the first one', async () => {
     vi.resetModules();
-    const fresh = await import('../../src/search/embed-memories.js');
+    const fresh = await import('../../src/domain/search/embed-memories.js');
     const config = path.join(root, 'config.json');
     const entry = createMemory('a memory that meets two different failures', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -122,7 +122,7 @@ describe('embedMemory provider failure', () => {
 
   it('counts later failures and reports the count once the interval has passed', async () => {
     vi.resetModules();
-    const fresh = await import('../../src/search/embed-memories.js');
+    const fresh = await import('../../src/domain/search/embed-memories.js');
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.stubGlobal(

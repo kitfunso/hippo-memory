@@ -44,7 +44,7 @@ const { initStore, loadAllEntriesWire: loadAllEntries } = await distImport('entr
 const { batchWriteAndDeleteWire: batchWriteAndDelete } = await distImport('entry/testing.js');
 const { hybridSearchWire: hybridSearch } = await distImport('entry/testing.js');
 const { embedMemoryWire: embedMemory } = await distImport('entry/testing.js');
-const { isEmbeddingAvailable } = await distImport('embeddings/local.js');
+const { isEmbeddingAvailable } = await distImport('base/embeddings/local.js');
 
 const ARM = arg('arm', 'hippo');
 const PORT = Number(arg('port', '8888'));

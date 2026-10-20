@@ -5,7 +5,7 @@ import { afterEach, vi } from 'vitest';
 import { apiCtx, type FullContext } from './api-ctx.js';
 import { makeRoot } from './make-root.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { adminActor } from '../../src/api/types.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { writeEntriesTogether } from './root-forms.js';

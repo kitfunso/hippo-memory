@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { detectChurnStale } from '../../src/learn/invalidation.js';
+import { detectChurnStale } from '../../src/domain/learn/invalidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';

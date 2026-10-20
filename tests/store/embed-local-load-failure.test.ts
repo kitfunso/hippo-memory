@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { handleEmbed } from '../../src/cli/maintenance.js';
-import { loadConfig } from '../../src/core/config.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { handleEmbed } from '../../src/surface/cli/maintenance.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 

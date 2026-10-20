@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { cosineOf as cosineSimilarity } from '../../src/core/cosine.js';
+import { cosineOf as cosineSimilarity } from '../../src/base/rank/cosine.js';
 import { REQUIRE_EMBEDDINGS_VAR } from '../_helpers/embedding-backend.js';
 
-const LOCAL_JS = new URL('../../dist/embeddings/local.js', import.meta.url).href;
+const LOCAL_JS = new URL('../../dist/base/embeddings/local.js', import.meta.url).href;
 const INSTALLED_ONLY = fileURLToPath(new URL('../_helpers/transformers-installed.cjs', import.meta.url));
 
 // ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ describe('isEmbeddingAvailable', () => {
   });
 
   it('matches what this install resolves, and is true on the CI leg that requires the backend', async () => {
-    const { isEmbeddingAvailable } = await import('../../src/embeddings/local.js');
+    const { isEmbeddingAvailable } = await import('../../src/base/embeddings/local.js');
     const req = createRequire(import.meta.url);
     const resolves = (id: string): boolean => {
       try {

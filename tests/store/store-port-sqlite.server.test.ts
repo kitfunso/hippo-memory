@@ -6,10 +6,10 @@ import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
 import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
-import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
-import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
+import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
+import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/sqlite/goals.js';
-import { boostByGoals } from '../../src/search/goal-boost.js';
+import { boostByGoals } from '../../src/domain/search/goal-boost.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../../src/store/sqlite/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
@@ -66,7 +66,7 @@ import {
 } from '../_helpers/root-forms.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

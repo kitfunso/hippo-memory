@@ -8,14 +8,14 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Layer, calculateStrength } from '../../src/core/memory.js';
+import { Layer, calculateStrength } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { sampleForReplay } from '../../src/consolidate/replay.js';
+import { sampleForReplay } from '../../src/domain/consolidate/replay.js';
 import { savePhysicsState, loadPhysicsState } from '../../src/db/physics-state.js';
-import { initializeParticle } from '../../src/core/physics.js';
+import { initializeParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 

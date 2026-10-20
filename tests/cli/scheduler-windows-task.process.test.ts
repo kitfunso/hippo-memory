@@ -8,7 +8,7 @@ import {
   buildSchtasksCreateArgs,
   buildWindowsTaskRun,
   quoteInsideWindowsArg,
-} from '../../src/cli/scheduler.js';
+} from '../../src/surface/cli/scheduler.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 describe('Windows daily task', () => {

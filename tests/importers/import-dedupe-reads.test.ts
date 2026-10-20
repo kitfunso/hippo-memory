@@ -1,11 +1,11 @@
 // The importer's duplicate check against a real store: spacing, sleep-merged rows, other scripts, symbols and FTS
 // syntax answer as the whole-store key set did, with the full-text index in sync or not, reading only rows that match.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
 import { importEntries } from '../../src/entry/importers.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { mergedText } from '../../src/util/same-text.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

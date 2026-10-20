@@ -1,0 +1,269 @@
+import { claudeConfigDir, claudeHomeIsSet } from '../../base/util/agent-homes.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { isObjectLike, isStringValue, readSessionEnd } from '../../base/session/capture-contract.js';
+import { copilotTurn } from './copilot-transcript.js';
+import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
+import { tryParseJson } from '../../base/util/json.js';
+
+const RECENT_USER_TURNS = 20;
+const RECENT_ASSISTANT_TURNS = 10;
+
+/**
+ * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain user messages and the
+ * final assistant text chunk, without thinking, tool_use and tool_result noise. Exported for tests. */
+
+/** Leading markers of the command lines Claude Code writes with type 'user'. */
+const CLAUDE_CODE_COMMAND_PREFIXES = ['<local-command-', '<command-name>', '<command-message>', '<command-args>'];
+
+/**
+ * Transcript-line flags isNonHumanUserLine reads (any may be absent); `promptSource: 'system'` marks Claude Code's own
+ * notices.
+ */
+interface TranscriptLineFlags {
+  type?: unknown;
+  isMeta?: unknown;
+  isSidechain?: unknown;
+  isCompactSummary?: unknown;
+  promptSource?: unknown;
+}
+
+function isNonHumanUserLine(entry: TranscriptLineFlags, content: string): boolean {
+  if (
+    entry.isMeta === true ||
+    entry.isSidechain === true ||
+    entry.isCompactSummary === true ||
+    entry.promptSource === 'system'
+  ) {
+    return true;
+  }
+  const head = content.trimStart();
+  return CLAUDE_CODE_COMMAND_PREFIXES.some((p) => head.startsWith(p));
+}
+
+interface TranscriptMessage {
+  content?: unknown;
+}
+
+const NON_HUMAN_BLOCK_PREFIXES = ['<ide_', '[Request interrupted by user'];
+
+/**
+ * The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own
+ * open-file, selection and interrupt blocks. */
+export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): string {
+  const content = message.content;
+  let text = '';
+  if (isStringValue(content)) {
+    text = content;
+  } else if (
+    Array.isArray(content) &&
+    !content.some((b) => isObjectLike(b) && 'type' in b && b.type === 'tool_result')
+  ) {
+    const parts: string[] = [];
+    for (const block of content) {
+      const blockText =
+        isObjectLike(block) && 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+      if (isStringValue(blockText) && !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p))) {
+        parts.push(blockText);
+      }
+    }
+    text = parts.join('\n');
+  }
+  text = text.trim();
+  return text && !isNonHumanUserLine(entry, text) ? text : '';
+}
+
+export interface SessionTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface TranscriptRecord extends TranscriptLineFlags {
+  message?: unknown;
+  payload?: unknown;
+  cwd?: unknown;
+}
+
+export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRecord) => void): SessionTurn[] {
+  const lines = jsonl.split('\n').filter((l) => l.trim());
+  const turns: SessionTurn[] = [];
+
+  for (const line of lines) {
+    // A torn or partial transcript line carries no turn.
+    const entry: unknown = tryParseJson(line);
+    if (!isObjectLike(entry) || !('type' in entry)) continue;
+    visit?.(entry);
+
+    const turn = copilotTurn(entry) ?? claudeCodeTurn(entry) ?? codexTurn(entry);
+    if (turn !== null) turns.push(turn);
+  }
+
+  return turns;
+}
+
+/**
+ * The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no human or reply
+ * text.
+ */
+function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
+  if (entry.type !== 'user' && entry.type !== 'assistant') return null;
+  const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
+  if (!message) return null;
+  const content = 'content' in message ? message.content : undefined;
+
+  if (entry.type === 'user') {
+    const text = humanUserText(entry, message);
+    return text ? { role: 'user', text } : null;
+  }
+  if (!Array.isArray(content)) return null;
+  // Keep assistant text blocks; drop thinking + tool_use
+  const chunks: string[] = [];
+  for (const block of content) {
+    if (isObjectLike(block)) {
+      const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+      if (isStringValue(blockText) && blockText.trim()) {
+        chunks.push(blockText.trim());
+      }
+    }
+  }
+  return chunks.length > 0 ? { role: 'assistant', text: chunks.join('\n') } : null;
+}
+
+// Codex stores its own context as user messages: the AGENTS.md text, and one tagged block each for the environment and
+// app state.
+const CODEX_INJECTED_USER_TEXT = /^(?:# AGENTS\.md instructions\b|<([A-Za-z][\w-]*)(?:\s[^>]*)?>[\s\S]*<\/\1>$)/;
+
+// Codex rollout transcript shape: response_item -> payload.message
+function codexTurn(entry: TranscriptRecord): SessionTurn | null {
+  if (entry.type !== 'response_item') return null;
+  const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
+  if (!payload || !('type' in payload) || payload.type !== 'message') return null;
+  const role = 'role' in payload ? payload.role : undefined;
+  const content = 'content' in payload ? payload.content : undefined;
+  if (!Array.isArray(content)) return null;
+
+  const chunks: string[] = [];
+  for (const block of content) {
+    if (!isObjectLike(block)) continue;
+    const blockType = 'type' in block ? block.type : undefined;
+    const blockText = 'text' in block ? block.text : undefined;
+    if (
+      role === 'user' &&
+      blockType === 'input_text' &&
+      isStringValue(blockText) &&
+      blockText.trim() &&
+      !CODEX_INJECTED_USER_TEXT.test(blockText.trim())
+    ) {
+      chunks.push(blockText.trim());
+    }
+    if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
+      chunks.push(blockText.trim());
+    }
+  }
+
+  if (chunks.length === 0) return null;
+  if (role === 'user') return { role: 'user', text: chunks.join('\n') };
+  if (role === 'assistant') return { role: 'assistant', text: chunks.join('\n') };
+  return null;
+}
+
+export function summariseTranscript(jsonl: string): string {
+  return summarizeSessionTurns(collectSessionTurns(jsonl));
+}
+
+/** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
+export function sessionTail(turns: readonly SessionTurn[]) {
+  return {
+    users: turns
+      .filter((t) => t.role === 'user')
+      .map((t) => t.text)
+      .slice(-RECENT_USER_TURNS),
+    assistants: turns
+      .filter((t) => t.role === 'assistant')
+      .map((t) => t.text)
+      .slice(-RECENT_ASSISTANT_TURNS),
+  };
+}
+
+export function summarizeSessionTurns(turns: readonly SessionTurn[]): string {
+  const { users: tailUsers, assistants: tailAssistants } = sessionTail(turns);
+  if (tailUsers.length === 0 && tailAssistants.length === 0) return '';
+
+  return [
+    '# Session Summary',
+    '',
+    '## User Messages',
+    ...tailUsers.map((m) => `- ${m}`),
+    '',
+    '## Assistant Responses',
+    // A blank line between replies keeps capture from joining two of them; each user turn opens its own list item.
+    tailAssistants.join('\n\n'),
+  ].join('\n');
+}
+
+/**
+ * Resolve a transcript path for `--last-session`: `transcriptPath`, then the stdin JSON payload, then the newest
+ * `.jsonl` in the Claude config dir.
+ * The scan runs only with `mayScan` (it spans every project on the box); returns null when nothing resolves, never
+ * throws.
+ */
+export function resolveLastSessionTranscript(
+  explicit: string | undefined,
+  stdinText: string | undefined,
+  opts: { mayScan: boolean },
+): string | null {
+  if (explicit) return fs.existsSync(explicit) ? explicit : null;
+
+  if (stdinText && stdinText.trim() !== '') {
+    const receipt = readSessionEnd(stdinText, false);
+    // A refused payload is still a payload, so no scan.
+    const tp = receipt.status === 'received' ? receipt.input.transcriptPath : null;
+    return tp !== null && fs.existsSync(tp) ? tp : null;
+  }
+
+  if (!opts.mayScan) return null;
+  // With no home set, os.homedir() would send the scan into the real profile's transcripts.
+  if (!claudeHomeIsSet()) return null;
+
+  const projectsDir = path.join(claudeConfigDir(), 'projects');
+  if (!fs.existsSync(projectsDir)) return null;
+
+  let newest: { path: string; mtime: number } | null = null;
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(projectsDir);
+  } catch (err) {
+    log.debug(`transcript scan: cannot list ${projectsDir}: ${errorMessage(err)}`, errorFields(err));
+    return null; // an unlistable projects dir means no transcript to find; the caller prints that
+  }
+  for (const entry of entries) {
+    const subDir = path.join(projectsDir, entry);
+    for (const file of listJsonl(subDir)) {
+      const full = path.join(subDir, file);
+      const m = statMtime(full);
+      if (m !== null && (!newest || m > newest.mtime)) newest = { path: full, mtime: m };
+    }
+  }
+  return newest?.path ?? null;
+}
+
+/** mtime of `file`, or null when it vanished after the listing; any other stat error is real. */
+function statMtime(file: string): number | null {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch (err) {
+    if (errorCode(err) === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+/** The .jsonl names in `dir`; empty when it is not a directory or vanished after the listing. */
+function listJsonl(dir: string): string[] {
+  try {
+    if (!fs.statSync(dir).isDirectory()) return [];
+    return fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+  } catch (err) {
+    if (errorCode(err) === 'ENOENT') return [];
+    throw err;
+  }
+}

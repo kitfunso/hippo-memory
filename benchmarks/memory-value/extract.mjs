@@ -6,7 +6,7 @@
  * via calculateStrength at extraction time (HIPPO_FAKE_NOW = question_date).
  * Binding constraint from the plan: stored `strength` writes are inert
  * (calculateStrength recomputes from last_retrieved/half_life_days/reward
- * and never reads the persisted `strength` column — src/core/memory.ts:309-385),
+ * and never reads the persisted `strength` column — src/base/memory/memory.ts:309-385),
  * so this file never trusts entry.strength and always recomputes it here.
  *
  * Blind: nothing here reads query text, the eval answer, or gold labels

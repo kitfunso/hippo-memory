@@ -21,7 +21,7 @@ You are a signal extractor. You'll receive a JSON array of conversation sessions
 
 Rubrics:
 
-**CONFIDENCE** — tier values are the keys of `CONFIDENCE_WEIGHT` in `src/rerankers/features.ts` (verified=1.30, observed=1.10, inferred=0.90, stale=0.70). Mismatched tier names fall back to weight 1.0 and lose discrimination.
+**CONFIDENCE** — tier values are the keys of `CONFIDENCE_WEIGHT` in `src/domain/rerankers/features.ts` (verified=1.30, observed=1.10, inferred=0.90, stale=0.70). Mismatched tier names fall back to weight 1.0 and lose discrimination.
 
 - `"verified"`: session contains a definitive, externally-verifiable fact OR a precisely-stated user/assistant claim with no hedging (e.g. "The Eiffel Tower is in Paris", "I'll do X tomorrow", "the API returned 200", official policy, scheduled event).
 - `"observed"`: session contains a clearly-stated user/assistant preference, recurring habit, or direct observation that is true at the time of the session but not externally verifiable (e.g. "I like pizza", "I usually run on Tuesdays", "the build took longer than expected").

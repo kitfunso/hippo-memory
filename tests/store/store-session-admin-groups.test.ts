@@ -1,14 +1,14 @@
 // The Sessions, Cards, Goals, Conflicts, Dormant and Reports groups answer alike as sqliteX (sync) and served (async), on a real store.
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { sqliteSyncStore, sqliteStore } from '../../src/store/sqlite/store.js';
 import type { ConflictListQuery } from '../../src/store/port/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 
 const T = 'default';
 const roots: string[] = [];

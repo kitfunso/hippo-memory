@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cliApiContext } from '../../src/cli/api-context.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { remember } from '../../src/api/index.js';
 import { memoryGet } from '../../src/api/memories/memories.js';
 import { makeRoot } from '../_helpers/make-root.js';

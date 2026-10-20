@@ -3,15 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { unlinkSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { contextGet } from '../../src/api/index.js';
-import { summaryLine } from '../../src/agent-memories/report.js';
-import { importForStore, type SyncOptions } from '../../src/agent-memories/sync.js';
-import type { Machine } from '../../src/util/agent-homes.js';
-import type { ImportReport } from '../../src/agent-memories/report.js';
+import { summaryLine } from '../../src/domain/agent-memories/report.js';
+import { importForStore, type SyncOptions } from '../../src/domain/agent-memories/sync.js';
+import type { Machine } from '../../src/base/util/agent-homes.js';
+import type { ImportReport } from '../../src/domain/agent-memories/report.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory } from '../../src/core/memory.js';
-import { isContentWorthStoring } from '../../src/core/memory-quality.js';
-import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
-import { isInitialized } from '../../src/core/project-identity.js';
+import { createMemory } from '../../src/base/memory/memory.js';
+import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
+import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
+import { isInitialized } from '../../src/base/scope/project-identity.js';
 import {
   auditTotal,
   closeWorld,
@@ -29,7 +29,7 @@ import {
   writeConfig,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 

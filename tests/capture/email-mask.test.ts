@@ -2,11 +2,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../../src/core/config.js';
-import { cmdCapture } from '../../src/capture/command.js';
-import { transcriptWorkingState } from '../../src/capture/working-state.js';
-import { maskEmails } from '../../src/util/secret-detect.js';
-import { recordSessionDigest } from '../../src/capture/session-digest.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { cmdCapture } from '../../src/surface/capture/command.js';
+import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
+import { maskEmails } from '../../src/base/util/secret-detect.js';
+import { recordSessionDigest } from '../../src/surface/capture/session-digest.js';
 import { captureTarget, hookStore } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

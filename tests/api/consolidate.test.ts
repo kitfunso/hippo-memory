@@ -9,12 +9,12 @@ import {
   calculateStrength,
   resolveConfidence,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
-import { refreshParticleProperties } from '../../src/core/particle-refresh.js';
-import { simulate, type PhysicsParticle } from '../../src/core/physics.js';
+import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.js';
+import { simulate, type PhysicsParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 

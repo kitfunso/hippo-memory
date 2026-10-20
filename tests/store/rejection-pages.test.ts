@@ -1,19 +1,19 @@
 // A rejection over a tenant larger than one page: the same removals as one whole scan, and a write that lands while
 // the rows are walked cannot bring the value back.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { RejectedValueError } from '../../src/core/api-errors.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { RejectedValueError } from '../../src/base/errors/api-errors.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
-import { rejectionDigest } from '../../src/core/rejection-digest.js';
+import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import type { OnHandle } from '../../src/store/sqlite/open.js';
 import { sqliteRejections } from '../../src/store/sqlite/rejections.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { mergedText } from '../../src/util/same-text.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';

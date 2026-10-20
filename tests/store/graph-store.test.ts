@@ -9,11 +9,11 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb, withWriteScope } from '../../src/db/index.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { insertEntityRow, insertRelationRow, updateEntityRow } from '../../src/store/sqlite/graph-writes.js';
-import { MAX_ENTITY_NAME_LEN } from '../../src/core/entity-name.js';
+import { MAX_ENTITY_NAME_LEN } from '../../src/base/records/entity-name.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';
 import {

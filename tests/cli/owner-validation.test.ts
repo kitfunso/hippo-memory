@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateOwner, isStrictOwnerEnv } from '../../src/cli/owner-validation.js';
+import { validateOwner, isStrictOwnerEnv } from '../../src/surface/cli/owner-validation.js';
 
 describe('owner format', () => {
   it.each([

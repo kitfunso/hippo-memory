@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GitHubFetchError, realGitHubFetcher } from '../../src/connectors/github/octokit-client.js';
-import { isSleepReply } from '../../src/server/sleep-offload.js';
+import { GitHubFetchError, realGitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
+import { isSleepReply } from '../../src/surface/server/sleep-offload.js';
 
 describe('a GitHub error whose body cannot be read', () => {
   afterEach(() => vi.unstubAllGlobals());

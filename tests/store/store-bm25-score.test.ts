@@ -19,7 +19,7 @@ import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { loadRecallEntriesAt } from '../../src/store/sqlite/search-rows.js';
 import { loadSearchEntries, writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

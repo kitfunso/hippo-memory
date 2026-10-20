@@ -2,11 +2,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import type { SearchResult } from '../../src/core/search-types.js';
-import { loadConfig } from '../../src/core/config.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { cliApiContext } from '../../src/cli/api-context.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
 import { handoffText, snapshotText } from '../../src/api/context-render.js';
 import {

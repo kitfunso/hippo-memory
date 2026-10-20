@@ -8,7 +8,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type CreateMemoryOptions,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { Store, type Ran } from '../_helpers/cli-verb-store.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 

@@ -12,10 +12,10 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { ingestMessage } from '../../src/connectors/slack/ingest.js';
+import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
-import type { ChannelMeta } from '../../src/connectors/slack/scope.js';
-import type { SlackMessageEvent } from '../../src/connectors/slack/types.js';
+import type { ChannelMeta } from '../../src/surface/connectors/slack/scope.js';
+import type { SlackMessageEvent } from '../../src/surface/connectors/slack/types.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

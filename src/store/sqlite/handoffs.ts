@@ -6,9 +6,9 @@ import {
   type HandoffOutcome,
   type HandoffEvidence,
   isHandoffOutcome,
-} from '../../core/handoff.js';
+} from '../../base/session/handoff.js';
 import { scopeAdmitSql } from './rule-sql.js';
-import { assertTenantId } from '../../core/tenant-id.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { TaskSnapshot } from '../port/sessions.js';
 import type { StoreFiles } from './open.js';
 import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';

@@ -2,19 +2,19 @@
 // object costs no write and a renamed one keeps its entity id and the edges that point at it.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { saveDecision } from '../../src/objects/decisions.js';
-import { savePolicy } from '../../src/objects/policies.js';
-import { saveCustomerNote } from '../../src/objects/customer-notes.js';
-import { saveProjectBrief } from '../../src/objects/project-briefs.js';
-import { extractGraph, deriveGraph, loadGraphSources } from '../../src/graph/extract.js';
-import { readGraphDelta, entityKey, type GraphOp } from '../../src/graph/delta.js';
+import { saveDecision } from '../../src/domain/objects/decisions.js';
+import { savePolicy } from '../../src/domain/objects/policies.js';
+import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
+import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
+import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
+import { readGraphDelta, entityKey, type GraphOp } from '../../src/domain/graph/delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, SourceObjectType } from '../../src/store/port/graph-reads.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
 
 const T = 'default';

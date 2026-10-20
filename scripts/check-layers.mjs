@@ -2,13 +2,13 @@
 // CI layer gate. A src/ file imports only from its own layer or a lower one (order and the folder and root-file
 // map are in layers.json). Any upward import, runtime or type-only, fails; there is no baseline of edges.
 // .layers-baseline.json holds one number, the cap on root files in layers.json, which may fall but never rise.
-// A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
-// So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
+// A file under src/surface/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
+// So does a runtime import from src/surface/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // So does any import, re-export or import() (type-only too) into src/store/sqlite/** from a file outside src/store that
 // SQLITE_ROOTS does not name, and so does naming sqliteSyncStore there: every other file takes its store handed down.
-// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and the local files beside it (local/**): the api reads the store through those and takes shared rules from src/core.
-// So does any import, runtime or type-only, from src/dashboard/** into src/store, src/db or src/cli: the dashboard reads through src/api, with no baseline.
-// layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
+// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and the local files beside it (local/**): the api reads the store through those and takes shared rules from src/base.
+// So does any import, runtime or type-only, from src/surface/dashboard/** into src/store, src/db or src/surface/cli: the dashboard reads through src/api, with no baseline.
+// layers.json `dbReach` names the folders and features (surface/mcp) that reach the db layer only through the store, and each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -102,10 +102,10 @@ function findUpwardEdges(map, srcDir) {
   return [...edges.entries()].sort(([a], [b]) => byText(a, b)).map(([, e]) => e);
 }
 
-const ROUTES_DIR = 'server/routes';
+const ROUTES_DIR = 'surface/server/routes';
 const ROUTE_STORE_NAMES = new Set(['requireGroup', 'storeFor']);
 
-/** Lines under src/server/routes/ that name requireGroup or storeFor: a route reaches the store through src/api, never the port. */
+/** Lines under src/surface/server/routes/ that name requireGroup or storeFor: a route reaches the store through src/api, never the port. */
 function findRouteStoreReaches(srcDir) {
   const root = resolve(srcDir);
   const dir = join(root, ROUTES_DIR);
@@ -128,7 +128,7 @@ function findRouteStoreReaches(srcDir) {
 }
 
 const CLI_ALLOWLIST = '.cli-store-allowlist.json';
-const isCliFile = (file) => file === 'cli.ts' || file.startsWith('cli/');
+const isCliFile = (file) => file === 'cli.ts' || file.startsWith('surface/cli/');
 const isStoreFile = (file) => file.startsWith('store/') || file.startsWith('db/');
 
 /** Runtime imports from the CLI into src/store or src/db, one per (file, target), as src-relative paths. */
@@ -198,11 +198,11 @@ function findApiStoreReaches(srcDir) {
 const SQLITE_DIR = 'store/sqlite/';
 // The composition roots, src-relative, each with why: only these build or publish the SQLite adapter.
 const SQLITE_ROOTS = new Map([
-  ['cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
-  ['server/boot.ts', 'the HTTP server builds its store, its global stores and their reach probe here'],
-  ['server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
-  ['server/dashboard-listener.ts', '`hippo dashboard` builds its worker store and held connection here'],
-  ['server/dashboard-reader-thread.ts', 'the dashboard reader is a thread entry of its own, handed only a folder'],
+  ['surface/cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
+  ['surface/server/boot.ts', 'the HTTP server builds its store, its global stores and their reach probe here'],
+  ['surface/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
+  ['surface/server/dashboard-listener.ts', '`hippo dashboard` builds its worker store and held connection here'],
+  ['surface/server/dashboard-reader-thread.ts', 'a thread entry of its own, handed only a folder'],
   ['index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
   ['server.ts', 'the ./server entry builds the store of the folder serve() names'],
   ['entry/importers.ts', 'the published importers build the store of the folder their options name'],
@@ -261,16 +261,16 @@ function sqliteReachProblems(srcDir) {
   ];
 }
 
-const DASHBOARD_BARRED = ['store/', 'db/', 'cli/', 'cli.ts'];
+const DASHBOARD_BARRED = ['store/', 'db/', 'surface/cli/', 'cli.ts'];
 
-/** Imports from src/dashboard into src/store, src/db or src/cli, runtime or type-only, as `file:line imports target`. */
+/** Imports from src/surface/dashboard into src/store, src/db or src/surface/cli, runtime or type-only, as `file:line imports target`. */
 function findDashboardReaches(srcDir) {
   const root = resolve(srcDir);
   const rel = (p) => relative(root, p).replace(/\\/g, '/');
   const out = [];
   for (const file of tsFiles(root)) {
     const from = rel(file);
-    if (!from.startsWith('dashboard/')) continue;
+    if (!from.startsWith('surface/dashboard/')) continue;
     for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
       const target = resolveSpecifier(file, spec);
       const to = target && rel(target);
@@ -293,7 +293,7 @@ function findDbReaches(map, srcDir) {
   const reaches = [];
   for (const file of tsFiles(root)) {
     const from = rel(file);
-    if (!rule.from.includes(from.split('/')[0])) continue;
+    if (!rule.from.some((prefix) => from.startsWith(`${prefix}/`))) continue;
     for (const { spec, line, names } of importsOf(readFileSync(file, 'utf8'))) {
       const target = resolveSpecifier(file, spec);
       if (!target || layerIn(map, rel(target)) !== rule.layer) continue;
@@ -368,7 +368,7 @@ if (dashboardReaches.length > 0 && !args.includes('--list')) {
 const apiStoreReaches = findApiStoreReaches('src');
 if (apiStoreReaches.length > 0 && !args.includes('--list')) {
   console.error(
-    'The api imports a store module past the port; read it through the port, or move the shared rule to src/core:',
+    'The api imports a store module past the port; read it through the port, or move the shared rule to src/base:',
   );
   for (const e of apiStoreReaches) console.error(`  src/${e.file}:${e.line} imports src/${e.target}`);
   process.exit(1);

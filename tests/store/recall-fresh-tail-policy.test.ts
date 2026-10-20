@@ -15,13 +15,13 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve, RecallContractError } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { envRuntimeSettings } from '../../src/util/env.js';
+import { envRuntimeSettings } from '../../src/base/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

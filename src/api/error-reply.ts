@@ -1,14 +1,14 @@
 // The one error-to-reply map the HTTP server and the MCP transports share, so a status never depends on which front end
 // caught the error.
-import { ApiError } from '../core/api-errors.js';
+import { ApiError } from '../base/errors/api-errors.js';
 import {
   BodyTimeoutError,
   BodyTooLargeError,
   HttpError,
   INTERNAL_ERROR_MESSAGE,
   STORE_NOT_PORTED_MESSAGE,
-} from '../util/http-util.js';
-import { SqliteBlockedError } from '../util/sqlite-blocked.js';
+} from '../base/util/http-util.js';
+import { SqliteBlockedError } from '../base/util/sqlite-blocked.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../store/port.js';
 
 /** The status and client-facing message for one failed request. */

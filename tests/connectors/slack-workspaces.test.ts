@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { addWorkspace, listWorkspaces, removeWorkspace } from '../../src/connectors/slack/workspaces.js';
+import { addWorkspace, listWorkspaces, removeWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 describe('slack workspaces helper', () => {

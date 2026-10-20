@@ -21,10 +21,10 @@ import {
   validateProcessSteps,
   MAX_PROCESS_STEPS,
   MAX_PROCESS_STEP_LEN,
-} from '../../src/objects/processes.js';
+} from '../../src/domain/objects/processes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -86,13 +86,13 @@ describe('processes store (first-class object)', () => {
       expect(JSON.parse(memRow!.tags_json) as string[]).toContain('process');
 
       // SAFETY: metadata_json for a process_create audit row is always a JSON
-      // object with these fields (see src/objects/processes.ts saveProcess audit write).
+      // object with these fields (see src/domain/objects/processes.ts saveProcess audit write).
       const rows = db
         .prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_create' AND target_id = ?`)
         .all(String(proc.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
       // SAFETY: metadata_json for a process_create audit row always includes
-      // these fields, written by saveProcess (see src/objects/processes.ts).
+      // these fields, written by saveProcess (see src/domain/objects/processes.ts).
       const meta = JSON.parse(rows[0].metadata_json) as {
         version: number;
         step_count: number;

@@ -3,7 +3,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { DEFAULT_HALF_LIFE_DAYS, type LossAversion, type MemoryEntry, Layer } from '../../core/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS, type LossAversion, type MemoryEntry, Layer } from '../../base/memory/memory.js';
 import {
   type DatabaseSyncLike,
   openHippoDb,
@@ -12,16 +12,16 @@ import {
   withWriteScope,
   pruneConsolidationRuns,
 } from '../../db/index.js';
-import { RejectedValueError } from '../../core/api-errors.js';
-import { errorFields, errorMessage, log } from '../../util/log.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { type HippoIndex } from './rows.js';
 import type { LegacyStats } from '../port/reports.js';
 import { audit } from './audit-event.js';
-import { deserializeEntry } from '../../core/markdown.js';
+import { deserializeEntry } from '../../base/memory/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { layerDir } from './mirrors.js';
-import { isJsonObject, type JsonValue } from '../../util/json.js';
-import { CLI_ACTOR } from '../../core/actor.js';
+import { isJsonObject, type JsonValue } from '../../base/util/json.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 /** The folder a store keeps its mirror files in, beside hippo.db, with the ratio its root built it with; an adapter
  * hands it on and never reads it. */
@@ -57,7 +57,8 @@ export interface Handles {
   readonly files: StoreFiles;
 }
 
-/** `meta` key holding the default half-life base a store's memories are on (src/consolidate/half-life-migration.ts). */
+/** `meta` key holding the default half-life base a store's memories are on; see
+ * src/domain/consolidate/half-life-migration.ts. */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */
 export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';

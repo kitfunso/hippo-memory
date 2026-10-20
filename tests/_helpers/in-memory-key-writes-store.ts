@@ -17,7 +17,7 @@ import type {
 } from '../../src/entry/store-kit.js';
 import { FIXTURE_REVOKED_AT, TENANT_A, TENANT_B, type StoreSide, type TwoTenantFixture } from './store-conformance.js';
 import { portOnlyStore } from './port-only-store.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface InMemoryKeyWritesStore extends StoreSide {
   readonly store: HippoStore & { readonly keyWrites: KeyWrites };

@@ -9,13 +9,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { createHash } from 'node:crypto';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { runDoctor, formatDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
-import type { SpoolFs } from '../../src/capture/compaction-spool.js';
+import type { SpoolFs } from '../../src/surface/capture/compaction-spool.js';
 import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
-import { cliApiContext } from '../../src/cli/api-context.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import {
   openHippoDb,
   openHippoDbReadOnly,

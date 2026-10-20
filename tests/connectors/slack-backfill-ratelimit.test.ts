@@ -1,7 +1,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { backfillChannel } from '../../src/connectors/slack/backfill.js';
-import { slackHistoryFetcher } from '../../src/connectors/slack/web-client.js';
+import { backfillChannel } from '../../src/surface/connectors/slack/backfill.js';
+import { slackHistoryFetcher } from '../../src/surface/connectors/slack/web-client.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

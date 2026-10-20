@@ -1,11 +1,11 @@
 // Option and result shapes for contextGet.
 
 import type { TaskSnapshot, SessionEvent } from '../store/port/sessions.js';
-import type { SessionHandoff } from '../core/handoff.js';
-import type { MemoryEntry } from '../core/memory.js';
+import type { SessionHandoff } from '../base/session/handoff.js';
+import type { MemoryEntry } from '../base/memory/memory.js';
 import type { DeliveryObserver } from './delivery-recorder.js';
-import type { AmbientState } from '../core/ambient.js';
-import type { ProjectRef } from '../core/project-identity.js';
+import type { AmbientState } from '../base/memory/ambient.js';
+import type { ProjectRef } from '../base/scope/project-identity.js';
 
 /**
  * Options for `contextGet`: a budget-bounded bundle of recalled memories, active task snapshot, handoff and recent

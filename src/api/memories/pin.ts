@@ -1,7 +1,7 @@
 // Pin or unpin a memory, so decay and sleep leave it alone.
 
-import type { MemoryEntry } from '../../core/memory.js';
-import { personalScopeOf } from '../../core/recall-scope.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import type { Context } from '../types.js';
 
 /** A row out of reach answers as not found, as forget does, so a caller learns nothing about it. */

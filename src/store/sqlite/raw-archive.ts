@@ -1,12 +1,12 @@
-import { errorMessage } from '../../util/log.js';
-import { DEFAULT_TENANT_ID } from '../../util/tenant.js';
-import { BadRequestError, NotFoundError } from '../../core/api-errors.js';
+import { errorMessage } from '../../base/util/log.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
+import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { isFtsAvailable, withWriteScope } from '../../db/index.js';
 import { appendAuditEvent } from './audit.js';
-import { reportAuditWriteFailure } from '../../core/audit-report.js';
+import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { CLI_ACTOR } from '../../core/actor.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export interface ArchiveOptions {
   reason: string;

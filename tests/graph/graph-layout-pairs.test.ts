@@ -1,6 +1,6 @@
 // The layout looks at the pairs near each node, not every pair, and still lays out finite, bounded, repeatable points.
 import { describe, expect, it } from 'vitest';
-import { layoutGraph, type GraphModel } from '../../src/graph/view.js';
+import { layoutGraph, type GraphModel } from '../../src/domain/graph/view.js';
 
 const NODES = 600;
 const PASSES = 20;

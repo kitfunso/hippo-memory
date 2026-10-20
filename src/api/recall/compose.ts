@@ -1,20 +1,24 @@
 // Recall composition: from the loaded candidates and the plan's reads to the reply and its rows; touches no store.
 
-import { estimateTokens } from '../../util/token-text.js';
-import { formatHandoffEvidenceLine } from '../../core/handoff.js';
-import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
-import { boostByGoals, type GoalStackBoostOptions } from '../../search/goal-boost.js';
-import type { ForwardClaimMatch } from '../../learn/forward-claim-detector.js';
+import { estimateTokens } from '../../base/util/token-text.js';
+import { formatHandoffEvidenceLine } from '../../base/session/handoff.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
+import { boostByGoals, type GoalStackBoostOptions } from '../../domain/search/goal-boost.js';
+import type { ForwardClaimMatch } from '../../domain/learn/forward-claim-detector.js';
 import type { RecallWrites } from '../../store/port.js';
-import { churnStaleFactor } from '../../search/boosts.js';
-import type { RerankStep } from '../../core/search-types.js';
-import { compareEntryIdentity } from '../../core/compare.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../util/same-text.js';
+import { churnStaleFactor } from '../../domain/search/boosts.js';
+import type { RerankStep } from '../../base/rank/search-types.js';
+import { compareEntryIdentity } from '../../base/rank/compare.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { eligibleSummaryParents } from '../summary-parents.js';
-import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
-import { autodebiasMode, decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
+import { classifyOriginProject, projectNames } from '../../base/scope/project-identity.js';
+import {
+  autodebiasMode,
+  decidePlanningFallacy,
+  detectPlanningClaim,
+} from '../../domain/predictions/planning-fallacy.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
-import { passesScopeFilterForRecall } from '../../core/recall-scope.js';
+import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type {
   RecallSuppressionSummary,
   RecallOptions,

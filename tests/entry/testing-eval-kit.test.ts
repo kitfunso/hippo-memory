@@ -1,6 +1,6 @@
 // The eval kit hippo-memory/testing publishes: an eval seeds a store folder, then scores what it reads back from it.
 import { describe, expect, it } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { initStore, loadAllEntries, writeEntry } from '../../src/entry/testing.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

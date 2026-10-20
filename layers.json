@@ -8,32 +8,13 @@
     "surface"
   ],
   "folders": {
-    "agent-memories": "domain",
-    "api": "api",
-    "capture": "surface",
-    "cli": "surface",
-    "connectors": "surface",
-    "core": "base",
-    "consolidate": "domain",
-    "dashboard": "surface",
-    "embeddings": "base",
+    "base": "base",
     "db": "db",
-    "entry": "surface",
-    "eval": "domain",
-    "graph": "domain",
-    "hooks": "domain",
-    "importers": "surface",
-    "mcp": "surface",
-    "objects": "domain",
-    "predictions": "domain",
-    "rerankers": "domain",
-    "search": "domain",
-    "server": "surface",
     "store": "store",
-    "util": "base",
-    "learn": "domain",
-    "trust": "domain",
-    "sharing": "domain"
+    "domain": "domain",
+    "api": "api",
+    "surface": "surface",
+    "entry": "surface"
   },
   "rootFiles": {
     "cli.ts": "surface",
@@ -46,8 +27,8 @@
     "layer": "db",
     "from": [
       "api",
-      "mcp",
-      "server"
+      "surface/mcp",
+      "surface/server"
     ],
     "allowed": {}
   }

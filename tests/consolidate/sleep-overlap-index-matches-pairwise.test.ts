@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { detectConflicts } from '../../src/consolidate/conflicts.js';
-import { mergePartners } from '../../src/consolidate/merge.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { detectConflicts } from '../../src/domain/consolidate/conflicts.js';
+import { mergePartners } from '../../src/domain/consolidate/merge.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { tokenize } from '../../src/util/tokenize.js';
+import { tokenize } from '../../src/base/util/tokenize.js';
 import { pairwiseDetectConflicts, pairwiseMergePartners } from '../_helpers/pairwise-sleep-oracle.js';
 import { mulberry32 } from '../_helpers/property.js';
 

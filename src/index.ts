@@ -7,13 +7,13 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type CreateMemoryOptions,
   type MemoryEntry,
-} from './core/memory.js';
+} from './base/memory/memory.js';
 import { sqliteStore } from './store/sqlite/store.js';
 import type { LocalStore } from './store/local/index.js';
-import { runConsolidation, type ConsolidateOptions } from './consolidate/sleep.js';
-import { loadConfig } from './core/config.js';
-import { DEFAULT_TENANT_ID } from './util/tenant.js';
-import type { ConsolidationResult } from './consolidate/run.js';
+import { runConsolidation, type ConsolidateOptions } from './domain/consolidate/sleep.js';
+import { loadConfig } from './base/config/config.js';
+import { DEFAULT_TENANT_ID } from './base/util/tenant.js';
+import type { ConsolidationResult } from './domain/consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
 import type { LocalContext } from './api/types.js';
 import { withSharedStoreHandles } from './db/index.js';
@@ -30,7 +30,7 @@ export {
   applyOutcome,
   generateId,
   computeSchemaFit,
-} from './core/memory.js';
+} from './base/memory/memory.js';
 
 /**
  * Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in memory.ts.
@@ -41,19 +41,19 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
     baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
   });
 }
-export { search } from './search/bm25-search.js';
+export { search } from './domain/search/bm25-search.js';
 export { hybridSearch } from './entry/folder-search.js';
-export { explainMatch, MatchExplanation } from './search/explain.js';
-export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './search/temporal.js';
-export { SearchResult } from './core/search-types.js';
-export { estimateTokens } from './util/token-text.js';
-export { tokenize, textOverlap } from './util/tokenize.js';
-export { markRetrieved } from './core/memory.js';
-export { multihopSearch } from './search/multihop.js';
-export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph/recall.js';
+export { explainMatch, MatchExplanation } from './domain/search/explain.js';
+export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './domain/search/temporal.js';
+export { SearchResult } from './base/rank/search-types.js';
+export { estimateTokens } from './base/util/token-text.js';
+export { tokenize, textOverlap } from './base/util/tokenize.js';
+export { markRetrieved } from './base/memory/memory.js';
+export { multihopSearch } from './domain/search/multihop.js';
+export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './domain/graph/recall.js';
 
 // Session handoff
-export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './core/handoff.js';
+export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './base/session/handoff.js';
 // Work-queue cards
 export {
   Card,
@@ -64,8 +64,8 @@ export {
   isCardStatus,
   CARD_TRANSITIONS,
   CARD_LEASE_MS,
-} from './core/card.js';
-export { ConsolidationResult } from './consolidate/run.js';
+} from './base/records/card.js';
+export { ConsolidationResult } from './domain/consolidate/run.js';
 export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
 // Named in the signatures of sleep and consolidate, so a caller needs them to type its own variable.
 export type { LocalContext, LocalStore };
@@ -91,17 +91,17 @@ function isFolder(target: string | LocalStore): target is string {
   return typeof target === 'string';
 }
 // The one dedupe.js export that is public; the rest of dedupe.js stays internal.
-export { strengthBucket } from './consolidate/dedupe.js';
+export { strengthBucket } from './domain/consolidate/dedupe.js';
 
 // Embedding search
-export { isEmbeddingAvailable, getEmbedding } from './embeddings/local.js';
+export { isEmbeddingAvailable, getEmbedding } from './base/embeddings/local.js';
 
 // Auto-learn from errors
-export { captureError, extractLessons, partitionLessons } from './learn/autolearn.js';
+export { captureError, extractLessons, partitionLessons } from './domain/learn/autolearn.js';
 
 // Cross-agent shared memory
-export { getGlobalRoot } from './sharing/global-store.js';
-export { transferScore } from './sharing/share.js';
+export { getGlobalRoot } from './domain/sharing/global-store.js';
+export { transferScore } from './domain/sharing/share.js';
 
 // Memory importers
 export {
@@ -113,7 +113,7 @@ export {
   importVault,
   importEntries,
 } from './entry/importers.js';
-export { ImportResult, ImportOptions } from './importers/core.js';
+export { ImportResult, ImportOptions } from './surface/importers/core.js';
 
 // Eval suite
 export {
@@ -122,10 +122,10 @@ export {
   resultToBaseline,
   detectRegressions,
   buildSyntheticCorpus,
-} from './eval/eval-suite.js';
+} from './domain/eval/eval-suite.js';
 
 // Salience gate
-export { computeSalience, SalienceDecision, SalienceResult, SalienceOptions } from './core/salience.js';
+export { computeSalience, SalienceDecision, SalienceResult, SalienceOptions } from './base/memory/salience.js';
 
 // Ambient state vector
-export { computeAmbientState, renderAmbientSummary, formatAmbientVector, AmbientState } from './core/ambient.js';
+export { computeAmbientState, renderAmbientSummary, formatAmbientVector, AmbientState } from './base/memory/ambient.js';

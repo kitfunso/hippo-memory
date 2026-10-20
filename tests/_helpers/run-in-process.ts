@@ -2,7 +2,7 @@
 // so a verb test skips the node start-up and module load a child process pays.
 import { format } from 'node:util';
 import { vi } from 'vitest';
-import { CliExit } from '../../src/cli/exit.js';
+import { CliExit } from '../../src/surface/cli/exit.js';
 
 /** Thrown in place of process.exit so the verb stops where the real process would. */
 export class ExitCalled extends Error {

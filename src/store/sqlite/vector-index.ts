@@ -7,18 +7,18 @@ import {
   indexedModel,
   indexNeedsRebuild,
   replacesIndex,
-} from '../../embeddings/index-identity.js';
-import { strengthOptionsOf, type LossAversion, type MemoryEntry } from '../../core/memory.js';
-import type { PhysicsParticle } from '../../core/physics.js';
+} from '../../base/embeddings/index-identity.js';
+import { strengthOptionsOf, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
+import type { PhysicsParticle } from '../../base/rank/physics.js';
 import {
   loadPhysicsState,
   resetPhysicsFromSeeds,
   savePhysicsState,
   type ParticleSeed,
 } from '../../db/physics-state.js';
-import { initializeParticle } from '../../core/physics.js';
-import { float32ToBuffer } from '../../util/vector-codec.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { initializeParticle } from '../../base/rank/physics.js';
+import { float32ToBuffer } from '../../base/util/vector-codec.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../port.js';
 import {
@@ -36,14 +36,14 @@ import {
   upsertVectors,
 } from '../../db/vector-store.js';
 import { countAllEntriesAt, loadEntryIdsPageAt, selectEntriesByIds } from './entry-reads.js';
-import { chunked } from '../../util/chunked.js';
+import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import { placeholders } from '../../util/sql.js';
+import { placeholders } from '../../base/util/sql.js';
 import type { StoredVectorSummary, VectorCoverage, VectorRebuild } from '../local/embedding-index.js';
 import type { EntryIdPage } from '../local/consolidation.js';
-import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
-import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
-import { errorFields, errorMessage, log } from '../../util/log.js';
+import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
+import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { EntryCursor } from '../port/types.js';
 
 const MAX_BACKFILL_PAGE = 500;

@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { quarantineScopeFor } from '../src/trust/quarantine.js';
+import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/api/dashboard/types.js';
 import {
   NOW,

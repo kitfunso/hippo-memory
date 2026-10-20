@@ -30,7 +30,7 @@ process.chdir(tmp);
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
 const load = (rel) => import(pathToFileURL(path.join(REPO, 'dist', rel)).href);
-const { createMemory } = await load('core/memory.js');
+const { createMemory } = await load('base/memory/memory.js');
 const { initStore } = await load('entry/testing.js');
 const { writeEntryDbOnly } = await load('store/sqlite/entry-writes.js');
 const { loadAmbientTallies } = await load('store/sqlite/folder-forms.js');
@@ -38,12 +38,12 @@ const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/sqlite/auth.js');
 const { contextGet, adminActor } = await load('api/index.js');
 const { contextReach } = await load('api/types.js');
-const { loadConfig } = await load('core/config.js');
-const { handleMcpRequest } = await load('mcp/server.js');
+const { loadConfig } = await load('base/config/config.js');
+const { handleMcpRequest } = await load('surface/mcp/server.js');
 const { runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/store.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
-const { serveDashboard } = await load('server/dashboard-listener.js');
+const { serveDashboard } = await load('surface/server/dashboard-listener.js');
 
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite');
 

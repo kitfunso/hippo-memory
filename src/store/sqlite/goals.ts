@@ -1,7 +1,7 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
-import { generateId } from '../../core/memory.js';
+import { generateId } from '../../base/memory/memory.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { placeholders } from '../../util/sql.js';
+import { placeholders } from '../../base/util/sql.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';

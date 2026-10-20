@@ -18,13 +18,13 @@ import {
   strengthOptionsOf,
   type MemoryEntry,
   type DecayOptions,
-} from '../../src/core/memory.js';
-import { toWire } from '../../src/core/memory-wire.js';
+} from '../../src/base/memory/memory.js';
+import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { mvCandidate, scoreEntries, type MvFeatureVector } from '../../src/consolidate/memory-value.js';
-import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/consolidate/memory-value-weights.js';
+import { mvCandidate, scoreEntries, type MvFeatureVector } from '../../src/domain/consolidate/memory-value.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
 import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
 import { loadEveryTenantEntries, loadSessionDecayContext, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

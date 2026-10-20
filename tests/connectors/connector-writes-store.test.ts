@@ -4,14 +4,17 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rawArchive, remember, type Actor, type RememberOptions } from '../../src/api/index.js';
-import { issueCommentEventToRememberOpts, issueEventToRememberOpts } from '../../src/connectors/github/transform.js';
-import { messageToRememberOpts } from '../../src/connectors/slack/transform.js';
+import {
+  issueCommentEventToRememberOpts,
+  issueEventToRememberOpts,
+} from '../../src/surface/connectors/github/transform.js';
+import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
 import { withSqliteBlocked } from '../../src/db/index.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import type { ConnectorEvent } from '../../src/store/port.js';
 import { inMemoryConnectorWritesStore } from '../_helpers/in-memory-connector-writes-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const connector: Actor = { subject: 'connector:slack', role: 'admin' };

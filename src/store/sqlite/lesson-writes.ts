@@ -5,7 +5,7 @@ import { writeEntriesSkippingRejectedAt, writeEntriesTogetherAt } from './entry-
 import { updateStatsAt } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import { bound, boundWithFiles, skipEmpty, type Bodies, type FileBodies } from './bound.js';
 import { openStore } from './handles.js';
 import type { LessonWrites } from '../port.js';

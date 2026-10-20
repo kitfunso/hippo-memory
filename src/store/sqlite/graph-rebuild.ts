@@ -1,6 +1,6 @@
 // hippo.db's GraphRebuild group: a rebuild's ops through the row writers in graph-writes.ts, one transaction a call.
 import { type DatabaseSyncLike, SLEEP_DB_WAIT_MS } from '../../db/index.js';
-import { clock } from '../../util/write-budget.js';
+import { clock } from '../../base/util/write-budget.js';
 import { storedGraphOn } from './graph-reads.js';
 import type {
   DesiredRelation,

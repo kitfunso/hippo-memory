@@ -1,10 +1,14 @@
 // The compaction record's SQL: one record per Claude Code compaction, and the rows its summary's items become.
 import * as path from 'path';
-import { ConflictError } from '../../core/api-errors.js';
-import { COMPACTION_DB_WAIT_MS, REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../../core/compaction-timing.js';
-import { isStringValue } from '../../core/capture-contract.js';
-import { itemWords, restates, writableItemRows } from '../../util/compaction-items.js';
-import { isSharedStore } from '../../core/config.js';
+import { ConflictError } from '../../base/errors/api-errors.js';
+import {
+  COMPACTION_DB_WAIT_MS,
+  REPLAY_AFTER_MS,
+  TRANSCRIPT_FILL_WINDOW_MS,
+} from '../../base/session/compaction-timing.js';
+import { isStringValue } from '../../base/session/capture-contract.js';
+import { itemWords, restates, writableItemRows } from '../../base/util/compaction-items.js';
+import { isSharedStore } from '../../base/config/config.js';
 import { isSqliteBusy, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { gatedWrite } from './gated-write.js';
 import {
@@ -14,7 +18,7 @@ import {
   createMemory,
   generateId,
   type MemoryEntry,
-} from '../../core/memory.js';
+} from '../../base/memory/memory.js';
 import {
   fallbackOrigin,
   isGlobalStoreRoot,
@@ -22,7 +26,7 @@ import {
   projectNames,
   resolveProjectIdentity,
   type ProjectRef,
-} from '../../core/project-identity.js';
+} from '../../base/scope/project-identity.js';
 import {
   closeStartedWithoutSummary,
   compactionProgress,
@@ -41,10 +45,10 @@ import {
   type CompactionStatus,
 } from './compaction-rows.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
-import { isRecallBoostAblated } from '../../core/ablation.js';
+import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { updateStatsAt } from './index-and-stats.js';
 import { type OnHandle, type StoreFiles, waitingOpener } from './open.js';
-import { errorFields, errorMessage, log as hippoLog, reportCompactionFailure } from '../../util/log.js';
+import { errorFields, errorMessage, log as hippoLog, reportCompactionFailure } from '../../base/util/log.js';
 import type { CompactionStart } from '../port/compactions.js';
 import type {
   CompactionSaveOutcome,

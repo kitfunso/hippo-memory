@@ -1,24 +1,24 @@
 // Admission sent as data admits the rows the callbacks contextGet and drillDown passed before 3.0 admitted, on a store
 // that mixes tenants, scopes, origins, secrets, compaction items and digests, in process and from a store worker.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/core/memory.js';
-import { isWorthSurfacing } from '../../src/core/memory-quality.js';
-import { classifyOriginProject, projectNames, type ProjectRef } from '../../src/core/project-identity.js';
+import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { isWorthSurfacing } from '../../src/base/memory/memory-quality.js';
+import { classifyOriginProject, projectNames, type ProjectRef } from '../../src/base/scope/project-identity.js';
 import {
   ambientRefusal,
   descendantAdmits,
   type AmbientAdmission,
   type DescendantAdmission,
-} from '../../src/core/read-admission.js';
-import { passesScopeFilterForRecall } from '../../src/core/recall-scope.js';
-import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/core/session-digest-row.js';
+} from '../../src/base/scope/read-admission.js';
+import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js';
+import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadAmbientCandidatesAt } from '../../src/store/sqlite/candidates.js';
 import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
-import { detectSecret } from '../../src/util/secret-detect.js';
+import { detectSecret } from '../../src/base/util/secret-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { writeEntry } from '../_helpers/root-forms.js';

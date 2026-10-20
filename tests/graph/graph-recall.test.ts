@@ -9,11 +9,11 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { estimateTokens } from '../../src/util/token-text.js';
-import type { SearchResult } from '../../src/core/search-types.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { graphExpandRecall } from '../../src/graph/recall.js';
+import { graphExpandRecall } from '../../src/domain/graph/recall.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {

@@ -4,12 +4,12 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
-import { cliApiContext } from '../../src/cli/api-context.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { storedTextKeys } from '../../src/util/same-text.js';
+import { storedTextKeys } from '../../src/base/util/same-text.js';
 import { makeStore } from '../_helpers/make-root.js';
 import {
   loadContextCandidates,

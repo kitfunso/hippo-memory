@@ -1,12 +1,12 @@
 // One hybrid recall over a 10k-row store with 384-dim vectors does a bounded amount of work; prints the measured time.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
-import { searchBothHybrid } from '../../src/sharing/search-both.js';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';

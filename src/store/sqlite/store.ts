@@ -1,7 +1,7 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTalliesAt } from './ambient.js';
-import type { LossAversion } from '../../core/memory.js';
-import { ambientRefusal } from '../../core/read-admission.js';
+import type { LossAversion } from '../../base/memory/memory.js';
+import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEventsAt, queryAuditEvents } from './audit.js';
@@ -87,8 +87,8 @@ import type { FailureLog } from '../port/failure-log.js';
 import type { Compactions } from '../port/compactions.js';
 import type { LocalFiles } from '../local/local-files.js';
 import { served } from './served.js';
-import { isSharedStore } from '../../core/config.js';
-import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
+import { isSharedStore } from '../../base/config/config.js';
+import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { loadRecallEntriesAt } from './search-rows.js';
 import { loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from './vector-index.js';

@@ -1,6 +1,6 @@
 // The tenant clause of a hippo.db read, and the tenant an API key names.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { validateApiKey } from './auth.js';
 
 /** ` AND <condition>` and its argument for one tenant; both empty for ALL_TENANTS. */

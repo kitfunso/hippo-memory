@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { mcpErrorResponse } from '../../src/mcp/server.js';
-import { NotFoundError } from '../../src/core/api-errors.js';
+import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
+import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 beforeEach(() => {

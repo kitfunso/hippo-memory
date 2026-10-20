@@ -21,10 +21,10 @@ import {
   loadPolicies,
   policiesAsOf,
   normalizePolicyDate,
-} from '../../src/objects/policies.js';
+} from '../../src/domain/objects/policies.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 function safeRmSync(p: string): void {
   try {

@@ -1,10 +1,10 @@
 // The cross-encoder's model load is bounded, a failure is fetched again once per backoff window, and the warning carries the real error.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { MODEL_LOAD_POLICY } from '../../src/embeddings/transformers.js';
-import { createCrossEncoderReranker } from '../../src/rerankers/cross-encoder.js';
-import type { RerankerFn } from '../../src/rerankers/types.js';
+import { MODEL_LOAD_POLICY } from '../../src/base/embeddings/transformers.js';
+import { createCrossEncoderReranker } from '../../src/domain/rerankers/cross-encoder.js';
+import type { RerankerFn } from '../../src/domain/rerankers/types.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/core/search-types.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
 
 /** A reranker over a stand-in for the optional package, which these tests never install; `fetch` decides how each from_pretrained ends. */
 function rerankerFetching(fetch: () => Promise<void>): RerankerFn {

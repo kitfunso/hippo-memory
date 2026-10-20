@@ -8,10 +8,10 @@ import {
 } from '../../src/store/sqlite/recall-trace.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
-import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
-import type { DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../../src/core/delivery.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { runWithRequestId } from '../../src/util/request-scope.js';
+import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
+import type { DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../../src/base/session/delivery.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { runWithRequestId } from '../../src/base/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from '../_helpers/count-statements.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { Ledger } from '../../src/store/local/ledger.js';

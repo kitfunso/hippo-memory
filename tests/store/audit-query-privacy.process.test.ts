@@ -4,14 +4,14 @@ import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { auditQueryFields } from '../../src/core/audit-report.js';
+import { auditQueryFields } from '../../src/base/records/audit-report.js';
 import { contextGet, retrieve, remember } from '../../src/api/index.js';
-import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {

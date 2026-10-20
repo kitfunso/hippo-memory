@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memory/memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 

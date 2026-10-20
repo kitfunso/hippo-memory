@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { ConflictError } from '../../src/core/api-errors.js';
+import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

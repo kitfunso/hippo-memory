@@ -1,5 +1,5 @@
 /**
- * AT1 T2 smoke tests: reject/unreject/rejections (api.ts + src/trust/reject-flow.ts)
+ * AT1 T2 smoke tests: reject/unreject/rejections (api.ts + src/domain/trust/reject-flow.ts)
  * and resolveConflict's rejectLoserValue + audit wiring.
  * docs/plans/2026-08-15-at1-rejected-value-tombstone.md
  */
@@ -8,13 +8,13 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import * as api from '../../src/api/index.js';
-import { RejectedValueError } from '../../src/core/api-errors.js';
-import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
+import { RejectedValueError } from '../../src/base/errors/api-errors.js';
+import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

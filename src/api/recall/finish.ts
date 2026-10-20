@@ -1,17 +1,17 @@
 // What a recall remembers and records: the anchoring detector and query history, the session rings and audit rows, then
 // the write around one recall (history, ring, recalled counter and token ledger row).
-import { isRecallBoostAblated } from '../../core/ablation.js';
-import { auditQueryFields } from '../../core/audit-report.js';
+import { isRecallBoostAblated } from '../../base/memory/ablation.js';
+import { auditQueryFields } from '../../base/records/audit-report.js';
 import type { HippoStore, RecallWrites } from '../../store/port.js';
 import type { TokenSurface } from '../../store/port/token-ledger.js';
-import type { HippoConfig } from '../../core/config.js';
+import type { HippoConfig } from '../../base/config/config.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
 import type { CallerState } from '../callers.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
-import { chunked } from '../../util/chunked.js';
-import type { AuditOp } from '../../core/audit-ops.js';
+import { chunked } from '../../base/util/chunked.js';
+import type { AuditOp } from '../../base/records/audit-ops.js';
 
 /**
  * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked within the window returns
@@ -82,7 +82,7 @@ export function hashQueryText(query: string): number {
     .split(/\s+/)
     .filter((t) => t.length > 0);
   // Drop tokens under 3 chars (filler words) so `a login bug` and `login bug` hash alike; matches the >=3 filter in
-  // src/learn/forward-claim-detector.ts.
+  // src/domain/learn/forward-claim-detector.ts.
   const filtered = normalized.filter((t) => t.length >= 3);
   // Fall back to all tokens when the filter empties the query (CJK 2-char words, acronyms like `AI`) so distinct short
   // queries do not all hash to fnv1a32('').
@@ -424,8 +424,8 @@ export interface RecallRecording {
   readonly stats: 'every' | 'shown';
 }
 
-/** The surfaces `retrieve` records in full. MCP is pending: src/mcp still feeds its own ring and books its own ledger
- * row, and counts no stats. */
+/** The surfaces `retrieve` records in full. MCP is pending: src/surface/mcp still feeds its own ring and books its own
+ * ledger row, and counts no stats. */
 export const RECALL_RECORDING = {
   http: { ring: 'http', ledger: 'http_recall', stats: 'every' },
   cli: { ring: 'cli', ledger: 'recall', stats: 'shown' },

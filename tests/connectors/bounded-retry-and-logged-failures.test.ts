@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { backfillRepo } from '../../src/connectors/github/backfill.js';
-import type { GitHubFetcher } from '../../src/connectors/github/octokit-client.js';
+import { backfillRepo } from '../../src/surface/connectors/github/backfill.js';
+import type { GitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
 import {
   closeHippoDb,
   openHippoDb,
@@ -13,9 +13,9 @@ import {
   withWriteScope,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { resolveCodexSessionTranscript } from '../../src/hooks/codex-session.js';
+import { resolveCodexSessionTranscript } from '../../src/domain/hooks/codex-session.js';
 import { importChatGPT, importClaude } from '../../src/entry/importers.js';
-import { detectServer } from '../../src/server/server-detect.js';
+import { detectServer } from '../../src/surface/server/server-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 

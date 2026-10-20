@@ -1,4 +1,4 @@
-import type { KeysetPosition } from '../../util/keyset.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
 
 /** Which of a tenant's quarantine records a list reads; `limit` is 100 when unset. */
 export interface QuarantineListQuery {

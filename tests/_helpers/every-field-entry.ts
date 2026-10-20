@@ -1,5 +1,5 @@
 // One memory with every MemoryEntry field set to a value that is not its default, for the wire-format goldens.
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 
 export const GOLDEN_TENANT = 'acme';
 

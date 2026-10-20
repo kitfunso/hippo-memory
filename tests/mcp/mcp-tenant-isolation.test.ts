@@ -4,13 +4,13 @@ import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember as apiRemember } from '../../src/api/index.js';
-import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/surface/mcp/server.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
@@ -267,7 +267,7 @@ describe('mcp tenant + client-key isolation', () => {
       content: 'cross-client http-mcp simulated bearer-isolation',
     });
 
-    // Simulate exactly what server/client-key.ts clientKeyOf produces:
+    // Simulate exactly what surface/server/client-key.ts clientKeyOf produces:
     //   `http:${sha256(bearer).slice(0,16)}:${remoteAddr}`
     const bearerA = 'hk_test_alpha_A';
     const bearerB = 'hk_test_alpha_B';

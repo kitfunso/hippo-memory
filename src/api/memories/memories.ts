@@ -1,11 +1,11 @@
 // Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every tenant's.
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { StrengthTallies } from '../../store/port/reports.js';
-import { NotFoundError } from '../../core/api-errors.js';
-import { canTouchScope } from '../../core/recall-scope.js';
+import { NotFoundError } from '../../base/errors/api-errors.js';
+import { canTouchScope } from '../../base/scope/recall-scope.js';
 import type { HippoStore } from '../../store/port.js';
 import { requireHostAdmin, type Context } from '../types.js';
-import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../store/port/types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */

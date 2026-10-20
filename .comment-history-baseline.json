@@ -1,10 +1,10 @@
 {
   "src/api/objects/drill-down.ts": 2,
-  "src/consolidate/dedupe.ts": 2,
-  "src/core/card.ts": 1,
-  "src/importers/core.ts": 3,
-  "src/importers/vault.ts": 1,
-  "src/learn/invalidation.ts": 1,
-  "src/objects/skills.ts": 2,
-  "src/trust/quarantine.ts": 1
+  "src/domain/consolidate/dedupe.ts": 2,
+  "src/base/records/card.ts": 1,
+  "src/surface/importers/core.ts": 3,
+  "src/surface/importers/vault.ts": 1,
+  "src/domain/learn/invalidation.ts": 1,
+  "src/domain/objects/skills.ts": 2,
+  "src/domain/trust/quarantine.ts": 1
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'path';
-import { handleRecall } from '../../src/cli/recall.js';
+import { handleRecall } from '../../src/surface/cli/recall.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

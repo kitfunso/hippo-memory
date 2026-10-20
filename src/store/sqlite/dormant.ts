@@ -2,11 +2,11 @@
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { type SqlFragment, touchableScopeSql } from './rule-sql.js';
-import type { WriteBudget } from '../../util/write-budget.js';
-import { RejectedValueError } from '../../core/api-errors.js';
-import { reviveDormant } from '../../core/dormant-revival.js';
-import { ownScopeTouches } from '../../core/recall-scope.js';
-import { DAY_MS } from '../../util/time.js';
+import type { WriteBudget } from '../../base/util/write-budget.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
+import { reviveDormant } from '../../base/memory/dormant-revival.js';
+import { ownScopeTouches } from '../../base/scope/recall-scope.js';
+import { DAY_MS } from '../../base/util/time.js';
 import { appendAuditEvent } from './audit.js';
 import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTakenAt } from './entry-reads.js';

@@ -1,5 +1,5 @@
-import { PACKAGE_VERSION, compareSemver } from '../util/version.js';
-import { errorFields, errorMessage, log } from '../util/log.js';
+import { PACKAGE_VERSION, compareSemver } from '../base/util/version.js';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry, withWriteScope } from './busy.js';
@@ -12,7 +12,7 @@ import {
   ensureContinuityTables,
 } from './continuity.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations/index.js';
-import { placeholders } from '../util/sql.js';
+import { placeholders } from '../base/util/sql.js';
 
 export function getCurrentSchemaVersion(): number {
   return CURRENT_SCHEMA_VERSION;

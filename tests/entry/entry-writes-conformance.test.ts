@@ -4,7 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { reject } from '../../src/api/index.js';
-import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/core/memory.js';
+import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';

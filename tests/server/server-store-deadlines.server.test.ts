@@ -6,9 +6,9 @@ import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/store/port.js';
-import type { JsonValue } from '../../src/util/json.js';
-import { log, type LogFields } from '../../src/util/log.js';
-import { currentSignal } from '../../src/util/request-scope.js';
+import type { JsonValue } from '../../src/base/util/json.js';
+import { log, type LogFields } from '../../src/base/util/log.js';
+import { currentSignal } from '../../src/base/util/request-scope.js';
 import { serve, type AuthResolver, type ServeOpts, type ServerHandle } from '../../src/server.js';
 import {
   type CallOptions,

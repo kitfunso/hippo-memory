@@ -1,8 +1,8 @@
 // `hippo capture`'s reads and writes: synchronous and hippo.db's own, since each row is mirrored beside the folder and
 // handed to the caller's embed callback.
 import type { HeldText } from '../port/types.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import type { TenantId } from '../../util/tenant.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { TenantId } from '../../base/util/tenant.js';
 
 export interface Captures {
   /** Each item through the write gate, one outcome per item in order; `keys` holds the texts already stored and gains

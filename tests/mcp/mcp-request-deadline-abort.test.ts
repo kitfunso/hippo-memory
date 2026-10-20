@@ -1,10 +1,10 @@
 // A tool call whose request signal has aborted stops before it reads or writes the store.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
-import { runWithRequestId } from '../../src/util/request-scope.js';
+import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
+import { runWithRequestId } from '../../src/base/util/request-scope.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
 let root: string;

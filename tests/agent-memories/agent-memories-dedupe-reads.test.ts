@@ -1,14 +1,14 @@
 // The agent memory sync's duplicate check against a real store: text another path holds, spacing aside or inside a
 // sleep-merged row, is skipped with the index in sync or not, and the rows read stay flat as unrelated rows grow.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { importForStore } from '../../src/agent-memories/sync.js';
-import type { ImportReport } from '../../src/agent-memories/report.js';
-import { loadConfig } from '../../src/core/config.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { importForStore } from '../../src/domain/agent-memories/sync.js';
+import type { ImportReport } from '../../src/domain/agent-memories/report.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { setFtsInSync } from '../../src/db/index.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { mergedText } from '../../src/util/same-text.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fails when top-level src/ folders import each other at runtime, even when no single file is on a cycle (a/1 -> b/1, b/2 -> a/2).
+// Fails when src/ features import each other at runtime, even when no single file is on a cycle (a/1 -> b/1, b/2 -> a/2).
 // File cycles are oxlint's import/no-cycle (.oxlintrc.json), which cannot see folder cycles.
 // Type-only imports are skipped because tsc erases them; dynamic import() is lazy.
 
@@ -77,11 +77,17 @@ function runtimeGraph(srcDir) {
   return graph;
 }
 
-/** The top-level src folder a module sits in; a file at the src root is a unit of its own. */
-const folderOf = (module) => module.split('/')[0];
+// base, domain and surface hold one folder per feature, so a cycle between two of their features must count.
+const FEATURE_LAYERS = new Set(['base', 'domain', 'surface']);
+
+/** The feature a module sits in: src/<layer>/<feature> under those layers, else its top folder or root file. */
+const folderOf = (module) => {
+  const [head, feature, ...rest] = module.split('/');
+  return FEATURE_LAYERS.has(head) && rest.length > 0 ? `${head}/${feature}` : head;
+};
 
 /**
- * Finds every group of top-level src folders that import each other at runtime, even when no single file is on a cycle.
+ * Finds every group of src features that import each other at runtime, even when no single file is on a cycle.
  * @param {string} srcDir
  * @returns {{ folders: string[], edges: [string, string][] }[]}
  */
@@ -120,5 +126,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     );
     process.exit(1);
   }
-  console.log(`No runtime import cycles between the top-level folders of ${srcDir}/. OK.`);
+  console.log(`No runtime import cycles between the features of ${srcDir}/. OK.`);
 }

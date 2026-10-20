@@ -28,10 +28,10 @@ import type {
   RecallTraceOptions,
   RecallWindowOptions,
 } from '../../src/api/index.js';
-import type { ConsolidationResult } from '../../src/consolidate/run.js';
+import type { ConsolidationResult } from '../../src/domain/consolidate/run.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';
 import type { LocalStore } from '../../src/store/local/index.js';
-import type { LossAversion } from '../../src/core/memory.js';
+import type { LossAversion } from '../../src/base/memory/memory.js';
 
 // Declared, not callback parameters: typeOnly takes a callback with none, so a parameter would be the error.
 declare const plainStore: HippoStore;

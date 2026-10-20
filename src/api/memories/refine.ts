@@ -1,6 +1,6 @@
 // The write half of `hippo refine`: the model call stays with the caller, the rewritten row is stored here.
 
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { Context } from '../types.js';
 
 /** Marks a merged memory a model has rewritten, so a later pass skips it. */

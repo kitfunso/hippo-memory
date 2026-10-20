@@ -64,8 +64,8 @@ describe('check-graph-writes lint', () => {
       expect(files.some((f) => f.endsWith('connectors/store/sqlite/graph-writes.ts'))).toBe(true); // subdir store/sqlite/graph-writes.ts IS linted
     });
 
-    it('flags a data write placed in src/graph/write.ts, which only applies ops through the store writers', () => {
-      file('graph/write.ts', `db.prepare('DELETE FROM entities WHERE id = ?').run(id);\n`);
+    it('flags a data write placed in src/domain/graph/write.ts, which only applies ops through the store writers', () => {
+      file('domain/graph/write.ts', `db.prepare('DELETE FROM entities WHERE id = ?').run(id);\n`);
       const v = findGraphWriteViolations(dir);
       expect(v.map((x) => x.file.replace(/\\/g, '/').endsWith('/graph/write.ts'))).toEqual([true]);
     });

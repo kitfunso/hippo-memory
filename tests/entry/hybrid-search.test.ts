@@ -5,11 +5,11 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect, vi } from 'vitest';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { search } from '../../src/search/bm25-search.js';
-import { mmrRerank } from '../../src/search/rerank.js';
-import type { SearchResult } from '../../src/core/search-types.js';
-import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
-import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
+import { search } from '../../src/domain/search/bm25-search.js';
+import { mmrRerank } from '../../src/domain/search/rerank.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
+import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
@@ -328,7 +328,7 @@ describe('SearchResult cosine field', () => {
 
 describe('searchBothHybrid', () => {
   it('is exported and callable', async () => {
-    const { searchBothHybrid } = await import('../../src/sharing/search-both.js');
+    const { searchBothHybrid } = await import('../../src/domain/sharing/search-both.js');
     expect(searchBothHybrid).toBeInstanceOf(Function);
   });
 });

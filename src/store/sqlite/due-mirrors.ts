@@ -11,7 +11,7 @@ import {
   withWriteScope,
 } from '../../db/index.js';
 import { oncePerStore } from '../../db/connect.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { deferMirrorWrite, mirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
 import { cachedStatement } from './statement-cache.js';

@@ -28,7 +28,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { remember } from '../../src/api/index.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';

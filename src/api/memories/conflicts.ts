@@ -1,19 +1,19 @@
 // Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
-import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import {
   canTouchScope,
   isPersonalScope,
   passesScopeFilterForRecall,
   personalScopeOf,
-} from '../../core/recall-scope.js';
+} from '../../base/scope/recall-scope.js';
 import type { MemoryConflict } from '../../store/port/conflicts.js';
 import type { ConflictMember, ConflictRow, ConflictSide, LoserFate } from '../../store/port/conflicts.js';
-import { classifyOriginProject } from '../../core/project-identity.js';
+import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
-import { isQuarantineScope } from '../../trust/quarantine.js';
-import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, resolveListLimit } from '../../util/limits.js';
-import type { KeysetPosition } from '../../util/keyset.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { isQuarantineScope } from '../../domain/trust/quarantine.js';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, resolveListLimit } from '../../base/util/limits.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
 import type { TenantReach } from './memories.js';
 

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';

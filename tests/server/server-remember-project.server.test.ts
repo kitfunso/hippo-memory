@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor } from '../../src/api/index.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

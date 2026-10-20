@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -5,16 +5,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sleep } from '../../src/api/index.js';
-import { auditMemories } from '../../src/core/memory-audit.js';
+import { auditMemories } from '../../src/base/memory/memory-audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { saveDecision } from '../../src/objects/decisions.js';
-import { deduplicateStore } from '../../src/consolidate/dedupe.js';
-import { openIncident } from '../../src/objects/incidents.js';
+import { saveDecision } from '../../src/domain/objects/decisions.js';
+import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
+import { openIncident } from '../../src/domain/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,

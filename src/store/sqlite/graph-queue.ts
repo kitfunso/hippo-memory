@@ -1,8 +1,8 @@
 // The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the watermark the sleep
 // drain marks them by.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { assertTenantId } from '../../core/tenant-id.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
 

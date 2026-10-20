@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { slackHistoryFetcher } from '../../src/connectors/slack/web-client.js';
+import { slackHistoryFetcher } from '../../src/surface/connectors/slack/web-client.js';
 import { paddedJsonResponse } from '../_helpers/padded-response.js';
 
 type FetchImpl = typeof fetch;
@@ -23,7 +23,7 @@ describe('slackHistoryFetcher', () => {
     expect(page.messages).toHaveLength(1);
     expect(page.next_cursor).toBe('NEXT');
     expect(calls[0].url).toContain('channel=C1');
-    // SAFETY: slackHistoryFetcher (src/connectors/slack/web-client.ts) always
+    // SAFETY: slackHistoryFetcher (src/surface/connectors/slack/web-client.ts) always
     // builds init.headers as a plain object literal, never a Headers instance
     // or an array-of-pairs, so narrowing the HeadersInit union here is sound.
     const headers = calls[0].init?.headers as Record<string, string> | undefined;

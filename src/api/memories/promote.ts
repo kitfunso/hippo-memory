@@ -1,13 +1,13 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
-import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { ConnectorEvent } from '../../store/port.js';
-import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../core/memory.js';
-import { fallbackOrigin } from '../../core/project-identity.js';
-import { detectSecret } from '../../util/secret-detect.js';
-import { embedMemoryDetached, folderIndex } from '../../search/embed-memories.js';
+import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { fallbackOrigin } from '../../base/scope/project-identity.js';
+import { detectSecret } from '../../base/util/secret-detect.js';
+import { embedMemoryDetached, folderIndex } from '../../domain/search/embed-memories.js';
 import { sharedStoreOf, type Context } from '../types.js';
-import { canTouchScope, isPersonalScope, isQuarantineScope, personalScopeOf } from '../../core/recall-scope.js';
+import { canTouchScope, isPersonalScope, isQuarantineScope, personalScopeOf } from '../../base/scope/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
  * audit event so intent stays distinct. The copy keeps the entry's tenantId on the global side. */

@@ -7,10 +7,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { request } from 'node:http';
-import { printDashboardBanner } from '../src/cli/dashboard-banner.js';
+import { printDashboardBanner } from '../src/surface/cli/dashboard-banner.js';
 import { serve } from '../src/server.js';
-import { serveDashboard } from '../src/server/dashboard-listener.js';
-import type { ServerHandle } from '../src/server/types.js';
+import { serveDashboard } from '../src/surface/server/dashboard-listener.js';
+import type { ServerHandle } from '../src/surface/server/types.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
 import { makeStore } from './_helpers/make-root.js';
 

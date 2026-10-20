@@ -9,7 +9,7 @@ import {
   rarestFtsQuery,
   RAREST_TERM_COUNT,
   type PromptRecallGate,
-} from '../../src/core/prompt-recall.js';
+} from '../../src/base/rank/prompt-recall.js';
 
 // promptTokens reads only this many prompt chars; pinned here so a change to the cut shows up as a test edit.
 const PROMPT_RECALL_MAX_CHARS = 4000;

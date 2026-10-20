@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { RerankerFn } from '../../src/rerankers/types.js';
+import type { RerankerFn } from '../../src/domain/rerankers/types.js';
 
 describe('hybridSearch reranker seam', () => {
   it('invokes the reranker after MMR and before budget filtering', async () => {

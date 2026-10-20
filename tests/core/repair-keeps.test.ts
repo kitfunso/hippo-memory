@@ -1,8 +1,12 @@
 // Quality repair's protection is data the store applies: each field keeps the rows it names, and only those.
 import { describe, expect, it } from 'vitest';
-import { PROTECTED_ROWS as repairProtection, repairKeeps, type RepairProtection } from '../../src/core/memory-audit.js';
+import {
+  PROTECTED_ROWS as repairProtection,
+  repairKeeps,
+  type RepairProtection,
+} from '../../src/base/memory/memory-audit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 
 const NONE: RepairProtection = { pinned: false, raw: false, trusted: false, objectBacked: false };
 const row = (extra: Partial<MemoryEntry> = {}): MemoryEntry => ({

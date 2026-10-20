@@ -1,6 +1,6 @@
 // Request lines, a stub store and API keys the server-other-store tests share.
 import { randomBytes, scryptSync } from 'node:crypto';
-import { type McpRequest } from '../../src/mcp/server.js';
+import { type McpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../../src/entry/store-kit.js';
 import { withoutLocalFiles } from '../_helpers/port-only-store.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';

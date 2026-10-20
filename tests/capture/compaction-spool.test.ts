@@ -2,14 +2,14 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PostCompactPayload } from '../../src/capture/compaction-record.js';
+import type { PostCompactPayload } from '../../src/surface/capture/compaction-record.js';
 import {
   importSpool,
   spool,
   spoolCounts,
   type SpoolFs,
   type SpoolImporter,
-} from '../../src/capture/compaction-spool.js';
+} from '../../src/surface/capture/compaction-spool.js';
 
 let root: string;
 let logs: string[];

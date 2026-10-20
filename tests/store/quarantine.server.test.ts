@@ -5,21 +5,21 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
-import { createMemory, Layer } from '../../src/core/memory.js';
+import { createMemory, Layer } from '../../src/base/memory/memory.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { ingestEvent, type IngestEvent } from '../../src/connectors/github/ingest.js';
-import { ingestMessage } from '../../src/connectors/slack/ingest.js';
-import { shareMemory, autoShare } from '../../src/sharing/share.js';
+import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
+import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
+import { shareMemory, autoShare } from '../../src/domain/sharing/share.js';
 import * as api from '../../src/api/index.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { copyToGlobal, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

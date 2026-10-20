@@ -3,11 +3,11 @@
 import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb } from '../../db/index.js';
 import { reproveStoreSchema } from '../../db/connect.js';
 import { openHippoDbWithFacts } from '../../db/open.js';
-import { errorFields, errorMessage, log } from '../../util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
 import { recoverDueMirrors } from './due-mirrors.js';
 import { bootstrapLegacyStore, type Handles, recordHalfLifeBaseForNewStore, type StoreFiles } from './open.js';
-import type { LossAversion } from '../../core/memory.js';
+import type { LossAversion } from '../../base/memory/memory.js';
 
 export function initStore(hippoRoot: string): void {
   reproveStoreSchema(hippoRoot);

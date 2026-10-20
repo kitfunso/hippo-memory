@@ -10,12 +10,17 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type CreateMemoryOptions,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { canReadScope, personalScopeOf, recallScopeFilter, type ScopeActor } from '../../src/core/recall-scope.js';
+import {
+  canReadScope,
+  personalScopeOf,
+  recallScopeFilter,
+  type ScopeActor,
+} from '../../src/base/scope/recall-scope.js';
 import { touchableScopeSql } from '../../src/store/sqlite/rule-sql.js';
-import { briefFromReceipts } from '../../src/objects/project-briefs.js';
+import { briefFromReceipts } from '../../src/domain/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../../src/store/sqlite/compactions-record.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';

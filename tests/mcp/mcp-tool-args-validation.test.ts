@@ -1,11 +1,11 @@
 // tools/call arguments are checked against the tool's inputSchema before the tool runs.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
-import { validateToolArgs, type ToolInputSchema } from '../../src/mcp/tool-args.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
+import { validateToolArgs, type ToolInputSchema } from '../../src/surface/mcp/tool-args.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {

@@ -1,5 +1,5 @@
-import type { AuditOp } from '../../core/audit-ops.js';
-import type { KeysetPosition } from '../../util/keyset.js';
+import type { AuditOp } from '../../base/records/audit-ops.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { AuditEvent } from './types.js';
 
 /** The read behind the audit list. It writes no audit row. */

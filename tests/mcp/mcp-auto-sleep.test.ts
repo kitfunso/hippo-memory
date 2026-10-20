@@ -2,11 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { currentRequestStores, runWithRequestStores, type RequestStores } from '../../src/db/index.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
-import { cliStdioHost } from '../../src/cli/api-context.js';
-import type { McpHost } from '../../src/mcp/protocol.js';
+import { cliStdioHost } from '../../src/surface/cli/api-context.js';
+import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const roots: string[] = [];

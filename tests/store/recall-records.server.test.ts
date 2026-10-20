@@ -5,10 +5,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { handleRecall } from '../../src/cli/recall.js';
+import { handleRecall } from '../../src/surface/cli/recall.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { RecallResult } from '../../src/api/index.js';
-import { estimateTokens } from '../../src/util/token-text.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import {
   CLEARED_ENV,
@@ -23,7 +23,7 @@ import {
   type Store,
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
-import type { CliFlags } from '../../src/cli/flag-values.js';
+import type { CliFlags } from '../../src/surface/cli/flag-values.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

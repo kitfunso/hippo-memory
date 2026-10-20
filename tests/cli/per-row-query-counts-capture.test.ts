@@ -3,12 +3,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
-import { cliRequest } from '../../src/cli/api-context.js';
-import { handleRemember, handleTrace } from '../../src/cli/remember.js';
-import { cmdCapture } from '../../src/capture/command.js';
-import { recordSessionDigest } from '../../src/capture/session-digest.js';
+import { cliRequest } from '../../src/surface/cli/api-context.js';
+import { handleRemember, handleTrace } from '../../src/surface/cli/remember.js';
+import { cmdCapture } from '../../src/surface/capture/command.js';
+import { recordSessionDigest } from '../../src/surface/capture/session-digest.js';
 import { captureTarget, hookStore } from '../_helpers/cli-stores.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import {
   ROW_READ,
   SIZES,

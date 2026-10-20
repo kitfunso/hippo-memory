@@ -1,5 +1,5 @@
-import { DEFAULT_TENANT_ID } from '../../util/tenant.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import {
   type DatabaseSyncLike,
   ftsRowCounts,
@@ -8,12 +8,12 @@ import {
   repairFtsDrift,
   setFtsInSync,
 } from '../../db/index.js';
-import { fallbackOrigin, originFromSource } from '../../core/project-identity.js';
+import { fallbackOrigin, originFromSource } from '../../base/scope/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { StoreFiles } from './open.js';
-import { chunked } from '../../util/chunked.js';
-import { placeholders, rowsPerStatement, valuesRows } from '../../util/sql.js';
+import { chunked } from '../../base/util/chunked.js';
+import { placeholders, rowsPerStatement, valuesRows } from '../../base/util/sql.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {

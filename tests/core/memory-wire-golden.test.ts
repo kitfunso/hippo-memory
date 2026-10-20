@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
-import { cliStdioHost } from '../../src/cli/api-context.js';
-import { deserializeEntry } from '../../src/core/markdown.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import { cliStdioHost } from '../../src/surface/cli/api-context.js';
+import { deserializeEntry } from '../../src/base/memory/markdown.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
@@ -123,7 +123,7 @@ describe('memory wire goldens', () => {
       },
       { ...cliStdioHost().contextFor(root, GOLDEN_TENANT), project: { name: '', legacyName: '' } },
     );
-    // SAFETY: a tools/call result is written by src/mcp/request.ts as { content: [{ text }], isError? }.
+    // SAFETY: a tools/call result is written by src/surface/mcp/request.ts as { content: [{ text }], isError? }.
     const result = res?.result as { content?: { text: string }[] } | undefined;
     expect(result?.content?.[0]?.text ?? JSON.stringify(res?.error)).toMatchSnapshot();
   });

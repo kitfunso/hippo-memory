@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { rebuildDirtySummaries } from '../../src/consolidate/dag.js';
+import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { makeRoot } from '../_helpers/make-root.js';

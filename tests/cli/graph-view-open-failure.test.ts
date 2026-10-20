@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
-import { openInBrowser } from '../../src/cli/open-browser.js';
-import { log } from '../../src/util/log.js';
+import { openInBrowser } from '../../src/surface/cli/open-browser.js';
+import { log } from '../../src/base/util/log.js';
 
 describe('graph view --open', () => {
   afterEach(() => {

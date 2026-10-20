@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { promote, remember, HttpResponseError, MalformedReplyError } from '../../src/cli/client.js';
+import { promote, remember, HttpResponseError, MalformedReplyError } from '../../src/surface/cli/client.js';
 
 const OVER_CAP = 'x'.repeat(1024 * 1024 + 1);
 

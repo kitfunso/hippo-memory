@@ -1,11 +1,11 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { adminActor } from '../../src/api/index.js';
-import { parkInDlq, replayParked } from '../../src/connectors/dlq.js';
-import { githubDlq } from '../../src/connectors/github/dlq.js';
-import { slackDlq } from '../../src/connectors/slack/dlq.js';
-import { rememberWithEventLog } from '../../src/connectors/ingest.js';
-import { isJsonObject, type JsonValue } from '../../src/util/json.js';
+import { parkInDlq, replayParked } from '../../src/surface/connectors/dlq.js';
+import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
+import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
+import { rememberWithEventLog } from '../../src/surface/connectors/ingest.js';
+import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

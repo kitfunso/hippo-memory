@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'crypto';
-import { verifyGitHubSignature, computeIdempotencyKey } from '../../src/connectors/github/signature.js';
+import { verifyGitHubSignature, computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
 
 const SECRET = 'shhh';
 const PREVIOUS = 'old-secret';

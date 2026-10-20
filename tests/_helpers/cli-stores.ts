@@ -1,9 +1,9 @@
 // The stores the CLI root hands its capture, digest and doctor code, for tests that call that code directly.
-import type { CaptureTarget } from '../../src/capture/command.js';
-import type { CompactionFolder } from '../../src/capture/compaction-record.js';
-import { cliLocalFiles, cliStore } from '../../src/cli/api-context.js';
-import type { EmbedTarget } from '../../src/search/embed-memories.js';
-import { loadConfig } from '../../src/core/config.js';
+import type { CaptureTarget } from '../../src/surface/capture/command.js';
+import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
+import { cliLocalFiles, cliStore } from '../../src/surface/cli/api-context.js';
+import type { EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import type { Diagnostics } from '../../src/store/local/diagnostics.js';
 import type { FolderFiles } from '../../src/store/local/index.js';
 

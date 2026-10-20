@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { BadRequestError } from '../../src/core/api-errors.js';
+import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';

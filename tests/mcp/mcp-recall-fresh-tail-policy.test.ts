@@ -16,12 +16,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
-import { cliConfig } from '../../src/cli/api-context.js';
+import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -124,7 +124,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
       },
     );
     // SAFETY: hippo_recall's MCP tool result envelope always carries
-    // result.content per src/mcp/server.ts; McpResponse.result is typed
+    // result.content per src/surface/mcp/server.ts; McpResponse.result is typed
     // unknown at the transport layer since it varies per tool.
     const r = res as {
       error?: { code: number; message: string };

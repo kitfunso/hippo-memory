@@ -3,15 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../../src/core/config.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../../src/util/http-util.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
-import { TOOLS } from '../../src/mcp/tools.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/util/http-util.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
+import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { withoutLocalFiles } from '../_helpers/port-only-store.js';
-import { predictionMirror } from '../../src/core/prediction.js';
+import { predictionMirror } from '../../src/base/records/prediction.js';
 import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
@@ -44,7 +44,7 @@ const ctxOn = (kind: string): McpContext => ({
 });
 
 function listedNames(res: McpResponse | null): string[] {
-  // SAFETY: src/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.
+  // SAFETY: src/surface/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.
   const result = res?.result as { tools: { name: string }[] } | undefined;
   return result?.tools.map((t) => t.name) ?? [];
 }

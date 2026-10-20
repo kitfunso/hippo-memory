@@ -8,9 +8,9 @@ import {
   claudeFolderName,
   claudeTranscriptListing,
   transcriptNotesProject,
-} from '../../src/agent-memories/claude-code.js';
-import type { AdapterContext, Container } from '../../src/agent-memories/types.js';
-import type { JsonObject } from '../../src/store/port/types.js';
+} from '../../src/domain/agent-memories/claude-code.js';
+import type { AdapterContext, Container } from '../../src/domain/agent-memories/types.js';
+import type { JsonObject } from '../../src/base/util/json.js';
 
 const made: string[] = [];
 const tmp = () => {

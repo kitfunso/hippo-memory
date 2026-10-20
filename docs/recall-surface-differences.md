@@ -1,6 +1,6 @@
 # Recall surface differences
 
-Recall has three surfaces: CLI `hippo recall` (`src/cli/recall.ts`), MCP `hippo_recall` (`src/mcp/recall-tools.ts`) and HTTP `GET /v1/memories` (`src/server/routes/recall.ts`). All three call one entry, `retrieve()` in `src/api/recall/recall.ts`, which ranks with the ranker the surface names and writes the recall. The rankers still differ, so the same query on the same store gives a different answer on each one. This file lists the 18 differences found in the code. Each one is asserted in `tests/store/recall-surface-differences.server.test.ts`; the test comments name the entries they assert (D1 to D18).
+Recall has three surfaces: CLI `hippo recall` (`src/surface/cli/recall.ts`), MCP `hippo_recall` (`src/surface/mcp/recall-tools.ts`) and HTTP `GET /v1/memories` (`src/surface/server/routes/recall.ts`). All three call one entry, `retrieve()` in `src/api/recall/recall.ts`, which ranks with the ranker the surface names and writes the recall. The rankers still differ, so the same query on the same store gives a different answer on each one. This file lists the 18 differences found in the code. Each one is asserted in `tests/store/recall-surface-differences.server.test.ts`; the test comments name the entries they assert (D1 to D18).
 
 When a change closes a difference, update its entry and those asserts in the same PR, and add one changelog line for each surface whose output moves.
 

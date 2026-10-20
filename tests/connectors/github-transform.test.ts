@@ -4,14 +4,14 @@ import {
   issueCommentEventToRememberOpts,
   pullRequestEventToRememberOpts,
   prReviewCommentEventToRememberOpts,
-} from '../../src/connectors/github/transform.js';
+} from '../../src/surface/connectors/github/transform.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
   GitHubPullRequestEvent,
   GitHubPullRequestReviewCommentEvent,
   GitHubRepository,
-} from '../../src/connectors/github/types.js';
+} from '../../src/surface/connectors/github/types.js';
 
 const publicRepo: GitHubRepository = {
   full_name: 'acme/widgets',

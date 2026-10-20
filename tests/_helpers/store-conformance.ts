@@ -10,7 +10,7 @@ import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/ind
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { initTestStore } from './store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export const TENANT_A = 'acme';
 export const TENANT_B = 'globex';

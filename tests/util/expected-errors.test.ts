@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
-import { ignoringCodes, PATH_UNREADABLE, tryDecodeUri } from '../../src/util/expected-errors.js';
-import { parseJson, tryParseJson, tryReadJsonFile } from '../../src/util/json.js';
-import { tryParseUrl } from '../../src/util/net.js';
-import { errorClassFields, errorFields } from '../../src/util/log.js';
-import { parseStoredObject } from '../../src/util/stored-json.js';
-import { endReply, writeChunk } from '../../src/server/request.js';
+import { ignoringCodes, PATH_UNREADABLE, tryDecodeUri } from '../../src/base/util/expected-errors.js';
+import { parseJson, tryParseJson, tryReadJsonFile } from '../../src/base/util/json.js';
+import { tryParseUrl } from '../../src/base/util/net.js';
+import { errorClassFields, errorFields } from '../../src/base/util/log.js';
+import { parseStoredObject } from '../../src/base/util/stored-json.js';
+import { endReply, writeChunk } from '../../src/surface/server/request.js';
 
 const errno = (code: string): NodeJS.ErrnoException => Object.assign(new Error(`${code}: forced`), { code });
 

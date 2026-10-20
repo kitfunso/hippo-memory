@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { expect, beforeEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../_helpers/delivery-events.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

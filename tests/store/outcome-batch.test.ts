@@ -14,8 +14,8 @@ import {
   createMemory,
   entryAfterOutcome,
   type MemoryEntry,
-} from '../../src/core/memory.js';
-import { ownScopeTouches } from '../../src/core/recall-scope.js';
+} from '../../src/base/memory/memory.js';
+import { ownScopeTouches } from '../../src/base/scope/recall-scope.js';
 import { writeEntriesTogetherAt, writeEntryDbOnly, writeEntryMirrorsIn } from '../../src/store/sqlite/entry-writes.js';
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvent } from '../../src/store/sqlite/audit.js';

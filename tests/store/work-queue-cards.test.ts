@@ -8,7 +8,7 @@ import {
   getCurrentSchemaVersion,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { CARD_TRANSITIONS, assertCardTransition, type CardStatus } from '../../src/core/card.js';
+import { CARD_TRANSITIONS, assertCardTransition, type CardStatus } from '../../src/base/records/card.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import {

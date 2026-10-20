@@ -2,11 +2,11 @@
 // the calling thread.
 import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
-import { currentDeadline, currentRequestId, currentSignal } from '../../util/request-scope.js';
+import { currentDeadline, currentRequestId, currentSignal } from '../../base/util/request-scope.js';
 import type { HippoStore, Readiness, StoreGroups, VectorReads } from '../port.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
-import type { LossAversion } from '../../core/memory.js';
+import type { LossAversion } from '../../base/memory/memory.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
 import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
 import type { GlobalStores, LocalFiles, LocalStore } from '../local/index.js';

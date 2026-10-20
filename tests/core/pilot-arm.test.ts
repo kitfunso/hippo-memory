@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -14,14 +14,14 @@ import {
 import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { sqliteLedger } from '../../src/store/sqlite/ledger.js';
 import { firstPilotArmHash } from '../../src/store/sqlite/token-ledger-rows.js';
-import { hashArm, type PilotArm } from '../../src/core/pilot-arm.js';
+import { hashArm, type PilotArm } from '../../src/base/session/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt, folderFiles } from '../_helpers/cli-stores.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

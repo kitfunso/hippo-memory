@@ -1,7 +1,7 @@
 // The read routes of the Health view: overview, project, memory page, detail and search, their validation, and the removed endpoints.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Layer, type MemoryEntry } from '../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../src/base/memory/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { buildOverview, buildProjectDetail } from '../src/api/dashboard/queries.js';
 import type {

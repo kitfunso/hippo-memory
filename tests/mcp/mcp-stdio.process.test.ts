@@ -3,8 +3,8 @@ import * as path from 'path';
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseFrame } from '../../src/mcp/framing.js';
-import { TOOLS } from '../../src/mcp/tools.js';
+import { parseFrame } from '../../src/surface/mcp/framing.js';
+import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -102,7 +102,7 @@ describe('hippo mcp stdio', () => {
   });
 
   it('responds to NDJSON initialize while stdin stays open', async () => {
-    const serverPath = path.resolve('dist/mcp/server.js');
+    const serverPath = path.resolve('dist/surface/mcp/server.js');
     if (!fs.existsSync(serverPath)) {
       throw new Error(`Build first: ${serverPath} missing`);
     }

@@ -1,8 +1,8 @@
 // A session id belongs to the first owner that binds it, so one developer's client cannot write into another's session.
-import { ConflictError } from '../../core/api-errors.js';
+import { ConflictError } from '../../base/errors/api-errors.js';
 import { ownerOrSubject, type Context } from '../types.js';
-import { assertTenantId } from '../../core/tenant-id.js';
-import { DAY_MS } from '../../util/time.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { DAY_MS } from '../../base/util/time.js';
 
 /** Bindings older than this are pruned when a new session binds. */
 const BINDING_RETENTION_DAYS = 90;

@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
-import { forgetProjectIdentities } from '../core/project-identity.js';
-import { errorFields, errorMessage, log } from '../util/log.js';
+import { forgetProjectIdentities } from '../base/scope/project-identity.js';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
 import { type OpenFacts, importLegacyVectors, runMigrations, settledStoreFacts } from './migrate.js';

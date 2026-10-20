@@ -8,7 +8,7 @@ import { createVectorGraph, insertNode, searchGraph } from '../../dist/db/vector
 import { VectorGraphs } from '../../dist/db/vector-graph-index.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../dist/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../dist/db/vector-store.js';
-import { createMemory } from '../../dist/core/memory.js';
+import { createMemory } from '../../dist/base/memory/memory.js';
 import { writeEntryDbOnly } from '../../dist/entry/testing.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { loadVectorCandidateEntriesAt } from '../../dist/entry/testing.js';

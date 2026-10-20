@@ -22,18 +22,18 @@ const P50_BOUND_MS = 15;
 const P95_BOUND_MS = 30;
 
 const load = (file) => import(pathToFileURL(path.join(REPO, 'dist', file)));
-const { createMemory } = await load('core/memory.js');
+const { createMemory } = await load('base/memory/memory.js');
 const { initStore, writeEntry } = await load('entry/testing.js');
 const api = await load('api/index.js');
 const { sqliteStore } = await load('store/sqlite/store.js');
-const { loadConfig } = await load('core/config.js');
-const { resolveProjectIdentity } = await load('core/project-identity.js');
+const { loadConfig } = await load('base/config/config.js');
+const { resolveProjectIdentity } = await load('base/scope/project-identity.js');
 const { contextCost } = await load('api/context-render.js');
 const { createDeliveryRecorder } = await load('api/delivery-recorder.js');
 const { writeDeliveryEventOnHandle } = await load('entry/testing.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
-const { blockHash } = await load('util/token-text.js');
-const { realpathOrResolve } = await load('util/real-path.js');
+const { blockHash } = await load('base/util/token-text.js');
+const { realpathOrResolve } = await load('base/util/real-path.js');
 const { recordTokenUse } = await load('entry/testing.js');
 
 // Same seed, vocabulary and prompt as scripts/hook-latency.mjs, so the stores match.

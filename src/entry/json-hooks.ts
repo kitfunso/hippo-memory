@@ -6,5 +6,5 @@ export {
   writeSettingsFile,
   type InstallResult,
   type JsonHookPaths,
-} from '../hooks/json-hooks.js';
-export { readJsonFile } from '../util/json.js';
+} from '../domain/hooks/json-hooks.js';
+export { readJsonFile } from '../base/util/json.js';

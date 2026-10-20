@@ -6,10 +6,10 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { geminiAdapter } from '../../src/agent-memories/gemini.js';
-import { textItemKeys } from '../../src/agent-memories/keys.js';
-import type { AdapterContext } from '../../src/agent-memories/types.js';
-import type { JsonObject } from '../../src/store/port/types.js';
+import { geminiAdapter } from '../../src/domain/agent-memories/gemini.js';
+import { textItemKeys } from '../../src/domain/agent-memories/keys.js';
+import type { AdapterContext } from '../../src/domain/agent-memories/types.js';
+import type { JsonObject } from '../../src/base/util/json.js';
 
 let tmp: string;
 

@@ -14,8 +14,8 @@ import {
   repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
   resolveCodexWrapperPaths,
-} from '../../src/hooks/codex-wrapper.js';
-import { resolveCodexSessionTranscript } from '../../src/hooks/codex-session.js';
+} from '../../src/domain/hooks/codex-wrapper.js';
+import { resolveCodexSessionTranscript } from '../../src/domain/hooks/codex-session.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

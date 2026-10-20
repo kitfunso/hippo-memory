@@ -5,10 +5,10 @@ import {
   type ImportOptions,
   type ImportResult,
   type TargetedImport,
-} from '../importers/core.js';
-import * as sources from '../importers/sources.js';
-import { importMarkdown as importMarkdownInto } from '../importers/markdown.js';
-import { importVault as importVaultInto } from '../importers/vault.js';
+} from '../surface/importers/core.js';
+import * as sources from '../surface/importers/sources.js';
+import { importMarkdown as importMarkdownInto } from '../surface/importers/markdown.js';
+import { importVault as importVaultInto } from '../surface/importers/vault.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 
 function targeted(options: ImportOptions): TargetedImport {

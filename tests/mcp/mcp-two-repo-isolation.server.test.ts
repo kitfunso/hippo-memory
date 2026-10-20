@@ -6,14 +6,14 @@ import * as path from 'node:path';
 import { assemble, retrieve } from '../../src/api/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import type { JsonValue } from '../../src/util/json.js';
-import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
+import type { JsonValue } from '../../src/base/util/json.js';
+import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   saveEmbeddingIndex,

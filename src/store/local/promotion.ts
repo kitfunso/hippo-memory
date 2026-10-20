@@ -1,5 +1,5 @@
 // The global write behind `promote`, which answers through a Promise so a served store runs it on its writer thread.
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 
 /** How a promoted copy is written: the actor its `remember` row names and the local row it copies. */
 export interface PromotedCopy {

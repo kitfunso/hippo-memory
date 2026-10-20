@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { resolveTenantForSlackTeam, type SlackFallback } from '../../src/connectors/slack/tenant-routing.js';
+import { resolveTenantForSlackTeam, type SlackFallback } from '../../src/surface/connectors/slack/tenant-routing.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { envTenant } from '../../src/util/env.js';
+import { envTenant } from '../../src/base/util/env.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): SlackFallback => ({ hostTenant: envTenant(), allowUnknown });

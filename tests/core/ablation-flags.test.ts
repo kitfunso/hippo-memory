@@ -1,5 +1,5 @@
 /**
- * EVAL-ONLY lifecycle ablation flags (src/core/ablation.ts).
+ * EVAL-ONLY lifecycle ablation flags (src/base/memory/ablation.ts).
  *
  * Pre-registered design rev #10 requirement: each flag must neutralize ONLY
  * its intended mechanism. Every block therefore asserts BOTH the ablation
@@ -19,14 +19,14 @@ import {
   applyOutcome,
   type MemoryEntry,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { outcomeMultiplier } from '../../src/search/boosts.js';
-import { markRetrieved } from '../../src/core/memory.js';
-import { evalNow, isOutcomeSlowAblated, strengthAblation } from '../../src/core/ablation.js';
+import { outcomeMultiplier } from '../../src/domain/search/boosts.js';
+import { markRetrieved } from '../../src/base/memory/memory.js';
+import { evalNow, isOutcomeSlowAblated, strengthAblation } from '../../src/base/memory/ablation.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -217,7 +217,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // functions apply ablated semantics internally, so a heavily-recalled
     // entry and an untouched twin produce the SAME mass - no history leaks
     // through either the count multiplier or the frozen-strength component.
-    const { computeMass } = await import('../../src/core/physics.js');
+    const { computeMass } = await import('../../src/base/rank/physics.js');
     const created = new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const hot = agedMemory(10);
     hot.created = created;
@@ -247,7 +247,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // Query gravity ranks the physics pool by particle mass, which scales with
     // retrieval_count; under the flag, mass must ignore retrieval history in
     // both the init and refresh paths (computeMass is the single shared site).
-    const { computeMass } = await import('../../src/core/physics.js');
+    const { computeMass } = await import('../../src/base/rank/physics.js');
     expect(computeMass(0.8, 16, abl().ablation)).toBe(computeMass(0.8, 0, abl().ablation));
     // Sanity: WITHOUT the flag, history raises mass.
     clearAblationEnv();
@@ -317,7 +317,7 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     // outcome-positive memories and then strengthens them via markRetrieved -
     // an outcome-dependent lifecycle path that must also go quiet in the
     // outcome-off arm.
-    const { replayPriority } = await import('../../src/consolidate/replay.js');
+    const { replayPriority } = await import('../../src/domain/consolidate/replay.js');
     let rewarded = agedMemory(5, 'replay candidate');
     rewarded = applyOutcome(applyOutcome(rewarded, true), true);
     const plain = agedMemory(5, 'replay candidate');
@@ -447,7 +447,7 @@ describe('HIPPO_FAKE_NOW', () => {
     // into hybridSearch, so the inner fallback never runs - the wrapper default
     // itself must honor the fake clock.
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
-    const { searchBothHybrid } = await import('../../src/sharing/search-both.js');
+    const { searchBothHybrid } = await import('../../src/domain/sharing/search-both.js');
     const m = createMemory('wrapper clock consistency check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
     m.lastRetrieved = '2026-06-11T00:00:00.000Z';

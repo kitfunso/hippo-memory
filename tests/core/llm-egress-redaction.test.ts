@@ -4,14 +4,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/core/search-types.js';
-import { generateDagSummary } from '../../src/consolidate/dag-summary.js';
-import { extractFacts } from '../../src/learn/extract.js';
-import { getReranker } from '../../src/rerankers/index.js';
-import { createJevReranker } from '../../src/rerankers/jev.js';
-import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
-import type { JsonValue } from '../../src/util/json.js';
-import { loadConfig } from '../../src/core/config.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
+import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
+import { extractFacts } from '../../src/domain/learn/extract.js';
+import { getReranker } from '../../src/domain/rerankers/index.js';
+import { createJevReranker } from '../../src/domain/rerankers/jev.js';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import type { JsonValue } from '../../src/base/util/json.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { refineOne } from '../_helpers/refine-one.js';
 
 afterEach(() => {

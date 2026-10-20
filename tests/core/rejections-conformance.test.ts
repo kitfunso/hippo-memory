@@ -2,7 +2,7 @@
 // over two tenants holding the same text.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type {
   AppliedRejection,
   AuditEvent,

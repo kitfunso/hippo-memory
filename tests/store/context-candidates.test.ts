@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { calculateStrength, type MemoryEntry } from '../../src/core/memory.js';
+import { calculateStrength, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { strengthAblation } from '../../src/core/ablation.js';
-import { ID_CHUNK } from '../../src/util/chunked.js';
+import { strengthAblation } from '../../src/base/memory/ablation.js';
+import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadContextCandidates, tallySources, loadTextsHoldingWords, writeEntry } from '../_helpers/root-forms.js';
 

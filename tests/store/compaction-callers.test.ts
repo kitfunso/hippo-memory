@@ -1,8 +1,8 @@
 // The seams a server uses to save another machine's compaction: pre-compact, compact-resume and the store calls under them.
 import { describe, expect, it, vi } from 'vitest';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
 import {
   markSnapshotSaved,
   recordSnapshotSaved,
@@ -11,11 +11,11 @@ import {
   startCompaction,
   type ItemContext,
 } from '../../src/store/sqlite/compactions-record.js';
-import { storeLesson } from '../../src/capture/capture-error.js';
+import { storeLesson } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { WORKING_STATE_CAPS } from '../../src/capture/working-state.js';
+import { WORKING_STATE_CAPS } from '../../src/surface/capture/working-state.js';
 import { compactResumeText } from '../../src/api/context-render.js';
-import { BadRequestError } from '../../src/core/api-errors.js';
+import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import type { Context } from '../../src/api/types.js';
 import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';

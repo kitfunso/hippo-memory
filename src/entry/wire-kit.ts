@@ -1,21 +1,21 @@
 // The eval kit's snake_case forms. Frozen eval scripts read and write MemoryWire keys, so each function here wraps the
 // domain function its name starts with and converts at the edge; a script takes one by re-pointing its import line.
 
-import { ambientSecretAdmit } from '../core/read-admission.js';
-import { isWorthSurfacing } from '../core/memory-quality.js';
+import { ambientSecretAdmit } from '../base/scope/read-admission.js';
+import { isWorthSurfacing } from '../base/memory/memory-quality.js';
 import {
   calculateStrength,
   createMemory,
   DEFAULT_HALF_LIFE_DAYS,
   type CreateMemoryOptions,
   type DecayOptions,
-} from '../core/memory.js';
-import { fromWire, toWire, type MemoryWire } from '../core/memory-wire.js';
-import type { ProjectRef } from '../core/project-identity.js';
-import type { SearchResult } from '../core/search-types.js';
-import { evalNow } from '../core/ablation.js';
-import type { HybridSearchOptions } from '../search/hybrid.js';
-import type { EmbedOutcome } from '../search/embed-memories.js';
+} from '../base/memory/memory.js';
+import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
+import type { ProjectRef } from '../base/scope/project-identity.js';
+import type { SearchResult } from '../base/rank/search-types.js';
+import { evalNow } from '../base/memory/ablation.js';
+import type { HybridSearchOptions } from '../domain/search/hybrid.js';
+import type { EmbedOutcome } from '../domain/search/embed-memories.js';
 import { embedMemory, hybridSearch } from './folder-search.js';
 
 /** A search hit whose entry carries the wire keys. */

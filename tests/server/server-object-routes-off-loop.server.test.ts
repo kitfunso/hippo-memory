@@ -1,16 +1,16 @@
 // The typed-object routes answer from store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
-import { mintApiKey } from '../../src/core/api-key.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memory/memory.js';
+import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest } from '../../src/core/rejection-digest.js';
+import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
-import type { JsonValue } from '../../src/util/json.js';
-import { log } from '../../src/util/log.js';
+import type { JsonValue } from '../../src/base/util/json.js';
+import { log } from '../../src/base/util/log.js';
 import { OBJECT_ROW, V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';

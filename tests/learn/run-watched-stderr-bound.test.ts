@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runWatched, RunWatchedTimeoutError } from '../../src/learn/autolearn.js';
+import { runWatched, RunWatchedTimeoutError } from '../../src/domain/learn/autolearn.js';
 
 /** Runs argv under runWatched with stderr captured, so the child's stderr is the result and the terminal stays quiet. */
 async function stderrOf(argv: readonly string[]): Promise<{ exitCode: number; stderr: string }> {

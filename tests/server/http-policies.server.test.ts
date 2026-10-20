@@ -13,7 +13,7 @@ import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import type { Policy } from '../../src/objects/policies.js';
+import type { Policy } from '../../src/domain/objects/policies.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */

@@ -9,9 +9,9 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { selectGraphSeeds, graphRankStream, type GraphSeed } from '../../src/graph/stream.js';
+import { selectGraphSeeds, graphRankStream, type GraphSeed } from '../../src/domain/graph/stream.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';

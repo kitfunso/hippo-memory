@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -11,10 +11,10 @@ import {
   getSchemaVersion,
   getCurrentSchemaVersion,
 } from '../../src/db/index.js';
-import { embeddingInputText } from '../../src/embeddings/index-identity.js';
+import { embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import { embedAll } from '../../src/search/embed-memories.js';
-import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
+import { embedAll } from '../../src/domain/search/embed-memories.js';
+import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import {
   decodeVector,
   deleteOrphanVectors,

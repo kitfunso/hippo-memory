@@ -12,19 +12,19 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
   saveDecision,
   closeDecision,
   loadDecisions,
   resolveActiveDecisionIdByMemory,
-} from '../../src/objects/decisions.js';
-import { ConflictError } from '../../src/core/api-errors.js';
+} from '../../src/domain/objects/decisions.js';
+import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {

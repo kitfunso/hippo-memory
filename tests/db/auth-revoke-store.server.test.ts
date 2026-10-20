@@ -9,7 +9,7 @@ import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type Serv
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from '../_helpers/in-memory-key-audit-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 let fixture: TwoTenantFixture;

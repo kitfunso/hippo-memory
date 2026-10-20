@@ -20,7 +20,7 @@ import {
   getSchemaVersion,
   getCurrentSchemaVersion,
 } from '../../src/db/index.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { consolidate } from '../../src/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

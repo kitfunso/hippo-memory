@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
-import { rowToSessionHandoff } from '../../src/core/handoff.js';
+import { rowToSessionHandoff } from '../../src/base/session/handoff.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {

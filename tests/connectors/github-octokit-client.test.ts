@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { GitHubFetchError, parseNextLink, realGitHubFetcher } from '../../src/connectors/github/octokit-client.js';
+import {
+  GitHubFetchError,
+  parseNextLink,
+  realGitHubFetcher,
+} from '../../src/surface/connectors/github/octokit-client.js';
 import { paddedJsonResponse } from '../_helpers/padded-response.js';
 
 describe('parseNextLink', () => {

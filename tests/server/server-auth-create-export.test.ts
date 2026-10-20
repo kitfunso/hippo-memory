@@ -5,7 +5,7 @@ import { validateApiKey } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 // hippo-enterprise's `key create --store` mints through this subpath export.
 describe('hippo-memory/server exports authCreate', () => {

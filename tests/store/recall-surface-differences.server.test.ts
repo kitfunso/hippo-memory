@@ -5,11 +5,11 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { handleRecall } from '../../src/cli/recall.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleRecall } from '../../src/surface/cli/recall.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { retrieveRanking, RecallContractError, type RecallResult } from '../../src/api/index.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import {
   CLEARED_ENV,
@@ -25,7 +25,7 @@ import {
   type Store,
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
-import type { CliFlags } from '../../src/cli/flag-values.js';
+import type { CliFlags } from '../../src/surface/cli/flag-values.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -104,7 +104,7 @@ interface ToolReply {
 }
 
 function toolReply(res: McpResponse | null): ToolReply {
-  // SAFETY: a tools/call result is written by src/mcp/request.ts as { content: [{ text }], isError? }.
+  // SAFETY: a tools/call result is written by src/surface/mcp/request.ts as { content: [{ text }], isError? }.
   const result = res?.result as { content?: { text: string }[]; isError?: boolean } | undefined;
   return { text: result?.content?.[0]?.text ?? '', isError: result?.isError === true };
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
-import { estimateTokens } from '../../src/util/token-text.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {

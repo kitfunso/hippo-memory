@@ -4,8 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
-import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
+import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
+import { deriveOriginProject, isInitialized } from '../../src/base/scope/project-identity.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 

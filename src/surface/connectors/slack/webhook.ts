@@ -1,0 +1,262 @@
+import {
+  envSlackAllowUnknownTeamFallback,
+  envSlackSigningSecret,
+  envSlackSigningSecretPrevious,
+  envSlackSigningSecretPreviousUntil,
+  envTenant,
+} from '../../../base/util/env.js';
+import type { ServerResponse } from 'node:http';
+import { isWellFormedSlackRequest, previousSecretInForce, verifySlackSignature } from './signature.js';
+import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
+import { ingestMessage } from './ingest.js';
+import { handleMessageDeleted } from './deletion.js';
+import { parkInDlq } from '../dlq.js';
+import { errorFields, log } from '../../../base/util/log.js';
+import { DAY_MS } from '../../../base/util/time.js';
+import { slackDlq, type DlqBucket } from './dlq.js';
+import { resolveTenantForSlackTeam, type SlackFallback } from './tenant-routing.js';
+import type { Context } from '../../../api/index.js';
+import type { HippoConfig } from '../../../base/config/config.js';
+import type { HippoStore } from '../../../store/index.js';
+import {
+  HttpError,
+  JSON_HEADERS,
+  isHeaderString,
+  closeIfBodyUnread,
+  readWebhookBody,
+  sendJson,
+  type WebhookRequest,
+} from '../../../base/util/http-util.js';
+import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/json.js';
+
+/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
+ * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
+ * cannot tell a gated-off route from a missing one. */
+export async function handleSlackEventsWebhook(
+  request: WebhookRequest,
+  store: HippoStore,
+  config: HippoConfig,
+): Promise<void> {
+  const { req, res, opts } = request;
+  // Secret and well-formed headers before the body, so a caller with neither cannot make the server buffer one.
+  const secret = envSlackSigningSecret();
+  if (!secret) {
+    closeIfBodyUnread(request);
+    res.writeHead(404, JSON_HEADERS);
+    res.end(JSON.stringify({ error: 'not found' }));
+    return;
+  }
+  const previousSecret = previousSecretInForce(envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
+  const sig = req.headers['x-slack-signature'];
+  const tsHdr = req.headers['x-slack-request-timestamp'];
+  const sigStr = isHeaderString(sig) ? sig : null;
+  const tsStr = isHeaderString(tsHdr) ? tsHdr : null;
+  if (sigStr === null || tsStr === null || !isWellFormedSlackRequest(tsStr, sigStr)) {
+    closeIfBodyUnread(request);
+    throw new HttpError(401, 'invalid Slack signature');
+  }
+  const rawBytes = await readWebhookBody(request);
+  if (
+    !verifySlackSignature({
+      rawBody: rawBytes,
+      timestamp: tsStr,
+      signature: sigStr,
+      signingSecret: secret,
+      previousSecret,
+    })
+  ) {
+    throw new HttpError(401, 'invalid Slack signature');
+  }
+  await routeUnlessReplayed({
+    hippoRoot: opts.hippoRoot,
+    store,
+    config,
+    res,
+    rawBody: rawBytes.toString('utf8'),
+    signature: sigStr,
+    slackTimestamp: tsStr,
+  });
+}
+
+// The timestamp check alone lets a captured request replay for five minutes; a hold in the store refuses the second
+// copy, and survives a restart.
+const REPLAY_HOLD_MS = DAY_MS;
+
+/** Routes a verified request once: the signature covers the timestamp and the body, so a repeat is the same request. */
+async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
+  const events = d.store.connectorEvents;
+  const held = await events.claimDelivery({
+    connector: 'slack',
+    key: d.signature,
+    nowMs: Date.now(),
+    ttlMs: REPLAY_HOLD_MS,
+  });
+  if (!held) {
+    sendJson(d.res, 200, { ok: true, status: 'duplicate' });
+    return;
+  }
+  try {
+    await routeSignedSlackPayload(d);
+  } catch (err) {
+    // A request that failed left nothing stored, so Slack's retry must get through.
+    await events.releaseDelivery('slack', d.signature).catch((releaseErr) => {
+      log.warn('slack webhook: could not free the replay hold of a failed delivery', errorFields(releaseErr));
+    });
+    throw err;
+  }
+}
+
+/** One signed request and where to answer it; every stage below parks into the DLQ through it. */
+interface SignedSlackRequest {
+  hippoRoot: string;
+  store: HippoStore;
+  config: HippoConfig;
+  res: ServerResponse;
+  rawBody: string;
+  signature: string;
+  slackTimestamp: string;
+}
+
+async function parkAndAck(
+  d: SignedSlackRequest,
+  park: { tenantId: string | null; teamId: string | null; error: string; bucket: DlqBucket },
+): Promise<void> {
+  const row = {
+    tenantId: park.tenantId,
+    teamId: park.teamId,
+    rawPayload: d.rawBody,
+    error: park.error,
+    bucket: park.bucket,
+    signature: d.signature,
+    slackTimestamp: d.slackTimestamp,
+  };
+  await parkInDlq(slackDlq, d.store, row);
+  sendJson(d.res, 200, { ok: true, status: 'dlq' });
+}
+
+function teamIdInRawBody(rawBody: string): string | null {
+  // Cheap regex extracts team_id from a (possibly malformed) raw body so the DLQ row carries it for triage even when
+  // JSON.parse fails.
+  const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
+  return m ? m[1] : null;
+}
+
+/** Answers Slack's URL-verification handshake; false when the payload is anything else. */
+function answerUrlVerification(res: ServerResponse, body: JsonValue | undefined): boolean {
+  if (isJsonObject(body)) {
+    const bodyRecord = body;
+    if (bodyRecord.type === 'url_verification') {
+      sendJson(res, 200, {
+        challenge: String(bodyRecord.challenge ?? ''),
+      });
+      return true;
+    }
+  }
+  return false;
+}
+
+async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
+  const { rawBody, res } = d;
+  const teamIdFromRaw = teamIdInRawBody(rawBody);
+  const body = tryParseJson(rawBody);
+  if (body === undefined) {
+    await parkUnparseable(d, teamIdFromRaw);
+    return;
+  }
+  if (answerUrlVerification(res, body)) return;
+  // Fail closed: resolveTenantForSlackTeam returns null for an unknown team on a non-empty slack_workspaces; park it in
+  // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
+  let resolvedTenant: string | null = null;
+  if (isSlackEventEnvelope(body)) {
+    resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id, hostFallback());
+    if (resolvedTenant === null) {
+      await parkAndAck(d, {
+        tenantId: null, // unroutable - stored as '__unroutable__'
+        teamId: body.team_id,
+        error: `unroutable team_id: ${body.team_id}`,
+        bucket: 'unroutable',
+      });
+      return;
+    }
+  } else {
+    // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
+    resolvedTenant = envTenant();
+  }
+  const ctx: Context = {
+    hippoRoot: d.hippoRoot,
+    tenantId: resolvedTenant,
+    actor: { subject: 'connector:slack', role: 'admin' },
+    store: d.store,
+    config: d.config,
+  };
+  if (!isSlackEventEnvelope(body)) {
+    await parkAndAck(d, {
+      tenantId: ctx.tenantId,
+      teamId: teamIdFromRaw,
+      error: 'not an event_callback envelope',
+      bucket: 'parse_error',
+    });
+    return;
+  }
+  await dispatchSlackEvent(d, ctx, body);
+}
+
+const hostFallback = (): SlackFallback => ({
+  hostTenant: envTenant(),
+  allowUnknown: envSlackAllowUnknownTeamFallback(),
+});
+
+async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
+  // Attribute the parse failure to the originating workspace via the regex-extracted team_id; a null or unknown team
+  // writes tenantId=null, which lands as '__unroutable__'.
+  const parseFailTenant =
+    teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw, hostFallback()) : null;
+  await parkAndAck(d, {
+    tenantId: parseFailTenant, // null → '__unroutable__' sentinel
+    teamId: teamIdFromRaw,
+    error: 'invalid JSON',
+    bucket: 'parse_error',
+  });
+}
+
+async function dispatchSlackEvent(
+  d: SignedSlackRequest,
+  ctx: Context,
+  body: JsonValue & SlackEventEnvelope,
+): Promise<void> {
+  const { res } = d;
+  const inner = body.event;
+  if (isSlackMessageEvent(inner)) {
+    if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
+      const r = await handleMessageDeleted(ctx, {
+        teamId: body.team_id,
+        channelId: inner.channel,
+        deletedTs: inner.deleted_ts,
+        eventId: body.event_id,
+      });
+      sendJson(res, 200, { ok: true, status: r.status });
+      return;
+    }
+    const r = await ingestMessage(ctx, {
+      teamId: body.team_id,
+      // Channel privacy is not on the inner event, so channel_type is the proxy: 'group'|'im'|'mpim' private, 'channel'
+      // public, unknown private.
+      channel: {
+        id: inner.channel,
+        is_private: inner.channel_type !== 'channel',
+        is_im: inner.channel_type === 'im',
+        is_mpim: inner.channel_type === 'mpim',
+      },
+      message: inner,
+      eventId: body.event_id,
+    });
+    sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
+    return;
+  }
+  await parkAndAck(d, {
+    tenantId: ctx.tenantId,
+    teamId: body.team_id,
+    error: `unhandled event type: ${inner.type ?? 'unknown'}`,
+    bucket: 'parse_error',
+  });
+}

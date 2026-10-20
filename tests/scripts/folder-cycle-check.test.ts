@@ -50,6 +50,23 @@ describe('check-folder-cycles', () => {
     expect(findFolderCycles(dir).map((c) => c.folders)).toEqual([['a', 'b']]);
   });
 
+  it('keys base, domain and surface on their features, so two domain features that import each other fail', () => {
+    file('domain/search/rank.ts', `import { scopeOf } from '../sharing/scope.js';\nexport const rank = scopeOf;\n`);
+    file('domain/sharing/scope.ts', `export const scopeOf = 1;\n`);
+    file('domain/sharing/both.ts', `import { rank } from '../search/rank.js';\nexport const both = rank;\n`);
+    file('db/open.ts', `import { x } from './sub/x.js';\nexport const open = x;\n`);
+    file('db/sub/x.ts', `import { open } from '../open.js';\nexport const x = 1;\nexport const again = open;\n`);
+    expect(findFolderCycles(dir)).toEqual([
+      {
+        folders: ['domain/search', 'domain/sharing'],
+        edges: [
+          ['domain/search/rank.ts', 'domain/sharing/scope.ts'],
+          ['domain/sharing/both.ts', 'domain/search/rank.ts'],
+        ],
+      },
+    ]);
+  });
+
   // Parses every src file (about 0.7 s locally), which a loaded CI runner stretches past the 5 s unit default.
   it('finds no folder cycle in src', { timeout: 15_000 }, () => {
     expect(findFolderCycles(join(import.meta.dirname, '..', '..', 'src'))).toEqual([]);

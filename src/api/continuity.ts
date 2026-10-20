@@ -1,6 +1,6 @@
 // Where-you-left-off ops: task snapshot, session events, handoffs and working memory.
 
-import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
+import type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { SessionEventInput, SnapshotInput } from '../store/port/sessions.js';
 import type { Sessions } from '../store/port-groups.js';

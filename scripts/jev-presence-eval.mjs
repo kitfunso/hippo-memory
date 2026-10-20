@@ -8,14 +8,14 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { hybridSearch } from '../dist/index.js';
-import { buildCorpus } from '../dist/search/bm25.js';
+import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { loadAllEntries } from '../dist/entry/testing.js';
-import { getReranker } from '../dist/rerankers/index.js';
+import { getReranker } from '../dist/domain/rerankers/index.js';
 import { mulberry32 } from './lib/prng.mjs';
 
 const NOW = new Date('2026-09-18T14:31:52.073Z'); // same clock as Lane 15, see rerank-3arm-ab.mjs:15
 const CANDIDATE_TOPK = 40;
-const TRUNCATE_CHARS = 1200; // matches src/rerankers/jev.ts TRUNCATE_CHARS
+const TRUNCATE_CHARS = 1200; // matches src/domain/rerankers/jev.ts TRUNCATE_CHARS
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const MODEL = 'jev-1.13.0'; // pinned: a threshold gets tuned on this run, per protocol
 const TIMEOUT_MS = 30_000;

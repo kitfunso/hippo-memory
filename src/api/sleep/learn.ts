@@ -1,10 +1,10 @@
 // Git auto-learn: fix/revert/bug commit subjects become memories.
 // `hippo learn`, init, sleep and MCP hippo_learn share it.
 
-import { ForbiddenError } from '../../core/api-errors.js';
-import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../../learn/autolearn.js';
-import type { HippoConfig } from '../../core/config.js';
-import { embedMemoryDetached } from '../../search/embed-memories.js';
+import { ForbiddenError } from '../../base/errors/api-errors.js';
+import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../../domain/learn/autolearn.js';
+import type { HippoConfig } from '../../base/config/config.js';
+import { embedMemoryDetached } from '../../domain/search/embed-memories.js';
 import {
   extractInvalidationTarget,
   invalidateMatching,
@@ -13,7 +13,7 @@ import {
   type InvalidationOptions,
   type InvalidationResult,
   type InvalidationTarget,
-} from '../../learn/invalidation.js';
+} from '../../domain/learn/invalidation.js';
 import {
   createMemory,
   Layer,
@@ -21,10 +21,10 @@ import {
   strengthOptionsOf,
   type MemoryEntry,
   type SchemaFitSource,
-} from '../../core/memory.js';
-import { extractPathTags } from '../../search/path-context.js';
-import { canReadScope, personalScopeOf } from '../../core/recall-scope.js';
-import { duplicateKey, heldTextKeys, longestWord, storedTextKeys } from '../../util/same-text.js';
+} from '../../base/memory/memory.js';
+import { extractPathTags } from '../../domain/search/path-context.js';
+import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js';
+import { duplicateKey, heldTextKeys, longestWord, storedTextKeys } from '../../base/util/same-text.js';
 import type { LessonWrites } from '../../store/port.js';
 import { memoryPages } from '../memories/memories.js';
 import type { Context, LocalContext } from '../types.js';

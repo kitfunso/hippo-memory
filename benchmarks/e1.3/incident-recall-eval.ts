@@ -20,10 +20,10 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { ingestMessage } from '../../src/connectors/slack/ingest.js';
+import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { retrieve, adminActor, type Context } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 interface TranscriptMessage {
   user: string;

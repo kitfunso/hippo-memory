@@ -4,7 +4,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { detectServer, claimPidfile } from '../../src/server/server-detect.js';
+import { detectServer, claimPidfile } from '../../src/surface/server/server-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let root: string;

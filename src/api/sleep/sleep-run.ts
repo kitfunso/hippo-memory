@@ -1,18 +1,18 @@
 // The sleep pipeline behind `sleep`, with its phase dependencies injectable; kept out of the package root.
 
-import { auditMemories, type AuditIssue } from '../../core/memory-audit.js';
-import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../sharing/share.js';
-import { runConsolidation } from '../../consolidate/sleep.js';
-import { deduplicateStore } from '../../consolidate/dedupe.js';
-import { evalNow } from '../../core/ablation.js';
-import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../core/ambient.js';
-import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
-import { strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
+import { auditMemories, type AuditIssue } from '../../base/memory/memory-audit.js';
+import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
+import { runConsolidation } from '../../domain/consolidate/sleep.js';
+import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
+import { evalNow } from '../../base/memory/ablation.js';
+import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../base/memory/ambient.js';
+import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
+import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import type { Context, LocalContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
-import { errorMessage } from '../../util/log.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { errorMessage } from '../../base/util/log.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { Consolidation, LocalFiles, LocalStore } from '../../store/local/index.js';
 import type { EntryCursor } from '../../store/port/types.js';
 

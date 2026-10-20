@@ -7,7 +7,7 @@ import { adminActor } from '../../src/api/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { DEFAULT_CONFIG } from '../../src/core/config.js';
+import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {

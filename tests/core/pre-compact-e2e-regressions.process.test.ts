@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHippoRoot } from '../../src/core/project-identity.js';
+import { getHippoRoot } from '../../src/base/scope/project-identity.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
 import { withScratchEnv, transcriptJsonl, runHippo, initHippo } from '../_helpers/pre-compact-e2e.js';
 

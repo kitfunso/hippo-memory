@@ -1,6 +1,6 @@
 // The project names of a store, read and rewritten on one handle; hippo.db's own, since a rewrite backs the store up
 // and fixes its mirror files.
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { DormantReason } from './consolidation.js';
 import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
 import type { DormantSnapshot } from '../port/types.js';

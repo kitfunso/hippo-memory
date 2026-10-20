@@ -1,0 +1,113 @@
+// Copying the global store's memories down into a local store.
+
+import { BadRequestError } from '../../base/errors/api-errors.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
+import { chunked } from '../../base/util/chunked.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
+import { classifyOriginProject, resolveProjectIdentity } from '../../base/scope/project-identity.js';
+import { isSharedStore } from '../../base/config/config.js';
+import { detectSecret } from '../../base/util/secret-detect.js';
+import { embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
+import { log } from '../../base/util/log.js';
+import type { EntryTextKey, Sharing } from '../../store/local/sharing.js';
+import { logEmbedAllFailure } from './search-both.js';
+import { textKeyPages } from './text-keys.js';
+import type { FolderStore } from '../../store/local/index.js';
+
+/**
+ * Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and
+ * share copy under a new ID). The caller's request scope keeps it to one open per store.
+ * Returns the count of newly copied entries. */
+export function syncGlobalToLocal(
+  into: ConfiguredFolder,
+  global: FolderStore,
+  opts: { includeCrossProject?: boolean } = {},
+): number {
+  if (isSharedStore(into.root)) {
+    throw new BadRequestError(
+      `Refusing to sync into ${into.root}: a shared store takes no copies of a personal global store, ` +
+        `whose rows would reach every member.`,
+    );
+  }
+  if (!fs.existsSync(global.root)) return 0;
+
+  return copyMissingRows(into, global, opts.includeCrossProject === true);
+}
+
+const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
+
+/** Global rows of every tenant that the local store holds by neither id nor tenant and text, oldest first; each page
+ * asks the local store about its own ids and texts only. */
+function missingRows(local: Sharing, from: Sharing): EntryTextKey[] {
+  const missing: EntryTextKey[] = [];
+  for (const page of textKeyPages(from, ALL_TENANTS)) {
+    const taken = new Set(local.takenIds(page.map((k) => k.id)));
+    // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
+    const open = page.filter((k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX));
+    if (open.length === 0) continue;
+    const held = new Set(
+      local
+        .textKeysHolding(
+          ALL_TENANTS,
+          open.map((k) => k.content),
+        )
+        .map(textKey),
+    );
+    missing.push(...open.filter((k) => !held.has(textKey(k))));
+  }
+  return missing;
+}
+
+/** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together; each copy
+ * keeps its own tenant. */
+function copyMissingRows(into: ConfiguredFolder, global: FolderStore, includeCrossProject: boolean): number {
+  const local = into.store.localFiles;
+  const from = global.store.localFiles;
+  const candidates = missingRows(local.sharing, from.sharing);
+  if (candidates.length === 0) return 0;
+  const byId = new Map(
+    chunked(candidates.map((k) => k.id))
+      .flatMap((ids) => from.sharing.entriesByIds(ids))
+      .map((e) => [e.id, e]),
+  );
+
+  // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret
+  // rows never copied.
+  // origin_project is preserved on the copy (the write stamps it only when missing).
+  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(into.root)));
+  // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
+  let rejected = 0;
+  const copied = new Set<string>();
+  const count = local.sharing.writeSkippingRejected((put) => {
+    for (const key of candidates) {
+      const entry = byId.get(key.id);
+      // A row the global store dropped or edited between the two reads waits for the next sync; a text an earlier copy
+      // in this batch brought down is not copied twice.
+      if (!entry || entry.content !== key.content || copied.has(textKey(entry))) continue;
+      if (detectSecret(entry).flagged) continue;
+      if (!includeCrossProject && classifyOriginProject(entry.originProject, currentProject) === 'cross-project') {
+        continue;
+      }
+      if (put(entry)) copied.add(textKey(entry));
+      else rejected++;
+    }
+  });
+  finishSyncDown(into, count, rejected);
+  return count;
+}
+
+function finishSyncDown(into: ConfiguredFolder, count: number, rejected: number): void {
+  if (rejected > 0) {
+    log.warn(
+      `syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`,
+    );
+  }
+
+  // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row (same batching
+  // invariant as autoShare).
+  if (count > 0) {
+    void embedAll(folderIndex(into)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
+  }
+}
