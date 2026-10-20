@@ -40,7 +40,6 @@ import { afterIdAnd, idPageOf } from './keyset.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import { placeholders } from '../../base/util/sql.js';
 import type { IdPage, IdPageRequest, StoredVectorSummary, VectorCoverage } from '../port/embedding-index.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
