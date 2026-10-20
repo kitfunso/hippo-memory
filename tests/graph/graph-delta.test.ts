@@ -10,7 +10,7 @@ import { extractGraph, deriveGraph, loadGraphSources } from '../../src/graph/ext
 import { readGraphDelta, entityKey, type GraphOp } from '../../src/graph/delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, SourceObjectType } from '../../src/store/port/graph-reads.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -335,7 +335,7 @@ describe('graph delta', () => {
   it.each(CROSS_OBJECT_FIXTURES)(
     'deriveGraph gives, by natural key, the rows the rebuild writes: %s',
     async (_, setup) => {
-      await setup(home);
+      await withSharedStoreHandles(() => setup(home));
       for (const tenant of [T, 'tenantA', 'tenantB']) {
         await extractGraph(sqliteStore(home), tenant);
         expect(await derivedByKey(home, tenant)).toEqual(storedByKey(home, tenant));
