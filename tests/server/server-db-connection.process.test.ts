@@ -79,11 +79,13 @@ describe('hippo serve store connection', () => {
     dirs.push(root);
     const db = join(root, 'hippo.db');
     const inlineLimit = inlineCheckpointPages(root);
+    // Sized so 16 posts write over twice the inline limit's pages, and under the 4,000 a served store checkpoints at.
+    const filler = 'x'.repeat(inlineLimit * 320);
     const handle = await serve({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' } });
     try {
       const before = readFileSync(db);
       // Too few responses for a background checkpoint to be due, so a changed hippo.db could only come from a request's own commit.
-      for (let n = 0; n < 16; n++) expect(await post(handle, `runbook step ${n} ${'x'.repeat(2000)}`)).toBe(200);
+      for (let n = 0; n < 16; n++) expect(await post(handle, `runbook step ${n} ${filler}`)).toBe(200);
       expect(statSync(`${db}-wal`).size / 4096).toBeGreaterThan(2 * inlineLimit);
       expect(readFileSync(db).equals(before)).toBe(true);
       for (let n = 16; n < 80; n++) expect(await post(handle, `runbook step ${n}`)).toBe(200);
