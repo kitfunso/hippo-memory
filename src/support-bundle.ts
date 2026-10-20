@@ -1,5 +1,5 @@
-/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only
- * (SQLite may leave empty -wal and -shm files); never touches memory content. */
+/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (SQLite may leave empty -wal and
+ * -shm files); never touches memory content. */
 import { envByName, processEnv } from './util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -202,8 +202,8 @@ function collectHomeAliases(home: string, probes: readonly string[]): Set<string
     aliases.add(path.resolve(base));
   }
 
-  // The alias (e.g. a short-name temp root) can sit above the probe itself, so walk ancestors and
-  // compare native realpaths rather than checking each probe alone.
+  // The alias (e.g. a short-name temp root) can sit above the probe itself, so walk ancestors and compare native
+  // realpaths rather than checking each probe alone.
   const homeKeys = new Set(
     [nativeRealPathKey(home), nativeRealPathKey(os.homedir())].filter((k): k is string => k !== null),
   );
@@ -257,8 +257,7 @@ function spellingPattern(spelling: string, deep: boolean): string | null {
   }
   if (deep) return `${mountedDrive(drive[1])}?${body}`;
   // One folder (C:\x, D:\home) is a name any path may hold, so it swaps only after its drive and as a whole name; a
-  // drive
-  // root swaps nothing.
+  // drive root swaps nothing.
   return /[^\\/-]/.test(below) ? `(?<![\\p{L}\\p{N}_])${mountedDrive(drive[1])}${body}` : null;
 }
 
@@ -336,8 +335,7 @@ export function buildSupportBundle(opts: SupportBundleOptions): JsonObject {
     logs: buildLogsSection(opts),
   };
   // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log
-  // lines
-  // often quote the temp folder, which usually sits under the home.
+  // lines often quote the temp folder, which usually sits under the home.
   const redacted = redactStrings(bundle, buildHomePattern(opts.home, [getGlobalRoot(), os.tmpdir()]));
   // SAFETY: the value built above is always a JsonObject; redactStrings preserves object shape.
   return redacted as JsonObject;

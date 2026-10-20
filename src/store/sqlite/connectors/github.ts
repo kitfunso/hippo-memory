@@ -70,7 +70,6 @@ export function archiveDeletedArtifactAt(db: DatabaseSyncLike, del: ArtifactDele
   if (githubEventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
   const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
 
-  // SAFETY: the SELECT projects only the `id` column.
   const rows = db
     .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
     .all(del.artifactRef, del.tenantId) as Array<{ id: string }>;
@@ -109,14 +108,13 @@ export function githubRoutingAt(
   db: DatabaseSyncLike,
   args: { installationId?: string | null; repoFullName?: string | null },
 ): GitHubRouting {
-  // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const instCount = (db.prepare(`SELECT COUNT(*) AS c FROM github_installations`).get() as { c: number | bigint }).c;
-  // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const repoCount = (db.prepare(`SELECT COUNT(*) AS c FROM github_repositories`).get() as { c: number | bigint }).c;
   const counts = { installations: Number(instCount), repositories: Number(repoCount) };
 
   if (args.installationId) {
-    // SAFETY: the SELECT projects exactly the tenant_id column of github_installations.
     const row = db
       .prepare(`SELECT tenant_id FROM github_installations WHERE installation_id = ?`)
       .get(args.installationId) as { tenant_id?: string } | undefined;
@@ -125,7 +123,6 @@ export function githubRoutingAt(
   if ((counts.installations === 0 && counts.repositories === 0) || !args.repoFullName) {
     return { ...counts, tenant: null };
   }
-  // SAFETY: the SELECT projects exactly the tenant_id column of github_repositories.
   const row = db
     .prepare(`SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`)
     .get(args.repoFullName) as { tenant_id?: string } | undefined;
@@ -133,7 +130,6 @@ export function githubRoutingAt(
 }
 
 export function githubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string): StoredCursors {
-  // SAFETY: the SELECT names exactly the three HWM columns.
   const row = db
     .prepare(
       `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm

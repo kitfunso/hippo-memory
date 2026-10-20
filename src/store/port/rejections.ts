@@ -40,8 +40,8 @@ export interface Rejection {
   readonly tenantId: string;
   readonly actor: string;
   readonly reason: string;
-  /** Reject this memory's current text: a row outside `tenantId` refuses as not found, a personal one as a bad
-   * request, both before any write. Unset, `value` is the text. */
+  /** Reject this memory's current text: a row outside `tenantId` refuses as not found, a personal one as a bad request,
+   * both before any write. Unset, `value` is the text. */
   readonly memoryId?: string;
   readonly value?: string;
   /** The caller's personal scope, the only personal rows the sweep removes; null leaves every personal row. */

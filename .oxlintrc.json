@@ -44,7 +44,17 @@
     "curly": ["error", "multi-line"]
   },
   "overrides": [
-    { "files": ["src/**/*.ts"], "rules": { "import/no-cycle": ["error", { "ignoreTypes": true }] } },
+    {
+      "files": ["src/**/*.ts"],
+      "rules": {
+        "import/no-cycle": ["error", { "ignoreTypes": true }],
+        "anti-slop/require-safety-comment-for-type-assertion": ["error", { "allowStatementReads": true }]
+      }
+    },
+    {
+      "files": ["tests/**/*.ts"],
+      "rules": { "anti-slop/require-safety-comment-for-type-assertion": ["error", { "allowStatementReads": true }] }
+    },
     { "files": ["deploy/**/*.mjs"], "rules": { "anti-slop/no-runtime-typeof": "off" } },
     {
       "files": [

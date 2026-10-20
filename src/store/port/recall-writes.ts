@@ -15,9 +15,9 @@ export interface RecallSearchArgs {
 
 /** Everything one recall writes once its reply is decided, so a store writes it on one connection. */
 export interface RecallWrites {
-  /** Insert or ignore on (memory_id, goal_id), so the first row wins, a duplicate
-   * inside this batch included. First drop a row whose memory_id is in no memories
-   * row of this store, whatever that row's tenant, as `localGoalRecallRows` does. */
+  /** Insert or ignore on (memory_id, goal_id), so the first row wins, a duplicate inside this batch included. First
+   * drop a row whose memory_id is in no memories row of this store, whatever that row's tenant, as
+   * `localGoalRecallRows` does. */
   readonly goalLog: readonly GoalRecallLogRow[];
   /** In the order they happened. */
   readonly audit: readonly AppendAuditOpts[];
@@ -43,11 +43,10 @@ export interface RecallTraceInput {
   tenantId: string;
   sessionId?: string | null;
   pipeline: 'api' | 'cli' | 'context' | 'mcp';
-  /** Raw query text. NEVER persisted — only its sha256/16 hash + length are
-   *  stored (GDPR Path A / audit convention, CLI). */
+  /** Raw query text. NEVER persisted: only its sha256/16 hash + length are stored (GDPR Path A / audit convention,
+   *  CLI). */
   query: string;
-  /** True when the caller ran with explain/--why (per-result rerank steps
-   *  may be present). Defaults to false. */
+  /** True when the caller ran with explain/--why (per-result rerank steps may be present). Defaults to false. */
   explainMode?: boolean;
   /** Results in returned rank order (index 0 = rank 1). */
   results: RecallTraceResultInput[];
@@ -57,8 +56,9 @@ export interface RecallTraceInput {
 export interface RecallTraceResultInput {
   memoryId: string;
   score: number;
-  /** Per-stage rerank steps when the caller ran with explain/--why; omitted
-   *  (or empty) persists `rerank_json` as NULL. */
+  /**
+   * Per-stage rerank steps when the caller ran with explain/--why; omitted (or empty) persists `rerank_json` as NULL.
+   */
   rerankSteps?: RerankStep[];
 }
 

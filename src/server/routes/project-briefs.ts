@@ -43,8 +43,8 @@ export function handleListProjectBriefs(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(briefRoutes, rr);
 }
 
-// The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
-// so the /(\d+)/ routes would not match it, but order it first).
+// The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric so the /(\d+)/ routes would not match
+// it, but order it first).
 export async function handleRefreshProjectBrief(rr: AuthedRouteRequest): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);

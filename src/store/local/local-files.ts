@@ -36,8 +36,8 @@ export type { Promotion } from './promotion.js';
 export type { ProjectTags } from './project-tags.js';
 export type { Sharing } from './sharing.js';
 
-/** The store is hippo.db and its files under a folder, so a path that reopens them by folder (sleep, its child
- * process, the global store) may run; the caller names that folder. */
+/** The store is hippo.db and its files under a folder, so a path that reopens them by folder (sleep, its child process,
+ * the global store) may run; the caller names that folder. */
 export interface LocalFiles {
   /** Creates the store's files when they are missing, as `hippo init`, a first share or a global capture needs. */
   ensureFiles(): void;

@@ -36,8 +36,9 @@ const DEFAULT_WRITE_GRACE_MS = 2000;
 export interface CallOptions {
   readonly mode: OpRoute;
   readonly requestId: string | undefined;
-  /** Epoch milliseconds by which the call's request must be answered; absent means the call waits as long as it
-   * takes. */
+  /**
+   * Epoch milliseconds by which the call's request must be answered; absent means the call waits as long as it takes.
+   */
   readonly deadlineAt?: number | undefined;
   /** Aborts when the request is abandoned; a call still queued then is dropped and never runs. */
   readonly signal?: AbortSignal | undefined;
@@ -56,8 +57,9 @@ export interface ExecutorOptions extends LossAversion {
 }
 
 export interface SqliteExecutor {
-  /** Runs `op` of the synchronous store on a worker thread. A throw there rejects here as an instance of its own
-   * class. */
+  /**
+   * Runs `op` of the synchronous store on a worker thread. A throw there rejects here as an instance of its own class.
+   */
   call<T>(op: string, args: readonly unknown[], opts: CallOptions): Promise<T>;
   /** Resolves once every thread has exited: Windows cannot delete a store folder while a thread holds its files. */
   close(): Promise<void>;
@@ -416,8 +418,8 @@ class WorkerPool implements SqliteExecutor {
   }
 }
 
-/** Threads for the hippo.db under `hippoRoot`: one writer and two readers. The first
- * call starts the writer for the store's setup; a reader starts at its own first call. */
+/** Threads for the hippo.db under `hippoRoot`: one writer and two readers. The first call starts the writer for the
+ * store's setup; a reader starts at its own first call. */
 export function createSqliteExecutor(hippoRoot: string, opts: ExecutorOptions = {}): SqliteExecutor {
   return new WorkerPool(hippoRoot, opts);
 }

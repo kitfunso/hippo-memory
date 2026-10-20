@@ -20,8 +20,8 @@ function secretDigest(plaintext: string): Buffer {
   return createHash('sha256').update(plaintext).digest();
 }
 
-/** LRU of the tokens that matched a stored key hash, so a repeat skips scrypt. Holds
- * a SHA-256 of the token, never the token, and nothing about the key's state. */
+/** LRU of the tokens that matched a stored key hash, so a repeat skips scrypt. Holds a SHA-256 of the token, never the
+ * token, and nothing about the key's state. */
 export class VerifiedKeyCache {
   // Keyed on the stored hash, so a rotated or re-minted key never meets an old entry; Map order makes the first key the
   // least recent.
@@ -54,8 +54,9 @@ export class VerifiedKeyCache {
 
 const verifiedKeys = new VerifiedKeyCache(VERIFIED_KEY_CACHE_CAP);
 
-/** A caller's limit on scrypt work, called once per derivation: it may throw to refuse `derive` or hold it in a
- * queue. */
+/**
+ * A caller's limit on scrypt work, called once per derivation: it may throw to refuse `derive` or hold it in a queue.
+ */
 type DerivationBound = (keyId: string, derive: () => Promise<Buffer>) => Promise<Buffer>;
 
 // By stored hash and a digest of the token, never the token, so a burst with one unproved key derives once and is
@@ -91,8 +92,8 @@ async function secretMatches(
   return check;
 }
 
-/** Verify a bearer API key against `store`, null when invalid. The key's row is read on every
- * call, so a revoke, expiry, role or scope change by any process applies on the next one. */
+/** Verify a bearer API key against `store`, null when invalid. The key's row is read on every call, so a revoke,
+ * expiry, role or scope change by any process applies on the next one. */
 export async function verifyApiKeyCached(
   plaintext: string,
   store: HippoStore,

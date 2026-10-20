@@ -6,14 +6,14 @@ import { DECAY_THRESHOLD } from './decay.js';
 import type { DetectedConflict } from '../store/local/consolidation.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
-// on stopword-filtered tokens
-// only applies after a polarity signal, so it filters drive-by topic similarity, not semantic drift.
+// on stopword-filtered tokens only applies after a polarity signal, so it filters drive-by topic similarity, not
+// semantic drift.
 const CONFLICT_OVERLAP_THRESHOLD = 0.5;
-// Minimum distinctive shared tokens before we trust an overlap score. Filters
-// out cases where two memories share only common English + a project name.
+// Minimum distinctive shared tokens before we trust an overlap score. Filters out cases where two memories share only
+// common English + a project name.
 const CONFLICT_MIN_RARE_SHARED = 2;
-// Polarity is detected on the first N words only. A stray "not" in the middle
-// of a long memory shouldn't flip the whole thing negative.
+// Polarity is detected on the first N words only. A stray "not" in the middle of a long memory shouldn't flip the whole
+// thing negative.
 const POLARITY_WINDOW_WORDS = 40;
 
 const CONFLICT_STOPWORDS = new Set([
@@ -124,8 +124,8 @@ type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]>;
 
 export interface DetectConflictsOptions {
   decayOpts?: DecayOptions;
-  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
-  // without this bypass rescued entries would be silently re-excluded from conflict detection.
+  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so without this bypass
+  // rescued entries would be silently re-excluded from conflict detection.
   rescuedIds?: Set<string>;
   pagesOf?: PagesOf;
 }
@@ -209,8 +209,8 @@ function tenantConflicts(rows: readonly ConflictRow[]): Array<readonly [number, 
   for (const [i, a] of rows.entries()) {
     for (const j of partnersOf(i)) {
       const b = rows[j];
-      // Traces are variants of each other, not contradictions: two strategies for the same task can both be valid,
-      // and conflict detection is for stated-rule disagreement, not strategy diversity.
+      // Traces are variants of each other, not contradictions: two strategies for the same task can both be valid, and
+      // conflict detection is for stated-rule disagreement, not strategy diversity.
       if ((a.trace && b.trace) || a.superseded || b.superseded || !recalledTogether(a, b) || a.restated || b.restated) {
         continue;
       }
@@ -256,12 +256,11 @@ function conflictProfile(text: string): ConflictProfile {
 }
 
 function describeConflict(a: ConflictProfile, b: ConflictProfile): { reason: string; score: number } | null {
-  // Jaccard on stopword-stripped tokens. Defer the threshold check until we
-  // know whether an explicit polarity pair is present (lower bar for those).
+  // Jaccard on stopword-stripped tokens. Defer the threshold check until we know whether an explicit polarity pair is
+  // present (lower bar for those).
   const overlapScore = jaccardSets(a.distinct, b.distinct);
 
-  // Require at least N shared distinctive tokens so two short memories sharing
-  // only "the project name" don't register.
+  // Require at least N shared distinctive tokens so two short memories sharing only "the project name" don't register.
   let shared = 0;
   for (const t of a.distinct) if (b.distinct.has(t)) shared++;
   if (shared < CONFLICT_MIN_RARE_SHARED) return null;

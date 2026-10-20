@@ -23,6 +23,7 @@ import { writeEntryMirrorsIn } from './entry-writes.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface QuarantineDbRow {
   tenant_id: string;
   memory_id: string;
@@ -53,7 +54,7 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
 function getQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string): QuarantineRow | null {
   const row = db
     .prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`)
-    .get<QuarantineDbRow>(tenantId, memoryId);
+    .get(tenantId, memoryId) as QuarantineDbRow | undefined;
   return row ? fromDbRow(row) : null;
 }
 
@@ -75,17 +76,16 @@ function listQuarantineRows(
   const order = 'ORDER BY quarantined_at DESC, memory_id DESC LIMIT ?';
   const rows =
     status === 'all'
-      ? db
+      ? (db
           .prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ?${after.sql} ${order}`)
-          .all(tenantId, ...after.params, limit)
-      : db
+          .all(tenantId, ...after.params, limit) as QuarantineDbRow[])
+      : (db
           .prepare(
             `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ?${live}${after.sql} ` +
               `${order}`,
           )
-          .all(tenantId, status, ...after.params, limit);
-  // SAFETY: both branches select SELECT_COLUMNS, matching QuarantineDbRow's field set.
-  return (rows as QuarantineDbRow[]).map(fromDbRow);
+          .all(tenantId, status, ...after.params, limit) as QuarantineDbRow[]);
+  return rows.map(fromDbRow);
 }
 
 interface RecordQuarantineOptions {

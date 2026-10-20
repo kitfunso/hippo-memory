@@ -1,5 +1,5 @@
-// SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for this session, as
-// the local hook prints it.
+// SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for this session, as the
+// local hook prints it.
 import type { Context } from '../api/types.js';
 import {
   COMPACT_RESUME_EVENT_CONTENT_CAP,
@@ -28,8 +28,8 @@ export async function compactResumeForCaller(ctx: Context, req: CallerCompactRes
   if (req.source !== 'compact' || callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
   const { sessions } = ctx.store;
   const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, key);
-  // One owner's concurrent sessions must not cross-restore; a
-  // snapshot with no session still restores, as on the local path.
+  // One owner's concurrent sessions must not cross-restore; a snapshot with no session still restores, as on the local
+  // path.
   if (snapshot === null || (snapshot.session_id !== null && snapshot.session_id !== req.sessionId)) {
     return { stdout: '' };
   }

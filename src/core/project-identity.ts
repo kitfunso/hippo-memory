@@ -13,8 +13,8 @@ import { placeholders } from '../util/sql.js';
 
 /** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means
  * user-global (empty name).
- * Name: `.hippo-project.json`, else the normalized `origin`, else the folder name. Must not import shared.ts /
- * store.ts / api/index.ts (cycle). */
+ * Name: `.hippo-project.json`, else the normalized `origin`, else the folder name. Must not import shared.ts,
+ * store.ts or api/index.ts, since each would close an import cycle. */
 
 /** The project a working directory belongs to. */
 export interface ProjectIdentity {
@@ -23,18 +23,18 @@ export interface ProjectIdentity {
   /** The project id rows are stamped with: the project file's id, the origin remote, or legacyName; '' outside a
    * project. */
   name: string;
-  /** The folder rule rows written before ids carry: the root's lowercased basename, or its repo's for a linked
-   * worktree with no `.hippo`. */
+  /** The folder rule rows written before ids carry: the root's lowercased basename, or its repo's for a linked worktree
+   * with no `.hippo`. */
   legacyName: string;
-  /** Every other name this root resolves to (the project file id, the origin remote even
-   * with the rule off, legacyName), so rows written under an earlier id stay readable. */
+  /** Every other name this root resolves to (the project file id, the origin remote even with the rule off,
+   * legacyName), so rows written under an earlier id stay readable. */
   aliases?: readonly string[];
   /** True when the directory resolves to the user home working set. */
   isHome: boolean;
 }
 
-/** Options for resolveProjectIdentity. Both fields are test seams and disable caching;
- * stopDir bounds the upward walk so tests in a temp sandbox never reach the host's real markers. */
+/** Options for resolveProjectIdentity. Both fields are test seams and disable caching; stopDir bounds the upward walk
+ * so tests in a temp sandbox never reach the host's real markers. */
 export interface ResolveProjectIdentityOpts {
   homeDir?: string;
   stopDir?: string;
@@ -59,8 +59,8 @@ function remoteRuleOn(): boolean {
   return globalConfig(resolveGlobalRootDir()).projectIdentity.remote;
 }
 
-/** The id a root names itself by plus every rung that resolves; only the root's own
- * `.git` is read, so a store nested in another checkout keeps its folder name. */
+/** The id a root names itself by plus every rung that resolves; only the root's own `.git` is read, so a store nested
+ * in another checkout keeps its folder name. */
 function namesAt(root: string, legacyName: string): Pick<ProjectIdentity, 'name' | 'aliases'> {
   const fileId = projectFileId(root);
   const remoteId = originRemoteId(root);
@@ -98,8 +98,8 @@ function isDirectoryAt(p: string): boolean {
   }
 }
 
-/** Resolves the project identity for a working directory (default process.cwd()); results are cached per resolved
- * input path. */
+/** Resolves the project identity for a working directory (default process.cwd()); results are cached per resolved input
+ * path. */
 export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdentityOpts): ProjectIdentity {
   const startInput = path.resolve(cwd ?? process.cwd());
   const cacheable = !opts?.homeDir && !opts?.stopDir;
@@ -124,8 +124,8 @@ export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdenti
   } else if (reachedHome || isUnder(start, home)) {
     identity = { root: home, name: '', legacyName: '', isHome: true };
   } else {
-    // No markers anywhere: not a project. Empty name keeps these memories
-    // user-global rather than fabricating an origin from a basename.
+    // No markers anywhere: not a project. Empty name keeps these memories user-global rather than fabricating an origin
+    // from a basename.
     identity = { root: start, name: '', legacyName: '', isHome: false };
   }
 
@@ -133,8 +133,8 @@ export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdenti
   return identity;
 }
 
-/** The repo name a linked worktree shares with its main checkout (`repo.git` or
- * `repo/.bare` for a bare repo), so one repo is one project; null for any other checkout. */
+/** The repo name a linked worktree shares with its main checkout (`repo.git` or `repo/.bare` for a bare repo), so one
+ * repo is one project; null for any other checkout. */
 function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
   const marker = path.join(gitRoot, '.git');
   if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
@@ -201,8 +201,8 @@ export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectI
 }
 
 export function isInitialized(hippoRoot: string): boolean {
-  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting
-  // that as initialized makes `hippo init` skip initStore, so only hippo.db counts.
+  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting that as initialized makes
+  // `hippo init` skip initStore, so only hippo.db counts.
   return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
 }
 
@@ -229,9 +229,8 @@ export const MAX_PROJECT_ALIASES = 10;
 export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
 
 /** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids:
- * rows match
- * verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its
- * folder. */
+ * rows match verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named
+ * by its folder. */
 export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');
@@ -252,9 +251,8 @@ export function originInSql(names: readonly string[], column = 'origin_project')
 }
 
 /** Classifies a memory's origin_project against the active project. An empty current id (home or markerless cwd) puts
- * everything in scope;
- * NULL/undefined origin (legacy row, or a shared-store write naming none) counts as cross-project: deny by default
- * for a security partition. */
+ * everything in scope; NULL/undefined origin (legacy row, or a shared-store write naming none) counts as cross-project:
+ * deny by default for a security partition. */
 export function classifyOriginProject(
   origin: string | null | undefined,
   current: ProjectRef,
@@ -273,17 +271,15 @@ export function resolveGlobalRootDir(): string {
 }
 
 /** True when `p` IS the global store root, so a global store whose parent chain contains `.git`/`.hippo` (git-managed
- * HIPPO_HOME) still backfills as
- * user-global ('') instead of being stamped with the surrounding repo's name, which would hide the global corpus
- * from every project. */
+ * HIPPO_HOME) still backfills as user-global ('') instead of being stamped with the surrounding repo's name, which
+ * would hide the global corpus from every project. */
 export function isGlobalStoreRoot(p: string): boolean {
   return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(resolveGlobalRootDir()));
 }
 
 /** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and `promoted:<localRoot>` name the
- * owning project; the home dir basename
- * maps to '' (user-global). Returns null without origin evidence. Pure string logic, since recorded paths may no
- * longer exist. */
+ * owning project; the home dir basename maps to '' (user-global). Returns null without origin evidence. Pure string
+ * logic, since recorded paths may no longer exist. */
 export function originFromSource(source: string | null | undefined, homeName?: string): string | null {
   if (!source) return null;
   const home = (homeName ?? path.basename(os.homedir())).toLowerCase();

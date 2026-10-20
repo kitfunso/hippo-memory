@@ -55,8 +55,8 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: St
   ];
   for (const [key, amount] of increments) {
     if (amount === 0) continue;
-    // Both binds are the same string: node:sqlite binds a JS number as REAL,
-    // which would store "1.0" into this TEXT column instead of "1".
+    // Both binds are the same string: node:sqlite binds a JS number as REAL, which would store "1.0" into this TEXT
+    // column instead of "1".
     db.prepare(`
       INSERT INTO meta(key, value) VALUES(?, ?)
       ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(? AS INTEGER)
@@ -108,13 +108,12 @@ export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, 
       `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
        AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
     )
-    .get<{ n: number }>(tenantId, dayAgo);
+    .get(tenantId, dayAgo) as { n: number };
   return row.n;
 }
 
 /** Timestamp of the latest consolidation run, or undefined when there is none. */
 export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
-  // SAFETY: row's shape matches the single `timestamp` column named in the SELECT.
   const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as
     | { timestamp?: string }
     | undefined;
@@ -124,7 +123,6 @@ export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
 /** Load the session decay context; session intervals come from consolidation_runs timestamps. */
 export function loadSessionDecayContextAt(db: DatabaseSyncLike): SessionDecayContext {
   // Get recent consolidation timestamps (last 20)
-  // SAFETY: rows' shape matches the single `timestamp` column above.
   const rows = db
     .prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`)
     .all() as Array<{ timestamp: string }>;

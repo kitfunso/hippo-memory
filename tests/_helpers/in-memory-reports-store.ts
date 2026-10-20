@@ -30,7 +30,9 @@ function copyState(hippoRoot: string): CopiedState {
   const db = openHippoDb(hippoRoot);
   try {
     const meta = (key: Counter): number =>
-      Number(db.prepare('SELECT value FROM meta WHERE key = ?').get<{ value: string } | undefined>(key)?.value ?? '0');
+      Number(
+        (db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined)?.value ?? '0',
+      );
     // SAFETY: the SELECT names SleepRun's four fields.
     const runs = db
       .prepare('SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp, id')

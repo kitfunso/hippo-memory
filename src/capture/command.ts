@@ -16,8 +16,8 @@ import type { FolderFiles, LocalFiles } from '../store/local/index.js';
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
-  /** Explicit transcript path for `--last-session`. Without one, `stdinText`
-   * is used, then auto-discovery under `<claude config dir>/projects/` on a manual run. */
+  /** Explicit transcript path for `--last-session`. Without one, `stdinText` is used, then auto-discovery under
+   * `<claude config dir>/projects/` on a manual run. */
   transcriptPath?: string;
   /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
    * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
@@ -30,8 +30,9 @@ export interface CaptureOptions {
   logFile?: string | null;
   dryRun: boolean;
   global: boolean;
-  /** The caller's tenant: the dedup read counts only its memories, except under `global`, which counts every
-   * tenant's. */
+  /**
+   * The caller's tenant: the dedup read counts only its memories, except under `global`, which counts every tenant's.
+   */
   tenantId: string;
   /** The session's project: rows are stamped with its id, and dedup reads its rows under either name. */
   originProject?: ProjectRef;
@@ -101,8 +102,8 @@ function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): void {
     return;
   }
 
-  // Scrub once here, as the snapshot fields are: every source can
-  // carry a pasted token (AGENTS.md: no secrets in memories).
+  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in
+  // memories).
   const extracted = extractFromTexts(
     texts.map((text) => maskEmails(redactSecretsStrict(text))),
     userTexts,

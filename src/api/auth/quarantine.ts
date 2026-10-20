@@ -46,8 +46,8 @@ function refusalError(id: string, refusal: QuarantineRefusal): Error {
   return new ConflictError(`${id} is already ${refusal.status}`);
 }
 
-/** Release a quarantined memory to its original scope. Admin only; the
- * scope guard refuses a row moved since (mirrors dormantRestore). */
+/** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row moved since (mirrors
+ * dormantRestore). */
 export async function quarantineApprove(ctx: Context, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');

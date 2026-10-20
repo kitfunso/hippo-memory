@@ -90,8 +90,8 @@ const EMBED_LOCK_FILE = 'embeddings.lock';
 const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_OWNER = `${process.pid}:${randomUUID()}`;
 
-// In-process mutex plus an O_EXCL "<pid>:<token>" lock file: our token is a lock we leaked; our PID
-// with another token is a live worker thread, unless the lock predates this process (a reused PID).
+// In-process mutex plus an O_EXCL "<pid>:<token>" lock file: our token is a lock we leaked; our PID with another token
+// is a live worker thread, unless the lock predates this process (a reused PID).
 let _embedWriteLock: Promise<void> = Promise.resolve();
 
 function embedLockHolderAlive(lockPath: string): boolean {
@@ -159,8 +159,8 @@ async function withEmbedLock<T>(hippoRoot: string, fn: () => Promise<T>): Promis
   });
 }
 
-// A store keeps each write whole in its own transaction, and a
-// lock file in hippoRoot would not reach a worker on another host.
+// A store keeps each write whole in its own transaction, and a lock file in hippoRoot would not reach a worker on
+// another host.
 async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
   let resolve!: () => void;
   const next = new Promise<void>((r) => {
@@ -278,8 +278,8 @@ async function backfillInStore(
       vectors,
       rebuild ? strength : undefined,
     );
-    // Another process rebuilt the index mid-run; every later page
-    // would be refused too, after paying the provider for it.
+    // Another process rebuilt the index mid-run; every later page would be refused too, after paying the provider for
+    // it.
     if (result.modelMismatch) throw new Error(OTHER_MODEL_INDEX);
     count += result.written;
   }
@@ -297,9 +297,8 @@ async function embedAllInStore(
 }
 
 /** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it leaves a model change to
- * embedAll, so a stale
- * read here never drops another process's rebuild; the read only saves a paid embed call, as the write refuses
- * another model itself. */
+ * embedAll, so a stale read here never drops another process's rebuild; the read only saves a paid embed call, as the
+ * write refuses another model itself. */
 function embedMemoryInStore(
   { store, strength }: StoreEmbedTarget,
   provider: EmbeddingProvider,
@@ -334,12 +333,12 @@ function embedMemoryInStore(
 
 const INLINE_REINDEX_MAX_ROWS = 256;
 
-/** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a memory that stays out of
- * the vector index. */
+/** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a memory that stays out of the
+ * vector index. */
 export type EmbedOutcome = 'indexed' | 'off' | 'failed';
 
-/** Where vectors go: hippo.db's own index under its folder lock, or a store's vector groups, with the embeddings
- * config that names the provider. */
+/** Where vectors go: hippo.db's own index under its folder lock, or a store's vector groups, with the embeddings config
+ * that names the provider. */
 export type EmbedTarget =
   | { readonly hippoRoot: string; readonly embeddingIndex: EmbeddingIndex; readonly embeddings: EmbeddingsConfig }
   | StoreEmbedTarget;
@@ -363,8 +362,8 @@ export function folderIndex({ root, store, config }: ConfiguredFolder): EmbedTar
 }
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
- * Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory
- * reached the index. */
+ * Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory reached
+ * the index. */
 export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: string): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
   let available: boolean;
@@ -393,7 +392,7 @@ export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
 
 /** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is
  * left as-is.
- *  Failures surface on the explicit `hippo embed` / `embedAll` path. */
+ * Failures surface on the explicit `hippo embed` / `embedAll` path. */
 async function embedMemoryLocked(
   index: EmbeddingIndex,
   provider: EmbeddingProvider,
@@ -487,8 +486,8 @@ async function backfillPending(
         'passage',
       );
     } catch (err) {
-      // Preserve the chunks already saved this run, then surface the failure
-      // below so the explicit `hippo embed` path never reports a false success.
+      // Preserve the chunks already saved this run, then surface the failure below so the explicit `hippo embed` path
+      // never reports a false success.
       backfillError = err;
       break;
     }
@@ -531,16 +530,15 @@ export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: 
     const identity = provider.id;
     if (index.requiresReindex(identity)) return rebuildIndexForProvider(index, provider);
 
-    // Host-wide by design: embedAll backfills all tenants'
-    // entries into the per-host index; per-tenant filtering
-    // would produce partial indices and break recall.
+    // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would
+    // produce partial indices and break recall.
     index.pruneOrphans();
     const { count, backfillError } = await backfillAllPending(index, provider, embeddingIndexIdentity(identity));
 
     index.saveModel(identity);
 
-    // Partial progress is now persisted; surface a hard backfill failure so the
-    // explicit embed path reports it (best-effort callers go via embedMemory).
+    // Partial progress is now persisted; surface a hard backfill failure so the explicit embed path reports it
+    // (best-effort callers go via embedMemory).
     if (backfillError) throw backfillError;
     return count;
   });

@@ -1,6 +1,6 @@
 /**
- * Prompt-injection detection for untrusted memory content. Same shape
- * as secret-detect.ts; leaf module, no store/api/shared imports.
+ * Prompt-injection detection for untrusted memory content. Same shape as secret-detect.ts; leaf module, no
+ * store/api/shared imports.
  */
 
 /** What a member's flagged row in a shared scope carries: it is kept, and prints framed as untrusted. */
@@ -123,8 +123,8 @@ const LOOKALIKES: ReadonlyMap<string, string> = new Map([
 ]);
 const GREEK_OR_CYRILLIC_RE = /[\u0370-\u03FF\u0400-\u04FF]/g;
 
-// A line break stays: it is the sentence bound the patterns rely
-// on where a list or a chat message ends a line with no full stop.
+// A line break stays: it is the sentence bound the patterns rely on where a list or a chat message ends a line with no
+// full stop.
 const SPACE_RUN_RE = /[^\S\n]+/g;
 
 function referencedCharacter(reference: string, decimal?: string, hex?: string, name?: string): string {

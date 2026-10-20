@@ -40,8 +40,9 @@ import {
 } from './tool-text.js';
 import type { RecallSuppressionSummary, ShowRanking } from './types.js';
 
-/** Builds the presenter that renders the list the tool
- * shows, parks the render in `out` and hands back its hint rows. */
+/**
+ * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands back its hint rows.
+ */
 interface RecallPresenterOptions {
   readonly config: HintConfig;
   readonly includeContinuity: boolean;
@@ -112,8 +113,8 @@ function fitToolRecall(
 function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
   const { config, includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
-    // Sections are paid in print order, ahead of the memories and
-    // after the heading; one that does not fit is dropped whole.
+    // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped
+    // whole.
     const purse = tokenPurse(budget - memoriesReserve(budget));
     const pays = (piece: string): boolean => purse.pays(estimateTokens(piece));
     const hintPool = availabilityPool(config, () => pool);
@@ -140,8 +141,8 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
         : [];
       const counts = suppressionCounts({ poolSize: pool.length, droppedByScope, cut, list, tail });
       const s = suppressionSummary(counts, anchoring);
-      // Anchoring is the stronger pull, so it prints first; the
-      // Cutoff block sits above the list, where the agent reads it.
+      // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads
+      // it.
       let text = biasHintSections(anchoring, availability);
       if (showPlan) text += planPiece;
       text += cutoffSection(s, list.length);

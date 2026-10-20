@@ -67,6 +67,8 @@ export function addRow(g: GraphRows, rowid: number, id: string, vector: Float32A
   g.lastRowid = Math.max(g.lastRowid, rowid);
 }
 
+// SAFETY: every read cast to this row selects ROWS_ABOVE_SQL; scripts/check-row-casts.mjs proves it.
+// node:sqlite returns BLOBs as Uint8Array.
 export interface StoredRow {
   readonly rowid: number;
   readonly id: string;
@@ -121,7 +123,6 @@ export class StagedRows {
 /** The highest rowid at or below the last one read whose row still holds the memory read there, or undefined when none
  * of the newest rows does. SQLite hands a deleted top rowid out again, so rows above it may be new. */
 function intactRowid(db: DatabaseSyncLike, g: GraphRows): number | undefined {
-  // SAFETY: the SELECT names exactly these two columns.
   const rows = db
     .prepare('SELECT rowid AS rowid, memory_id AS id FROM memory_vectors WHERE rowid <= ? ORDER BY rowid DESC LIMIT ?')
     .iterate(g.lastRowid, INTACT_WALK) as Iterable<{ rowid: number; id: string }>;
@@ -143,7 +144,6 @@ export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number):
   if (storedModel(db) !== g.model) return { kind: 'lost' };
   const afterRowid = intactRowid(db, g);
   if (afterRowid === undefined) return { kind: 'lost' };
-  // SAFETY: ROWS_ABOVE_SQL names exactly these three columns; node:sqlite returns BLOBs as Uint8Array.
   const rows = db.prepare(`${ROWS_ABOVE_SQL} LIMIT ?`).all(afterRowid, g.graph.dim, inlineRows + 1) as StoredRow[];
   if (rows.length > inlineRows) return { kind: 'behind', afterRowid };
   g.lastRowid = afterRowid;
@@ -161,7 +161,7 @@ function admittedRows(
   params: readonly (string | number)[],
 ): VectorRow[] {
   if (ids.length === 0) return [];
-  // SAFETY: admittedVectorsSql names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
+  // SAFETY: node:sqlite returns BLOBs as Uint8Array.
   const rows = db.prepare(admittedVectorsSql(where, ids.length)).all(...ids, dim, ...params) as Array<{
     id: string;
     vector: Uint8Array;

@@ -46,8 +46,8 @@ function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
 }
 
 function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKind): void {
-  // Glued form has no following token to swallow, so a switch gets its
-  // own branch here instead of the swallow-avoidance short-circuit in setSeparatedFlag.
+  // Glued form has no following token to swallow, so a switch gets its own branch here instead of the swallow-avoidance
+  // short-circuit in setSeparatedFlag.
   if (kind === 'switch') {
     flags[key] = value;
   } else if (kind === 'list') {
@@ -115,8 +115,8 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliF
   return true;
 }
 
-// Repair-only: never first-installs, because silently swapping the codex binary on routine commands
-// is a consent violation and reads as binary hijacking to supply-chain scanners.
+// Repair-only: never first-installs, because silently swapping the codex binary on routine commands is a consent
+// violation and reads as binary hijacking to supply-chain scanners.
 function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
@@ -169,16 +169,16 @@ function printVersion(): never {
   throw new CliExit(0);
 }
 
-/** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
- *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
+/** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped; reject it once
+ *  here so every command, thin-client relays included, sees only a non-empty string. */
 function rejectEmptyScope(flags: CliFlags): void {
   if ('scope' in flags && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
     fail('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
   }
 }
 
-// parseArgs stores a value-less flag as boolean true, and NaN then survives every
-// downstream guard because each comparison against it is false.
+// parseArgs stores a value-less flag as boolean true, and NaN then survives every downstream guard because each
+// comparison against it is false.
 function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) !== 'number') continue;
@@ -188,8 +188,8 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
   }
 }
 
-// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
-// so no single coercion of an inline value would be correct for every one of them.
+// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true, so no single coercion of an
+// inline value would be correct for every one of them.
 function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) === 'switch' && !isBooleanFlag(raw)) {

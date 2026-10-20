@@ -166,8 +166,8 @@ function buildExtractedEntry(
       source: source.source,
       extractedFrom: source.id,
       scope: source.scope,
-      // Without it createMemory stamps 'default', and extracted facts leave
-      // the tenant of the episodic memory they were extracted from.
+      // Without it createMemory stamps 'default', and extracted facts leave the tenant of the episodic memory they were
+      // extracted from.
       tenantId: source.tenantId,
       baseHalfLifeDays,
     }),

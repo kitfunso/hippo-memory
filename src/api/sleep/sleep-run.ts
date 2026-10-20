@@ -59,8 +59,8 @@ interface DirtyTenantSnapshot {
 /** A sleep's context with hippo.db's own files at hand. */
 type SleepContext = LocalContext & { readonly local: LocalFiles };
 
-/** `sleep` with its phase dependencies overridable; tests pass
- * stubs here, so the seam never touches the public `SleepOpts`. */
+/** `sleep` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the public
+ * `SleepOpts`. */
 export async function runSleep(
   storeCtx: LocalContext,
   opts: SleepOpts,
@@ -152,8 +152,8 @@ function sleepResultFrom(consolidateResult: ConsolidateOutcome, dryRun: boolean)
     dryRun,
     details: consolidateResult.details,
   };
-  // Set only when non-zero, so a store without dormant memories gets a
-  // byte-identical result (HTTP /v1/sleep, the CLI render snapshot).
+  // Set only when non-zero, so a store without dormant memories gets a byte-identical result (HTTP /v1/sleep, the CLI
+  // render snapshot).
   if (consolidateResult.dormant > 0) {
     result.dormant = consolidateResult.dormant;
   }
@@ -194,8 +194,8 @@ interface QualityAuditOptions {
   readonly pages: () => Iterable<MemoryEntry[]>;
 }
 
-/** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so pages need no shared
- * state beyond the issues found. */
+/** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so pages need no shared state
+ * beyond the issues found. */
 async function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): Promise<number> {
   const { dryRun, consolidateResult, dedupResult, result, backing, pages } = options;
   // The pages follow consolidation and dedup, so only a dry run still holds the rows they would remove.
@@ -301,8 +301,8 @@ async function drainGraphQueue(
 
 type GraphTotals = NonNullable<SleepResult['graph']>;
 
-/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its
- * queue; a failure is a detail line and the tenant stays pending. */
+/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is a detail line and the tenant
+ * stays pending. */
 async function rebuildDirtyTenant(
   ctx: SleepContext,
   phases: SleepPhases,
@@ -312,8 +312,7 @@ async function rebuildDirtyTenant(
 ): Promise<void> {
   try {
     const ext = await phases.extractGraph(ctx.store, dirty.tenantId);
-    // Count the rebuild as soon as it succeeds — it happened regardless of
-    // the drain-mark below.
+    // Count the rebuild as soon as it succeeds; it happened regardless of the drain-mark below.
     rebuilt.tenants += 1;
     rebuilt.entities += ext.entities;
     rebuilt.relations += ext.relations;
@@ -369,8 +368,8 @@ async function emitSleepAudit(
       triggeredByTenant: ctx.tenantId, // preserve for audit forensics
     };
     if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
-    // A flush stopped between chunks names the unit it would have
-    // committed next, so a unit that fails every night can be found.
+    // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can
+    // be found.
     const nextUnitIds = ctx.local.consolidation.failedUnitOf(phaseError);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([

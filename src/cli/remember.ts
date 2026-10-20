@@ -69,7 +69,6 @@ function rememberTags(flags: CliFlags, cwd: string): RememberTags {
   return { requested, all };
 }
 
-// Resolve explicit confidence flag (default: 'verified' for manual remember)
 function rememberConfidence(flags: CliFlags): ConfidenceLevel {
   let confidence: ConfidenceLevel = 'verified';
   if (flags['observed']) confidence = 'observed';
@@ -357,7 +356,6 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
     return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' };
   });
 
-  // Open conflicts involving this memory.
   const openIn = (root: string) =>
     api.conflictListAll((page) => api.conflictList(cliApiContext(root, tenantId), 'open', {}, page));
   const allConflicts = [...(await openIn(hippoRoot)), ...(isInitialized(globalRoot) ? await openIn(globalRoot) : [])];

@@ -81,8 +81,8 @@ export function ftsTermParts(term: string): string[] {
   return term.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 }
 
-/** The rarest terms as a space-joined FTS query, given each part's document count; a term counts as its rarest part,
- *  an upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. */
+/** The rarest terms as a space-joined FTS query, given each part's document count; a term counts as its rarest part, an
+ *  upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. */
 export function rarestFtsQuery(
   terms: readonly string[],
   docCount: (part: string) => number,

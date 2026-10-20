@@ -77,8 +77,8 @@ describe('startStdioLoop, in process', () => {
 
     const db = openHippoDb(join(dir, 'global'));
     try {
-      expect(db.prepare('SELECT COUNT(*) AS n FROM memories').get<{ n: number }>().n).toBe(1);
-      expect(db.prepare('SELECT content FROM memories').get<{ content: string }>().content).toBe(
+      expect((db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n).toBe(1);
+      expect((db.prepare('SELECT content FROM memories').get() as { content: string }).content).toBe(
         'the staging queue drains at midnight',
       );
     } finally {

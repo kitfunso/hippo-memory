@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) =>
   activeGoalsWithPolicies(root, opts).goals;
@@ -13,11 +13,19 @@ describe('goal stack depth cap', () => {
     root = makeRoot('b3-cap');
   });
 
-  it('auto-suspends the oldest active goal when pushing the 4th', () => {
-    const g1 = pushGoal(root, { ...ctx, goalName: 'oldest' });
-    pushGoal(root, { ...ctx, goalName: 'middle' });
-    pushGoal(root, { ...ctx, goalName: 'recent' });
-    pushGoal(root, { ...ctx, goalName: 'newest' });
+  it('auto-suspends the oldest active goal when pushing the 4th, even when all share one created_at', () => {
+    // A frozen clock gives every push the same created_at, the tie fast pushes hit by chance.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T00:00:00.000Z'));
+    let g1: ReturnType<typeof pushGoal>;
+    try {
+      g1 = pushGoal(root, { ...ctx, goalName: 'oldest' });
+      pushGoal(root, { ...ctx, goalName: 'middle' });
+      pushGoal(root, { ...ctx, goalName: 'recent' });
+      pushGoal(root, { ...ctx, goalName: 'newest' });
+    } finally {
+      vi.useRealTimers();
+    }
 
     const active = activeGoalsOf(root, ctx);
     expect(active).toHaveLength(3);

@@ -52,8 +52,6 @@ import { ALL_TENANTS } from '../util/tenant.js';
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
 
-// Watch command
-
 const WATCH_USAGE = 'Usage: hippo watch -- <command> [args...]';
 
 /** The argv to run, which no shell parses. */
@@ -77,15 +75,14 @@ async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Pr
     return;
   }
 
-  // Only create memory if hippo is initialized
   if (!isInitialized(hippoRoot)) {
     printError('Command failed but .hippo not initialized. Run `hippo init` to enable auto-learn.');
     throw new CliExit(exitCode);
   }
 
   const failure = captureError(exitCode, stderr, command, tenantId);
-  // A rejection-guard refusal of a failed command's output must not crash the watcher:
-  // skip with the message below and still exit with the wrapped command's real exit code.
+  // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with the message below and
+  // still exit with the wrapped command's real exit code.
   try {
     await api.rememberLocally(cliApiContext(hippoRoot, tenantId), {
       content: failure.content,
@@ -109,8 +106,6 @@ async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Pr
 
   throw new CliExit(exitCode);
 }
-
-// Learn command
 
 export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -148,8 +143,6 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
     console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
   }
 }
-
-// Import command
 
 /** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command
  * that finishes them. */
@@ -379,8 +372,6 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: C
   if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }
 
-// Promote command
-
 async function cmdPromote(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
@@ -397,8 +388,6 @@ async function cmdPromote(hippoRoot: string, tenantId: string, id: string): Prom
     fail(`Failed to promote: ${errorMessage(err)}`);
   }
 }
-
-// Sync command
 
 export function handleSync({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
@@ -440,7 +429,6 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
 export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const shareId = args[0];
   if (shareId === '--auto' || flags['auto']) {
-    // Auto-share mode
     requireInit(hippoRoot);
     const minScore = numberFlag(flags, 'min-score') ?? AUTO_SHARE_MIN_SCORE;
     const dryRun = boolFlag(flags, 'dry-run');

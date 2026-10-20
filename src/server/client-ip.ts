@@ -11,8 +11,8 @@ const IPV6_PREFIX_GROUPS = 4;
 /**
  * Rate-limit key: the socket's remote address, which behind a TLS proxy collapses into one bucket unauthenticated
  * traffic can drain.
- * HIPPO_CLIENT_IP_HEADER (fly-client-ip on Fly) is read only from a peer in HIPPO_TRUSTED_PROXIES (IPs or CIDRs),
- * so a caller that reaches the port past the proxy cannot pick its own bucket. In a comma-joined chain the key is the
+ * HIPPO_CLIENT_IP_HEADER (fly-client-ip on Fly) is read only from a peer in HIPPO_TRUSTED_PROXIES (IPs or CIDRs), so a
+ * caller that reaches the port past the proxy cannot pick its own bucket. In a comma-joined chain the key is the
  * rightmost hop no trusted proxy added.
  */
 export function clientIpForRateLimit(req: IncomingMessage): string {
@@ -131,9 +131,8 @@ function isTrustedProxy(list: BlockList, ip: string): boolean {
 
 export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
   // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration; /health and other paths are never throttled,
-  // and a 429 lands in the createServer
-  // catch. Keyed per clientIpForRateLimit (set HIPPO_CLIENT_IP_HEADER behind a TLS-terminating proxy, or all clients
-  // share one bucket).
+  // and a 429 lands in the createServer catch. Keyed per clientIpForRateLimit (set HIPPO_CLIENT_IP_HEADER behind a
+  // TLS-terminating proxy, or all clients share one bucket).
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
     if (!limiter.check(clientLimitKey(req))) {
       throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);

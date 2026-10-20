@@ -21,8 +21,8 @@ import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../uti
 import { randomUUID } from 'node:crypto';
 import { currentRequestId, runWithRequestId } from '../util/request-scope.js';
 
-// MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded
-// newlines. https://modelcontextprotocol.io/specification/.../basic/transports#stdio
+// MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
+// https://modelcontextprotocol.io/specification/.../basic/transports#stdio
 function send(msg: McpResponse): void {
   process.stdout.write(JSON.stringify(msg) + '\n');
 }
@@ -94,8 +94,8 @@ function answerUnroutable(frame: JsonValue): void {
   log.warn('mcp: dropped a frame with no method and no id; it cannot be routed or answered');
 }
 
-/** How long stdin's end waits for calls still running, so a client that closes right after its last request still
- * gets the reply. */
+/** How long stdin's end waits for calls still running, so a client that closes right after its last request still gets
+ * the reply. */
 const STDIN_END_DRAIN_MS = 5000;
 const CRASH_DRAIN_SLACK_MS = 1000;
 
@@ -227,9 +227,8 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
 }
 
 /** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run
- * directly) should call it, so the HTTP daemon
- * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. The caller picks
- * the host, so src/mcp names no store adapter and no scope plumbing. */
+ * directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`) does not steal stdin or exit when its
+ * parent closes a pipe. The caller picks the host, so src/mcp names no store adapter and no scope plumbing. */
 export function startStdioLoop(host: McpHost): void {
   process.stdin.on(
     'data',

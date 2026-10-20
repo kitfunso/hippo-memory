@@ -160,8 +160,8 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx:
 }
 
 /** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through
- * it. Returns null for notifications. A tool's errors are the caller's problem: wrap with try/catch in the
- * transport. Only `tools/call` needs the context, so stdio builds one for that method alone. */
+ * it. Returns null for notifications. A tool's errors are the caller's problem: wrap with try/catch in the transport.
+ * Only `tools/call` needs the context, so stdio builds one for that method alone. */
 export async function handleMcpRequest(req: McpRequest, ctx: McpContext | undefined): Promise<McpResponse | null> {
   const { id, method, params } = req;
 

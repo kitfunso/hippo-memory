@@ -6,12 +6,11 @@ const TARGET_ID_CHARS = 100;
 
 /**
  * Surface delivered on `RecallResult.planningFallacyHint` when a recall query carries a forward-prediction phrase and
- * the closest class has closed history,
- *  so the agent sees its own track record at the moment of forecasting. */
+ * the closest class has closed history, so the agent sees its own track record at the moment of forecasting. */
 export interface PlanningFallacyHint {
   classTag: string;
-  /** Verbatim PredictionBaserate.summary, e.g.
-   *  "Last 5 estimates in class migration-effort averaged 2.10x actual (MAE 1.40)." */
+  /** Verbatim PredictionBaserate.summary, e.g. "Last 5 estimates in class migration-effort averaged 2.10x actual (MAE
+   *  1.40)." */
   baserateSummary: string;
   /** Discriminator vs hypothetical future manual-override hints. */
   source: 'j3.2-auto';
@@ -36,18 +35,15 @@ export interface PlanningFallacyWatching {
   detectedPhrase: string;
   /**
    * Why hippo could not produce a baserate hint despite the match: 'no_class_match' (no class scored >=1 on token
-   * overlap)
-   *  or 'tiebreak' (>=2 classes tied at the best score; silent on ambiguity). */
+   * overlap) or 'tiebreak' (>=2 classes tied at the best score; silent on ambiguity). */
   reason: 'no_class_match' | 'tiebreak';
-  /** One-line agent-facing suggestion for how the user can give hippo
-   *  enough signal to produce a baserate next time. */
+  /** One-line agent-facing suggestion for how the user can give hippo enough signal to produce a baserate next time. */
   suggestion: string;
 }
 
 /**
  * What `decidePlanningFallacy` hands to recall: EITHER `hint` (baserate available) OR `watching` (regex fired, no
- * baserate), or NEITHER (mode=off,
- *  no queryText, no regex match, or nClosed=0). Never both. */
+ * baserate), or NEITHER (mode=off, no queryText, no regex match, or nClosed=0). Never both. */
 export interface PlanningFallacyOutput {
   hint?: PlanningFallacyHint;
   watching?: PlanningFallacyWatching;
@@ -90,13 +86,13 @@ export function decidePlanningFallacy(
   actor: string,
 ): PlanningFallacyDecision {
   if (evidence.tiebreak) {
-    // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets the
-    // caller render "watching but no baserate (tiebreak)"; the audit channel stays the source of truth.
+    // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets the caller render
+    // "watching but no baserate (tiebreak)"; the audit channel stays the source of truth.
     return watchingWithAudit(tenantId, actor, match, 'tiebreak', TIEBREAK_SUGGESTION);
   }
   if (!evidence.classTag) {
-    // Telemetry: no class scored ≥ 1. High volume here means regex+token-overlap misses real forward-claims
-    // with no class signal, the case for an embedding fallback.
+    // Telemetry: no class scored ≥ 1. High volume here means regex+token-overlap misses real forward-claims with no
+    // class signal, the case for an embedding fallback.
     return watchingWithAudit(tenantId, actor, match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION);
   }
   const baserate = evidence.baserate;

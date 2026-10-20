@@ -9,8 +9,8 @@ import type { ClefSettings } from '../core/config.js';
  */
 export type RerankerFn = (query: string, results: SearchResult[], options?: RerankerOptions) => Promise<RerankResult[]>;
 
-/** JSON-serializable value. Per-track reranker config is opaque to the seam
- *  but must still be a concrete, serializable shape rather than `unknown`. */
+/** JSON-serializable value. Per-track reranker config is opaque to the seam but must still be a concrete, serializable
+ *  shape rather than `unknown`. */
 export type RerankerConfigValue =
   | string
   | number
@@ -44,8 +44,8 @@ export interface RerankProvenance {
 }
 
 export interface RerankResult extends SearchResult {
-  /** Score assigned by the reranker. Replaces `score` for downstream
-   *  ordering; original `score` preserved on the SearchResult. */
+  /** Score assigned by the reranker. Replaces `score` for downstream ordering; original `score` preserved on the
+   *  SearchResult. */
   rerankScore: number;
   /** 1-indexed rank in the input to the reranker. */
   preRerankRank: number;

@@ -17,8 +17,8 @@ export const DEFAULT_GRAPH_HOPS = 2;
 export const DEFAULT_GRAPH_DECAY = 0.5;
 /** Default number of top lexical seeds expanded from. */
 export const DEFAULT_GRAPH_SEED_COUNT = 10;
-/** Recommended RRF weight for the graph stream — a CLI-only convenience default. The
- *  library `graphStream.weight` option stays REQUIRED (opt-in is explicit). */
+/** Recommended RRF weight for the graph stream, a CLI-only convenience default. The library `graphStream.weight` option
+ *  stays REQUIRED (opt-in is explicit). */
 export const DEFAULT_GRAPH_STREAM_WEIGHT = 0.5;
 
 /** A lexical seed to expand the graph from: a candidate index + its lexical strength. */
@@ -71,8 +71,8 @@ export function selectGraphSeeds(
 }
 
 // Pass 1: take the STRONGEST reaching-seed strength per new neighbor across ALL relations at this depth before
-// committing any to `visited`;
-// marking mid-loop would lock a node to whichever relation SQLite returned first and drop a stronger seed's later edge.
+// committing any to `visited`; marking mid-loop would lock a node to whichever relation SQLite returned first and drop
+// a stronger seed's later edge.
 function bestStrengthAtDepth(
   rels: ReadonlyArray<Relation>,
   frontierSet: ReadonlySet<number>,
@@ -127,8 +127,8 @@ async function reachedEntityScores(
     });
     const hopFactor = Math.pow(decay, depth);
     const bestStrengthThisDepth = bestStrengthAtDepth(rels, frontierSet, visited, frontierStrength, originStrength);
-    // Pass 2: commit strongest-first (then id asc — deterministic), so the per-hop fanout cap
-    // keeps the highest-scoring neighbors rather than whichever SQLite happened to return.
+    // Pass 2: commit strongest-first (then id asc, so deterministic), so the per-hop fanout cap keeps the
+    // highest-scoring neighbors rather than whichever SQLite happened to return.
     const nextFrontier: number[] = [];
     const nextStrength = new Map<number, number>();
     const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
@@ -172,8 +172,8 @@ async function accumulateForStore(
 ): Promise<void> {
   const { memIdToIndex, graphScore, hops, decay, maxNeighbors, tenantId } = options;
   if (seeds.length === 0) return;
-  // The strongest seed strength per source memory id (a memId could appear once, but
-  // guard against dup indices mapping to the same memId).
+  // The strongest seed strength per source memory id (a memId could appear once, but guard against dup indices mapping
+  // to the same memId).
   const strengthByMemId = new Map<string, number>();
   for (const s of seeds) {
     const memId = entries[s.index].id;
@@ -245,9 +245,8 @@ export async function graphRankStream(
   }
 
   // Seed-exclusion guard: graphScore is keyed by entryIndex across roots but each root's visited-set is per-root, so a
-  // seed in one store
-  // could score as a neighbor in the other; drop every seed index so "seeds are never graph-scored" holds across
-  // roots.
+  // seed in one store could score as a neighbor in the other; drop every seed index so "seeds are never graph-scored"
+  // holds across roots.
   for (const s of seeds) graphScore.delete(s.index);
 
   if (graphScore.size === 0) return [];

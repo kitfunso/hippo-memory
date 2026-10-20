@@ -15,10 +15,9 @@ import type { AuditOp } from '../../core/audit-ops.js';
 
 /**
  * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked within the window returns
- * the same topMemoryId) and
- * `memory_dominance` (the same topMemoryId across >= minDominance distinct queryHashes). Each pipeline keeps its OWN
- * ring Map keyed by (tenant, session),
- * because its top-1 ranking differs. AnchoringHint and PlanningFallacyHint are independent signals. */
+ * the same topMemoryId) and `memory_dominance` (the same topMemoryId across >= minDominance distinct queryHashes). Each
+ * pipeline keeps its OWN ring Map keyed by (tenant, session), because its top-1 ranking differs. AnchoringHint and
+ * PlanningFallacyHint are independent signals. */
 
 export type AnchoringReason = 'query_repeat' | 'memory_dominance';
 
@@ -26,8 +25,8 @@ export interface AnchoringHint {
   reason: AnchoringReason;
   /** The memory ID that is anchoring the agent's reasoning. */
   memoryId: string;
-  /** For 'memory_dominance': how many distinct queries in the recent window
-   *  had this memory as their top-1 result. Always >= 3 when emitted. */
+  /** For 'memory_dominance': how many distinct queries in the recent window had this memory as their top-1 result.
+   *  Always >= 3 when emitted. */
   queryCount?: number;
   /** Human-readable summary surfaced to the agent. */
   summary: string;
@@ -44,16 +43,15 @@ export interface RecallHistoryEntry {
   ts: string;
   /**
    * Memory id of the AnchoringHint that fired on this recall, if any; the caller writes it after detectAnchoring
-   * returns, and the cooldown reads it next
-   * time. */
+   * returns, and the cooldown reads it next time. */
   anchoredOn?: string;
 }
 
 export type RecallHistorySnapshot = readonly RecallHistoryEntry[];
 
 export interface DetectAnchoringOptions {
-  /** memory_dominance threshold: number of distinct queryHashes that must have returned
-   *  the same topMemoryId. Default 3. */
+  /** memory_dominance threshold: number of distinct queryHashes that must have returned the same topMemoryId. Default
+   *  3. */
   minDominance?: number;
   /** query_repeat window: how many recent history entries to scan for query repeat.
    *  Default 5. */
@@ -83,11 +81,11 @@ export function hashQueryText(query: string): number {
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     .filter((t) => t.length > 0);
-  // Drop tokens under 3 chars (filler words) so `a login bug` and `login bug` hash
-  // alike; matches the >=3 filter in src/learn/forward-claim-detector.ts.
+  // Drop tokens under 3 chars (filler words) so `a login bug` and `login bug` hash alike; matches the >=3 filter in
+  // src/learn/forward-claim-detector.ts.
   const filtered = normalized.filter((t) => t.length >= 3);
-  // Fall back to all tokens when the filter empties the query (CJK 2-char words,
-  // acronyms like `AI`) so distinct short queries do not all hash to fnv1a32('').
+  // Fall back to all tokens when the filter empties the query (CJK 2-char words, acronyms like `AI`) so distinct short
+  // queries do not all hash to fnv1a32('').
   const tokens = filtered.length > 0 ? filtered : normalized;
   const deduped = Array.from(new Set(tokens)).sort();
   return fnv1a32(deduped.join(' '));
@@ -122,8 +120,8 @@ export function detectAnchoring(
   const recentRepeatWindow = opts.recentRepeatWindow ?? DEFAULT_RECENT_REPEAT_WINDOW;
   const cooldown = opts.cooldown ?? DEFAULT_COOLDOWN;
 
-  // Cooldown gate: was the most-recent hint (across the last `cooldown`
-  // entries) for THIS memory? If yes, suppress regardless of rule.
+  // Cooldown gate: was the most-recent hint (across the last `cooldown` entries) for THIS memory? If yes, suppress
+  // regardless of rule.
   const cooldownSlice = history.slice(-cooldown);
   for (const entry of cooldownSlice) {
     if (entry.anchoredOn === currentTopMemoryId) {
@@ -159,8 +157,8 @@ export function detectAnchoring(
   return null;
 }
 
-// Count distinct queryHashes in history where topMemoryId === the current top
-// (excluding null tops), plus the current query itself.
+// Count distinct queryHashes in history where topMemoryId === the current top (excluding null tops), plus the current
+// query itself.
 function countDistinctQueries(
   history: RecallHistorySnapshot,
   currentQueryHash: number,
@@ -176,8 +174,8 @@ function countDistinctQueries(
   return matchingQueryHashes.size;
 }
 
-// query_repeat check: is currentQueryHash present in the last `recentRepeatWindow`
-// entries AND was that entry's topMemoryId === currentTopMemoryId?
+// query_repeat check: is currentQueryHash present in the last `recentRepeatWindow` entries AND was that entry's
+// topMemoryId === currentTopMemoryId?
 function isRecentRepeat(
   history: RecallHistorySnapshot,
   recentRepeatWindow: number,
@@ -223,8 +221,7 @@ export function buildSessionKey(tenantId: string, sessionId: string): string {
 
 /**
  * Get-or-create a RingBuffer per session key, capped at `maxSessions` (default 1000); at the cap the oldest-inserted
- * key (first from Map.keys()) is
- * evicted. */
+ * key (first from Map.keys()) is evicted. */
 export function getOrCreateRing(
   map: Map<string, RingBuffer>,
   key: string,
@@ -415,15 +412,15 @@ export function shownRecallRows(config: HintConfig, who: RecallAuditCaller, show
   ];
 }
 
-/** How one surface's recall is recorded. The surfaces differ in
- * these three values and in the list they hand over, nowhere else. */
+/** How one surface's recall is recorded. The surfaces differ in these three values and in the list they hand over,
+ * nowhere else. */
 export interface RecallRecording {
   /** Whose session rings the recall reads and feeds. */
   readonly ring: RecallSurface;
   /** The label of its token ledger row. */
   readonly ledger: TokenSurface;
-  /** 'every': an empty list still reaches the stats write, which
-   * then only rewrites stats.json; 'shown': an empty list skips it. */
+  /** 'every': an empty list still reaches the stats write, which then only rewrites stats.json; 'shown': an empty list
+   * skips it. */
   readonly stats: 'every' | 'shown';
 }
 
@@ -479,8 +476,8 @@ export async function recordShownRecall(
   how: RecallRecording,
   shown: ShownList,
 ): Promise<void> {
-  // A surface that only peeked has its ring created here, after the
-  // write, so a recall that fails cannot LRU-evict a live session.
+  // A surface that only peeked has its ring created here, after the write, so a recall that fails cannot LRU-evict a
+  // live session.
   const ring = sessionRing(ctx, how.ring, shown.sessionId);
   if (ring) noteRecall(ring, shown.query, shown.topId, shown.anchoredOn);
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.

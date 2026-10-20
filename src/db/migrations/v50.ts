@@ -64,8 +64,7 @@ export const v50: Migration = {
   version: 50,
   up: (db) => {
     // Per-turn delivery events (src/store/recall-trace.ts). Additive only: no min_compatible_binary bump; rollback
-    // drops both tables
-    // and sets schema_version back to 49. No CHECK on enum columns since SQLite cannot alter one;
+    // drops both tables and sets schema_version back to 49. No CHECK on enum columns since SQLite cannot alter one;
     // delivery-recorder.ts unions are the allowlist.
     db.exec(DELIVERY_EVENTS_SCHEMA_SQL);
   },

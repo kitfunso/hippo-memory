@@ -14,8 +14,8 @@ export interface AuditOptions {
   readonly tenantId: string;
 }
 
-/** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth,
- * and a failed audit write shows up as missing rows. */
+/** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth, and a failed audit
+ * write shows up as missing rows. */
 export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: AuditOptions): void {
   const { targetId, metadata, actor = CLI_ACTOR, tenantId } = options;
   try {

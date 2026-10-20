@@ -24,8 +24,6 @@ import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit, fail } from './exit.js';
 import { errorMessage } from '../util/log.js';
 
-// Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
-
 async function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const channel = stringFlag(flags, 'channel');
   if (!channel) {

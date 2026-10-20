@@ -9,7 +9,6 @@ const STATS_DECIMALS = 4;
 // they are recalled.
 const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
 
-// 2. Physics simulation pass
 export function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_MAX_PARTICLES): void {
   if (run.dryRun) return;
   const { config, result } = run;
@@ -56,8 +55,8 @@ function recallTimes(run: SleepRun, capped: boolean): Map<string, Pick<MemoryEnt
 }
 
 /**
- * Every stored particle id in load order up to the cap; past it, the most recently recalled survivors (memory id
- * breaks ties), then particles with no survivor. */
+ * Every stored particle id in load order up to the cap; past it, the most recently recalled survivors (memory id breaks
+ * ties), then particles with no survivor. */
 export function particlesToSimulate(
   stored: readonly string[],
   entries: ReadonlyMap<string, Pick<MemoryEntry, 'lastRetrieved'>>,

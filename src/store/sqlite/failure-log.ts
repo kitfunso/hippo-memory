@@ -1,5 +1,5 @@
-// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a
-// handle of its own.
+// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a handle
+// of its own.
 import { ConflictError } from '../../core/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { DAY_MS } from '../../util/time.js';
@@ -52,7 +52,7 @@ export function requestOutcome(
 ): FailureOutcome | null {
   const row = db
     .prepare(`SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
-    .get<{ outcome: FailureOutcome; session_id: string | null } | undefined>(tenantId, requestId);
+    .get(tenantId, requestId) as { outcome: FailureOutcome; session_id: string | null } | undefined;
   if (row === undefined) return null;
   // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
   if (row.session_id !== sessionId.slice(0, MAX_FIELD)) {
@@ -61,8 +61,9 @@ export function requestOutcome(
   return row.outcome;
 }
 
-/** A retry that stored what the first try could not rewrites that row, since the request id allows one row per
- * tenant. */
+/**
+ * A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant.
+ */
 function settleFailureOutcome(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -78,7 +79,6 @@ function settleFailureOutcome(
 
 /** The tenant's rated failures per session since `sinceIso`, under the rule in core/failure-repeats.ts. */
 function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
-  // SAFETY: the SELECT names exactly these three TEXT columns.
   const rows = db
     .prepare(
       `SELECT ts, session_id, sig_hash FROM failure_log
@@ -93,7 +93,6 @@ function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: str
 
 /** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
 export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): number {
-  // SAFETY: COUNT aggregate row.
   const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as
     | { n: number }
     | undefined;
@@ -102,7 +101,6 @@ export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): numb
 
 /** Sum the failure log for one tenant since `sinceIso`. */
 export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceIso: string): FailureSummary {
-  // SAFETY: the SELECT names exactly these two columns, TEXT and an aggregate.
   const rows = db
     .prepare(`SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`)
     .all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;

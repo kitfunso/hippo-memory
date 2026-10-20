@@ -56,8 +56,7 @@ const TRG_DECISIONS_TENANT_MATCH_UPDATE = `
         `;
 
 // Cross-tenant safety vs the successor decision (self-FK): superseded_by is set only via the supersede UPDATE and the
-// successor,
-// which already exists in the same transaction when this fires, must share the tenant.
+// successor, which already exists in the same transaction when this fires, must share the tenant.
 const TRG_DECISIONS_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_decisions_supersede_tenant_match_update
           BEFORE UPDATE ON decisions

@@ -176,8 +176,8 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
   opts.cost = drillCost;
   const r = await api.drillDown(ctx, summaryId, opts);
   if ('failure' in r) {
-    // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
-    // and missing on purpose: telling scope_blocked apart would leak that the row exists.
+    // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked and missing on
+    // purpose: telling scope_blocked apart would leak that the row exists.
     if (r.failure === 'not_drillable') {
       printError(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
     } else {

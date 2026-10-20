@@ -1,8 +1,7 @@
 /**
  * Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny rule to
- * searchBothHybrid's candidate loads without an
- * import cycle. src/api/index.ts imports these and re-exports them for back-compat (`api.isPrivateScope`, tests
- * importing `passesScopeFilterForRecall`).
+ * searchBothHybrid's candidate loads without an import cycle. src/api/index.ts imports these and re-exports them for
+ * back-compat (`api.isPrivateScope`, tests importing `passesScopeFilterForRecall`).
  */
 
 import { BadRequestError, ForbiddenError } from './api-errors.js';
@@ -10,16 +9,14 @@ import { MAX_ID_LEN } from '../util/limits.js';
 
 /**
  * Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by the SQL clause in
- * `loadSearchRows` and by
- * `passesScopeFilterForRecall`. Invariant: never empty, or quarantine scopes would pass both paths silently (the
- * module-load assertion below pins this).
+ * `loadSearchRows` and by `passesScopeFilterForRecall`. Invariant: never empty, or quarantine scopes would pass both
+ * paths silently (the module-load assertion below pins this).
  */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
 
 /**
  * @internal Runtime guard against blanking a load-bearing literal array; `as const` arrays widen via `readonly T[]` at
- * the call site, so the empty case
- * is reachable and testable. */
+ * the call site, so the empty case is reachable and testable. */
 export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
   if (arr.length === 0) {
     throw new Error(`${name} cannot be empty — would silently allow quarantine scopes`);
@@ -30,9 +27,8 @@ assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
 
 /**
  * Source-agnostic private-scope detector: private means `<lowercase-source>:private:<rest>` (`slack:private:Cabc`; not
- * `slack:public:x`, null, '',
- * 'private:foo'). The single source of truth for api.recall, the MCP server, the CLI and search-both.ts, so connector
- * work cannot drift.
+ * `slack:public:x`, null, '', 'private:foo'). The single source of truth for api.recall, the MCP server, the CLI and
+ * search-both.ts, so connector work cannot drift.
  */
 export const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
 
@@ -154,8 +150,7 @@ export class ScopeForbiddenError extends ForbiddenError {
 
 /**
  * True for scopes default-deny hides (`<source>:private:*` and the quarantine buckets); naming one explicitly unlocks
- * it, so naming one needs
- * authorization. */
+ * it, so naming one needs authorization. */
 export function isRestrictedScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
   // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string literals; widening the array lets .includes() take
@@ -176,8 +171,8 @@ export interface ScopeActor {
   owner?: string;
 }
 
-/** Personal rows answer to their owner alone: role, key grants and resolver scopes never
- * open one. Else admin reads all; a member needs an exact grant on a restricted scope. */
+/** Personal rows answer to their owner alone: role, key grants and resolver scopes never open one. Else admin reads
+ * all; a member needs an exact grant on a restricted scope. */
 export function canReadScope(actor: ScopeActor, scope: string): boolean {
   if (isPersonalScope(scope)) return scope === personalScopeOf(actor);
   if (actor.role === 'admin') return true;
@@ -197,8 +192,8 @@ export function derivationScope(scope: string | null | undefined): string | null
   return isRestrictedScope(scope) ? (scope ?? null) : null;
 }
 
-/** The one derivation scope shared by every source, or `{ ok: false }` when
- *  two disagree, so the caller skips the derived row instead of under-scoping it. */
+/** The one derivation scope shared by every source, or `{ ok: false }` when two disagree, so the caller skips the
+ *  derived row instead of under-scoping it. */
 export function commonDerivationScope(
   scopes: readonly (string | null | undefined)[],
 ): { ok: true; scope: string | null } | { ok: false } {
@@ -216,8 +211,8 @@ export function commonDerivationScope(
   return { ok: true, scope: common };
 }
 
-/** Map-partition key for consolidate/dag/dedup producers: tenant + derivation scope + origin project,
- *  so a derived row never blends two restricted scopes, a mixed pair, or two projects. */
+/** Map-partition key for consolidate/dag/dedup producers: tenant + derivation scope + origin project, so a derived row
+ *  never blends two restricted scopes, a mixed pair, or two projects. */
 export function derivationPartitionKey(
   tenantId: string,
   scope: string | null | undefined,

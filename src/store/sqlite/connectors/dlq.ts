@@ -55,7 +55,7 @@ function listDlqRows(
       `SELECT ${selectColumns}
          FROM ${table}
         WHERE tenant_id = ?
-        ORDER BY received_at ASC
+        ORDER BY received_at ASC, id ASC
         LIMIT ?`,
     )
     .all(tenantId, limit) as DlqRawRow[];

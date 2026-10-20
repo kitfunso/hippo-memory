@@ -1,6 +1,6 @@
-// `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and repeats are not
-// stored, because error memories decay slowly and would crowd out real lessons; what is stored stays `observed`
-// until outcome feedback confirms it. Every failure, stored or not, goes to the failure log.
+// `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and repeats are not stored,
+// because error memories decay slowly and would crowd out real lessons; what is stored stays `observed` until outcome
+// feedback confirms it. Every failure, stored or not, goes to the failure log.
 import type { Context } from '../api/types.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import { createMemory } from '../core/memory.js';

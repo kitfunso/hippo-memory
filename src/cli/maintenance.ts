@@ -104,7 +104,6 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
 }
 
 function printDedupPairs(result: DedupResult, dryRun: boolean): void {
-  // Show detailed pairs
   console.log('');
   const shown = result.pairs.slice(0, MAX_PAIRS_SHOWN);
   for (const pair of shown) {
@@ -121,14 +120,12 @@ function printDedupPairs(result: DedupResult, dryRun: boolean): void {
   }
 }
 
-// Embed command
-
 export async function handleEmbed(
   { hippoRoot, tenantId, flags }: CommandContext,
   given?: EmbeddingProvider,
 ): Promise<void> {
-  // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local requireInit,
-  // so it heals pre-1.27.0 global stores from a directory with no local .hippo.
+  // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local requireInit, so it heals
+  // pre-1.27.0 global stores from a directory with no local .hippo.
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
 

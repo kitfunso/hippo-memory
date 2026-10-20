@@ -1,5 +1,5 @@
-// Files named by a Codex apply_patch call, read the way openai/codex codex-rs/apply-patch reads them
-// (parser.rs for the body, invocation.rs for the shell forms it runs as apply_patch).
+// Files named by a Codex apply_patch call, read the way openai/codex codex-rs/apply-patch reads them (parser.rs for the
+// body, invocation.rs for the shell forms it runs as apply_patch).
 import * as path from 'path';
 import { isStringValue } from '../core/capture-contract.js';
 

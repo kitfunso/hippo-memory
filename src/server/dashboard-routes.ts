@@ -85,8 +85,8 @@ function dashboardRouteMatches(
 
 const findDashboardRoute = routeLookup(DASHBOARD_ROUTES, dashboardRouteMatches);
 
-/** One dashboard request: the security headers, then the first matching row; a path no row takes still passes the
- * gate before its 404, so only a signed-in browser learns which paths exist. */
+/** One dashboard request: the security headers, then the first matching row; a path no row takes still passes the gate
+ * before its 404, so only a signed-in browser learns which paths exist. */
 export async function answerDashboard(
   serving: DashboardServing,
   req: IncomingMessage,

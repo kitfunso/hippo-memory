@@ -186,8 +186,8 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
     await auditRepair(hippoRoot, tenantId, flags);
     return;
   }
-  // `audit list` and `audit prune` are the audit-log subcommands;
-  // other forms (no sub, --fix) keep the memory-quality auditor.
+  // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep the memory-quality
+  // auditor.
   if (args[0] === 'list' || args[0] === 'prune') {
     await cmdAuditLog(hippoRoot, tenantId, args, flags);
     return;

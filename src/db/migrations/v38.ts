@@ -249,8 +249,8 @@ function recreateGraphTables(db: DatabaseSyncLike): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
-  // Mirrors idx_entities_source_object: removeGraphEntitiesForObject (close-time cleanup)
-  // deletes relations by (source_object_type, source_object_id), so index that pair.
+  // Mirrors idx_entities_source_object: removeGraphEntitiesForObject (close-time cleanup) deletes relations by
+  // (source_object_type, source_object_id), so index that pair.
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_relations_source_object ON relations(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`,
   );

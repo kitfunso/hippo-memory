@@ -36,8 +36,7 @@ const IDX_PROJECT_BRIEFS_REPO = `
           ON project_briefs(tenant_id, repo, status)
         `;
 
-// Cross-tenant safety vs the referenced memory (verbatim mirror of the
-// v34 skills tenant-match triggers).
+// Cross-tenant safety vs the referenced memory (verbatim mirror of the v34 skills tenant-match triggers).
 const TRG_PROJECT_BRIEFS_TENANT_MATCH_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_project_briefs_tenant_match_insert
           BEFORE INSERT ON project_briefs
@@ -63,8 +62,7 @@ const TRG_PROJECT_BRIEFS_TENANT_MATCH_UPDATE = `
           END
         `;
 
-// Cross-tenant safety vs the successor brief (self-FK; verbatim mirror of
-// the v34 skills supersede trigger).
+// Cross-tenant safety vs the successor brief (self-FK; verbatim mirror of the v34 skills supersede trigger).
 const TRG_PROJECT_BRIEFS_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_project_briefs_supersede_tenant_match_update
           BEFORE UPDATE ON project_briefs

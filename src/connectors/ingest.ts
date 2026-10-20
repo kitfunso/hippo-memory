@@ -11,8 +11,8 @@ export interface IngestResult {
   memoryId: string | null;
 }
 
-/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory,
- * so a redelivery acks instead of retrying. */
+/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory, so a
+ * redelivery acks instead of retrying. */
 export async function rememberWithEventLog(
   ctx: Context,
   event: ConnectorEvent,

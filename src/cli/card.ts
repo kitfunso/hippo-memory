@@ -89,8 +89,8 @@ async function cardRefusal(hippoRoot: string, tenantId: string, id: string): Pro
   return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
-// One entry per subcommand: the flags handleCard actually reads for it, so a typo like
-// --depend-on fails fast instead of silently doing nothing.
+// One entry per subcommand: the flags handleCard actually reads for it, so a typo like --depend-on fails fast instead
+// of silently doing nothing.
 type CardSubcommand =
   | 'create'
   | 'show'

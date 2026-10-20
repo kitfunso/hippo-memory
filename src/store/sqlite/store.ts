@@ -95,12 +95,13 @@ import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from 
 import type { ContinuityKey } from '../port/types.js';
 import { isLocalStore, type LocalStore, type StoreReach } from '../local/index.js';
 
-/** Not on the synchronous store: the nearest-row scan yields to
- * the event loop, so this group answers only through Promises. */
+/** Not on the synchronous store: the nearest-row scan yields to the event loop, so this group answers only through
+ * Promises. */
 type AsyncOnly = 'vectors';
 
-/** The port as hippo.db answers it: each call runs to its end
- * and returns the value, so no write scope spans an await. */
+/**
+ * The port as hippo.db answers it: each call runs to its end and returns the value, so no write scope spans an await.
+ */
 // LocalFiles is written synchronous already, and Sync would erase its plain methods.
 export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>> & Pick<LocalStore, 'localFiles'>;
 

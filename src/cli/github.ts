@@ -1,5 +1,5 @@
-/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering main(); the verb
- * table in verbs/health.ts dispatches to handleGitHub. */
+/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering main(); the verb table
+ * in verbs/health.ts dispatches to handleGitHub. */
 
 import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../util/env.js';
 import { adminActor, type Context } from '../api/index.js';
@@ -23,8 +23,8 @@ import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit } from './exit.js';
 import { errorMessage } from '../util/log.js';
 
-/** Map a parsed envelope + eventName header to an IngestEvent;
- * null for unknown event types or shapes failing the type guards. */
+/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the type
+ * guards. */
 function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };
@@ -124,8 +124,8 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
   if (!event) {
     return { memoryId: null };
   }
-  // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent,
-  // which would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
+  // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent, which would write the
+  // deleted comment as a NEW raw memory instead of archiving the matching ones.
   if (
     (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
     event.payload.action === 'deleted'
@@ -142,8 +142,8 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
       deliveryId: args.deliveryId,
       eventName: event.eventName,
     });
-    // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return null;
-    // the replay audit trail is github_dlq.retry_count + retried_at.
+    // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return null; the replay
+    // audit trail is github_dlq.retry_count + retried_at.
     return { memoryId: r.archivedCount > 0 ? 'archived' : null };
   }
   const r = await ingestEvent(innerCtx, {

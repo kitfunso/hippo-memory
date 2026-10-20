@@ -275,8 +275,8 @@ interface ShownRanking {
   readonly planningAudit: AppendAuditOpts | undefined;
 }
 
-/** Audit rows first: a recall they cannot be written for leaves no
- * strengthen, trace, marker or count, as under the other rankers. */
+/** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or count, as under the
+ * other rankers. */
 async function recordShown(
   ctx: Context,
   store: HippoStore,

@@ -36,8 +36,7 @@ const IDX_CUSTOMER_NOTES_CUSTOMER = `
           ON customer_notes(tenant_id, customer, status)
         `;
 
-// Cross-tenant safety vs the referenced memory (verbatim mirror of the
-// v35 project_briefs tenant-match triggers).
+// Cross-tenant safety vs the referenced memory (verbatim mirror of the v35 project_briefs tenant-match triggers).
 const TRG_CUSTOMER_NOTES_TENANT_MATCH_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_customer_notes_tenant_match_insert
           BEFORE INSERT ON customer_notes
@@ -63,8 +62,7 @@ const TRG_CUSTOMER_NOTES_TENANT_MATCH_UPDATE = `
           END
         `;
 
-// Cross-tenant safety vs the successor note (self-FK; verbatim mirror of the
-// v35 project_briefs supersede trigger).
+// Cross-tenant safety vs the successor note (self-FK; verbatim mirror of the v35 project_briefs supersede trigger).
 const TRG_CUSTOMER_NOTES_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_customer_notes_supersede_tenant_match_update
           BEFORE UPDATE ON customer_notes

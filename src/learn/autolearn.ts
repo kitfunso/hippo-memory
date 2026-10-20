@@ -13,8 +13,8 @@ const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
 const MAX_LESSON_CHARS = 500;
 
-/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and
- * tags through remember. */
+/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and tags
+ * through remember. */
 export function captureError(exitCode: number, stderr: string, command: string, tenantId?: string): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
@@ -46,8 +46,6 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
   const lessons: string[] = [];
   const lines = gitLog.split('\n');
 
-  // Patterns that indicate a lesson to learn from
-  // Covers: fix, revert, bug, error, hotfix, refactor, perf, chore, breaking, deprecate
   const prefixes =
     customPatterns?.join('|') ?? 'fix|revert|bug|error|hotfix|bugfix|refactor|perf|chore|breaking|deprecate';
   const patterns = [
@@ -79,13 +77,12 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
     }
   }
 
-  // Deduplicate exact matches at extraction time
   return [...new Set(lessons)];
 }
 
 /** Split parsed lessons into ones worth storing and low-information ones; kept out of `extractLessons` so that
  * published parser's output cannot change.
- *  Order is preserved in both arrays, and both hold lessons with secret shapes redacted. */
+ * Order is preserved in both arrays, and both hold lessons with secret shapes redacted. */
 export function partitionLessons(lessons: string[]) {
   const kept: string[] = [];
   const dropped: string[] = [];

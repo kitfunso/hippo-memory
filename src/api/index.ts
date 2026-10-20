@@ -1,6 +1,6 @@
-// Domain API layer: Context-taking functions that the CLI, the HTTP server and MCP all call, so the
-// business logic lives in one place. The code lives in src/api/, one module per domain; this barrel
-// keeps every import path that callers already use.
+// Domain API layer: Context-taking functions that the CLI, the HTTP server and MCP all call, so the business logic
+// lives in one place. The code lives in src/api/, one module per domain; this barrel keeps every import path that
+// callers already use.
 
 export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../core/api-errors.js';
 

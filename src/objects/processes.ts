@@ -3,7 +3,7 @@
  * `change_summary` and a server-derived `version`.
  * The `processes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for
  * recall.
- *  Structural step-diffing is a deferred read-side feature; the version chain is the changelog. */
+ * Structural step-diffing is a deferred read-side feature; the version chain is the changelog. */
 
 import { BadRequestError } from '../core/api-errors.js';
 import type { KeysetPosition } from '../util/keyset.js';
@@ -71,8 +71,8 @@ export function validateProcessSteps(steps: JsonValue): string[] {
   return out;
 }
 
-/** The recall-surface content for the memory mirror: name + numbered steps +
- *  optional description, so `hippo recall` shows the process body. */
+/** The recall-surface content for the memory mirror: name + numbered steps + optional description, so `hippo recall`
+ *  shows the process body. */
 function buildProcessContent(processName: string, steps: string[], description?: string): string {
   const numbered = steps.map((s, i) => `${i + 1}. ${s}`).join('\n');
   let content = processName;
@@ -105,8 +105,8 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOptions> = {
   },
 };
 
-/** Create a process, or a new version superseding an existing one, in the `objects`
- * store group's one transaction. The supersede CAS (WHERE status='active' AND id
+/** Create a process, or a new version superseding an existing one, in the `objects` store group's one transaction. The
+ * supersede CAS (WHERE status='active' AND id
  * != <new id>) throws on changes===0 so a duplicate supersede aborts the write.
  */
 export function saveProcess(

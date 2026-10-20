@@ -4,7 +4,7 @@ import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike 
 import { raiseMinBinary } from '../../db/meta.js';
 import { assertTenantId } from '../../core/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../util/version.js';
-import { type SessionEventRow, rowToSessionEvent } from './rows.js';
+import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
 import type { TaskSnapshot, SessionEvent, SessionEventInput, WorkingMemoryItem } from '../port/sessions.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
@@ -51,7 +51,6 @@ function clearActiveTaskSnapshotAt(
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', hippoRoot, undefined);
   const now = new Date().toISOString();
-  // SAFETY: active's shape matches the single `id` column selected above.
   const active = db
     .prepare(
       `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
@@ -120,10 +119,9 @@ function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: Se
 }
 
 function reloadSessionEvent(db: DatabaseSyncLike, id: number): SessionEvent {
-  // SAFETY: row's shape matches the nine columns named in the SELECT below.
   const row = db
     .prepare(`
-      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
+      SELECT ${SESSION_EVENT_COLUMNS}
       FROM session_events
       WHERE id = ?
     `)
@@ -141,11 +139,10 @@ function recentSessionEventsOldestFirst(
   sessionId: string,
   limit: number,
 ): SessionEvent[] {
-  // SAFETY: recentRows' shape matches the nine columns named in the SELECT below.
   const recentRows = db
     .prepare(
       `
-      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
+      SELECT ${SESSION_EVENT_COLUMNS}
       FROM session_events
       WHERE session_id = ? AND tenant_id = ?
       ORDER BY created_at DESC, id DESC
@@ -165,8 +162,8 @@ export function appendSessionEventAt(
   assertTenantId('appendSessionEvent', tenantId);
   const now = new Date().toISOString();
 
-  // Scope is stored as given; default-deny in api.recall + cmdRecall
-  // continuity reads applies to slack:private:* and 'unknown:legacy' rows.
+  // Scope is stored as given, since reads deny by default.
+  // api.recall and cmdRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
   const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
   const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
   writeRecentSessionMirror(hippoRoot, tenantId, recent);
@@ -195,11 +192,9 @@ export function listSessionEventsAt(
   params.push(limit);
 
   const where = `WHERE ${clauses.join(' AND ')}`;
-  // SAFETY: rows' shape matches the nine columns named in the SELECT
-  // above.
   const rows = db
     .prepare(`
-    SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
+    SELECT ${SESSION_EVENT_COLUMNS}
     FROM session_events
     ${where}
     ORDER BY created_at DESC, id DESC
@@ -218,8 +213,6 @@ export function findPromotableSessionsAt(
   sinceMs: number,
 ): Array<{ session_id: string }> {
   assertTenantId('findPromotableSessions', tenantId);
-  // SAFETY: rows' shape matches the single `session_id` column selected
-  // above.
   const rows = db
     .prepare(`
     SELECT DISTINCT session_id FROM session_events
@@ -244,7 +237,6 @@ export function traceExistsForSessionAt(db: DatabaseSyncLike, tenantId: string, 
 
 /** The owner a session id is bound to, or null. */
 function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
-  // SAFETY: the SELECT names exactly this one TEXT column.
   const row = db
     .prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`)
     .get(tenantId, sessionId) as { owner_subject: string } | undefined;
@@ -320,6 +312,7 @@ function sessionOwnerOrBindAt(
 
 const WM_MAX_ENTRIES = 20;
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface WorkingMemoryRow {
   id: number;
   scope: string;
@@ -350,7 +343,7 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 }
 
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
- * oldest created_at). Returns the new row ID. */
+ * the oldest, by created_at then id). Returns the new row ID. */
 function wmPushAt(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
   const now = new Date().toISOString();
   return withWriteScope(db, 'wm_push', () => {
@@ -384,7 +377,6 @@ function wmPushAt(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPus
 
 function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string): void {
   // Evict if over capacity for this scope.
-  // SAFETY: `COUNT(*) AS cnt` always returns exactly one row { cnt }, so `.get()` never yields undefined.
   const countRow = db
     .prepare(`
     SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
@@ -399,7 +391,7 @@ function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string
       WHERE id IN (
         SELECT id FROM working_memory
         WHERE scope = ? AND tenant_id = ?
-        ORDER BY importance ASC, created_at ASC
+        ORDER BY importance ASC, created_at ASC, id ASC
         LIMIT ?
       )
     `).run(scope, tenantId, excess);
@@ -429,14 +421,12 @@ function wmReadAt(
 ): WorkingMemoryItem[] {
   const where = wmWhere(tenantId, filter);
   const limit = Math.max(1, Math.trunc(filter.limit ?? WM_MAX_ENTRIES));
-  // SAFETY: query selects exactly the columns of WorkingMemoryRow, in the
-  // same names, from the working_memory table this module owns.
   const rows = db
     .prepare(`
     SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
     FROM working_memory
     ${where.sql}
-    ORDER BY importance DESC, created_at DESC
+    ORDER BY importance DESC, created_at DESC, id DESC
     LIMIT ?
   `)
     .all(...where.params, limit) as WorkingMemoryRow[];

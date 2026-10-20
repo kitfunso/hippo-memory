@@ -1,11 +1,11 @@
-// Home-directory paths name their user, so text bound for a shared
-// store tests or masks them here; no imports keep it light.
+// Home-directory paths name their user, so text bound for a shared store tests or masks them here; no imports keep it
+// light.
 
 // VS Code writes file links URL-encoded, so a separator may be %5C or %2F.
 const WIN_SEP = String.raw`(?:[\\/]|%5[Cc]|%2[Ff])`;
 const WIN_CHAR = String.raw`(?:(?!%5[Cc]|%2[Ff])[^\\/:*?"<>|\s])`;
-// A Windows name never holds a quote, so JSON stops it; one with spaces runs to a separator, quote,
-// closing mark or line end, leaving the mark, as stopping at its first word leaks the surname.
+// A Windows name never holds a quote, so JSON stops it; one with spaces runs to a separator, quote, closing mark or
+// line end, leaving the mark, as stopping at its first word leaks the surname.
 const WIN_USER =
   String.raw`(?:${WIN_CHAR}+(?: ${WIN_CHAR}+){0,3}(?=${WIN_SEP}|["'\`)\]>,;]|\.(?=\s|$)|` +
   String.raw`(?<!\.)(?:[^\S ]|$))(?<![\`)\],;'])|${WIN_CHAR}+)`;
@@ -32,8 +32,8 @@ const LINUX_START = String.raw`(?<![\w.~-])${LINUX_HOME}`;
 const ROOT_START = String.raw`(?<![\w.~-])${ROOT_HOME}`;
 const MAC_START = String.raw`(?<![\w.~-])${MAC_HOME}`;
 
-/** One pattern per path shape that carries a user name: Windows, Git Bash and WSL
- * mounts, extended-length, UNC home shares, Linux, macOS and 8.3 short names. */
+/** One pattern per path shape that carries a user name: Windows, Git Bash and WSL mounts, extended-length, UNC home
+ * shares, Linux, macOS and 8.3 short names. */
 export const USER_SEGMENT: readonly RegExp[] = [
   DRIVE_HOME,
   new RegExp(MOUNT_START),
@@ -51,10 +51,9 @@ const MASK = '[home]';
 const allOf = (re: RegExp): RegExp => new RegExp(re.source, `${re.flags}g`);
 const [DRIVE_HOMES, LONG_PATHS, SHARE_HOMES, SHORT_NAMES] = [DRIVE_HOME, LONG_PATH, SHARE_HOME, SHORT_NAME].map(allOf);
 
-// A home glued after another starts where a mask will end, which no guard
-// refuses: one match takes the whole run, as masking one a pass costs a
-// pass per home. A run holds only shapes whose own step is not still to
-// come, so a later step meets the same text it would without the run.
+// A home glued after another starts where a mask will end, which no guard refuses: one match takes the whole run, as
+// masking one a pass costs a pass per home. A run holds only shapes whose own step is not still to come, so a later
+// step meets the same text it would without the run.
 const runFrom = (start: string, ...glued: readonly string[]): RegExp =>
   new RegExp(`${start}(?:${glued.join('|')})*`, 'g');
 const MOUNT_RUNS = runFrom(MOUNT_START, MOUNT_HOME);

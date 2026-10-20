@@ -42,8 +42,7 @@ export function logSessionEndImport(
 
 /**
  * Best-effort log line for the cmdSessionEndWorker snapshot-close step: cmdSleep/cmdCapture restore their console tee
- * before this runs,
- * so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file directly. */
+ * before this runs, so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file directly. */
 export function appendSessionEndCloseLog(
   logFile: string | null,
   message: string,
@@ -52,8 +51,8 @@ export function appendSessionEndCloseLog(
   if (!logFile) return;
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    // sanitizeLogMessage: `message` interpolates the payload-controlled
-    // session_id — same log-forgery guard appendPreCompactLog applies.
+    // sanitizeLogMessage: `message` interpolates the payload-controlled session_id, the same log-forgery guard
+    // appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
     write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch (err) {

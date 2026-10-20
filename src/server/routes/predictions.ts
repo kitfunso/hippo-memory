@@ -76,8 +76,7 @@ export async function handleListPredictions({ res, ctx, query }: AuthedRouteRequ
 }
 
 // Reference-class / planning-fallacy detector; registered BEFORE /v1/predictions/:id so dispatch order cannot matter
-// ('stats' is not a number, but routing
-// it first is safer).
+// ('stats' is not a number, but routing it first is safer).
 export async function handlePredictionStats({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const classTag = query.get('class');
   if (!classTag || classTag.length === 0) {

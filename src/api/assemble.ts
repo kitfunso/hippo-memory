@@ -18,8 +18,7 @@ export interface AssembleOptions {
   budget?: number;
   /** Recent raw rows always kept verbatim. Default 10. */
   freshTailCount?: number;
-  /** Substitute parent summaries for older raws when ≥2 share a level-2
-   *  ancestor. Default true. */
+  /** Substitute parent summaries for older raws when ≥2 share a level-2 ancestor. Default true. */
   summarizeOlder?: boolean;
   /** Exact scope match when set, so an authorised caller can assemble a private session.
    * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */
@@ -39,18 +38,15 @@ export interface AssembleCost {
 export interface AssembledContextItem {
   id: string;
   content: string;
-  /** ISO timestamp of the source row's `created` field (or `earliest_at`
-   *  for substituted summaries). */
+  /** ISO timestamp of the source row's `created` field (or `earliest_at` for substituted summaries). */
   createdAt: string;
   /** Fresh-tail protected window (last freshTailCount raws). */
   isFreshTail?: boolean;
   /** Level-2 summary substituted for older raw rows that share a parent. */
   isSummary?: boolean;
-  /** When isSummary, the raw ids this summary covers. drillDown
-   *  recovers the originals. */
+  /** When isSummary, the raw ids this summary covers. drillDown recovers the originals. */
   substitutedFor?: string[];
-  /** Decay × retrieval × emotional. Lets callers render a confidence
-   *  hint without re-deriving from MemoryEntry. */
+  /** Decay × retrieval × emotional. Lets callers render a confidence hint without re-deriving from MemoryEntry. */
   strength: number;
 }
 
@@ -58,8 +54,8 @@ export interface AssembleResult {
   sessionId: string;
   items: AssembledContextItem[];
   tokens: number;
-  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`,
-   * so "session has N msgs" stays accurate for a windowed items[]. */
+  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays accurate for a windowed
+   * items[]. */
   totalRaw: number;
   summarized: number;
   evicted: number;
@@ -69,7 +65,7 @@ export interface AssembleResult {
 
 /** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh
  *  tail is never evicted).
- * Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
+ *  Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(ctx: Context, sessionId: string, opts: AssembleOptions = {}): Promise<AssembleResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
@@ -99,8 +95,8 @@ export async function assemble(ctx: Context, sessionId: string, opts: AssembleOp
 
   const tailItems = tailRows.map(freshTailItem);
 
-  // Byte compare is chronological for the fixed-form UTC ISO timestamps
-  // (invariant documented in src/core/memory.ts above MemoryEntry).
+  // Byte compare is chronological for the fixed-form UTC ISO timestamps (invariant documented in src/core/memory.ts
+  // above MemoryEntry).
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
@@ -133,8 +129,8 @@ async function loadScopedRaws(
   const scoped = rows.filter((r) => passesScopeFilterForRecall(r.scope ?? null, opts.scope, own));
   let totalRaw: number;
   if (truncated) {
-    // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
-    // caller cannot infer private rows by comparing totalRaw to items.length.
+    // The COUNT applies the same default-deny scope rule in SQL, so a no-scope caller cannot infer private rows by
+    // comparing totalRaw to items.length.
     totalRaw = await dag.sessionRawCount({
       tenantId: ctx.tenantId,
       sessionId,

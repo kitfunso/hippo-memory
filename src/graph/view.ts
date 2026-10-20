@@ -1,7 +1,7 @@
 /**
  * Graph observability and visualization, READ-ONLY over the entity/relation graph (no writes, so
  * `scripts/check-graph-writes.mjs` stays green).
- *  Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
+ * Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import { readFileSync } from 'node:fs';
 import type { ScopeActor } from '../core/recall-scope.js';
@@ -24,8 +24,8 @@ export interface GraphEdge {
 export interface GraphModel {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  /** Conservative "maybe incomplete" flag: true when a loader returned exactly
-   *  its limit (the graph MAY be truncated). Can over-report, never under-report. */
+  /** Conservative "maybe incomplete" flag: true when a loader returned exactly its limit (the graph MAY be truncated).
+   *  Can over-report, never under-report. */
   truncated: boolean;
 }
 
@@ -35,7 +35,7 @@ export const DEFAULT_VIEW_LIMIT = 500;
 /**
  * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named so plus their 1-hop
  * neighbors.
- *  Dangling edges (an endpoint outside the node set) are always dropped. */
+ * Dangling edges (an endpoint outside the node set) are always dropped. */
 export async function buildGraphModel(
   graphReads: Pick<GraphReads, 'graphRows'>,
   tenantId: string,
@@ -189,7 +189,7 @@ function applyDisplacement(options: DisplacementOptions): void {
  * Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations, no `Math.random`, so
  * one model gives the same positions. Repulsion reaches 2k and runs on a grid, so a pass costs the nodes near each
  * node, not every pair; `opts.visits` counts the pairs looked at.
- *  Non-finite coordinates are clamped to the viewport centre and all positions to the bounds. */
+ * Non-finite coordinates are clamped to the viewport centre and all positions to the bounds. */
 export function layoutGraph(
   model: GraphModel,
   opts: { width?: number; height?: number; iterations?: number; visits?: { pairs: number } } = {},
@@ -296,8 +296,8 @@ function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
     .join('');
 }
 
-// Safe inline JSON for the client: unicode-escape the HTML-significant chars so
-// the content cannot terminate the <script> block; JSON.parse restores them.
+// Safe inline JSON for the client: unicode-escape the HTML-significant chars so the content cannot terminate the
+// <script> block; JSON.parse restores them.
 function inlineModelJson(model: GraphModel): string {
   return JSON.stringify(model).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 }

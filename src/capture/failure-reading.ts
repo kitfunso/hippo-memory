@@ -1,5 +1,5 @@
-// What a PostToolUseFailure payload says, read with no store, so a
-// hook with no store sends the same reading the local log keeps.
+// What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local
+// log keeps.
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../util/token-text.js';
@@ -10,8 +10,8 @@ import type { CaptureErrorOutcome, RoutineRule } from '../store/port/failure-log
 const COMMAND_HEAD_WORDS = 2;
 
 /**
- * What {@link lessonFromFailure} read from a payload; `detail`
- * is the finer failure-log key (untruncated, command head).
+ * What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command
+ * head).
  */
 export type FailureReading =
   | { text: string; detail: string }
@@ -48,8 +48,8 @@ const NO_MATCH = /\bno (?:matches|files|results) found\b/i;
 /** Shell commands whose exit code 1 means "nothing found" or "differs", not an error. */
 const QUIET_EXIT_1 = /^\s*(?:grep|rg|egrep|fgrep|find|test|\[|diff|cmp|git diff|git grep)\b/;
 
-// Claude Code's tool names, then the Copilot CLI's and VS Code's;
-// tests/capture/copilot-failure-reading.test.ts cites where each comes from.
+// Claude Code's tool names, then the Copilot CLI's and VS Code's; tests/capture/copilot-failure-reading.test.ts cites
+// where each comes from.
 const SEARCH_TOOLS: ReadonlySet<string> = new Set([
   'Grep',
   'Glob',
@@ -86,8 +86,7 @@ export function failureHash(text: string): string {
 
 /**
  * The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub`
- * runs before the
- * cap, as a mask can be longer than what it hides. Pure. */
+ * runs before the cap, as a mask can be longer than what it hides. Pure. */
 export function lessonFromFailure(
   payload: JsonValue,
   scrub: (text: string) => string = (text) => text,

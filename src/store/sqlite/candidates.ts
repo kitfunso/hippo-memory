@@ -50,8 +50,8 @@ interface RecentRowsOptions {
   readonly origins?: RecentOrigins;
 }
 
-// `id DESC` mirrors contextGet's comparator, not loadFreshRawMemories'
-// cross-ingest-stable order: that would change what the hook injects.
+// `id DESC` mirrors contextGet's comparator, not loadFreshRawMemories' cross-ingest-stable order: that would change
+// what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
 
 interface OwnRows {
@@ -59,8 +59,8 @@ interface OwnRows {
   readonly params: ReadonlyArray<string | number>;
 }
 
-// The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the
-// delivery ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
+// The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the delivery
+// ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
 function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
@@ -138,10 +138,9 @@ export function loadAmbientCandidatesAt(
 ): AmbientCandidates {
   const refused: AmbientRefusal[] = [];
   const admit = noting(judge, refused);
-  // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
-  // and include_recent is any non-negative finite number at the HTTP edge.
+  // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one, and include_recent is any non-negative
+  // finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
-  // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
   const run: RunSql = (where, params) =>
     (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`).all(...params) as MemoryRow[]).map(
       rowToEntry,
@@ -157,8 +156,8 @@ export function loadAmbientCandidatesAt(
     for (const e of loadRecentRows(run, drifted, tenantId, { needed, admit, origins })) byId.set(e.id, e);
   }
 
-  // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
-  // is stable, so input order is load-bearing downstream.
+  // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort is stable, so input order is load-bearing
+  // downstream.
   const entries = [...byId.values()].sort((a, b) => {
     const byCreated = a.created.localeCompare(b.created);
     return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
@@ -236,7 +235,6 @@ function decayKeySubsetSql(whereSql: string): string {
 function decayKeySubsetRows(db: DatabaseSyncLike, rows: ContextRowsWhere, cap: number, now: string): MemoryRow[] {
   const whereSql = rows.where.join(' AND ');
   const bound = [now, ...rows.params, ...rows.params, now, DECAY_KEY_SLACK_DAYS, cap, cap, DECAY_KEY_HALF_LIVES];
-  // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   return db.prepare(decayKeySubsetSql(whereSql)).all(...bound) as MemoryRow[];
 }
 
@@ -252,7 +250,7 @@ export function loadContextCandidatesAt(
   const whereSql = rowsWhere.where.join(' AND ');
   const now = filter.now.toISOString();
   // Stops one row past the cap, so a large tenant is not walked to be counted.
-  // SAFETY: the count row has the one column named.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const matched = (
     db
       .prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`)
@@ -260,8 +258,8 @@ export function loadContextCandidatesAt(
   ).n;
   // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
   const ranked = matched > cap;
-  // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could
-  // not prove itself, and the scan below ranks the tenant.
+  // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could not
+  // prove itself, and the scan below ranks the tenant.
   const bySubset = ranked && cap > 0 && !isOutcomeSlowAblated() ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
   if (bySubset.length > 0) return bySubset.map(rowToEntry);
   const sql = ranked
@@ -269,8 +267,6 @@ export function loadContextCandidatesAt(
     SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
   ) ORDER BY created ASC, id ASC`
     : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
-  // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries
-  // ids only.
   const rows = db.prepare(sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
   return rows.map(rowToEntry);
 }
@@ -297,7 +293,6 @@ export function loadTextsHoldingWordsAt(
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
   // One instr() per word in an OR chain: ID_CHUNK terms stay under SQLite's 1000-level expression depth.
   for (const chunk of chunked(unique)) {
-    // SAFETY: rows' shape matches the three columns named in the SELECT below.
     const rows = db
       .prepare(
         `SELECT content, source, origin_project FROM memories WHERE 1${tenant.sql}${originWhere} AND ` +
@@ -315,10 +310,10 @@ export function loadTextsHoldingWordsAt(
   return out;
 }
 
-/** A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before
- * it. */
+/**
+ * A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it.
+ */
 export function newestEntriesAt(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
-  // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`)
     .all(tenantId, limit) as MemoryRow[];
@@ -332,13 +327,12 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
 /** How many of a tenant's newest rows schemaFitAt reads; older rows no longer move the fit. */
 const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
-/** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate
- * and texts stream one column, so no row is loaded. */
+/** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate and texts
+ * stream one column, so no row is loaded. */
 export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: string, tags: readonly string[]): number {
   const newest = 'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
   // One read transaction, so the row count and the texts come from the same snapshot.
   return withReadSnapshot(db, () => {
-    // SAFETY: rows' shape matches the two columns named in the SELECT.
     const groups = db
       .prepare(`SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`)
       .all(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Array<{ tags_json: string | null; n: number }>;
@@ -348,9 +342,8 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
       rows += group.n;
       for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
     }
-    // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out;
-    // a stored per-tenant tag and token tally is the upgrade.
-    // SAFETY: the SELECT names exactly the one column read.
+    // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out; a stored per-tenant tag and
+    // token tally is the upgrade.
     const texts = db.prepare(`SELECT content FROM (${newest})`).iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{
       content: string;
     }>;
@@ -358,17 +351,19 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
   });
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+type SourceTallyDbRow = SourceTally;
+
 /** Row count and newest `created` per source, for peer listings that need no row. */
 export function tallySourcesAt(db: DatabaseSyncLike, tenantId: TenantId): SourceTally[] {
   const tenant = tenantAnd(tenantId);
-  // SAFETY: rows' shape matches the four aliased columns in the SELECT below.
   return db
     .prepare(
       `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
         `char(31) || id) AS first
      FROM memories WHERE 1${tenant.sql} GROUP BY COALESCE(source, 'cli')`,
     )
-    .all(...tenant.args) as SourceTally[];
+    .all(...tenant.args) as SourceTallyDbRow[];
 }
 
 // A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
@@ -386,7 +381,7 @@ export function strengthTalliesAt(
 ): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
   const strength = `COALESCE(${strengthSql(now, rules)}, 0)`;
-  // SAFETY: one aggregate row whose columns are the aliases named below.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = db
     .prepare(
       `SELECT
@@ -418,6 +413,8 @@ type StatusColumn =
   | 'emotional_valence'
   | 'outcome_positive'
   | 'outcome_negative';
+// SAFETY: every read cast to this row selects STATUS_ROW_COLUMNS; scripts/check-row-casts.mjs proves it.
+// The store writes `layer` only from the Layer enum.
 type StatusRow = Omit<Pick<MemoryRow, StatusColumn>, 'layer'> & { layer: Layer };
 // What calculateStrength and confidenceFacets read, plus the layer: no text and no JSON column.
 const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
@@ -471,8 +468,9 @@ function tallyStatusRows(
   return { total, byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength: total > 0 ? sums.strength / total : 0 };
 }
 
-/** The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is
- * built. */
+/**
+ * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built.
+ */
 export function statusCountsAt(
   db: DatabaseSyncLike,
   rules: LossAversion,
@@ -482,12 +480,11 @@ export function statusCountsAt(
   // One read transaction, so the row tallies and the two counts describe the same store.
   return withReadSnapshot(db, () => {
     // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
-    // SAFETY: the SELECT names exactly StatusRow's columns, and the store writes `layer` only from the Layer enum.
     const rows = db
       .prepare(`SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`)
       .iterate() as Iterable<StatusRow>;
     const tallies = tallyStatusRows(rows, now, atRiskBelow, rules);
-    // SAFETY: one row whose columns are the two aliases named below.
+    // SAFETY: scalar subqueries with no FROM always answer one row.
     const counts = db
       .prepare(`SELECT
       (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,

@@ -46,8 +46,8 @@ export function replyFor<E>(err: E): { status: number; message: string } {
 // slow.
 const SLOW_REQUEST_WARN_MS = MINUTE_MS;
 
-/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request
- * or touches the reply; the timer goes when the reply finishes or the socket closes. */
+/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or touches the reply; the timer
+ * goes when the reply finishes or the socket closes. */
 function watchSlowRequest(
   req: IncomingMessage,
   res: ServerResponse,

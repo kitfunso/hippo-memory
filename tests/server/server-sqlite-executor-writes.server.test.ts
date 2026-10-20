@@ -644,7 +644,7 @@ describe('an audit write failure counted on a worker thread', () => {
 function checkpointedPredictions(root: string): number {
   const copy = removeLater(mkdtempSync(join(tmpdir(), 'hippo-sqlite-executor-main-file-')));
   copyFileSync(getHippoDbPath(root), getHippoDbPath(copy));
-  return onDb(copy, (db) => db.prepare('SELECT COUNT(*) AS n FROM predictions').get<{ n: number }>().n);
+  return onDb(copy, (db) => (db.prepare('SELECT COUNT(*) AS n FROM predictions').get() as { n: number }).n);
 }
 
 describe("a store worker's wal_autocheckpoint", () => {

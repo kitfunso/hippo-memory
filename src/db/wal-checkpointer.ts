@@ -67,8 +67,8 @@ interface CheckpointWorker {
   readonly exited: Promise<void>;
 }
 
-/** An explicit execArgv keeps the parent's loaders out of the
- * worker and silences its repeat of the node:sqlite warning. */
+/** An explicit execArgv keeps the parent's loaders out of the worker and silences its repeat of the node:sqlite
+ * warning. */
 function newCheckpointWorker(
   key: string,
   onSettled: (settled: boolean) => void,
@@ -95,8 +95,9 @@ function newCheckpointWorker(
   return { worker: started, exited };
 }
 
-/** Checkpoints `dbPath` off the calling thread until `stop()`;
- * the worker starts with the first checkpoint that is due. */
+/**
+ * Checkpoints `dbPath` off the calling thread until `stop()`; the worker starts with the first checkpoint that is due.
+ */
 export function startWalCheckpointer(dbPath: string): WalCheckpointer {
   const key = path.resolve(dbPath);
   let worker: Worker | undefined;

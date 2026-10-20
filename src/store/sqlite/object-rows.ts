@@ -93,6 +93,7 @@ interface CustomerNoteRow extends VersionedRow<NoteStatus> {
   note: string;
 }
 
+// SAFETY: every read cast to one of these rows selects its kind's rowSpec(kind).cols.
 export interface RowByKind {
   decision: DecisionRow;
   incident: IncidentRow;
@@ -210,8 +211,9 @@ interface RowSpec<K extends ObjectKind> {
   readonly closeOp: AuditOp;
   /** The one column a list may filter by equality. */
   readonly filterColumn?: string;
-  /** Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the object's graph
-   * rows. */
+  /**
+   * Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the object's graph rows.
+   */
   readonly graphType?: SourceObjectType;
 }
 

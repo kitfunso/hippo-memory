@@ -34,8 +34,8 @@ export function finishRecallAt(db: DatabaseSyncLike, rules: LossAversion, writes
   });
   // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them, never the read.
   if (writes.goalLog.length === 0 && writes.audit.length === 0) return traceAndStrengthen();
-  // Inside this scope both run as savepoints, so one recall commits once and a failed trace or strengthen still
-  // unwinds alone.
+  // Inside this scope both run as savepoints, so one recall commits once and a failed trace or strengthen still unwinds
+  // alone.
   return withWriteScope(db, 'finish_recall', () => {
     writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
     for (const event of writes.audit) appendAuditEvent(db, event);

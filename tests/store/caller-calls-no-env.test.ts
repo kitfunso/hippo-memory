@@ -75,7 +75,7 @@ function rowsByTenant(db: DatabaseSyncLike, tenantId: string): Record<string, nu
   return Object.fromEntries(
     TENANT_TABLES.map((t) => [
       t,
-      db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE tenant_id = ?`).get<{ n: number }>(tenantId).n,
+      (db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE tenant_id = ?`).get(tenantId) as { n: number }).n,
     ]),
   );
 }

@@ -474,8 +474,8 @@ function fitRecallBlock(options: FitRecallBlockOptions) {
 
 type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
-/** The presenter `retrieveWithCliCore` calls once ranking ends: fits and
- * renders the block, and names the rows and hint rows to record. */
+/** The presenter `retrieveWithCliCore` calls once ranking ends: fits and renders the block, and names the rows and hint
+ * rows to record. */
 async function presentRecall(
   ctx: api.Context,
   query: string,
@@ -499,8 +499,8 @@ async function presentRecall(
       availability: hints.availability,
     },
   );
-  // The token ledger books the text this recall prints, on whichever
-  // exit it takes; the ring keeps the hint the final detect made.
+  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final
+  // detect made.
   return { text, shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId } };
 }
 

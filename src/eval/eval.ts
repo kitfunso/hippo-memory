@@ -55,8 +55,8 @@ export interface RunEvalOptions {
   budget?: number;
   /** Where the vector arm reads when `entries` rank alone; BM25 only when unset. */
   source?: VectorSource;
-  /** When set, eval runs through searchBothHybrid so global memories are in scope. Otherwise only the `entries` list
-   *  is searched. */
+  /** When set, eval runs through searchBothHybrid so global memories are in scope. Otherwise only the `entries` list is
+   *  searched. */
   stores?: { local: ConfiguredFolder; global: ConfiguredFolder };
   /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;

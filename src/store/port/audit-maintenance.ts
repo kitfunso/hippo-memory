@@ -12,8 +12,8 @@ export interface AuditMaintenance {
     removals: readonly { readonly id: string; readonly reason: string }[],
     actor: string,
   ): Promise<string[]>;
-  /** Counts (dryRun) or deletes the tenant's audit rows before
-   * `cutoff`, then appends one audit_prune row; resolves to the count. */
+  /** Counts (dryRun) or deletes the tenant's audit rows before `cutoff`, then appends one audit_prune row; resolves to
+   * the count. */
   pruneAuditRows(prune: AuditPrune): Promise<number>;
   /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup; a row
    * `repairKeeps(row, backsObject, protect)` names is kept, checked inside the repair's write. */
@@ -32,8 +32,9 @@ export interface AuditPrune {
   dryRun: boolean;
 }
 
-/** One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot be changed
- * safely. */
+/**
+ * One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot be changed safely.
+ */
 export interface QualityRepairResult {
   readonly root: string;
   readonly schema: number;

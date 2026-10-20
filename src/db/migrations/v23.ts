@@ -24,9 +24,8 @@ export const v23: Migration = {
       db.exec(`ALTER TABLE task_snapshots ADD COLUMN scope TEXT`);
     }
     // Quarantine pre-existing continuity rows with NULL scope as 'unknown:legacy' so the recall default-deny filter
-    // excludes them for no-scope callers;
-    // new rows legitimately carry NULL. UPDATE only tables that exist (v22 healing is skipped on some paths); WHERE
-    // scope IS NULL keeps it idempotent.
+    // excludes them for no-scope callers; new rows legitimately carry NULL. UPDATE only tables that exist (v22 healing
+    // is skipped on some paths); WHERE scope IS NULL keeps it idempotent.
     if (tableExists(db, 'task_snapshots')) {
       db.exec(`UPDATE task_snapshots SET scope = 'unknown:legacy' WHERE scope IS NULL`);
     }

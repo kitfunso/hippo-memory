@@ -5,8 +5,8 @@ import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
-/** Coerce one imported record (string, `{content|text: ...}` object, or
- *  anything else) into the plain-text memory chunk it represents. */
+/** Coerce one imported record (string, `{content|text: ...}` object, or anything else) into the plain-text memory chunk
+ *  it represents. */
 function extractMemoryText(candidate: JsonValue): string {
   if (isJsonString(candidate)) return candidate;
   if (isJsonObject(candidate)) {
@@ -73,8 +73,9 @@ function splitMarkdown(content: string): string[] {
   return chunks.filter(Boolean);
 }
 
-/** Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still
- * open. */
+/**
+ * Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still open.
+ */
 function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
   const trimmed = line.trim();
@@ -208,8 +209,9 @@ export function importCursor(sourcePath: string, options: TargetedImport): Impor
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
-/** Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per
- * line. */
+/**
+ * Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per line.
+ */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');

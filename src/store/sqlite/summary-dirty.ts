@@ -25,7 +25,6 @@ export function summaryDirtyAuditRow(
 /** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is
  * audited. */
 export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, tenantId: string, actor: string): void {
-  // SAFETY: result's shape matches the single `dag_level` column returned below.
   const result = db
     .prepare(`
     UPDATE memories
@@ -52,7 +51,6 @@ export function markSummariesDirtyInTx(
   tenantId: string,
 ): Map<string, number> {
   if (summaryIds.length === 0) return new Map();
-  // SAFETY: each row carries exactly the `id` and `dag_level` columns RETURNING names.
   const flipped = db
     .prepare(`
     UPDATE memories

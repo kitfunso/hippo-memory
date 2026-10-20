@@ -153,8 +153,7 @@ export function selectPinned(
   const picked: Picked = { items: [], ids: new Set<string>(), used: 0 };
 
   // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE budget and the recent
-  // loop runs first,
-  // so pins are ranked here and reserve their share before it can spend.
+  // loop runs first, so pins are ranked here and reserve their share before it can spend.
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
   const rankedPinned = rankPinned(plan, pinnedLocal, pinnedGlobal, nowP);

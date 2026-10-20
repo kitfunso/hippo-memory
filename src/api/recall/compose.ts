@@ -294,8 +294,9 @@ function substituteOverflow(opts: RecallOptions, options: SubstituteOverflowOpti
   }));
 }
 
-/** Overflowed leaf rows by summary parent, kept only for a
- * parent with 2+ of them that is not already in the base band. */
+/**
+ * Overflowed leaf rows by summary parent, kept only for a parent with 2+ of them that is not already in the base band.
+ */
 function overflowGroups(window: CandidateWindow, limit: number): Map<string, MemoryEntry[]> {
   // The goal boost only re-scores the base band, so its ids are known before the boost runs.
   const baseIds = new Set(window.baseSlice.map((e) => e.id));
@@ -353,8 +354,8 @@ function summaryItem(s: SummaryDecoration, opts: RecallOptions): RecallResultIte
   return item;
 }
 
-// The last N raw rows, so "what did I just see" always covers the recent window. A recent row already in the BM25
-// band is only tagged isFreshTail; new ones are prepended, so every recent row appears exactly once.
+// The last N raw rows, so "what did I just see" always covers the recent window. A recent row already in the BM25 band
+// is only tagged isFreshTail; new ones are prepended, so every recent row appears exactly once.
 interface FreshTailBandOptions {
   readonly recent: MemoryEntry[];
   readonly baseRanked: RecallResultItem[];

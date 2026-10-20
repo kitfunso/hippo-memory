@@ -36,7 +36,7 @@ async function post(handle: ServerHandle, content: string): Promise<number> {
 function inlineCheckpointPages(root: string): number {
   const db = openHippoDb(root);
   try {
-    return Object.values(db.prepare('PRAGMA wal_autocheckpoint').get<Record<string, number>>())[0]!;
+    return (db.prepare('PRAGMA wal_autocheckpoint').get() as { wal_autocheckpoint: number }).wal_autocheckpoint;
   } finally {
     closeHippoDb(db);
   }

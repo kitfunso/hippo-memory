@@ -30,8 +30,8 @@ export interface RecallWindowOptions {
   /** Fresh tail (default 0 = off, capped at 200): prepend the last N kind='raw' rows (tenant + scope filtered, deduped
    * against BM25 hits) even when the query terms miss. */
   freshTailCount?: number;
-  /** Restricts the fresh-tail window to one session; without it the
-   * tail is tenant-wide and surfaces newest rows across ALL sessions. */
+  /** Restricts the fresh-tail window to one session; without it the tail is tenant-wide and surfaces newest rows across
+   * ALL sessions. */
   freshTailSessionId?: string;
   /** Include a continuity block (active task snapshot, latest matching handoff, recent session events); default false
    * to keep the hot path cheap. With no active snapshot, sessionHandoff is null and recentSessionEvents is [], so a
@@ -116,8 +116,8 @@ interface CliCoreRanking {
   note?: (line: string) => void;
 }
 
-/** A recall the caller prints. `show` runs once ranking ends,
- * unless it halted; `retrieveWithCliCore` then records the list it returns. */
+/** A recall the caller prints. `show` runs once ranking ends, unless it halted; `retrieveWithCliCore` then records the
+ * list it returns. */
 export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
   hostSessionId?: string;
@@ -134,8 +134,8 @@ export interface CliCoreInspection extends CliCoreRanking {
 /** The CLI ranking core (`rankRecall`), run by `retrieveWithCliCore`: host admin only, on hippo.db. */
 export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
 
-/** `results`: the rows the caller shows, best first; `audit`: its hint rows, written
- * ahead of the 'recall' row; `tokens`: the text it prints, for the ledger. */
+/** `results`: the rows the caller shows, best first; `audit`: its hint rows, written ahead of the 'recall' row;
+ * `tokens`: the text it prints, for the ledger. */
 export interface ShownCliCore {
   results: readonly SearchResult[];
   audit: readonly AppendAuditOpts[];
@@ -150,8 +150,8 @@ export interface ShownRanking {
   audit: readonly AppendAuditOpts[];
 }
 
-/** `ranked`: every scored row, best first, goal boost applied,
- * entries as loaded; `pool`: the store after the scope filter. */
+/** `ranked`: every scored row, best first, goal boost applied, entries as loaded; `pool`: the store after the scope
+ * filter. */
 export interface StoreRanking {
   ranked: SearchResult[];
   pool: MemoryEntry[];
@@ -172,8 +172,8 @@ export interface RecallResultItem {
   substitutedFor?: string[];
   /** Cached descendant count from schema v25; non-zero for level-2+ rows. */
   descendantCount?: number;
-  /** True for rows from the most-recent-N kind='raw' window rather
-   * than the BM25 match; render them in a separate "recent" band. */
+  /** True for rows from the most-recent-N kind='raw' window rather than the BM25 match; render them in a separate
+   * "recent" band. */
   isFreshTail?: boolean;
   /** Ordered lifecycle re-ranking steps that mutated this row's `score` after candidate generation (on the api
    * pipeline, only goal-boost). Populated ONLY when `RecallOptions.trace.explain` is set; absent otherwise. */
@@ -189,8 +189,8 @@ export interface RecallResult {
   tokens: number;
   continuity?: ContinuityBlock;
   /** Tokens consumed by the continuity block (snapshot, handoff and the last 5 events' full content), each via
-   *  Math.ceil(len/4) like `tokens`; undefined
-   * when not requested. Callers needing a tighter budget should truncate event.content themselves. */
+   *  Math.ceil(len/4) like `tokens`; undefined when not requested. Callers needing a tighter budget should truncate
+   *  event.content themselves. */
   continuityTokens?: number;
   /** Scorer window used for this recall: `opts.scorerWindow`, else the store default (200). Optional in the type so
    * test fakes built before the field still compile; always present on values returned by `api.recall`. */
@@ -213,8 +213,8 @@ export interface RecallResult {
   anchoringHint?: AnchoringHint;
 
   /** Availability/recency-bias hint: per-pipeline, soft warning only (never filters or reorders); fires when the
-   *  returned slice is recency-dominated
-   *  while older relevant matches in the pool were passed over. Disabled by `HIPPO_AVAILABILITY=off`. */
+   *  returned slice is recency-dominated while older relevant matches in the pool were passed over. Disabled by
+   *  `HIPPO_AVAILABILITY=off`. */
   availabilityHint?: AvailabilityHint;
 }
 
@@ -222,8 +222,8 @@ export interface RecallResult {
  * the full picture. Counters are honest per-path reports of the pipeline that produced this RecallResult, not
  * normalized across pipelines. */
 export interface RecallSuppressionSummary {
-  /** Candidates loaded from the store before any post-load filter or limit cut;
-   *  each pipeline counts at its own load (api.recall: after `loadRecallSearchEntries`). */
+  /** Candidates loaded from the store before any post-load filter or limit cut; each pipeline counts at its own load
+   *  (api.recall: after `loadRecallSearchEntries`). */
   totalCandidates: number;
   /** Candidates dropped by any non-budget filter site, pre- or post-rank; the final limit slice is counted in
    * droppedByBudget instead. Each pipeline counts its own filters (cmdRecall: --as-of, superseded, --filter-conflicts,

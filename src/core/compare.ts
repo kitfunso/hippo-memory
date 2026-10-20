@@ -1,12 +1,10 @@
 /**
  * Deterministic tie-break comparators for recall ranking. A true LEAF module: it imports from no sort-site module
- * (search, physics, api, cli, goals,
- * graph-recall, multihop, rerankers), taking structural param types instead, because even a type-only import back would
- * recreate the search <-> physics ESM
- * cycle this module exists to avoid. */
+ * (search, physics, api, cli, goals, graph-recall, multihop, rerankers), taking structural param types instead, because
+ * even a type-only import back would recreate the search <-> physics ESM cycle this module exists to avoid. */
 
-/** Minimal shape for a deterministic tie-break across fresh ingests into different stores;
- *  the metadata keys are optional so `{ content, id }` callers still fit. */
+/** Minimal shape for a deterministic tie-break across fresh ingests into different stores; the metadata keys are
+ *  optional so `{ content, id }` callers still fit. */
 export interface EntryIdentity {
   content: string;
   id: string;
@@ -59,8 +57,8 @@ function compareTags(a: readonly string[] | undefined, b: readonly string[] | un
   return 0;
 }
 
-/** Minimal shape for score-primary sort sites (SearchResult and friends
- *  that carry `{ score, entry: { content, id } }`). */
+/** Minimal shape for score-primary sort sites (SearchResult and friends that carry `{ score, entry: { content, id }
+ *  }`). */
 export interface ScoredEntryLike {
   score: number;
   entry: EntryIdentity;
@@ -68,8 +66,8 @@ export interface ScoredEntryLike {
 
 /**
  * score descending, then `compareEntryIdentity`: the shared ordering for every score-primary recall sort site, which
- * delegate here (via an arrow when the
- * score field is not named `score`) so the tiebreak cannot drift between call sites. */
+ * delegate here (via an arrow when the score field is not named `score`) so the tiebreak cannot drift between call
+ * sites. */
 export function compareScoredResults(a: ScoredEntryLike, b: ScoredEntryLike): number {
   return compareScoresDesc(a.score, b.score) || compareEntryIdentity(a.entry, b.entry);
 }
@@ -101,8 +99,8 @@ export function comparePhysicsResultsBy<T extends { memoryId: string }>(
     const bi = tieKeyOf ? tieKeyOf(b) : b.memoryId;
     if (ai < bi) return -1;
     if (ai > bi) return 1;
-    // Tie-key collision (e.g. duplicate content): fall through to memoryId
-    // so the comparator still yields a total order within one store.
+    // Tie-key collision (e.g. duplicate content): fall through to memoryId so the comparator still yields a total order
+    // within one store.
     return a.memoryId < b.memoryId ? -1 : a.memoryId > b.memoryId ? 1 : 0;
   };
 }

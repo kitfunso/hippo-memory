@@ -77,16 +77,17 @@ export interface ClassResolution {
 
 export interface PredictionBaserate {
   classTag: string;
-  /** Count of closed predictions with a numeric actual_value (excludes
-   *  open + closed-unknown). The denominator for MAE. */
+  /**
+   * Count of closed predictions with a numeric actual_value (excludes open + closed-unknown). The denominator for MAE.
+   */
   nClosed: number;
   /** Count of closed rows where estimate_value > 0 (i.e. ratio is defined).
    *  Subset of nClosed used for meanRatio + p50Ratio. */
   nRatioEligible: number;
   meanEstimate: number | null;
   meanActual: number | null;
-  /** mean(actual / estimate) over the nRatioEligible subset. Null when
-   *  nRatioEligible = 0 (e.g. all closed predictions had estimate=0). */
+  /** mean(actual / estimate) over the nRatioEligible subset. Null when nRatioEligible = 0 (e.g. all closed predictions
+   *  had estimate=0). */
   meanRatio: number | null;
   /** Median ratio over the nRatioEligible subset. */
   p50Ratio: number | null;
@@ -102,8 +103,8 @@ export interface AppendAuditOpts {
   actor: string; // 'cli' | 'api_key:hk_...' | 'system'
   op: AuditOp;
   targetId?: string;
-  // Opaque on purpose: appendAuditEvent only JSON.stringify's it wholesale and never reads a field,
-  // so no parsed contract is claimed.
+  // Opaque on purpose: appendAuditEvent only JSON.stringify's it wholesale and never reads a field, so no parsed
+  // contract is claimed.
   metadata?: unknown;
 }
 

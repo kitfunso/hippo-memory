@@ -79,8 +79,8 @@ export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
   const opts = { ...drillExtra, project: ctx?.project, cost: drillCost };
   const r = await apiDrillDown(mcpApiContext(ctx), summaryId, opts);
   if ('failure' in r) {
-    // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
-    // missing, because telling scope_blocked apart would leak private-row existence.
+    // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and missing, because
+    // telling scope_blocked apart would leak private-row existence.
     if (r.failure === 'not_drillable') {
       return `Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`;
     }
@@ -107,8 +107,8 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
   const ownsCwd = ownsServerCwd(ctx);
   const result = await apiGetContext(mcpApiContext(ctx), {
-    // The server's git state is no remote caller's, so a project
-    // or remote caller gets rows by strength without a query.
+    // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a
+    // query.
     q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),
     budget,
     exactScope,
