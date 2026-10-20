@@ -1,7 +1,7 @@
 /**
  * v1.25.0 (v39 post-ship tail #1) — direct CLI recall/explain scope default-deny.
  *
- * Before this release the direct CLI paths (cmdRecall / cmdExplain) loaded
+ * Before this release the direct CLI paths (printRecall / explainQuery) loaded
  * candidates via unscoped loadSearchEntries: `<source>:private:*` and
  * `unknown:legacy` rows reached output for no-scope callers, while
  * api.recall (HTTP/MCP) denied them. These tests lock the parity:

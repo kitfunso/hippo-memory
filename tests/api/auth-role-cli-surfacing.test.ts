@@ -9,7 +9,7 @@
  *
  * The CLI flag (`hippo auth create-key --role`) and table-header column are
  * pure surfacing of the api.authCreate / listApiKeys results — covered
- * transitively. Direct subprocess invocation of cmdAuthCreate is awkward in
+ * transitively. Direct subprocess invocation of createApiKey is awkward in
  * vitest (would mock process.exit / stdout), so the contract is locked at
  * the api/db layer.
  */

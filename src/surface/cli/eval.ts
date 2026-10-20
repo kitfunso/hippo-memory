@@ -36,22 +36,29 @@ const MAX_DELTAS_SHOWN = 5;
 
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus
  * file. */
-async function cmdEval(hippoRoot: string, tenantId: string, corpusPath: string | null, flags: CliFlags): Promise<void> {
+async function evaluateCorpus(
+  hippoRoot: string,
+  tenantId: string,
+  corpusPath: string | null,
+  flags: CliFlags,
+): Promise<void> {
   const asJson = boolFlag(flags, 'json');
   const minMrr = numberFlag(flags, 'min-mrr') ?? null;
   const comparePath = stringFlagOrExit(flags, 'compare') || null;
 
   // Suite mode doesn't need an initialized store
-  if (!flags['suite']) requireInit(hippoRoot);
+  if (!boolFlag(flags, 'suite')) requireInit(hippoRoot);
 
-  const entries = flags['suite'] ? [] : await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
+  const entries = boolFlag(flags, 'suite')
+    ? []
+    : await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
 
-  if (flags['bootstrap']) {
+  if (boolFlag(flags, 'bootstrap')) {
     writeBootstrapCorpus(entries, flags);
     return;
   }
 
-  if (flags['suite']) {
+  if (boolFlag(flags, 'suite')) {
     await runEvalSuite(hippoRoot, flags, asJson, minMrr);
     return;
   }
@@ -79,14 +86,14 @@ async function runCorpusEval(
 ): Promise<EvalSummary> {
   const cases = readCorpus(corpusPath);
   const globalRoot = resolveGlobalRootDir();
-  const localBump = flags['equal-sources']
+  const localBump = boolFlag(flags, 'equal-sources')
     ? 1.0
     : (numberFlag(flags, 'local-bump') ?? cliConfig(hippoRoot).search.localBump);
 
   return runEval(cases, entries, {
     stores: isInitialized(globalRoot) ? { local: cliFolder(hippoRoot), global: cliFolder(globalRoot) } : undefined,
     source: folderVectorSource({ hippoRoot }),
-    mmr: !flags['no-mmr'],
+    mmr: !boolFlag(flags, 'no-mmr'),
     mmrLambda: numberFlag(flags, 'mmr-lambda'),
     embeddingWeight: numberFlag(flags, 'embedding-weight'),
     localBump,
@@ -130,7 +137,7 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
     console.log(formatResult(result, baseline));
   }
 
-  if (flags['save-baseline']) {
+  if (boolFlag(flags, 'save-baseline')) {
     const newBaseline = resultToBaseline(result);
     fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
     fs.writeFileSync(baselinePath, JSON.stringify(newBaseline, null, 2), 'utf8');
@@ -251,5 +258,5 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
 
 export async function handleEval({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const corpusPath = args[0] ? String(args[0]) : null;
-  await cmdEval(hippoRoot, tenantId, corpusPath, flags);
+  await evaluateCorpus(hippoRoot, tenantId, corpusPath, flags);
 }

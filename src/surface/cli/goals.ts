@@ -9,7 +9,6 @@ import {
   type CliFlags,
   boolFlag,
   flagIsTrue,
-  isStringFlag,
   stringFlag,
   stringFlagOrExit,
   type CommandContext,
@@ -45,11 +44,11 @@ function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
 }
 
 function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined {
-  const policyRaw = flags['policy'];
-  if (policyRaw === true) {
+  if (flagIsTrue(flags, 'policy')) {
     fail('--policy requires a value (e.g., --policy error-prioritized)');
   }
-  if (!isStringFlag(policyRaw)) return undefined;
+  const policyRaw = stringFlag(flags, 'policy');
+  if (policyRaw === undefined) return undefined;
   if (!isGoalPolicyType(policyRaw)) {
     fail(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
   }
@@ -57,10 +56,10 @@ function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined
 }
 
 function readGoalLevel(flags: CliFlags): number | undefined {
-  const levelRaw = flags['level'];
-  if (levelRaw === true) {
+  if (flagIsTrue(flags, 'level')) {
     fail('--level requires a value (e.g., --level 1)');
   }
+  const levelRaw = stringFlag(flags, 'level');
   if (levelRaw === undefined) return undefined;
   const parsed = Number(levelRaw);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
@@ -69,7 +68,7 @@ function readGoalLevel(flags: CliFlags): number | undefined {
   return parsed;
 }
 
-async function cmdGoalPush(hippoRoot: string, defaultTenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function pushGoal(hippoRoot: string, defaultTenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const rawName = args.join(' ').trim();
   if (!rawName) {
     fail('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
@@ -83,16 +82,14 @@ async function cmdGoalPush(hippoRoot: string, defaultTenantId: string, args: str
 
   const policy = readGoalPolicy(flags);
 
-  const successRaw = flags['success'];
-  if (successRaw === true) {
+  if (flagIsTrue(flags, 'success')) {
     fail('--success requires a value (e.g., --success "<condition>")');
   }
   const successCondition = stringFlag(flags, 'success');
 
   const level = readGoalLevel(flags);
 
-  const parentRaw = flags['parent'];
-  if (parentRaw === true) {
+  if (flagIsTrue(flags, 'parent')) {
     fail('--parent requires a value (e.g., --parent <goalId>)');
   }
   const parentGoalId = stringFlag(flags, 'parent');
@@ -108,7 +105,7 @@ async function cmdGoalPush(hippoRoot: string, defaultTenantId: string, args: str
   console.log(goal.id);
 }
 
-async function cmdGoalList(hippoRoot: string, defaultTenantId: string, flags: CliFlags): Promise<void> {
+async function listGoals(hippoRoot: string, defaultTenantId: string, flags: CliFlags): Promise<void> {
   const { sessionId, tenantId } = resolveGoalSession(flags, defaultTenantId);
   const showAll = boolFlag(flags, 'all');
   const goals = await api.goalList(cliApiContext(hippoRoot, tenantId), { sessionId, all: showAll });
@@ -144,16 +141,16 @@ async function cmdGoalList(hippoRoot: string, defaultTenantId: string, flags: Cl
   }
 }
 
-async function cmdGoalComplete(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function completeGoal(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
   }
   let outcomeScore: number | undefined;
-  const outcomeRaw = flags['outcome'];
-  if (outcomeRaw === true) {
+  if (flagIsTrue(flags, 'outcome')) {
     fail('--outcome requires a value (e.g., --outcome 0.9)');
   }
+  const outcomeRaw = stringFlag(flags, 'outcome');
   if (outcomeRaw !== undefined) {
     const parsed = Number(outcomeRaw);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
@@ -166,7 +163,7 @@ async function cmdGoalComplete(hippoRoot: string, tenantId: string, args: string
   console.log('ok');
 }
 
-async function cmdGoalSuspend(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
+async function suspendGoal(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Usage: hippo goal suspend <id>');
@@ -175,7 +172,7 @@ async function cmdGoalSuspend(hippoRoot: string, tenantId: string, args: string[
   console.log('ok');
 }
 
-async function cmdGoalResume(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
+async function resumeGoal(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Usage: hippo goal resume <id>');
@@ -192,19 +189,19 @@ export async function handleGoal({ hippoRoot, tenantId, args, flags }: CommandCo
   const subArgs = args.slice(1);
   switch (sub) {
     case 'push':
-      await cmdGoalPush(hippoRoot, tenantId, subArgs, flags);
+      await pushGoal(hippoRoot, tenantId, subArgs, flags);
       return;
     case 'list':
-      await cmdGoalList(hippoRoot, tenantId, flags);
+      await listGoals(hippoRoot, tenantId, flags);
       return;
     case 'complete':
-      await cmdGoalComplete(hippoRoot, tenantId, subArgs, flags);
+      await completeGoal(hippoRoot, tenantId, subArgs, flags);
       return;
     case 'suspend':
-      await cmdGoalSuspend(hippoRoot, tenantId, subArgs);
+      await suspendGoal(hippoRoot, tenantId, subArgs);
       return;
     case 'resume':
-      await cmdGoalResume(hippoRoot, tenantId, subArgs);
+      await resumeGoal(hippoRoot, tenantId, subArgs);
       return;
     default:
       fail(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);

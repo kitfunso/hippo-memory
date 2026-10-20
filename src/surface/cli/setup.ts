@@ -444,7 +444,7 @@ export function handleSetup({ tenantId, flags }: CommandContext): void {
 
   setupDetectedTools(tools, forceAll, dryRun);
 
-  if (!flags['no-schedule']) {
+  if (!boolFlag(flags, 'no-schedule')) {
     console.log('');
     if (dryRun) {
       console.log(`[dry-run] would install the machine-level daily runner around ${globalRoot}`);
@@ -453,7 +453,7 @@ export function handleSetup({ tenantId, flags }: CommandContext): void {
     }
   }
 
-  if (!flags['no-learn']) {
+  if (!boolFlag(flags, 'no-learn')) {
     console.log('');
     const imported = importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine(), { dryRun }));
     printAgentImport(imported, dryRun ? '[dry-run] ' : '');

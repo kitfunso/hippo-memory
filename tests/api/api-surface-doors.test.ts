@@ -19,7 +19,7 @@ import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
 
-const MEMBER: Actor = { subject: 'member', role: 'admin', hostAdmin: false };
+const MEMBER: Actor = { subject: 'member', role: 'admin' };
 let root: string;
 const ctx = (tenantId = 'default', actor = adminActor('cli')): FullContext => apiCtx(root, tenantId, actor);
 

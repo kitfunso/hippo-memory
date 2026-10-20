@@ -6,7 +6,15 @@ import { isHandoffOutcome } from '../../base/session/handoff.js';
 import { type Card, isCardStatus } from '../../base/records/card.js';
 import type { CardDetail } from '../../store/port/cards.js';
 import { printError } from './output.js';
-import { type CliFlags, repeatedFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
+import {
+  type CliFlags,
+  repeatedFlag,
+  stringFlagOrExit,
+  type CommandContext,
+  boolFlag,
+  flagIsTrue,
+  stringFlag,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { CliExit, fail } from './exit.js';
@@ -153,8 +161,7 @@ async function cardCreate(hippoRoot: string, tenantId: string, _args: string[], 
     }
     budget = Number(budgetRaw);
   }
-  const dependsOnFlag = flags['depends-on'];
-  if (dependsOnFlag === true) {
+  if (flagIsTrue(flags, 'depends-on')) {
     fail('--depends-on requires a value');
   }
   const dependsOn = repeatedFlag(flags, 'depends-on');
@@ -177,7 +184,7 @@ async function cardShow(hippoRoot: string, tenantId: string, args: string[], fla
   if (!detail) {
     fail(`No card found with id ${id}.`);
   }
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(detail, null, 2));
     return;
   }
@@ -190,7 +197,7 @@ async function cardList(hippoRoot: string, tenantId: string, _args: string[], fl
     fail(`Invalid status: "${status}".`);
   }
   const cards = await cardsApi.cardList(cliApiContext(hippoRoot, tenantId), { status });
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ cards }, null, 2));
     return;
   }
@@ -282,7 +289,7 @@ async function cardReview(hippoRoot: string, tenantId: string, args: string[], f
 
 async function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
-  const outcomeRaw = flags['outcome'];
+  const outcomeRaw = stringFlag(flags, 'outcome');
   if (!id || !isHandoffOutcome(outcomeRaw)) {
     throw usageError('complete');
   }

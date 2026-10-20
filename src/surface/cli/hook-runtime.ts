@@ -14,7 +14,7 @@ import { summaryLine } from '../../api/agent-memory-report.js';
 import { getHippoRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import type { CliFlags } from './flag-values.js';
+import { type CliFlags, stringFlag } from './flag-values.js';
 
 /**
  * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one stage failing does
@@ -40,8 +40,9 @@ export function logSessionEndImport(
 }
 
 /**
- * Best-effort log line for the cmdSessionEndWorker snapshot-close step: cmdSleep/cmdCapture restore their console tee
- * before this runs, so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file directly. */
+ * Best-effort log line for the handleSessionEndWorker snapshot-close step: handleSleep/cmdCapture restore their
+ * console tee before this runs, so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file
+ * directly. */
 export function appendSessionEndCloseLog(
   logFile: string | null,
   message: string,
@@ -116,7 +117,9 @@ export function hookStoreRoot(hippoRoot: string): string {
  * payload.
  */
 export function hookRuntime(flags: CliFlags): HookRuntime {
-  return flags['runtime'] === 'copilot' || flags['format'] === 'copilot' ? 'copilot' : 'claude-code';
+  return stringFlag(flags, 'runtime') === 'copilot' || stringFlag(flags, 'format') === 'copilot'
+    ? 'copilot'
+    : 'claude-code';
 }
 
 /**

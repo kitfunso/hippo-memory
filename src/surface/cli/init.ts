@@ -19,7 +19,7 @@ import { importForStore, importProjectMemories, importUserMemories } from '../..
 import { currentMachine } from '../../base/util/agent-homes.js';
 import { emptyReport, mergeReports } from '../../api/agent-memory-report.js';
 import { registerWorkspace } from './scheduler.js';
-import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, numberFlag, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
@@ -125,7 +125,7 @@ function printScanSummary(repoCount: number, totalLessons: number, totalLowInfo:
   );
 }
 
-async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFlags): Promise<void> {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
 
@@ -145,7 +145,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
   const seedDays = numberFlag(flags, 'days') ?? 365;
   const machine = currentMachine();
   const agentImport = emptyReport();
-  const learn = !flags['no-learn'];
+  const learn = !boolFlag(flags, 'no-learn');
 
   for (const repo of repos) {
     const alreadyExists = await initScannedRepo(repo, tenantId, globalRoot);
@@ -168,7 +168,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
   }
   console.log(`Global store: ${globalRoot}`);
   if (initInstallsIntegrations(flags)) installScanHooks(repos);
-  if (!flags['no-schedule']) {
+  if (!boolFlag(flags, 'no-schedule')) {
     setupDailySchedule(globalRoot);
   }
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
@@ -182,7 +182,7 @@ function initGlobalOnly(tenantId: string, flags: CliFlags): void {
     cliInitGlobal();
     console.log('Initialized global Hippo store at', globalRoot);
   }
-  if (!flags['no-learn']) {
+  if (!boolFlag(flags, 'no-learn')) {
     printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine())));
   }
 }
@@ -200,13 +200,13 @@ async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<
 }
 
 export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  if (flags['scan']) {
+  if (boolFlag(flags, 'scan')) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
-    await cmdInitScan(scanDir, tenantId, flags);
+    await initScannedRepos(scanDir, tenantId, flags);
     return;
   }
 
-  if (flags['global']) {
+  if (boolFlag(flags, 'global')) {
     initGlobalOnly(tenantId, flags);
     return;
   }
@@ -229,13 +229,13 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   }
 
   // Auto-setup daily schedule (unless --no-schedule)
-  if (!flags['no-schedule'] && !flags['global']) {
+  if (!boolFlag(flags, 'no-schedule') && !boolFlag(flags, 'global')) {
     setupDailySchedule(globalRoot);
   }
 
-  const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
+  const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
-  if (!alreadyExists && learn && !flags['global']) await seedFromGitHistory(hippoRoot, tenantId);
+  if (!alreadyExists && learn && !boolFlag(flags, 'global')) await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
   if (learn) printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, tenantId, currentMachine())));
@@ -246,7 +246,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
  * switch skips them all.
  */
 function initInstallsIntegrations(flags: CliFlags): boolean {
-  if (flags['no-hooks']) return false;
+  if (boolFlag(flags, 'no-hooks')) return false;
   if (!envSkipAutoIntegrations()) return true;
   console.log('   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.');
   return false;

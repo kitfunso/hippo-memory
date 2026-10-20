@@ -14,6 +14,7 @@ import {
   flagIsTrue,
   stringFlag,
   numberFlag,
+  boolFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { CONTENT_PREVIEW_CHARS } from '../../base/util/token-text.js';
@@ -116,12 +117,12 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
   }
 }
 
-async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: string, flags: CliFlags): Promise<void> {
+async function assembleSession(hippoRoot: string, tenantId: string, sessionId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
-  // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
-  const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
+  // Absent stays undefined so the api default applies.
+  const budget = parseBudgetFlag(flags, undefined);
   const freshTailCount = numberFlag(flags, 'fresh-tail');
-  const summarizeOlder = flags['no-summarize-older'] !== true;
+  const summarizeOlder = !flagIsTrue(flags, 'no-summarize-older');
   const scope = stringFlag(flags, 'scope') || undefined;
   const ctx: api.Context = {
     ...cliApiContext(hippoRoot, tenantId),
@@ -134,7 +135,7 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
   if (scope !== undefined) opts.scope = scope;
   opts.cost = assembleCost(sessionId);
   const r = await api.assemble(ctx, sessionId, opts);
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(r, null, 2));
     return;
   }
@@ -150,21 +151,27 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
   );
 }
 
-async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: string, flags: CliFlags): Promise<void> {
+// --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently clamped.
+function drillDepthFlag(flags: CliFlags): number | undefined {
+  const depth = numberFlag(flags, 'depth');
+  if (depth !== undefined && (!Number.isInteger(depth) || depth < 1 || depth > 10)) {
+    printError(`--depth must be an integer between 1 and 10 (got ${stringFlag(flags, 'depth')})`);
+    throw new CliExit(2);
+  }
+  return depth;
+}
+
+async function drillIntoSummary(
+  hippoRoot: string,
+  tenantId: string,
+  summaryId: string,
+  flags: CliFlags,
+): Promise<void> {
   requireInit(hippoRoot);
   const limit = numberFlag(flags, 'limit');
-  // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
-  const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
-  // --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently clamped.
-  const rawDepth = numberFlag(flags, 'depth');
-  let depth: number | undefined;
-  if (rawDepth !== undefined) {
-    if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
-      printError(`--depth must be an integer between 1 and 10 (got ${stringFlag(flags, 'depth')})`);
-      throw new CliExit(2);
-    }
-    depth = rawDepth;
-  }
+  // Absent stays undefined so the api default applies.
+  const budget = parseBudgetFlag(flags, undefined);
+  const depth = drillDepthFlag(flags);
   const ctx: api.Context = {
     ...cliApiContext(hippoRoot, tenantId),
     actor: api.adminActor('cli:drill'),
@@ -185,7 +192,7 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     }
     throw new CliExit(1);
   }
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(r, null, 2));
     return;
   }
@@ -205,7 +212,7 @@ export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandC
   if (!summaryId) {
     fail('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
   }
-  await cmdDrillDown(hippoRoot, tenantId, summaryId, flags);
+  await drillIntoSummary(hippoRoot, tenantId, summaryId, flags);
 }
 
 export async function handleAssemble({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
@@ -213,5 +220,5 @@ export async function handleAssemble({ hippoRoot, tenantId, args, flags }: Comma
   if (!sessionId) {
     fail('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
   }
-  await cmdAssemble(hippoRoot, tenantId, sessionId, flags);
+  await assembleSession(hippoRoot, tenantId, sessionId, flags);
 }

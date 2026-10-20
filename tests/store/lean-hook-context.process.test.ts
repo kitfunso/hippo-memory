@@ -114,7 +114,7 @@ describe('SessionStart hooks', () => {
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean);
-    // In process the console spies bypass the tee, so only cmdSleep's opening line is certain; teed warnings may follow.
+    // In process the console spies bypass the tee, so only handleSleep's opening line is certain; teed warnings may follow.
     expect(lines[0]).toMatch(/^\[hippo\] \S+ consolidating memory\.\.\.$/);
 
     const runs = [];

@@ -38,11 +38,12 @@ import {
   type CommandContext,
   boolFlag,
   flagIsTrue,
-  isStringFlag,
   nonEmptyStringFlag,
   numberFlag,
   stringFlagOrExit,
   stringListFlag,
+  hasFlag,
+  stringFlag,
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
@@ -65,7 +66,8 @@ function watchedCommand(args: readonly string[]): string[] {
   return [...args];
 }
 
-async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Promise<void> {
+export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
+  const argv = watchedCommand(args);
   const command = argv.join(' ');
   const { exitCode, stderr } = await runWatched(argv);
 
@@ -109,7 +111,7 @@ async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Pr
 export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  if (!flags['git']) {
+  if (!boolFlag(flags, 'git')) {
     fail('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
   }
 
@@ -179,7 +181,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
 
   const targetRoot = useGlobal ? resolveGlobalRootDir() : hippoRoot;
 
-  if (flags['agents']) return importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
+  if (boolFlag(flags, 'agents')) return importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
 
   if (useGlobal) {
     cliInitGlobal();
@@ -216,19 +218,19 @@ interface PickedImporter {
 
 // Determine which importer to use based on flag
 function pickImporter(args: string[], flags: CliFlags): PickedImporter {
-  if (flags['chatgpt']) {
+  if (boolFlag(flags, 'chatgpt')) {
     return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPT, importerName: 'ChatGPT' };
   }
-  if (flags['claude']) {
+  if (boolFlag(flags, 'claude')) {
     return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaude, importerName: 'Claude' };
   }
-  if (flags['cursor']) {
+  if (boolFlag(flags, 'cursor')) {
     return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursor, importerName: 'Cursor' };
   }
-  if (flags['file']) {
+  if (boolFlag(flags, 'file')) {
     return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFile, importerName: 'File' };
   }
-  if (flags['markdown']) {
+  if (boolFlag(flags, 'markdown')) {
     return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdown, importerName: 'Markdown' };
   }
   // Positional: try to auto-detect from extension
@@ -344,12 +346,12 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
   if (useGlobal) {
     fail('hippo import --vault does not support --global (raw rows are tenant-local).');
   }
-  if (!isStringFlag(flags['name']) || !flags['name'].trim()) {
+  if (!stringFlag(flags, 'name')?.trim()) {
     // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
     // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
     fail('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
   }
-  if (flags['scope'] !== undefined && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
+  if (hasFlag(flags, 'scope') && !stringFlag(flags, 'scope')?.trim()) {
     // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed
     // private form, since a bare `private` scope is not treated as private by recall and importVault rejects it.
     fail('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
@@ -371,7 +373,7 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: C
   if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }
 
-async function cmdPromote(hippoRoot: string, tenantId: string, id: string): Promise<void> {
+async function promoteMemory(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
   if (!id) {
@@ -404,10 +406,6 @@ export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext)
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
 
-export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
-  await cmdWatch(watchedCommand(args), hippoRoot, tenantId);
-}
-
 export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
@@ -422,12 +420,12 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
     }
   });
   if (promoted) return;
-  await cmdPromote(hippoRoot, tenantId, id);
+  await promoteMemory(hippoRoot, tenantId, id);
 }
 
 export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const shareId = args[0];
-  if (shareId === '--auto' || flags['auto']) {
+  if (shareId === '--auto' || boolFlag(flags, 'auto')) {
     requireInit(hippoRoot);
     const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
     const dryRun = boolFlag(flags, 'dry-run');

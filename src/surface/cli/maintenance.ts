@@ -8,7 +8,7 @@ import { memoryCountAll } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
+import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext, hasFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
@@ -61,7 +61,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
   requireInit(hippoRoot);
 
   const dryRun = boolFlag(flags, 'dry-run');
-  if (flags['threshold'] !== undefined) {
+  if (hasFlag(flags, 'threshold')) {
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
@@ -131,12 +131,12 @@ export async function handleEmbed(
 
   // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an
   // earlier embed); the provider-availability gate is deferred to the embed path.
-  if (flags['reset-physics']) {
+  if (boolFlag(flags, 'reset-physics')) {
     await resetPhysics(ctx);
     return;
   }
 
-  if (flags['status']) {
+  if (boolFlag(flags, 'status')) {
     await printEmbedStatus(ctx);
     return;
   }

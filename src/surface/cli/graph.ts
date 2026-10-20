@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { DEFAULT_VIEW_LIMIT, graphExtract, graphViewOnHost } from '../../api/objects/graph.js';
 import { renderGraphHtml, renderGraphCanvas } from './graph-page.js';
 import { printError } from './output.js';
-import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fail } from './exit.js';
 import { cliApiContext } from './api-context.js';
@@ -33,7 +33,7 @@ async function graphShow(
   flags: CliFlags,
 ): Promise<void> {
   const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), { entity, limit: DEFAULT_VIEW_LIMIT });
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(model, null, 2));
     return;
   }
@@ -80,7 +80,7 @@ async function graphView(
   fs.writeFileSync(out, content, 'utf8');
   const truncated = model.truncated ? ' (truncated)' : '';
   console.log(`Wrote ${model.nodes.length} entities + ${model.edges.length} relations to ${out}${truncated}`);
-  if (flags['open'] && format === 'html') openInBrowser(out);
+  if (boolFlag(flags, 'open') && format === 'html') openInBrowser(out);
 }
 
 export async function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {

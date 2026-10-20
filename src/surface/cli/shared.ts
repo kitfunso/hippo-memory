@@ -15,7 +15,7 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { printError } from './output.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
-import type { CliFlags } from './flag-values.js';
+import { type CliFlags, boolFlag } from './flag-values.js';
 
 export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
@@ -162,7 +162,7 @@ export async function learnFromRepo(
 }
 
 export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
-  if (flags['global']) {
+  if (boolFlag(flags, 'global')) {
     cliInitGlobal();
     return resolveGlobalRootDir();
   }

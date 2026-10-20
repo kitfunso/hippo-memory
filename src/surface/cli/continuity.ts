@@ -30,6 +30,8 @@ import {
   repeatedFlag,
   stringFlagOrExit,
   type CommandContext,
+  hasFlag,
+  stringFlag,
 } from './flag-values.js';
 import { fail } from './exit.js';
 
@@ -77,7 +79,7 @@ async function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlag
 async function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const snapshot = await snapshotLoad(cliApiContext(hippoRoot, tenantId));
   if (!snapshot) {
-    if (flags['json']) {
+    if (boolFlag(flags, 'json')) {
       console.log(JSON.stringify({ snapshot: null }));
     } else {
       console.log('No active task snapshot saved.');
@@ -85,7 +87,7 @@ async function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags
     return;
   }
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ snapshot }, null, 2));
     return;
   }
@@ -143,7 +145,7 @@ async function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, 
     limit: s.limit,
   });
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ events }, null, 2));
     return;
   }
@@ -157,7 +159,7 @@ async function sessionLatest(hippoRoot: string, tenantId: string, s: SessionArgs
     limit: s.limit,
   });
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ snapshot: snapshot ?? null, events }, null, 2));
     return;
   }
@@ -280,9 +282,10 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
     fail(HANDOFF_CREATE_USAGE);
   }
 
-  const outcomeRaw = flags['outcome'];
-  if (outcomeRaw !== undefined && !isHandoffOutcome(outcomeRaw)) {
-    fail(`Invalid outcome: "${String(outcomeRaw)}". Must be one of: success, failure, partial.`);
+  const outcomeRaw = stringFlag(flags, 'outcome');
+  if (hasFlag(flags, 'outcome') && !isHandoffOutcome(outcomeRaw)) {
+    // A bare --outcome parses as true, and the message has always echoed it.
+    fail(`Invalid outcome: "${outcomeRaw ?? 'true'}". Must be one of: success, failure, partial.`);
   }
 
   const sessionId =
@@ -339,7 +342,7 @@ async function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlag
   const handoff = await apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId);
 
   if (!handoff) {
-    if (flags['json']) {
+    if (boolFlag(flags, 'json')) {
       console.log(JSON.stringify({ handoff: null }));
     } else {
       console.log('No session handoff found.');
@@ -347,7 +350,7 @@ async function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlag
     return;
   }
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ handoff }, null, 2));
     return;
   }
@@ -366,7 +369,7 @@ async function handoffShow(hippoRoot: string, tenantId: string, args: string[], 
   const handoff = await handoffById(cliApiContext(hippoRoot, tenantId), handoffId);
 
   if (!handoff) {
-    if (flags['json']) {
+    if (boolFlag(flags, 'json')) {
       console.log(JSON.stringify({ handoff: null }));
     } else {
       console.log(`No handoff found with ID ${handoffId}.`);
@@ -374,7 +377,7 @@ async function handoffShow(hippoRoot: string, tenantId: string, args: string[], 
     return;
   }
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ handoff }, null, 2));
     return;
   }
@@ -515,7 +518,7 @@ async function wmReadCmd(hippoRoot: string, tenantId: string, flags: CliFlags): 
 
   const items = await workingMemoryRead(cliApiContext(hippoRoot, tenantId), { scope, sessionId, limit });
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ items }, null, 2));
     return;
   }

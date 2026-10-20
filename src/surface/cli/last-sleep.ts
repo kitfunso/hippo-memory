@@ -1,6 +1,5 @@
 // `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for the user.
 import * as fs from 'fs';
-import { isStringValue } from '../../base/session/capture-contract.js';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { SPOOL_PROBLEM, spoolCounts } from '../capture/compaction-spool.js';
 import { defaultSleepLogPath } from '../hooks-install/json-hooks.js';
@@ -8,7 +7,7 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';
 import { truncateCodePointSafe } from '../../base/util/transcript-tail.js';
 import { printError } from './output.js';
-import { type CliFlags, type CommandContext } from './flag-values.js';
+import { type CommandContext, boolFlag, stringFlag } from './flag-values.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { plural } from '../../base/util/format.js';
 
@@ -44,13 +43,11 @@ function badSpoolFiles(hippoRoot: string): number {
 
 /** Prints the SessionEnd sleep log on stderr, then clears it. In a hook, stdout carries only `systemMessage`, because
  *  Claude Code shows that to the user and adds any other SessionStart stdout to the model's context. */
-export function cmdLastSleep(
-  hippoRoot: string,
-  flags: CliFlags,
+export function handleLastSleep(
+  { hippoRoot, flags }: Pick<CommandContext, 'hippoRoot' | 'flags'>,
   out: 'hook' | 'terminal' = process.stdout.isTTY ? 'terminal' : 'hook',
 ): void {
-  const pathFlag = flags['path'];
-  const logPath = isStringValue(pathFlag) ? pathFlag : defaultSleepLogPath();
+  const logPath = stringFlag(flags, 'path') ?? defaultSleepLogPath();
 
   if (!fs.existsSync(logPath)) return;
 
@@ -69,15 +66,11 @@ export function cmdLastSleep(
   if (problems !== null && out === 'hook') process.stdout.write(`${JSON.stringify({ systemMessage: problems })}\n`);
   if (problems !== null && out === 'terminal') printError(problems);
 
-  if (!flags['keep']) {
+  if (!boolFlag(flags, 'keep')) {
     try {
       fs.unlinkSync(logPath);
     } catch (err) {
       log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`, errorFields(err));
     }
   }
-}
-
-export function handleLastSleep({ hippoRoot, flags }: CommandContext): void {
-  return cmdLastSleep(hippoRoot, flags);
 }

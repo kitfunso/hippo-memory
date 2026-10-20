@@ -49,11 +49,11 @@ interface InspectedSlot {
   rank?: RankRecallResult;
 }
 
-async function cmdExplain(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
+async function explainQuery(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
-  const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
-  const limit = parseLimitFlag(flags['limit']);
+  const budget = parseBudgetFlag(flags, DEFAULT_RECALL_BUDGET);
+  const limit = parseLimitFlag(flags, 'limit');
   const asJson = boolFlag(flags, 'json');
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
@@ -221,5 +221,5 @@ export async function handleExplain({ hippoRoot, tenantId, args, flags }: Comman
   if (!query) {
     fail('Please provide a search query.');
   }
-  await cmdExplain(hippoRoot, tenantId, query, flags);
+  await explainQuery(hippoRoot, tenantId, query, flags);
 }
