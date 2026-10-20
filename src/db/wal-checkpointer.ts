@@ -5,8 +5,9 @@ import { Worker } from 'node:worker_threads';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 
-// WAL pages at which a connection checkpoints inside its own commit.
-const INLINE_CHECKPOINT_PAGES = 100;
+// WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long write pays the
+// checkpoint's two flushes once per 1,000 pages, not once per 100.
+const INLINE_CHECKPOINT_PAGES = 1000;
 
 // The same limit while a worker checkpoints the store: SQLite still bounds the WAL when the worker falls behind.
 const BACKSTOP_CHECKPOINT_PAGES = 4000;

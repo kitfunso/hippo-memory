@@ -14,6 +14,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { withRequestStoresSync } from '../../src/db/request-stores.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -59,6 +60,10 @@ function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [
 
 /** One row per score signal and per skip rule, each labelled with the transfer score it should get. */
 function seedSignalRows(): Map<string, string> {
+  return withRequestStoresSync(seedSignalRowsIn);
+}
+
+function seedSignalRowsIn(): Map<string, string> {
   const ids = new Map<string, string>();
   ids.set('plain 0.5', put('plain'));
   ids.set('negative 0.55', put('negative', { emotionalValence: 'negative' }));
@@ -160,8 +165,10 @@ describe('autoShare prefilter', () => {
   });
 
   it('reads only the rows that can clear a score above neutral', () => {
-    for (let i = 0; i < 60; i++) put(`plain ${i}`);
-    const errorId = put('error', {}, ['error']);
+    const errorId = withRequestStoresSync(() => {
+      for (let i = 0; i < 60; i++) put(`plain ${i}`);
+      return put('error', {}, ['error']);
+    });
     for (const tenantId of ['default', ALL_TENANTS] as const) {
       const { result, statements, rowsRead } = recordStatements(() =>
         autoShare(...sharingStores(root), { dryRun: true, tenantId }),

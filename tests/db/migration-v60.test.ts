@@ -58,7 +58,8 @@ describe('schema v60', () => {
     home = makeRoot('migration-v60-old', { init: false });
     const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
     const old = new DatabaseSync(getHippoDbPath(home));
-    old.exec(readFileSync(V56_SCHEMA, 'utf8'));
+    // One transaction: on a rollback journal each statement of the schema would otherwise flush the disk on its own.
+    old.exec(`BEGIN;\n${readFileSync(V56_SCHEMA, 'utf8')}\nCOMMIT;`);
     old
       .prepare(
         `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json,

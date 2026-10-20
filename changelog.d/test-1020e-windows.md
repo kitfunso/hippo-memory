@@ -1,0 +1,4 @@
+### Changed
+
+- **The package's `sleep` and `consolidate` open hippo.db twice, not once per step.** Called from code, each step of a pass opened and closed its own connection: 16 for a 5-row `consolidate`, 37 for a 40-row one. Each of those closes was SQLite's last, which checkpoints the WAL with two disk flushes and deletes it, and a write call paid about 50 ms for it on the GitHub Windows runner. Both now share one handle per store, as `hippo sleep` does, so a pass opens two connections however many rows it reads.
+- **A connection outside `hippo serve` checkpoints its WAL every 1,000 pages, not every 100.** A long write such as a sleep pass over a large store paid the checkpoint's two disk flushes ten times as often. 1,000 is SQLite's default and close to the window a served store already has.

@@ -180,8 +180,8 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('test #4: cap enforcement — 25 dirty summaries with cap=20 → attempted=20, capped=true', async () => {
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(() => {
+    // One connection for the seed loop and the rebuild: a close per write checkpoints the WAL, which is slow on Windows.
+    const result = await withSharedStoreHandles(async () => {
       for (let i = 0; i < 25; i++) {
         const sum = makeSummary(`sum-${i}`);
         writeEntry(hippoRoot, sum);
@@ -189,13 +189,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         writeEntry(hippoRoot, child);
         forceMarkDirty(hippoRoot, sum.id);
       }
-    });
-
-    const fetcher = makeOkFetcher();
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
-      apiKey: 'k',
-      fetcher,
-      cap: 20,
+      return rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+        apiKey: 'k',
+        fetcher: makeOkFetcher(),
+        cap: 20,
+      });
     });
 
     expect(result.attempted).toBe(20);

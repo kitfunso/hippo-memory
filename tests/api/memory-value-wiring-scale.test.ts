@@ -10,7 +10,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadEveryTenantEntries,
   loadSessionDecayContext,
-  writeEntry,
+  writeEntriesTogether,
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -313,10 +313,9 @@ describe('(i) dry-run parity', () => {
 
     const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
     const built = lens.map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ti' }));
-    for (const e of built) {
-      writeEntry(dirDry, e);
-      writeEntry(dirReal, e); // identical ids in both stores — a true clone
-    }
+    // Identical ids in both stores: a true clone.
+    writeEntriesTogether(dirDry, built);
+    writeEntriesTogether(dirReal, built);
 
     const sortedByLen = [...built].sort((a, b) => a.content.length - b.content.length);
     const expectedRescued = new Set(sortedByLen.slice(0, 3).map((e) => e.id));

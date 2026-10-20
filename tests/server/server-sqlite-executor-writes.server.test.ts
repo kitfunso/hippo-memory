@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { mintApiKey } from '../../src/core/api-key.js';
 import { getHippoDbPath } from '../../src/db/index.js';
-import { startWalCheckpointer } from '../../src/db/wal-checkpointer.js';
+import { autoCheckpointPages, startWalCheckpointer } from '../../src/db/wal-checkpointer.js';
 import { log } from '../../src/util/log.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -650,6 +650,7 @@ function checkpointedPredictions(root: string): number {
 describe("a store worker's wal_autocheckpoint", () => {
   it('follows the server thread: no checkpoint inside a commit while the checkpointer runs, and one in the next commit after it stops', async () => {
     const root = newRoot();
+    const inlineLimit = autoCheckpointPages(getHippoDbPath(root));
     const checkpointer = startWalCheckpointer(getHippoDbPath(root));
     cleanups.push(() => checkpointer.stop());
     const store = workerSqliteStore(root);
@@ -664,8 +665,8 @@ describe("a store worker's wal_autocheckpoint", () => {
     };
 
     for (let n = 0; n < 60; n++) await save(n);
-    // Past the 100 pages at which a connection of this thread's own would have checkpointed inside its commit.
-    expect(statSync(`${getHippoDbPath(root)}-wal`).size).toBeGreaterThan(150 * 4096);
+    // Past the pages at which a connection of this thread's own would have checkpointed inside its commit.
+    expect(statSync(`${getHippoDbPath(root)}-wal`).size).toBeGreaterThan(inlineLimit * 4096);
     expect(checkpointedPredictions(root)).toBe(0);
 
     await checkpointer.stop();

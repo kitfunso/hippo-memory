@@ -27,6 +27,7 @@ import {
   deleteEntry,
   listMemoryConflicts,
   writeEntry,
+  writeEntriesTogether,
   loadAllEntries,
   readEntry,
   batchWriteAndDelete,
@@ -258,7 +259,7 @@ describe('sleep with decay forced', () => {
     const kept = keptRow('the release train leaves on thursdays');
     const merged = createMemory7('the release train leaves on fridays', { tags: [TAG], source: 'consolidation' });
     const plain = createMemory7('the staging cluster restarts on sundays');
-    for (const e of [kept, merged, plain]) writeEntry(root, e);
+    writeEntriesTogether(root, [kept, merged, plain]);
 
     await consolidate(root, { now: sixtyDaysOn() });
 
@@ -274,9 +275,10 @@ describe('sleep with decay forced', () => {
     const root = newRoot(JSON.stringify({ replay: { count: 0 }, memoryValue: { enabled: true } }));
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
-    for (let i = 0; i < 12; i++) {
-      writeEntry(root, createMemory7(`faded observation number ${i} about module ${i} internals`));
-    }
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 12 }, (_, i) => createMemory7(`faded observation number ${i} about module ${i} internals`)),
+    );
 
     await consolidate(root, { now: sixtyDaysOn() });
 
@@ -394,7 +396,7 @@ describe('forget and supersede still work on a kept row', () => {
 describe('kept rows are not merged and not sent to extraction', () => {
   const BASE = 'Fixed the server crash due to memory overflow in the worker process `pool.ts`';
   const seedThree = (root: string, make: (content: string) => MemoryEntry) => {
-    for (const content of [BASE, `${BASE} again today`, `${BASE} once more`]) writeEntry(root, make(content));
+    writeEntriesTogether(root, [BASE, `${BASE} again today`, `${BASE} once more`].map(make));
   };
 
   it('control: with a key set, three untagged look-alike rows reach the fetcher and merge', async () => {

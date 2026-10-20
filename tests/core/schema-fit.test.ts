@@ -7,8 +7,10 @@ import * as fs from 'node:fs';
 import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { writeEntriesTogether, loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
+import { writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 
 function makePool(): MemoryEntry[] {
   return [
@@ -106,7 +108,7 @@ describe('contextReads.schemaFit', () => {
       tags: ['data-pipeline', 'error', 'kubernetes'],
       tenantId: 'other',
     });
-    for (const entry of [...pool, elsewhere]) writeEntry(root, entry);
+    writeEntriesTogether(root, [...pool, elsewhere]);
     const loaded = loadAllEntries(root, 'default');
     expect(loaded).toHaveLength(pool.length);
 
@@ -128,7 +130,6 @@ describe('contextReads.schemaFit', () => {
     expect(sqliteSyncStore(root).contextReads.schemaFit('nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
 
-  // A full window of rows is slow to write; a macOS runner went past the 5 s default.
   it('scores against only the newest window of rows, not the whole tenant', () => {
     const root = makeRoot('schema-fit-window');
     roots.push(root);
@@ -142,7 +143,15 @@ describe('contextReads.schemaFit', () => {
       ...createMemory(`recent pipeline note ${i}`, { tags: ['recent', i % 2 ? 'even' : 'odd'] }),
       created: new Date(Date.UTC(2025, 0, 1, 0, 0, i)).toISOString(),
     }));
-    writeEntriesTogether(root, [...oldest, ...newest]);
+    // Rows only, in one transaction: 2050 mirror files cost seconds on a Windows runner and no assertion reads them.
+    const db = openHippoDb(root);
+    try {
+      db.exec('BEGIN');
+      for (const entry of [...oldest, ...newest]) writeEntryDbOnly(db, entry);
+      db.exec('COMMIT');
+    } finally {
+      closeHippoDb(db);
+    }
     const window = sqliteSyncStore(root).contextReads.newestEntries('default', windowRows);
     expect(window).toHaveLength(windowRows);
     expect(window.some((entry) => entry.tags.includes('oldonly'))).toBe(false);

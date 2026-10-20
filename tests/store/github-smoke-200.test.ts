@@ -33,6 +33,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/util/env.js';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): GitHubFallback => ({ hostTenant: envTenant(), allowUnknown });
@@ -252,9 +253,11 @@ describe('GitHub connector — 200-event smoke test', () => {
 
     // ---- Stream 1: ingest all 200 -----------------------------------------
     const results: IngestResult[] = [];
-    for (const d of deliveries) {
-      results.push(await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId }));
-    }
+    await withSharedStoreHandles(async () => {
+      for (const d of deliveries) {
+        results.push(await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId }));
+      }
+    });
     const ingested = results.filter((r) => r.status === 'ingested').length;
     expect(ingested).toBe(200);
     expect(rawCount(root)).toBe(200);
@@ -312,15 +315,17 @@ describe('GitHub connector — 200-event smoke test', () => {
     // ---- (5) Re-running the same stream produces 0 new ingests -----------
     const beforeReplay = rawCount(root);
     let duplicateCount = 0;
-    for (const d of deliveries) {
-      const r = await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId });
-      // Either fast-path 'duplicate' (live row) or 'skipped'/'duplicate' for
-      // the 5 archived rows (their event_log row still exists -> 'duplicate').
-      expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
-      if (r.status === 'duplicate' || r.status === 'skipped_duplicate') {
-        duplicateCount++;
+    await withSharedStoreHandles(async () => {
+      for (const d of deliveries) {
+        const r = await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId });
+        // Either fast-path 'duplicate' (live row) or 'skipped'/'duplicate' for
+        // the 5 archived rows (their event_log row still exists -> 'duplicate').
+        expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
+        if (r.status === 'duplicate' || r.status === 'skipped_duplicate') {
+          duplicateCount++;
+        }
       }
-    }
+    });
     expect(rawCount(root)).toBe(beforeReplay);
     expect(duplicateCount).toBe(200);
 

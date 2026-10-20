@@ -2,10 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { consolidate } from '../../src/index.js';
+import { runConsolidation } from '../../src/consolidate/sleep.js';
+import { loadConfig } from '../../src/core/config.js';
 import { calculateStrength, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
@@ -56,7 +58,13 @@ describe('sleep rescue audit', () => {
     }
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    const result = await consolidate(root, { now: NOW });
+    // A handle per store call, outside the shared one of `hippo sleep` and the package's consolidate, so the audit
+    // opens its own and that open can refuse.
+    const result = await runConsolidation(sqliteSyncStore(root).localFiles, {
+      now: NOW,
+      config: loadConfig(root),
+      tenantId: 'default',
+    });
 
     const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
     expect(
