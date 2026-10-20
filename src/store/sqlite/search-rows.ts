@@ -273,10 +273,11 @@ export function pickRarestFtsQuery(
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
-  // Prepared per call: an IN list over a virtual table keeps its term lookups only with one mark per term.
-  const rows = db
-    .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`)
-    .all(...vocab) as Array<{ term: string; doc: number }>;
+  // One cached shape per term count: an IN list over a virtual table keeps its term lookups only with one mark per term.
+  const rows = cachedStatement(
+    db,
+    `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,
+  ).all(...vocab) as Array<{ term: string; doc: number }>;
   const counts = new Map(rows.map((r) => [r.term, r.doc]));
   return rarestFtsQuery(terms, (part) => counts.get(part) ?? 0, maxTerms);
 }
