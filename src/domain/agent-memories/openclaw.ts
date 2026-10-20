@@ -1,7 +1,6 @@
 // OpenClaw keeps its durable memory in one MEMORY.md; the daily notes, USER.md and DREAMS.md are left out on purpose.
-import fs from 'node:fs';
 import path from 'node:path';
-import { readTextFile } from './files.js';
+import type { AgentFiles } from '../../base/util/agent-files.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container } from './types.js';
@@ -10,7 +9,12 @@ export const openclawAdapter: Adapter = {
   tool: 'openclaw',
   list(ctx, scope) {
     const home = workspaceDir(ctx);
-    return { tool: 'openclaw', home, containers: scope === 'user' ? userContainers(home) : [], warnings: [] };
+    return {
+      tool: 'openclaw',
+      home,
+      containers: scope === 'user' ? userContainers(ctx.files, home) : [],
+      warnings: [],
+    };
   },
 };
 
@@ -28,10 +32,10 @@ function stateDir(ctx: AdapterContext): string {
   return path.join(openclawHome || ctx.home, `.openclaw${suffix}`);
 }
 
-function userContainers(workspace: string): Container[] {
+function userContainers(files: AgentFiles, workspace: string): Container[] {
   const file = path.join(workspace, 'MEMORY.md');
-  if (!fs.existsSync(file)) return [];
-  const read = readTextFile(file);
+  if (!files.exists(file)) return [];
+  const read = files.readText(file);
   if (!read.ok) {
     return [
       { scope: 'user', path: file, readable: false, items: [], skipped: [], warnings: [read.reason], textKeyed: true },

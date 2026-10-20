@@ -1,0 +1,4 @@
+### Changed
+
+- **The domain and api layers no longer touch the disk or start git themselves.** The agent memory readers now read through a file reader and a git runner that the caller's machine carries. The hook installers are split into plans in `src/domain/hooks` and the file writes in `src/surface/hooks-install`. Auto-learn, churn checks and `--auto` context get a git runner from the CLI or MCP verb that calls them. The `hippo-memory/json-hooks` export keeps the same names, and nothing a user runs behaves differently.
+- **CI fails a `src/domain` or `src/api` file that imports `fs` or `child_process`.** `scripts/check-domain-io.mjs` names each import by file and line. Six files are exempt until lanes g-local-port and g-graph-view move their I/O, and the check also fails once an exempt file no longer needs its exemption.

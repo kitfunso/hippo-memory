@@ -17,6 +17,7 @@ import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -420,8 +421,8 @@ describe('git repo detection', () => {
         },
       });
 
-      expect(isGitRepo(repoDir)).toBe(true);
-      expect(fetchGitLog(repoDir, 1)).toBe('');
+      expect(isGitRepo(processGit, repoDir)).toBe(true);
+      expect(fetchGitLog(processGit, repoDir, 1)).toBe('');
     } finally {
       fs.rmSync(repoDir, { recursive: true, force: true });
     }
@@ -431,7 +432,7 @@ describe('git repo detection', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-not-git-'));
 
     try {
-      expect(isGitRepo(dir)).toBe(false);
+      expect(isGitRepo(processGit, dir)).toBe(false);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

@@ -1,9 +1,6 @@
-/** Git subprocess helpers for churn-staleness (src/domain/learn/invalidation.ts). */
+/** Git reads for churn-staleness (src/domain/learn/invalidation.ts), through the caller's git runner. */
 
-import { execFileSync } from 'child_process';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import type { GitResult, GitRunner } from '../../base/util/git-runner.js';
 import { DAY_MS, MINUTE_MS } from '../../base/util/time.js';
 import { errorMessage } from '../../base/util/log.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
@@ -17,41 +14,38 @@ const GIT_TIMEOUT_MS = MINUTE_MS;
 /** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on this. */
 export class GitReadError extends Error {}
 
-function runGit(args: string[], repoRoot: string): string {
-  try {
-    return execFileSync('git', args, {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      maxBuffer: GIT_MAX_BUFFER,
-      timeout: GIT_TIMEOUT_MS,
-      windowsHide: true,
-    });
-  } catch (err) {
-    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`, { cause: err });
-  }
+/** The work tree churn checks read and the runner that starts git there. */
+export interface ChurnRepo {
+  readonly root: string;
+  readonly git: GitRunner;
+}
+
+function gitCall(repo: ChurnRepo, args: string[], input?: string): GitResult {
+  const call = { cwd: repo.root, maxBuffer: GIT_MAX_BUFFER, timeoutMs: GIT_TIMEOUT_MS };
+  return repo.git.run(args, input === undefined ? call : { ...call, input });
+}
+
+function readFailed(args: string[], run: Extract<GitResult, { ok: false }>): GitReadError {
+  return new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(run.error)}`, { cause: run.error });
+}
+
+function runGit(args: string[], repo: ChurnRepo): string {
+  const run = gitCall(repo, args);
+  if (run.ok) return run.stdout;
+  throw readFailed(args, run);
 }
 
 // git grep exits 1 for "no match" -- a normal empty result, not a failure.
-function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
-  try {
-    return execFileSync('git', args, {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      maxBuffer: GIT_MAX_BUFFER,
-      timeout: GIT_TIMEOUT_MS,
-      windowsHide: true,
-    });
-  } catch (err) {
-    // SAFETY: execFileSync attaches `status` to the thrown Error on a non-zero child exit.
-    const status = (err as { status?: number }).status;
-    if (status === 1) return '';
-    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`, { cause: err });
-  }
+function runGitGrepOrEmpty(args: string[], repo: ChurnRepo, input: string): string {
+  const run = gitCall(repo, args, input);
+  if (run.ok) return run.stdout;
+  if (run.status === 1) return '';
+  throw readFailed(args, run);
 }
 
 // ls-tree, not ls-files: the index can hold staged adds/deletes that HEAD does not.
-export function gitLsFilesAtHead(repoRoot: string): Set<string> {
-  const raw = runGit(['ls-tree', '-r', '--name-only', 'HEAD'], repoRoot);
+export function gitLsFilesAtHead(repo: ChurnRepo): Set<string> {
+  const raw = runGit(['ls-tree', '-r', '--name-only', 'HEAD'], repo);
   return new Set(
     raw
       .split('\n')
@@ -72,7 +66,7 @@ export interface ChurnCommit {
 }
 
 // 1-day buffer guards against git's --since boundary excluding a commit dated exactly at the anchor.
-export function fetchChurnWindowLog(repoRoot: string, sinceIso: string): ChurnCommit[] {
+export function fetchChurnWindowLog(repo: ChurnRepo, sinceIso: string): ChurnCommit[] {
   const buffered = new Date(new Date(sinceIso).getTime() - DAY_MS).toISOString();
   const raw = runGit(
     // --first-parent -m: a merge's changes land as one diff against its mainline parent.
@@ -85,7 +79,7 @@ export function fetchChurnWindowLog(repoRoot: string, sinceIso: string): ChurnCo
       '--pretty=format:%x01%H%x02%cI',
       '--name-status',
     ],
-    repoRoot,
+    repo,
   );
   const commits: ChurnCommit[] = [];
   let current: ChurnCommit | null = null;
@@ -102,29 +96,23 @@ export function fetchChurnWindowLog(repoRoot: string, sinceIso: string): ChurnCo
   return commits;
 }
 
-/** `git grep -o -h -w -F -f <patternFile> <rev>`; returns the subset of `patterns` found. */
-export function gitGrepPresence(repoRoot: string, patterns: string[], rev: string): Set<string> {
+/** `git grep -o -h -w -F -f - <rev>` with the patterns on stdin; returns the subset of `patterns` found. */
+export function gitGrepPresence(repo: ChurnRepo, patterns: string[], rev: string): Set<string> {
   if (patterns.length === 0) return new Set();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-grep-'));
-  try {
-    const patternFile = path.join(tmpDir, 'patterns.txt');
-    fs.writeFileSync(patternFile, `${patterns.join('\n')}\n`, 'utf8');
-    const raw = runGitGrepOrEmpty(['grep', '-o', '-h', '-w', '-F', '-f', patternFile, rev], repoRoot);
-    const patternSet = new Set(patterns);
-    const found = new Set<string>();
-    for (const line of raw.split('\n')) {
-      const t = line.trim();
-      if (patternSet.has(t)) found.add(t);
-    }
-    return found;
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  const input = `${patterns.join('\n')}\n`;
+  const raw = runGitGrepOrEmpty(['grep', '-o', '-h', '-w', '-F', '-f', '-', rev], repo, input);
+  const patternSet = new Set(patterns);
+  const found = new Set<string>();
+  for (const line of raw.split('\n')) {
+    const t = line.trim();
+    if (patternSet.has(t)) found.add(t);
   }
+  return found;
 }
 
 /** Last commit at or before `beforeIso`, or null when the repo has none. */
-export function resolveCommitBefore(repoRoot: string, beforeIso: string): string | null {
-  const raw = runGit(['rev-list', '-1', '--first-parent', `--before=${beforeIso}`, 'HEAD'], repoRoot).trim();
+export function resolveCommitBefore(repo: ChurnRepo, beforeIso: string): string | null {
+  const raw = runGit(['rev-list', '-1', '--first-parent', `--before=${beforeIso}`, 'HEAD'], repo).trim();
   return raw === '' ? null : raw;
 }
 
@@ -132,9 +120,9 @@ export function resolveCommitBefore(repoRoot: string, beforeIso: string): string
  * package.json `scripts` at a revision; {} when the file is absent, null when unparsable. Git failures throw
  * GitReadError.
  */
-export function packageScriptsAt(repoRoot: string, rev: string): Record<string, string> | null {
-  if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repoRoot).trim() === '') return {};
-  const raw = runGit(['show', `${rev}:package.json`], repoRoot);
+export function packageScriptsAt(repo: ChurnRepo, rev: string): Record<string, string> | null {
+  if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repo).trim() === '') return {};
+  const raw = runGit(['show', `${rev}:package.json`], repo);
   try {
     const parsed: JsonValue = JSON.parse(raw);
     const scripts = isJsonObject(parsed) ? parsed.scripts : undefined;

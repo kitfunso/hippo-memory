@@ -1,8 +1,8 @@
-import * as fs from 'fs';
+// The OpenCode plugin hippo installs and the hippo hooks it strips from an old opencode.json; surface/hooks-install
+// does the reads and writes.
 import * as path from 'path';
 import { homeDir } from '../../base/util/agent-homes.js';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
-import { type JsonValue, isJsonString, isJsonObjectLiteral, tryReadJsonFile } from '../../base/util/json.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../../base/util/json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
@@ -12,7 +12,7 @@ const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
  * No `@opencode-ai/plugin` type import (unresolved, it would crash the loader); `$` is guarded and `.nothrow()` keeps a
  * missing hippo binary from throwing.
  */
-const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
+export const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
 // hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
 // \`hippo hook install opencode\` from src/hooks.ts OPENCODE_PLUGIN_SOURCE
 // in https://github.com/kitfunso/hippo-memory. Local changes will be lost.
@@ -57,7 +57,7 @@ export function resolveOpencodePluginPath(): string {
   return path.join(homeDir(), '.config', 'opencode', 'plugins', 'hippo.ts');
 }
 
-function resolveOpencodeConfigPath(): string {
+export function resolveOpencodeConfigPath(): string {
   return path.join(homeDir(), '.config', 'opencode', 'opencode.json');
 }
 
@@ -75,41 +75,23 @@ function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
   return isJsonString(cmd) && HIPPO_OWNED_COMMAND_RE.test(cmd);
 }
 
-/**
- * Strip every hippo-owned hook from opencode.json's `hooks` key, deleting entries, keys and the object as they empty;
- * user-authored hooks and other keys stay.
- * Returns `{ migrated, jsonRepairFailed }`; jsonRepairFailed means the file is present but unparseable. */
-function migrateLegacyOpencodeHooksBlock() {
-  const configPath = resolveOpencodeConfigPath();
-  if (!fs.existsSync(configPath)) return { migrated: false, jsonRepairFailed: false };
-
-  const settings = tryReadJsonFile(configPath);
-  if (settings === undefined) return { migrated: false, jsonRepairFailed: true };
-  if (!isJsonObjectLiteral(settings)) return { migrated: false, jsonRepairFailed: false };
-
-  const hooks = settings.hooks;
-  // Non-object hooks values (string, array, null) are user content we don't recognise; leave them alone, return
-  // migrated=false.
-  if (!isJsonObjectLiteral(hooks)) {
-    return { migrated: false, jsonRepairFailed: false };
-  }
-
-  const hooksObj = hooks;
+/** Strips every hippo-owned hook from parsed opencode.json, edited in place, deleting entries, keys and the `hooks`
+ * object as they empty; true when anything changed. A non-object `hooks` is user content hippo does not recognise. */
+export function stripLegacyHooks(settings: JsonValue): boolean {
+  if (!isJsonObjectLiteral(settings)) return false;
+  const hooksObj = settings.hooks;
+  if (!isJsonObjectLiteral(hooksObj)) return false;
   let changed = false;
   for (const key of Object.keys(hooksObj)) {
-    if (!Array.isArray(hooksObj[key])) continue;
-    const { survivingEntries, strippedAny } = stripHippoHooksFromEntries(hooksObj[key]);
-    if (strippedAny) changed = true;
-    if (survivingEntries.length !== hooksObj[key].length) changed = true;
+    const entries = hooksObj[key];
+    if (!Array.isArray(entries)) continue;
+    const { survivingEntries, strippedAny } = stripHippoHooksFromEntries(entries);
+    if (strippedAny || survivingEntries.length !== entries.length) changed = true;
     hooksObj[key] = survivingEntries;
-    if (hooksObj[key].length === 0) delete hooksObj[key];
+    if (survivingEntries.length === 0) delete hooksObj[key];
   }
-
-  if (!changed) return { migrated: false, jsonRepairFailed: false };
-
-  if (Object.keys(hooksObj).length === 0) delete settings.hooks;
-  writeFileAtomic(configPath, JSON.stringify(settings, null, 2) + '\n');
-  return { migrated: true, jsonRepairFailed: false };
+  if (changed && Object.keys(hooksObj).length === 0) delete settings.hooks;
+  return changed;
 }
 
 /** One event's entries with every hippo-owned hook taken out, and whether any was. */
@@ -136,34 +118,7 @@ function stripHippoHooksFromEntries(entries: JsonValue[]) {
   return { survivingEntries, strippedAny };
 }
 
-export function installOpencodePlugin(): OpencodePluginInstallResult {
-  const pluginPath = resolveOpencodePluginPath();
-  const { migrated, jsonRepairFailed } = migrateLegacyOpencodeHooksBlock();
-
-  // Skip the write only if BOTH the marker is present and the content matches; a marker-only match with stale content
-  // is rewritten so plugin-source patches reach existing installs.
-  if (fs.existsSync(pluginPath)) {
-    const existing = fs.readFileSync(pluginPath, 'utf8');
-    if (existing.includes(HIPPO_OPENCODE_PLUGIN_MARKER) && existing === OPENCODE_PLUGIN_SOURCE) {
-      return { installed: false, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
-    }
-  }
-  writeFileAtomic(pluginPath, OPENCODE_PLUGIN_SOURCE);
-  return { installed: true, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
-}
-
-export function uninstallOpencodePlugin(): boolean {
-  const pluginPath = resolveOpencodePluginPath();
-  let removedFile = false;
-  if (fs.existsSync(pluginPath)) {
-    const existing = fs.readFileSync(pluginPath, 'utf8');
-    if (existing.includes(HIPPO_OPENCODE_PLUGIN_MARKER)) {
-      fs.unlinkSync(pluginPath);
-      removedFile = true;
-    }
-  }
-  // Always run the legacy migration on uninstall: the downgrade path (user removing hippo entirely) must leave opencode
-  // launchable.
-  const { migrated } = migrateLegacyOpencodeHooksBlock();
-  return removedFile || migrated;
+/** True when the file is hippo's plugin as this release writes it, so install can skip the write. */
+export function isCurrentPlugin(text: string): boolean {
+  return text.includes(HIPPO_OPENCODE_PLUGIN_MARKER) && text === OPENCODE_PLUGIN_SOURCE;
 }

@@ -33,6 +33,7 @@ import {
   seed,
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 useQueryCountRoots();
 
@@ -134,10 +135,14 @@ describe('detectChurnStale', () => {
         rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', originProject: 'qcproj' }),
       );
       const { result, statements } = recordStatements(() =>
-        detectChurnStale(sqliteSyncStore(root).localFiles.learning, repo, {
-          tenantId: 'default',
-          projectName: 'qcproj',
-        }),
+        detectChurnStale(
+          sqliteSyncStore(root).localFiles.learning,
+          { root: repo, git: processGit },
+          {
+            tenantId: 'default',
+            projectName: 'qcproj',
+          },
+        ),
       );
       expect(result.marked).toBe(n);
       return { opens: countMatching(statements, STORE_OPEN), reads: countMatching(statements, ROW_READ) };
@@ -221,7 +226,7 @@ describe('learn', () => {
       memory('quuxlib client timeouts are 30s'),
     ]);
     const { result, statements } = await recordStatementsAsync(() =>
-      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows })),
+      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows, git: processGit })),
     );
     return {
       root,

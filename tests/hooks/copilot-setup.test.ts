@@ -5,14 +5,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { copilotHomeDir, detectInstalledTools } from '../../src/domain/hooks/shared.js';
-import {
-  VSCODE_MCP,
-  copilotMcpSnippet,
-  copilotPaths,
-  installCopilot,
-  uninstallCopilot,
-} from '../../src/domain/hooks/copilot.js';
+import { copilotHomeDir } from '../../src/domain/hooks/shared.js';
+import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
+import { VSCODE_MCP, copilotMcpSnippet } from '../../src/domain/hooks/copilot.js';
+import { copilotPaths, installCopilot, uninstallCopilot } from '../../src/surface/hooks-install/copilot.js';
 import { HOOKS } from '../../src/domain/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import type { JsonValue } from '../../src/base/util/json.js';

@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { packageScriptsAt } from '../../src/domain/learn/churn-git.js';
 import { onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 let dir: string;
 beforeEach(() => {
@@ -41,14 +42,14 @@ describe('packageScriptsAt', () => {
 
   it('returns the scripts when every value is a string', () => {
     git('init', '-q');
-    expect(packageScriptsAt(dir, commit('{"scripts":{"a":"b"}}'))).toEqual({ a: 'b' });
+    expect(packageScriptsAt({ root: dir, git: processGit }, commit('{"scripts":{"a":"b"}}'))).toEqual({ a: 'b' });
   });
 
   it.each(['{"scripts":"build"}', '{"scripts":["x"]}', '{"scripts":{"a":1}}', '{"scripts":null}'])(
     'reads %s as no scripts',
     (pkg) => {
       git('init', '-q');
-      expect(packageScriptsAt(dir, commit(pkg))).toEqual({});
+      expect(packageScriptsAt({ root: dir, git: processGit }, commit(pkg))).toEqual({});
     },
   );
 });

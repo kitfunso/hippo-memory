@@ -1,6 +1,6 @@
 // A folder whose files are the items, as Claude Code, Gemini, Qwen and Copilot keep them: one reader for all four.
 import path from 'node:path';
-import { listFiles, readTextFile } from './files.js';
+import type { AgentFiles } from '../../base/util/agent-files.js';
 import type { Container, MemoryItem, Scope } from './types.js';
 
 export interface FolderRules {
@@ -11,8 +11,8 @@ export interface FolderRules {
 }
 
 /** Null when the folder is missing; a file that could not be read is `skipped`, so its row is left alone. */
-export function readFolderStore(dir: string, scope: Scope, rules: FolderRules): Container | null {
-  const listing = listFiles(dir, { recursive: rules.recursive });
+export function readFolderStore(files: AgentFiles, dir: string, scope: Scope, rules: FolderRules): Container | null {
+  const listing = files.listFiles(dir, { recursive: rules.recursive });
   if (listing.status === 'missing') return null;
   if (listing.status === 'unreadable') {
     return { scope, path: dir, readable: false, items: [], skipped: [], warnings: [listing.reason], textKeyed: false };
@@ -21,7 +21,7 @@ export function readFolderStore(dir: string, scope: Scope, rules: FolderRules): 
   const skipped: string[] = [];
   const warnings: string[] = [];
   for (const key of listing.files.filter(rules.include)) {
-    const file = readTextFile(path.join(dir, key));
+    const file = files.readText(path.join(dir, key));
     if (!file.ok) {
       skipped.push(key);
       warnings.push(file.reason);

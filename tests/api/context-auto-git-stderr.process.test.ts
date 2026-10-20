@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { autoDetectContext } from '../../src/api/context-auto.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 let repo: string;
 let prevCwd: string;
@@ -35,7 +36,7 @@ afterEach(() => {
 
 describe('autoDetectContext', () => {
   it('builds the query from changed file names only', () => {
-    expect(autoDetectContext()).toBe('deployment txt');
+    expect(autoDetectContext(processGit)).toBe('deployment txt');
   });
 
   it('logs at debug why no git-derived query came back, and returns empty', () => {
@@ -46,7 +47,7 @@ describe('autoDetectContext', () => {
     vi.stubEnv('HIPPO_LOG', 'debug');
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      expect(autoDetectContext()).toBe('');
+      expect(autoDetectContext(processGit)).toBe('');
       expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('auto context: no git-derived query');
     } finally {
       stderr.mockRestore();

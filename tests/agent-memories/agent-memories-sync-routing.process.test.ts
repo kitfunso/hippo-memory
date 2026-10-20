@@ -1,11 +1,12 @@
 // Design 2 and 9: which store each pass writes to, the handover, and what may leave a store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import childProcess, { spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { gitLayout } from '../../src/domain/agent-memories/git.js';
+import type { Machine } from '../../src/base/util/agent-homes.js';
+import { processGit, type GitRunner } from '../../src/base/util/git-runner.js';
 import { containerId, containerPrefix } from '../../src/domain/agent-memories/source.js';
 import {
   importAtSessionEnd,
@@ -72,21 +73,22 @@ function plainRow(root: string, content: string, origin: string): MemoryEntry {
   return entry;
 }
 
-interface Spawned<T> {
+interface GitRuns<T> {
   readonly result: T;
-  readonly spawns: number;
+  readonly runs: number;
 }
 
-function spawnsDuring<T>(run: () => T): Spawned<T> {
-  const spy = vi.spyOn(childProcess, 'spawnSync');
-  syncBuiltinESMExports();
-  try {
-    const result = run();
-    return { result, spawns: spy.mock.calls.length };
-  } finally {
-    spy.mockRestore();
-    syncBuiltinESMExports();
-  }
+/** Domain starts git only through Machine.git, so a counting runner sees every git process the pass starts. */
+function gitRunsDuring<T>(run: (machine: Machine) => T): GitRuns<T> {
+  let runs = 0;
+  const git: GitRunner = {
+    run: (args, call) => {
+      runs++;
+      return w.machine.git.run(args, call);
+    },
+  };
+  const result = run({ ...w.machine, git });
+  return { result, runs };
 }
 
 describe('agent memory sync: routing and sharing', () => {
@@ -131,13 +133,15 @@ describe('agent memory sync: routing and sharing', () => {
     const transcript = join(dirname(note(projectNotes(w), 'q.md', Q)), '..', 's.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    const compaction = spawnsDuring(() => importSessionFolder(w.local, transcript, w.project, opts()));
-    expect(compaction.spawns).toBe(0);
+    const compaction = gitRunsDuring((machine) =>
+      importSessionFolder(w.local, transcript, w.project, { ...opts(), machine }),
+    );
+    expect(compaction.runs).toBe(0);
     expect(claude(compaction.result).imported).toBe(1);
     expect(liveRows(w.local)).toMatchObject([{ content: Q, originProject: 'proj' }]);
     expect(isInitialized(w.global)).toBe(false);
     // Claude Code's folder names ask git once; this world has no Gemini index or Copilot store to ask it again.
-    expect(spawnsDuring(() => importProjectMemories(w.local, opts())).spawns).toBe(1);
+    expect(gitRunsDuring((machine) => importProjectMemories(w.local, { ...opts(), machine })).runs).toBe(1);
   });
 
   it('a session begun above two repos keeps its folder notes user-global, one copy wherever it ends', () => {
@@ -302,7 +306,7 @@ describe('agent memory sync: routing and sharing', () => {
     const noTools = join(w.dir, 'no-tools');
     mkdirSync(noTools);
     vi.stubEnv('PATH', noTools);
-    expect(gitLayout(join(repo, 'sub'))).toBeNull();
+    expect(gitLayout(processGit, join(repo, 'sub'))).toBeNull();
     expect(claude(importForStore(store, opts()))).toMatchObject({ setAside: 0, imported: 0 });
     expect(liveTexts(store)).toEqual([DEPLOY]);
   });

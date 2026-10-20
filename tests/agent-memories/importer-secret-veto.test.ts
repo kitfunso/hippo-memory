@@ -19,6 +19,7 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 const sync = (root: string, home: string): Tally =>
   totalTally(
@@ -26,7 +27,7 @@ const sync = (root: string, home: string): Tally =>
       configAt: loadConfig,
       tenantId: 'default',
       agentImport: sqliteAgentImport({}),
-      machine: { home, env: {}, platform: process.platform },
+      machine: { home, env: {}, platform: process.platform, ...REAL_IO },
     }),
   );
 
