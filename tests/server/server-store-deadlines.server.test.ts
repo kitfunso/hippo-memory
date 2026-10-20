@@ -20,7 +20,6 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { neverHold } from '../_helpers/held-stores.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -305,8 +304,6 @@ describe("a read still running at its request's deadline", () => {
     const before = await counts(server);
     mkdirSync(join(root, '.hippo'), { recursive: true });
     initTestStore(root);
-    // A held store would keep the lock on the whole file below from being taken.
-    neverHold(root);
     // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
     await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });
     executor.terminateWriter();

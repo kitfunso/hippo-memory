@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { runIncidentRecallEval } from '../../benchmarks/e1.3/incident-recall-eval.js';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 describe('slack incident recall (success criterion)', () => {
@@ -10,7 +11,7 @@ describe('slack incident recall (success criterion)', () => {
 
   // Ingests and recalls ten incident scenarios against a real store.
   it('beats transcript-tail baseline on every one of the 10 scenarios', async () => {
-    const r = await runIncidentRecallEval({ hippoRoot: root });
+    const r = await withSharedStoreHandles(() => runIncidentRecallEval({ hippoRoot: root }));
     expect(r.scenarios).toHaveLength(10);
     // Named, so the one scenario that regresses shows in the diff.
     expect(r.scenarios.filter((s) => s.beat).map((s) => s.id)).toEqual([

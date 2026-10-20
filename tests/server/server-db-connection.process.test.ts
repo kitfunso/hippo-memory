@@ -44,7 +44,7 @@ function inlineCheckpointPages(root: string): number {
 
 describe('hippo serve store connection', () => {
   it('keeps the WAL between requests while running, and releases the store on stop', async () => {
-    const root = makeRoot('srv-conn', { held: false });
+    const root = makeRoot('srv-conn');
     dirs.push(root);
     const wal = join(root, 'hippo.db-wal');
     const handle = await serve({ hippoRoot: root, port: 0 });
@@ -75,7 +75,7 @@ describe('hippo serve store connection', () => {
   });
 
   it('checkpoints the WAL away from request commits, and gives the inline limit back on stop', async () => {
-    const root = makeRoot('srv-conn-ckpt', { held: false });
+    const root = makeRoot('srv-conn-ckpt');
     dirs.push(root);
     const db = join(root, 'hippo.db');
     const inlineLimit = inlineCheckpointPages(root);
@@ -98,7 +98,7 @@ describe('hippo serve store connection', () => {
   });
 
   it('stops waiting for a locked store after the server lock wait, instead of stalling the event loop until the lock goes', async () => {
-    const root = makeRoot('srv-conn-locked', { held: false });
+    const root = makeRoot('srv-conn-locked');
     dirs.push(root);
     // Another process holds an exclusive lock for 6 s; in rollback-journal mode that blocks the journal-mode switch every open makes.
     const script = join(root, 'hold-lock.mjs');
