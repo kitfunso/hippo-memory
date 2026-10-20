@@ -17,6 +17,8 @@ import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { withRequestStoresSync } from '../../src/db/request-stores.js';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
@@ -89,6 +91,10 @@ afterEach(() => {
 describe('own-session compaction items in recent context', () => {
   // 40 items outnumber the loader's first window (32), so admit has to reject them for the load to widen.
   function seedFortyItemsAndOlderRows() {
+    return withRequestStoresSync(seedFortyItemsAndOlderRowsIn);
+  }
+
+  function seedFortyItemsAndOlderRowsIn() {
     const older = Array.from({ length: 8 }, (_, i) =>
       seed(local, `older release note ${i} about the checklist for the payments service`, { created: minute(0, i) }),
     );
@@ -130,16 +136,18 @@ describe('own-session compaction items in recent context', () => {
       .map((e) => e.id)
       .sort();
 
-    for (const currentSessionId of [OTHER, '', null, undefined]) {
-      const result = await contextGet(ctx, {
-        pinnedOnly: true,
-        includeRecent: 5,
-        budget: 2000,
-        currentProject: PROJECT,
-        currentSessionId,
-      });
-      expect(ids(result).sort()).toEqual(newestItems);
-    }
+    await withSharedStoreHandles(async () => {
+      for (const currentSessionId of [OTHER, '', null, undefined]) {
+        const result = await contextGet(ctx, {
+          pinnedOnly: true,
+          includeRecent: 5,
+          budget: 2000,
+          currentProject: PROJECT,
+          currentSessionId,
+        });
+        expect(ids(result).sort()).toEqual(newestItems);
+      }
+    });
   });
 
   it('keeps them out of the strength-ranked context too', async () => {
