@@ -1,4 +1,4 @@
-// tests/server/serve-nonloopback-auth.test.ts
+// tests/server/serve-nonloopback-auth.server.test.ts
 //
 // serve()'s non-loopback guard used to refuse EVERY non-loopback host
 // unconditionally, citing the A5 v2 auth middleware as "not yet built".

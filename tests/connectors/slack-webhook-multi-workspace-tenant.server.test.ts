@@ -11,8 +11,8 @@
  *
  * Existing coverage map (what we already had):
  *   - tests/connectors/slack-tenant-routing.test.ts: resolveTenantForSlackTeam helper unit only
- *   - tests/connectors/slack-hardening.test.ts: unroutable foreign team → __unroutable__ DLQ
- *   - tests/connectors/slack-webhook-parse-failure-tenant.test.ts (v1.12.6 B4): parse-failure paths
+ *   - tests/connectors/slack-hardening.process.test.ts: unroutable foreign team → __unroutable__ DLQ
+ *   - tests/connectors/slack-webhook-parse-failure-tenant.server.test.ts (v1.12.6 B4): parse-failure paths
  *   - tests/connectors/slack-workspaces-cli.test.ts (v1.12.5): CLI add/list/remove unit
  *
  * What was missing (and is added here):

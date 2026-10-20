@@ -3,11 +3,13 @@
 // with vi.unstubAllEnvs in afterEach restores the value vitest.config.ts set, so a test cannot leak env into the next.
 // tests/_helpers/ may own env for a child process. An env object built for a spawn is a read, not a write.
 // A vi.stubEnv made once (beforeAll, a describe body, module scope) under an afterEach unstub is gone after the first test.
+// Also fails a test whose name puts it in another vitest project than what it starts needs (scripts/lib/test-classes.mjs).
 
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import { EVAL_TESTS, STARTS_A_CHILD, STARTS_A_SERVER, projectOfName } from './lib/test-classes.mjs';
 
 const isProcessEnv = (e) => e.getText() === 'process.env';
 const isEnvMember = (e) =>
@@ -170,10 +172,69 @@ export function findEnvWrites(dir) {
   });
 }
 
-// Guarded so the test can import the functions without running the check.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const dir = process.argv[2] ?? 'tests';
-  const hits = findEnvWrites(dir);
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Whether a source starts what `starts` matches, itself or through a tests/_helpers module that does. */
+function startsVia(helpers, starts) {
+  const starters = new Set(helpers.filter((h) => starts.test(h.source)).map((h) => h.name));
+  let importsStarter = () => false;
+  // A helper that imports a starter is one too, so this repeats until a pass adds none.
+  for (let known = -1; known !== starters.size;) {
+    known = starters.size;
+    if (known === 0) break;
+    const names = new RegExp(`(?:_helpers|\\.)/(?:${[...starters].map(escapeRegExp).join('|')})\\.`);
+    importsStarter = (source) => names.test(source);
+    for (const h of helpers) if (importsStarter(h.source)) starters.add(h.name);
+  }
+  return (source) => starts.test(source) || importsStarter(source);
+}
+
+function filesUnder(dir, keep, out = []) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) {
+      if (e.name !== 'node_modules') filesUnder(p, keep, out);
+    } else if (keep(e.name)) out.push(p);
+  }
+  return out;
+}
+
+/**
+ * Returns one entry per test file whose name puts it in another vitest project than the one its code needs: a test
+ * that starts a child process is `*.process.test.*`, one that starts only the server or a worker thread
+ * `*.server.test.*`, and no other test has either name. The eval config runs EVAL_TESTS, so they keep their names.
+ * @param {string} dir the tests folder
+ * @returns {{ file: string, has: string, want: string }[]}
+ */
+export function misnamedTests(dir) {
+  const helperDir = join(dir, '_helpers');
+  const helpers = existsSync(helperDir)
+    ? readdirSync(helperDir, { withFileTypes: true })
+        .filter((e) => e.isFile())
+        .map((e) => ({ name: e.name.replace(/\.\w+$/, ''), source: readFileSync(join(helperDir, e.name), 'utf8') }))
+    : [];
+  const startsChild = startsVia(helpers, STARTS_A_CHILD);
+  const startsServer = startsVia(helpers, STARTS_A_SERVER);
+  const skipped = new Set(EVAL_TESTS);
+  const hits = [];
+  for (const path of filesUnder(dir, (n) => /\.test\.(ts|mjs)$/.test(n))) {
+    const file = relative(dirname(dir), path).replaceAll('\\', '/');
+    if (skipped.has(file)) continue;
+    const source = readFileSync(path, 'utf8');
+    const want = startsChild(source) ? 'process' : startsServer(source) ? 'server' : 'unit';
+    const has = projectOfName(file);
+    if (want !== has) hits.push({ file, has, want });
+  }
+  return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+const RENAME = {
+  process: 'starts a child process: name it *.process.test.ts',
+  server: 'starts the server or a worker thread and no child: name it *.server.test.ts',
+  unit: 'starts no child, server or worker thread: drop .process or .server from its name',
+};
+
+function report(dir, hits, misnamed) {
   if (hits.length > 0) {
     console.error(`\nTests that write or leak process.env in ${dir}/:`);
     for (const h of hits) console.error(`  ${h.file}:${h.line} ${h.write}`);
@@ -183,7 +244,22 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error(
       'A stub made once (beforeAll, describe body, module scope) goes in beforeEach, or pairs with vi.unstubAllEnvs() in afterAll.\n',
     );
-    process.exit(1);
   }
-  console.log(`No test in ${dir}/ writes process.env by hand. OK.`);
+  if (misnamed.length > 0) {
+    console.error(`\nTests whose name puts them in the wrong vitest project in ${dir}/:`);
+    for (const m of misnamed) console.error(`  ${m.file} ${RENAME[m.want]}`);
+    console.error(
+      '\nThe unit project gives a test 5 s; one that waits on another process or thread needs the 30 s project.\n',
+    );
+  }
+}
+
+// Guarded so the test can import the functions without running the check.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const dir = process.argv[2] ?? 'tests';
+  const hits = findEnvWrites(dir);
+  const misnamed = misnamedTests(dir);
+  report(dir, hits, misnamed);
+  if (hits.length > 0 || misnamed.length > 0) process.exit(1);
+  console.log(`No test in ${dir}/ writes process.env by hand, and each test's name matches what it starts. OK.`);
 }

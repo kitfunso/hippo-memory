@@ -14,7 +14,7 @@ import { loadActiveTaskSnapshot, loadLatestHandoff, saveActiveTaskSnapshot } fro
 // SessionEnd hook's stdin JSON and passes `--session-id` to the detached
 // `__session-end-worker`; the worker closes that session's own active
 // snapshot AFTER sleep+capture. Real built CLI, real detached child, no
-// mocks — same idiom as tests/core/pre-compact-e2e.test.ts.
+// mocks, the same idiom as tests/core/pre-compact-e2e.process.test.ts.
 
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-e2e-'));

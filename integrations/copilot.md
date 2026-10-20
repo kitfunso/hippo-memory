@@ -118,4 +118,4 @@ Run it before `npm uninstall -g hippo-memory`. The hooks call `hippo`, so once t
 
 ## Status
 
-The install and uninstall steps are covered by `tests/hooks/copilot-setup.test.ts`, and the hook commands by the other `tests/**/copilot-*.test.ts` files and `tests/capture/session-worker.test.ts`. Hippo has not yet been watched end to end in a live Copilot CLI or VS Code session. So `docs/integrations/agent-inventory.json` keeps the Copilot CLI at `planned` and marks VS Code agent mode `shipped`: built and covered by fixture tests, not yet verified live.
+The install and uninstall steps are covered by `tests/hooks/copilot-setup.test.ts`, and the hook commands by the other `tests/**/copilot-*.test.ts` files and `tests/capture/session-worker.process.test.ts`. Hippo has not yet been watched end to end in a live Copilot CLI or VS Code session. So `docs/integrations/agent-inventory.json` keeps the Copilot CLI at `planned` and marks VS Code agent mode `shipped`: built and covered by fixture tests, not yet verified live.

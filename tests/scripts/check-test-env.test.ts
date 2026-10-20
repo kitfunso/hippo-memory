@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { earlyUnstubs, envWrites, onceStubs } from '../../scripts/check-test-env.mjs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { earlyUnstubs, envWrites, misnamedTests, onceStubs } from '../../scripts/check-test-env.mjs';
 
 const lines = (text: string): number[] => envWrites(text).map((hit) => hit.line);
 
@@ -88,5 +91,59 @@ describe('earlyUnstubs', () => {
       '});',
     ].join('\n');
     expect(earlyUnstubs(text)).toEqual([]);
+  });
+});
+
+// Built from pieces so this file's own text starts nothing and it stays a unit test.
+const CHILD = `import { spawn } from 'node:${['child', 'process'].join('_')}';\n`;
+const SERVER = `await ${'ser' + 've'}({ port: 0 });\n`;
+
+function misnamedIn(files: Record<string, string>): { file: string; has: string; want: string }[] {
+  const root = mkdtempSync(join(tmpdir(), 'hippo-test-names-'));
+  try {
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, 'tests', p)), { recursive: true });
+      writeFileSync(join(root, 'tests', p), text);
+    }
+    return misnamedTests(join(root, 'tests'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('misnamedTests', () => {
+  it('flags a test whose name does not match the child, server or nothing it starts', () => {
+    expect(
+      misnamedIn({
+        'a.test.ts': CHILD,
+        'b.process.test.ts': "import { x } from '../../src/x.js';\n",
+        'c/d.test.ts': SERVER,
+        'e.server.test.ts': CHILD + SERVER,
+      }),
+    ).toEqual([
+      { file: 'tests/a.test.ts', has: 'unit', want: 'process' },
+      { file: 'tests/b.process.test.ts', has: 'process', want: 'unit' },
+      { file: 'tests/c/d.test.ts', has: 'unit', want: 'server' },
+      { file: 'tests/e.server.test.ts', has: 'server', want: 'process' },
+    ]);
+  });
+
+  it('follows a _helpers module that starts a child, through a helper that imports it', () => {
+    const files = {
+      '_helpers/run.ts': CHILD,
+      '_helpers/wrap.ts': "export { run } from './run.js';\n",
+      'f.test.ts': "import { run } from './_helpers/wrap.js';\n",
+    };
+    expect(misnamedIn(files)).toEqual([{ file: 'tests/f.test.ts', has: 'unit', want: 'process' }]);
+  });
+
+  it('passes matching names, a plain unit test and an eval test the eval config runs', () => {
+    const files = {
+      'g.process.test.ts': CHILD,
+      'g.server.test.ts': SERVER,
+      'g.test.ts': "import { x } from '../../src/x.js';\n",
+      'token-eval-ab-run.test.ts': CHILD,
+    };
+    expect(misnamedIn(files)).toEqual([]);
   });
 });

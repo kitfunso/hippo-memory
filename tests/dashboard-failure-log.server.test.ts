@@ -1,5 +1,5 @@
 // A dashboard request that fails logs its route and status through the server's failure line, never its path or query,
-// so the access token in a URL stays out of the log. The committed-write case lives in tests/api/dashboard-detail.test.ts.
+// so the access token in a URL stays out of the log. The committed-write case lives in tests/api/dashboard-detail.server.test.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serveDashboard } from '../src/server/dashboard-listener.js';

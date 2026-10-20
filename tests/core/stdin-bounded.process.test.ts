@@ -11,7 +11,7 @@ import { waitFor } from '../_helpers/wait-for.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
-// real store, no mocks, same idiom as tests/core/pre-compact-e2e.test.ts.
+// real store, no mocks, same idiom as tests/core/pre-compact-e2e.process.test.ts.
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 function withScratchEnv() {
@@ -36,7 +36,7 @@ async function initHippo(cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
 }
 
 // Detached session-end workers can briefly hold a Windows lock on the
-// SQLite WAL/shm files (mirrors session-end-snapshot-close.test.ts).
+// SQLite WAL/shm files (mirrors session-end-snapshot-close.process.test.ts).
 function safeRmSync(p: string): void {
   try {
     fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -46,7 +46,7 @@ function safeRmSync(p: string): void {
 }
 
 // case 1's payload-less run takes the "no session_id" branch, which
-// session-end-snapshot-close.test.ts's own CLOSE_STEP regex never matches.
+// session-end-snapshot-close.process.test.ts's own CLOSE_STEP regex never matches.
 const SESSION_END_DONE =
   /closed \d+ active snapshot\(s\) for session |snapshot close failed: |skip: no session_id in SessionEnd payload/;
 function sessionEndDoneLogged(logFile: string): boolean {

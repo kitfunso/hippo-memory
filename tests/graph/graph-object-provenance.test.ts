@@ -5,7 +5,7 @@
  * memory is forgotten or consolidation-pruned.
  * Docs: docs/plans/2026-06-03-graph-e2-provenance.md
  *
- * Real DB, no mocks (mirrors tests/graph/graph-extract.test.ts + tests/store/graph-store.test.ts).
+ * Real DB, no mocks (mirrors tests/graph/graph-extract.server.test.ts + tests/store/graph-store.test.ts).
  * The success criterion is asserted by querying the entities/relations TABLES directly,
  * not via recall (recall surfacing of mirror-less nodes is an out-of-scope follow-up).
  */

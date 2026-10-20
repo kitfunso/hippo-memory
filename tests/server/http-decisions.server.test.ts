@@ -2,7 +2,7 @@
  * E2 decision first-class object — HTTP route parity test.
  * Docs: docs/plans/2026-05-28-e2-decision-object.md
  *
- * Covers what only decisions have; the shared route rules run per kind in http-objects.test.ts.
+ * Covers what only decisions have; the shared route rules run per kind in http-objects.server.test.ts.
  * 1. GET /v1/decisions lists + status filter
  */
 

@@ -2,7 +2,7 @@
  * E2 incident first-class object — HTTP route parity test.
  * Docs: docs/plans/2026-05-29-e2-incident-object.md
  *
- * Covers what only incidents have; the shared route rules run per kind in http-objects.test.ts.
+ * Covers what only incidents have; the shared route rules run per kind in http-objects.server.test.ts.
  * 1. GET /v1/incidents lists + status filter
  * 2. POST /v1/incidents/:id/resolve resolves open (+409 on re-resolve)
  */

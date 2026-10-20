@@ -11,7 +11,7 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 
 // OpenCode's idle hook runs `hippo session-end` with no payload. An empty stdin
 // must not read as a manual run: session-end never scans ~/.claude/projects.
-// Real built CLI and real detached worker, same idiom as session-end-snapshot-close.test.ts.
+// Real built CLI and real detached worker, same idiom as session-end-snapshot-close.process.test.ts.
 const MARKER = 'zebrafish-ledger';
 const WORKER_DONE = 'skip: no session_id in SessionEnd payload';
 

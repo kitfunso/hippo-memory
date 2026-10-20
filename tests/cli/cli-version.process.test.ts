@@ -7,7 +7,7 @@ const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 // SAFETY: repo's own package.json is read from disk here and always has a string "version" field.
 const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf-8')) as { version: string };
 
-// cli-help.test.ts checks both flags in process; this spawn stays as the one run from a cwd outside home and temp, walking to the filesystem root.
+// cli-help.process.test.ts checks both flags in process; this spawn stays as the one run from a cwd outside home and temp, walking to the filesystem root.
 describe('hippo --version', () => {
   it('--version prints the package version', () => {
     const out = execFileSync('node', [HIPPO_BIN, '--version'], { encoding: 'utf-8' });

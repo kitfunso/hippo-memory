@@ -1,4 +1,4 @@
-// Two first imports at once give one row: 4 child processes x 40 notes, sized as store-stats-concurrency.test.ts sizes its race.
+// Two first imports at once give one row: 4 child processes x 40 notes, sized as store-stats-concurrency.process.test.ts sizes its race.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';

@@ -1,5 +1,5 @@
 // The api's write functions answer through a Promise on every store kind; the HTTP edge refuses a last-recall outcome
-// on a store without that group (store-port-capabilities.test.ts).
+// on a store without that group (store-port-capabilities.process.test.ts).
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';

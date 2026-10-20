@@ -202,7 +202,7 @@ describe('I3: the ledger changes nothing session-end prints or exits with', () =
     dispose(off);
   });
 
-  // B9 in delivery-ledger-boundary-faults.test.ts holds the same off-and-on check for pre-compact and compact-resume.
+  // B9 in delivery-ledger-boundary-faults.process.test.ts holds the same off-and-on check for pre-compact and compact-resume.
   it('I3: session-end gives the same stdout and status off and on', async () => {
     const on = await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('i3') });
     const plain = await hippoInNoWorker(off, ['session-end'], { input: sessionEndPayload('i3') });

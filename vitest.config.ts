@@ -2,8 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
-import { PROCESS_TESTS } from './tests/_process-tests.js';
-import { SERVER_TESTS } from './tests/_server-tests.js';
+import { EVAL_TESTS, PROCESS_GLOBS, SERVER_GLOBS } from './scripts/lib/test-classes.mjs';
 
 // Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
 process.env.HIPPO_TEST_REAL_TMP ??= tmpdir();
@@ -40,26 +39,22 @@ for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
 process.env.HIPPO_SKIP_SCHEDULE = '1';
 
-// Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
-export const EVAL_TESTS = [
-  'ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-regrade', 'z0-regrade-resume', 'z0-readcheck', 'z0-chain', 'z0-surfaces', 'z0-timeout', 'z0-leaks', 'z0-grading',
-  'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install',
-].map((name) => `tests/token-eval-${name}.test.ts`);
+// token-eval.yml runs these through vitest.eval.config.ts, which reads them from here.
+export { EVAL_TESTS };
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const UNIT_MS = 5_000;
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
-export { PROCESS_TESTS, SERVER_TESTS };
 
 export default defineConfig({
   test: {
     // A test that starts a child process, the HTTP server or a worker thread waits on the operating system and keeps 30 s; the rest get UNIT_MS.
-    // tests/process-tests-list.test.ts fails when either list goes stale.
+    // Its name says which (*.process.test.ts, *.server.test.ts); scripts/check-test-env.mjs fails a name that does not match.
     // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
     projects: [
-      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_TESTS, ...SERVER_TESTS], testTimeout: UNIT_MS, hookTimeout: Math.max(UNIT_MS, 10_000) } },
-      { extends: true, test: { name: 'process', include: PROCESS_TESTS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
-      { extends: true, test: { name: 'server', include: SERVER_TESTS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
+      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS], testTimeout: UNIT_MS, hookTimeout: Math.max(UNIT_MS, 10_000) } },
+      { extends: true, test: { name: 'process', include: PROCESS_GLOBS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
+      { extends: true, test: { name: 'server', include: SERVER_GLOBS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
     ],
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);

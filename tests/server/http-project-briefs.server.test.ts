@@ -2,7 +2,7 @@
  * E2 project_brief first-class object (repo-scoped / auto-refreshes) - HTTP route test.
  * Docs: docs/plans/2026-05-30-e2-project-brief-object.md
  *
- * Covers what only project briefs have; the shared route rules run per kind in http-objects.test.ts.
+ * Covers what only project briefs have; the shared route rules run per kind in http-objects.server.test.ts.
  * 1. GET /v1/project-briefs lists + status filter + repo filter
  * 2. POST /v1/project-briefs/refresh writes a brief; dryRun returns {markdown} without writing
  */

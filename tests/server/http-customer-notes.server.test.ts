@@ -2,7 +2,7 @@
  * E2 customer_note (entity-scoped) - HTTP route parity test.
  * Docs: docs/plans/2026-06-01-e2-customer-note-object.md
  *
- * Covers what only customer notes have; the shared route rules run per kind in http-objects.test.ts.
+ * Covers what only customer notes have; the shared route rules run per kind in http-objects.server.test.ts.
  * GET list + status + customer filter (many-per-customer).
  */
 

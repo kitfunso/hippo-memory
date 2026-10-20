@@ -2,7 +2,7 @@
  * E2 policy first-class object (bi-temporal-first) - HTTP route parity test.
  * Docs: docs/plans/2026-05-30-e2-policy-object.md
  *
- * Covers what only policies have; the shared route rules run per kind in http-objects.test.ts.
+ * Covers what only policies have; the shared route rules run per kind in http-objects.server.test.ts.
  * 1. GET /v1/policies lists + status filter
  * 2. GET /v1/policies/asof (as-of query; date + name; missing date 400)
  * 3. inverted valid_to (400)

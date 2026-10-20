@@ -97,7 +97,7 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
 
 // -----------------------------------------------------------------------
 // Explicit surfaces (`snapshot show`, `compact-resume`) run through the
-// real built CLI — same idiom as tests/core/pre-compact-e2e.test.ts.
+// real built CLI, the same idiom as tests/core/pre-compact-e2e.process.test.ts.
 // -----------------------------------------------------------------------
 
 function withScratchEnv() {
