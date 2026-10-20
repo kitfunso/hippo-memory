@@ -114,7 +114,7 @@ function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string, tenant
        AND tenant_id = ?
        AND kind != 'archived'
        AND superseded_by IS NULL
-     ORDER BY created ASC
+     ORDER BY created ASC, id ASC
   `)
     .all(summaryId, tenantId) as MemoryRow[];
   return rows.map(rowToEntry);
@@ -144,7 +144,7 @@ function childrenOfSummariesAt(
            AND tenant_id = ?
            AND kind != 'archived'
            AND superseded_by IS NULL
-         ORDER BY created ASC
+         ORDER BY created ASC, id ASC
       `)
         .all(...slice, tenantId) as MemoryRow[];
       for (const entry of rows.map(rowToEntry)) {

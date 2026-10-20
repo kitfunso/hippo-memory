@@ -72,7 +72,7 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
       WHERE id IN (
         SELECT id FROM goal_stack
         WHERE tenant_id = ? AND session_id = ? AND status = 'active'
-        ORDER BY created_at ASC
+        ORDER BY created_at ASC, rowid ASC
         LIMIT ?
       )
     `).run(tenantId, sessionId, overflow);
@@ -178,7 +178,7 @@ function getSessionGoalsAt(db: DatabaseSyncLike, tenantId: string, sessionId: st
     SELECT ${GOAL_COLUMNS}
     FROM goal_stack
     WHERE tenant_id = ? AND session_id = ?
-    ORDER BY created_at ASC
+    ORDER BY created_at ASC, rowid ASC
   `)
     .all(tenantId, sessionId) as GoalRow[];
   return rows.map(rowToGoal);
@@ -190,7 +190,7 @@ function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): G
     SELECT ${GOAL_COLUMNS}
     FROM goal_stack
     WHERE tenant_id = ? AND session_id = ? AND status = 'active'
-    ORDER BY created_at ASC
+    ORDER BY created_at ASC, rowid ASC
   `)
     .all(opts.tenantId, opts.sessionId) as GoalRow[];
   return rows.map(rowToGoal);
