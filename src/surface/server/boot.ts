@@ -62,6 +62,8 @@ import {
 import { loopbackBindHosts } from './loopback.js';
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
+import { warnGitHubPreviousSecretOpen } from '../connectors/github/webhook.js';
+import { warnSlackPreviousSecretOpen } from '../connectors/slack/webhook.js';
 import {
   dispatchAddonRoute,
   dispatchHostRoute,
@@ -437,6 +439,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const loopbackHosts = await loopbackBindHosts(host);
   assertBindable(host, loopbackHosts);
   assertTlsOrCleartextAllowed(host, opts.tls, loopbackHosts, opts.allowCleartext ?? envAllowCleartext());
+  // An open-ended previous secret keeps working, so the operator hears once that nothing will close it.
+  warnSlackPreviousSecretOpen();
+  warnGitHubPreviousSecretOpen();
 
   // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer
   // can prove a pid-reusing impostor is not this server.

@@ -91,7 +91,7 @@ export { heldTexts } from '../base/util/same-text.js';
 // An add-on's quality repair keeps the rows hippo.db's does.
 export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../base/memory/memory-audit.js';
 export { RejectedValueError } from '../base/errors/api-errors.js';
-export { ownScopeTouches } from '../base/scope/recall-scope.js';
+export { ownScopeTouches, readerReaches, type ScopeReader } from '../base/scope/recall-scope.js';
 export type { KeysetPosition } from '../base/util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
 export type { ContinuityBlock } from '../api/recall/types.js';

@@ -99,12 +99,7 @@ export function assertClientScope(scope: string | null | undefined): void {
   }
 }
 
-/** True when `actor` may change or delete a row in `scope`: any non-personal scope, or its own personal one. */
-export function canTouchScope(actor: { owner?: string }, scope: string | null): boolean {
-  return ownScopeTouches(personalScopeOf(actor), scope);
-}
-
-/** canTouchScope for a caller known by its own personal scope, as a store method receives it. */
+/** The personal half of readerReaches alone: any non-personal scope, or the caller's own personal one. */
 export function ownScopeTouches(ownScope: string | null, scope: string | null): boolean {
   return !isPersonalScope(scope) || scope === ownScope;
 }
@@ -171,13 +166,29 @@ export interface ScopeActor {
   owner?: string;
 }
 
-/** Personal rows answer to their owner alone: role, key grants and resolver scopes never open one. Else admin reads
- * all; a member needs an exact grant on a restricted scope. */
-export function canReadScope(actor: ScopeActor, scope: string): boolean {
-  if (isPersonalScope(scope)) return scope === personalScopeOf(actor);
-  if (actor.role === 'admin') return true;
-  if (!isRestrictedScope(scope)) return true;
-  return (actor.scopes ?? []).includes(scope);
+/** A caller as a store's write by id receives it: its own personal scope, its role and its restricted-scope grants. */
+export interface ScopeReader {
+  readonly ownScope: string | null;
+  readonly role: 'admin' | 'member';
+  readonly grants?: readonly string[];
+}
+
+export function scopeReaderOf(actor: ScopeActor): ScopeReader {
+  const reader = { ownScope: personalScopeOf(actor), role: actor.role };
+  return actor.scopes === undefined ? reader : { ...reader, grants: actor.scopes };
+}
+
+/** Personal rows answer to their owner alone: role and grants never open one. Else admin reads all; a member needs an
+ * exact grant on a restricted scope. A null scope reads. */
+export function readerReaches(reader: ScopeReader, scope: string | null): boolean {
+  if (isPersonalScope(scope)) return scope === reader.ownScope;
+  if (reader.role === 'admin' || !isRestrictedScope(scope)) return true;
+  return scope !== null && (reader.grants ?? []).includes(scope);
+}
+
+/** The read rule recall, the graph and every by-id write share, on a request's actor. */
+export function canReadScope(actor: ScopeActor, scope: string | null): boolean {
+  return readerReaches(scopeReaderOf(actor), scope);
 }
 
 /** Authorize an explicitly requested scope before any read honours it (member scope grants). */

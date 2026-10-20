@@ -5,7 +5,7 @@ import { iterateEveryTenantEntriesAt } from '../../src/store/sqlite/entry-reads.
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/server.js';
 import {
   entryAfterOutcome,
-  ownScopeTouches,
+  readerReaches,
   rejectionDigest,
   RejectedValueError,
   type AppendAuditOpts,
@@ -111,7 +111,7 @@ export function markParentDirty(tx: Tx, parentId: string, tenantId: string, acto
 
 function inReach(tx: Tx, target: EntryTarget, id: string): MemoryEntry {
   const row = tx.rows.get(id);
-  if (!row || row.tenantId !== target.tenantId || !ownScopeTouches(target.ownScope, row.scope)) {
+  if (!row || row.tenantId !== target.tenantId || !readerReaches(target, row.scope)) {
     throw new NotFoundError(`memory not found: ${id}`);
   }
   return row;
@@ -235,12 +235,13 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
 
   const entryWrites: EntryWrites = {
     writeEntry: (write) => writeWith(write, () => undefined),
-    async applyOutcome({ tenantId, actor, ownScope, ids, good }) {
+    async applyOutcome(outcome) {
+      const { tenantId, actor, ids, good } = outcome;
       return inTx(actor, (tx) => {
         const applied: string[] = [];
         for (const id of ids) {
           const row = tx.rows.get(id);
-          if (!row || row.tenantId !== tenantId || !ownScopeTouches(ownScope, row.scope)) continue;
+          if (!row || row.tenantId !== tenantId || !readerReaches(outcome, row.scope)) continue;
           put(tx, entryAfterOutcome(row, good), actor);
           tx.audit.push({ tenantId, actor, op: 'outcome', targetId: id, metadata: { good } });
           applied.push(id);

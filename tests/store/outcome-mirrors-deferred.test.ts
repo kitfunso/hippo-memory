@@ -58,7 +58,11 @@ describe('outcome mirrors', () => {
     writeEntriesTogetherAt(db, { hippoRoot: root }, entries);
     const before = entries.map((entry) => mirrorText(root, entry));
     const ids = entries.map((entry) => entry.id);
-    applyOutcomeAt(db, { hippoRoot: root }, { tenantId: 'default', actor: 'test', ownScope: null, ids, good: true });
+    applyOutcomeAt(
+      db,
+      { hippoRoot: root },
+      { tenantId: 'default', actor: 'test', ownScope: null, role: 'admin', ids, good: true },
+    );
 
     expect(entries.map((entry) => mirrorText(root, entry))).toEqual(before);
     expect(dueKeys(db)).toEqual(ids.map((id) => `mirror_due:${id}`).sort());

@@ -401,6 +401,9 @@ export function envGitHubWebhookSecret(): string | undefined {
 export function envGitHubWebhookSecretPrevious(): string | undefined {
   return raw('GITHUB_WEBHOOK_SECRET_PREVIOUS');
 }
+export function envGitHubWebhookSecretPreviousUntil(): string | undefined {
+  return raw('GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL');
+}
 export function envGitHubAllowUnknownInstallationFallback(): boolean {
   return flag('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK');
 }
