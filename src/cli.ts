@@ -5,7 +5,7 @@
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
-import { repairCodexWrapperIfInstalled } from './domain/hooks/codex-wrapper.js';
+import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
 import { getHippoRoot } from './base/scope/project-identity.js';
 import { readPackageVersion } from './base/config/package-root.js';
 import { printGitHubBackfillUsage } from './surface/cli/github.js';

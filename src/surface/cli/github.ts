@@ -1,7 +1,7 @@
 /** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering main(); the verb table
  * in verbs/health.ts dispatches to handleGitHub. */
 
-import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../../base/util/env.js';
+import { envGitHubToken, envGitHubWebhookSecret } from '../../base/util/env.js';
 import { adminActor, type Context } from '../../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
@@ -10,6 +10,7 @@ import { githubDlq, replayDlqEntry, type IngestHook } from '../connectors/github
 import { ingestEvent, type IngestEvent } from '../connectors/github/ingest.js';
 import { handleCommentDeleted } from '../connectors/github/deletion.js';
 import { computeDeletionKey } from '../connectors/github/signature.js';
+import { githubPreviousSecret } from '../connectors/github/webhook.js';
 import {
   isGitHubIssueEvent,
   isGitHubIssueCommentEvent,
@@ -166,7 +167,7 @@ export async function cmdGitHubDlqReplay(
     replayDlqEntry(ctx, id, {
       force,
       webhookSecret: envGitHubWebhookSecret(),
-      previousSecret: envGitHubWebhookSecretPrevious(),
+      previousSecret: githubPreviousSecret(),
       ingestHook: reingestParkedDelivery,
     }),
   );

@@ -7,11 +7,12 @@ import {
   assertClientScope,
   assertScopeRequestAllowed,
   canReadScope,
-  canTouchScope,
   isPersonalScope,
+  ownScopeTouches,
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
   personalScopeOf,
+  readerReaches,
   ScopeForbiddenError,
   type ScopeActor,
 } from '../../src/base/scope/recall-scope.js';
@@ -74,7 +75,7 @@ describe('personalScopeOf', () => {
   });
 });
 
-describe('assertClientScope, isPersonalScope and canTouchScope', () => {
+describe('assertClientScope, isPersonalScope and ownScopeTouches', () => {
   it('refuses a client personal: scope in any case with a 400', () => {
     for (const scope of ['personal:x', 'Personal:private:a']) {
       expect(() => assertClientScope(scope), scope).toThrow(BadRequestError);
@@ -89,11 +90,40 @@ describe('assertClientScope, isPersonalScope and canTouchScope', () => {
   });
 
   it('lets anyone touch a non-personal row and only the owner a personal one', () => {
-    expect(canTouchScope(ownerA, A_SCOPE)).toBe(true);
-    expect(canTouchScope(ownerB, A_SCOPE)).toBe(false);
-    expect(canTouchScope({}, A_SCOPE)).toBe(false);
-    expect(canTouchScope({}, 'team')).toBe(true);
-    expect(canTouchScope({}, null)).toBe(true);
+    expect(ownScopeTouches(A_SCOPE, A_SCOPE)).toBe(true);
+    expect(ownScopeTouches(B_SCOPE, A_SCOPE)).toBe(false);
+    expect(ownScopeTouches(null, A_SCOPE)).toBe(false);
+    expect(ownScopeTouches(null, 'team')).toBe(true);
+    expect(ownScopeTouches(null, null)).toBe(true);
+  });
+});
+
+describe('readerReaches, the read rule a store write by id applies', () => {
+  const member = { ownScope: A_SCOPE, role: 'member' } as const;
+  const granted = { ...member, grants: [SLACK] };
+  const admin = { ownScope: null, role: 'admin' } as const;
+
+  it('opens a restricted scope to an admin, or a member with that exact grant, and nobody else', () => {
+    expect([readerReaches(member, SLACK), readerReaches(granted, SLACK), readerReaches(admin, SLACK)]).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    expect(readerReaches(granted, 'slack:private:C2')).toBe(false);
+    expect(readerReaches(member, 'quarantine:private:team')).toBe(false);
+    expect(readerReaches(member, 'Team:Private:x')).toBe(false);
+  });
+
+  it('reads a null or public scope for anyone, and a personal one for its owner alone', () => {
+    expect([readerReaches(member, null), readerReaches(member, 'team'), readerReaches(member, A_SCOPE)]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect([readerReaches(admin, A_SCOPE), readerReaches({ ...granted, grants: [B_SCOPE] }, B_SCOPE)]).toEqual([
+      false,
+      false,
+    ]);
   });
 });
 

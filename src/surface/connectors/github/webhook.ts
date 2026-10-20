@@ -2,11 +2,13 @@ import {
   envGitHubAllowUnknownInstallationFallback,
   envGitHubWebhookSecret,
   envGitHubWebhookSecretPrevious,
+  envGitHubWebhookSecretPreviousUntil,
   envTenant,
 } from '../../../base/util/env.js';
 import type { ServerResponse } from 'node:http';
 import { DAY_MS } from '../../../base/util/time.js';
 import { isWellFormedGitHubSignature, verifyGitHubSignature } from './signature.js';
+import { GITHUB_PREVIOUS, previousSecretInForce, warnIfOpenEnded } from '../previous-secret.js';
 import {
   isGitHubWebhookEnvelope,
   isGitHubIssueEvent,
@@ -36,10 +38,23 @@ import {
 } from '../../../base/util/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
 
+/** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ replay alike. */
+export function githubPreviousSecret(): string | undefined {
+  return previousSecretInForce(
+    GITHUB_PREVIOUS,
+    envGitHubWebhookSecretPrevious(),
+    envGitHubWebhookSecretPreviousUntil(),
+  );
+}
+
+export function warnGitHubPreviousSecretOpen(): void {
+  warnIfOpenEnded(GITHUB_PREVIOUS, envGitHubWebhookSecretPrevious(), envGitHubWebhookSecretPreviousUntil());
+}
+
 /** Reads the raw body and refuses it unless the signature matches the current or the previous secret. */
 async function readSignedBody(request: WebhookRequest, secret: string, sigStr: string): Promise<string> {
   const rawBytes = await readWebhookBody(request);
-  const previousSecret = envGitHubWebhookSecretPrevious();
+  const previousSecret = githubPreviousSecret();
   if (!verifyGitHubSignature({ rawBody: rawBytes, signature: sigStr, webhookSecret: secret, previousSecret })) {
     throw new HttpError(401, 'invalid GitHub signature');
   }

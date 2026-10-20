@@ -10,6 +10,7 @@ import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js'
 import { createListener } from '../../src/surface/server/tls.js';
 import { parseSteps } from '../../src/domain/consolidate/trace.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -77,7 +78,7 @@ describe('rethrown errors keep their cause', () => {
     [
       'a git read in a folder that is not a repository',
       () => {
-        gitLsFilesAtHead(mkdtemp());
+        gitLsFilesAtHead({ root: mkdtemp(), git: processGit });
       },
       'failed',
     ],
@@ -95,7 +96,7 @@ describe('rethrown errors keep their cause', () => {
   });
 
   it('a git failure is a GitReadError whose cause is the child-process error', async () => {
-    const err = await caught(() => gitLsFilesAtHead(mkdtemp()));
+    const err = await caught(() => gitLsFilesAtHead({ root: mkdtemp(), git: processGit }));
     expect(err).toBeInstanceOf(GitReadError);
     expect(err.cause).toBeInstanceOf(Error);
   });

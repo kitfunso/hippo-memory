@@ -10,6 +10,7 @@ import { geminiAdapter } from '../../src/domain/agent-memories/gemini.js';
 import { textItemKeys } from '../../src/domain/agent-memories/keys.js';
 import type { AdapterContext } from '../../src/domain/agent-memories/types.js';
 import type { JsonObject } from '../../src/base/util/json.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 let tmp: string;
 
@@ -30,7 +31,7 @@ function write(file: string, content: string | Buffer): string {
 }
 
 function ctxFor(over: Partial<AdapterContext> = {}): AdapterContext {
-  return { home: tmp, env: {}, platform: process.platform, ...over };
+  return { home: tmp, env: {}, platform: process.platform, ...REAL_IO, ...over };
 }
 
 const geminiDir = (): string => path.join(tmp, '.gemini');

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { qwenCodeAdapter, sanitizeCwd } from '../../src/domain/agent-memories/qwen-code.js';
 import type { AdapterContext, Scope } from '../../src/domain/agent-memories/types.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 let tmp: string;
 beforeEach(() => {
@@ -27,7 +28,7 @@ function ctxOf(
   projectRoot?: string,
   platform: NodeJS.Platform = process.platform,
 ): AdapterContext {
-  return { home: tmp, env, platform, projectRoot };
+  return { home: tmp, env, platform, projectRoot, ...REAL_IO };
 }
 
 const list = (ctx: AdapterContext, scope: Scope) => qwenCodeAdapter.list(ctx, scope);

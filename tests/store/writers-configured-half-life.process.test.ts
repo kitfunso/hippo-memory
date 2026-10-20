@@ -29,6 +29,7 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -174,7 +175,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
           configAt: loadConfig,
           tenantId: 'default',
           agentImport: sqliteAgentImport({}),
-          machine: { home, env: {}, platform: process.platform },
+          machine: { home, env: {}, platform: process.platform, ...REAL_IO },
         }),
       );
     },

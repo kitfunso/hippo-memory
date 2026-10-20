@@ -12,6 +12,7 @@ import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import { MAX_ID_LEN } from '../../../base/util/limits.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { AuthedRouteRequest } from '../types.js';
+import type { KindRoutes } from './kind-routes.js';
 import {
   getString,
   isSetMember,
@@ -26,7 +27,7 @@ import { isJsonString, isJsonNumber } from '../../../base/util/json.js';
 // Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped; closure_state is validated
 // against VALID_CLOSURE_STATES.
 // DoS caps: claim MAX_SHORT_FIELD_LEN chars, closureNote 2048.
-export async function handleCreatePrediction({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
+async function handleCreatePrediction({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const claim = requiredString(body, 'claim', { max: MAX_SHORT_FIELD_LEN, untrimmed: true });
   const classTag = requiredString(body, 'classTag', { max: MAX_ID_LEN, untrimmed: true });
@@ -65,7 +66,7 @@ function listFilter(classTag: string | undefined, status: string): PredictionFil
   return { classTag, closureState: status };
 }
 
-export async function handleListPredictions({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
+async function handleListPredictions({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const classTag = query.get('class') || undefined;
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
@@ -77,7 +78,7 @@ export async function handleListPredictions({ res, ctx, query }: AuthedRouteRequ
 
 // Reference-class / planning-fallacy detector; registered BEFORE /v1/predictions/:id so dispatch order cannot matter
 // ('stats' is not a number, but routing it first is safer).
-export async function handlePredictionStats({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
+async function handlePredictionStats({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const classTag = query.get('class');
   if (!classTag || classTag.length === 0) {
     throw new HttpError(400, 'class param is required');
@@ -89,11 +90,7 @@ export async function handlePredictionStats({ res, ctx, query }: AuthedRouteRequ
   sendJson(res, 200, { baserate });
 }
 
-export async function handleGetPrediction(
-  { res, ctx }: AuthedRouteRequest,
-  predictionByIdMatch: RegExpMatchArray,
-): Promise<void> {
-  const id = parseInt(predictionByIdMatch[1], 10);
+async function handleGetPrediction({ res, ctx }: AuthedRouteRequest, id: number): Promise<void> {
   const prediction = await predictionById(ctx, id);
   if (!prediction) {
     throw new HttpError(404, `prediction ${id} not found`);
@@ -101,11 +98,7 @@ export async function handleGetPrediction(
   sendJson(res, 200, { prediction });
 }
 
-export async function handleClosePrediction(
-  { req, res, ctx }: AuthedRouteRequest,
-  predictionCloseMatch: RegExpMatchArray,
-): Promise<void> {
-  const id = parseInt(predictionCloseMatch[1], 10);
+async function handleClosePrediction({ req, res, ctx }: AuthedRouteRequest, id: number): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const state = body['state'];
   if (!isJsonString(state) || !isSetMember(VALID_CLOSURE_STATES, state) || state === 'open') {
@@ -124,3 +117,12 @@ export async function handleClosePrediction(
   const prediction = await predictionClose(ctx, id, close);
   sendJson(res, 200, { prediction });
 }
+
+export const PREDICTION_ROUTES: KindRoutes = {
+  base: '/v1/predictions',
+  create: handleCreatePrediction,
+  list: handleListPredictions,
+  named: [{ method: 'GET', sub: 'stats', handler: handlePredictionStats }],
+  actions: { close: handleClosePrediction },
+  get: handleGetPrediction,
+};

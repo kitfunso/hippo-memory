@@ -14,10 +14,12 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
+import { closeObject } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
   savePolicy,
-  closePolicy,
+  POLICY,
   loadPolicies,
   policiesAsOf,
   normalizePolicyDate,
@@ -144,7 +146,7 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x2',
       supersedesPolicyId: b.id,
     });
-    await closePolicy(objectsAt(home), 'default', c.id);
+    await closeObject(objectsAt(home), POLICY, 'default', c.id, CLI_ACTOR);
     const active = await loadPolicies(objectsAt(home), 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
@@ -274,7 +276,7 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x',
       validFrom: '2026-01-01',
     });
-    await closePolicy(objectsAt(home), 'default', p.id);
+    await closeObject(objectsAt(home), POLICY, 'default', p.id, CLI_ACTOR);
     expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'Cl' })).length).toBe(0);
   });
 

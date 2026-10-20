@@ -9,6 +9,7 @@ import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
   totalTally(
@@ -16,7 +17,7 @@ const learnFromClaude = (hippoRoot: string, home: string): number =>
       configAt: loadConfig,
       tenantId: 'default',
       agentImport: sqliteAgentImport({}),
-      machine: { home, env: {}, platform: process.platform },
+      machine: { home, env: {}, platform: process.platform, ...REAL_IO },
     }),
   ).imported;
 

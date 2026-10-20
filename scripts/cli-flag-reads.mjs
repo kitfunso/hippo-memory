@@ -20,7 +20,8 @@ function mergeKinds(kinds) {
 }
 
 function loadEnv(repo) {
-  const ts = createRequire(path.join(repo, 'package.json'))('typescript');
+  // Loaded from this script's install, so a fixture tree without node_modules can be walked.
+  const ts = createRequire(import.meta.url)('typescript');
   const parsed = ts.getParsedCommandLineOfConfigFile(
     path.join(repo, 'tsconfig.json'),
     {},
@@ -252,6 +253,29 @@ function bind(env, scope, name, kind) {
 // A member a known object literal lacks: a call through it never runs for that object.
 const ABSENT = Symbol('absent');
 
+/** The object literal a `const` name is declared as, so a config passed by name is followed like one written inline. */
+function constObject(env, ident) {
+  const { ts, checker } = env;
+  let sym = checker.getSymbolAtLocation(ident);
+  if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
+  const decl = sym?.valueDeclaration;
+  if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return null;
+  if (!(ts.getCombinedNodeFlags(decl) & ts.NodeFlags.Const)) return null;
+  const init = strip(ts, decl.initializer);
+  return ts.isObjectLiteralExpression(init) ? init : null;
+}
+
+/** The property `obj.name` picks from a known object literal: ABSENT when the literal surely lacks it, null when unknown. */
+function memberOf(env, scope, access, depth) {
+  const { ts } = env;
+  const base = valueOf(env, scope, access.expression, depth + 1);
+  if (base === ABSENT) return ABSENT;
+  if (!base || !ts.isObjectLiteralExpression(base)) return null;
+  const prop = base.properties.find((p) => p.name?.getText() === access.name.text);
+  // A spread may carry the member, so only a literal without one surely lacks it.
+  return prop ?? (base.properties.some((p) => ts.isSpreadAssignment(p)) ? null : ABSENT);
+}
+
 /** The function or object literal an expression names, through bound names, declarations and factory calls; null when unknown. */
 function valueOf(env, scope, expr, depth = 0) {
   const { ts, checker } = env;
@@ -260,14 +284,11 @@ function valueOf(env, scope, expr, depth = 0) {
   if (isFunctionLike(ts, e) || ts.isObjectLiteralExpression(e)) return e;
   if (ts.isIdentifier(e)) {
     const sym = checker.getSymbolAtLocation(e);
-    return (sym && scope?.bound.get(sym)) ?? functionOf(env, e);
+    return (sym && scope?.bound.get(sym)) ?? functionOf(env, e) ?? constObject(env, e);
   }
   if (ts.isPropertyAccessExpression(e)) {
-    const base = valueOf(env, scope, e.expression, depth + 1);
-    if (base === ABSENT) return ABSENT;
-    if (!base || !ts.isObjectLiteralExpression(base)) return null;
-    const prop = base.properties.find((p) => p.name?.getText() === e.name.text);
-    if (!prop) return ABSENT;
+    const prop = memberOf(env, scope, e, depth);
+    if (!prop || prop === ABSENT) return prop;
     if (ts.isMethodDeclaration(prop)) return prop;
     if (ts.isShorthandPropertyAssignment(prop)) return functionOf(env, prop.name);
     return ts.isPropertyAssignment(prop) ? valueOf(env, null, prop.initializer, depth + 1) : null;
@@ -352,9 +373,19 @@ function addRead(env, scope, keyExpr, node, kind) {
     scope.keyParams.set(index, [...(scope.keyParams.get(index) ?? []), kind]);
     return;
   }
-  const keys = (ts.isIdentifier(ident) ? loopKeys(env, ident) : null) ?? literalKeys(env, keyExpr);
+  const keys = keysOf(env, scope, ident);
   if (!keys) noteUnfollowed(env, node, 'computed key');
   for (const key of keys ?? []) scope.reads.push({ key, kind, at: where(env, node), text: lineText(node) });
+}
+
+/** The names a key takes: a literal, a loop over literals, or a member of a known config; none for a member it lacks. */
+function keysOf(env, scope, key) {
+  const { ts } = env;
+  if (ts.isIdentifier(key)) return loopKeys(env, key) ?? literalKeys(env, key);
+  if (!ts.isPropertyAccessExpression(key)) return literalKeys(env, key);
+  const member = memberOf(env, scope, key, 0);
+  if (member === ABSENT) return [];
+  return member && ts.isPropertyAssignment(member) ? literalKeys(env, member.initializer) : null;
 }
 
 function followCall(env, scope, call) {
