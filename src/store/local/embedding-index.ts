@@ -2,8 +2,6 @@
 // Vectors and particles carry no tenant, so each method covers the whole store.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
-import type { EntryIdPage } from './consolidation.js';
-import type { EntryCursor } from '../port/types.js';
 
 export interface EmbeddingIndex {
   /** Whether another model than `providerId` built the stored vectors; an unreadable index answers false. */
@@ -11,8 +9,8 @@ export interface EmbeddingIndex {
   /** Records `providerId`'s index identity as what built the vectors. */
   saveModel(providerId: string): void;
   entryCount(): number;
-  /** Up to `page.limit` memory ids, by created then id, after `page.after`; `next` is null on the last page. */
-  entryIdsPage(page: { readonly limit: number; readonly after?: EntryCursor }): EntryIdPage;
+  /** Up to `page.limit` memory ids in id order after `page.afterId`: a re-embed needs each row once, not time order. */
+  entryIdsPage(page: IdPageRequest): IdPage;
   /** The rows of `ids` that exist, in no set order. */
   entriesByIds(ids: readonly string[]): MemoryEntry[];
   summary(): StoredVectorSummary;
@@ -25,13 +23,25 @@ export interface EmbeddingIndex {
   beginRebuild(): VectorRebuild;
   /** Drops the vectors of deleted memories. */
   pruneOrphans(): void;
-  /** Up to `page.limit` ids with no vector, by created then id, after `page.after`; `next` is null on the last page. */
-  pendingIds(page: { readonly limit: number; readonly after?: EntryCursor }): EntryIdPage;
+  /** Up to `page.limit` ids with no vector, in id order after `page.afterId`. */
+  pendingIds(page: IdPageRequest): IdPage;
   /** Replaces every particle with a fresh one per memory that has a stored vector, reading a page at a time; answers
    * how many. */
   resetParticles(): number;
   /** A first particle for `entry` at `vector`, unless it has one. */
   seedParticle(entry: MemoryEntry, vector: number[]): void;
+}
+
+/** A page in id order: up to `limit` ids after `afterId`, or from the first id when it is unset. */
+export interface IdPageRequest {
+  readonly limit: number;
+  readonly afterId?: string;
+}
+
+/** A page of memory ids in id order, and the id the next page starts after; null on the last page. */
+export interface IdPage {
+  readonly ids: string[];
+  readonly next: string | null;
 }
 
 /** Vectors staged by page on a handle of their own, so neither the live index nor the caller holds them all. */

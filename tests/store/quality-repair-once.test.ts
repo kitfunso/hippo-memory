@@ -64,7 +64,7 @@ describe('repairQualityOnce', () => {
 
   it('reads the tenant once per plan, and under its lock the apply reads only the rows it moves', () => {
     seed(root, CUT);
-    const tenantPage = /FROM memories WHERE tenant_id = \? ORDER BY created/;
+    const tenantPage = /FROM memories WHERE 1 AND tenant_id = \? ORDER BY created/;
     const preview = recordStatements(() =>
       repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect }),
     );
