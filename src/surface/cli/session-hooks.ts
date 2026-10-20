@@ -41,13 +41,20 @@ import { normalizeHookPayload, readHookStdin, readStdinBounded, type BoundedStdi
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { cmdShimArgs } from '../../base/util/spawn-argv.js';
 import { bookLedgerTurn } from '../../api/ledger-db.js';
-import { flushDeliveryRecorder, startDeliveryRecorder, startToolFailureRecorder } from '../../api/prompt-hook.js';
+import {
+  flushDeliveryRecorder,
+  startDeliveryRecorder,
+  startToolFailureRecorder,
+  takeDelivery,
+} from '../../api/prompt-hook.js';
 import type { DeliveryRecorder } from '../../api/delivery-recorder.js';
 import { printError } from './output.js';
+import { folderIndex } from '../../domain/search/embed-memories.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
 import {
   cliApiContext,
+  cliFolder,
   cliHookRequest,
   cliLedgerReach,
   cliLocalFiles,
@@ -78,7 +85,12 @@ import { parseJson } from '../../base/util/json.js';
 import { ignoringCodes } from '../../base/util/expected-errors.js';
 import { CliExit, fail } from './exit.js';
 
-const captureTarget = (root: string): CaptureTarget => ({ root, files: cliLocalFiles(root), config: cliConfig(root) });
+const captureTarget = (root: string): CaptureTarget => ({
+  root,
+  files: cliLocalFiles(root),
+  config: cliConfig(root),
+  index: folderIndex(cliFolder(root)),
+});
 
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories
  * (UserPromptSubmit re-injects them). Every path exits 0: a malformed payload or store read failure degrades to empty
@@ -102,7 +114,7 @@ async function cmdCompactResume(
     const payloadSessionId = payloadState.payloadSessionId;
 
     if (payloadState.boundary) {
-      rec = startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
+      rec = await startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
         stdinText,
         runtime: 'claude-code',
         eventType: 'compact-resume',
@@ -114,7 +126,7 @@ async function cmdCompactResume(
     if (
       !suppressOutput &&
       payloadSessionId !== null &&
-      inPilotHoldout(hippoRoot, tenantId, payloadSessionId, { write: false })
+      (await inPilotHoldout(hippoRoot, tenantId, payloadSessionId, { write: false }))
     ) {
       suppressOutput = true;
       rec?.disabled();
@@ -128,7 +140,7 @@ async function cmdCompactResume(
     log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`, errorFields(err));
   }
   // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
-  flushDeliveryRecorder(rec);
+  await flushDeliveryRecorder(rec);
   throw new CliExit(0);
 }
 
@@ -143,7 +155,7 @@ async function restoreCompactSnapshot(
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);
   rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
-  bookLedgerTurn(
+  await bookLedgerTurn(
     {
       uses: [
         {
@@ -155,7 +167,7 @@ async function restoreCompactSnapshot(
           tokens: estimateTokens(text),
         },
       ],
-      delivery: (write) => flushDeliveryRecorder(rec, write),
+      delivery: takeDelivery(rec),
     },
     cliLedgerReach(hippoRoot),
   );
@@ -183,7 +195,7 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
   // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not boundaries.
   const rec =
-    !turn && input !== null && !input.manual ? startSessionEndRecorder(root, tenantId, stdinText, runtime) : null;
+    !turn && input !== null && !input.manual ? await startSessionEndRecorder(root, tenantId, stdinText, runtime) : null;
   const sessionId = input?.sessionId ?? null;
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed. Always a
   // hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so
@@ -210,12 +222,12 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   await cliHookRequest(() => flushDeliveryRecorder(rec));
 }
 
-function startSessionEndRecorder(
+async function startSessionEndRecorder(
   root: string,
   tenantId: string,
   stdinText: string | undefined,
   runtime: HookRuntime,
-): DeliveryRecorder | null {
+): Promise<DeliveryRecorder | null> {
   return startDeliveryRecorder(cliApiContext(hookStoreRoot(root), tenantId), {
     stdinText,
     runtime,
@@ -323,8 +335,11 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
       save: (id, file, turns) => saveTurnPosition(id, file, turns, logLine),
     },
     currentProject: () => resolveProjectIdentity(process.cwd()),
-    capture: (into, turns, originProject) =>
-      captureEndedSession(into.hippoRoot, { tenantId, flags, transcriptPath, turns, originProject }),
+    // The run writes to this folder's own store, else to the global one in its reach.
+    capture: (into, turns, originProject) => {
+      const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
+      return root !== undefined && captureEndedSession(root, { tenantId, flags, transcriptPath, turns, originProject });
+    },
     digest: (scan, key, log) =>
       recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
     workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
@@ -591,24 +606,30 @@ export async function handlePreCompact({ hippoRoot, tenantId, flags }: CommandCo
   const storeRoot = hookStoreRoot(root);
   await cliHookRequest(async () => {
     // Started before any store wait, so two fires of one hook carry timestamps close enough to match as duplicates.
-    const rec = startDeliveryRecorder(cliApiContext(storeRoot, tenantId), {
+    const rec = await startDeliveryRecorder(cliApiContext(storeRoot, tenantId), {
       stdinText,
       runtime,
       eventType: 'pre-compact',
       envSessionId: hostSessionId(),
     });
-    resetHookInjection(root, tenantId, stdinText, null);
-    await cmdPreCompact(storeRoot, cliStore(storeRoot), {
-      tenantId,
-      stdinText,
-      stdinTimedOut,
-      logFile: stringFlag(flags, 'log-file'),
-      runtime,
-      onBoundary: (printed) => {
-        rec?.delivered(printed === null ? { state: 'empty' } : { state: 'sent', emittedText: printed });
-        flushDeliveryRecorder(rec);
-      },
-    });
+    await resetHookInjection(root, tenantId, stdinText, null);
+    // Started at the boundary, so the row lands then; awaited after, as the boundary callback cannot wait.
+    let flushed: Promise<void> | undefined;
+    try {
+      await cmdPreCompact(storeRoot, cliStore(storeRoot), {
+        tenantId,
+        stdinText,
+        stdinTimedOut,
+        logFile: stringFlag(flags, 'log-file'),
+        runtime,
+        onBoundary: (printed) => {
+          rec?.delivered(printed === null ? { state: 'empty' } : { state: 'sent', emittedText: printed });
+          flushed = flushDeliveryRecorder(rec);
+        },
+      });
+    } finally {
+      await flushed;
+    }
   });
 }
 
@@ -647,7 +668,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
     if (isInitialized(root) && payload) {
       const failure = parseJson(payload);
       const ctx = cliApiContext(root, tenantId);
-      const rec = startToolFailureRecorder(ctx, {
+      const rec = await startToolFailureRecorder(ctx, {
         stdinText: text,
         runtime: hookRuntime(flags),
         envSessionId: hostSessionId(),
@@ -656,7 +677,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
         try {
           return await captureToolFailure(ctx, failure, (id) => rec?.logged(id));
         } finally {
-          flushDeliveryRecorder(rec);
+          await flushDeliveryRecorder(rec);
         }
       });
     }
@@ -669,7 +690,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
 export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   await cliHookRequest(async () => {
-    resetHookInjection(hippoRoot, tenantId, stdinText, 'compact');
+    await resetHookInjection(hippoRoot, tenantId, stdinText, 'compact');
     await cmdCompactResume(hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
   });
 }

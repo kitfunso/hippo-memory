@@ -35,7 +35,7 @@ export async function preCompactForCaller(ctx: Context, req: CallerPreCompactReq
   assertTrigger(req.trigger);
   const state = checkedWorkingState(req.workingState);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  if (callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
+  if (await callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
   const start = {
     sessionId: req.sessionId,
     originProject: req.project.name,

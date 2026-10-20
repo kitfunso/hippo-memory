@@ -8,7 +8,7 @@ import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../b
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
 import { errorMessage, log } from '../base/util/log.js';
 import { MAX_HOOK_FIELD_LEN } from '../base/util/limits.js';
-import type { Ledger } from '../store/local/ledger.js';
+import type { Ledger } from '../store/port.js';
 import type {
   DeliveryBlockState,
   DeliveryCandidateInput,
@@ -103,13 +103,12 @@ export interface DeliveryRecorder extends DeliveryObserver {
   delivered(outcome: DeliveryOutcomeInput): void;
   /** The failure log row id a `tool-failure` event links to; null when the log write threw. */
   logged(failureId: number | null): void;
-  /** Builds the event and hands it to `write` once per call; throws on an injected fault, and writes nothing once
-   * broken. */
-  flush(write: (input: DeliveryEventInput) => number | null): void;
+  /** The event, built on the first call only; null after that or once broken. Throws on an injected fault. */
+  takeEvent(): DeliveryEventInput | null;
 }
 
 export interface DeliveryRecorderInit {
-  /** The ledger the event is written to when its turn hands no writer. */
+  /** The ledger the event is written to when no turn carries it. */
   ledger: Ledger;
   storeHash: string;
   writeStore: DeliveryWriteStore;
@@ -533,29 +532,29 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
     dropMissing,
     gated,
     selected,
-    flush: recorderFlush(init, payload, state, ts, startedMs),
+    takeEvent: recorderTake(init, payload, state, ts, startedMs),
   };
 }
 
-function recorderFlush(
+function recorderTake(
   init: DeliveryRecorderInit,
   payload: PayloadFacts,
   state: RecorderState,
   ts: string,
   startedMs: number,
-): DeliveryRecorder['flush'] {
+): DeliveryRecorder['takeEvent'] {
   const fault = init.fault ?? null;
-  return (write) => {
-    if (state.flushed) return;
+  return () => {
+    if (state.flushed) return null;
     state.flushed = true;
     if (state.broken !== null) {
       log.warn(`delivery ledger skipped: recorder failed: ${state.broken}`);
-      return;
+      return null;
     }
     if (fault === 'build') throw new Error('injected build fault');
     const input = buildEvent(init, payload, state, ts, startedMs);
     if (fault === 'flush') throw new Error('injected flush fault');
-    write(input);
+    return input;
   };
 }
 

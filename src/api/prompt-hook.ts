@@ -15,15 +15,14 @@ import {
   snapshotText,
 } from './context-render.js';
 import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from './delivery-recorder.js';
-import type { DeliveryEventType } from '../base/session/delivery.js';
+import type { DeliveryEventInput, DeliveryEventType } from '../base/session/delivery.js';
 import type { HookRuntime } from '../base/session/capture-contract.js';
-import { realpathOrResolve } from '../base/util/real-path.js';
 import { MAX_ID_LEN } from '../base/util/limits.js';
 import { isJsonString, type JsonValue } from '../base/util/json.js';
 import {
   bookLedgerTurn,
   bookLedgerTurnPerRow,
-  ledgerFiles,
+  ledgerHome,
   ledgerLastSent,
   ledgerReachOf,
   type LedgerReach,
@@ -32,7 +31,6 @@ import type { MemoryEntry } from '../base/memory/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../base/session/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../base/scope/project-identity.js';
-import type { DeliveryWrite } from '../store/local/ledger.js';
 import { shouldSkipUnchanged } from '../base/session/skip-unchanged.js';
 import type { TokenSurface, TokenUse } from '../store/port/token-ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
@@ -51,17 +49,17 @@ export interface DeliveryStart {
   fault?: DeliveryFault;
 }
 
-/** A delivery recorder for a hook on `ctx.hippoRoot` when the ledger store enables one, else null; never throws. */
-export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): DeliveryRecorder | null {
+/** A delivery recorder for a hook on `ctx`'s store when the ledger store enables one, else null; never throws. */
+export async function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Promise<DeliveryRecorder | null> {
   try {
     // The same store the token ledger writes to, so its config governs both.
     const reach = ledgerReachOf(ctx);
-    const home = ledgerFiles(reach);
+    const home = ledgerHome(reach);
     if (home === null || !home.config.deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
-      ledger: home.files.ledger,
-      storeHash: blockHash(realpathOrResolve(home.root)),
-      // ledgerFiles falls back to the global store only when the primary is not initialized.
+      ledger: home.ledger,
+      storeHash: (await home.folderFiles.home()).hash,
+      // ledgerHome falls back to the global store only when the primary is not initialized.
       writeStore: home !== reach.local || ctx.reach?.isGlobal === true ? 'global' : 'local',
       tenantId: ctx.tenantId,
       stdinText: start.stdinText,
@@ -78,29 +76,31 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
 
 /** A recorder for `hippo capture-error`, only when the failure log and the ledger are one store, so `failure_id` never
  * points into another. */
-export function startToolFailureRecorder(
+export async function startToolFailureRecorder(
   ctx: Context,
   start: Omit<DeliveryStart, 'eventType'>,
-): DeliveryRecorder | null {
+): Promise<DeliveryRecorder | null> {
+  const reach = ledgerReachOf(ctx);
+  // ledgerHome is the call's own store only when it is the local one.
+  if (reach.local === undefined) return null;
+  return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
+}
+
+/** The recorder's event for a turn to write after its rows; undefined with no recorder, a second take or a failure. */
+export function takeDelivery(rec: DeliveryRecorder | null): DeliveryEventInput | undefined {
+  if (rec === null) return undefined;
   try {
-    const home = ledgerFiles(ledgerReachOf(ctx));
-    if (home === null || realpathOrResolve(home.root) !== realpathOrResolve(ctx.hippoRoot)) return null;
-    return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
+    return rec.takeEvent() ?? undefined;
   } catch (error) {
-    log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));
-    return null;
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
+    return undefined;
   }
 }
 
-/** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a
- * no-op. */
-export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
-  if (rec === null) return;
-  try {
-    rec.flush(write ?? ((input) => rec.ledger.writeDeliveryEvent(input)));
-  } catch (error) {
-    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
-  }
+/** Writes the recorder's event on a connection of its own; a second flush is a no-op. */
+export async function flushDeliveryRecorder(rec: DeliveryRecorder | null): Promise<void> {
+  const event = takeDelivery(rec);
+  if (rec !== null && event !== undefined) await rec.ledger.writeDeliveryEvent(event);
 }
 
 /** What one render needs once api.contextGet has answered. */
@@ -164,8 +164,8 @@ export function toRenderItems(entries: ContextResultEntry[]): RenderItem[] {
 
 /** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins,
  * recent-N) and a never-skipped recall block. */
-export function additionalContextOutput(view: ContextView): string {
-  return renderAdditionalContext(view).stdout;
+export async function additionalContextOutput(view: ContextView): Promise<string> {
+  return (await renderAdditionalContext(view)).stdout;
 }
 
 function renderStaticBlock(
@@ -193,7 +193,7 @@ function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['fram
   );
 }
 
-function renderAdditionalContext(view: ContextView): RenderedContext {
+async function renderAdditionalContext(view: ContextView): Promise<RenderedContext> {
   const { result, rec, framing } = view;
   const staticEntries = result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
   const staticCrossEntries = result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall);
@@ -209,7 +209,8 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
   const sendStatic =
-    staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
+    staticBlock.trim().length > 0 &&
+    !(await skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length));
 
   const finalStatic = sendStatic ? staticBlock : '';
   const additionalContext =
@@ -229,7 +230,7 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
     staticReused,
   });
   if (finalStatic || recallBlock) {
-    recordAdditionalContextRows(
+    await recordAdditionalContextRows(
       view,
       surface,
       { text: finalStatic, items: staticItems.length },
@@ -240,13 +241,13 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
 }
 
 /** True, after booking the skip row, when the hook may omit a static block this session already holds. */
-function skipUnchangedStatic(
+async function skipUnchangedStatic(
   view: ContextView,
   surface: TokenSurface,
   staticBlock: string,
   recallBlock: string,
   staticCount: number,
-): boolean {
+): Promise<boolean> {
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
@@ -259,9 +260,11 @@ function skipUnchangedStatic(
   const staticHash = blockHash(staticBlock);
   // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
-  const last = ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
-  if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
-  bookLedgerTurn(
+  const last = await ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
+  if (!shouldSkipUnchanged(last, staticHash, refreshTurns)) return false;
+  // With no recall block this turn sends nothing more, so its delivery row says the static block was reused.
+  if (!recallBlock.trim()) rec?.delivered({ state: 'reused', staticHash, staticReused: true });
+  await bookLedgerTurn(
     {
       uses: [
         {
@@ -274,12 +277,7 @@ function skipUnchangedStatic(
           hash: staticHash,
         },
       ],
-      delivery: recallBlock.trim()
-        ? undefined
-        : (write) => {
-            rec?.delivered({ state: 'reused', staticHash, staticReused: true });
-            flushDeliveryRecorder(rec, write);
-          },
+      delivery: recallBlock.trim() ? undefined : takeDelivery(rec),
     },
     view.reach,
   );
@@ -293,12 +291,12 @@ interface InjectedBlock {
 
 /** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not
  * break the hook. */
-function recordAdditionalContextRows(
+async function recordAdditionalContextRows(
   view: ContextView,
   surface: TokenSurface,
   staticPart: InjectedBlock,
   recallPart: InjectedBlock,
-): void {
+): Promise<void> {
   const row = (part: InjectedBlock, on: TokenSurface): TokenUse => ({
     tenantId: view.tenantId,
     sessionId: view.ledgerSessionId,
@@ -308,13 +306,13 @@ function recordAdditionalContextRows(
     tokens: estimateTokens(part.text),
     hash: blockHash(part.text),
   });
-  bookLedgerTurnPerRow(
+  await bookLedgerTurnPerRow(
     {
       uses: [
         ...(staticPart.text ? [row(staticPart, surface)] : []),
         ...(recallPart.text ? [row(recallPart, 'hook_recall')] : []),
       ],
-      delivery: (write) => flushDeliveryRecorder(view.rec, write),
+      delivery: takeDelivery(view.rec),
     },
     view.reach,
   );
@@ -390,7 +388,7 @@ export async function promptHookContext(
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);
   const armOpts = { reach, ownTenantOnly: true };
-  const arm = sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
+  const arm = await sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
   const result = await contextGet(ctx, {
@@ -405,7 +403,7 @@ export async function promptHookContext(
     sharedStore,
   });
   const rendered = hasContextData(result)
-    ? renderAdditionalContext({
+    ? await renderAdditionalContext({
         config: ctx.config,
         tenantId: ctx.tenantId,
         ledgerSessionId,

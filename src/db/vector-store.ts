@@ -72,6 +72,11 @@ export function openVectorStaging(db: DatabaseSyncLike): void {
   db.exec('DELETE FROM temp.staged_vectors');
 }
 
+/** Drops the staging table, for a handle that outlives the rebuild, as a store worker's does. */
+export function dropVectorStaging(db: DatabaseSyncLike): void {
+  db.exec('DROP TABLE IF EXISTS temp.staged_vectors');
+}
+
 /** Stages `rows` on the handle openVectorStaging ran on, skipping empty or non-finite vectors; answers how many. */
 export function stageVectors(db: DatabaseSyncLike, rows: Iterable<readonly [string, readonly number[]]>): number {
   const stmt = cachedStatement(

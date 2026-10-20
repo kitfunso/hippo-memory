@@ -51,7 +51,6 @@ describe('api tenant isolation', () => {
     await expect(
       promote(
         {
-          hippoRoot: home,
           store: sqliteStore(home),
           config: loadConfig(home),
           tenantId: 'bravo',

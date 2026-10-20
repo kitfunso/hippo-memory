@@ -139,7 +139,7 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../../src/store/port/context-reads.js';
-import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../src/store/local/sharing.js';
+import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../src/store/port/sharing.js';
 import type {
   DetectedConflict,
   FlushComponent,
@@ -150,7 +150,7 @@ import type {
 import type { Prediction, PredictionClose } from '../../src/store/port/predictions.js';
 import type { ClosureState } from '../../src/base/records/prediction.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
-import type { StoredVectorSummary } from '../../src/store/local/embedding-index.js';
+import type { StoredVectorSummary } from '../../src/store/port/embedding-index.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import type { EntryCursor } from '../../src/store/port/types.js';
 
@@ -810,7 +810,7 @@ export async function copyToGlobal(
 ): Promise<MemoryEntry> {
   const ctx = apiCtx(hippoRoot, opts.tenantId ?? 'default', { subject: CLI_ACTOR, role: 'admin', owner: opts.owner });
   const { globalId } = await promote(ctx, id);
-  const copy = ctx.reach?.globalTarget?.store.localFiles.learning.readEntry(globalId, ctx.tenantId);
+  const [copy] = (await ctx.reach?.globalTarget?.store.sharing.entriesByIds([globalId])) ?? [];
   if (!copy) throw new Error(`the promoted copy ${globalId} is not in the global store`);
   return copy;
 }

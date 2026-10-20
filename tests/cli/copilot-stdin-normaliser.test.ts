@@ -10,7 +10,7 @@ import { readClaudeCodePreCompact } from '../../src/base/session/capture-contrac
 import { lessonFromFailure, payloadString } from '../../src/surface/capture/failure-reading.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { claudeCodePayload, copilotPayload } from '../_helpers/copilot-hooks.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 
 const CWD = 'C:\\Users\\user\\proj';
 const TRANSCRIPT = 'C:\\Users\\user\\.copilot\\session-state\\copilot-sess-1\\events.jsonl';
@@ -25,19 +25,15 @@ function normalized(text: string): JsonValue {
 
 function deliveryEvent(stdinText: string | undefined, runtime?: DeliveryRuntime): DeliveryEventInput {
   const rec = createDeliveryRecorder({
-    ledger: sqliteSyncStore(CWD).localFiles.ledger,
+    ledger: sqliteStore(CWD).ledger,
     storeHash: 'aaaaaaaaaaaaaaaa',
     writeStore: 'local',
     tenantId: 'default',
     stdinText,
     runtime,
   });
-  let input: DeliveryEventInput | null = null;
-  rec.flush((i) => {
-    input = i;
-    return 1;
-  });
-  if (input === null) throw new Error('recorder wrote nothing');
+  const input = rec.takeEvent();
+  if (input === null) throw new Error('recorder built nothing');
   return input;
 }
 

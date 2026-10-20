@@ -7,7 +7,8 @@
 // So does any import, re-export or import() (type-only too) into src/store/sqlite/** from a file outside src/store that
 // SQLITE_ROOTS does not name, and so does naming sqliteSyncStore there: every other file takes its store handed down.
 // A root imports only the adapter's doors in SQLITE_DOORS, so no root names a module behind them.
-// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and the local files beside it (local/**): the api reads the store through those and takes shared rules from src/base.
+// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and local/**, which the next rule covers: the api reads the store through the port and takes shared rules from src/base.
+// So does an import from src/api/** or src/domain/** into src/store/local/** that .store-local-pending.json does not name with a reason, any isLocalStore there, and any hippoRoot in src/api/**: both read the store through its port groups.
 // So does any import, runtime or type-only, from src/surface/dashboard/** into src/store, src/db or src/surface/cli: the dashboard reads through src/api, with no baseline.
 // layers.json `dbReach`: every file outside the db layer and `dbReach.through` (the store) reaches the db layer through the store; `allowed` names each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
@@ -194,6 +195,67 @@ function findApiStoreReaches(srcDir) {
     }
   }
   return [...out.values()];
+}
+
+const LOCAL_PENDING = '.store-local-pending.json';
+const LOCAL_DIR = 'store/local/';
+
+/** Imports from src/api or src/domain into src/store/local, runtime or type-only, one per (file, target). */
+function findLocalImports(srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = new Map();
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!from.startsWith('api/') && !from.startsWith('domain/')) continue;
+    for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
+      const to = target && rel(target);
+      const key = `${from}\t${to}`;
+      if (to?.startsWith(LOCAL_DIR) && !out.has(key)) out.set(key, { file: from, target: to, line });
+    }
+  }
+  return [...out.values()];
+}
+
+/** `file:line` of each isLocalStore in src/api or src/domain, and each hippoRoot in src/api. */
+function findLocalNames(srcDir) {
+  const root = resolve(srcDir);
+  const out = [];
+  for (const file of tsFiles(root)) {
+    const from = relative(root, file).replace(/\\/g, '/');
+    const text = readFileSync(file, 'utf8');
+    const banned = new Set();
+    if (/^(api|domain)\//.test(from) && text.includes('isLocalStore')) banned.add('isLocalStore');
+    if (from.startsWith('api/') && text.includes('hippoRoot')) banned.add('hippoRoot');
+    if (banned.size === 0) continue;
+    for (const id of readFacts(text, 'file.ts', ['identifiers']).identifiers.filter((i) => banned.has(i.name))) {
+      out.push(
+        id.name === 'hippoRoot'
+          ? `src/${from}:${id.line} names hippoRoot; read what the folder gave from a port method`
+          : `src/${from}:${id.line} names isLocalStore; test the optional group by its property`,
+      );
+    }
+  }
+  return out;
+}
+
+/** Local-store imports .store-local-pending.json does not name, entries with no reason or no import left, then banned names. */
+function localReachProblems(srcDir) {
+  const pending = readJson(LOCAL_PENDING, []);
+  const listed = new Set(pending.map((e) => e.file));
+  const found = findLocalImports(srcDir);
+  const importers = new Set(found.map((e) => e.file));
+  return [
+    ...found
+      .filter((e) => !listed.has(e.file))
+      .map((e) => `src/${e.file}:${e.line} imports src/${e.target}; read it through a port group`),
+    ...pending.filter((e) => !String(e.why ?? '').trim()).map((e) => `${LOCAL_PENDING}: src/${e.file} gives no reason`),
+    ...pending
+      .filter((e) => !importers.has(e.file))
+      .map((e) => `${LOCAL_PENDING}: src/${e.file} no longer imports src/${LOCAL_DIR}; delete the entry`),
+    ...findLocalNames(srcDir),
+  ];
 }
 
 const SQLITE_DIR = 'store/sqlite/';
@@ -389,6 +451,13 @@ if (apiStoreReaches.length > 0 && !args.includes('--list')) {
     'The api imports a store module past the port; read it through the port, or move the shared rule to src/base:',
   );
   for (const e of apiStoreReaches) console.error(`  src/${e.file}:${e.line} imports src/${e.target}`);
+  process.exit(1);
+}
+
+const localProblems = localReachProblems('src');
+if (localProblems.length > 0 && !args.includes('--list')) {
+  console.error('The api or domain reaches the local store past its port groups, or the api names the folder:');
+  for (const p of localProblems) console.error(`  ${p}`);
   process.exit(1);
 }
 

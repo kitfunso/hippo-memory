@@ -1,13 +1,11 @@
 // Sharing local memories to the global store: transfer scoring, share, peers and auto-share.
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
-import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, strengthOptionsOf } from '../../base/memory/memory.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../../base/memory/agent-memory-tools.js';
 import { isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
-import { fallbackOrigin } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../../base/util/same-text.js';
@@ -16,8 +14,8 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
-import type { EntrySignals, PageRequest, Sharing } from '../../store/local/sharing.js';
-import type { FolderStore, LocalFiles } from '../../store/local/index.js';
+import type { SharingStore } from './text-keys.js';
+import type { EntrySignals, PageRequest, Sharing, StoreGroups, StoreHome, StoreWith } from '../../store/port.js';
 import type { EntryCursor } from '../../store/port/types.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
@@ -131,8 +129,8 @@ export function transferScore(entry: MemoryEntry): number {
 /** Share a memory to the global store with attribution (source enriched with project path and timestamp).
  *  Returns the new entry, or null if the transfer score is too low. */
 export async function shareMemory(
-  local: FolderStore,
-  global: ConfiguredFolder,
+  local: { readonly store: StoreWith<'folderFiles'> },
+  global: ConfiguredFolder<SharingStore>,
   id: string,
   options: { force?: boolean; tenantId: string; skipEmbed?: boolean },
 ): Promise<MemoryEntry | null> {
@@ -140,7 +138,7 @@ export async function shareMemory(
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  const globalEntry = toGlobalEntry(local.root, entry, options.force === true);
+  const globalEntry = toGlobalEntry(await local.store.folderFiles.home(), entry, options.force === true);
   if (!globalEntry) return null;
 
   await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: CLI_ACTOR });
@@ -149,7 +147,6 @@ export async function shareMemory(
   // the whole index per call.
   if (!options.skipEmbed) {
     const target = {
-      hippoRoot: global.root,
       store: global.store,
       embeddings: global.config.embeddings,
       strength: strengthOptionsOf(global.config.runtime),
@@ -162,7 +159,7 @@ export async function shareMemory(
 
 /** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the row
  * may not be shared. */
-function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): MemoryEntry | null {
+function toGlobalEntry(local: StoreHome, entry: MemoryEntry, force: boolean): MemoryEntry | null {
   assertShareable(entry, entry.id);
 
   const score = transferScore(entry);
@@ -170,8 +167,8 @@ function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): M
 
   // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as
   // no project.
-  const fallbackName = path.basename(path.resolve(localRoot, '..'));
-  const originName = entry.originProject ?? fallbackOrigin(localRoot);
+  const fallbackName = local.folderName;
+  const originName = entry.originProject ?? (local.shared ? null : local.project.name);
   const label = originName === '' ? fallbackName : (originName ?? '');
   return {
     ...entry,
@@ -209,12 +206,12 @@ function assertShareable(entry: MemoryEntry, id: string): void {
 /** List all projects that contributed memories to the global store, parsed from 'shared:<project>:' or
  * 'promoted:<path>' sources; ALL_TENANTS is the host-wide view. */
 export async function listPeers(
-  global: FolderStore,
+  global: { readonly store: SharingStore },
   tenantId: TenantId,
 ): Promise<Array<{ project: string; count: number; latest: string }>> {
-  if (!fs.existsSync(global.root)) return [];
+  if (!(await global.store.folderFiles.home()).exists) return [];
 
-  const tallies = (await global.store.localFiles.sharing.sourceTallies(tenantId)).sort((a, b) =>
+  const tallies = (await global.store.sharing.sourceTallies(tenantId)).sort((a, b) =>
     a.first < b.first ? -1 : a.first > b.first ? 1 : 0,
   );
   const peerMap = new Map<string, { count: number; latest: string }>();
@@ -284,14 +281,14 @@ function isNewAndClean(
 
 /** The local rows a page at a time: above the neutral score only a row carrying a signal can share or count as a
  * never-auto-share skip, so only those are read. */
-function* autoSharePages(sharing: Sharing, minScore: number, tenantId: TenantId): Generator<MemoryEntry[]> {
+async function* autoSharePages(sharing: Sharing, minScore: number, tenantId: TenantId): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | null = null;
   do {
     const page: PageRequest = { limit: AUTO_SHARE_PAGE_ROWS, after: after ?? undefined };
     const { entries, next } =
       minScore > TRANSFER_WEIGHTS.neutral
-        ? sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
-        : sharing.entriesPage(tenantId, page);
+        ? await sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
+        : await sharing.entriesPage(tenantId, page);
     yield entries;
     after = next;
   } while (after !== null);
@@ -299,46 +296,39 @@ function* autoSharePages(sharing: Sharing, minScore: number, tenantId: TenantId)
 
 /** The page's rows that share. Only a global row holding a row's longest word can hold its text, so the global store,
  * the union of every tenant, is asked for those rows alone. */
-function pageCandidates(
-  to: LocalFiles,
+async function pageCandidates(
+  to: Sharing,
   page: readonly MemoryEntry[],
   minScore: number,
   stats: AutoShareStats | undefined,
-): MemoryEntry[] {
+): Promise<MemoryEntry[]> {
   const scored = page.filter((entry) => clearsShareRules(entry, minScore, stats));
   if (scored.length === 0) return [];
   const words = scored.map((entry) => longestWord(entry.content)).filter((word) => word.length > 0);
-  const globalKeys = storedTextKeys(to.captures.textsHolding(ALL_TENANTS, words, { everyScope: true }));
+  const globalKeys = storedTextKeys(await to.textsHolding(ALL_TENANTS, words, { everyScope: true }));
   return scored.filter((entry) => isNewAndClean(entry, globalKeys, stats));
 }
 
 /** Writes one page of candidates in one transaction; returns the copies written and how many a tombstone refused. */
-function sharePage(localRoot: string, to: LocalFiles, page: readonly MemoryEntry[]) {
-  const shared: MemoryEntry[] = [];
-  let refused = 0;
-  to.sharing.writeSkippingRejected((put) => {
-    for (const entry of page) {
-      const globalEntry = toGlobalEntry(localRoot, entry, true);
-      if (!globalEntry) continue;
-      if (put(globalEntry)) shared.push(globalEntry);
-      else refused++;
-    }
-  });
-  return { shared, refused };
+async function sharePage(local: StoreHome, to: SharingStore, page: readonly MemoryEntry[]) {
+  const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true) ?? []);
+  const written = new Set(await to.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
+  const shared = copies.filter((copy) => written.has(copy.id));
+  return { shared, refused: copies.length - shared.length };
 }
 
 // A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort the autoShare sleep
 // phase. The caller embeds once via embedAll() afterwards.
-function shareCandidates(
-  localRoot: string,
-  to: LocalFiles,
+async function shareCandidates(
+  local: StoreHome,
+  to: SharingStore,
   candidates: readonly MemoryEntry[],
   stats: AutoShareStats | undefined,
-): MemoryEntry[] {
+): Promise<MemoryEntry[]> {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
   for (const page of chunked(candidates, AUTO_SHARE_PAGE_ROWS)) {
-    const written = sharePage(localRoot, to, page);
+    const written = await sharePage(local, to, page);
     shared.push(...written.shared);
     rejectedSkipped += written.refused;
   }
@@ -354,9 +344,9 @@ function shareCandidates(
  * `options.tenantId` scopes the LOCAL read.
  * `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
  * rejection refusals (0 under `dryRun`). */
-export function autoShare(
-  from: FolderStore,
-  global: ConfiguredFolder,
+export async function autoShare(
+  from: { readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles'> },
+  global: ConfiguredFolder<SharingStore>,
   options: {
     minScore?: number;
     dryRun?: boolean;
@@ -364,19 +354,19 @@ export function autoShare(
     tenantId: TenantId;
     stats?: AutoShareStats;
   },
-): MemoryEntry[] {
+): Promise<MemoryEntry[]> {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
-  const to = global.store.localFiles;
-  to.ensureFiles();
+  const to = global.store;
+  await to.folderFiles.ensure();
   // Every page is judged before any is written, so a copy written early cannot hide a later row's twin.
   const candidates: MemoryEntry[] = [];
-  for (const page of autoSharePages(from.store.localFiles.sharing, minScore, options.tenantId)) {
-    candidates.push(...pageCandidates(to, page, minScore, options.stats));
+  for await (const page of autoSharePages(from.store.sharing, minScore, options.tenantId)) {
+    candidates.push(...(await pageCandidates(to.sharing, page, minScore, options.stats)));
   }
 
   if (dryRun) return candidates;
 
-  const shared = shareCandidates(from.root, to, candidates, options.stats);
+  const shared = await shareCandidates(await from.store.folderFiles.home(), to, candidates, options.stats);
 
   if (shared.length > 0) {
     void embedAll(folderIndex(global)).catch((err) => logEmbedAllFailure('autoShare', err));

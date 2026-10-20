@@ -6,10 +6,10 @@ import type { HippoConfig } from '../../base/config/config.js';
 import type { Context } from '../types.js';
 
 /**
- * Runs one auto-sleep consolidation of `hippoRoot`: the HTTP server passes one that runs it off its event loop, in a
- * child process; stdio passes one that runs it in its own.
+ * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes one that runs it off
+ * its event loop, in a child process; stdio passes one that runs it in its own.
  */
-export type AutoSleepRunner = (hippoRoot: string) => Promise<void>;
+export type AutoSleepRunner = () => Promise<void>;
 
 export interface AutoSleepDue {
   enabled: boolean;
@@ -34,28 +34,30 @@ export async function autoSleepDue(
  * tenant's writes start one, one per store at a time. Never rejects: the write it follows has landed.
  */
 export async function autoSleepAfterWrite(
-  ctx: Pick<Context, 'hippoRoot' | 'tenantId' | 'store' | 'config' | 'callers'>,
+  ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'callers'>,
 ): Promise<void> {
   const host = ctx.callers?.autoSleep;
-  const { hippoRoot, tenantId, store, config } = ctx;
+  const { tenantId, store, config } = ctx;
   if (host === undefined || !config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
-  if (host.inFlight.has(hippoRoot)) return;
+  if (host.latch.held) return;
   // Held from the count on, so two writes landing together never both start a sleep.
-  host.inFlight.add(hippoRoot);
+  host.latch.held = true;
   let due = false;
   try {
     due = (await autoSleepDue(store, tenantId, config.autoSleep)).due;
   } catch (err) {
     log.warn(`auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`, errorFields(err));
   } finally {
-    if (!due) host.inFlight.delete(hippoRoot);
+    if (!due) host.latch.held = false;
   }
   if (!due) return;
   // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
   host
-    .run(hippoRoot)
+    .run()
     .catch((err) => {
       log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`, errorFields(err));
     })
-    .finally(() => host.inFlight.delete(hippoRoot));
+    .finally(() => {
+      host.latch.held = false;
+    });
 }

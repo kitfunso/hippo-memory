@@ -8,7 +8,7 @@ import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -143,14 +143,14 @@ const PICKED: ReadonlyArray<[number, string[]]> = [
 ];
 
 describe('autoShare prefilter', () => {
-  it('picks the same rows, in store order, with the same skip count, on both sides of the neutral score', () => {
+  it('picks the same rows, in store order, with the same skip count, on both sides of the neutral score', async () => {
     const ids = seedSignalRows();
     for (const tenantId of ['default', ALL_TENANTS] as const) {
       for (const [minScore, labels] of PICKED) {
         const wanted = new Set(labels.map((l) => ids.get(l)!));
         if (tenantId === ALL_TENANTS && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
         const stats: AutoShareStats = { secretSkipped: 0 };
-        const picked = autoShare(...sharingStores(root), { minScore, dryRun: true, tenantId, stats });
+        const picked = await autoShare(...sharingStores(root), { minScore, dryRun: true, tenantId, stats });
         const inOrder = (
           tenantId === ALL_TENANTS ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)
         ).filter((e) => wanted.has(e.id));
@@ -164,13 +164,13 @@ describe('autoShare prefilter', () => {
     }
   });
 
-  it('reads only the rows that can clear a score above neutral', () => {
+  it('reads only the rows that can clear a score above neutral', async () => {
     const errorId = withRequestStoresSync(() => {
       for (let i = 0; i < 60; i++) put(`plain ${i}`);
       return put('error', {}, ['error']);
     });
     for (const tenantId of ['default', ALL_TENANTS] as const) {
-      const { result, statements, rowsRead } = recordStatements(() =>
+      const { result, statements, rowsRead } = await recordStatementsAsync(() =>
         autoShare(...sharingStores(root), { dryRun: true, tenantId }),
       );
       expect(result.map((e) => e.id)).toEqual([errorId]);

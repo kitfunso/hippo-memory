@@ -111,7 +111,7 @@ describe('physics status stats', () => {
 
   it('averages the speeds a whole read averages, and loads the particles only up to the limit', () => {
     seedParticles(3);
-    const index = sqliteSyncStore(root).localFiles.embeddingIndex;
+    const index = sqliteSyncStore(root).embeddingIndex;
     const whole = loadStoredParticles(root);
     const mean = whole.reduce((sum, p) => sum + vecNorm(p.velocity), 0) / whole.length;
     expect(index.particleStats(3)).toEqual({ count: 3, meanSpeed: mean, particles: whole });
@@ -120,7 +120,7 @@ describe('physics status stats', () => {
 
   it('reads one column past the limit, whatever the particle count', () => {
     seedParticles(4);
-    const stats = () => sqliteSyncStore(root).localFiles.embeddingIndex.particleStats(2);
+    const stats = () => sqliteSyncStore(root).embeddingIndex.particleStats(2);
     const reads = recordStatements(stats).reads.filter((r) => r.sql.includes('memory_physics'));
     expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
   });

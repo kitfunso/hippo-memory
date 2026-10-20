@@ -4,9 +4,9 @@
  * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../../base/memory/memory.js';
-import { REFINED_TAG, storeRefinement, type Context } from '../../api/index.js';
+import { REFINED_TAG, storeRefinement } from '../../api/index.js';
 import { memoryList, memoryListByIds, type TenantReach } from '../../api/memories/memories.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, type CliContext } from './api-context.js';
 import { chunked } from '../../base/util/chunked.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import {
@@ -155,7 +155,7 @@ export async function refineStore(hippoRoot: string, opts: RefineOptions): Promi
 }
 
 async function refineOneEntry(
-  ctx: Context,
+  ctx: CliContext,
   reach: TenantReach,
   entry: MemoryEntry,
   opts: RefineOptions,

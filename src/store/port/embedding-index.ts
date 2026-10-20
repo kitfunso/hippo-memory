@@ -1,37 +1,51 @@
-// hippo.db's own vector index: what embedding under its folder lock and the embed and status verbs read and write.
-// Vectors and particles carry no tenant, so each method covers the whole store.
+// A store's own vector index, which the embed and status verbs read and write. Vectors and particles carry no tenant,
+// so each method covers the whole store.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 
 export interface EmbeddingIndex {
   /** Whether another model than `providerId` built the stored vectors; an unreadable index answers false. */
-  requiresReindex(providerId: string): boolean;
+  requiresReindex(providerId: string): Promise<boolean>;
   /** Records `providerId`'s index identity as what built the vectors. */
-  saveModel(providerId: string): void;
-  entryCount(): number;
+  saveModel(providerId: string): Promise<void>;
+  entryCount(): Promise<number>;
   /** Up to `page.limit` memory ids in id order after `page.afterId`: a re-embed needs each row once, not time order. */
-  entryIdsPage(page: IdPageRequest): IdPage;
+  entryIdsPage(page: IdPageRequest): Promise<IdPage>;
   /** The rows of `ids` that exist, in no set order. */
-  entriesByIds(ids: readonly string[]): MemoryEntry[];
-  summary(): StoredVectorSummary;
+  entriesByIds(ids: readonly string[]): Promise<MemoryEntry[]>;
+  summary(): Promise<StoredVectorSummary>;
   /** How many memories and vectors the store holds, and how many memories have a vector. */
-  coverage(): VectorCoverage;
+  coverage(): Promise<VectorCoverage>;
   /** The particle count and mean speed, and every particle only while at most `fullUpTo` are stored. */
-  particleStats(fullUpTo: number): ParticleStats;
+  particleStats(fullUpTo: number): Promise<ParticleStats>;
   /** Upserts each row under `model`, one commit per row so a failure keeps those before it; answers how many. */
-  saveVectors(rows: Iterable<readonly [string, readonly number[]]>, model: string): number;
-  /** A rebuild whose vectors wait apart from the live index until `commit`; the caller closes it. */
-  beginRebuild(): VectorRebuild;
+  saveVectors(rows: readonly VectorRow[], model: string): Promise<number>;
+  /** Opens a rebuild whose vectors wait apart from the live index; the id names it to the three calls below. */
+  beginRebuild(): Promise<string>;
+  /** Stages one page of vectors, skipping empty or non-finite ones; answers how many it staged. */
+  stageRebuild(rebuild: string, rows: readonly VectorRow[]): Promise<number>;
+  /** In one transaction, replaces every stored vector with the staged ones and records `model` as what built them. */
+  commitRebuild(rebuild: string, model: string): Promise<void>;
+  /** Drops what is staged; a rebuild never committed leaves the live index as it was. */
+  closeRebuild(rebuild: string): Promise<void>;
   /** Drops the vectors of deleted memories. */
-  pruneOrphans(): void;
+  pruneOrphans(): Promise<void>;
   /** Up to `page.limit` ids with no vector, in id order after `page.afterId`. */
-  pendingIds(page: IdPageRequest): IdPage;
+  pendingIds(page: IdPageRequest): Promise<IdPage>;
   /** Replaces every particle with a fresh one per memory that has a stored vector, reading a page at a time; answers
    * how many. */
-  resetParticles(): number;
+  resetParticles(): Promise<number>;
   /** A first particle for `entry` at `vector`, unless it has one. */
-  seedParticle(entry: MemoryEntry, vector: number[]): void;
+  seedParticle(entry: MemoryEntry, vector: number[]): Promise<void>;
+  /** Takes the index's write lock, which other processes on the store honour; a token to unlock, or null while a live
+   * holder has it. */
+  tryLock(): Promise<string | null>;
+  /** Releases the lock `token` took; a lock another holder took since is left. */
+  unlock(token: string): Promise<void>;
 }
+
+/** One memory's vector. */
+export type VectorRow = readonly [memoryId: string, vector: readonly number[]];
 
 /** `particles` is null past the caller's limit, so a large store is summed a column at a time, never loaded. */
 export interface ParticleStats {
@@ -50,17 +64,6 @@ export interface IdPageRequest {
 export interface IdPage {
   readonly ids: string[];
   readonly next: string | null;
-}
-
-/** Vectors staged by page on a handle of their own, so neither the live index nor the caller holds them all. */
-export interface VectorRebuild {
-  /** Stages one page of vectors, skipping empty or non-finite ones; answers how many it staged. */
-  stage(rows: ReadonlyArray<readonly [string, readonly number[]]>): number;
-  /** In one transaction, replaces every stored vector with the staged ones and records `model`, an index identity as
-   * saveVectors takes it, as what built them. */
-  commit(model: string): void;
-  /** Drops what is staged and releases the handle; a rebuild never committed leaves the live index as it was. */
-  close(): void;
 }
 
 export interface VectorCoverage {

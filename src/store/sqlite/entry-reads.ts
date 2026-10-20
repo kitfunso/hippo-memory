@@ -19,10 +19,10 @@ import {
   type SqlAnd,
 } from './keyset.js';
 import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '../local/consolidation.js';
-import type { IdPage, IdPageRequest } from '../local/embedding-index.js';
+import type { IdPage, IdPageRequest } from '../port/embedding-index.js';
 import type { RawRefRow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../local/project-tags.js';
-import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../local/sharing.js';
+import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
 import type { SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/dag-reads.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 

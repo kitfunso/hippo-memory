@@ -11,7 +11,6 @@ import {
 } from '../../base/embeddings/index-identity.js';
 import { strengthOptionsOf, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
-import type { ParticleStats } from '../local/embedding-index.js';
 import {
   loadPhysicsState,
   resetPhysicsFromSeeds,
@@ -45,10 +44,10 @@ import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import type {
   IdPage,
   IdPageRequest,
+  ParticleStats,
   StoredVectorSummary,
   VectorCoverage,
-  VectorRebuild,
-} from '../local/embedding-index.js';
+} from '../port/embedding-index.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -120,6 +119,15 @@ export function loadStoredVectorsAt(db: DatabaseSyncLike, ids: readonly string[]
 export function loadStoredVectorViewsAt(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
   return loadVectorViews(db, ids);
+}
+
+/** Vectors staged by page on a handle of their own, so neither the live index nor the caller holds them all. */
+export interface VectorRebuild {
+  /** Stages one page, skipping empty or non-finite vectors; answers how many it staged. */
+  stage(rows: ReadonlyArray<readonly [string, readonly number[]]>): number;
+  /** In one transaction, swaps the staged vectors in and records `model` as what built them. */
+  commit(model: string): void;
+  close(): void;
 }
 
 /** A rebuild staged on `db`, a handle of its own that `release` closes, which drops the staging table with it. */

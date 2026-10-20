@@ -117,7 +117,7 @@ export function importEntries(chunks: string[], source: string, tags: string[], 
 interface OpenImport {
   readonly targetRoot: string;
   readonly learning: LocalFiles['learning'];
-  readonly sharing: LocalFiles['sharing'];
+  readonly importKeys: LocalFiles['importKeys'];
   /** Whose rows a chunk is checked against. */
   readonly tenantId: TenantId;
   /** Keys of the chunks this run wrote; a dry run writes none. */
@@ -133,7 +133,7 @@ function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImp
   return {
     targetRoot: target.root,
     learning: files.learning,
-    sharing: files.sharing,
+    importKeys: files.importKeys,
     tenantId: scope,
     written: new Set(),
     rejections: files.rejections,
@@ -147,9 +147,9 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
 }
 
 /** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those alone. */
-function storeHolds({ sharing, tenantId }: OpenImport, chunk: string): boolean {
+function storeHolds({ importKeys, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
-  return sharing.textKeysHolding(tenantId, [chunk]).some((row) => heldTextKeys(row).includes(key));
+  return importKeys.textKeysHolding(tenantId, [chunk]).some((row) => heldTextKeys(row).includes(key));
 }
 
 /** The secret-vetted chunk capped at MAX_IMPORT_CHARS, and whether vetting changed it. */

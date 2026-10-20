@@ -4,14 +4,21 @@ import { RecentRecalls } from './recall/last-recalled.js';
 import type { RecallSurface, RingBuffer } from './recall/finish.js';
 import type { AutoSleepRunner } from './sleep/auto-sleep.js';
 
-/** How a write starts a background sleep: the server runs it in its sleep queue's child, stdio in its own process.
- * Consolidation runs on hippo.db, so only a root whose store is hippo.db holds one. */
+/** How a write starts a background sleep of one folder: the server runs it in its sleep queue's child, stdio in its
+ * own process. Consolidation runs on hippo.db, so only a root whose store is hippo.db holds one. */
 export interface AutoSleepHost {
   readonly run: AutoSleepRunner;
   /** The tenant that owns the host: consolidation is host-wide, so only its writes start one. */
   readonly hostTenantId: string;
-  /** The stores with a sleep being counted or run, so two writes landing together start one. */
-  readonly inFlight: Set<string>;
+  /** Held while a sleep is counted or run, so two writes landing together start one. */
+  readonly latch: { held: boolean };
+}
+
+export type AutoSleepStart = Omit<AutoSleepHost, 'latch'>;
+
+/** A host for one folder's auto-sleep, its latch free. */
+export function autoSleepHost(start: AutoSleepStart): AutoSleepHost {
+  return { ...start, latch: { held: false } };
 }
 
 export interface CallerState {
@@ -23,10 +30,10 @@ export interface CallerState {
   readonly autoSleep?: AutoSleepHost;
 }
 
-export function createCallerState(autoSleep?: Omit<AutoSleepHost, 'inFlight'>): CallerState {
+export function createCallerState(autoSleep?: AutoSleepStart): CallerState {
   return {
     rings: { cli: new Map(), mcp: new Map(), http: new Map() },
     lastShown: new RecentRecalls(),
-    ...(autoSleep !== undefined && { autoSleep: { ...autoSleep, inFlight: new Set<string>() } }),
+    ...(autoSleep !== undefined && { autoSleep: autoSleepHost(autoSleep) }),
   };
 }

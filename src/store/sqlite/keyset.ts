@@ -6,7 +6,7 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { tenantAnd } from './tenant.js';
 import type { EntryCursor } from '../port/types.js';
-import type { IdPage } from '../local/embedding-index.js';
+import type { IdPage } from '../port/embedding-index.js';
 
 /** An ` AND ...` WHERE fragment, or empty, and the arguments it binds. */
 export interface SqlAnd {

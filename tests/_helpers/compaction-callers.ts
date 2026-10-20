@@ -104,7 +104,6 @@ export function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] 
 
 export function owned(owner: string): Context {
   return {
-    hippoRoot: root,
     store: sqliteStore(root),
     config: loadConfig(root),
     tenantId: TENANT,

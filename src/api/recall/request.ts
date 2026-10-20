@@ -318,17 +318,17 @@ async function recordShown(
   });
 }
 
-/** The second store ranked, as the caller's own store when its root is the one searched, so its graph walks once. */
+/** The second store ranked, as the caller's own store when that is the global one, so its graph walks once. */
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
-  if (sources.root === ctx.hippoRoot) return { store: ctx.store, config: ctx.config, onHippoDb: true };
+  if (ctx.reach?.isGlobal === true) return { store: ctx.store, config: ctx.config, onHippoDb: true };
   return { store: sources.store, config: sources.config, onHippoDb: true };
 }
 
-/** The second store takes its own recall rows, unless it is the root being searched already. */
+/** The second store takes its own recall rows, unless the caller's store is the global one already. */
 function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
   const sources = core.sources;
-  return sources !== undefined && sources.root !== ctx.hippoRoot ? sources.store : undefined;
+  return sources !== undefined && ctx.reach?.isGlobal !== true ? sources.store : undefined;
 }
 
 // The caller has ranked and is about to print, so a failed audit write is logged and counted, never thrown.

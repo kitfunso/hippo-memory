@@ -2,20 +2,28 @@
 import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
 import { cliLocalFiles, cliStore } from '../../src/surface/cli/api-context.js';
-import type { EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import { folderIndex, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import type { Diagnostics } from '../../src/store/local/diagnostics.js';
 import type { FolderFiles } from '../../src/store/local/index.js';
+import type { StoreGroups } from '../../src/store/port.js';
 
 export function captureTarget(root: string): CaptureTarget {
-  return { root, files: cliLocalFiles(root), config: loadConfig(root) };
+  const config = loadConfig(root);
+  return { root, files: cliLocalFiles(root), config, index: folderIndex({ store: cliStore(root), config }) };
 }
 
 export function diagnosticsAt(root: string): Diagnostics {
   return cliLocalFiles(root).diagnostics;
 }
 
-/** hippo.db's files under `root`, as the ledger takes them. */
+/** hippo.db's ledger under `root`, with the folder facts its delivery rows name. */
+export function ledgerAt(root: string): Pick<StoreGroups, 'ledger' | 'folderFiles'> {
+  const { ledger, folderFiles } = cliStore(root);
+  return { ledger, folderFiles };
+}
+
+/** hippo.db's files under `root`, as a compaction hook takes them. */
 export function folderFiles(root: string): FolderFiles {
   return { root, files: cliLocalFiles(root) };
 }
@@ -27,11 +35,7 @@ export function compactionFolder(root: string, tenantId = 'default'): Compaction
 
 /** hippo.db's own vector index under `root`, as embedMemory and embedAll take it. */
 export function localIndex(root: string): EmbedTarget {
-  return {
-    hippoRoot: root,
-    embeddingIndex: cliLocalFiles(root).embeddingIndex,
-    embeddings: loadConfig(root).embeddings,
-  };
+  return { embeddingIndex: cliStore(root).embeddingIndex, embeddings: loadConfig(root).embeddings };
 }
 
 /** The store a CLI hook is handed: hippo.db with its local files. */

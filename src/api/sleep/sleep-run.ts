@@ -119,7 +119,7 @@ async function runSleepPhases(
   if (dryRun) return result;
 
   // Phase 4: Auto-share high-transfer-score memories to global.
-  if (!opts.noShare) shareOnSleep(ctx, phases, result);
+  if (!opts.noShare) await shareOnSleep(ctx, phases, result);
 
   // Phase 5: Post-sleep ambient state summary.
   counts.ambient = summarizeAmbient(ctx, phases, result, pages);
@@ -218,13 +218,16 @@ async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: 
   return gone.length;
 }
 
-function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): void {
+async function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): Promise<void> {
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = ctx.reach?.globalTarget;
-  if (!ctx.config.autoShareOnSleep || target === undefined) return;
+  const { sharing, folderFiles } = ctx.store;
+  if (!ctx.config.autoShareOnSleep || target === undefined || sharing === undefined || folderFiles === undefined) {
+    return;
+  }
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = phases.autoShare({ root: ctx.hippoRoot, store: ctx.store }, target, {
+  const shared = await phases.autoShare({ store: { sharing, folderFiles } }, target, {
     tenantId: ALL_TENANTS,
     minScore: AUTO_SHARE_MIN_SCORE,
     stats: autoShareStats,

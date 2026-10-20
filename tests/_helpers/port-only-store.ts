@@ -5,17 +5,33 @@ import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/ind
 import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
+// The groups hippo.db serves from its folder, which a store that is not hippo.db holds none of.
+type FolderGroup = 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing';
+
 // The optional groups and the local files beside the port, which an add-on store at its smallest has none of.
 const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup | 'localFiles'>([
   'localFiles',
   'vectorViews',
   'readiness',
   'lastRecall',
+  'ledger',
+  'embeddingIndex',
+  'promotion',
+  'folderFiles',
+  'sharing',
 ]);
 
-/** `store` without its local files, as a store that is not hippo.db holds none. */
-export function withoutLocalFiles<S extends LocalStore>(store: S): Omit<S, 'localFiles'> {
-  const { localFiles: _files, ...port } = store;
+/** `store` without its local files and the groups they became, as a store that is not hippo.db holds none. */
+export function withoutLocalFiles<S extends LocalStore>(store: S): Omit<S, 'localFiles' | FolderGroup> {
+  const {
+    localFiles: _files,
+    ledger: _l,
+    embeddingIndex: _e,
+    promotion: _p,
+    folderFiles: _f,
+    sharing: _s,
+    ...port
+  } = store;
   return port;
 }
 

@@ -260,7 +260,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(loadEveryTenantEntries(hippoRoot).length).toBe(2); // tenant-a:1, tenant-b:1
   });
 
-  it('case 7: autoShare({ tenantId: tenant-a }) only considers tenant-a local memories', () => {
+  it('case 7: autoShare({ tenantId: tenant-a }) only considers tenant-a local memories', async () => {
     isolateGlobalHome('l9-autoshare-global');
     // Seed both tenants with high-transfer-score content (with the 'lesson' tag boost)
     seedFor(hippoRoot, 'tenant-a', 'a-lesson: prefer explicit imports over wildcards', {
@@ -269,7 +269,11 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     seedFor(hippoRoot, 'tenant-b', 'b-lesson: do not commit secrets to git', { tags: ['lesson', 'global-relevant'] });
 
     // dryRun returns the candidate list without writing
-    const candidates = autoShare(...sharingStores(hippoRoot), { tenantId: 'tenant-a', minScore: 0, dryRun: true });
+    const candidates = await autoShare(...sharingStores(hippoRoot), {
+      tenantId: 'tenant-a',
+      minScore: 0,
+      dryRun: true,
+    });
     // Only tenant-a candidates should appear
     const contents = candidates.map((c) => c.content);
     expect(contents.some((c) => c.startsWith('a-lesson:'))).toBe(true);
@@ -399,7 +403,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     expect(peerNames).toContain('project-bar');
   });
 
-  it('case 13: syncGlobalToLocal host-wide TENANT read survives the v39 origin gate', () => {
+  it('case 13: syncGlobalToLocal host-wide TENANT read survives the v39 origin gate', async () => {
     // syncGlobalToLocal doesn't call initGlobal() (caller provides the
     // globalRoot directly), so HIPPO_HOME isolation isn't strictly required
     // here — but kept consistent for defence-in-depth.
@@ -409,12 +413,12 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
     seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-    expect(syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
+    expect(await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
 
     // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
     // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly
     // lifted: both tenants' rows copy.
-    const copied = syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
+    const copied = await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
     expect(copied).toBe(2);
   });
 });

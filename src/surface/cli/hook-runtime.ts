@@ -80,16 +80,16 @@ export function hostSessionId(): string | undefined {
  * Compaction drops the pinned blocks the per-prompt hook injected, so record a `reset` for the payload's session and
  * the next prompt injects again.
  * `requiredSource` limits it to payloads with that `source`; best-effort and silent on a malformed payload. */
-export function resetHookInjection(
+export async function resetHookInjection(
   hippoRoot: string,
   tenantId: string,
   stdinText: string | undefined,
   requiredSource: string | null,
-): void {
+): Promise<void> {
   const sessionId = hookPayloadSessionId(stdinText, requiredSource);
   // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
   if (sessionId === null || isSubagentPayload(stdinText)) return;
-  bookTokenUse(
+  await bookTokenUse(
     {
       tenantId,
       sessionId,
@@ -142,12 +142,12 @@ export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined,
 }
 
 /** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */
-export function inPilotHoldout(
+export async function inPilotHoldout(
   hippoRoot: string,
   tenantId: string,
   sessionId: string | undefined,
   opts: { write: boolean },
-): boolean {
+): Promise<boolean> {
   const reach = cliLedgerReach(hippoRoot);
-  return sessionPilotArm(tenantId, sessionId, opts.write, { reach }) === 'holdout';
+  return (await sessionPilotArm(tenantId, sessionId, opts.write, { reach })) === 'holdout';
 }

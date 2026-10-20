@@ -85,38 +85,38 @@ function seedGlobal(): void {
 const at = (ids: readonly string[], ...places: number[]): string[] => places.map((i) => ids[i]);
 
 describe('autoShare across pages', () => {
-  it('picks the signal rows in store order and skips global copies, git seeds and secrets', () => {
+  it('picks the signal rows in store order and skips global copies, git seeds and secrets', async () => {
     const ids = seedLocal();
     seedGlobal();
     const stats: AutoShareStats = { secretSkipped: 0 };
 
-    const picked = autoShare(...sharingStores(root), { dryRun: true, tenantId: 'default', stats });
+    const picked = await autoShare(...sharingStores(root), { dryRun: true, tenantId: 'default', stats });
 
     expect(picked.map((e) => e.id)).toEqual(at(ids, 3, 500, 1050));
     expect(stats).toEqual({ secretSkipped: 1, neverAutoShareSkipped: 1 });
   });
 
-  it('below the neutral score picks every other row of the tenant in store order', () => {
+  it('below the neutral score picks every other row of the tenant in store order', async () => {
     const ids = seedLocal();
     seedGlobal();
     const skipped = new Set(at(ids, 499, 501, 750, 900));
 
-    const picked = autoShare(...sharingStores(root), { minScore: 0.3, dryRun: true, tenantId: 'default' });
+    const picked = await autoShare(...sharingStores(root), { minScore: 0.3, dryRun: true, tenantId: 'default' });
 
     expect(picked.map((e) => e.id)).toEqual(ids.filter((id) => !skipped.has(id)));
   });
 
-  it('writes the picks to the global store, and a second run finds them there', () => {
+  it('writes the picks to the global store, and a second run finds them there', async () => {
     const ids = seedLocal();
     seedGlobal();
     const stores = sharingStores(root);
 
-    const shared = autoShare(...stores, { tenantId: 'default' });
+    const shared = await autoShare(...stores, { tenantId: 'default' });
 
     const local = new Map(loadAllEntries(root, 'default').map((e) => [e.id, e.content]));
     expect(shared.map((e) => e.content)).toEqual(at(ids, 3, 500, 1050).map((id) => local.get(id)));
     const global = loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
     expect(global).toEqual(expect.arrayContaining(shared.map((e) => e.content)));
-    expect(autoShare(...stores, { tenantId: 'default' })).toEqual([]);
+    expect(await autoShare(...stores, { tenantId: 'default' })).toEqual([]);
   });
 });

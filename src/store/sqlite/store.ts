@@ -34,11 +34,12 @@ import { sqliteConsolidation } from './consolidation.js';
 import { sqliteLearning } from './learning.js';
 import { sqlitePromotion } from './promotion.js';
 import { sqliteProjectTags } from './project-tags.js';
-import { sqliteSharing } from './sharing.js';
+import { sqliteImportKeys, sqliteSharing } from './sharing.js';
 import { sqliteDiagnostics } from './diagnostics.js';
 import { sqliteEmbeddingIndex } from './embedding-index.js';
 import { sqliteGraphRebuild } from './graph-rebuild.js';
 import { sqliteLedger } from './ledger.js';
+import { sqliteFolderFiles } from './folder-files.js';
 import { sqliteDagReads } from './dag-reads.js';
 import { sqliteEntryWrites } from './entry-writes.js';
 import { sqliteAuditMaintenance } from './audit-maintenance.js';
@@ -63,19 +64,25 @@ import {
   type ContextReads,
   type ContinuityBlock,
   type DagReads,
+  type EmbeddingIndex,
   type EntryWrites,
+  type FolderFiles,
   type GraphReads,
   type HippoStore,
   type KeyAudit,
   type KeyGrants,
   type KeyWrites,
   type LastRecall,
+  type Ledger,
   type LessonWrites,
   type Objects,
   type Predictions,
+  type Promotion,
   type Quarantine,
   type Readiness,
+  type Sharing,
   type StoreGroups,
+  type StoreReach,
   type VectorViews,
   type VectorWrites,
 } from '../port.js';
@@ -92,7 +99,7 @@ import { loadRecallEntriesAt } from './search-rows.js';
 import { loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
-import { isLocalStore, type LocalStore, type StoreReach } from '../local/index.js';
+import { isLocalStore, type LocalStore } from '../local/index.js';
 
 /** Not on the synchronous store: the nearest-row scan yields to the event loop, so this group answers only through
  * Promises. */
@@ -112,15 +119,12 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     agentImport: sqliteAgentImport(handles.files),
     captures: sqliteCaptures(on),
     compactionHooks: sqliteCompactionHooks(on),
-    promotion: sqlitePromotion(handles),
     projectTags: sqliteProjectTags(on),
     learning: sqliteLearning(on),
-    sharing: sqliteSharing(on),
     diagnostics: sqliteDiagnostics(on),
     graphRebuild: sqliteGraphRebuild(on),
-    embeddingIndex: sqliteEmbeddingIndex(handles),
-    ledger: sqliteLedger(on),
     rejections: sqliteRefusedAmong(on),
+    importKeys: sqliteImportKeys(on),
   };
 }
 
@@ -165,9 +169,23 @@ export function sqliteSyncStore(
     rejections: sqliteRejections(on),
     failureLog: sqliteFailureLog(on),
     compactions: sqliteCompactions(on),
+    ...sqliteFolderGroups(handles),
     close() {
       flushHeldMirrors(hippoRoot);
     },
+  };
+}
+
+type FolderGroups = Pick<StoreGroups, 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing'>;
+
+/** The groups only a store kept as files in a folder serves: its ledger, own index, promote copies and sharing. */
+function sqliteFolderGroups(handles: Handles): Sync<FolderGroups> {
+  return {
+    ledger: sqliteLedger(handles.on),
+    embeddingIndex: sqliteEmbeddingIndex(handles),
+    promotion: sqlitePromotion(handles),
+    folderFiles: sqliteFolderFiles(handles),
+    sharing: sqliteSharing(handles.on),
   };
 }
 
@@ -263,7 +281,7 @@ export function sqliteReach(
   hippoRoot: string,
   store: HippoStore,
   shared?: boolean,
-  openGlobal: (root: string) => LocalStore = sqliteStore,
+  openGlobal: (root: string) => LocalStore & StoreGroups = sqliteStore,
 ): StoreReach {
   const other = isLocalStore(store) ? undefined : store;
   const sharedStore = shared === true || isSharedStore(hippoRoot);
@@ -318,6 +336,11 @@ export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): LocalS
     rejections: served<Rejections>(sync.rejections),
     failureLog: served<FailureLog>(sync.failureLog),
     compactions: served<Compactions>(sync.compactions),
+    ledger: served<Ledger>(sync.ledger),
+    embeddingIndex: served<EmbeddingIndex>(sync.embeddingIndex),
+    promotion: served<Promotion>(sync.promotion),
+    folderFiles: served<FolderFiles>(sync.folderFiles),
+    sharing: served<Sharing>(sync.sharing),
     close: async () => sync.close(),
   };
 }

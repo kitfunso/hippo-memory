@@ -12,7 +12,7 @@ import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
 import type { Context } from './types.js';
-import { isLocalStore, type LocalFiles } from '../store/local/index.js';
+import type { Ledger } from '../store/port.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
 export interface SessionClose {
@@ -78,19 +78,12 @@ async function closeSnapshot(ctx: Context, sessionId: string | null, line: (mess
   }
 }
 
-/** The caller's hippo.db and the global one, each once; a store that is not hippo.db keeps no ledger. */
-function rereadLedgers(ctx: Context): LocalFiles[] {
-  const local = (ctx.reach?.hasLocal ?? true) && isLocalStore(ctx.store) ? ctx.store.localFiles : undefined;
-  const global = ctx.reach?.global;
-  const globalFiles = global !== undefined && isLocalStore(global.store) ? global.store.localFiles : undefined;
-  const byRoot = new Map<string, LocalFiles>();
-  for (const [root, files] of [
-    [ctx.hippoRoot, local],
-    [global?.root, globalFiles],
-  ] as const) {
-    if (root !== undefined && files !== undefined) byRoot.set(path.resolve(root), files);
-  }
-  return [...byRoot.values()];
+/** The caller's store and the global one, each once; a store that keeps no ledger is left out. */
+function rereadLedgers(ctx: Context): Ledger[] {
+  const local = (ctx.reach?.hasLocal ?? true) ? ctx.store.ledger : undefined;
+  // A call on the global store reaches it twice, as itself and as the global store beside it.
+  const global = ctx.reach?.isGlobal === true ? undefined : ctx.reach?.global?.store.ledger;
+  return [local, global].filter((ledger) => ledger !== undefined);
 }
 
 /** Books the ending session's re-reads in each hippo.db its ledger rows can land in (the caller's and global); returns
@@ -109,9 +102,9 @@ export async function bookSessionRereads(
   }
   const lines: string[] = [];
   let tokens = 0;
-  for (const { ledger } of rereadLedgers(ctx)) {
+  for (const ledger of rereadLedgers(ctx)) {
     try {
-      tokens += ledger.replaceRereads(ctx.tenantId, sessionId, read.calls);
+      tokens += await ledger.replaceRereads(ctx.tenantId, sessionId, read.calls);
     } catch (err) {
       lines.push(`re-read count failed: ${errorMessage(err)}`);
     }
@@ -185,7 +178,6 @@ function endStore(ctx: Context): Context | null {
   const global = ctx.reach?.global;
   if (global === undefined) return null;
   return {
-    hippoRoot: global.root,
     tenantId: ctx.tenantId,
     actor: ctx.actor,
     store: global.store,

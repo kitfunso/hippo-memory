@@ -57,9 +57,9 @@ describe('git-learned rows and the global store', () => {
     vi.unstubAllEnvs();
   });
 
-  it('autoShare copies the ordinary error row and skips the git-learned one', () => {
+  it('autoShare copies the ordinary error row and skips the git-learned one', async () => {
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    const shared = autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS, stats });
+    const shared = await autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS, stats });
     expect(shared.map((e) => e.content)).toEqual([ORDINARY]);
     expect(globalContents()).toEqual([ORDINARY]);
     expect(stats.neverAutoShareSkipped).toBe(1);
@@ -82,7 +82,7 @@ describe('git-learned rows and the global store', () => {
     expect(globalContents()).toEqual([SEED]);
   });
 
-  it('a fact extracted from a git-learned row keeps the tag and stays local after three recalls', () => {
+  it('a fact extracted from a git-learned row keeps the tag and stays local after three recalls', async () => {
     const [fact] = storeExtractedFacts(
       sqliteSyncStore(hippoRoot).localFiles.learning,
       seed,
@@ -99,7 +99,7 @@ describe('git-learned rows and the global store', () => {
     const recalled = { ...fact, retrievalCount: 3 };
     writeEntry(hippoRoot, recalled);
     expect(transferScore(recalled)).toBeGreaterThanOrEqual(0.6);
-    autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS });
+    await autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS });
     expect(globalContents()).toEqual([ORDINARY]);
   });
 

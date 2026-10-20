@@ -1,7 +1,6 @@
 // Search across the local and global stores, merged into one ranked, budgeted list.
 
 import { compareScoresDesc } from '../../base/rank/compare.js';
-import * as fs from 'fs';
 import { MemoryEntry } from '../../base/memory/memory.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import {
@@ -23,7 +22,7 @@ import { evalNow } from '../../base/memory/ablation.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { FolderStore } from '../../store/local/index.js';
+import type { SharingStore } from './text-keys.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 export function logEmbedAllFailure<E>(caller: string, err: E): void {
@@ -82,8 +81,8 @@ export type BothStoresSearch = HybridSearchOptions & { readonly tenantId: Tenant
  *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
 export async function searchBothHybrid(
   query: string,
-  local: ConfiguredFolder,
-  global: ConfiguredFolder,
+  local: ConfiguredFolder<SharingStore>,
+  global: ConfiguredFolder<SharingStore>,
   options: BothStoresSearch,
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
@@ -94,9 +93,9 @@ export async function searchBothHybrid(
   // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows never enter the
   // candidates, shadow duplicates or use budget.
   // The JS post-filter below is the regex-only `<source>:private:*` half plus defense in depth on exact match.
-  const loadEntries = ({ root, store }: FolderStore): MemoryEntry[] => {
-    const { sharing } = store.localFiles;
-    if (!fs.existsSync(root)) return [];
+  const loadEntries = async ({ store }: { readonly store: SharingStore }): Promise<MemoryEntry[]> => {
+    const { sharing } = store;
+    if (!(await store.folderFiles.home()).exists) return [];
     return recallScope
       ? sharing.recallEntries(query, {
           limit: searchWindow,
@@ -115,8 +114,8 @@ export async function searchBothHybrid(
         passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
       : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
   const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
-  const localEntries = loadEntries(local).filter(admit);
-  const globalEntries = loadEntries(global).filter(admit);
+  const localEntries = (await loadEntries(local)).filter(admit);
+  const globalEntries = (await loadEntries(global)).filter(admit);
 
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
   const vectorCandidates: HybridVectorCandidates = {
@@ -132,8 +131,8 @@ export async function searchBothHybrid(
 }
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
-function folderVectorSource({ root, store, config }: ConfiguredFolder): VectorSource | undefined {
-  return root ? vectorSourceOf({ store, config, onHippoDb: true }) : undefined;
+function folderVectorSource({ store, config }: ConfiguredFolder): VectorSource {
+  return vectorSourceOf({ store, config, onHippoDb: true });
 }
 
 /** Each store prices its rows already tagged, so a price that reads the store origin sees it before the merge. */

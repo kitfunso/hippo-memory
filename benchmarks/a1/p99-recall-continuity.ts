@@ -189,7 +189,7 @@ async function measure(
   const warmup = Math.max(5, Math.floor(iterations * 0.1));
   for (let i = 0; i < warmup; i++) {
     await apiRetrieve(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
+      { tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
       { query: queries[i % queries.length]!, window: { includeContinuity } },
     );
   }
@@ -199,7 +199,7 @@ async function measure(
     const q = queries[i % queries.length]!;
     const t0 = performance.now();
     await apiRetrieve(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
+      { tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
       { query: q, window: { includeContinuity } },
     );
     samples.push(performance.now() - t0);
@@ -223,7 +223,7 @@ async function main(): Promise<void> {
     const cluster = pick(rng, TAG_CLUSTERS);
     const content = buildContent(rng, cluster);
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
+      { tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
       { content, tags: [cluster.tag] },
     );
     if ((i + 1) % 1000 === 0) {

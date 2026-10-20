@@ -149,10 +149,10 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 
 /** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command
  * that finishes them. */
-function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): void {
+async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): Promise<void> {
   let waiting: string;
   try {
-    const { memories, embedded } = embedCoverage(ctx);
+    const { memories, embedded } = await embedCoverage(ctx);
     waiting = String(memories - embedded);
   } catch (countErr) {
     waiting = `an unknown number of (count failed: ${errorMessage(countErr)})`;
@@ -392,7 +392,7 @@ async function cmdPromote(hippoRoot: string, tenantId: string, id: string): Prom
   }
 }
 
-export function handleSync({ hippoRoot, flags }: CommandContext): void {
+export async function handleSync({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const globalRoot = getGlobalRoot();
@@ -403,7 +403,7 @@ export function handleSync({ hippoRoot, flags }: CommandContext): void {
 
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = flagIsTrue(flags, 'cross-project');
-  const count = syncGlobalToLocal(cliFolder(hippoRoot), cliFolder(globalRoot), { includeCrossProject });
+  const count = await syncGlobalToLocal(cliFolder(hippoRoot), cliFolder(globalRoot), { includeCrossProject });
   const skipNote = includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)';
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
@@ -435,7 +435,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     requireInit(hippoRoot);
     const minScore = numberFlag(flags, 'min-score') ?? AUTO_SHARE_MIN_SCORE;
     const dryRun = boolFlag(flags, 'dry-run');
-    const results = autoShare(cliFolder(hippoRoot), cliFolder(getGlobalRoot()), { minScore, dryRun, tenantId });
+    const results = await autoShare(cliFolder(hippoRoot), cliFolder(getGlobalRoot()), { minScore, dryRun, tenantId });
     if (results.length === 0) {
       console.log('No memories meet the sharing threshold.');
     } else if (dryRun) {
@@ -454,8 +454,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
     const ctx = cliApiContext(hippoRoot, tenantId);
-    const local = { root: hippoRoot, store: ctx.store };
-    const result = await shareMemory(local, cliFolder(getGlobalRoot()), shareId, { force, tenantId });
+    const result = await shareMemory(ctx, cliFolder(getGlobalRoot()), shareId, { force, tenantId });
     if (result) {
       console.log(`Shared [${result.id}] to global store.`);
       console.log(`  Source: ${result.source}`);

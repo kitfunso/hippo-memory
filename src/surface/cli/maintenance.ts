@@ -132,12 +132,12 @@ export async function handleEmbed(
   // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an
   // earlier embed); the provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
-    resetPhysics(ctx);
+    await resetPhysics(ctx);
     return;
   }
 
   if (flags['status']) {
-    printEmbedStatus(ctx);
+    await printEmbedStatus(ctx);
     return;
   }
 
@@ -151,12 +151,12 @@ export async function handleEmbed(
   } catch (err) {
     printError(`Embedding failed: ${errorMessage(err)}`);
     printError(
-      `Partial progress saved: ${storedVectorCount(ctx)} embeddings on disk. Re-run \`hippo embed\` to resume.`,
+      `Partial progress saved: ${await storedVectorCount(ctx)} embeddings on disk. Re-run \`hippo embed\` to resume.`,
     );
     process.exitCode = 1;
     return;
   }
-  const after = embedCoverage(ctx);
+  const after = await embedCoverage(ctx);
   console.log(`Done. ${count} new embeddings created. ${after.vectors}/${after.memories} total.`);
   const unembedded = after.memories - after.embedded;
   if (unembedded > 0) {
@@ -167,13 +167,13 @@ export async function handleEmbed(
   }
 }
 
-function resetPhysics(ctx: CliContext): void {
-  const count = resetPhysicsFromVectors(ctx);
+async function resetPhysics(ctx: CliContext): Promise<void> {
+  const count = await resetPhysicsFromVectors(ctx);
   console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 
-function printEmbedStatus(ctx: CliContext): void {
-  const { memories, vectors, embedded } = embedCoverage(ctx);
+async function printEmbedStatus(ctx: CliContext): Promise<void> {
+  const { memories, vectors, embedded } = await embedCoverage(ctx);
   console.log(`Embedding status: ${embedded}/${memories} memories embedded`);
   const orphaned = vectors - embedded;
   if (orphaned > 0) {

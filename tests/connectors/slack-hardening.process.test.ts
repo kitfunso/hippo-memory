@@ -357,7 +357,7 @@ describe('Slack hardening + migration v19', () => {
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replayDlqEntry(
-      { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
+      { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },
     );

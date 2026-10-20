@@ -25,7 +25,7 @@ export interface CallerCompactResumeRequest {
 
 export async function compactResumeForCaller(ctx: Context, req: CallerCompactResumeRequest): Promise<CallerHookOutput> {
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  if (req.source !== 'compact' || callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
+  if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) return { stdout: '' };
   const { sessions } = ctx.store;
   const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, key);
   // One owner's concurrent sessions must not cross-restore; a snapshot with no session still restores, as on the local
@@ -34,7 +34,7 @@ export async function compactResumeForCaller(ctx: Context, req: CallerCompactRes
     return { stdout: '' };
   }
   const text = compactResumeText(snapshot, await sessionTrail(ctx, sessions, snapshot.session_id));
-  bookTokenUse(
+  await bookTokenUse(
     {
       tenantId: ctx.tenantId,
       sessionId: req.sessionId,

@@ -86,14 +86,7 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({
-  args,
-  ctx,
-  hippoRoot,
-  tenantId,
-  store,
-  globalTarget,
-}: LocalToolCall): Promise<string> {
+export async function runShareTool({ args, ctx, tenantId, store, globalTarget }: LocalToolCall): Promise<string> {
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
@@ -101,8 +94,7 @@ export async function runShareTool({
   await memoryGetTouchable(mcpApiContext(ctx), shareId);
   // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to
   // the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
-  const local = { root: hippoRoot, store };
-  const shared = await shareMemory(local, globalTarget, shareId, { force, tenantId });
+  const shared = await shareMemory({ store }, globalTarget, shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
 }

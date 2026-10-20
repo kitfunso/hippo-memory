@@ -9,8 +9,10 @@ import {
   authRevoke,
   type AuthRevokeResult,
   type Context,
+  type ContextReach,
   contextReach,
 } from './api/index.js';
+import type { HippoStore } from './store/index.js';
 import {
   promptHookContext as renderPromptHook,
   type PromptHookOptions,
@@ -29,12 +31,14 @@ async function promptHookContext(
   req: PromptHookRequest,
   opts?: PromptHookOptions,
 ): ReturnType<typeof renderPromptHook> {
-  // Only hippo.db has a global store beside it; an add-on's own store reads as one project.
-  const sqliteBacked = isLocalStore(ctx.store);
-  const reach =
-    ctx.reach ??
-    (sqliteBacked ? contextReach(sqliteReach(ctx.hippoRoot, ctx.store, opts?.sharedStore), loadConfig) : undefined);
-  return renderPromptHook({ ...ctx, reach }, req, opts);
+  return renderPromptHook({ ...ctx, reach: ctx.reach ?? (await folderReach(ctx.store, opts)) }, req, opts);
+}
+
+/** Only hippo.db has a global store beside it; an add-on's own store reads as one project. */
+async function folderReach(store: HippoStore, opts: PromptHookOptions | undefined): Promise<ContextReach | undefined> {
+  if (!isLocalStore(store) || store.folderFiles === undefined) return undefined;
+  const { folder } = await store.folderFiles.home();
+  return contextReach(sqliteReach(folder, store, opts?.sharedStore), loadConfig);
 }
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface; a route narrows its
