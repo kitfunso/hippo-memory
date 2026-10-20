@@ -1,5 +1,5 @@
 // The git port: domain and api build the arguments and read the output, and only this file starts the process.
-import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
+import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import { errorMessage } from './log.js';
 
 /** How one git call runs; each caller keeps the timeout and stderr handling its call needs. */
@@ -26,12 +26,8 @@ export interface GitRunner {
 
 const STDIO = { drop: ['ignore', 'pipe', 'ignore'], keep: ['pipe', 'pipe', 'pipe'] } as const;
 
-function execOptions(call: GitCall): ExecFileSyncOptionsWithStringEncoding {
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    encoding: 'utf8',
-    timeout: call.timeoutMs,
-    windowsHide: true,
-  };
+function optionalOptions(call: GitCall): ExecFileSyncOptions {
+  const options: ExecFileSyncOptions = {};
   // Keys stay absent rather than undefined: an undefined maxBuffer would lift node's default cap.
   if (call.cwd !== undefined) options.cwd = call.cwd;
   if (call.maxBuffer !== undefined) options.maxBuffer = call.maxBuffer;
@@ -51,7 +47,15 @@ function exitStatus(error: Error): number | null {
 export const processGit: GitRunner = {
   run(args, call) {
     try {
-      return { ok: true, stdout: execFileSync('git', args, execOptions(call)) };
+      return {
+        ok: true,
+        stdout: execFileSync('git', args, {
+          ...optionalOptions(call),
+          encoding: 'utf8',
+          timeout: call.timeoutMs,
+          windowsHide: true,
+        }),
+      };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(errorMessage(err));
       return { ok: false, status: exitStatus(error), error };

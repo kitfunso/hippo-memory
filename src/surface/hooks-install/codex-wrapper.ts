@@ -22,6 +22,9 @@ import {
 } from '../../domain/hooks/codex-wrapper.js';
 import { HIPPO_CODEX_WRAPPER_MARKER } from '../../domain/hooks/shared.js';
 
+// The installer module exposes the paths it installs to.
+export { resolveCodexWrapperPaths } from '../../domain/hooks/codex-wrapper.js';
+
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
