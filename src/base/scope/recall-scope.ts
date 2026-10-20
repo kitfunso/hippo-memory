@@ -44,7 +44,7 @@ export function isPrivateScope(scope: string | null | undefined): boolean {
 
 export const PERSONAL_SCOPE_PREFIX = 'personal:private:';
 // The scope must fit the 256-character scope caps, so the owner gets what the prefix leaves.
-const PERSONAL_OWNER_MAX = MAX_ID_LEN - PERSONAL_SCOPE_PREFIX.length;
+export const PERSONAL_OWNER_MAX = MAX_ID_LEN - PERSONAL_SCOPE_PREFIX.length;
 
 /** True for a `personal:private:<owner>` scope, any case, so a case variant is never mistaken for a team scope. */
 export function isPersonalScope(scope: string | null | undefined): boolean {

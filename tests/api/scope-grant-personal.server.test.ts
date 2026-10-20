@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../../src/api/index.js';
 import { createApiKey, grantScope, readApiKeyRecord } from '../../src/store/sqlite/auth.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { canReadScope } from '../../src/base/scope/recall-scope.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -20,7 +20,7 @@ let handle: ServerHandle;
 let keyB: { plaintext: string; keyId: string };
 let adminCtx: FullContext;
 
-function withDb<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {
+function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
     return fn(db);

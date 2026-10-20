@@ -1,4 +1,26 @@
-(function () {
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hippo graph</title>
+<style>html,body{margin:0;height:100%;background:#0b1020;font-family:ui-sans-serif,system-ui,sans-serif}
+#g{width:100vw;height:100vh;cursor:grab}
+#g:active{cursor:grabbing}
+.edge{stroke:#475569;stroke-width:1}
+.node circle{stroke:#0b1020;stroke-width:1.5}
+.node text{fill:#e2e8f0;font-size:11px;pointer-events:none}
+.node{cursor:pointer}
+#g.focused .node{opacity:.18}
+#g.focused .edge{opacity:.07}
+#g.focused .node.hi{opacity:1}
+#g.focused .edge.hi{opacity:1;stroke:#e2e8f0}
+.legend{position:fixed;top:10px;left:12px;color:#94a3b8;font-size:12px;line-height:1.6}
+.legend b{color:#e2e8f0}</style></head><body>
+<div class="legend"><b>hippo graph</b> · 3 entities · 2 relations · <b style="color:#f59e0b">truncated</b><br><span style="color:#6366f1">●</span> decision  <span style="color:#10b981">●</span> policy  <span style="color:#f59e0b">●</span> customer<br><span style="color:#64748b">drag to pan · scroll to zoom · click a node to focus</span></div>
+<svg id="g" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet">
+<g id="edges"><line class="edge" data-from="1" data-to="2" x1="895.3" y1="514.5" x2="477.6" y2="273.1"/><line class="edge" data-from="2" data-to="3" x1="477.6" y1="273.1" x2="63.9" y2="21.0"/></g><g id="nodes"><g class="node" data-id="1" transform="translate(895.3,514.5)"><title>decision: Use &lt;b&gt;SQLite&lt;/b&gt; &amp; friends</title><circle r="7" fill="#6366f1"/><text x="10" y="4">Use &lt;b&gt;SQLite&lt;/b&gt; &amp; f…</text></g><g class="node" data-id="2" transform="translate(477.6,273.1)"><title>policy: A very long policy name that is truncated</title><circle r="7" fill="#10b981"/><text x="10" y="4">A very long policy na…</text></g><g class="node" data-id="3" transform="translate(63.9,21.0)"><title>customer: Acme</title><circle r="7" fill="#f59e0b"/><text x="10" y="4">Acme</text></g></g>
+</svg>
+<script type="application/json" id="graph-data">{"nodes":[{"id":1,"type":"decision","name":"Use \u003cb\u003eSQLite\u003c/b\u003e \u0026 friends"},{"id":2,"type":"policy","name":"A very long policy name that is truncated"},{"id":3,"type":"customer","name":"Acme"}],"edges":[{"from":1,"to":2,"relType":"owns"},{"from":2,"to":3,"relType":"references"}],"truncated":true}</script>
+<script>(function () {
   var svg = document.getElementById('g');
   var vb = svg.getAttribute('viewBox').split(' ').map(Number);
   var view = { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
@@ -93,4 +115,5 @@
       if (l.getAttribute('data-from') === id || l.getAttribute('data-to') === id) l.classList.add('hi');
     });
   }
-})();
+})();</script>
+</body></html>
