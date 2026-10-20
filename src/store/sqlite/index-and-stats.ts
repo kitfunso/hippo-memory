@@ -108,7 +108,7 @@ export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, 
       `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
        AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
     )
-    .get<{ n: number }>(tenantId, dayAgo);
+    .get(tenantId, dayAgo) as { n: number };
   return row.n;
 }
 

@@ -299,9 +299,9 @@ describe('the first key of a store', () => {
     expect(minted.role).toBe('member');
     const db = openHippoDb(home);
     try {
-      expect(db.prepare('SELECT role FROM api_keys WHERE key_id = ?').get<{ role: string }>(minted.keyId)?.role).toBe(
-        'member',
-      );
+      expect(
+        (db.prepare('SELECT role FROM api_keys WHERE key_id = ?').get(minted.keyId) as { role: string })?.role,
+      ).toBe('member');
     } finally {
       closeHippoDb(db);
     }

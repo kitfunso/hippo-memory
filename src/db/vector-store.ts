@@ -106,7 +106,7 @@ export function countVectors(db: DatabaseSyncLike): VectorCounts {
         'COALESCE(SUM(EXISTS (SELECT 1 FROM memories m WHERE m.id = v.memory_id)), 0) AS embedded ' +
         'FROM memory_vectors v',
     )
-    .get() as VectorCounts;
+    .get() as { vectors: number; embedded: number };
   return { vectors: Number(row.vectors), embedded: Number(row.embedded) };
 }
 

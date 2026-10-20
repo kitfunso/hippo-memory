@@ -52,7 +52,7 @@ export function requestOutcome(
 ): FailureOutcome | null {
   const row = db
     .prepare(`SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
-    .get<{ outcome: FailureOutcome; session_id: string | null } | undefined>(tenantId, requestId);
+    .get(tenantId, requestId) as { outcome: FailureOutcome; session_id: string | null } | undefined;
   if (row === undefined) return null;
   // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
   if (row.session_id !== sessionId.slice(0, MAX_FIELD)) {

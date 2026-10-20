@@ -45,15 +45,11 @@ function opts(extra: Partial<RankRecallOptions> = {}): RankRecallOptions {
   };
 }
 
-interface CountRow {
-  n: number;
-}
-
 function goalLogCount(): number {
   const db = openHippoDb(hippoRoot);
   try {
     // SAFETY: COUNT(*) AS n always returns exactly one row with a numeric n.
-    const row = db.prepare('SELECT COUNT(*) AS n FROM goal_recall_log').get() as CountRow;
+    const row = db.prepare('SELECT COUNT(*) AS n FROM goal_recall_log').get() as { n: number };
     return row.n;
   } finally {
     closeHippoDb(db);

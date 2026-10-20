@@ -19,7 +19,7 @@ beforeEach(() => {
 });
 
 const busyTimeout = (db: DatabaseSyncLike): number =>
-  Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout);
+  Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
 describe('runWithRequestStores', () => {
   it('a timer that outlives its scope gets a connection of its own, which closeHippoDb closes', async () => {

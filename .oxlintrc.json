@@ -51,6 +51,10 @@
         "anti-slop/require-safety-comment-for-type-assertion": ["error", { "allowStatementReads": true }]
       }
     },
+    {
+      "files": ["tests/**/*.ts"],
+      "rules": { "anti-slop/require-safety-comment-for-type-assertion": ["error", { "allowStatementReads": true }] }
+    },
     { "files": ["deploy/**/*.mjs"], "rules": { "anti-slop/no-runtime-typeof": "off" } },
     {
       "files": [

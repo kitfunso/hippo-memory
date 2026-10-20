@@ -54,7 +54,7 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
 function getQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string): QuarantineRow | null {
   const row = db
     .prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`)
-    .get<QuarantineDbRow>(tenantId, memoryId);
+    .get(tenantId, memoryId) as QuarantineDbRow | undefined;
   return row ? fromDbRow(row) : null;
 }
 

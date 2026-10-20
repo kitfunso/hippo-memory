@@ -190,7 +190,7 @@ export function compactionProgress(
 ): { status: CompactionStatus; items_written: number } | undefined {
   return db
     .prepare(`SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`)
-    .get<{ status: CompactionStatus; items_written: number } | undefined>(tenantId, id);
+    .get(tenantId, id) as { status: CompactionStatus; items_written: number } | undefined;
 }
 
 export function markCompactionDone(db: DatabaseSyncLike, tenantId: string, id: string, itemsWritten: number): void {
@@ -217,7 +217,7 @@ export function nextCompactionStart(
 ): string | null {
   const row = db
     .prepare(`SELECT MIN(started_at) AS at FROM compactions WHERE tenant_id = ? AND session_id = ? AND started_at > ?`)
-    .get<{ at: string | null } | undefined>(tenantId, sessionId, after);
+    .get(tenantId, sessionId, after) as { at: string | null } | undefined;
   return row?.at ?? null;
 }
 

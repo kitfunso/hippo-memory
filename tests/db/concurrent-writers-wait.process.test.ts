@@ -76,7 +76,7 @@ function storeCounts(hippoRoot: string): StoreCounts {
     (SELECT COUNT(*) FROM audit_log WHERE op = 'remember') AS audits,
     (SELECT COUNT(DISTINCT a.target_id) FROM audit_log a JOIN memories m ON m.id = a.target_id WHERE a.op = 'remember') AS matched`)
       .get(),
-  ) as StoreCounts;
+  ) as { rows: number; audits: number; matched: number };
   return { rows: Number(row.rows), audits: Number(row.audits), matched: Number(row.matched) };
 }
 

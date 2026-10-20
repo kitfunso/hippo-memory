@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Fails when src/ casts a SQLite read to a row shape nothing proves. The SAFETY note sits once on the row type, so this
-// check proves each cast instead: the SQL the statement runs must name every key of the row it is cast to.
+// Fails when src/ or tests/ casts a SQLite read to a row shape nothing proves. The SAFETY note sits once on the
+// row type, so this check proves each cast instead: the SQL must name every key of the row it is cast to.
 
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
@@ -19,8 +19,10 @@ const OWNER_KINDS = new Set([
 ]);
 // A part of the SQL known only at run time reads as this, which matches no column name.
 const UNKNOWN = '\0';
-// Read from node:sqlite; a value pragma such as `PRAGMA user_version` answers one column named after itself.
+// Read from node:sqlite; a value pragma such as `PRAGMA user_version` answers one column named after itself, but
+// `PRAGMA busy_timeout` answers `timeout`.
 const PRAGMA_COLUMNS = { table_info: ['cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'] };
+const VALUE_PRAGMA_COLUMN = { busy_timeout: 'timeout' };
 // Deep enough for a builder that calls a builder, shallow enough that a recursive one stops.
 const MAX_DEPTH = 12;
 
@@ -82,13 +84,14 @@ function topLevelItems(sql, keyword, stop) {
   return [start, ...cuts].map((from, n) => sql.slice(n === 0 ? from : from + 1, cuts[n] ?? end).trim());
 }
 
-/** The column names a statement answers: RETURNING, else the first top-level SELECT, else a PRAGMA; `*` is a wildcard. */
+/** The columns a statement answers: RETURNING, else the first top-level SELECT, else a PRAGMA; `*` is a wildcard. */
 export function selectNames(sql) {
   const items = topLevelItems(sql, 'RETURNING', ';') ?? topLevelItems(sql, 'SELECT', 'FROM');
   if (!items) {
     const pragma = /^\s*PRAGMA\s+(\w+)\s*(\()?/i.exec(sql);
     if (!pragma) return undefined;
-    return pragma[2] ? PRAGMA_COLUMNS[pragma[1].toLowerCase()] : [pragma[1]];
+    const name = pragma[1].toLowerCase();
+    return pragma[2] ? PRAGMA_COLUMNS[name] : [VALUE_PRAGMA_COLUMN[name] ?? pragma[1]];
   }
   return items.flatMap((item) => {
     const alias = /\bAS\s+["`]?(\w+)["`]?$/i.exec(item);
@@ -321,7 +324,7 @@ function rowCastProblem(checker, sql, cast, read) {
 }
 
 /**
- * Every get/all/iterate cast in the program's files under `srcDir`, with why it fails when it has no SAFETY note of its own.
+ * Every get/all/iterate cast in the program's files under `srcDir`, with why it fails when it has no SAFETY note.
  * @param {ts.Program} program
  * @param {string} srcDir
  * @returns {{ file: string, line: number, noted: boolean, problem: string | undefined }[]}
@@ -355,20 +358,24 @@ export function findRowCasts(program, srcDir) {
 
 // Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const casts = findRowCasts(programFromConfig('tsconfig.json'), `${process.cwd()}/src`);
+  // The tests program holds src too, so one program covers both trees.
+  const program = programFromConfig('tsconfig.tests.json');
+  const casts = ['src', 'tests'].flatMap((dir) =>
+    findRowCasts(program, `${process.cwd()}/${dir}`).map((c) => ({ ...c, file: `${dir}/${c.file}` })),
+  );
   if (process.argv.includes('--report')) {
     const tag = (c) => `${c.noted ? 'noted' : 'bare'}\t${c.problem ?? 'holds'}`;
-    for (const c of casts) console.log(`src/${c.file}:${c.line}\t${tag(c)}`);
+    for (const c of casts) console.log(`${c.file}:${c.line}\t${tag(c)}`);
     process.exit(0);
   }
   const bad = casts.filter((c) => c.problem && !c.noted);
   if (bad.length > 0) {
-    console.error('\nSQLite row casts in src/ that nothing proves:');
-    for (const c of bad) console.error(`  src/${c.file}:${c.line}  ${c.problem}`);
+    console.error('\nSQLite row casts in src/ and tests/ that nothing proves:');
+    for (const c of bad) console.error(`  ${c.file}:${c.line}  ${c.problem}`);
     console.error(
       '\nFix: name every key the row needs in its SQL, or say why the cast holds in a SAFETY note at the cast.\n',
     );
     process.exit(1);
   }
-  console.log(`Every SQLite row cast in src/ names the keys it reads (${casts.length} casts). OK.`);
+  console.log(`Every SQLite row cast in src/ and tests/ names the keys it reads (${casts.length} casts). OK.`);
 }

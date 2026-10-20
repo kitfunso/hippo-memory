@@ -35,8 +35,8 @@ export function createPhysicsTable(db: DatabaseSyncLike): void {
 // SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface PhysicsRow {
   memory_id: string;
-  position_blob: Buffer;
-  velocity_blob: Buffer;
+  position_blob: Uint8Array;
+  velocity_blob: Uint8Array;
   mass: number;
   charge: number;
   temperature: number;

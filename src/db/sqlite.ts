@@ -1,10 +1,14 @@
 import { createRequire } from 'module';
+import type { SQLOutputValue } from 'node:sqlite';
 
 const require = createRequire(import.meta.url);
 
+/** A row as node:sqlite returns it, before a cast names its columns. */
+type SqlRow = Record<string, SQLOutputValue>;
+
 interface StatementSyncLike {
   run(...params: unknown[]): { lastInsertRowid?: number | bigint; changes?: number };
-  get<T>(...params: unknown[]): T;
+  get(...params: unknown[]): SqlRow | undefined;
   all(...params: unknown[]): unknown[];
   iterate(...params: unknown[]): IterableIterator<unknown>;
 }

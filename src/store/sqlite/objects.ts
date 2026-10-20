@@ -117,7 +117,7 @@ function idByMemory<K extends ObjectKind>(
       `SELECT id FROM ${rowSpec(kind).table} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
         `LIMIT 1`,
     )
-    .get<{ id: number } | undefined>(memoryId, tenantId, status);
+    .get(memoryId, tenantId, status) as { id: number } | undefined;
   return row ? row.id : null;
 }
 
@@ -128,9 +128,10 @@ function selectRow<K extends ObjectKind>(
   id: number,
 ): RowByKind[K] | undefined {
   const spec = rowSpec(kind);
-  return db
-    .prepare(`SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`)
-    .get<RowByKind[K] | undefined>(id, tenantId);
+  // SAFETY: the SELECT names spec.cols, the columns the kind's row declares.
+  return db.prepare(`SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
+    | RowByKind[K]
+    | undefined;
 }
 
 function rowById<K extends ObjectKind>(
@@ -195,7 +196,7 @@ function closeRow<K extends ObjectKind>(
     if (updated.changes === 0) {
       const existing = db
         .prepare(`SELECT status FROM ${spec.table} WHERE id = ? AND tenant_id = ?`)
-        .get<{ status: string } | undefined>(id, tenantId);
+        .get(id, tenantId) as { status: string } | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
@@ -247,12 +248,13 @@ function successorVersion(
   kind: SavableKind,
   replaced: number,
 ): { version: number } | ObjectRefusal {
+  // SAFETY: the SELECT names status, and version or a 0 AS version for a kind with no versions.
   const pred = db
     .prepare(
       `SELECT status, ${insertSpec(kind).versioned ? 'version' : '0 AS version'} FROM ${rowSpec(kind).table} WHERE ` +
         `id = ? AND tenant_id = ?`,
     )
-    .get<{ status: string; version: number } | undefined>(replaced, tenantId);
+    .get(replaced, tenantId) as { status: string; version: number } | undefined;
   if (!pred) return { refused: 'missing' };
   if (pred.status !== 'active') return { refused: 'status', status: pred.status };
   return { version: pred.version + 1 };
@@ -480,9 +482,9 @@ function resolveRow(
       )
       .run(resolve.text, resolve.at, id, tenantId);
     if (updated.changes === 0) {
-      const existing = db
-        .prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`)
-        .get<{ status: string } | undefined>(id, tenantId);
+      const existing = db.prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
+        | { status: string }
+        | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );

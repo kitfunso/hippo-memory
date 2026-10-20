@@ -40,7 +40,8 @@ function run(sql: string): void {
 function count(sql: string): number {
   const db = openHippoDb(root);
   try {
-    return Number(db.prepare(sql).get<{ n: number | bigint }>()?.n ?? -1);
+    // SAFETY: every caller passes a SELECT COUNT(*) AS n.
+    return Number((db.prepare(sql).get() as { n: number | bigint })?.n ?? -1);
   } finally {
     closeHippoDb(db);
   }
@@ -83,7 +84,7 @@ describe('a write scope that fails in the middle rolls back', () => {
         lastSimulation: new Date().toISOString(),
       });
       expect(() => savePhysicsState(db, [particle(a.id), particle(b.id)])).toThrow('refused');
-      expect(db.prepare('SELECT COUNT(*) AS n FROM memory_physics').get<{ n: number }>()?.n).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) AS n FROM memory_physics').get() as { n: number })?.n).toBe(0);
     } finally {
       closeHippoDb(db);
     }

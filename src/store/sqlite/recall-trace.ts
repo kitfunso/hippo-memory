@@ -406,7 +406,7 @@ export function writeDeliveryEventOnHandle(
   input: DeliveryEventInput,
   prune: DeliveryPruneSchedule = deliveryPruneSchedule(),
 ): number | null {
-  const prior = Math.trunc(Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout));
+  const prior = Math.trunc(Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout));
   db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
   try {
     return writeDeliveryEvent(db, input, prune);
