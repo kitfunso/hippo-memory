@@ -132,3 +132,23 @@ export interface ApiKeyOwner {
   role: string;
   ownerSubject: string | null;
 }
+
+/** A dormant memory's stored snapshot plus when and why it went dormant. */
+export interface DormantSnapshot {
+  entry: MemoryEntry;
+  reason: string;
+  strength: number;
+  dormantAt: string;
+}
+
+/** Where a page stopped: the `created`, `id` of its last row, in loadAllEntries' order. */
+export interface EntryCursor {
+  created: string;
+  id: string;
+}
+
+export interface EntryPage {
+  entries: MemoryEntry[];
+  /** The cursor that reads the page after this one, or null when this was the last. */
+  next: EntryCursor | null;
+}

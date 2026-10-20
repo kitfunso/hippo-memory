@@ -13,7 +13,8 @@ import {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../store/index.js';
-import { hasGroup, isStoreBusy } from '../store/port.js';
+import { isStoreBusy } from '../store/port.js';
+import { isLocalStore } from '../store/local/index.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { createSqliteExecutor } from '../store/sqlite/executor.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
@@ -527,7 +528,7 @@ function servedOptsFor(
     counts.autoSleeps += 1;
     return sleeps.consolidate(root);
   };
-  const sleepsHere = opts.autoSleep !== false && hasGroup(store, 'localFiles');
+  const sleepsHere = opts.autoSleep !== false && isLocalStore(store);
   const autoSleep = sleepsHere ? { run, hostTenantId: envTenant() } : undefined;
   return {
     ...opts,

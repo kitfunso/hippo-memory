@@ -10,9 +10,9 @@ import { escapeLike } from '../../util/escape.js';
 import { placeholders } from '../../util/sql.js';
 import { parseStoredJson, warnDamagedColumn } from '../../util/stored-json.js';
 import { cachedStatement } from './statement-cache.js';
-import type { DormantSnapshot } from '../port/agent-import.js';
-import type { DormantMove } from '../port/consolidation.js';
+import type { DormantMove } from '../local/consolidation.js';
 import type { DormantMemory, ListDormantOpts } from '../port/dormant.js';
+import type { DormantSnapshot } from '../port/types.js';
 
 interface DormantRow {
   tenant_id: string;

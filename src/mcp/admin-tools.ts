@@ -6,10 +6,7 @@ import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { predictionBaserate } from '../api/objects/predictions.js';
 import { conflictListAll, conflictListOpen, conflictResolve } from '../api/memories/conflicts.js';
 import { memoryStatusGet, memoryGetTouchable } from '../api/memories/memories.js';
-import { mcpApiContext, type McpContext, type ToolCall } from './protocol.js';
-import { hasGroup } from '../store/port.js';
-import type { ConfiguredFolder } from '../search/embed-memories.js';
-import { StoreNotPortedError } from '../util/sqlite-blocked.js';
+import { mcpApiContext, type LocalToolCall, type ToolCall } from './protocol.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { AT_RISK_BELOW } from '../core/strength-bands.js';
@@ -89,7 +86,14 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
+export async function runShareTool({
+  args,
+  ctx,
+  hippoRoot,
+  tenantId,
+  store,
+  globalTarget,
+}: LocalToolCall): Promise<string> {
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
@@ -97,23 +101,15 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
   await memoryGetTouchable(mcpApiContext(ctx), shareId);
   // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's
   // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
-  if (!hasGroup(store, 'localFiles')) throw new StoreNotPortedError(store.kind, 'localFiles');
   const local = { root: hippoRoot, store };
-  const shared = await shareMemory(local, globalTarget(ctx), shareId, { force, tenantId });
+  const shared = await shareMemory(local, globalTarget, shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
 }
 
-/** The global store the host's reach names; the tool table runs share and peers only where hippo.db sets one. */
-function globalTarget(ctx: McpContext): ConfiguredFolder {
-  const target = ctx.reach?.globalTarget;
-  if (target === undefined) throw new StoreNotPortedError(ctx.store.kind, 'localFiles');
-  return target;
-}
-
-export async function runPeersTool({ ctx, tenantId }: ToolCall): Promise<string> {
+export async function runPeersTool({ tenantId, globalTarget }: LocalToolCall): Promise<string> {
   // Tenant-scope peer discovery to the caller, as hippo_share does.
-  const peers = await listPeers(globalTarget(ctx), tenantId);
+  const peers = await listPeers(globalTarget, tenantId);
   if (peers.length === 0) return 'No peers found.';
   return peers
     .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)

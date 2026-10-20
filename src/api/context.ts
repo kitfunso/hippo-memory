@@ -17,7 +17,6 @@ import { promptTokens } from '../core/prompt-recall.js';
 import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../core/read-admission.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
 import type { HippoStore } from '../store/port.js';
-import type { StoreReach } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
@@ -43,6 +42,7 @@ import type {
 } from '../store/port/context-reads.js';
 import type { ContinuityKey } from '../store/port/types.js';
 import type { RecallTraceInput } from '../store/port/recall-writes.js';
+import type { StoreReach } from '../store/local/index.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -82,7 +82,7 @@ interface RecentRequest {
   origins: RecentOrigins | undefined;
 }
 
-/** A store's base search and context reads; a store without the group throws StoreNotPortedError. */
+/** A store's base search and context reads, both required on the port. */
 function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: store.contextReads };
 }

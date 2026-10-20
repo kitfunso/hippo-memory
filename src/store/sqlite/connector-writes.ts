@@ -12,8 +12,8 @@ import type {
   ConnectorWrite,
   ConnectorWriteOutcome,
   ConnectorWrites,
-  Sync,
 } from '../port.js';
+import type { Sync } from './served.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProjectIn } from './entry-row.js';
 import { writeEntryMirrorsIn, archiveRawAt, writeInOwnTenant } from './entry-writes.js';

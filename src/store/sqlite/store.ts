@@ -24,7 +24,7 @@ import { sqliteCards } from './cards.js';
 import { sqliteConflicts } from './conflicts.js';
 import { sqliteDashboardReads } from './dashboard-reads.js';
 import { sqliteDormant } from './dormant.js';
-import { sqliteRejections } from './rejections.js';
+import { sqliteRefusedAmong, sqliteRejections } from './rejections.js';
 import { sqliteFailureLog } from './failure-log.js';
 import { sqliteCompactions } from './compactions.js';
 import { sqliteReports } from './reports.js';
@@ -77,18 +77,15 @@ import {
   type Quarantine,
   type Readiness,
   type StoreGroups,
-  type StoreReach,
-  type StoreWith,
-  type Sync,
   type VectorViews,
   type VectorWrites,
-  hasGroup,
 } from '../port.js';
+import type { Sync } from './served.js';
 import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
 import type { Rejections } from '../port/rejections.js';
 import type { FailureLog } from '../port/failure-log.js';
 import type { Compactions } from '../port/compactions.js';
-import type { LocalFiles } from '../port/local-files.js';
+import type { LocalFiles } from '../local/local-files.js';
 import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
@@ -96,6 +93,7 @@ import { loadRecallEntriesAt } from './search-rows.js';
 import { loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
+import { isLocalStore, type LocalStore, type StoreReach } from '../local/index.js';
 
 /** Not on the synchronous store: the nearest-row scan yields to
  * the event loop, so this group answers only through Promises. */
@@ -104,7 +102,7 @@ type AsyncOnly = 'vectors';
 /** The port as hippo.db answers it: each call runs to its end
  * and returns the value, so no write scope spans an await. */
 // LocalFiles is written synchronous already, and Sync would erase its plain methods.
-export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'localFiles'>> & Pick<HippoStore, 'localFiles'>;
+export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>> & Pick<LocalStore, 'localFiles'>;
 
 function sqliteLocalFiles(handles: Handles): LocalFiles {
   const { on } = handles;
@@ -123,6 +121,7 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     embeddingIndex: sqliteEmbeddingIndex(handles),
     ledger: sqliteLedger(on),
     dashboard: sqliteDashboardReads(handles),
+    rejections: sqliteRefusedAmong(on),
   };
 }
 
@@ -131,7 +130,7 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
 export function sqliteSyncStore(
   hippoRoot: string,
   rules: LossAversion = {},
-): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
+): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly>> {
   const handles = handlesOf(hippoRoot, rules);
   const { on } = handles;
   const localFiles = sqliteLocalFiles(handles);
@@ -270,9 +269,9 @@ export function sqliteReach(
   hippoRoot: string,
   store: HippoStore,
   shared?: boolean,
-  openGlobal: (root: string) => StoreWith<'localFiles'> = sqliteStore,
+  openGlobal: (root: string) => LocalStore = sqliteStore,
 ): StoreReach {
-  const other = hasGroup(store, 'localFiles') ? undefined : store;
+  const other = isLocalStore(store) ? undefined : store;
   const sharedStore = shared === true || isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
@@ -290,7 +289,7 @@ export function sqliteReach(
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
  * another store's would. */
-export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): HippoStore & StoreGroups {
+export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): LocalStore & StoreGroups {
   const handles = handlesOf(hippoRoot, rules);
   const sync = sqliteSyncStore(hippoRoot, rules);
   return {

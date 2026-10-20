@@ -4,7 +4,6 @@ import { BadRequestError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../core/agent-memory-tools.js';
-import type { FolderStore } from '../store/port.js';
 import { chunked } from '../util/chunked.js';
 import { ALL_TENANTS } from '../util/tenant.js';
 import { classifyOriginProject, resolveProjectIdentity } from '../core/project-identity.js';
@@ -12,9 +11,10 @@ import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { log } from '../util/log.js';
-import type { EntryTextKey, Sharing } from '../store/port/sharing.js';
+import type { EntryTextKey, Sharing } from '../store/local/sharing.js';
 import { logEmbedAllFailure } from './search-both.js';
 import { textKeyPages } from './text-keys.js';
+import type { FolderStore } from '../store/local/index.js';
 
 /**
  * Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and

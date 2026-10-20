@@ -7,7 +7,7 @@ import { cmdCapture } from '../../src/capture/command.js';
 import { transcriptWorkingState } from '../../src/capture/working-state.js';
 import { maskEmails } from '../../src/util/secret-detect.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';
-import { captureTarget, syncStore } from '../_helpers/cli-stores.js';
+import { captureTarget, hookStore } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -50,7 +50,7 @@ describe('maskEmails', () => {
 });
 
 describe('no stored text holds an email address', () => {
-  it('in the session digest', () => {
+  it('in the session digest', async () => {
     const edits = [{ filePath: path.join(repo, 'exports', `${EMAIL}.csv`), base: null }];
     const scan = {
       turns: [{ role: 'user' as const, text: 'the export keeps failing' }],
@@ -59,7 +59,7 @@ describe('no stored text holds an email address', () => {
       edits,
     };
     const log: string[] = [];
-    recordSessionDigest(hippoRoot, syncStore(hippoRoot), scan, {
+    await recordSessionDigest(hippoRoot, hookStore(hippoRoot), scan, {
       key: 's1',
       tenantId: 'default',
       config: loadConfig(hippoRoot),

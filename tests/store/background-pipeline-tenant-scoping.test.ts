@@ -11,7 +11,7 @@ import { createMemory, Layer } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { refineStore } from '../../src/cli/refine-llm.js';
 import { cmdCapture } from '../../src/capture/command.js';
-import { captureTarget, localIndex, syncStore } from '../_helpers/cli-stores.js';
+import { captureTarget, localIndex, hookStore } from '../_helpers/cli-stores.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../../src/entry/importers.js';
 import { autoShare } from '../../src/sharing/share.js';
@@ -78,7 +78,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     const result = invalidateMatching(
-      syncStore(hippoRoot).localFiles.learning,
+      hookStore(hippoRoot).localFiles.learning,
       { from: 'REST', to: 'GraphQL', type: 'migration' },
       'tenant-a',
     );
@@ -430,7 +430,7 @@ describe('invalidate onlyId', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'tenant B private memory', { tags: ['private'] });
 
     const result = invalidateMatching(
-      syncStore(hippoRoot).localFiles.learning,
+      hookStore(hippoRoot).localFiles.learning,
       { from: `id:${bId}`, to: null, type: 'removal' },
       'tenant-a',
       { onlyId: bId },

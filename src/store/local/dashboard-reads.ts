@@ -1,6 +1,6 @@
 // The dashboard snapshot's reads; on LocalFiles because the commit signal they rest on is hippo.db's own.
 import type { ConfidenceInputs, MemoryEntry, StrengthInputs } from '../../core/memory.js';
-import type { ConflictRow } from './conflicts.js';
+import type { ConflictRow } from '../port/conflicts.js';
 
 /** One live row as the dashboard lists it. `head` is the whole content or at least its first 241 characters. */
 export type DashboardRow = StrengthInputs &

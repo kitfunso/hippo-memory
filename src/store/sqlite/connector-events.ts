@@ -36,8 +36,8 @@ import type {
   DeadLetterRows,
   DeletionLookup,
   DeletionTarget,
-  Sync,
 } from '../port.js';
+import type { Sync } from './served.js';
 
 function eventRecordAt(db: DatabaseSyncLike, event: ConnectorEvent): ConnectorEventRecord {
   return event.connector === 'slack'

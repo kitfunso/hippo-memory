@@ -23,7 +23,8 @@ import {
 } from '../port/graph-reads.js';
 import { chunked } from '../../util/chunked.js';
 import { placeholders } from '../../util/sql.js';
-import type { GraphRows, GraphReads, GraphViewQuery, Sync } from '../port.js';
+import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
+import type { Sync } from './served.js';
 import { canReadScope } from '../../core/recall-scope.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';

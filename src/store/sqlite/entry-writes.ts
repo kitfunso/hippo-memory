@@ -28,12 +28,13 @@ import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeE
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { CLI_ACTOR } from '../../core/actor.js';
-import type { RenameSourceOptions } from '../port/agent-import.js';
+import type { RenameSourceOptions } from '../local/agent-import.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
 import { ownScopeTouches } from '../../core/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
-import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
+import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite } from '../port.js';
+import type { Sync } from './served.js';
 import type { PinWrite } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';

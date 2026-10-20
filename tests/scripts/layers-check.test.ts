@@ -65,6 +65,7 @@ const PORT_BASE = {
   'src/store/port.ts': 'export type P = 1;\n',
   'src/store/port-groups.ts': 'export type G = 1;\n',
   'src/store/port/types.ts': 'export type T = 1;\n',
+  'src/store/local/index.ts': 'export const isLocal = 1;\n',
 };
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
 const DASHBOARD_MAP = {
@@ -311,14 +312,15 @@ const rows: Row[] = [
     output: ['src/api/y.ts:1 imports src/store/rows.ts', 'src/api/z.ts:1 imports src/store/rows.ts'],
   },
   {
-    name: 'an api import of port.ts, port-groups.ts or port/ passes',
+    name: 'an api import of port.ts, port-groups.ts, port/ or local/ passes',
     files: {
       ...PORT_BASE,
       'src/api/y.ts': [
         "import type { P } from '../store/port.js';",
         "import type { G } from '../store/port-groups.js';",
         "import type { T } from '../store/port/types.js';",
-        'export type Y = [P, G, T];',
+        "import { isLocal } from '../store/local/index.js';",
+        'export type Y = [P, G, T, typeof isLocal];',
         '',
       ].join('\n'),
     },

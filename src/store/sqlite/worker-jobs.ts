@@ -16,7 +16,7 @@ import { PackedVectors, packVectors } from './vector-pack.js';
 import { sqliteVectorReads } from './vector-reads.js';
 import {
   type Job,
-  type OpPlace,
+  type OpRoute,
   type Reply,
   STORE_SETUP_OP,
   type WorkerGroup,
@@ -87,8 +87,8 @@ function isWorkerGroup(group: string): group is WorkerGroup {
 }
 
 function runsOnWorker(group: WorkerGroup, method: string): boolean {
-  const places: Readonly<Record<string, OpPlace>> = WORKER_OPS[group];
-  return Object.hasOwn(places, method) && places[method] !== 'server';
+  const places: Readonly<Record<string, OpRoute>> = WORKER_OPS[group];
+  return Object.hasOwn(places, method);
 }
 
 type MethodsOf<T> = T extends T ? T[keyof T] : never;

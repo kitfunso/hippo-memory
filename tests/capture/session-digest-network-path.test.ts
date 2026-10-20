@@ -8,7 +8,7 @@ import { loadConfig } from '../../src/core/config.js';
 import { recordSessionDigest, type DigestEdit } from '../../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { syncStore } from '../_helpers/cli-stores.js';
+import { hookStore } from '../_helpers/cli-stores.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
@@ -43,14 +43,14 @@ afterEach(() => {
 const touched = (): string[] => probes.filter((p) => HOST.test(p));
 
 /** One session end on a fresh store: the line it logs and the digest it stores, '' for none. */
-function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
+async function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
   initTestStore(hippoRoot);
-  const store = syncStore(hippoRoot);
+  const store = hookStore(hippoRoot);
   // Probes count from the session end itself, not the store set-up before it.
   probes.length = 0;
   const log: string[] = [];
-  recordSessionDigest(
+  await recordSessionDigest(
     hippoRoot,
     store,
     { turns: [{ role: 'user', text: 'go' }], finalText, cwd, edits },
@@ -66,11 +66,12 @@ function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
     content: loadAllEntries(hippoRoot, 'default').find(isSessionDigestRow)?.content ?? '',
   };
 }
-const digest = (finalText: string, edits: DigestEdit[] = []): string => end(finalText, edits).content;
+const digest = async (finalText: string, edits: DigestEdit[] = []): Promise<string> =>
+  (await end(finalText, edits)).content;
 
 describe('network paths in a digest', () => {
-  it('still probes a local repo path, so the checks below are live', () => {
-    expect(digest('', [{ filePath: path.join(repo, 'src', 'a.ts'), base: null }])).toBe('Changed: src/a.ts');
+  it('still probes a local repo path, so the checks below are live', async () => {
+    expect(await digest('', [{ filePath: path.join(repo, 'src', 'a.ts'), base: null }])).toBe('Changed: src/a.ts');
     // Every module's existsSync is recorded; the digest's own probes walk the missing file up to its folder.
     expect(probes).toEqual(expect.arrayContaining([repo, path.join(repo, 'src', 'a.ts'), path.join(repo, 'src')]));
   });
@@ -80,19 +81,19 @@ describe('network paths in a digest', () => {
     ['a file URI', 'Loaded file:/opt/app/config.yaml because `boot()` needs it.'],
     ['a forward-slash share', 'Copied it to //fileserver/share/x.ts because `sync()` reads it.'],
     ['a backslash share', 'Copied it to \\\\fileserver\\share\\x.ts because `sync()` reads it.'],
-  ])('a sentence naming %s keeps its text and probes nothing', (_label, sentence) => {
-    expect(digest(sentence)).toBe(sentence);
+  ])('a sentence naming %s keeps its text and probes nothing', async (_label, sentence) => {
+    expect(await digest(sentence)).toBe(sentence);
     expect(touched()).toEqual([]);
   });
 
-  it('an edit on a share is left out and probes nothing', () => {
+  it('an edit on a share is left out and probes nothing', async () => {
     const edits: DigestEdit[] = [
       { filePath: '//fileserver/share/x.ts', base: null },
       { filePath: '\\\\fileserver\\share\\y.ts', base: null },
       { filePath: '\\\\?\\UNC\\fileserver\\share\\z.ts', base: null },
       { filePath: 'w.ts', base: '//fileserver/share' },
     ];
-    expect(digest('', edits)).toBe('');
+    expect(await digest('', edits)).toBe('');
     expect(touched()).toEqual([]);
   });
 
@@ -101,8 +102,8 @@ describe('network paths in a digest', () => {
     '\\\\fileserver\\share\\x.ts',
     '\\\\?\\UNC\\fileserver\\share\\x.ts',
     '\\\\.\\UNC\\fileserver\\share\\x.ts',
-  ])('%s as the working directory resolves to no repo path without a probe', (p) => {
-    expect(end('Fixed `sync()` because the share moved.', [], p).line).toBe(
+  ])('%s as the working directory resolves to no repo path without a probe', async (p) => {
+    expect((await end('Fixed `sync()` because the share moved.', [], p)).line).toBe(
       'digest: skip: the session ran outside this repo',
     );
     expect(touched()).toEqual([]);

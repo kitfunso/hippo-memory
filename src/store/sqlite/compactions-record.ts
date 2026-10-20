@@ -54,7 +54,7 @@ import type {
   ReplayOptions,
   ReplaySources,
   SpoolRecorder,
-} from '../port/compaction-hooks.js';
+} from '../local/compaction-hooks.js';
 
 export type { CompactionStatus };
 

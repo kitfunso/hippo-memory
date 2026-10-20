@@ -1,24 +1,25 @@
 // hippo.db's Dormant group: the memories sleep set aside, listed, restored or forgotten for good.
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { StoreFiles, OnHandle } from './open.js';
-import type { MemoryEntry } from '../../core/memory.js';
 import { type SqlFragment, touchableScopeSql } from './rule-sql.js';
 import type { WriteBudget } from '../../util/write-budget.js';
 import { RejectedValueError } from '../../core/api-errors.js';
+import { reviveDormant } from '../../core/dormant-revival.js';
+import { ownScopeTouches } from '../../core/recall-scope.js';
 import { DAY_MS } from '../../util/time.js';
 import { appendAuditEvent } from './audit.js';
 import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTakenAt } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
-import type { DormantSnapshot } from '../port/agent-import.js';
 import type { DormantRestoreOutcome } from '../port/dormant.js';
 import { updateStatsUnlessBusyAt } from './index-and-stats.js';
 import type { Dormant, DormantRestoreRequest } from '../port-groups.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 import { deleteDormantRow, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
+import type { DormantSnapshot } from '../port/types.js';
 
 /** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`;
  * `retentionDays` bounds how long one is kept). Content stays in `dormant_memories` (schema v44) and the `memories` row
@@ -75,18 +76,8 @@ export async function expireDormantBeforeAt(
   return opts.dryRun ? keys.length : await expireInChunks(db, keys, cutoffIso, opts.budget);
 }
 
-/** One restore as the store applies it. The two functions are the caller's policy over plain rows; neither is handed
- * the handle. */
-interface DormantRestore {
-  readonly tenantId: string;
-  readonly id: string;
-  /** Who restores, for the audit rows. */
-  readonly actor: string;
-  /** False for a snapshot this caller may not touch, which then reads as missing. */
-  readonly inReach: (scope: string | null) => boolean;
-  /** The live memory the snapshot comes back as at `now`; a throw refuses before any write. */
-  readonly revive: (snapshot: DormantSnapshot, now: Date) => MemoryEntry;
-}
+/** One restore as the store applies it: the caller's request with its tenant. */
+type DormantRestore = DormantRestoreRequest & { readonly tenantId: string };
 
 function auditDormantRestore(
   db: DatabaseSyncLike,
@@ -111,10 +102,12 @@ function auditDormantRestore(
 function restoreInWriteScope(db: DatabaseSyncLike, hippoRoot: string, restore: DormantRestore): DormantRestoreOutcome {
   return withWriteScopeOr<DormantRestoreOutcome, DormantRestoreOutcome>(db, 'restore_dormant', (rollback) => {
     const snapshot = readDormantSnapshot(db, restore.tenantId, restore.id);
-    if (!snapshot || !restore.inReach(snapshot.entry.scope ?? null)) return rollback({ status: 'missing' });
+    if (!snapshot || !ownScopeTouches(restore.ownScope, snapshot.entry.scope ?? null)) {
+      return rollback({ status: 'missing' });
+    }
     if (entryIdTakenAt(db, restore.id)) return rollback({ status: 'active' });
     const now = new Date();
-    const entry = stampOriginProject(hippoRoot, restore.revive(snapshot, now));
+    const entry = stampOriginProject(hippoRoot, reviveDormant(snapshot, now, restore.revival));
     writeEntryDbOnly(db, entry, { actor: restore.actor });
     deleteDormantRow(db, restore.tenantId, restore.id);
     // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle trains on.

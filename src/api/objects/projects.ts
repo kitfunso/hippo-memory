@@ -10,13 +10,11 @@ import {
   type ProjectSummary,
   type RepairResult,
 } from '../../sharing/project-merge.js';
-import type { ProjectTagStore } from '../../store/port/project-tags.js';
-import type { ContextWith } from '../types.js';
+import type { ProjectTagStore } from '../../store/local/project-tags.js';
+import type { LocalContext } from '../types.js';
 
 export type { MergeResult, ProjectCollision, ProjectSummary, RepairResult } from '../../sharing/project-merge.js';
 export type { ProjectFold } from '../../agent-memories/project-folds.js';
-
-type LocalContext = ContextWith<'localFiles'>;
 
 export interface MergeProjectNamesOptions {
   from: string;

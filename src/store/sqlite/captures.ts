@@ -6,7 +6,7 @@ import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
 import type { StoreFiles, OnHandle } from './open.js';
-import type { CaptureItem, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/captures.js';
+import type { CaptureItem, CaptureWriteOptions, CapturedOutcome, Captures } from '../local/captures.js';
 import { EVERY_SCOPE, loadTextsHoldingWordsAt } from './candidates.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';

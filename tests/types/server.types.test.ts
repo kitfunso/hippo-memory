@@ -8,16 +8,23 @@ import {
   ForbiddenError,
   HttpError,
   NotFoundError,
+  captureSessionTexts,
+  isLocalStore,
   isReservedActor,
   serve,
   type Context,
   type HippoStore,
+  type LocalContext,
+  type LocalStore,
+  type SessionCaptureRequest,
   type ServeOpts,
   type ServerHandle,
 } from '../../src/server.js';
 import type { HippoConfig } from '../../src/entry/store-kit.js';
 
 declare const store: HippoStore;
+declare const plain: Context;
+declare const sessionReq: SessionCaptureRequest;
 
 describe('hippo-memory/server entry types', () => {
   it('serve takes ServeOpts and resolves to a ServerHandle', () => {
@@ -57,6 +64,16 @@ describe('hippo-memory/server entry types', () => {
       // @ts-expect-error config is required: the api reads no config file of its own
       const ctx: Context = { hippoRoot: '/tmp/root', tenantId: 't', actor: { subject: 'cli', role: 'admin' }, store };
       expectTypeOf(ctx).toEqualTypeOf<Context>();
+    });
+  });
+
+  it('captureSessionTexts takes a Context whose store has local files, and isLocalStore narrows one', () => {
+    expectTypeOf(captureSessionTexts).parameter(0).toEqualTypeOf<LocalContext>();
+    expectTypeOf(isLocalStore).guards.toEqualTypeOf<LocalStore>();
+    // @ts-expect-error a store with no local files has nowhere to read or write the session's rows
+    typeOnly(() => captureSessionTexts(plain, sessionReq));
+    typeOnly(() => {
+      if (isLocalStore(plain.store)) captureSessionTexts({ ...plain, store: plain.store }, sessionReq);
     });
   });
 

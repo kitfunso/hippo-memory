@@ -20,7 +20,7 @@ import type {
   CompactionCounts,
   TokenTally,
   Diagnostics,
-} from '../port/diagnostics.js';
+} from '../local/diagnostics.js';
 import type { OnHandle } from './open.js';
 import { projectTagReads } from './project-tags.js';
 import { bound, type Bodies } from './bound.js';

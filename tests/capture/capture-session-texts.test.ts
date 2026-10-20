@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Context } from '../../src/api/index.js';
+import type { LocalContext } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -47,7 +47,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): Context => ({
+const ctxFor = (hippoRoot: string, tenantId = 'default'): LocalContext => ({
   hippoRoot,
   store: sqliteStore(hippoRoot),
   config: loadConfig(hippoRoot),

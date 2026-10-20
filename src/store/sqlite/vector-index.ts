@@ -39,11 +39,12 @@ import { countAllEntriesAt, loadEntryIdsPageAt, selectEntriesByIds } from './ent
 import { chunked } from '../../util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { placeholders } from '../../util/sql.js';
-import type { StoredVectorSummary, VectorCoverage, VectorRebuild } from '../port/embedding-index.js';
-import type { EntryCursor, EntryIdPage } from '../port/consolidation.js';
+import type { StoredVectorSummary, VectorCoverage, VectorRebuild } from '../local/embedding-index.js';
+import type { EntryIdPage } from '../local/consolidation.js';
 import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
+import type { EntryCursor } from '../port/types.js';
 
 const MAX_BACKFILL_PAGE = 500;
 

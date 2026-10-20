@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../core/capture-contract.js';
-import type { CompactionText, Log } from '../store/port/compaction-hooks.js';
+import type { CompactionText, Log } from '../store/local/compaction-hooks.js';
 import type { PostCompactPayload } from './compaction-record.js';
 import { isSqliteBusy } from '../db/busy-code.js';
 import { errorMessage } from '../util/log.js';

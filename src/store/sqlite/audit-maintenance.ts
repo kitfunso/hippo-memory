@@ -21,12 +21,13 @@ import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, Handles } from './open.js';
-import type { EntryCursor } from '../port/consolidation.js';
 import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit-maintenance.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, skipEmpty } from './bound.js';
-import type { AuditMaintenance, Sync } from '../port.js';
+import type { AuditMaintenance } from '../port.js';
+import type { Sync } from './served.js';
 import { withUnmigratedDb } from '../../db/open.js';
+import type { EntryCursor } from '../port/types.js';
 
 const PLAN_PAGE_ROWS = 500;
 

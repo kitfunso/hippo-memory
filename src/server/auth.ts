@@ -1,7 +1,7 @@
 // Bearer and loopback auth for the HTTP server.
 import { envAllowKeylessLocal, envRequireAuth, envTenant } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
-import { hasGroup } from '../store/index.js';
+import { isLocalStore } from '../store/local/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { verifyApiKeyCached } from './api-key.js';
 import { API_KEY_PREFIX } from '../core/api-key.js';
@@ -313,7 +313,7 @@ function keylessLocalActor(): Actor {
 
 function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
-  const team = !hasGroup(opts.store, 'localFiles');
+  const team = !isLocalStore(opts.store);
   // Per request, never cached at serve: the global store can be created while the server runs.
   const reach = contextReach(opts.reachOf(team), opts.configAt);
   // The reader keys on the file's stamp, so each request still sees an edit made while the server runs.

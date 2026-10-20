@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
 import { consolidate } from '../../src/index.js';
-import type { HippoStore } from '../../src/entry/store-kit.js';
+import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb, ftsRowCounts, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -43,9 +43,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('consolidate on a HippoStore', () => {
+describe('consolidate on an integrator store with local files', () => {
   it("repairs the integrator's store and leaves another folder's drift alone", async () => {
-    const store: HippoStore = { ...sqliteStore(b) };
+    const store: LocalStore = { ...sqliteStore(b) };
 
     const result = await consolidate(store);
 

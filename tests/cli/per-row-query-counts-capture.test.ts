@@ -7,7 +7,7 @@ import { cliRequest } from '../../src/cli/api-context.js';
 import { handleRemember, handleTrace } from '../../src/cli/remember.js';
 import { cmdCapture } from '../../src/capture/command.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';
-import { captureTarget, syncStore } from '../_helpers/cli-stores.js';
+import { captureTarget, hookStore } from '../_helpers/cli-stores.js';
 import { loadConfig } from '../../src/core/config.js';
 import {
   ROW_READ,
@@ -133,7 +133,7 @@ describe('cmdCapture', () => {
 });
 
 describe('recordSessionDigest', () => {
-  it('reads no full row to find the text hippo could have injected', () => {
+  it('reads no full row to find the text hippo could have injected', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-digest');
       seed(ctxFor(root), rows(n, 'digest'));
@@ -144,8 +144,8 @@ describe('recordSessionDigest', () => {
         edits: [],
       };
       const log: string[] = [];
-      const { statements } = recordStatements(() =>
-        recordSessionDigest(root, syncStore(root), scan, {
+      const { statements } = await recordStatementsAsync(() =>
+        recordSessionDigest(root, hookStore(root), scan, {
           key: 's1',
           tenantId: 'default',
           config: loadConfig(root),

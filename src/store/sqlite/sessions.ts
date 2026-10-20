@@ -18,7 +18,7 @@ import {
   writeSessionEndHandoffAt,
 } from './handoffs.js';
 import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../port-groups.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import {

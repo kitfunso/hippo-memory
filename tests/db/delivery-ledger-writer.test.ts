@@ -14,7 +14,7 @@ import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../sr
 import { runWithRequestId } from '../../src/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from '../_helpers/count-statements.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import type { Ledger } from '../../src/store/port/ledger.js';
+import type { Ledger } from '../../src/store/local/ledger.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 

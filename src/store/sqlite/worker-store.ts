@@ -3,20 +3,13 @@
 import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId, currentSignal } from '../../util/request-scope.js';
-import type { HippoStore, LocalFiles, Readiness, StoreGroups, VectorReads, StoreWith } from '../port.js';
-import type { GlobalStores } from '../local/global-stores.js';
+import type { HippoStore, Readiness, StoreGroups, VectorReads } from '../port.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../core/memory.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
-import {
-  type OpPlace,
-  type OpPlaces,
-  type OpRoute,
-  type WorkerBase,
-  type WorkerGroup,
-  WORKER_OPS,
-} from './worker-ops.js';
+import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
+import type { GlobalStores, LocalFiles, LocalStore } from '../local/index.js';
 
 const offLoopStores = new WeakSet<HippoStore>();
 
@@ -41,9 +34,10 @@ function send<T>(executor: SqliteExecutor, op: string, args: readonly unknown[],
 /** `inProcess` with each method the op table places on a worker answered from one, so a new method of a group needs its
  * tag and no body here. */
 function onWorkers<G>(executor: SqliteExecutor, group: WorkerGroup, places: OpPlaces<G>, inProcess: G): G {
-  const moved = Object.entries<OpPlace>(places).flatMap(([method, place]) =>
-    place === 'server' ? [] : [[method, (...args: unknown[]) => send(executor, `${group}.${method}`, args, place)]],
-  );
+  const moved = Object.entries<OpRoute>(places).map(([method, place]) => [
+    method,
+    (...args: unknown[]) => send(executor, `${group}.${method}`, args, place),
+  ]);
   return { ...inProcess, ...Object.fromEntries(moved) };
 }
 
@@ -170,9 +164,9 @@ export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
   rules: LossAversion = {},
-): HippoStore & StoreGroups {
+): LocalStore & StoreGroups {
   const inProcess = sqliteStore(hippoRoot, rules);
-  const store: HippoStore & StoreGroups = {
+  const store: LocalStore & StoreGroups = {
     ...inProcess,
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(executor, inProcess.vectors),
@@ -190,7 +184,7 @@ export function workerSqliteStore(
  * thread; each is built at first use, since the global store can appear while the server runs. */
 export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
   if (!runsOffLoop(served)) return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
-  const opened = new Map<string, StoreWith<'localFiles'>>();
+  const opened = new Map<string, LocalStore>();
   return {
     open(root) {
       const known = opened.get(root);

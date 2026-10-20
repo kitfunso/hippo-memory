@@ -14,7 +14,7 @@ import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 import { served } from './served.js';
-import type { Sharing } from '../port/sharing.js';
+import type { Sharing } from '../local/sharing.js';
 import { loadRecallEntriesAt, loadSearchEntriesAt } from './search-rows.js';
 
 type SharingReads = Omit<Sharing, 'writeSkippingRejected' | 'sourceTallies'>;

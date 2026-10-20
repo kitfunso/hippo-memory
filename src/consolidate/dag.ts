@@ -1,11 +1,11 @@
 import { createMemory, DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
-import type { Consolidation, LocalFiles } from '../store/port.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
 import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../core/recall-scope.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
+import type { Consolidation, LocalFiles } from '../store/local/index.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;

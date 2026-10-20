@@ -32,7 +32,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../core/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
-import type { DeliveryWrite } from '../store/port/ledger.js';
+import type { DeliveryWrite } from '../store/local/ledger.js';
 import { shouldSkipUnchanged } from '../core/skip-unchanged.js';
 import type { TokenSurface, TokenUse } from '../store/port/token-ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';

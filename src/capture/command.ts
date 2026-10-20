@@ -3,8 +3,6 @@ import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { embedMemoryDetached } from '../search/embed-memories.js';
-import type { FolderFiles, LocalFiles, Sync } from '../store/port.js';
-import type { Rejections } from '../store/port/rejections.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import type { HippoConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
@@ -13,6 +11,7 @@ import { teeStdStreams } from '../util/stream-tee.js';
 import { ALL_TENANTS } from '../util/tenant.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
+import type { FolderFiles, LocalFiles } from '../store/local/index.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -38,11 +37,11 @@ export interface CaptureOptions {
   originProject?: ProjectRef;
 }
 
-/** The folder a capture writes to, the global one under `global`, and its store, which the CLI root builds. */
+/** The folder a capture writes to, the global one under `global`, and its local files, which the CLI root builds. */
 export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
-  readonly store: { readonly localFiles: LocalFiles; readonly rejections: Sync<Rejections> };
+  readonly files: LocalFiles;
 }
 
 export function cmdCapture(target: CaptureTarget, options: CaptureOptions): void {
@@ -82,7 +81,7 @@ function writeLogBanner(logFile: string): boolean {
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): void {
   if (options.global) {
-    target.store.localFiles.ensureFiles();
+    target.files.ensureFiles();
   } else if (!isInitialized(target.root)) {
     console.error(
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
@@ -114,13 +113,13 @@ function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): void {
     return;
   }
 
-  const keys = storedKeysInView(target.store.localFiles, options, extracted);
+  const keys = storedKeysInView(target.files, options, extracted);
 
   printCaptureTally(options, captureFromCli(target, options, extracted, keys));
 }
 
 function captureFromCli(
-  { root, store, config }: CaptureTarget,
+  { root, files, config }: CaptureTarget,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
@@ -130,9 +129,9 @@ function captureFromCli(
     originProject: options.originProject,
     lean: false,
   };
-  const into = { root, files: store.localFiles, config };
+  const into = { root, files, config };
   if (!options.dryRun) return captureExtractedItems(into, writeOpts, extracted, keys);
-  return previewCapture(store.rejections, writeOpts, extracted, keys, config.defaultHalfLifeDays);
+  return previewCapture(files.rejections, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
@@ -263,7 +262,7 @@ export function captureExtractedItems(
 /** A dry run asks the store the same rejected-value question the write's gate does, so a tombstoned item previews as
  * rejected rather than captured. */
 function previewCapture(
-  rejections: Sync<Rejections>,
+  rejections: LocalFiles['rejections'],
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: ReadonlySet<string>,

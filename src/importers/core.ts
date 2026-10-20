@@ -7,11 +7,10 @@ import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import type { LocalFiles, Sync } from '../store/port.js';
-import type { Rejections } from '../store/port/rejections.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { log } from '../util/log.js';
+import type { LocalFiles } from '../store/local/index.js';
 
 /** Below this length a chunk holds nothing worth recalling. */
 const MIN_IMPORT_CHARS = 10;
@@ -57,10 +56,10 @@ export interface ImportOptions {
   scope?: string;
 }
 
-/** The folder an import writes to and its store, answered at once; a composition root builds it. */
+/** The folder an import writes to and its local files, which answer at once; a composition root builds it. */
 export interface ImportTarget {
   readonly root: string;
-  readonly store: { readonly localFiles: LocalFiles; readonly rejections: Sync<Rejections> };
+  readonly files: LocalFiles;
 }
 
 /** `ImportOptions` with the store the import writes to. */
@@ -123,21 +122,21 @@ interface OpenImport {
   readonly tenantId: TenantId;
   /** Keys of the chunks this run wrote; a dry run writes none. */
   readonly written: Set<string>;
-  readonly rejections: Sync<Rejections>;
+  readonly rejections: LocalFiles['rejections'];
 }
 
 /** The store the import writes to, made ready. */
 function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImport {
-  const { localFiles, rejections } = target.store;
-  if (global) localFiles.ensureFiles();
+  const { files } = target;
+  if (global) files.ensureFiles();
   const scope = global ? ALL_TENANTS : (tenantId ?? DEFAULT_TENANT_ID);
   return {
     targetRoot: target.root,
-    learning: localFiles.learning,
-    sharing: localFiles.sharing,
+    learning: files.learning,
+    sharing: files.sharing,
     tenantId: scope,
     written: new Set(),
-    rejections,
+    rejections: files.rejections,
   };
 }
 

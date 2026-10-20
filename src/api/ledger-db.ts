@@ -1,10 +1,10 @@
 // The store the token ledger writes to for a caller; context, recall and the session hooks share it.
-import type { LedgerTurn } from '../store/port/ledger.js';
+import type { LedgerTurn } from '../store/local/ledger.js';
 import type { HippoConfig } from '../core/config.js';
-import type { FolderFiles, Ledger } from '../store/port.js';
 import type { TokenSurface, TokenUse } from '../store/port/token-ledger.js';
 import type { LastSent } from '../core/skip-unchanged.js';
 import type { Context, GlobalInReach } from './types.js';
+import { isLocalStore, type FolderFiles, type Ledger } from '../store/local/index.js';
 
 /** A hippo.db a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
 export interface LedgerHome extends FolderFiles {
@@ -22,7 +22,7 @@ export function ledgerReachOf(
   ctx: Pick<Context, 'hippoRoot' | 'reach' | 'store' | 'config'>,
   shared?: boolean,
 ): LedgerReach {
-  const files = ctx.reach?.hasLocal === true ? ctx.store.localFiles : undefined;
+  const files = ctx.reach?.hasLocal === true && isLocalStore(ctx.store) ? ctx.store.localFiles : undefined;
   const local = files === undefined ? undefined : { root: ctx.hippoRoot, files, config: ctx.config };
   return shared === true ? { local } : { local, global: ctx.reach?.global };
 }
@@ -31,7 +31,7 @@ export function ledgerReachOf(
 export function ledgerFiles(reach: LedgerReach): LedgerHome | null {
   if (reach.local !== undefined) return reach.local;
   const { global } = reach;
-  const files = global?.store.localFiles;
+  const files = global !== undefined && isLocalStore(global.store) ? global.store.localFiles : undefined;
   return global === undefined || files === undefined ? null : { root: global.root, files, config: global.config };
 }
 

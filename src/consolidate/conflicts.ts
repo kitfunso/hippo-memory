@@ -3,7 +3,7 @@ import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
-import type { DetectedConflict } from '../store/port/consolidation.js';
+import type { DetectedConflict } from '../store/local/consolidation.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
 // on stopword-filtered tokens

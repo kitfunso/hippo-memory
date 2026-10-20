@@ -15,7 +15,7 @@ import { HANDOFF_COLUMNS } from './handoffs.js';
 import { placeholders } from '../../util/sql.js';
 import type { CardDetail } from '../port/cards.js';
 import type { CardCreate, Cards } from '../port-groups.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';

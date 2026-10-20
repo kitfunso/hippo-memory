@@ -15,8 +15,7 @@ import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { isInitialized } from '../core/project-identity.js';
-import type { ContextReads, EntryWrites, Sync } from '../store/port.js';
-import type { Sessions } from '../store/port-groups.js';
+import type { HippoStore } from '../store/port.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../core/session-snapshot.js';
 import { isSyntheticMessage } from '../core/transcript-calls.js';
 import { readOpenTranscriptTail } from '../util/transcript-tail.js';
@@ -580,24 +579,19 @@ export interface DigestOutcome {
   files: number;
 }
 
-/** The repo store's reads and the digest's write, built by the CLI root; each answers at once, since the session-end
- * hook counts this run's statements. */
-export interface DigestStore {
-  readonly contextReads: Sync<ContextReads>;
-  readonly sessions: Sync<Sessions>;
-  readonly entryWrites: Sync<EntryWrites>;
-}
+/** The repo store's reads and the digest's write, built by the CLI root. */
+export type DigestStore = Pick<HippoStore, 'contextReads' | 'sessions' | 'entryWrites'>;
 
 /** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient
  * handoff, never this session's own. */
-function injectedTexts(store: DigestStore, opts: SessionDigestOptions): string[] {
-  const digests = store.contextReads.liveContentsBySourceAndTag(
+async function injectedTexts(store: DigestStore, opts: SessionDigestOptions): Promise<string[]> {
+  const digests = await store.contextReads.liveContentsBySourceAndTag(
     opts.tenantId,
     SESSION_DIGEST_TAG,
     SESSION_DIGEST_TAG,
     opts.key,
   );
-  const handoff = store.sessions.latestHandoff(
+  const handoff = await store.sessions.latestHandoff(
     opts.tenantId,
     null,
     {
@@ -616,12 +610,12 @@ function skipped(reason: string): DigestOutcome {
   return { written: false, reason, sentences: 0, files: 0 };
 }
 
-function writeSessionDigest(
+async function writeSessionDigest(
   hippoRoot: string,
   store: DigestStore,
   scan: SessionScan,
   opts: SessionDigestOptions,
-): DigestOutcome {
+): Promise<DigestOutcome> {
   const prompts = scan.turns.filter((t) => t.role === 'user').map((t) => t.text);
   if (prompts.length === 0) return skipped('no human prompt');
   if (!scan.finalText.trim() && scan.edits.length === 0) return skipped('no final message and no edits');
@@ -632,7 +626,7 @@ function writeSessionDigest(
 
   const draft = buildSessionDigest({
     finalText: scan.finalText,
-    echoTexts: [...prompts, ...injectedTexts(store, opts)],
+    echoTexts: [...prompts, ...(await injectedTexts(store, opts))],
     edits: scan.edits,
     repoRoot,
   });
@@ -651,7 +645,7 @@ function writeSessionDigest(
     id: sessionDigestId(opts.tenantId, opts.key),
   };
   try {
-    store.entryWrites.writeEntry({ entry, actor: CLI_ACTOR });
+    await store.entryWrites.writeEntry({ entry, actor: CLI_ACTOR });
   } catch (err) {
     if (err instanceof RejectedValueError) return skipped('it matches a rejected value');
     throw err;
@@ -664,12 +658,12 @@ export interface DigestRunOptions extends SessionDigestOptions {
 }
 
 /** Never throws: a digest failure must not block the handoff or the snapshot close. Logs carry no digest text. */
-export function recordSessionDigest(
+export async function recordSessionDigest(
   hippoRoot: string,
   store: DigestStore,
   scan: SessionScan | null,
   opts: DigestRunOptions,
-): void {
+): Promise<void> {
   // The digest names this repo's files, so it goes only to the repo's own store, never the global one.
   if (!isInitialized(hippoRoot)) {
     opts.log('digest: skip: this folder has no store of its own');
@@ -680,7 +674,7 @@ export function recordSessionDigest(
     return;
   }
   try {
-    const outcome = writeSessionDigest(hippoRoot, store, scan, opts);
+    const outcome = await writeSessionDigest(hippoRoot, store, scan, opts);
     opts.log(
       outcome.written
         ? `digest: wrote ${outcome.sentences} sentence(s), ${outcome.files} file(s) for ${opts.key}`

@@ -8,13 +8,13 @@ import { evalNow } from '../../core/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
 import { strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
-import type { Context, ContextWith } from '../types.js';
-import type { Consolidation, LocalFiles, StoreWith } from '../../store/port.js';
+import type { Context, LocalContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
 import { ALL_TENANTS } from '../../util/tenant.js';
-import type { EntryCursor } from '../../store/port/consolidation.js';
+import type { Consolidation, LocalFiles, LocalStore } from '../../store/local/index.js';
+import type { EntryCursor } from '../../store/port/types.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row, or shrink the
  * pages dedup, the audit and ambient read; production never sets them. */
@@ -25,7 +25,7 @@ export interface SleepPhases {
   autoShare: typeof autoShare;
   computeAmbientState: typeof ambientStateFromTallies;
   loadPendingExtractionTenants: (store: Consolidation) => DirtyTenantSnapshot['dirtyTenants'];
-  extractGraph: (store: StoreWith<'localFiles'>, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  extractGraph: (store: LocalStore, tenantId: string) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
 }
 
@@ -57,12 +57,12 @@ interface DirtyTenantSnapshot {
 }
 
 /** A sleep's context with hippo.db's own files at hand. */
-type SleepContext = ContextWith<'localFiles'> & { readonly local: LocalFiles };
+type SleepContext = LocalContext & { readonly local: LocalFiles };
 
 /** `sleep` with its phase dependencies overridable; tests pass
  * stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
-  storeCtx: ContextWith<'localFiles'>,
+  storeCtx: LocalContext,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {

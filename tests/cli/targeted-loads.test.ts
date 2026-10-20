@@ -155,9 +155,8 @@ describe('rejections.apply', () => {
         tenantId: 'default',
         actor: 'tester',
         reason: 'wrong',
-        textOf: () => '  The Deploy WINDOW is friday   afternoon ',
-        inReach: () => true,
-        successorOf: () => undefined,
+        value: '  The Deploy WINDOW is friday   afternoon ',
+        ownScope: null,
       }),
     );
     expect(result.removedIds).toEqual([target.id]);

@@ -19,9 +19,8 @@ import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
 import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
 import type { TokenSummary } from './port/token-ledger.js';
 import type { WorkingMemoryItem } from './port/sessions.js';
-import type { DormantSnapshot } from './port/agent-import.js';
-import type { EntryCursor, EntryPage } from './port/consolidation.js';
-import type { Goal, ContinuityKey, JsonObject } from './port/types.js';
+import type { DormantRevival } from '../core/dormant-revival.js';
+import type { Goal, ContinuityKey, EntryCursor, EntryPage, JsonObject } from './port/types.js';
 
 export interface WorkingMemoryFilter {
   readonly scope?: string;
@@ -144,16 +143,18 @@ export interface Conflicts {
 export interface DormantRestoreRequest {
   readonly id: string;
   readonly actor: string;
-  readonly inReach: (scope: string | null) => boolean;
-  readonly revive: (snapshot: DormantSnapshot, now: Date) => MemoryEntry;
+  /** The caller's personal scope: another person's personal row reads as missing. */
+  readonly ownScope: string | null;
+  /** How the revived row is scored, inside the store's write. */
+  readonly revival: DormantRevival;
 }
 
 /** `ownScope` is the caller's personal scope; the store builds its own scope test, so no predicate crosses the port. */
 export interface Dormant {
   list(tenantId: string, ownScope: string | null, opts: ListDormantOpts): Promise<DormantMemory[]>;
   holds(tenantId: string, ownScope: string | null, id: string): Promise<boolean>;
-  /** `revive` runs inside the store's write, so a throw refuses before any row changes; its entry's origin is filled
-   * as writeEntry fills one. */
+  /** Revives inside the store's write, so a refused row changes nothing; its entry's origin is filled as writeEntry
+   * fills one. */
   restore(tenantId: string, request: DormantRestoreRequest): Promise<DormantRestoreOutcome>;
   /** Deletes for good, writes the `forget` audit row and counts it; false when no row in reach. */
   forget(tenantId: string, ownScope: string | null, id: string, actor: string): Promise<boolean>;

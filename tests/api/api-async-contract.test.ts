@@ -21,6 +21,7 @@ import {
 import { rememberLocally } from '../../src/api/memories/remember-local.js';
 import { importVault } from '../../src/entry/importers.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
+import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -106,7 +107,7 @@ const REPLIES = {
   importVault: expect.objectContaining({ total: 1, imported: 1 }),
 };
 
-const STORE_KINDS: ReadonlyArray<readonly [string, (root: string) => HippoStore & StoreGroups]> = [
+const STORE_KINDS: ReadonlyArray<readonly [string, (root: string) => LocalStore & StoreGroups]> = [
   ['sqliteStore', sqliteStore],
   ['workerSqliteStore', (root) => workerSqliteStore(root)],
 ];

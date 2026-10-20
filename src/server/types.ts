@@ -3,12 +3,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../api/index.js';
 import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
-import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
-import type { StoreReach } from '../store/port.js';
-import type { GlobalStores } from '../store/local/global-stores.js';
+import type { HippoStore, OptionalGroup } from '../store/index.js';
 import type { ConfigReader } from '../core/config.js';
 import type { CallerState } from '../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
+import type { GlobalStores, StoreNeed, StoreReach } from '../store/local/index.js';
 
 export interface ServerHandle {
   port: number;
@@ -44,7 +43,7 @@ export interface AddonCall {
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
-  readonly storeReady?: StoreGroup;
+  readonly storeReady?: StoreNeed;
   readonly loop?: 'off';
 }
 
@@ -135,9 +134,11 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
 
-/** A route's store status: the optional group it needs, a `sqliteOnly`
+/** A route's store status: the optional group or local files it needs, a `sqliteOnly`
  * reason, or neither for a route that runs on any store; never both. */
-type StoreStatus = { storeReady?: OptionalGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
+type StoreStatus =
+  | { storeReady?: OptionalGroup | 'localFiles'; sqliteOnly?: never }
+  | { sqliteOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for
  * a route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */

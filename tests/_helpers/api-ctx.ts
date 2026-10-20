@@ -1,12 +1,12 @@
 import { adminActor, type Actor } from '../../src/api/index.js';
-import { contextReach, type ContextReach, type ContextWith } from '../../src/api/types.js';
+import { contextReach, type ContextReach, type ContextWith, type LocalContext } from '../../src/api/types.js';
 import { loadConfig } from '../../src/core/config.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../../src/core/project-identity.js';
 import type { HippoStore, OptionalGroup } from '../../src/store/port.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 
-/** A test Context whose store holds every group, as the CLI's composition root hands it. */
-export type FullContext = ContextWith<OptionalGroup>;
+/** A test Context whose store holds every group and its local files, as the CLI's composition root hands it. */
+export type FullContext = LocalContext & ContextWith<OptionalGroup>;
 
 /** The reach a root sets for `store` on `hippoRoot`, with the global store's config read as the CLI reads it. */
 export function testReach(hippoRoot: string, store: HippoStore): ContextReach {

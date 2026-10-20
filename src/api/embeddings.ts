@@ -3,10 +3,8 @@
 
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { embedAll, folderIndex } from '../search/embed-memories.js';
-import type { VectorCoverage } from '../store/port/embedding-index.js';
-import { requireHostAdmin, type ContextWith } from './types.js';
-
-type LocalContext = ContextWith<'localFiles'>;
+import type { VectorCoverage } from '../store/local/embedding-index.js';
+import { requireHostAdmin, type LocalContext } from './types.js';
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
 export async function memoryEmbedMissing(ctx: LocalContext, provider?: EmbeddingProvider): Promise<number> {
