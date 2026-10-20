@@ -174,10 +174,11 @@ function gateOf(gates: Map<string, FetchGate>, model: string): FetchGate {
   return gate;
 }
 
-function rejectOnAbort(signal: AbortSignal): Promise<never> {
+/** `done` removes the listener when the wait ends without an abort, so a long-lived signal collects none. */
+function rejectOnAbort(signal: AbortSignal, done: AbortSignal): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     if (signal.aborted) reject(signal.reason);
-    else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    else signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: done });
   });
 }
 
@@ -186,12 +187,17 @@ async function waitForPipeline(
   downloading?: Promise<void>,
   signal?: AbortSignal,
 ): Promise<void> {
+  const left = new AbortController();
   try {
-    await (downloading && signal ? Promise.race([loading, downloading.then(() => rejectOnAbort(signal))]) : loading);
+    await (downloading && signal
+      ? Promise.race([loading, downloading.then(() => rejectOnAbort(signal, left.signal))])
+      : loading);
   } catch (err) {
     // The download goes on, and the first call after it lands gets the model.
     if (signal?.aborted && err === signal.reason) throw err;
     throw new Error(`local embedding model did not load: ${errorMessage(err)}`, { cause: err });
+  } finally {
+    left.abort();
   }
 }
 

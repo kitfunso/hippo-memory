@@ -4,6 +4,7 @@
  * Calibration is HIGH-PRECISION / LOW-RECALL, since cry-wolf noise dominates hint UX;
  * `recall_autodebias_hint_no_class_match` audits are the telemetry.
  */
+import { FORWARD_CLAIM_STOPWORDS } from '../../base/util/stopwords.js';
 
 /**
  * Each pattern is deliberately narrow (add one only on audit evidence); word boundaries are mandatory so `ETA` never
@@ -42,97 +43,6 @@ const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   ),
 ];
 
-/**
- * Pronouns, function words and modal verbs the regex set already gates on; dropped before class resolution so overlap
- * comes from domain tokens.
- */
-const STOP_WORDS: ReadonlySet<string> = new Set([
-  'the',
-  'a',
-  'an',
-  'and',
-  'or',
-  'but',
-  'for',
-  'to',
-  'in',
-  'on',
-  'at',
-  'of',
-  'by',
-  'with',
-  'my',
-  'your',
-  'our',
-  'their',
-  'its',
-  'it',
-  'this',
-  'that',
-  'these',
-  'those',
-  'will',
-  'should',
-  'can',
-  'i',
-  'we',
-  'they',
-  'he',
-  'she',
-  'is',
-  'be',
-  'was',
-  'are',
-  'were',
-  'has',
-  'have',
-  'had',
-  'do',
-  'does',
-  'did',
-  'from',
-  'as',
-  'so',
-  'than',
-  'then',
-  // Verbs inside FORWARD_CLAIM_PATTERNS gate the regex but are no signal for class resolution; listing them keeps them
-  // out of the classQueryTokens overlap.
-  'take',
-  'taken',
-  'takes',
-  'ship',
-  'ships',
-  'finish',
-  'complete',
-  'land',
-  'eta',
-  'estimate',
-  'estimated',
-  'next',
-  'about',
-  'around',
-  // Every forward-claim phrase contains a duration unit by design; letting it through would let a class tag containing
-  // 'days' win or tie on the unit.
-  'day',
-  'days',
-  'week',
-  'weeks',
-  'month',
-  'months',
-  'hour',
-  'hours',
-  'hr',
-  'hrs',
-  'min',
-  'mins',
-  'minute',
-  'minutes',
-  'sec',
-  'secs',
-  'second',
-  'seconds',
-]);
-
 export interface ForwardClaimMatch {
   /**
    * The regex match snippet (e.g. "will take"), surfaced in `PlanningFallacyHint.detectedPhrase` so the agent sees WHY
@@ -170,6 +80,6 @@ function extractClassQueryTokens(queryText: string): string[] {
       .replace(/[^a-z0-9\s_-]/g, ' ')
       // Split on whitespace, hyphen and underscore, matching the class-tag split in resolveClassFromTokens.
       .split(/[\s_-]+/)
-      .filter((t) => t.length >= 3 && !STOP_WORDS.has(t) && !/^\d+$/.test(t))
+      .filter((t) => t.length >= 3 && !FORWARD_CLAIM_STOPWORDS.has(t) && !/^\d+$/.test(t))
   );
 }

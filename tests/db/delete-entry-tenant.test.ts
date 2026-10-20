@@ -1,7 +1,7 @@
 // The delete core takes the tenant it acts for, so a caller that skipped its own reach check still cannot remove
 // another tenant's row.
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { deleteEntryCore } from '../../src/store/sqlite/delete-and-batch.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -9,7 +9,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 let root: string;
-let db: ReturnType<typeof openHippoDb>;
+let db: DatabaseSyncLike;
 const entry = createMemory('tenant a keeps this', { tenantId: 'tenant-a' });
 
 beforeEach(() => {

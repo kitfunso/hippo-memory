@@ -81,7 +81,7 @@ describe('the FTS check on a read', () => {
 });
 
 describe('vectors without an index entry', () => {
-  it('pages list each pending id once, oldest first, and skip those that have a vector', () => {
+  it('pages list each pending id once, in id order, and skip those that have a vector', () => {
     const root = makeRoot('bounded-pending');
     const rows = seeded(root, 7);
     const db = openHippoDb(root);
@@ -89,13 +89,18 @@ describe('vectors without an index entry', () => {
       upsertVectors(db, [[rows[2].id, [1, 0]]], 'm');
       pruneOrphanVectorsAt(db);
       const ids: string[] = [];
-      let after;
+      let afterId: string | undefined;
       do {
-        const page = pendingVectorIdsAt(db, { limit: 3, after });
+        const page = pendingVectorIdsAt(db, { limit: 3, afterId });
         ids.push(...page.ids);
-        after = page.next ?? undefined;
-      } while (after);
-      expect(ids).toEqual(rows.filter((_, i) => i !== 2).map((r) => r.id));
+        afterId = page.next ?? undefined;
+      } while (afterId !== undefined);
+      expect(ids).toEqual(
+        rows
+          .filter((_, i) => i !== 2)
+          .map((r) => r.id)
+          .sort(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -119,7 +124,8 @@ describe('walks of every row a read names', () => {
         return ids;
       });
       expect(log.result).toEqual(rows.map((r) => r.id));
-      expect(log.reads.map((read) => read.rows)).toEqual([4, 4, 1]);
+      const idReads = log.reads.filter((read) => read.sql.startsWith(ID_PAGE_READ));
+      expect(idReads.map((read) => read.rows)).toEqual([4, 4, 1]);
     } finally {
       closeHippoDb(db);
     }

@@ -8,7 +8,7 @@ import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorRead
 import { folderVectorSource, hybridSearch } from '../../src/entry/folder-search.js';
 import { resolveVectorArm } from '../../src/domain/search/vector.js';
 import { shareRoot } from '../_helpers/share-root.js';
-import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike, setMeta } from '../../src/db/index.js';
 import { log as hippoLog } from '../../src/base/util/log.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
@@ -92,7 +92,7 @@ const HIDDEN: readonly SeedRow[] = [
 ];
 const HIDDEN_IDS = [...HIDDEN.map((r) => r.entry.id), ORPHAN];
 
-function withDb(root: string, fn: (db: ReturnType<typeof openHippoDb>) => void): void {
+function withDb(root: string, fn: (db: DatabaseSyncLike) => void): void {
   const db = openHippoDb(root);
   try {
     fn(db);

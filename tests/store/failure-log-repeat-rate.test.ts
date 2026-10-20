@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { failuresPerSession } from '../../src/base/records/failure-repeats.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -25,7 +25,7 @@ oneRequestPerTest();
 
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 
-function withDb<T>(root: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T {
+function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
     return fn(db);

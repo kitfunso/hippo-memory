@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe('hot read statements', () => {
-  it('loadEntriesByIdsAt prepares one statement per id-list length and reuses it', () => {
+  it('loadEntriesByIdsAt prepares one statement for every id-list length and reuses it', () => {
     const ids = ['a', 'b', 'c'].map((id) => {
       const entry = { ...createMemory(`row ${id}`, { baseHalfLifeDays: 30 }), id };
       writeEntryDbOnly(db, entry);
@@ -37,7 +37,7 @@ describe('hot read statements', () => {
     for (let i = 0; i < 4; i++) expect(loadEntriesByIdsAt(db, ids, 'default').map((e) => e.id)).toHaveLength(3);
     loadEntriesByIdsAt(db, ids.slice(0, 2), 'default');
 
-    expect(preparedOf('FROM memories WHERE id IN')).toBe(2);
+    expect(preparedOf('FROM memories WHERE id IN')).toBe(1);
   });
 
   it('pickRarestFtsQuery prepares its vocabulary read once for the same term count', () => {

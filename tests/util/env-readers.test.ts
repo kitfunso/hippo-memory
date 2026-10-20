@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   envClaudeCodeSessionId,
+  envClefSettings,
+  envLlmRerankerUrl,
   envHealthProbeMs,
   envHippoSessionId,
   envLlmRerankerTimeoutMs,
@@ -82,5 +84,27 @@ describe('trimmed readers', () => {
     expect(read()).toBe('value-1');
     vi.stubEnv(name, '   ');
     expect(read()).toBeUndefined();
+  });
+});
+
+describe('endpoint and Clef readers', () => {
+  it('trims the reranker URL and the Clef endpoint, and reads blank as unset', () => {
+    for (const [name, read] of [
+      ['HIPPO_LLM_RERANKER_URL', envLlmRerankerUrl],
+      ['HIPPO_CLEF_ENDPOINT', () => envClefSettings().endpoint],
+    ] as const) {
+      vi.stubEnv(name, '  https://example.test/rank  ');
+      expect(read(), name).toBe('https://example.test/rank');
+      vi.stubEnv(name, '   ');
+      expect(read(), name).toBeUndefined();
+    }
+  });
+  it('reads the Clef timeout as a whole number above zero, and nothing else', () => {
+    vi.stubEnv('HIPPO_CLEF_TIMEOUT_MS', ' 250 ');
+    expect(envClefSettings().timeoutMs).toBe(250);
+    for (const bad of ['15s', '250.5', '-5', '0', '', 'soon']) {
+      vi.stubEnv('HIPPO_CLEF_TIMEOUT_MS', bad);
+      expect(envClefSettings().timeoutMs, bad).toBeUndefined();
+    }
   });
 });

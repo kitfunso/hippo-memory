@@ -44,6 +44,7 @@ const MAX_WALK_DEPTH = 64;
 
 // A walk costs milliseconds and a batch write stamps every row, so each path resolves once per process and remote rule,
 // until this process makes a store. `remote` is null where no root made the rule count.
+const IDENTITY_CACHE_MAX = 1_000;
 const identityCache = new Map<string, { readonly identity: ProjectIdentity; readonly remote: boolean | null }>();
 
 // The global store's config only: a per-store switch would stamp one checkout two ways. Read here, since the published
@@ -129,7 +130,10 @@ export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdenti
     identity = { root: start, name: '', legacyName: '', isHome: false };
   }
 
-  if (cacheable) identityCache.set(startInput, { identity, remote: root === null ? null : remoteRuleOn() });
+  if (cacheable) {
+    if (identityCache.size >= IDENTITY_CACHE_MAX) identityCache.delete(identityCache.keys().next().value!);
+    identityCache.set(startInput, { identity, remote: root === null ? null : remoteRuleOn() });
+  }
   return identity;
 }
 

@@ -12,13 +12,8 @@ import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { extractGraph } from '../../src/domain/graph/extract.js';
-import {
-  buildGraphModel,
-  layoutGraph,
-  renderGraphHtml,
-  renderGraphCanvas,
-  type GraphModel,
-} from '../../src/domain/graph/view.js';
+import { buildGraphModel, layoutGraph, type GraphModel } from '../../src/domain/graph/view.js';
+import { renderGraphHtml, renderGraphCanvas } from '../../src/surface/cli/graph-page.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
@@ -242,7 +237,7 @@ describe('graph-view: layout + renderers (pure)', () => {
   });
 
   it('11. JSON Canvas export is valid and 1:1 with the model', () => {
-    // SAFETY: renderGraphCanvas (src/domain/graph/view.ts) is the function under
+    // SAFETY: renderGraphCanvas (src/surface/cli/graph-page.ts) is the function under
     // test; its output is always this JSON Canvas node/edge shape.
     const canvas = JSON.parse(renderGraphCanvas(model)) as {
       nodes: { id: string; type: string; x: number; y: number; width: number; height: number; text: string }[];

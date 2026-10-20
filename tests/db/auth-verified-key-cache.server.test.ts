@@ -2,7 +2,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { verifyApiKeyCached, VerifiedKeyCache } from '../../src/surface/server/api-key.js';
 import type { VerifiedApiKey } from '../../src/base/scope/api-key.js';
@@ -36,7 +36,7 @@ async function counted<T>(fn: () => Promise<T>) {
 }
 
 /** Runs `work` on the store's file directly, as the CLI in another process would: nothing in this process hears of it. */
-function onDb<T>(root: string, work: (db: ReturnType<typeof openHippoDb>) => T): T {
+function onDb<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
     return work(db);
