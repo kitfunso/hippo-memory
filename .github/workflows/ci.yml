@@ -302,6 +302,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Test stores live in the temp dir, and the runner's D: flushes about 100 times faster than its C: (docs/incidents.md).
+      - name: Temp dir on the D drive
+        if: runner.os == 'Windows'
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}
         env:
