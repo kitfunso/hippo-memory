@@ -10,6 +10,7 @@ import { getGlobalRoot } from '../../domain/sharing/global-store.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
+import { processGit } from '../../base/util/git-runner.js';
 import { cliApiContext, cliInitGlobal, cliLocalFiles } from './api-context.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { fail } from './exit.js';
@@ -45,7 +46,10 @@ export function runChurnStaleForRepo(
     // One store failing must not abort sleep's later phases or skip the other store.
     try {
       const opts = { tenantId, projectName, legacyName, dryRun };
-      return { root, result: detectChurnStale(cliLocalFiles(root).learning, repoRoot, opts) };
+      return {
+        root,
+        result: detectChurnStale(cliLocalFiles(root).learning, { root: repoRoot, git: processGit }, opts),
+      };
     } catch (err) {
       const message = errorMessage(err);
       return {
@@ -131,7 +135,12 @@ export async function learnFromRepo(
   label?: string,
 ): Promise<LearnFromRepoResult> {
   const prefix = label ? `[${label}] ` : '';
-  const result = await learn(cliApiContext(hippoRoot, tenantId), { repoPath, days, profile: CLI_LEARN });
+  const result = await learn(cliApiContext(hippoRoot, tenantId), {
+    repoPath,
+    days,
+    profile: CLI_LEARN,
+    git: processGit,
+  });
   if (result.status === 'not-a-repo') {
     console.log(`${prefix}No git history found (or not a git repository).`);
     return { added: 0, skipped: 0, lowInfo: 0 };

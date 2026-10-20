@@ -6,8 +6,10 @@ import { parseArgs } from '../../src/cli.js';
 import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { undeclaredFlags, type VerbFlags } from '../../src/surface/cli/flags.js';
 import { HOOKS } from '../../src/domain/hooks/hook-blocks.js';
-import { installJsonHooks, resolveJsonHookPaths } from '../../src/domain/hooks/json-hooks.js';
-import { installOpencodePlugin, resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
+import { installJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
+import { resolveJsonHookPaths } from '../../src/domain/hooks/json-hooks.js';
+import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
+import { resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 let env: FakeHomeHandle;

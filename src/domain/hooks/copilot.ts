@@ -1,13 +1,8 @@
-// GitHub Copilot: hippo's hooks file, one MCP server key and an instructions block under the Copilot home folder, plus
-// the MCP server and an instructions file in each VS Code User folder.
-import * as fs from 'fs';
-import * as path from 'path';
+// GitHub Copilot: what hippo writes in its hooks file, its MCP server key and its instructions, under the Copilot home
+// and each VS Code User folder; surface/hooks-install/copilot.ts reads and writes the files.
 import { isDeepStrictEqual } from 'node:util';
-import { type JsonValue, readJsonFile, isJsonObjectLiteral, type JsonObject } from '../../base/util/json.js';
+import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../base/util/json.js';
 import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
-import { copilotHomeDir, vscodeUserDirs } from './shared.js';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
-import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
 const MCP_KEY = 'hippo';
 
@@ -53,9 +48,10 @@ before you finish.
 /** VS Code attaches a User `*.instructions.md` file to every chat request its `applyTo` glob matches. */
 const withApplyToAll = (text: string): string => `---\napplyTo: "**"\n---\n${text}\n`;
 
-const VSCODE_INSTRUCTIONS = withApplyToAll(COPILOT_INSTRUCTIONS);
+/** The whole file hippo writes in each VS Code User folder. */
+export const VSCODE_INSTRUCTIONS = withApplyToAll(COPILOT_INSTRUCTIONS);
 
-function isHipposVscodeInstructions(text: string): boolean {
+export function isHipposVscodeInstructions(text: string): boolean {
   return SHIPPED_COPILOT_INSTRUCTIONS.some((shipped) => text === withApplyToAll(shipped));
 }
 
@@ -74,31 +70,6 @@ export interface CopilotPaths {
   readonly mcpConfig: string;
   readonly instructions: string;
   readonly vscode: readonly VscodePaths[];
-}
-
-function profileDirs(userDir: string): string[] {
-  const dir = path.join(userDir, 'profiles');
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => path.join(dir, e.name))
-    .sort();
-}
-
-export function copilotPaths(): CopilotPaths {
-  const home = copilotHomeDir();
-  return {
-    hooks: resolveJsonHookPaths('copilot').settings,
-    mcpConfig: path.join(home, 'mcp-config.json'),
-    instructions: path.join(home, 'copilot-instructions.md'),
-    vscode: vscodeUserDirs().map((userDir) => ({
-      userDir,
-      mcpConfig: path.join(userDir, 'mcp.json'),
-      instructions: path.join(userDir, 'prompts', 'hippo.instructions.md'),
-      profiles: profileDirs(userDir),
-    })),
-  };
 }
 
 /** The app that reads an MCP config: where it keeps its servers, and hippo's entry there. */
@@ -139,28 +110,15 @@ export function copilotMcpSnippet(host: McpHost = COPILOT_CLI_MCP): string {
   return `"${MCP_KEY}": ${JSON.stringify(host.server())}`;
 }
 
-interface McpConfig {
+/** An MCP config file's parsed object and the server table under the host's key, edited in place. */
+export interface McpConfig {
   readonly config: JsonObject;
   readonly servers: JsonObject;
 }
 
-/**
- * Null for a file with comments, one that is not JSON, or one whose shape a merge would overwrite; a missing file reads
- * as empty.
- */
-function readMcpConfig(file: string, host: McpHost): McpConfig | null {
-  let config: JsonValue = {};
-  if (fs.existsSync(file)) {
-    try {
-      config = readJsonFile(file);
-    } catch (err) {
-      // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown with its own
-      // message.
-      if (!(err instanceof SyntaxError)) throw err;
-      // An empty file is a new one with no servers yet, not one with comments.
-      if (fs.readFileSync(file, 'utf8').trim() !== '') return null;
-    }
-  }
+/** Null for text that is not a JSON object, or one whose shape a merge would overwrite; the server table is made when
+ * absent. */
+export function mcpConfigOf(config: JsonValue, host: McpHost): McpConfig | null {
   if (!isJsonObjectLiteral(config)) return null;
   if (config[host.key] === undefined) config[host.key] = {};
   const servers = config[host.key];
@@ -169,40 +127,30 @@ function readMcpConfig(file: string, host: McpHost): McpConfig | null {
 
 export type McpMergeStatus = 'added' | 'present' | 'user-owned' | 'unreadable';
 
-/**
- * Adds hippo's server and keeps every other key; a file hippo cannot parse, or a "hippo" key it did not write, stays as
- * it is.
- */
-function mergeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpMergeStatus {
-  const read = readMcpConfig(file, host);
-  if (read === null) return 'unreadable';
+/** Adds hippo's server and keeps every other key; a "hippo" key hippo did not write stays as it is. The caller writes
+ * the config on `added`. */
+export function addHippoServer(read: McpConfig, host: McpHost): Exclude<McpMergeStatus, 'unreadable'> {
   const existing = read.servers[MCP_KEY];
   if (existing !== undefined) return isHipposServer(existing, host) ? 'present' : 'user-owned';
   read.servers[MCP_KEY] = host.server();
-  writeSettingsFile(file, read.config);
   return 'added';
 }
 
 export type McpRemoveStatus = 'removed' | 'absent' | 'user-owned' | 'unreadable';
 
-/** Removes the "hippo" key only when hippo wrote it. */
-export function removeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpRemoveStatus {
-  if (!fs.existsSync(file)) return 'absent';
-  const read = readMcpConfig(file, host);
-  if (read === null) return 'unreadable';
+/** Removes the "hippo" key only when hippo wrote it, and the host's table once it is empty. The caller writes the
+ * config on `removed`. */
+export function removeHippoServer(read: McpConfig, host: McpHost): Exclude<McpRemoveStatus, 'unreadable'> {
   const existing = read.servers[MCP_KEY];
   if (existing === undefined) return 'absent';
   if (!isHipposServer(existing, host)) return 'user-owned';
   delete read.servers[MCP_KEY];
   if (Object.keys(read.servers).length === 0) delete read.config[host.key];
-  writeSettingsFile(file, read.config);
   return 'removed';
 }
 
-/**
- * A filesystem error on an MCP config file (EACCES, EISDIR, EBUSY), kept as its own message so setup can report it and
- * go on.
- */
+/** A filesystem error on an MCP config file (EACCES, EISDIR, EBUSY), kept as its own message so setup can report it
+ * and go on. */
 export interface McpFailure {
   readonly failed: string;
 }
@@ -211,32 +159,14 @@ export function isMcpFailure(status: string | McpFailure): status is McpFailure 
   return typeof status !== 'string';
 }
 
-function hasErrnoCode(err: Error): err is NodeJS.ErrnoException {
-  return 'code' in err && typeof err.code === 'string';
-}
-
-/**
- * One MCP config step; a filesystem error comes back as a failure, so the hooks file and the instructions still
- * install.
- */
-function mcpStep<S extends string>(step: () => S): S | McpFailure {
-  try {
-    return step();
-  } catch (err) {
-    if (err instanceof Error && hasErrnoCode(err)) return { failed: err.message };
-    throw err;
-  }
-}
-
 function isCopilotBlock(inner: string): boolean {
   return SHIPPED_COPILOT_INSTRUCTIONS.includes(inner);
 }
 
 type FoundBlock = NonNullable<ReturnType<typeof hippoBlock>>;
 
-/**
- * Replaces only the text between the markers, in the file's own line ending, or appends a block after the user's text.
- */
+/** Replaces only the text between the markers, in the file's own line ending, or appends a block after the user's
+ * text. */
 function withCopilotBlock(text: string, found: FoundBlock | null): string {
   if (found !== null) {
     const { start, end, eol } = found;
@@ -247,31 +177,27 @@ function withCopilotBlock(text: string, found: FoundBlock | null): string {
   return `${text}${text.endsWith('\n') ? '\n' : '\n\n'}${block}`;
 }
 
-/**
- * `kept`: a hippo block that is not the Copilot text (edited, or another agent's in a shared file); `unclosed`: a start
- * marker with no end.
- */
+/** `kept`: a hippo block that is not the Copilot text (edited, or another agent's in a shared file); `unclosed`: a
+ * start marker with no end. */
 export type InstructionsInstallStatus = 'written' | 'present' | 'kept' | 'unclosed';
 
-/**
- * Creates the file when missing; any block but hippo's own Copilot one, and a start marker with no end, leave the file
- * as it is.
- */
-function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
-  const old = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  const found = hippoBlock(old);
-  if (found === null && old.includes(HOOK_MARKERS.start)) return 'unclosed';
-  if (found !== null && !isCopilotBlock(found.inner)) return 'kept';
-  const next = withCopilotBlock(old, found);
-  if (next === old) return 'present';
-  writeFileAtomic(file, next);
-  return 'written';
+export interface InstructionsPlan {
+  readonly status: InstructionsInstallStatus;
+  readonly next: string;
 }
 
-/**
- * `text` without the block and its markers, plus the line break after the end marker, else the one before the start
- * marker.
- */
+/** The instructions file's next text, `old` being '' for a missing file; any block but hippo's own Copilot one, and a
+ * start marker with no end, leave it as it is. The caller writes `next` on `written`. */
+export function planInstructionsBlock(old: string): InstructionsPlan {
+  const found = hippoBlock(old);
+  if (found === null && old.includes(HOOK_MARKERS.start)) return { status: 'unclosed', next: old };
+  if (found !== null && !isCopilotBlock(found.inner)) return { status: 'kept', next: old };
+  const next = withCopilotBlock(old, found);
+  return { status: next === old ? 'present' : 'written', next };
+}
+
+/** `text` without the block and its markers, plus the line break after the end marker, else the one before the start
+ * marker. */
 function withoutCopilotBlock(text: string, found: FoundBlock): string {
   const from = found.start - HOOK_MARKERS.start.length;
   const to = found.end + HOOK_MARKERS.end.length;
@@ -282,47 +208,33 @@ function withoutCopilotBlock(text: string, found: FoundBlock): string {
 
 export type InstructionsRemoveStatus = 'removed' | 'absent' | 'kept' | 'unclosed';
 
-/**
- * Splices out only hippo's own Copilot block and keeps every other byte; a file left with nothing but whitespace goes.
- */
-export function removeInstructionsBlock(file: string): InstructionsRemoveStatus {
-  if (!fs.existsSync(file)) return 'absent';
-  const old = fs.readFileSync(file, 'utf8');
+/** On `removed`, `left` null means the file held nothing but hippo's block and goes. */
+export interface InstructionsRemovalPlan {
+  readonly status: InstructionsRemoveStatus;
+  readonly left: string | null;
+}
+
+/** Splices out only hippo's own Copilot block and keeps every other byte. */
+export function planInstructionsRemoval(old: string): InstructionsRemovalPlan {
   const found = hippoBlock(old);
-  if (found === null) return old.includes(HOOK_MARKERS.start) ? 'unclosed' : 'absent';
-  if (!isCopilotBlock(found.inner)) return 'kept';
+  if (found === null) return { status: old.includes(HOOK_MARKERS.start) ? 'unclosed' : 'absent', left: old };
+  if (!isCopilotBlock(found.inner)) return { status: 'kept', left: old };
   const left = withoutCopilotBlock(old, found);
-  if (left.trim() === '') fs.rmSync(file);
-  else writeFileAtomic(file, left);
-  return 'removed';
+  return { status: 'removed', left: left.trim() === '' ? null : left };
 }
 
 /** `kept`: the file is there but is not the text hippo writes, so the user edited it or it is someone else's. */
 export type VscodeInstructionsInstallStatus = 'written' | 'present' | 'kept';
 
-/**
- * The file is hippo's alone, so it is written whole; an earlier hippo text is upgraded, and any other text already
- * there stays.
- */
-export function ensureVscodeInstructions(file: string): VscodeInstructionsInstallStatus {
-  if (fs.existsSync(file)) {
-    const old = fs.readFileSync(file, 'utf8');
-    if (old === VSCODE_INSTRUCTIONS) return 'present';
-    if (!isHipposVscodeInstructions(old)) return 'kept';
-  }
-  writeFileAtomic(file, VSCODE_INSTRUCTIONS);
-  return 'written';
+/** The file is hippo's alone, so it is written whole; an earlier hippo text is upgraded, and any other text already
+ * there stays. `old` is null for a missing file; the caller writes VSCODE_INSTRUCTIONS on `written`. */
+export function planVscodeInstructions(old: string | null): VscodeInstructionsInstallStatus {
+  if (old === null) return 'written';
+  if (old === VSCODE_INSTRUCTIONS) return 'present';
+  return isHipposVscodeInstructions(old) ? 'written' : 'kept';
 }
 
 export type VscodeInstructionsRemoveStatus = 'removed' | 'absent' | 'kept';
-
-/** Deletes the file only when it still holds exactly what a hippo release wrote. */
-export function removeVscodeInstructions(file: string): VscodeInstructionsRemoveStatus {
-  if (!fs.existsSync(file)) return 'absent';
-  if (!isHipposVscodeInstructions(fs.readFileSync(file, 'utf8'))) return 'kept';
-  fs.rmSync(file);
-  return 'removed';
-}
 
 export interface VscodeInstallResult {
   readonly paths: VscodePaths;
@@ -340,33 +252,6 @@ export interface CopilotInstallResult {
   readonly vscode: readonly VscodeInstallResult[];
 }
 
-/**
- * The CLI's folder holds more than the hooks folder setup makes for VS Code, so a rerun on a VS Code-only machine still
- * finds no CLI.
- */
-export function isCopilotCliPresent(home: string = copilotHomeDir()): boolean {
-  if (fs.statSync(home, { throwIfNoEntry: false })?.isDirectory() !== true) return false;
-  const entries = fs.readdirSync(home);
-  return entries.length !== 1 || entries[0] !== 'hooks';
-}
-
-export function installCopilot(): CopilotInstallResult {
-  const paths = copilotPaths();
-  // Read before the hooks install, which makes the folder on a machine with only VS Code.
-  const cli = isCopilotCliPresent();
-  return {
-    paths,
-    hooks: installJsonHooks('copilot').installedSessionStart,
-    mcp: cli ? mcpStep(() => mergeMcpServer(paths.mcpConfig)) : null,
-    instructions: cli ? ensureInstructionsBlock(paths.instructions) : null,
-    vscode: paths.vscode.map((dir) => ({
-      paths: dir,
-      mcp: mcpStep(() => mergeMcpServer(dir.mcpConfig, VSCODE_MCP)),
-      instructions: ensureVscodeInstructions(dir.instructions),
-    })),
-  };
-}
-
 export interface VscodeUninstallResult {
   readonly paths: VscodePaths;
   readonly mcp: McpRemoveStatus | McpFailure;
@@ -379,19 +264,4 @@ export interface CopilotUninstallResult {
   readonly mcp: McpRemoveStatus | McpFailure;
   readonly instructions: InstructionsRemoveStatus;
   readonly vscode: readonly VscodeUninstallResult[];
-}
-
-export function uninstallCopilot(): CopilotUninstallResult {
-  const paths = copilotPaths();
-  return {
-    paths,
-    hooks: uninstallJsonHooks('copilot'),
-    mcp: mcpStep(() => removeMcpServer(paths.mcpConfig)),
-    instructions: removeInstructionsBlock(paths.instructions),
-    vscode: paths.vscode.map((dir) => ({
-      paths: dir,
-      mcp: mcpStep(() => removeMcpServer(dir.mcpConfig, VSCODE_MCP)),
-      instructions: removeVscodeInstructions(dir.instructions),
-    })),
-  };
 }

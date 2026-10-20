@@ -9,7 +9,8 @@ import { StoreBusyError } from '../../src/store/port.js';
 import { HttpError } from '../../src/base/util/http-util.js';
 import { judgeAll } from '../../src/domain/eval/judgment.js';
 import { createLocalEmbedder } from '../../src/base/embeddings/local.js';
-import { installOpencodePlugin, resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
+import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
+import { resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
 import * as fs from 'node:fs';
 import { withFakeHome } from '../_helpers/with-fake-home.js';
 

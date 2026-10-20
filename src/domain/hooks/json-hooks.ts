@@ -1,8 +1,7 @@
-/** Hook install/uninstall for AI coding tools. Claude Code gets a JSON `hooks` block in settings.json; older forms are
- * migrated automatically. OpenCode rejects the JSON-hook schema (no `hooks` key), so it gets a TS plugin
- * (OPENCODE_PLUGIN_SOURCE); see installCodexHooks, installCopilotHooks. */
+/** Hook install and removal rules for AI coding tools, on parsed settings: Claude Code gets a JSON `hooks` block in
+ * settings.json with older forms migrated, Codex an appended one, Copilot a whole file; surface/hooks-install does the
+ * reads and writes. */
 
-import * as fs from 'fs';
 import * as path from 'path';
 import {
   type JsonHookTarget,
@@ -20,17 +19,8 @@ import {
   defaultPreCompactLogPath,
 } from './shared.js';
 import { claudeConfigDir, codexHomeDir, homeDir } from '../../base/util/agent-homes.js';
-import {
-  type JsonValue,
-  isJsonString,
-  readJsonFile,
-  tryReadJsonFile,
-  isJsonObjectLiteral,
-  type JsonObject,
-} from '../../base/util/json.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../base/util/json.js';
 import { escapeRegex } from '../../base/util/escape.js';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
 
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {
@@ -174,7 +164,7 @@ function migratePinnedInjectRecentCommands(hookArray: JsonValue | undefined): bo
   return changed;
 }
 
-function nothingInstalled(target: JsonHookTarget, settingsPath: string): InstallResult {
+export function nothingInstalled(target: JsonHookTarget, settingsPath: string): InstallResult {
   return {
     target,
     settingsPath,
@@ -209,13 +199,20 @@ function ensureHooksObject(settings: JsonObject, events: readonly string[]): Jso
   return hooks;
 }
 
+/** What an install does to one settings file: the result to report, and the settings to write, null when the file
+ * stays as it is. */
+export interface HookInstallPlan {
+  readonly result: InstallResult;
+  readonly write: JsonValue | null;
+}
+
 /** Codex keys trust to each hook's position and hash and re-asks for a changed one, so hippo only appends and never
  * edits an entry. */
-function installCodexHooks(settingsPath: string, settings: JsonValue): InstallResult {
+function planCodexHooks(settingsPath: string, settings: JsonValue): HookInstallPlan {
   const result = nothingInstalled('codex', settingsPath);
-  if (!isJsonObjectLiteral(settings)) return { ...result, invalidJson: true };
+  if (!isJsonObjectLiteral(settings)) return { result: { ...result, invalidJson: true }, write: null };
   const hooks = ensureHooksObject(settings, ['UserPromptSubmit', 'SessionStart']);
-  if (hooks === null) return { ...result, invalidJson: true };
+  if (hooks === null) return { result: { ...result, invalidJson: true }, write: null };
   const append = (event: string, marker: string, group: JsonObject): boolean => {
     const groups = hooks[event];
     if (hookArrayContains(groups, marker)) return false;
@@ -229,8 +226,10 @@ function installCodexHooks(settingsPath: string, settings: JsonValue): InstallRe
     matcher: 'compact',
     hooks: [codexCommandHook(HIPPO_COMPACT_RESUME_MARKER, 10)],
   });
-  if (installedUserPromptSubmit || installedCompactResume) writeSettingsFile(settingsPath, settings);
-  return { ...result, installedUserPromptSubmit, installedCompactResume };
+  return {
+    result: { ...result, installedUserPromptSubmit, installedCompactResume },
+    write: installedUserPromptSubmit || installedCompactResume ? settings : null,
+  };
 }
 
 /** One Copilot entry with a PowerShell twin: VS Code runs only `powershell` on Windows, where the execution policy can
@@ -264,45 +263,40 @@ export function copilotHookEvents(): string[] {
   return isJsonObjectLiteral(hooks) ? Object.keys(hooks) : [];
 }
 
+/** A settings file's text as hippo writes it, so an install can tell an unchanged file from one it must write. */
+export function settingsText(settings: JsonValue): string {
+  return JSON.stringify(settings, null, 2) + '\n';
+}
+
 /** Hippo owns this whole file, so install writes the full table and a second install changes no byte. */
-function installCopilotHooks(settingsPath: string): InstallResult {
+export function planCopilotHooks(settingsPath: string, current: string | null): HookInstallPlan {
   const result = nothingInstalled('copilot', settingsPath);
   const table = copilotHooksTable();
-  const current = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : null;
-  if (current === JSON.stringify(table, null, 2) + '\n') return result;
-  writeSettingsFile(settingsPath, table);
+  if (current === settingsText(table)) return { result, write: null };
   return {
-    ...result,
-    installedSessionStart: true,
-    installedCaptureError: true,
-    installedPreCompact: true,
-    installedSessionEnd: true,
+    result: {
+      ...result,
+      installedSessionStart: true,
+      installedCaptureError: true,
+      installedPreCompact: true,
+      installedSessionEnd: true,
+    },
+    write: table,
   };
 }
 
-/** Adds hippo's hooks to `target`'s settings file and migrates older hippo entries; a file that is not JSON stays
- * untouched. */
-export function installJsonHooks(target: JsonHookTarget): InstallResult {
-  const { settings: settingsPath, logFile } = resolveJsonHookPaths(target);
-  const dir = path.dirname(settingsPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (target === 'copilot') return installCopilotHooks(settingsPath);
-
-  let settings: JsonValue = {};
-  if (fs.existsSync(settingsPath)) {
-    const read = tryReadJsonFile(settingsPath);
-    if (read === undefined) return { ...nothingInstalled(target, settingsPath), invalidJson: true };
-    settings = read;
-  }
-  if (target === 'codex') return installCodexHooks(settingsPath, settings);
-  if (!isJsonObjectLiteral(settings)) return { ...nothingInstalled(target, settingsPath), invalidJson: true };
-  return installClaudeCodeHooks(settingsPath, settings, logFile);
-}
-
-/** Swaps the file in with one rename, so a crash mid-write cannot leave a truncated settings.json that Claude Code
- * cannot parse. */
-export function writeSettingsFile(file: string, settings: JsonValue): void {
-  writeFileAtomic(file, JSON.stringify(settings, null, 2) + '\n');
+/** Adds hippo's hooks to parsed settings, which it edits in place, and migrates older hippo entries; `settings` is
+ * undefined for a file that is not JSON, which stays untouched. */
+export function planJsonHooks(
+  target: 'claude-code' | 'codex',
+  paths: Pick<JsonHookPaths, 'settings' | 'logFile'>,
+  settings: JsonValue | undefined,
+): HookInstallPlan {
+  const invalid = { result: { ...nothingInstalled(target, paths.settings), invalidJson: true }, write: null };
+  if (settings === undefined) return invalid;
+  if (target === 'codex') return planCodexHooks(paths.settings, settings);
+  if (!isJsonObjectLiteral(settings)) return invalid;
+  return planClaudeCodeHooks(paths.settings, settings, paths.logFile);
 }
 
 type ClaudeHooks = Record<string, JsonValue[]>;
@@ -420,9 +414,11 @@ function appendCompactionHooks(hooks: ClaudeHooks) {
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
 
-function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logFile: string): InstallResult {
+function planClaudeCodeHooks(settingsPath: string, settings: JsonObject, logFile: string): HookInstallPlan {
   const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
-  if (merge === null) return { ...nothingInstalled('claude-code', settingsPath), invalidJson: true };
+  if (merge === null) {
+    return { result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true }, write: null };
+  }
   // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
   const hooks = merge as ClaudeHooks;
   const migration = migrateLegacyClaudeHooks(hooks);
@@ -454,8 +450,7 @@ function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logF
     ...migration,
     invalidJson: false,
   };
-  if (Object.values(result).some((v) => v === true)) writeSettingsFile(settingsPath, settings);
-  return result;
+  return { result, write: Object.values(result).some((v) => v === true) ? settings : null };
 }
 
 /** The exact command hippo writes for each Codex event; uninstall removes only these handlers. */
@@ -473,68 +468,39 @@ function uninstallCodexHooks(hooks: JsonObject): boolean {
   return changed;
 }
 
-/** One stderr line naming the handlers uninstall kept that still mention a hippo command (`nice hippo sleep`, `pnpm
- * exec hippo ...`), so the user can remove them by hand. */
-function warnKeptHippoHandlers(settingsPath: string, hooks: JsonObject): void {
-  const kept = CLAUDE_HOOK_MARKERS.flatMap(([event, markers]) => {
+/** The Claude Code handlers uninstall kept that still mention a hippo command (`nice hippo sleep`, `pnpm exec hippo
+ * ...`), so the user can be told to remove them by hand. */
+function keptHippoHandlers(hooks: JsonObject): string[] {
+  return CLAUDE_HOOK_MARKERS.flatMap(([event, markers]) => {
     const groups = hooks[event];
     return Array.isArray(groups)
       ? handlerCommands(groups).filter((command) => markers.some((m) => command.includes(m)))
       : [];
   });
-  if (kept.length === 0) return;
-  process.stderr.write(
-    `hippo kept these hook handlers in ${settingsPath} because they do not start with a hippo command; ` +
-      `remove any that are hippo's by hand: ${kept.map((c) => JSON.stringify(c)).join(', ')}\n`,
-  );
 }
 
-/** Removes hippo's own hook handlers from `target`'s settings file and keeps every other handler; true when the file
- * changed. */
-export function uninstallJsonHooks(target: JsonHookTarget): boolean {
-  const { settings: settingsPath } = resolveJsonHookPaths(target);
-  if (!fs.existsSync(settingsPath)) return false;
-  if (target === 'copilot') {
-    // Copilot reads every file in its hooks folder, so hippo's own file goes whole and the user's files stay.
-    fs.rmSync(settingsPath, { force: true });
-    return true;
-  }
+/** What uninstall does to parsed settings, edited in place: the settings to write (null when nothing changed) and, for
+ * Claude Code, the kept handlers that still name a hippo command. */
+export interface HookRemovalPlan {
+  readonly write: JsonObject | null;
+  readonly kept: readonly string[];
+}
 
-  let settings: JsonValue;
-  try {
-    settings = readJsonFile(settingsPath);
-  } catch (err) {
-    // Never rewrite a settings file we cannot parse; a read failure (permissions, a directory) is the caller's to see.
-    if (!(err instanceof SyntaxError)) {
-      throw new Error(`could not read ${settingsPath}: ${errorMessage(err)}`, { cause: err });
-    }
-    log.warn(
-      `${settingsPath} is not valid JSON, so no hippo hooks were removed from it: ${err.message}`,
-      errorFields(err),
-    );
-    return false;
-  }
-  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) return false;
+/** Removes hippo's own hook handlers and keeps every other handler. */
+export function planHookRemoval(target: 'claude-code' | 'codex', settings: JsonValue): HookRemovalPlan {
+  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) return { write: null, kept: [] };
   const hooks = settings.hooks;
   const changed = target === 'codex' ? uninstallCodexHooks(hooks) : uninstallClaudeCodeHooks(hooks);
-  if (target === 'claude-code') warnKeptHippoHandlers(settingsPath, hooks);
-  if (!changed) return false;
+  const kept = target === 'claude-code' ? keptHippoHandlers(hooks) : [];
+  if (!changed) return { write: null, kept };
   if (Object.keys(hooks).length === 0) delete settings.hooks;
-  writeSettingsFile(settingsPath, settings);
-  return true;
+  return { write: settings, kept };
 }
 
-/** Whether uninstall can edit settings.json; `invalidJson` marks a file that exists but is not JSON hippo can edit,
- * which `uninstallJsonHooks` reports only as false. */
-export function checkUninstallable(target: JsonHookTarget): Pick<InstallResult, 'settingsPath' | 'invalidJson'> {
-  const { settings: settingsPath } = resolveJsonHookPaths(target);
-  if (!fs.existsSync(settingsPath)) return { settingsPath, invalidJson: false };
-  const settings = tryReadJsonFile(settingsPath);
-  return {
-    settingsPath,
-    invalidJson:
-      !isJsonObjectLiteral(settings) || (settings.hooks !== undefined && !isJsonObjectLiteral(settings.hooks)),
-  };
+/** False for settings uninstall cannot edit: not a JSON object (undefined when the text did not parse), or a `hooks`
+ * that is not one. */
+export function canEditHooks(settings: JsonValue | undefined): boolean {
+  return isJsonObjectLiteral(settings) && (settings.hooks === undefined || isJsonObjectLiteral(settings.hooks));
 }
 
 function uninstallClaudeCodeHooks(hooks: JsonObject): boolean {

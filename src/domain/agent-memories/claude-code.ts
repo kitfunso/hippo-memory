@@ -1,14 +1,14 @@
 // Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user
 // folder.
-import fs from 'node:fs';
 import path from 'node:path';
 import { resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { realpathOrResolve } from '../../base/util/real-path.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
 import { claudeConfigDir } from '../../base/util/agent-homes.js';
-import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
+import type { AgentFiles } from '../../base/util/agent-files.js';
+import { expandHome, frontmatterField, itemTime, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
-import { gitLayout } from './git.js';
+import { gitLayout, type GitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
 import { isJsonObjectLiteral, isJsonString, parseJson, tryParseJson } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -22,21 +22,20 @@ const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
  * Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself
  * outside a repository.
  */
-function claudeMemoryFolderNames(projectRoot: string, platform: NodeJS.Platform): Set<string> {
+function claudeMemoryFolderNames(ctx: AdapterContext, projectRoot: string): Set<string> {
   const roots = [projectRoot, realpathOrResolve(projectRoot)];
-  const layout = gitLayout(projectRoot);
-  if (layout) roots.push(claudeCheckoutRoot(layout.top, layout.gitDir, layout.common));
-  return new Set(
-    roots.map((root) => (platform === 'win32' ? claudeFolderName(root).toLowerCase() : claudeFolderName(root))),
-  );
+  const layout = gitLayout(ctx.git, projectRoot);
+  if (layout) roots.push(claudeCheckoutRoot(ctx.files, layout));
+  const fold = (name: string): string => (ctx.platform === 'win32' ? name.toLowerCase() : name);
+  return new Set(roots.map((root) => fold(claudeFolderName(root))));
 }
 
 /** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside
  * a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
-export function claudeCheckoutRoot(top: string, gitDir: string, common: string): string {
+function claudeCheckoutRoot(files: AgentFiles, { top, gitDir, common }: GitLayout): string {
   if (gitDir === common) return top;
   if (path.basename(common) === '.git') return path.dirname(common);
-  return fs.existsSync(path.join(common, '.git')) ? top : common;
+  return files.exists(path.join(common, '.git')) ? top : common;
 }
 
 /**
@@ -58,7 +57,7 @@ export const claudeCodeAdapter: Adapter = {
     const config = claudeConfigDir(ctx.home, ctx.env);
     const warnings: string[] = [];
     const folders = scope === 'project' ? projectFolders(ctx, config) : userFolders(ctx, config, warnings);
-    return { tool: 'claude-code', home: config, containers: readFolders(folders, scope, ctx.platform), warnings };
+    return { tool: 'claude-code', home: config, containers: readFolders(ctx, folders, scope), warnings };
   },
 };
 
@@ -72,7 +71,7 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
   return {
     tool: 'claude-code',
     home: config,
-    containers: readFolders([folder], 'project', ctx.platform),
+    containers: readFolders(ctx, [folder], 'project'),
     warnings: [],
   };
 }
@@ -82,16 +81,16 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
 export function transcriptNotesProject(
   transcriptPath: string,
   cwd: string | null,
-  machine: Pick<AdapterContext, 'platform' | 'env'>,
+  machine: Pick<AdapterContext, 'platform' | 'env' | 'files'>,
 ): ProjectIdentity | null {
   const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));
-  const start = transcriptStartCwd(transcriptPath);
+  const start = transcriptStartCwd(machine.files, transcriptPath);
   const pinned = pinnedProjectDirName(machine.env);
   if (pinned !== null && fold(pinned) === folder) {
     // A pinned name stands for whatever project the session ran in, so its start folder decides.
     const from = start ?? cwd;
-    return from !== null && fs.existsSync(from) ? resolveProjectIdentity(from) : null;
+    return from !== null && machine.files.exists(from) ? resolveProjectIdentity(from) : null;
   }
   for (const from of [start, cwd]) {
     for (
@@ -101,7 +100,7 @@ export function transcriptNotesProject(
     ) {
       // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
       if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) {
-        return fs.existsSync(dir) ? resolveProjectIdentity(dir) : null;
+        return machine.files.exists(dir) ? resolveProjectIdentity(dir) : null;
       }
     }
   }
@@ -115,37 +114,23 @@ const START_SCAN_BYTES = 64 * 1024;
  * The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder
  * name alone cannot give back.
  */
-function transcriptStartCwd(transcriptPath: string): string | null {
-  let fd: number;
-  try {
-    fd = fs.openSync(transcriptPath, 'r');
-  } catch (err) {
-    // A transcript that is not there names no start folder; any other failure is the caller's to see.
-    if (err instanceof Error && 'code' in err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return null;
-    throw err;
+function transcriptStartCwd(files: AgentFiles, transcriptPath: string): string | null {
+  // A transcript that is not there names no start folder; any other failure is the caller's to see.
+  const head = files.readHead(transcriptPath, START_SCAN_BYTES);
+  if (head === null) return null;
+  for (const line of head.split('\n')) {
+    const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
+    if (cwd === undefined) continue;
+    // The match is the body of one JSON string, so parsing it in quotes yields a string; a bad escape skips the line.
+    const decoded = tryParseJson(`"${cwd}"`);
+    if (isJsonString(decoded)) return decoded;
   }
-  try {
-    const buf = Buffer.alloc(START_SCAN_BYTES);
-    const lines = buf
-      .subarray(0, fs.readSync(fd, buf, 0, buf.length, 0))
-      .toString('utf8')
-      .split('\n');
-    for (const line of lines) {
-      const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
-      if (cwd === undefined) continue;
-      // The match is the body of one JSON string, so parsing it in quotes yields a string; a bad escape skips the line.
-      const decoded = tryParseJson(`"${cwd}"`);
-      if (isJsonString(decoded)) return decoded;
-    }
-    return null;
-  } finally {
-    fs.closeSync(fd);
-  }
+  return null;
 }
 
 function projectFolders(ctx: AdapterContext, config: string): string[] {
   const projects = path.join(config, 'projects');
-  const names = ctx.projectRoot === undefined ? [] : [...claudeMemoryFolderNames(ctx.projectRoot, ctx.platform)];
+  const names = ctx.projectRoot === undefined ? [] : [...claudeMemoryFolderNames(ctx, ctx.projectRoot)];
   const pinned = pinnedProjectDirName(ctx.env);
   if (pinned !== null) names.push(pinned);
   return names.map((name) => path.join(projects, name, 'memory'));
@@ -158,14 +143,14 @@ function pinnedProjectDirName(env: AdapterContext['env']): string | null {
 }
 
 function userFolders(ctx: AdapterContext, config: string, warnings: string[]): string[] {
-  const dir = autoMemoryDirectory(path.join(config, 'settings.json'), ctx.home, warnings);
+  const dir = autoMemoryDirectory(ctx, path.join(config, 'settings.json'), warnings);
   return dir === null ? [] : [dir];
 }
 
 // User settings only: a cloned repository's own settings must not point the import at another project's notes.
-function autoMemoryDirectory(settings: string, home: string, warnings: string[]): string | null {
-  if (!fs.existsSync(settings)) return null;
-  const file = readTextFile(settings);
+function autoMemoryDirectory(ctx: AdapterContext, settings: string, warnings: string[]): string | null {
+  if (!ctx.files.exists(settings)) return null;
+  const file = ctx.files.readText(settings);
   if (!file.ok) {
     warnings.push(file.reason);
     return null;
@@ -179,7 +164,7 @@ function autoMemoryDirectory(settings: string, home: string, warnings: string[])
   }
   const value = isJsonObjectLiteral(json) ? json.autoMemoryDirectory : undefined;
   if (!isStringValue(value) || value === '') return null;
-  const dir = expandHome(value, home);
+  const dir = expandHome(value, ctx.home);
   if (path.isAbsolute(dir)) return dir;
   warnings.push(`${settings}: autoMemoryDirectory "${value}" is not absolute or under ~/, so it is ignored`);
   return null;
@@ -196,8 +181,8 @@ const NOTES: FolderRules = {
   },
 };
 
-function readFolders(folders: readonly string[], scope: Scope, platform: NodeJS.Platform): Container[] {
-  return uniqueFolders(folders, platform)
-    .map((dir) => readFolderStore(dir, scope, NOTES))
+function readFolders(ctx: AdapterContext, folders: readonly string[], scope: Scope): Container[] {
+  return uniqueFolders(folders, ctx.platform)
+    .map((dir) => readFolderStore(ctx.files, dir, scope, NOTES))
     .filter((c): c is Container => c !== null);
 }

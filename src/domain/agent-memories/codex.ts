@@ -1,8 +1,7 @@
 // Codex CLI's memory_summary.md, the one memory file Codex puts in its prompt, read as a single text-keyed file.
-import fs from 'node:fs';
 import path from 'node:path';
 import { codexHomeDir } from '../../base/util/agent-homes.js';
-import { readTextFile } from './files.js';
+import type { AgentFiles } from '../../base/util/agent-files.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, Container, MemoryItem } from './types.js';
@@ -17,16 +16,16 @@ export const codexAdapter: Adapter = {
     const home = codexHomeDir(ctx.home, ctx.env);
     const containers: Container[] = [];
     if (scope === 'user') {
-      const container = readSummary(path.join(home, 'memories', 'memory_summary.md'));
+      const container = readSummary(ctx.files, path.join(home, 'memories', 'memory_summary.md'));
       if (container !== null) containers.push(container);
     }
     return { tool: 'codex', home, containers, warnings: [] };
   },
 };
 
-function readSummary(file: string): Container | null {
-  if (!fs.existsSync(file)) return null;
-  const read = readTextFile(file);
+function readSummary(files: AgentFiles, file: string): Container | null {
+  if (!files.exists(file)) return null;
+  const read = files.readText(file);
   if (!read.ok) return unreadable(file, read.reason);
   if (!isCodexSummary(read.text)) {
     return unreadable(file, `${file}: not a Codex memory summary (needs "v1" first and a "## User Profile" heading)`);
