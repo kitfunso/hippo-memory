@@ -20,7 +20,7 @@ import { remember } from '../../src/api/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 interface ScoredRow {
   entry: MemoryEntry;
@@ -41,7 +41,7 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
 
   beforeEach(async () => {
     hippoRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hippo-1.7.4-helper-'));
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
   });
 
   // Fully-populated MemoryEntry fixture: the boost only reads

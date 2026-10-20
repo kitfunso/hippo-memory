@@ -12,7 +12,7 @@ import {
 } from '../_helpers/compaction-hooks.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 // The instruction Claude Code hands the summarizer; pinned word for word.
 const INSTRUCTION =
@@ -68,7 +68,7 @@ function preCompact(session: string | null, transcriptPath: string = transcript,
 
 describe('hippo pre-compact leaves a record and asks for memories', () => {
   it('inserts a started record and prints the instruction once, on fd 1', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     const result = await preCompact('s1', transcript, 'manual');
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(`${INSTRUCTION}\n`);
@@ -89,7 +89,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('still saves the working-state snapshot, and no report file is left for post-compact', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     expect((await preCompact('s1')).status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(s.hippoRoot, 'default');
     expect(snapshot?.task).toMatch(/npm install/);
@@ -98,7 +98,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('records the compaction even when no snapshot is derivable', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     const empty = path.join(s.proj, 'empty.jsonl');
     fs.writeFileSync(empty, '');
     const result = await preCompact('s1', empty);
@@ -117,7 +117,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('prints nothing and writes nothing for a malformed payload', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     for (const input of [
       'not json',
       '{"session_id":"s1"}',
@@ -131,7 +131,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('a payload naming no session gets no record and no instruction', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     const result = await preCompact(null);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
@@ -139,7 +139,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('two sessions compacting keep their own records and their own message', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     const empty = path.join(s.proj, 'empty.jsonl');
     fs.writeFileSync(empty, '');
     expect((await preCompact('s1')).status).toBe(0);

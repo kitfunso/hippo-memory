@@ -9,7 +9,7 @@ import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
@@ -21,7 +21,7 @@ describe('autoShare batching', () => {
     tmp = mkdtempSync(join(tmpdir(), 'hippo-autoshare-batch-'));
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     // The first open migrates the store, which would count as writes in whichever call comes first.
-    initStore(getGlobalRoot());
+    initTestStore(getGlobalRoot());
   });
 
   afterEach(() => {
@@ -31,7 +31,7 @@ describe('autoShare batching', () => {
 
   function shareFrom(topics: readonly string[]) {
     const hippoRoot = join(tmp, `proj${topics.length}`, '.hippo');
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     for (const topic of topics) {
       writeEntry(
         hippoRoot,

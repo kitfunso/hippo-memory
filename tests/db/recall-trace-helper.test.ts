@@ -65,7 +65,7 @@ function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 }
 
 function tmpHome() {
-  const home = makeRoot('recall-trace-helper', { init: false });
+  const home = makeRoot('recall-trace-helper');
   return {
     home,
     restore: () => rmSync(home, { recursive: true, force: true }),

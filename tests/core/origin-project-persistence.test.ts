@@ -8,7 +8,7 @@ import { stampOriginProject } from '../../src/store/sqlite/entry-row.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -20,7 +20,7 @@ function makeProjectStore(projectName: string): string {
   const projectDir = path.join(tmpRoot, projectName);
   const storeRoot = path.join(projectDir, '.hippo');
   fs.mkdirSync(storeRoot, { recursive: true });
-  initStore(storeRoot);
+  initTestStore(storeRoot);
   return storeRoot;
 }
 
@@ -116,7 +116,7 @@ describe('markdown mirror round-trip', () => {
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${unknown.id}.md`), serializeEntry(unknown));
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${legacy.id}.md`), serializeEntry(legacy));
 
-    initStore(storeRoot);
+    initTestStore(storeRoot);
     const byId = new Map(loadAllEntries(storeRoot, 'default').map((e) => [e.id, e.originProject]));
     expect(byId.get(unknown.id)).toBeNull();
     expect(byId.get(legacy.id)).toBe('proj-a');
@@ -193,7 +193,7 @@ describe('v39 migration backfill', () => {
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${sharedRow.id}.md`), serializeEntry(sharedRow));
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${plainRow.id}.md`), serializeEntry(plainRow));
 
-    initStore(storeRoot); // bootstrapLegacyStore imports the markdown
+    initTestStore(storeRoot); // bootstrapLegacyStore imports the markdown
     const entries = loadAllEntries(storeRoot, 'default');
     const shared = entries.find((e) => e.source.startsWith('shared:'));
     const plain = entries.find((e) => !e.source.startsWith('shared:'));
@@ -225,7 +225,7 @@ describe('v39 migration backfill', () => {
     const origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', globalRoot);
     try {
-      initStore(globalRoot);
+      initTestStore(globalRoot);
       writeEntry(globalRoot, {
         ...createMemory('a user-global lesson in a dotfiles-managed store'),
         originProject: '',

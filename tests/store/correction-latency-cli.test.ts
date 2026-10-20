@@ -4,7 +4,7 @@ import { createMemory, MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/cor
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -34,7 +34,7 @@ function withCreated<T extends MemoryEntry>(entry: T, iso: string): T {
 
 describe('hippo correction-latency CLI', () => {
   it('reports the empty case when no supersessions exist', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(
       hippoDir,
       createMemory('a single belief, never corrected', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
@@ -46,7 +46,7 @@ describe('hippo correction-latency CLI', () => {
   });
 
   it('emits JSON percentiles for an extraction-driven correction', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
 
     const raw = withCreated(
       createMemory('slack: tier moved to 120', {
@@ -85,7 +85,7 @@ describe('hippo correction-latency CLI', () => {
   });
 
   it('flags manual-only stores and explains how to surface latency', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
 
     const oldFact = withCreated(
       createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),

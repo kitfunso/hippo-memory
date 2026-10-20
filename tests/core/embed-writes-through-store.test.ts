@@ -18,7 +18,7 @@ import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-s
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
@@ -172,7 +172,7 @@ describe('embedAll with a store', () => {
 
   it('keeps the pages written before the provider fails, and the next run finishes the rest', async () => {
     const root = join(home, `paged-${++n}`);
-    initStore(root);
+    initTestStore(root);
     writeEntriesTogether(
       root,
       Array.from({ length: 70 }, (_, i) =>

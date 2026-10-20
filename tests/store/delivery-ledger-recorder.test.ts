@@ -15,7 +15,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -126,8 +126,8 @@ beforeEach(() => {
   globalRoot = path.join(tmpRoot, 'global');
   fs.mkdirSync(local, { recursive: true });
   fs.mkdirSync(globalRoot, { recursive: true });
-  initStore(local);
-  initStore(globalRoot);
+  initTestStore(local);
+  initTestStore(globalRoot);
   vi.stubEnv('HIPPO_HOME', globalRoot);
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });

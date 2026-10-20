@@ -19,7 +19,7 @@ import { RecallContractError } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 function callTool(
   name: string,
@@ -51,16 +51,16 @@ describe('MCP hippo_recall scorer_window', () => {
 
   beforeEach(() => {
     home = makeRoot('mcp-sw');
-    for (let i = 0; i < 30; i++) {
-      writeEntry(
-        home,
+    writeEntriesTogether(
+      home,
+      Array.from({ length: 30 }, (_, i) =>
         createMemory(`alpha ${i}`, {
           layer: Layer.Buffer,
           kind: 'raw',
           tenantId: 'default',
         }),
-      );
-    }
+      ),
+    );
   });
 
   afterEach(() => rmSync(home, { recursive: true, force: true }));

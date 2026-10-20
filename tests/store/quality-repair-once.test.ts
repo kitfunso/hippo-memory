@@ -15,7 +15,7 @@ import {
   writeEntry,
   loadAllEntries,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const CUT = 'Found local migration files to be';
 const DOUBTFUL = 'When CI fails we retry once';
@@ -128,8 +128,8 @@ describe('the upgrade runs the repair once', () => {
     dir = makeRoot('quality-once-cli', { init: false });
     local = join(dir, '.hippo');
     global = join(dir, 'global');
-    initStore(local);
-    initStore(global);
+    initTestStore(local);
+    initTestStore(global);
     env = {
       ...process.env,
       HIPPO_HOME: global,

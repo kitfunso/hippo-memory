@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sqlText, stageScratchWinner, type StagedWinner } from './race-winner.js';
 import { loadEntriesByIds, writeEntry } from './root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 /** A supersede another process wins: it copies a successor from a scratch store and links `oldId` to it under the write lock. */
 export async function stageSupersedeWinner(
@@ -24,7 +24,7 @@ export async function stageSupersedeWinner(
     baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
   const scratch = mkdtempSync(join(tmpdir(), 'hippo-race-winner-'));
-  initStore(scratch);
+  initTestStore(scratch);
   writeEntry(scratch, successor);
   const audit = JSON.stringify({ newId: successor.id });
   const winner = await stageScratchWinner(

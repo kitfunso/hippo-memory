@@ -11,7 +11,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { copilotScratch, type CopilotScratch } from '../_helpers/copilot-hooks.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 export const runHippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
   hippoRun(args, { cwd, env, input });
@@ -95,7 +95,7 @@ export function rows<T>(sql: string, hippoRoot = s.hippoRoot): T[] {
 /** A git-marked folder with its own project store, as a second project the hook may run from. */
 export function initStoreIn(dir: string): string {
   fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
-  initStore(path.join(dir, '.hippo'));
+  initTestStore(path.join(dir, '.hippo'));
   return path.join(dir, '.hippo');
 }
 
@@ -112,8 +112,8 @@ export async function waitForLog(logFile: string, marker: string, timeoutMs = WO
 export function useCopilotScratch() {
   beforeEach(() => {
     s = copilotScratch();
-    initStore(s.hippoRoot);
-    initStore(s.globalRoot);
+    initTestStore(s.hippoRoot);
+    initTestStore(s.globalRoot);
   });
 }
 

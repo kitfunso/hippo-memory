@@ -7,7 +7,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const savedCwd = process.cwd();
 let cwd: string;
@@ -54,7 +54,7 @@ const SPEC = [
 
 describe('hippo capture --file', () => {
   it('turns bullets under a spec heading into spec memories, and a second run skips them', async () => {
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     const notes = file('notes.md', SPEC);
 
     const dry = await capture('--file', notes, '--dry-run');
@@ -78,14 +78,14 @@ describe('hippo capture --file', () => {
   });
 
   it('refuses a missing file with exit 1', async () => {
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     const r = await capture('--file', join(cwd, 'nope.md'));
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('File not found');
   });
 
   it('says there is nothing to capture from an empty file and writes nothing', async () => {
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     const r = await capture('--file', file('empty.md', '   \n'));
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('No text to capture from.');

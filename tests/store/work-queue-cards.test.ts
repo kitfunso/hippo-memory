@@ -21,7 +21,7 @@ import {
   completeCard,
   addCardComment,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { root, useCardsRoot } from '../_helpers/work-queue-cards.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
@@ -52,6 +52,7 @@ function countRows(db: DatabaseSyncLike, table: string): number {
 useCardsRoot();
 
 describe('test 1: fresh store, single open', () => {
+  useCardsRoot({ init: false });
   it('has all four card tables, the five new indexes, and schema_version 43', async () => {
     const db = openHippoDb(root);
     try {
@@ -92,7 +93,7 @@ describe('test 1: fresh store, single open', () => {
 
 describe('test 2: a v42 store migrates to v43 with the four tables present, empty', () => {
   it('gains cards/card_deps/card_runs/card_comments on next open', async () => {
-    initStore(root);
+    initTestStore(root);
     const db1 = openHippoDb(root);
     try {
       db1.exec('DROP TABLE cards; DROP TABLE card_deps; DROP TABLE card_runs; DROP TABLE card_comments;');

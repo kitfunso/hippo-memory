@@ -10,7 +10,7 @@ import type { MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { everyFieldEntry, GOLDEN_TENANT, recallableEntry } from '../_helpers/every-field-entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -42,7 +42,7 @@ function seed(): void {
 beforeEach(() => {
   base = makeRoot('wire-golden');
   root = path.join(base, '.hippo');
-  initStore(root);
+  initTestStore(root);
   for (const k of CLEARED_ENV) vi.stubEnv(k, '');
   vi.stubEnv('HIPPO_HOME', path.join(base, 'global'));
   vi.stubEnv('HIPPO_TENANT', GOLDEN_TENANT);

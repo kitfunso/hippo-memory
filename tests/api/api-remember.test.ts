@@ -7,7 +7,7 @@ import { BadRequestError } from '../../src/core/api-errors.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 describe('api.remember', () => {
   it('persists a memory and returns its envelope', async () => {
@@ -56,7 +56,7 @@ describe("api.remember stamps the caller's project", () => {
     mkdirSync(join(tmp, 'proj', '.git'), { recursive: true });
     const store = join(tmp, 'proj', '.hippo');
     mkdirSync(store, { recursive: true });
-    initStore(store);
+    initTestStore(store);
     if (flagged) writeFileSync(join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
     return apiCtx(store, 'default', { subject: 'cli', role: 'admin' });
   }

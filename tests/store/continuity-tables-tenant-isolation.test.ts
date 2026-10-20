@@ -8,7 +8,7 @@ import {
   appendSessionEvent,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 beforeEach(() => {
@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe('session_events tenant isolation', () => {
   it('listSessionEvents does not return rows from another tenant', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'tenantA', {
       session_id: 'shared-id',
@@ -42,7 +42,7 @@ describe('session_events tenant isolation', () => {
   });
 
   it('findPromotableSessions only sees the calling tenant', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'tenantA', {
       session_id: 'sess-a',
@@ -67,7 +67,7 @@ describe('session_events tenant isolation', () => {
 
 describe('session_handoffs tenant isolation', () => {
   it('loadLatestHandoff (no sessionId) does not surface another tenant row', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveSessionHandoff(tmpDir, 'tenantA', {
       version: 1,
@@ -82,7 +82,7 @@ describe('session_handoffs tenant isolation', () => {
   });
 
   it('loadLatestHandoff with same session_id returns each tenant own handoff', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveSessionHandoff(tmpDir, 'tenantA', {
       version: 1,
@@ -107,7 +107,7 @@ describe('session_handoffs tenant isolation', () => {
   });
 
   it('loadHandoffById rejects cross-tenant lookups', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveSessionHandoff(tmpDir, 'tenantA', {
       version: 1,
@@ -136,13 +136,13 @@ describe('session_handoffs tenant isolation', () => {
 
 describe('runtime guards', () => {
   it('throws clear error when tenantId is empty string', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     expect(() => listSessionEvents(tmpDir, '', { session_id: 'x' })).toThrow(/tenantId is required/);
     expect(() => loadLatestHandoff(tmpDir, '', 'x')).toThrow(/tenantId is required/);
   });
 
   it('rejects misbinding: passing a session_id where tenantId is expected', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     // A JS caller from a v0.40 codebase that called loadLatestHandoff(root, sessionId)
     // would now have 'sess-abc' bound to tenantId. The runtime guard catches this
     // before it silently filters to a non-existent tenant.
@@ -165,7 +165,7 @@ describe('runtime guards', () => {
   });
 
   it('rejects non-string tenantId values', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     // SAFETY: casts force non-string values past the tenantId: string type on purpose,
     // to verify the runtime guard rejects them the same way a JS (non-TS) caller could.
     expect(() => loadLatestHandoff(tmpDir, undefined as never, 'x')).toThrow(/tenantId is required/);

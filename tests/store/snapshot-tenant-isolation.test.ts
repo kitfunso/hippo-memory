@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, clearActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 beforeEach(() => {
@@ -12,7 +12,7 @@ beforeEach(() => {
 
 describe('task_snapshot tenant isolation', () => {
   it('tenant B saving a snapshot does not supersede tenant A active row', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A task',
@@ -43,7 +43,7 @@ describe('task_snapshot tenant isolation', () => {
   });
 
   it('load is tenant-scoped: tenant A cannot see tenant B snapshot', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'tenantB', {
       task: 'B task',
       summary: 'B',
@@ -57,7 +57,7 @@ describe('task_snapshot tenant isolation', () => {
   });
 
   it('clear is tenant-scoped: clearing tenant A does not clear tenant B', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A',
       summary: 'A',
@@ -83,7 +83,7 @@ describe('task_snapshot tenant isolation', () => {
   });
 
   it('mirror files are tenant-scoped: tenant B does not overwrite tenant A active-task.md', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A keeps its mirror',
@@ -112,7 +112,7 @@ describe('task_snapshot tenant isolation', () => {
   });
 
   it('default tenant keeps the unsuffixed mirror filename for back-compat', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'd',
       summary: 'd',
@@ -125,7 +125,7 @@ describe('task_snapshot tenant isolation', () => {
   });
 
   it('same-tenant supersede still works: saving twice retires the older row', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'first',
       summary: 'first',

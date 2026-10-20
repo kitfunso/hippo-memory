@@ -3,7 +3,7 @@ import { consolidate } from '../../src/index.js';
 import { listMemoryConflicts, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -13,7 +13,7 @@ beforeEach(() => {
 
 describe('Extracted fact protection', () => {
   it('does not merge extracted facts into new semantic entries', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const fact1 = createMemory('the deployment uses kubernetes pods on port 8080', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -45,7 +45,7 @@ describe('Extracted fact protection', () => {
   });
 
   it('still merges non-extracted episodic memories', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const base = 'the server crashed due to memory overflow in the worker process';
     const ep1 = createMemory(base, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
@@ -66,7 +66,7 @@ describe('Extracted fact protection', () => {
   });
 
   it('does not detect conflicts between extracted facts', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const fact1 = createMemory('always use port 3000 for the dev server', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

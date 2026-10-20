@@ -17,7 +17,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import type { RerankStep } from '../../src/core/search-types.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 describe('session goal boost trace parity (side-channel)', () => {
   let hippoRoot: string;
@@ -26,7 +26,7 @@ describe('session goal boost trace parity (side-channel)', () => {
 
   beforeEach(async () => {
     hippoRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hippo-a7-parity-'));
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
   });
 
   function seed(content: string, tags: string[]): MemoryEntry {

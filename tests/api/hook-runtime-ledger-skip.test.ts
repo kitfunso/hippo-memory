@@ -8,7 +8,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { DEFAULT_CONFIG } from '../../src/core/config.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -52,7 +52,7 @@ describe('startToolFailureRecorder', () => {
     tmp = makeRoot('tf-recorder', { init: false });
     const globalRoot = path.join(tmp, 'global');
     fs.mkdirSync(globalRoot);
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true } }));
     vi.stubEnv('HIPPO_HOME', globalRoot);
     const noStore = path.join(tmp, 'proj', '.hippo');

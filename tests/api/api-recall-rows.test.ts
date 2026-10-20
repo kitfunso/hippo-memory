@@ -20,7 +20,7 @@ import {
 } from '../../src/api/recall/rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let home: string;
 let hippoRoot: string;
@@ -99,7 +99,7 @@ beforeEach(() => {
   hippoRoot = join(home, '.hippo');
   globalRoot = join(home, 'global');
   vi.stubEnv('HIPPO_HOME', globalRoot);
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   for (const [i, text] of [
     'deploy pipeline uses blue green rollout',
     'deploy token rotation happens weekly',
@@ -137,7 +137,7 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
     // SAFETY: the origin reads only the isGlobal tag, so a bare id is enough of a row.
     expect(off.isGlobal({ entry: { id: 'mem_elsewhere' }, isGlobal: true } as SearchResult)).toBe(false);
     // The reach is probed when the context is built, so the global store is seen by a context built after it exists.
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     const s = cliRecallSetting(ctx(), 'team-a');
     expect(s).toEqual({ globalRoot, primaryIsGlobal: false, activeScope: 'team-a' });
     const on = cliRecallOrigin(ctx(), s);
@@ -151,7 +151,7 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
   });
 
   it('tags a ranked row global when it came from the global store and local when it did not', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     writeEntry(globalRoot, {
       ...createMemory('deploy rollback checklist lives in the shared runbook'),
       id: 'mem_glob_0',

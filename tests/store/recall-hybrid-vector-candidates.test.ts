@@ -16,7 +16,8 @@ import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
-import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -49,7 +50,7 @@ function seed(): Seeded {
     JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }),
     'utf8',
   );
-  initStore(home);
+  initTestStore(home);
   const s: Seeded = { home, global, labelById: new Map(), idByLabel: new Map() };
   add(s, 'L1', 'deploy pipeline uses blue green rollout');
   add(s, 'L2', 'deploy checklist says run migrations before every deploy');

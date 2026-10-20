@@ -45,7 +45,7 @@ Four rules decide a status:
 - The status rules in the table above.
 - Every agent named in the README framework table, the MCP recipe's client sentence, its `## Setup` headings, and `package.json` keywords maps to an entry. The table must keep at least six rows and the client sentence must exist, so moving either fails loudly instead of passing empty.
 - Every `integrations/*.md` file and `extensions/*` directory is cited in some entry's `sources`.
-- `tests/hooks/agent-inventory-check.test.ts` also checks that every tool `hippo setup` detects has an entry with the matching integration kind.
+- `tests/hooks/agent-inventory-check.process.test.ts` also checks that every tool `hippo setup` detects has an entry with the matching integration kind.
 
 Website pages are listed in `claims` but not parsed, since they hold no structured agent list. Keep them in step by hand.
 
@@ -77,7 +77,7 @@ Fixtures live in `tests/fixtures/capture/<runtime>/<event>/*.json`. Each holds `
 
 ## Store-level fixtures
 
-`tests/db/copilot-hooks-cli.test.ts` runs the built CLI against a real store, for the hazards a payload fixture cannot show.
+`tests/db/copilot-hooks-cli.process.test.ts` runs the built CLI against a real store, for the hazards a payload fixture cannot show.
 
 - **Busy store.** While another process holds the store's write lock, a VS Code reply saves no memory and no progress cursor. The next reply in that chat saves the lesson once. Copilot's pre-compact waits once, warns once and saves no snapshot.
 - **Crash and retry.** A worker killed after it wrote the memories and before it saved the progress cursor leaves one copy. The next reply finds the lesson already stored and saves the cursor.

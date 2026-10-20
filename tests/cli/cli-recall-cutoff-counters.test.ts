@@ -37,7 +37,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 /** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {
@@ -145,13 +145,13 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
   // the query and reachable only through a supersedes edge.
   it('a row surfaced by edge is included in the published total and the invariant closes', async () => {
     // Same root convention as makeEnv: the store ROOT is the .hippo directory
-    // itself. initStore(home) with a bare dir leaves cwd/.hippo uninitialized
+    // itself. initTestStore(home) with a bare dir leaves cwd/.hippo uninitialized
     // and the CLI exits "No .hippo directory found".
     home = makeRoot('c5-graph', { init: false });
     const root = join(home, '.hippo');
     const globalRoot = join(home, 'global-hippo');
     mkdirSync(globalRoot, { recursive: true });
-    initStore(root);
+    initTestStore(root);
     const T = 'default';
     const mk = (text: string) => {
       const m = createMemory(text, {

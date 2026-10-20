@@ -5,8 +5,8 @@ import type { JsonValue } from '../../src/util/json.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { rowsOf, seeded } from './recall-golden-seed.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
-import { writeEntry } from './root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { writeEntry, writeEntriesTogether } from './root-forms.js';
+import { initTestStore } from './store-template.js';
 
 /** Every row's time is set against this, so a test pins the clock here. */
 export const CONTEXT_NOW = '2026-03-10T12:00:00.000Z';
@@ -226,14 +226,14 @@ function pinUpdatedAt(dir: string): void {
 
 /** Adds the context rows to a store folder that seedTwoTenants made. */
 export function seedContextRows(dir: string): void {
-  for (const row of memoryRows()) writeEntry(dir, row);
+  writeEntriesTogether(dir, memoryRows());
   insertTaskState(dir);
   pinUpdatedAt(dir);
 }
 
 /** A global store with a pin and a recent row in the first tenant, for the contextGet runs that read one. */
 export function seedContextGlobal(dir: string): void {
-  initStore(dir);
+  initTestStore(dir);
   const a = inTenant(TENANT_A, '');
   writeEntry(
     dir,

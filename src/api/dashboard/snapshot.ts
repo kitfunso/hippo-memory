@@ -236,19 +236,6 @@ export interface Snapshot {
   memo: SnapshotMemo;
 }
 
-export interface SnapshotInput {
-  id: number;
-  tenantId: string;
-  nowMs: number;
-  entries: readonly DashboardRow[];
-  /** Rows counted out before `entries` was read; any entry here that is not live adds to them. */
-  excluded?: ExcludedCounts;
-  openConflicts: readonly ConflictPair[];
-  scanText: TextScan;
-  /** The ratio the root read, which the strengths are scored by. */
-  lossAversion: LossAversion;
-}
-
 interface CutHead {
   head: string;
   truncated: boolean;
@@ -411,14 +398,6 @@ class SnapshotDraft {
 }
 
 const noneExcluded = (): ExcludedCounts => ({ superseded: 0, archived: 0, quarantined: 0 });
-
-/** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
-export function buildSnapshot(input: SnapshotInput): Snapshot {
-  const draft = new SnapshotDraft(input.nowMs, { ...noneExcluded(), ...input.excluded }, input.lossAversion);
-  for (const row of input.entries) draft.addRow(row);
-  for (const pair of input.openConflicts) draft.addConflict(pair);
-  return draft.finish(input.id, input.tenantId, input.scanText);
-}
 
 interface CachedSnapshot {
   snapshot: Snapshot;

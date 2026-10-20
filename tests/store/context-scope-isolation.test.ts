@@ -21,7 +21,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -46,9 +46,9 @@ beforeEach(() => {
   tmpRoot = makeRoot('ctx-iso', { init: false });
   projA = path.join(tmpRoot, 'proj-a', '.hippo');
   fs.mkdirSync(projA, { recursive: true });
-  initStore(projA);
+  initTestStore(projA);
   globalStore = path.join(tmpRoot, 'globalstore');
-  initStore(globalStore);
+  initTestStore(globalStore);
   origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalStore);
 

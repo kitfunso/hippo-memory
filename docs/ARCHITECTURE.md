@@ -17,7 +17,7 @@ A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a 
 
 ## Test-only exports
 
-A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any not listed in `.test-only-exports-baseline.json`; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. The list can only shrink: move the helper to `tests/_helpers` or give it a production caller, then run the script with `--update` to lock the lower count in.
+A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any of them, with no baseline; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. A test asserts through the path src uses, the helper moves to `tests/_helpers`, or the export gets a production caller.
 
 ## src/core/ablation.ts
 

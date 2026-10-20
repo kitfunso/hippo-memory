@@ -17,7 +17,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
@@ -35,7 +35,7 @@ beforeEach(() => {
   tmp = makeRoot('digest-store', { init: false });
   repo = path.join(tmp, 'repo');
   hippoRoot = path.join(repo, '.hippo');
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });

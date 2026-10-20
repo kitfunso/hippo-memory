@@ -15,7 +15,7 @@ import { createSnapshotService, type SnapshotService } from '../../src/api/dashb
 import type { DashboardRow } from '../../src/store/local/dashboard-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from './root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 import { envTenant } from '../../src/util/env.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
@@ -36,7 +36,7 @@ export function makeStore(prefix: string): TmpStore {
   const home = mkdtempSync(join(tmpdir(), `${prefix}-`));
   const hippoRoot = join(home, '.hippo');
   mkdirSync(hippoRoot, { recursive: true });
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   const prevTenant = process.env.HIPPO_TENANT;
   const prevHome = process.env.HIPPO_HOME;
   delete process.env.HIPPO_TENANT;

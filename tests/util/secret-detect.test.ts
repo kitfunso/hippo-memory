@@ -20,7 +20,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
@@ -209,9 +209,9 @@ describe('producer + sync vetoes (real stores)', () => {
     tmpRoot = makeRoot('secret', { init: false });
     projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
-    initStore(projA);
+    initTestStore(projA);
     globalStore = path.join(tmpRoot, 'globalstore');
-    initStore(globalStore);
+    initTestStore(globalStore);
     origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', globalStore);
   });

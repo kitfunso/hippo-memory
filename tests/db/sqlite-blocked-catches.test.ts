@@ -7,14 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteBlockedError, withSqliteBlocked } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
-import { recordMcpTokens } from '../../src/mcp/request.js';
 import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vector-index.js';
 import { resolveVectorArm } from '../../src/search/vector.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/core/config.js';
 import { strengthenRetrieved } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
@@ -34,23 +31,6 @@ const ROWS: readonly Row[] = [
       await recordTokens(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), 'http_recall', {
         items: 1,
         tokens: 1,
-      });
-      return 'returned';
-    },
-    'returned',
-  ],
-  [
-    'mcp/request.ts recordMcpTokens',
-    /recordMcpTokens/,
-    async (root) => {
-      await recordMcpTokens('hippo_context', 'memory text', {
-        hippoRoot: root,
-        tenantId: 'default',
-        actor: 'mcp',
-        role: 'admin',
-        hostAdmin: true,
-        store: sqliteStore(root),
-        config: loadConfig(root),
       });
       return 'returned';
     },

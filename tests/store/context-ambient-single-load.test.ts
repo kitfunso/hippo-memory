@@ -14,7 +14,7 @@ import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -63,7 +63,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
     tmpRoot = makeRoot('ambient-summary', { init: false });
     projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
-    initStore(projA);
+    initTestStore(projA);
     ctx = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
   });
 
@@ -122,7 +122,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     tmpRoot = makeRoot('ambient-strength', { init: false });
     const projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
-    initStore(projA);
+    initTestStore(projA);
     const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
     // Half-life 7 days, aged ~8 months before the call below: pre-retrieval

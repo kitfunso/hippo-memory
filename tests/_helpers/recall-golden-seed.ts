@@ -13,11 +13,12 @@ import {
   pushGoal,
   closePrediction,
   writeEntry,
+  writeEntriesTogether,
   appendSessionEvent,
   saveActiveTaskSnapshot,
   saveSessionHandoff,
 } from './root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';
@@ -126,7 +127,7 @@ export function seeded(
 
 /** Seeds the local store and returns the id of its active goal. */
 function seedLocal(root: string): string {
-  initStore(root);
+  initTestStore(root);
   const rows: MemoryEntry[] = [
     seeded(
       'deploy pipeline uses blue green rollout for the api',
@@ -184,17 +185,17 @@ function seedLocal(root: string): string {
 }
 
 function seedWide(root: string): void {
-  initStore(root);
-  for (let i = 0; i < 230; i++) {
-    writeEntry(
-      root,
+  initTestStore(root);
+  writeEntriesTogether(
+    root,
+    Array.from({ length: 230 }, (_, i) =>
       seeded(`deploy step ${i} of the wide rollout`, `mem_w_${String(i).padStart(3, '0')}`, '2026-01-10T00:00:00.000Z'),
-    );
-  }
+    ),
+  );
 }
 
 function seedGlobal(root: string): void {
-  initStore(root);
+  initTestStore(root);
   writeEntry(
     root,
     seeded('deploy notes from the global store about rollbacks', 'mem_p_global', '2026-01-12T00:00:00.000Z'),

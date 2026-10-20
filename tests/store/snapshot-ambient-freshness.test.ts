@@ -8,7 +8,7 @@ import {
   closeTaskSnapshotsForSession,
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
 // never-expires fix for the active task snapshot ambient-injection surfaces.
@@ -39,7 +39,7 @@ function isoAgo(ms: number): string {
 
 describe('loadFreshActiveTaskSnapshot', () => {
   it('1. RED-under-old incident pin: a 7d-old cross-session snapshot must not inject; the unchanged unbounded loadActiveTaskSnapshot still would', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'orphaned /compact task',
       summary: 'live incident: 2026-08-15 snapshot, session f235ebd3',
@@ -64,7 +64,7 @@ describe('loadFreshActiveTaskSnapshot', () => {
   });
 
   it('2. owner unbounded: a 7d-old snapshot still injects for its owning session', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'owner still working on this',
       summary: 's',
@@ -81,7 +81,7 @@ describe('loadFreshActiveTaskSnapshot', () => {
   });
 
   it('2b. null/empty/absent session ids never count as an owner match; every combo falls through to the age check', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // (a-c) snapshot.session_id = null; caller passes undefined / null / ''.
     const nullOwner = saveActiveTaskSnapshot(tmpDir, TENANT, {
@@ -121,7 +121,7 @@ describe('loadFreshActiveTaskSnapshot', () => {
   });
 
   it('3. fresh cross-session continuity preserved: a 1h-old snapshot injects for a different session', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'still fresh',
       summary: 's',
@@ -140,7 +140,7 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const fixedNow = new Date('2026-08-23T12:00:00.000Z');
     vi.useFakeTimers({ now: fixedNow });
     try {
-      initStore(tmpDir);
+      initTestStore(tmpDir);
       const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
         task: 'boundary case',
         summary: 's',
@@ -164,7 +164,7 @@ describe('loadFreshActiveTaskSnapshot', () => {
 
 describe('closeTaskSnapshotsForSession', () => {
   it('5. scoped close: only the owning session can close the active row', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'owned by session A',
       summary: 's',

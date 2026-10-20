@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 /** A project dir with its own `.hippo` store plus a sibling `global-hippo` dir to point HIPPO_HOME at. */
 export interface TestEnv {
@@ -16,7 +16,7 @@ export function makeEnv(label: string, opts: { initGlobal?: boolean } = {}): Tes
   const hippoRoot = join(cwd, '.hippo');
   const globalRoot = join(cwd, 'global-hippo');
   mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  if (opts.initGlobal) initStore(globalRoot);
+  initTestStore(hippoRoot);
+  if (opts.initGlobal) initTestStore(globalRoot);
   return { cwd, hippoRoot, globalRoot };
 }

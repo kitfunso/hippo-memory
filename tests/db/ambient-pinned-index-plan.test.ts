@@ -6,7 +6,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadAmbientCandidates, writeEntry } from '../_helpers/root-forms.js';
+import { loadAmbientCandidates, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 /** The pinned and drift statements loadAmbientCandidates really prepares, so the plan checks run the production SQL. */
 interface AmbientSql {
@@ -41,12 +41,13 @@ function indexNames(db: DatabaseSyncLike): string[] {
 
 function seedStore() {
   const { root } = makeStore('pinned-plan');
-  for (let i = 0; i < 30; i++) {
-    writeEntry(root, {
+  writeEntriesTogether(
+    root,
+    Array.from({ length: 30 }, (_, i) => ({
       ...createMemory(`row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       pinned: i % 10 === 0,
-    });
-  }
+    })),
+  );
   return root;
 }
 

@@ -4,7 +4,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -28,7 +28,7 @@ async function runHippo(args: string[]): Promise<RunResult> {
 
 describe('hippo provenance CLI', () => {
   it('reports the trivially-satisfied gate when no raw rows exist', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('legacy distilled memory predating envelope', { kind: 'distilled' }));
 
     const r = await runHippo(['provenance', '--strict']);
@@ -37,7 +37,7 @@ describe('hippo provenance CLI', () => {
   });
 
   it('emits machine-readable coverage with --json including gap detail', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
 
     writeEntry(
       hippoDir,
@@ -67,7 +67,7 @@ describe('hippo provenance CLI', () => {
   });
 
   it('exits non-zero under --strict when raw coverage drops below 100%', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('raw row missing envelope', { kind: 'raw' }));
 
     const r = await runHippo(['provenance', '--strict']);
@@ -77,7 +77,7 @@ describe('hippo provenance CLI', () => {
   });
 
   it('exits zero under --strict when every raw receipt is envelope-complete', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(
       hippoDir,
       createMemory('raw row with full envelope', {

@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/core/search-types.js';
-import { refineSemanticMemory } from '../../src/cli/refine-llm.js';
 import { generateDagSummary } from '../../src/consolidate/dag-summary.js';
 import { extractFacts } from '../../src/learn/extract.js';
 import { getReranker } from '../../src/rerankers/index.js';
@@ -13,6 +12,7 @@ import { createJevReranker } from '../../src/rerankers/jev.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { loadConfig } from '../../src/core/config.js';
+import { refineOne } from '../_helpers/refine-one.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -70,7 +70,7 @@ afterEach(() => {
 describe('secret redaction before memory text leaves the box', () => {
   it('refine scrubs the merged text, and scrubs a source before cutting it at 400 chars', async () => {
     const source = createMemory(`${'x'.repeat(390)} ${SECRET}`);
-    await refineSemanticMemory(TEXT, [source], {
+    await refineOne(TEXT, [source], {
       apiKey: 'k',
       fetcher: capture({ content: [{ text: 'a refined principle' }] }),
     });

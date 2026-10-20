@@ -11,7 +11,7 @@ import {
   loadAllEntries,
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 const RULE = 'Never run npm install in the billing service';
 const USER_TEXT = `We decided to use pnpm for the billing service. ${RULE}; the lockfile is pnpm-lock.yaml.`;
 
@@ -62,7 +62,7 @@ const contents = (root: string): string[] => loadAllEntries(root, 'default').map
 
 describe('__session-end-worker with no store in the folder', () => {
   it('captures into the global store, makes no folder store, and skips sleep', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
 
     const { logFile, status } = await runSessionEnd('sess-global-capture');
 
@@ -76,7 +76,7 @@ describe('__session-end-worker with no store in the folder', () => {
   });
 
   it('keeps the folder project on rows it saves to the global store', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     fs.mkdirSync(path.join(cwd, '.git'));
 
     expect((await runSessionEnd('sess-global-origin')).status).toBe(0);
@@ -88,7 +88,7 @@ describe('__session-end-worker with no store in the folder', () => {
   });
 
   it('saves its own copy of a lesson another project already holds in the global store', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     const other = path.join(dir, 'other');
     fs.mkdirSync(path.join(other, '.git'), { recursive: true });
     fs.mkdirSync(path.join(cwd, '.git'));
@@ -107,7 +107,7 @@ describe('__session-end-worker with no store in the folder', () => {
   });
 
   it('starts the log afresh when it skips sleep, as sleep does', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     fs.writeFileSync(path.join(dir, 'session-end.log'), 'stale line from an earlier run\n');
 
     const { logFile } = await runSessionEnd('sess-fresh-log');
@@ -116,7 +116,7 @@ describe('__session-end-worker with no store in the folder', () => {
   });
 
   it('closes the session snapshot and writes the handoff in the global store', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     saveActiveTaskSnapshot(globalRoot, 'default', {
       task: 'billing service lockfile task',
       summary: 's',
@@ -149,8 +149,8 @@ describe('__session-end-worker with no store in the folder', () => {
   });
 
   it('with a store of its own, still sleeps and captures into that store, not the global one', async () => {
-    initStore(globalRoot);
-    initStore(path.join(cwd, '.hippo'));
+    initTestStore(globalRoot);
+    initTestStore(path.join(cwd, '.hippo'));
 
     const { logFile, status } = await runSessionEnd('sess-local');
 
@@ -198,7 +198,7 @@ describe('__codex-session-end-worker with no store in the folder', () => {
   }
 
   it('captures into the global store and skips sleep, in a fresh log', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     fs.writeFileSync(path.join(dir, 'codex-session-end.log'), 'stale line from an earlier run\n');
 
     const { logFile, status } = await runCodexWorker(writeCodexHome());
@@ -213,7 +213,7 @@ describe('__codex-session-end-worker with no store in the folder', () => {
   });
 
   it('keeps the folder project on rows it saves to the global store', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     fs.mkdirSync(path.join(cwd, '.git'));
 
     expect((await runCodexWorker(writeCodexHome())).status).toBe(0);

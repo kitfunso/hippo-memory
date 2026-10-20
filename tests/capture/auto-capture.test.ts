@@ -22,7 +22,7 @@ import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -365,7 +365,7 @@ describe('failed-tool capture', () => {
   it('stores an unverified error memory once, however often it repeats', async () => {
     const { dir } = scratch();
     try {
-      initStore(dir);
+      initTestStore(dir);
       const payload = {
         tool_name: 'Bash',
         tool_input: { command: 'npm run build' },
@@ -409,7 +409,7 @@ describe('failed-tool capture', () => {
   it('with a store, a payload the hook cannot read still exits 0 and says why on stderr', async () => {
     const { dir, env } = scratch();
     try {
-      initStore(path.join(dir, '.hippo'));
+      initTestStore(path.join(dir, '.hippo'));
       const r = await run(['capture-error'], dir, env, '{"tool_name": "Bash", ');
       expect(r.status).toBe(0);
       expect(r.stderr).toMatch(/\[hippo\] warn: failure capture skipped: \S/);
@@ -471,7 +471,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
   });
 
   it('hippo doctor names the missing hooks', () => {
-    initStore(path.join(dir, '.hippo'));
+    initTestStore(path.join(dir, '.hippo'));
     fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
     fs.writeFileSync(
       path.join(dir, '.claude', 'settings.json'),

@@ -3,7 +3,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -13,7 +13,7 @@ beforeEach(() => {
 
 describe('SQLite busy_timeout', () => {
   it('sets busy_timeout pragma on open', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
       // SAFETY: PRAGMA busy_timeout always returns a single { timeout } row.
@@ -25,7 +25,7 @@ describe('SQLite busy_timeout', () => {
   });
 
   it('sets synchronous to NORMAL', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
       // SAFETY: PRAGMA synchronous always returns a single { synchronous } row.
@@ -38,7 +38,7 @@ describe('SQLite busy_timeout', () => {
   });
 
   it('concurrent readers do not get SQLITE_BUSY', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // Write some data first
     const entry = createMemory('test concurrent access');
@@ -61,7 +61,7 @@ describe('SQLite busy_timeout', () => {
 
 describe('batchWriteAndDelete', () => {
   it('writes and deletes in a single transaction', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // Create entries to later delete
     const toDelete1 = createMemory('will be deleted 1');
@@ -85,7 +85,7 @@ describe('batchWriteAndDelete', () => {
   });
 
   it('is a no-op when both arrays are empty', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const entry = createMemory('existing');
     writeEntry(tmpDir, entry);
 

@@ -31,7 +31,7 @@ import {
   clearActiveTaskSnapshot,
   listSessionEvents,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const legacyFixtureRoot = path.join(__dirname, '..', 'fixtures', 'legacy-markdown-store');
@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe('store initialization', () => {
   it('creates a SQLite database backbone for new stores', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     expect(fs.existsSync(path.join(tmpDir, 'hippo.db'))).toBe(true);
   });
@@ -52,7 +52,7 @@ describe('store initialization', () => {
   it('imports the explicit legacy markdown fixture into SQLite on first init', () => {
     fs.cpSync(legacyFixtureRoot, tmpDir, { recursive: true });
 
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const alpha = readEntry(tmpDir, 'mem_legacy_alpha');
     const beta = readEntry(tmpDir, 'mem_legacy_beta');
@@ -103,13 +103,13 @@ describe('store initialization', () => {
     const originalRaw = fs.readFileSync(legacyPath, 'utf8');
     fs.writeFileSync(path.join(tmpDir, 'hippo.db'), 'definitely not sqlite', 'utf8');
 
-    expect(() => initStore(tmpDir)).toThrow();
+    expect(() => initTestStore(tmpDir)).toThrow();
     expect(fs.readFileSync(legacyPath, 'utf8')).toBe(originalRaw);
     expect(fs.existsSync(legacyPath)).toBe(true);
   });
 
   it('tracks schema version through the migration scaffold', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const db = openHippoDb(tmpDir);
     try {
@@ -122,7 +122,7 @@ describe('store initialization', () => {
 
 describe('remember + recall round-trip', () => {
   it('writes a memory and reads it back intact', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const entry = createMemory('FRED cache silently dropped TIPS', {
       tags: ['error', 'data-pipeline'],
@@ -141,7 +141,7 @@ describe('remember + recall round-trip', () => {
   });
 
   it('preserves numeric fields accurately', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const entry = createMemory('test memory');
     const custom = { ...entry, retrievalCount: 7, halfLifeDays: 14, strength: 0.7654 };
@@ -154,7 +154,7 @@ describe('remember + recall round-trip', () => {
   });
 
   it('handles pinned flag correctly', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const entry = createMemory('pinned rule', { pinned: true });
     writeEntry(tmpDir, entry);
@@ -164,14 +164,14 @@ describe('remember + recall round-trip', () => {
   });
 
   it('returns null for non-existent id', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     expect(readEntry(tmpDir, 'mem_nonexistent')).toBeNull();
   });
 });
 
 describe('deleteEntry', () => {
   it('removes the row so readEntry finds nothing', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const entry = createMemory('delete me');
     writeEntry(tmpDir, entry);
 
@@ -183,7 +183,7 @@ describe('deleteEntry', () => {
 
 describe('stats tracking', () => {
   it('writes at once after a flush, so a flushed root keeps no throttle state', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     updateStats(tmpDir, { recalled: 1 });
     updateStats(tmpDir, { recalled: 1 });
     flushHeldMirrors(tmpDir);
@@ -194,7 +194,7 @@ describe('stats tracking', () => {
   });
 
   it('persists stat counters through the SQLite backbone', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     // Longer than any rewrite, so bytes left over from it would break the mirror's JSON.
     fs.writeFileSync(path.join(tmpDir, 'stats.json'), 'x'.repeat(4096));
 
@@ -218,7 +218,7 @@ describe('stats tracking', () => {
 
 describe('SQLite-backed search candidates', () => {
   it('returns targeted candidates for matching queries', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const matching = createMemory('FRED cache silently dropped TIPS during refresh', {
       tags: ['error', 'cache'],
@@ -236,7 +236,7 @@ describe('SQLite-backed search candidates', () => {
   });
 
   it('sleep rebuilds the FTS mirror if it goes missing', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const entry = createMemory('cache refresh failure in gold pipeline', {
       tags: ['cache', 'error'],
@@ -272,7 +272,7 @@ describe('SQLite-backed search candidates', () => {
 
 describe('loadAllEntries', () => {
   it('returns all stored entries', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const entries = [createMemory('first'), createMemory('second'), createMemory('third')];
     for (const e of entries) writeEntry(tmpDir, e);
 
@@ -281,14 +281,14 @@ describe('loadAllEntries', () => {
   });
 
   it('returns empty array for fresh store', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     expect(loadAllEntries(tmpDir, 'default')).toHaveLength(0);
   });
 });
 
 describe('active task snapshots', () => {
   it('persists and reloads the current active snapshot', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const saved = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Finish SQLite migration hardening',
@@ -312,7 +312,7 @@ describe('active task snapshots', () => {
   });
 
   it('persists an optional session link with the active snapshot', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship session continuity',
@@ -331,7 +331,7 @@ describe('active task snapshots', () => {
   });
 
   it('supersedes the previous active snapshot when a new one is saved', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const first = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'First task',
@@ -366,7 +366,7 @@ describe('active task snapshots', () => {
   });
 
   it('clears the active snapshot and removes the mirror file', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Task to clear',
@@ -383,7 +383,7 @@ describe('active task snapshots', () => {
 
 describe('session events', () => {
   it('stores and reloads recent session events in chronological order', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess_alpha',
@@ -416,7 +416,7 @@ describe('session events', () => {
   });
 
   it('can filter down to the newest session trail', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess_old',

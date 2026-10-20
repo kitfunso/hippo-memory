@@ -16,7 +16,8 @@ import type { RerankerFn } from '../../src/rerankers/types.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
-import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -206,7 +207,7 @@ function seedStore(): string {
     JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }),
     'utf8',
   );
-  initStore(root);
+  initTestStore(root);
   for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
   vi.stubEnv('OPENAI_API_KEY', 'sk-test');
   saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });

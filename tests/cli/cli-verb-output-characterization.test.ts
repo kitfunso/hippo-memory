@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const savedCwd = process.cwd();
 let root: string;
@@ -13,7 +13,7 @@ let root: string;
 beforeEach(() => {
   root = makeRoot('q10cli');
   // The CLI looks for <cwd>/.hippo; makeRoot made that folder but put its store at the root.
-  initStore(path.join(root, '.hippo'));
+  initTestStore(path.join(root, '.hippo'));
   vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
   vi.stubEnv('HOME', root);
   vi.stubEnv('USERPROFILE', root);

@@ -12,7 +12,7 @@ import {
   saveActiveTaskSnapshot,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -22,7 +22,7 @@ beforeEach(() => {
 
 describe('schema v5+v6 migration', () => {
   it('migrates to latest schema version', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
@@ -33,7 +33,7 @@ describe('schema v5+v6 migration', () => {
   });
 
   it('creates the session_handoffs table', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
       // SAFETY: literal SELECT against the known sqlite_master schema; name
@@ -49,7 +49,7 @@ describe('schema v5+v6 migration', () => {
   });
 
   it('creates the index on session_handoffs', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
       // SAFETY: literal SELECT against the known sqlite_master schema; name
@@ -66,7 +66,7 @@ describe('schema v5+v6 migration', () => {
 
 describe('session handoff create/save/load', () => {
   it('saves and loads a handoff', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const handoff = saveSessionHandoff(tmpDir, 'default', {
       version: 1,
@@ -89,7 +89,7 @@ describe('session handoff create/save/load', () => {
   });
 
   it('saves a minimal handoff without optional fields', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const handoff = saveSessionHandoff(tmpDir, 'default', {
       version: 1,
@@ -108,13 +108,13 @@ describe('session handoff create/save/load', () => {
 
 describe('loadLatestHandoff', () => {
   it('returns null when no handoffs exist', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const result = loadLatestHandoff(tmpDir, 'default');
     expect(result).toBeNull();
   });
 
   it('returns the most recent handoff', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveSessionHandoff(tmpDir, 'default', {
       version: 1,
@@ -135,7 +135,7 @@ describe('loadLatestHandoff', () => {
   });
 
   it('filters by session ID when provided', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveSessionHandoff(tmpDir, 'default', {
       version: 1,
@@ -170,7 +170,7 @@ describe('loadLatestHandoff', () => {
 
 describe('loadHandoffById', () => {
   it('loads a specific handoff by row ID', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // Save handoff and verify we can get it by ID from the DB
     saveSessionHandoff(tmpDir, 'default', {
@@ -199,7 +199,7 @@ describe('loadHandoffById', () => {
   });
 
   it('returns null for non-existent ID', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const result = loadHandoffById(tmpDir, 'default', 99999);
     expect(result).toBeNull();
   });
@@ -317,7 +317,7 @@ describe('rowToSessionHandoff', () => {
 
 describe('session events integration with handoffs', () => {
   it('session_start and session_end events can be recorded', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-lifecycle',
@@ -348,7 +348,7 @@ describe('session events integration with handoffs', () => {
   });
 
   it('handoff + session latest returns combined view', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship PR2',

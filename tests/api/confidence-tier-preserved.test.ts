@@ -7,7 +7,7 @@ import { markRetrieved } from '../../src/core/memory.js';
 import { sampleForReplay } from '../../src/consolidate/replay.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -33,7 +33,7 @@ function agedEntry(overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['
 
 describe('confidence tier survives sleep', () => {
   it('an inferred memory stays inferred through sleep and markRetrieved, never silently upgraded', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const entry = agedEntry({ confidence: 'inferred' });
     writeEntry(tmpDir, entry);
     expect(readEntry(tmpDir, entry.id)!.confidence).toBe('inferred');
@@ -48,7 +48,7 @@ describe('confidence tier survives sleep', () => {
   });
 
   it('distinguishes an aged-out stored tier from a deliberately invalidated one', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const now = new Date();
     const aged = agedEntry({ confidence: 'observed' });
     const invalidated = agedEntry({ confidence: 'stale', tags: ['invalidated'] });
@@ -76,7 +76,7 @@ describe('confidence tier survives sleep', () => {
   });
 
   it('verified and pinned memories are exempt from staleness regardless of age', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const now = new Date();
     const verified = agedEntry({ confidence: 'verified' });
     const pinned = { ...agedEntry({ confidence: 'observed' }), pinned: true };

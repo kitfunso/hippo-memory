@@ -11,7 +11,7 @@ import {
   workspaceRegistryPath,
 } from '../../src/cli/scheduler.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 // The registry stores forward-slash paths on every platform.
 const norm = (p: string): string => resolve(p).replace(/\\/g, '/');
@@ -98,7 +98,7 @@ describe('hippo daily-runner', () => {
     const workspace = join(dir, 'repo');
     mkdirSync(globalRoot);
     mkdirSync(join(workspace, '.hippo'), { recursive: true });
-    initStore(join(workspace, '.hippo'));
+    initTestStore(join(workspace, '.hippo'));
     writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
     // The runner runs in process so coverage sees it; each step it starts is still a real child with a real deadline.
     const run = (extraEnv: Record<string, string>) =>

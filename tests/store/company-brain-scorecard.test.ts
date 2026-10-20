@@ -15,7 +15,7 @@ import {
   appendSessionEvent,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -110,7 +110,7 @@ function appendVerboseTrail(hippoRoot: string, sessionId: string): void {
 
 describe('Company Brain continuity scorecard scaffold', () => {
   it('shows full resume coverage only after continuity objects are present', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const sessionId = 'sess-company-brain';
 
     appendVerboseTrail(tmpDir, sessionId);
@@ -146,7 +146,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
 
   it('recall(includeContinuity=true) hits the same scorecard signals via the public API', async () => {
     const { retrieve } = await import('../../src/api/index.js');
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const sessionId = 'sess-recall-scorecard';
 
     appendVerboseTrail(tmpDir, sessionId);
@@ -225,7 +225,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
   });
 
   it('uses the matching session handoff instead of a stale one from another session', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const currentSession = 'sess-current';
 
     appendVerboseTrail(tmpDir, currentSession);
@@ -262,7 +262,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
 
 describe('Company Brain provenance coverage scorecard', () => {
   it('drops below 1.0 when any raw receipt is missing owner or artifact_ref', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     writeEntry(
       tmpDir,
@@ -317,7 +317,7 @@ describe('Company Brain provenance coverage scorecard', () => {
   });
 
   it('reaches the 100% gate once every raw receipt carries owner and artifact_ref', () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     writeEntry(
       tmpDir,

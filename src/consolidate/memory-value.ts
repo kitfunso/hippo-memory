@@ -12,7 +12,7 @@ import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-wei
 import { DAY_MS } from '../util/time.js';
 
 /** The 8 live feature dims (FIT_DIMS) — canonical order for iteration. */
-export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
+const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
   'age_days',
   'half_life_days',
   'strength',
@@ -50,7 +50,7 @@ export interface MvFeatureVector {
  * DecayOptions, as in the weights' training; passing the production decay basis would silently break parity with the
  * frozen weights.
  */
-export function computeMvFeatures(
+function computeMvFeatures(
   entry: MemoryEntry,
   now: Date,
   rules: StrengthOptions = strengthOptionsOf(undefined),

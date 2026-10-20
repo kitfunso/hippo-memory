@@ -26,7 +26,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 function tmpHome() {
   const home = makeRoot('df3');
@@ -462,7 +462,7 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
   }
 
   it('test 7 — `hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const junk = createMemory('fixed signals', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     const clean = createMemory('clean CLI-seeded memory with plenty of specific detail worth keeping', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

@@ -39,7 +39,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
@@ -213,7 +213,7 @@ describe('case 4: legacy-mirror resurrection pin', () => {
       closeHippoDb(dbBefore);
     }
 
-    initStore(home);
+    initTestStore(home);
 
     // Value stays absent — the guard skipped the stale-mirror re-insert.
     expect(readEntry(home, rawEntry.id)).toBeNull();

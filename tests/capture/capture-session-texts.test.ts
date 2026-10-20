@@ -19,7 +19,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const TEXTS = [
   'We decided to use pnpm for the billing service because the lockfile is pnpm-lock.yaml.',
@@ -40,7 +40,7 @@ beforeEach(() => {
   repo = path.join(dir, 'srv', 'server-repo');
   fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
   root = path.join(repo, '.hippo');
-  initStore(root);
+  initTestStore(root);
 });
 
 afterEach(() => {
@@ -116,7 +116,7 @@ describe('captureSessionTexts', () => {
     vi.stubEnv('USERPROFILE', home);
     vi.stubEnv('HOME', home);
     try {
-      initStore(homeStore);
+      initTestStore(homeStore);
       expect(deriveOriginProject(home)).toBe('');
       captureSessionTexts(ctxFor(homeStore), req(TEXTS));
       expect(loadAllEntries(homeStore, 'default').map((r) => r.originProject)).toEqual([

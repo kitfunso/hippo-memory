@@ -15,7 +15,7 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:c5', role: 'admin' });
@@ -79,7 +79,10 @@ describe('RecallResult.suppressionSummary', () => {
 
   it('droppedByBudget reflects rows excluded by the final limit slice', async () => {
     // Insert 20 matching memories; limit to 5; expect droppedByBudget = 15.
-    for (let i = 0; i < 20; i++) writeEntry(root, makeRaw(`omega ${i}`));
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 20 }, (_, i) => makeRaw(`omega ${i}`)),
+    );
     const result = await retrieve(ctxFor(root), { query: 'omega', window: { limit: 5 } });
     expect(result.results.length).toBe(5);
     expect(result.suppressionSummary!.droppedByBudget).toBe(15);

@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
-const STORE_OPENERS = new Set(['initStore', 'openStore', 'openHippoDb']);
+const STORE_OPENERS = new Set(['initStore', 'initTestStore', 'openStore', 'openHippoDb']);
 const PATH_FUNCTIONS = new Set(['join', 'resolve', 'dirname', 'normalize', 'realpathSync', 'native']);
 const SPAWNERS = new Set(['spawn', 'spawnSync', 'execFile', 'execFileSync', 'exec', 'execSync', 'fork']);
 

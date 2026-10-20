@@ -14,7 +14,7 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -65,9 +65,10 @@ describe('DAG-aware recall substitution', () => {
 
   it('1. no DAG, no substitution', async () => {
     // 30 leaves, no parent summary. limit=10 should return 10 with no isSummary marker.
-    for (let i = 0; i < 30; i++) {
-      writeEntry(root, makeLeaf(`alpha bravo charlie ${i}`));
-    }
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 30 }, (_, i) => makeLeaf(`alpha bravo charlie ${i}`)),
+    );
     const r = await retrieve(ctxFor(root), { query: 'alpha bravo charlie', window: { limit: 10 } });
     expect(r.results.length).toBe(10);
     expect(r.results.every((it) => !it.isSummary)).toBe(true);

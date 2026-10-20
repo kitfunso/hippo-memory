@@ -18,7 +18,7 @@ import { runCli as runCliEntry } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const savedCwd = process.cwd();
 
@@ -45,8 +45,8 @@ describe('CLI tenant-scoping', () => {
     globalRoot = join(home, '.hippo-global');
     mkdirSync(hippoRoot, { recursive: true });
     mkdirSync(globalRoot, { recursive: true });
-    initStore(hippoRoot);
-    initStore(globalRoot);
+    initTestStore(hippoRoot);
+    initTestStore(globalRoot);
     // Isolate the CLI's global store from the developer's real ~/.hippo by pointing HIPPO_HOME at a per-test temp.
     vi.stubEnv('HIPPO_HOME', globalRoot);
     process.chdir(home);

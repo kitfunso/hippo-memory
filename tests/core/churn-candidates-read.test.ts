@@ -9,7 +9,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 
 /** loadAllEntries' statement: every full row of one tenant. */
 const TENANT_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`;
@@ -28,12 +28,16 @@ function newRoot(): string {
   return root;
 }
 
-function put(root: string, label: string, extra: Partial<MemoryEntry> = {}, tenantId = 'default'): string {
-  const entry = {
+function build(label: string, extra: Partial<MemoryEntry> = {}, tenantId = 'default'): MemoryEntry {
+  return {
     ...createMemory(`${label}: a plain note about the team`, { tenantId }),
     originProject: 'proj',
     ...extra,
   };
+}
+
+function put(root: string, label: string, extra: Partial<MemoryEntry> = {}, tenantId = 'default'): string {
+  const entry = build(label, extra, tenantId);
   writeEntry(root, entry);
   return entry.id;
 }
@@ -93,7 +97,10 @@ describe('detectChurnStale candidate read', () => {
 
   it('reads no row of another project', () => {
     const root = newRoot();
-    for (let i = 0; i < 30; i++) put(root, `other ${i}`, { originProject: 'other' });
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 30 }, (_, i) => build(`other ${i}`, { originProject: 'other' })),
+    );
     const pinned = put(root, 'pinned', { pinned: true });
     put(root, 'current');
     const { result, statements, rowsRead } = recordStatements(() =>

@@ -88,7 +88,7 @@ jobs:
         run: node scripts/check-store-port.mjs
       - name: Layer order
         run: node scripts/check-layers.mjs
-      - name: Test-only export ratchet
+      - name: No test-only exports
         run: node scripts/check-test-only-exports.mjs
       # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.
       - name: Tests build temp stores through makeRoot and makeStore
@@ -158,12 +158,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
       # Floors are zeroed per shard: each sees a third of the suite, and the coverage job applies them to the merge.
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob --coverage.thresholds.lines=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0
         env:
-          TMPDIR: /dev/shm
           HIPPO_REQUIRE_SYMLINKS: '1'
       - name: Upload blob report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -251,12 +249,12 @@ jobs:
         run: python3 benchmarks/micro/run.py --verbose
       # The zero-dep `test` job skips these; a missing backend here fails instead.
       - name: Embedding tests against the real backend
-        run: npx vitest run tests/store/lifecycle-stress.test.ts tests/api/global-row-embeddings.test.ts
+        run: npx vitest run tests/store/lifecycle-stress.test.ts tests/api/global-row-embeddings.process.test.ts
         env:
           HIPPO_REQUIRE_EMBEDDINGS: '1'
       # After the micro-eval, which has fetched the embedding model into this folder by now on a cold cache too.
       - name: Embedding model from a local folder
-        run: npx vitest run tests/embeddings/local-cache.test.ts
+        run: npx vitest run tests/embeddings/local-cache.process.test.ts
         env:
           HIPPO_REQUIRE_MODEL_CACHE: '1'
           HIPPO_MODEL_CACHE: ${{ github.workspace }}/node_modules/@huggingface/transformers/.cache
@@ -283,7 +281,6 @@ jobs:
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}/3
         env:
-          TMPDIR: /dev/shm
           HIPPO_REQUIRE_SYMLINKS: '1'
 
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
@@ -307,7 +304,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # Test stores on a RAM disk, the Windows twin of TMPDIR=/dev/shm (#214): the runner's D: stalls for minutes (#903).
+      # Test stores on a RAM disk: Linux runs green without one, but on Windows 29 files time out (#992) and D: stalls (#903).
       # Arsenal Image Mounter, not ImDisk: an ImDisk volume skips the mount manager, so realpathSync.native throws EISDIR.
       - name: Temp dir on a RAM disk
         if: runner.os == 'Windows'

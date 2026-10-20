@@ -19,7 +19,7 @@ import {
   appendSessionEvent,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 interface ColumnInfo {
   name: string;
@@ -90,7 +90,7 @@ describe('test 1: fresh store, single open', () => {
 
 describe('test 2: v41 store upgrades to v42', () => {
   it('gains the five columns on next open, reads existing rows at empty defaults', () => {
-    initStore(root);
+    initTestStore(root);
     const db1 = openHippoDb(root);
     try {
       db1.exec('DROP TABLE session_handoffs');
@@ -125,7 +125,7 @@ describe('test 2: v41 store upgrades to v42', () => {
   });
 
   it('self-heals a v41 store whose session_handoffs table was dropped (2026-08-15 incident shape)', () => {
-    initStore(root);
+    initTestStore(root);
     const db1 = openHippoDb(root);
     try {
       db1.exec('DROP TABLE session_handoffs');
@@ -149,7 +149,7 @@ describe('test 2: v41 store upgrades to v42', () => {
 
 describe('test 3: round trip of new fields', () => {
   it('saveSessionHandoff / loadHandoffById round-trips constraints, evidence, outcome, targetRuntime, cardId', () => {
-    initStore(root);
+    initTestStore(root);
     const saved = saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-full',
@@ -173,7 +173,7 @@ describe('test 3: round trip of new fields', () => {
   });
 
   it('malformed constraints_json and evidence_json read back as [] and null', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-malformed',
@@ -196,7 +196,7 @@ describe('test 3: round trip of new fields', () => {
   });
 
   it('a damaged or wrong-shaped JSON column reads as empty and logs the table, row and column, never the text', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-damaged',
@@ -244,7 +244,7 @@ describe('test 3: round trip of new fields', () => {
 
 describe('test 4: loadLatestHandoff opts', () => {
   it('unfinishedOnly skips success rows; maxAgeMs excludes stale rows; no-opts call is unchanged', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-multi',
@@ -302,7 +302,7 @@ describe('test 4: loadLatestHandoff opts', () => {
 
 describe('test 5: stampHandoffOutcome', () => {
   it('stamps only the newest null-outcome row for the session; returns 0 when none qualify', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-stamp', summary: 'older', artifacts: [] });
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-stamp', summary: 'newer', artifacts: [] });
 
@@ -321,7 +321,7 @@ describe('test 5: stampHandoffOutcome', () => {
 
 describe('test 6: writeSessionEndHandoff', () => {
   it('6a: writes from an active snapshot owned by the session', () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'ship W1',
       summary: 'writing the envelope',
@@ -343,7 +343,7 @@ describe('test 6: writeSessionEndHandoff', () => {
   });
 
   it("6b: returns null for another session's snapshot", () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'owned by sess-a',
       summary: 'summary',
@@ -355,12 +355,12 @@ describe('test 6: writeSessionEndHandoff', () => {
   });
 
   it('6c: returns null when no active snapshot exists', () => {
-    initStore(root);
+    initTestStore(root);
     expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-none', evidence: null })).toBeNull();
   });
 
   it('6d: returns null when a handoff strictly newer than the snapshot exists', () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
       summary: 'summary',
@@ -388,7 +388,7 @@ describe('test 6: writeSessionEndHandoff', () => {
   });
 
   it('6e: a handoff whose created_at equals snapshot.updated_at to the millisecond does NOT suppress the write', () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
       summary: 'summary',
@@ -427,7 +427,7 @@ describe('test 6: writeSessionEndHandoff', () => {
   });
 
   it('6f: copies a valid outcome from the newest session_complete event, null when invalid', () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
       summary: 'summary',
@@ -456,7 +456,7 @@ describe('test 6: writeSessionEndHandoff', () => {
 
 describe('fix 4: v42 migration backfills outcome from session_complete events', () => {
   it('backfills success from the newest session_complete event; leaves eventless rows null', () => {
-    initStore(root);
+    initTestStore(root);
     const db1 = openHippoDb(root);
     try {
       db1.exec('DROP TABLE session_handoffs');
