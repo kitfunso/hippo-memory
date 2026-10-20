@@ -284,14 +284,18 @@ jobs:
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
   # One Windows job set the wall time of the whole run, so the Windows suite splits in two.
   suite:
-    name: suite (${{ matrix.os }}, ${{ matrix.shard }})
+    name: suite (${{ matrix.os }}, ${{ matrix.shard }}, ${{ matrix.variant }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, shard: 1/2 }
-          - { os: windows-latest, shard: 2/2 }
-          - { os: macos-latest, shard: 1/1 }
+          - { os: windows-latest, shard: 1/2, variant: K1000 }
+          - { os: windows-latest, shard: 2/2, variant: K1000 }
+          - { os: windows-latest, shard: 1/2, variant: N1000 }
+          - { os: windows-latest, shard: 2/2, variant: N1000 }
+          - { os: windows-latest, shard: 1/2, variant: D100 }
+          - { os: windows-latest, shard: 2/2, variant: D100 }
+          - { os: macos-latest, shard: 1/1, variant: K1000 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -301,6 +305,20 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Variant (throwaway)
+        shell: bash
+        run: |
+          case "${{ matrix.variant }}" in
+            K1000) sed -i 's/^const INLINE_CHECKPOINT_PAGES = 100;/const INLINE_CHECKPOINT_PAGES = 1000;/' src/db/wal-checkpointer.ts ;;
+            N1000) sed -i 's/^const INLINE_CHECKPOINT_PAGES = 100;/const INLINE_CHECKPOINT_PAGES = 1000;/' src/db/wal-checkpointer.ts
+                   sed -i "/runner: 'tests\/_held-stores-runner.ts',/d" vitest.config.ts
+                   sed -i 's/^  holdUntilTestEnds(hippoRoot);$//' tests/_helpers/store-template.ts ;;
+            D100) sed -i "/runner: 'tests\/_held-stores-runner.ts',/d" vitest.config.ts
+                  sed -i 's/^  holdUntilTestEnds(hippoRoot);$//' tests/_helpers/store-template.ts
+                  echo "TEMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+                  echo "TMP=$RUNNER_TEMP" >> "$GITHUB_ENV" ;;
+          esac
+          git diff --stat
       - run: npm run build
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}
