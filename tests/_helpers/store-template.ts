@@ -2,7 +2,6 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { inject } from 'vitest';
 import { getHippoDbPath } from '../../src/db/open.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
-import { holdUntilTestEnds } from './held-stores.js';
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -20,5 +19,4 @@ export function initTestStore(hippoRoot: string): void {
     copyFileSync(inject('storeTemplate'), db);
   }
   initStore(hippoRoot);
-  holdUntilTestEnds(hippoRoot);
 }

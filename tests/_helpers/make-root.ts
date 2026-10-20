@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll } from 'vitest';
-import { releaseHeldStores } from './held-stores.js';
+import { neverHold } from './held-stores.js';
 import { initTestStore } from './store-template.js';
 
 export interface MakeRootOptions {
@@ -10,8 +10,8 @@ export interface MakeRootOptions {
   config?: object;
   /** False for a test that opens, migrates or refuses a folder that is not a store yet: only the temp dir is made. */
   init?: boolean;
-  /** False for a test of what the store's last close leaves, or of a lock on the whole file: the store is not held
-   *  open while the test runs (tests/_helpers/held-stores.ts). */
+  /** False for a test of what the store's last close leaves, or of a lock on the whole file: the store is never held
+   *  open (tests/_helpers/held-stores.ts). */
   held?: boolean;
 }
 
@@ -36,11 +36,11 @@ function build(
   const base = mkdtempSync(join(tmpdir(), `hippo-${label}-`));
   made.push(base);
   const root = rootOf(base);
+  if (!held) neverHold(root);
   if (!init) return { base, root };
   // makeStore's root is left for initTestStore to create, so it gets the owner-only mode a real store gets.
   if (root === base) mkdirSync(join(base, '.hippo'), { recursive: true });
   initTestStore(root);
-  if (!held) releaseHeldStores(root);
   if (config) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   return { base, root };
 }
