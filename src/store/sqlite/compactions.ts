@@ -7,8 +7,8 @@ import {
   saveItems,
   markSnapshotSaved,
   startCompaction,
+  type Log,
 } from './compactions-record.js';
-import type { Log } from '../port/compaction-hooks.js';
 import type { CallerItems, CallerItemsSaved, Compactions } from '../port/compactions.js';
 import type { Sync } from './served.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';

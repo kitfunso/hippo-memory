@@ -19,7 +19,7 @@ import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { importForStore } from '../../src/domain/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, repairAutomaticMemories, writeEntry } from '../_helpers/root-forms.js';
@@ -343,7 +343,7 @@ describe('recoverable automatic memory quality repair', () => {
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(other.id);
   });
 
-  it('still imports a note a person wrote after a captured copy was repaired', () => {
+  it('still imports a note a person wrote after a captured copy was repaired', async () => {
     const world = openWorld();
     try {
       const bad = createMemory('succeeds (inserts or updates)', { source: 'capture', confidence: 'observed' });
@@ -351,10 +351,10 @@ describe('recoverable automatic memory quality repair', () => {
       const repair = { tenantId: 'default', apply: true, protect: repairProtection };
       expect(repairAutomaticMemories({ hippoRoot: world.local }, repair).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
-      importForStore(world.local, {
+      await importForStore(world.local, {
         configAt: loadConfig,
         tenantId: 'default',
-        agentImport: sqliteAgentImport({}),
+        stores: sqliteImportStores({}),
         machine: world.machine,
       });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);

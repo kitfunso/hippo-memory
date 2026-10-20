@@ -16,36 +16,36 @@ function fakeEntry(overrides: Partial<MemoryEntry>): MemoryEntry {
 }
 
 describe('sampleForReplay', () => {
-  it('returns empty when count is zero', () => {
+  it('returns empty when count is zero', async () => {
     const entries = [fakeEntry({ content: 'a' }), fakeEntry({ content: 'b' })];
-    const sample = sampleForReplay(entries, 0, new Date(), 42);
+    const sample = await sampleForReplay(entries, 0, new Date(), 42);
     expect(sample).toHaveLength(0);
   });
 
-  it('returns empty when survivors are empty', () => {
-    const sample = sampleForReplay([], 5, new Date(), 42);
+  it('returns empty when survivors are empty', async () => {
+    const sample = await sampleForReplay([], 5, new Date(), 42);
     expect(sample).toHaveLength(0);
   });
 
-  it('caps sample size at survivors.length', () => {
+  it('caps sample size at survivors.length', async () => {
     const entries = [fakeEntry({ content: 'a' }), fakeEntry({ content: 'b' })];
-    const sample = sampleForReplay(entries, 10, new Date(), 42);
+    const sample = await sampleForReplay(entries, 10, new Date(), 42);
     expect(sample).toHaveLength(2);
   });
 
-  it('is deterministic for a given seed', () => {
+  it('is deterministic for a given seed', async () => {
     const entries = [
       fakeEntry({ content: 'a' }),
       fakeEntry({ content: 'b' }),
       fakeEntry({ content: 'c' }),
       fakeEntry({ content: 'd' }),
     ];
-    const s1 = sampleForReplay(entries, 2, new Date(), 42);
-    const s2 = sampleForReplay(entries, 2, new Date(), 42);
+    const s1 = await sampleForReplay(entries, 2, new Date(), 42);
+    const s2 = await sampleForReplay(entries, 2, new Date(), 42);
     expect(s1).toEqual(s2);
   });
 
-  it('prefers high-reward memories over neutral peers', () => {
+  it('prefers high-reward memories over neutral peers', async () => {
     const entries: MemoryEntry[] = [];
     // 10 neutral memories
     for (let i = 0; i < 10; i++) {
@@ -62,7 +62,7 @@ describe('sampleForReplay', () => {
     // Over many seeds, hero should be sampled more often than any neutral peer.
     const counts = new Map<string, number>();
     for (let seed = 0; seed < 100; seed++) {
-      const sample = sampleForReplay(entries, 1, new Date(), seed);
+      const sample = await sampleForReplay(entries, 1, new Date(), seed);
       for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const heroHits = counts.get(hero.id) ?? 0;
@@ -71,7 +71,7 @@ describe('sampleForReplay', () => {
     expect(heroHits).toBeGreaterThan(peerHits);
   });
 
-  it('prefers critical-valence memories over neutral peers (expected rate check)', () => {
+  it('prefers critical-valence memories over neutral peers (expected rate check)', async () => {
     const entries: MemoryEntry[] = [];
     for (let i = 0; i < 10; i++) entries.push(fakeEntry({ content: `neutral-${i}` }));
     const critical = fakeEntry({ content: 'critical', emotionalValence: 'critical' });
@@ -80,7 +80,7 @@ describe('sampleForReplay', () => {
     const TRIALS = 500;
     const counts = new Map<string, number>();
     for (let seed = 0; seed < TRIALS; seed++) {
-      const sample = sampleForReplay(entries, 1, new Date(), seed);
+      const sample = await sampleForReplay(entries, 1, new Date(), seed);
       for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const criticalHits = counts.get(critical.id) ?? 0;
@@ -91,7 +91,7 @@ describe('sampleForReplay', () => {
     expect(criticalHits).toBeGreaterThan(peerAvg);
   });
 
-  it('prefers under-retrieved memories over heavily retrieved peers', () => {
+  it('prefers under-retrieved memories over heavily retrieved peers', async () => {
     const entries: MemoryEntry[] = [];
     for (let i = 0; i < 10; i++) {
       entries.push(fakeEntry({ content: `busy-${i}`, retrievalCount: 50 }));
@@ -101,7 +101,7 @@ describe('sampleForReplay', () => {
 
     const counts = new Map<string, number>();
     for (let seed = 0; seed < 100; seed++) {
-      const sample = sampleForReplay(entries, 1, new Date(), seed);
+      const sample = await sampleForReplay(entries, 1, new Date(), seed);
       for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const freshHits = counts.get(fresh.id) ?? 0;
@@ -109,9 +109,9 @@ describe('sampleForReplay', () => {
     expect(freshHits).toBeGreaterThan(peerMax);
   });
 
-  it('does not sample the same memory twice within one call', () => {
+  it('does not sample the same memory twice within one call', async () => {
     const entries = [fakeEntry({ content: 'a' }), fakeEntry({ content: 'b' }), fakeEntry({ content: 'c' })];
-    const sample = sampleForReplay(entries, 3, new Date(), 42);
+    const sample = await sampleForReplay(entries, 3, new Date(), 42);
     expect(new Set(sample).size).toBe(sample.length);
   });
 });

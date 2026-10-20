@@ -11,7 +11,8 @@ import { teeStdStreams } from '../../base/util/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
-import type { LocalFiles } from '../../store/local/index.js';
+import type { CapturedOutcome } from '../../store/port/captures.js';
+import type { StoreGroups } from '../../store/port.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -38,21 +39,21 @@ export interface CaptureOptions {
   originProject?: ProjectRef;
 }
 
-/** The folder a capture writes to, the global one under `global`, and its local files, which the CLI root builds. */
+/** The folder a capture writes to, the global one under `global`, and its store, which the CLI root builds. */
 export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
-  readonly files: LocalFiles;
+  readonly store: Pick<StoreGroups, 'captures' | 'folderFiles' | 'rejections'>;
   /** Where each captured row's vector goes. */
   readonly index: EmbedTarget;
 }
 
-export function cmdCapture(target: CaptureTarget, options: CaptureOptions): void {
+export async function cmdCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already
   // wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
   try {
-    cmdCaptureCore(target, options);
+    await cmdCaptureCore(target, options);
     if (options.logFile) console.log('[hippo] capture complete');
   } catch (err) {
     if (options.logFile) console.log(`[hippo] capture failed: ${errorMessage(err)}`);
@@ -82,9 +83,9 @@ function writeLogBanner(logFile: string): boolean {
 }
 
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
-function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): void {
+async function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
-    target.files.ensureFiles();
+    await target.store.folderFiles.ensure();
   } else if (!isInitialized(target.root)) {
     console.error(
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
@@ -116,36 +117,35 @@ function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): void {
     return;
   }
 
-  const keys = storedKeysInView(target.files, options, extracted);
+  const keys = await storedKeysInView(target.store, options, extracted);
 
-  printCaptureTally(options, captureFromCli(target, options, extracted, keys));
+  printCaptureTally(options, await captureFromCli(target, options, extracted, keys));
 }
 
-function captureFromCli(
-  { files, config, index }: CaptureTarget,
+async function captureFromCli(
+  { store, config, index }: CaptureTarget,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
-): CaptureTally {
+): Promise<CaptureTally> {
   const writeOpts: CaptureWriteOptions = {
     tenantId: options.global ? undefined : options.tenantId,
     originProject: options.originProject,
     lean: false,
   };
-  const into = { files, config, index };
-  if (!options.dryRun) return captureExtractedItems(into, writeOpts, extracted, keys);
-  return previewCapture(files.rejections, writeOpts, extracted, keys, config.defaultHalfLifeDays);
+  if (!options.dryRun) return captureExtractedItems({ store, config, index }, writeOpts, extracted, keys);
+  return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
 // stop its own copy.
 // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
-function storedKeysInView(
-  local: LocalFiles,
+async function storedKeysInView(
+  store: Pick<StoreGroups, 'captures'>,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
-): Set<string> {
-  const stored = local.captures.textsHolding(
+): Promise<Set<string>> {
+  const stored = await store.captures.textsHolding(
     options.global ? ALL_TENANTS : options.tenantId,
     extracted.map((item) => longestWord(item.content)),
     { everyScope: true },
@@ -235,46 +235,77 @@ export interface CaptureWriteOptions {
   readonly lean: boolean;
 }
 
-/** A folder's files with the config its root loaded for this capture, and where its rows' vectors go. */
-export interface ConfiguredFiles {
-  readonly files: LocalFiles;
+/** A folder's store with the config its root loaded for this capture, and where its rows' vectors go. */
+export interface ConfiguredStore {
+  readonly store: Pick<StoreGroups, 'captures'>;
   readonly config: HippoConfig;
   readonly index: EmbedTarget;
 }
 
-export function captureExtractedItems(
-  { files, config, index }: ConfiguredFiles,
+/** The entries to write, and per item the entry whose outcome it takes, or -1 for a text the store already holds. */
+interface CapturePlan {
+  readonly entries: MemoryEntry[];
+  readonly keys: string[];
+  readonly slots: number[];
+}
+
+/** One entry per new text: building can throw, so a held text or a repeat within the batch is never built. */
+function planCapture(
+  extracted: readonly ExtractedItem[],
+  held: ReadonlySet<string>,
+  build: (item: ExtractedItem) => MemoryEntry,
+): CapturePlan {
+  const plan: CapturePlan = { entries: [], keys: [], slots: [] };
+  const firstSlot = new Map<string, number>();
+  for (const item of extracted) {
+    const key = duplicateKey(item.content);
+    let slot = held.has(key) ? -1 : firstSlot.get(key);
+    if (slot === undefined) {
+      slot = plan.entries.push(build(item)) - 1;
+      plan.keys.push(key);
+      firstSlot.set(key, slot);
+    }
+    plan.slots.push(slot);
+  }
+  return plan;
+}
+
+/** Writes each new text once; a repeat of a captured text in the same batch counts as skipped, as a held one does. */
+export async function captureExtractedItems(
+  { store, config, index }: ConfiguredStore,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
-): CaptureTally {
+): Promise<CaptureTally> {
+  const plan = planCapture(extracted, keys, (item) => captureEntry(item, options, config.defaultHalfLifeDays));
+  const outcomes = await store.captures.write(plan.entries, { actor: options.actor, lean: options.lean });
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
-  const baseHalfLifeDays = config.defaultHalfLifeDays;
-  const items = extracted.map((item) => ({
-    content: item.content,
-    makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
-  }));
-  const outcomes = files.captures.write(items, keys, {
-    actor: options.actor,
-    lean: options.lean,
-    onCaptured: options.lean ? undefined : (entry) => embedMemoryDetached(index, entry),
+  const counted = new Set<number>();
+  for (const slot of plan.slots) {
+    const outcome: CapturedOutcome = slot === -1 ? 'skipped' : outcomes[slot];
+    tally[counted.has(slot) && outcome === 'captured' ? 'skipped' : outcome]++;
+    counted.add(slot);
+  }
+  outcomes.forEach((outcome, i) => {
+    if (outcome !== 'captured') return;
+    keys.add(plan.keys[i]);
+    if (!options.lean) embedMemoryDetached(index, plan.entries[i]);
   });
-  for (const outcome of outcomes) tally[outcome]++;
   return tally;
 }
 
 /** A dry run asks the store the same rejected-value question the write's gate does, so a tombstoned item previews as
  * rejected rather than captured. */
-function previewCapture(
-  rejections: LocalFiles['rejections'],
+async function previewCapture(
+  { rejections }: Pick<StoreGroups, 'rejections'>,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: ReadonlySet<string>,
   baseHalfLifeDays: number,
-): CaptureTally {
+): Promise<CaptureTally> {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const fresh = extracted.filter((item) => !keys.has(duplicateKey(item.content)));
-  const refused = rejections.refusedAmong(
+  const refused = await rejections.refusedAmong(
     fresh.map((item) => {
       const entry = captureEntry(item, options, baseHalfLifeDays);
       return { tenantId: entry.tenantId, entryId: entry.id, content: entry.content };

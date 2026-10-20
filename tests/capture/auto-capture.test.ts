@@ -470,7 +470,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     expect(after).toContain('hippo post-compact');
   });
 
-  it('hippo doctor names the missing hooks', () => {
+  it('hippo doctor names the missing hooks', async () => {
     initTestStore(path.join(dir, '.hippo'));
     fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
     fs.writeFileSync(
@@ -482,15 +482,14 @@ describe('both install routes wire compaction and failed-tool capture', () => {
         },
       }),
     );
-    const check = runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' }).checks.find(
-      (c) => c.id === 'claude-code',
-    )!;
+    const report = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' });
+    const check = report.checks.find((c) => c.id === 'claude-code')!;
     expect(check.status).toBe('warn');
     expect(check.detail).toMatch(/compaction snapshot and memories request/);
     expect(check.detail).toMatch(/failed-tool capture/);
     installJsonHooks('claude-code');
     expect(
-      runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' }).checks.find(
+      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' })).checks.find(
         (c) => c.id === 'claude-code',
       )!.status,
     ).toBe('pass');

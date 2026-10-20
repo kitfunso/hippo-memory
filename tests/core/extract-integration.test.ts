@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { storeExtractedFacts, ExtractedFact } from '../../src/domain/learn/extract.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
@@ -13,7 +13,7 @@ function setup(): string {
 }
 
 describe('storeExtractedFacts', () => {
-  it('creates Semantic entries linked to source via extracted_from', () => {
+  it('creates Semantic entries linked to source via extracted_from', async () => {
     const dir = setup();
     const source = createMemory('Alice and Bob discussed the project timeline', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -27,12 +27,7 @@ describe('storeExtractedFacts', () => {
       { content: 'Bob prefers async standup meetings', tags: ['speaker:Bob', 'topic:standup'], valence: 'positive' },
     ];
 
-    const entries = storeExtractedFacts(
-      sqliteSyncStore(dir).localFiles.learning,
-      source,
-      facts,
-      DEFAULT_HALF_LIFE_DAYS,
-    );
+    const entries = await storeExtractedFacts(sqliteStore(dir), source, facts, DEFAULT_HALF_LIFE_DAYS);
 
     expect(entries).toHaveLength(2);
 
@@ -51,7 +46,7 @@ describe('storeExtractedFacts', () => {
     expect(entries[1]!.content).toBe('Bob prefers async standup meetings');
   });
 
-  it('inherits conv:, session:, scope:, path: tags from source', () => {
+  it('inherits conv:, session:, scope:, path: tags from source', async () => {
     const dir = setup();
     const source = createMemory('Discussion about deployment', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -64,12 +59,7 @@ describe('storeExtractedFacts', () => {
       { content: 'Deploy uses blue-green strategy', tags: ['speaker:Carol', 'topic:deploy'], valence: 'neutral' },
     ];
 
-    const entries = storeExtractedFacts(
-      sqliteSyncStore(dir).localFiles.learning,
-      source,
-      facts,
-      DEFAULT_HALF_LIFE_DAYS,
-    );
+    const entries = await storeExtractedFacts(sqliteStore(dir), source, facts, DEFAULT_HALF_LIFE_DAYS);
     expect(entries).toHaveLength(1);
 
     const tags = entries[0]!.tags;
@@ -83,7 +73,7 @@ describe('storeExtractedFacts', () => {
     expect(tags).not.toContain('other-tag');
   });
 
-  it('returns empty array when no facts provided', () => {
+  it('returns empty array when no facts provided', async () => {
     const dir = setup();
     const source = createMemory('Small talk about weather', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -91,7 +81,7 @@ describe('storeExtractedFacts', () => {
     });
     writeEntry(dir, source);
 
-    const entries = storeExtractedFacts(sqliteSyncStore(dir).localFiles.learning, source, [], DEFAULT_HALF_LIFE_DAYS);
+    const entries = await storeExtractedFacts(sqliteStore(dir), source, [], DEFAULT_HALF_LIFE_DAYS);
     expect(entries).toHaveLength(0);
   });
 });

@@ -5,7 +5,6 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
 import {
   markSnapshotSaved,
-  recordSnapshotSaved,
   recordSummary,
   saveItems,
   startCompaction,
@@ -20,6 +19,7 @@ import type { Context } from '../../src/api/types.js';
 import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteCompactionHooks } from '../../src/store/sqlite/compaction-hooks.js';
 import {
   ALICE,
   BOB,
@@ -98,9 +98,7 @@ describe('snapshot_saved under a tenant the environment does not name', () => {
       const a = startCompaction(db, TENANT, { ...META, originProject: 'acme/app' });
       const b = startCompaction(db, TENANT, { ...META, sessionId: 's3', originProject: 'acme/app' });
       markSnapshotSaved(db, TENANT, a);
-      recordSnapshotSaved(handlesOf(root).on, TENANT, b, (m) => {
-        throw new Error(m);
-      });
+      sqliteCompactionHooks(handlesOf(root).on).markSnapshotSaved(TENANT, b);
       expect([recordRow(db, a)?.snapshot_saved, recordRow(db, b)?.snapshot_saved]).toEqual([1, 1]);
     });
   });

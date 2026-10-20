@@ -309,7 +309,7 @@ describe('recordRereads', () => {
   });
 });
 
-describe('__session-end-worker counts re-reads', () => {
+describe('__session-end-worker counts re-reads', async () => {
   let root: string;
   let env: NodeJS.ProcessEnv;
   let proj: string;
@@ -734,13 +734,15 @@ describe('re-read reports', () => {
   });
 
   it('hippo doctor reports tokens sent and re-read', async () => {
-    const tokens = runDoctor({
-      diagnosticsAt,
-      tenantId: 'default',
-      cwd: proj,
-      home: join(root, 'home'),
-      version: 'test',
-    }).checks.find((c) => c.id === 'tokens');
+    const tokens = (
+      await runDoctor({
+        diagnosticsAt,
+        tenantId: 'default',
+        cwd: proj,
+        home: join(root, 'home'),
+        version: 'test',
+      })
+    ).checks.find((c) => c.id === 'tokens');
     expect(tokens?.detail).toBe(
       '3 memory blocks sent to agents in 7 days, about 180 tokens sent and 250 re-read by later model calls (hippo tokens for detail)',
     );

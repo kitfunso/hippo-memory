@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 
@@ -141,7 +141,7 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
 });
 
 describe('extract.ts storeExtractedFacts has the same defect, folded in', () => {
-  it('extracted facts inherit the source entry tenant instead of stamping default', () => {
+  it('extracted facts inherit the source entry tenant instead of stamping default', async () => {
     const home = makeRoot('consolidate-tenant-landing');
     const source = createMemory('Alice prefers dark mode and vim keybindings', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -153,12 +153,7 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = storeExtractedFacts(
-      sqliteSyncStore(home).localFiles.learning,
-      source,
-      facts,
-      DEFAULT_HALF_LIFE_DAYS,
-    );
+    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS);
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.tenantId).toBe('tenant-extract');

@@ -1,13 +1,8 @@
 // Project names folded into others, read from the audit trail: the sync files imports under the surviving name, and
 // `hippo projects` repair agrees.
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
-import type { ProjectTagReads } from '../../store/port/project-tags.js';
+import type { ProjectFold, ProjectTags } from '../../store/port/project-tags.js';
 import type { JsonValue } from '../../base/util/json.js';
-
-export interface ProjectFold {
-  readonly from: string;
-  readonly into: string;
-}
 
 function foldOf(value: JsonValue | undefined): ProjectFold[] {
   if (!isObjectLike(value) || Array.isArray(value)) return [];
@@ -15,12 +10,12 @@ function foldOf(value: JsonValue | undefined): ProjectFold[] {
   return isStringValue(from) && isStringValue(into) ? [{ from, into }] : [];
 }
 
-export function foldEdges(store: Pick<ProjectTagReads, 'auditEvents'>): ProjectFold[] {
+export async function foldEdges(tags: Pick<ProjectTags, 'auditEvents'>, tenantId: string): Promise<ProjectFold[]> {
+  const merges = await tags.auditEvents(tenantId, 'project_merge');
+  const repairs = await tags.auditEvents(tenantId, 'project_repair');
   return [
-    ...store.auditEvents('project_merge').flatMap((e) => foldOf(e.metadata)),
-    ...store
-      .auditEvents('project_repair')
-      .flatMap((e) => (Array.isArray(e.metadata.folds) ? e.metadata.folds.flatMap(foldOf) : [])),
+    ...merges.flatMap((e) => foldOf(e.metadata)),
+    ...repairs.flatMap((e) => (Array.isArray(e.metadata.folds) ? e.metadata.folds.flatMap(foldOf) : [])),
   ];
 }
 
@@ -39,6 +34,10 @@ export function foldedInto(edges: readonly ProjectFold[], names: readonly string
 }
 
 /** Names folded, directly or through others, into one of `names`; the sync moves imports still filed under them. */
-export function namesFoldedInto(store: Pick<ProjectTagReads, 'auditEvents'>, names: readonly string[]): string[] {
-  return foldedInto(foldEdges(store), names);
+export async function namesFoldedInto(
+  tags: Pick<ProjectTags, 'auditEvents'>,
+  tenantId: string,
+  names: readonly string[],
+): Promise<string[]> {
+  return foldedInto(await foldEdges(tags, tenantId), names);
 }

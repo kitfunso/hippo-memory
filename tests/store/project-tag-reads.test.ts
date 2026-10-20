@@ -5,11 +5,15 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import type { ProjectTagStore } from '../../src/store/port/project-tags.js';
-import { listProjects, mergeProjects, planProjectRepair } from '../../src/domain/sharing/project-merge.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import {
+  listProjects,
+  mergeProjects,
+  planProjectRepair,
+  type StoreFolder,
+} from '../../src/domain/sharing/project-merge.js';
 import { mergedText } from '../../src/base/util/same-text.js';
-import { recordStatements } from '../_helpers/count-statements.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -33,8 +37,14 @@ function withDb<R>(fn: (db: DatabaseSyncLike) => R): R {
   }
 }
 
-const withStore = <R>(fn: (store: ProjectTagStore) => R): R =>
-  sqliteSyncStore(root).localFiles.projectTags.on({ tenantId: T, actor: 'test' }, fn);
+const SCOPE = { tenantId: T, actor: 'test' };
+const tags = () => sqliteStore(root).projectTags;
+
+/** The store's folder as the api hands it to the repair: a project store, not the global one. */
+async function folder(): Promise<StoreFolder> {
+  const { project, shared } = await sqliteStore(root).folderFiles.home();
+  return { isGlobal: false, shared, project };
+}
 
 const memory = (content: string, origin: string | null, i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { layer: Layer.Semantic }),
@@ -106,10 +116,10 @@ function addBystanders(n: number): void {
 }
 
 describe('hippo projects reads', () => {
-  it('lists live rows, imports and copies per project, newest first, a tie in first-seen order', () => {
+  it('lists live rows, imports and copies per project, newest first, a tie in first-seen order', async () => {
     seed();
 
-    expect(withStore(listProjects)).toEqual([
+    expect(await listProjects(tags(), T)).toEqual([
       { origin: '', live: 7, imported: 1, newest: at(16), copiesElsewhere: 1 },
       { origin: 'elsewhere', live: 2, imported: 1, newest: at(7), copiesElsewhere: 1 },
       { origin: null, live: 1, imported: 0, newest: at(7), copiesElsewhere: 0 },
@@ -118,7 +128,7 @@ describe('hippo projects reads', () => {
     ]);
   });
 
-  it('merges one tenant: sets aside the note the target holds, re-tags the rest, snapshots and compactions', () => {
+  it('merges one tenant: sets aside the note the target holds, re-tags the rest, snapshots and compactions', async () => {
     const { r, faded } = seed();
     const expected = {
       from: 'repo-wt-a',
@@ -129,17 +139,17 @@ describe('hippo projects reads', () => {
       compactions: 1,
     };
 
-    const dry = withStore((store) => mergeProjects(store, { from: 'repo-wt-a', into: 'repo', dryRun: true }));
+    const dry = await mergeProjects(tags(), SCOPE, { from: 'repo-wt-a', into: 'repo', dryRun: true });
     expect(dry).toEqual({ ...expected, backup: null });
-    const done = withStore((store) => mergeProjects(store, { from: 'repo-wt-a', into: 'repo', dryRun: false }));
+    const done = await mergeProjects(tags(), SCOPE, { from: 'repo-wt-a', into: 'repo', dryRun: false });
     expect(done).toMatchObject(expected);
-    expect(withStore(listProjects).find((p) => p.origin === 'repo')).toMatchObject({ live: 3, imported: 2 });
+    expect((await listProjects(tags(), T)).find((p) => p.origin === 'repo')).toMatchObject({ live: 3, imported: 2 });
   });
 
-  it('plans the repair from the user-global merges, their parents live or dormant, and copied imports', () => {
+  it('plans the repair from the user-global merges, their parents live or dormant, and copied imports', async () => {
     const { r } = seed();
 
-    expect(withStore((store) => planProjectRepair(store, root))).toEqual({
+    expect(await planProjectRepair(tags(), T, await folder())).toEqual({
       copies: [r[7].id],
       folds: [],
       collisions: [],
@@ -152,18 +162,19 @@ describe('hippo projects reads', () => {
     });
   });
 
-  it('reads no more rows with 300 rows and snapshots of a project none of them touches', () => {
+  it('reads no more rows with 300 rows and snapshots of a project none of them touches', async () => {
     seed();
-    const rowsRead = (): number[] =>
-      withStore((store) => [
-        recordStatements(() => listProjects(store)).rowsRead,
-        recordStatements(() => mergeProjects(store, { from: 'repo-wt-a', into: 'repo', dryRun: true })).rowsRead,
-        recordStatements(() => planProjectRepair(store, root)).rowsRead,
-      ]);
-    const before = rowsRead();
+    const at = await folder();
+    const dryMerge = { from: 'repo-wt-a', into: 'repo', dryRun: true };
+    const rowsRead = async (): Promise<number[]> => [
+      (await recordStatementsAsync(() => listProjects(tags(), T))).rowsRead,
+      (await recordStatementsAsync(() => mergeProjects(tags(), SCOPE, dryMerge))).rowsRead,
+      (await recordStatementsAsync(() => planProjectRepair(tags(), T, at))).rowsRead,
+    ];
+    const before = await rowsRead();
 
     addBystanders(300);
 
-    expect(rowsRead()).toEqual(before);
+    expect(await rowsRead()).toEqual(before);
   });
 });

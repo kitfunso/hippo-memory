@@ -30,7 +30,7 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
@@ -53,18 +53,18 @@ beforeEach(() => {
 afterEach(() => closeWorld(w));
 
 const withEnv = (env: Machine['env']): Machine => ({ ...w.machine, env });
-const sync = (extra: Partial<SyncOptions> = {}): ImportReport =>
+const sync = (extra: Partial<SyncOptions> = {}): Promise<ImportReport> =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport({}),
+    stores: sqliteImportStores({}),
     machine: w.machine,
     ...extra,
   });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
 describe('agent memory sync: options, time and reporting', () => {
-  it('HIPPO_AGENT_MEMORY_TOOLS overrides config; empty and none turn the import off', () => {
+  it('HIPPO_AGENT_MEMORY_TOOLS overrides config; empty and none turn the import off', async () => {
     writeConfig(w.local, []);
     note(dir, 'deploy.md', A);
     codexSummary(w, BULLET);
@@ -72,20 +72,20 @@ describe('agent memory sync: options, time and reporting', () => {
     for (const off of ['', 'none', ' NONE ']) {
       expect(
         tally(
-          importForStore(w.local, {
+          await importForStore(w.local, {
             configAt: loadConfig,
             tenantId: 'default',
-            agentImport: sqliteAgentImport({}),
+            stores: sqliteImportStores({}),
             machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: off }),
           }),
         ).imported,
       ).toBe(0);
     }
-    expect(tally(sync()).imported).toBe(0);
-    const report = importForStore(w.local, {
+    expect(tally(await sync()).imported).toBe(0);
+    const report = await importForStore(w.local, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport({}),
+      stores: sqliteImportStores({}),
       machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }),
     });
     expect([claude(report).imported, toolTally(report, 'codex').imported]).toEqual([1, 1]);
@@ -95,19 +95,19 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(report.warnings.join('\n')).not.toContain('nosuchtool');
   });
 
-  it('agentMemories.tools: [] in a project store stops its project pass and its user pass', () => {
+  it('agentMemories.tools: [] in a project store stops its project pass and its user pass', async () => {
     writeConfig(w.local, []);
     note(dir, 'deploy.md', A);
     note(userNotes(w), 'u.md', USER_NOTE);
 
-    expect(tally(sync()).imported).toBe(0);
+    expect(tally(await sync()).imported).toBe(0);
     expect(isInitialized(w.global)).toBe(false);
     expect(
       tally(
-        importForStore(w.global, {
+        await importForStore(w.global, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport({}),
+          stores: sqliteImportStores({}),
           machine: w.machine,
         }),
       ).imported,
@@ -115,26 +115,26 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(liveTexts(w.global)).toEqual([USER_NOTE]);
   });
 
-  it('a one-tool list imports that tool only', () => {
+  it('a one-tool list imports that tool only', async () => {
     writeConfig(w.local, ['codex']);
     note(dir, 'deploy.md', A);
     codexSummary(w, BULLET);
 
-    const report = sync();
+    const report = await sync();
     expect([claude(report).imported, toolTally(report, 'codex').imported]).toEqual([0, 1]);
     expect(liveRows(w.local)).toEqual([]);
   });
 
-  it('a busy container is skipped with one warning and nothing set aside', () => {
+  it('a busy container is skipped with one warning and nothing set aside', async () => {
     const gone = note(dir, 'gone.md', A);
-    sync();
+    await sync();
     unlinkSync(gone);
     note(dir, 'new.md', B);
     const holder = openHippoDb(w.local);
     let report: ImportReport;
     try {
       holder.exec('BEGIN IMMEDIATE');
-      report = sync({ busyWaitMs: 50 });
+      report = await sync({ busyWaitMs: 50 });
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);
@@ -143,81 +143,85 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(claude(report)).toMatchObject({ setAside: 0, imported: 0 });
     expect(liveTexts(w.local)).toEqual([A]);
 
-    expect(claude(sync())).toMatchObject({ setAside: 1, imported: 1 });
+    expect(claude(await sync())).toMatchObject({ setAside: 1, imported: 1 });
     expect(liveTexts(w.local)).toEqual([B]);
   });
 
-  it('a dry run writes nothing and reports what would move', () => {
+  it('a dry run writes nothing and reports what would move', async () => {
     const gone = note(dir, 'gone.md', A);
-    sync();
+    await sync();
     unlinkSync(gone);
     note(dir, 'new.md', B);
     note(userNotes(w), 'u.md', USER_NOTE);
     const before = { ids: liveRows(w.local).map((e) => e.id), audit: auditTotal(w.local) };
 
-    const report = sync({ dryRun: true });
+    const report = await sync({ dryRun: true });
     expect(claude(report)).toMatchObject({ imported: 2, setAside: 1 });
     expect({ ids: liveRows(w.local).map((e) => e.id), audit: auditTotal(w.local) }).toEqual(before);
     expect(dormantRows(w.local)).toEqual([]);
     expect(isInitialized(w.global)).toBe(false);
   });
 
-  it('a dry run counts kept rows in a config folder this run did not list', () => {
+  it('a dry run counts kept rows in a config folder this run did not list', async () => {
     const alt = join(w.home, 'alt-claude');
     const altMachine = withEnv({ CLAUDE_CONFIG_DIR: alt });
     note(join(alt, 'projects', claudeFolderName(w.project), 'memory'), 'alt.md', B);
-    importForStore(w.local, {
+    await importForStore(w.local, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport({}),
+      stores: sqliteImportStores({}),
       machine: altMachine,
     });
     note(dir, 'deploy.md', A);
-    sync();
+    await sync();
 
-    expect(sync({ dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
+    expect((await sync({ dryRun: true })).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
     expect(
-      importForStore(w.local, {
-        configAt: loadConfig,
-        tenantId: 'default',
-        agentImport: sqliteAgentImport({}),
-        machine: altMachine,
-        dryRun: true,
-      }).tools.find((t) => t.tool === 'claude-code')?.unlisted,
+      (
+        await importForStore(w.local, {
+          configAt: loadConfig,
+          tenantId: 'default',
+          stores: sqliteImportStores({}),
+          machine: altMachine,
+          dryRun: true,
+        })
+      ).tools.find((t) => t.tool === 'claude-code')?.unlisted,
     ).toBe(1);
   });
 
-  it('summaryLine names what moved, and is null when nothing did', () => {
+  it('summaryLine names what moved, and is null when nothing did', async () => {
     note(dir, 'a.md', A);
     const bFile = note(dir, 'b.md', B);
     const secret = note(dir, 'secret.md', `Deploys sign in with ${FAKE_KEY} on the build box.`);
     codexSummary(w, BULLET);
-    expect(summaryLine(sync())).toBe('Imported 3 agent memories (Claude Code 2, Codex 1); 1 skipped for a secret.');
+    expect(summaryLine(await sync())).toBe(
+      'Imported 3 agent memories (Claude Code 2, Codex 1); 1 skipped for a secret.',
+    );
 
     unlinkSync(secret);
-    expect(summaryLine(sync())).toBeNull();
+    expect(summaryLine(await sync())).toBeNull();
 
     note(dir, 'a.md', `${A} Then run the smoke test.`);
     unlinkSync(bFile);
-    expect(summaryLine(sync())).toBe('Agent memories: 1 replaced, 1 set aside.');
+    expect(summaryLine(await sync())).toBe('Agent memories: 1 replaced, 1 set aside.');
 
     note(dir, 'b.md', B);
-    expect(summaryLine(sync())).toBe('Agent memories: 1 brought back.');
+    expect(summaryLine(await sync())).toBe('Agent memories: 1 brought back.');
 
     const row = liveRows(w.local).find((e) => e.content === B);
     if (row !== undefined) writeEntry(w.local, { ...row, pinned: true });
     unlinkSync(bFile);
-    expect(summaryLine(sync())).toBe('Agent memories: 1 pinned memory kept with the note gone.');
+    expect(summaryLine(await sync())).toBe('Agent memories: 1 pinned memory kept with the note gone.');
   });
 
-  it("created carries the item's time as a 24-character Z timestamp, from an offset modified too, capped at now", () => {
+  it("created carries the item's time as a 24-character Z timestamp, from an offset modified too, capped at now", async () => {
     note(dir, 'offset.md', A, 'type: feedback\nmodified: 2026-03-04T10:00:00+02:00');
     const byMtime = note(dir, 'mtime.md', B);
     // Node 22's utimes passes seconds as a double, so .123 lands at .1229999; half a second is exact.
     utimesSync(byMtime, new Date('2025-11-05T06:07:08.500Z'), new Date('2025-11-05T06:07:08.500Z'));
     note(dir, 'future.md', USER_NOTE, 'type: feedback\nmodified: 2099-01-01T00:00:00Z');
     const start = Date.now();
-    sync();
+    await sync();
     const end = Date.now();
 
     const byText = new Map(liveRows(w.local).map((e) => [e.content, e]));
@@ -251,7 +255,7 @@ describe('agent memory sync: options, time and reporting', () => {
       );
       utimesSync(file, monthAgo, monthAgo);
     }
-    expect(claude(sync()).imported).toBe(40);
+    expect(claude(await sync()).imported).toBe(40);
 
     const result = await contextGet(ctxFor(w.local), {
       pinnedOnly: true,
@@ -262,13 +266,13 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(result.entries.map((e) => e.entry.id).sort()).toEqual([...fresh].sort());
   });
 
-  it('a one-line preference is imported, since the worth check is off', () => {
+  it('a one-line preference is imported, since the worth check is off', async () => {
     const PREF = 'keep replies short';
     expect(isContentWorthStoring(PREF)).toBe(false);
     note(dir, 'pref.md', PREF);
     codexSummary(w, '- likes terse answers');
 
-    const report = sync();
+    const report = await sync();
     expect([claude(report).imported, toolTally(report, 'codex').imported]).toEqual([1, 1]);
     expect(liveTexts(w.local)).toEqual([PREF]);
     expect(liveTexts(w.global)).toEqual(['User Profile: likes terse answers']);

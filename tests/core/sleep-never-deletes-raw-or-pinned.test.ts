@@ -14,7 +14,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadEveryTenantEntries,
@@ -24,7 +24,6 @@ import {
   readEntry,
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
@@ -108,14 +107,14 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     }
   });
 
-  it('dedup keeps a pinned duplicate', () => {
+  it('dedup keeps a pinned duplicate', async () => {
     const root = newRoot();
     const keeper = createMemory7(CACHE_FACT);
     const pinnedCopy = { ...createMemory(CACHE_FACT, { pinned: true }), strength: 0.5 };
     writeEntry(root, keeper);
     writeEntry(root, pinnedCopy);
 
-    deduplicateStore(sqliteConsolidation(handlesOf(root)));
+    await deduplicateStore(sqliteStore(root));
 
     expect(readEntry(root, keeper.id)?.content).toBe(CACHE_FACT);
     expect(readEntry(root, pinnedCopy.id)).toMatchObject({ content: CACHE_FACT, pinned: true });

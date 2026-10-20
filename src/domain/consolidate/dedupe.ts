@@ -10,7 +10,7 @@ import { compareEntryIdentity } from '../../base/rank/compare.js';
 import { canAutoDelete, type MemoryEntry } from '../../base/memory/memory.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import type { Consolidation } from '../../store/local/index.js';
+import type { StoreWith } from '../../store/port.js';
 
 export interface DedupPair {
   kept: string;
@@ -121,11 +121,14 @@ const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') 
 
 type Partitions = Map<string, PartitionGroups>;
 
+/** Pages of rows, held now or read a page at a time from the store. */
+type RowPages = Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
+
 /** Groups rows fed a page at a time; between pages only each group's survivor and losers are held. Map order is first
  * appearance, so partitions keep the order the pages gave them. */
-function partitionRows(pages: Iterable<readonly MemoryEntry[]>): Partitions {
+async function partitionRows(pages: RowPages): Promise<Partitions> {
   const partitions: Partitions = new Map();
-  for (const page of pages) {
+  for await (const page of pages) {
     for (const entry of page) {
       if (!isCurrentDistilled(entry)) continue;
       // EI2: also split by restricted scope, else a private copy can delete the readable one.
@@ -139,40 +142,44 @@ function partitionRows(pages: Iterable<readonly MemoryEntry[]>): Partitions {
 }
 
 /** The candidates' partitions in the order a read of every current row first meets them. */
-function candidatePartitions(store: Pick<Consolidation, 'duplicateCandidates'>): Partitions {
-  const { rows, firstSeen } = store.duplicateCandidates();
+async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<Partitions> {
+  const { rows, firstSeen } = await store.consolidation.duplicateCandidates();
   const rank = new Map<string, number>();
   firstSeen.forEach((seen, i) => {
     const key = derivationPartitionKey(seen.tenantId, seen.scope, seen.originProject);
     if (!rank.has(key)) rank.set(key, i);
   });
   const at = (key: string): number => rank.get(key) ?? firstSeen.length;
-  return new Map([...partitionRows([rows])].sort(([a], [b]) => at(a) - at(b)));
+  return new Map([...(await partitionRows([rows]))].sort(([a], [b]) => at(a) - at(b)));
 }
 
-function scanPairs(store: Pick<Consolidation, 'objectBackedAmong'>, partitions: Partitions): DedupPair[] {
+async function scanPairs(store: StoreWith<'consolidation'>, partitions: Partitions): Promise<DedupPair[]> {
   const losers = [...partitions.values()].flatMap((groups) => [...groups.values()].flatMap((g) => g.losers));
-  const backing = store.objectBackedAmong(losers.map((loser) => loser.id));
+  const backing = await store.consolidation.objectBackedAmong(losers.map((loser) => loser.id));
   return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
 }
 
 /** Remove the weaker copy of same-text (apart from spacing) memories within one tenant, never across (isolation).
  * Strength wins, then retrievals; `threshold` is ignored; `pages` feeds every row in place of the candidates read. */
-export function deduplicateStore(
-  store: Consolidation,
-  options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: Iterable<readonly MemoryEntry[]> } = {},
-): DedupResult {
+export async function deduplicateStore(
+  store: StoreWith<'consolidation'>,
+  options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: RowPages } = {},
+): Promise<DedupResult> {
   // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort sleep mid-loop) and
   // superseded rows are history.
-  const partitions = options.pages ? partitionRows(options.pages) : candidatePartitions(store);
-  const pairs = scanPairs(store, partitions);
-  const done = options.dryRun ? pairs : deletePairs(store, pairs, options.actor);
+  const partitions = options.pages ? await partitionRows(options.pages) : await candidatePartitions(store);
+  const pairs = await scanPairs(store, partitions);
+  const done = options.dryRun ? pairs : await deletePairs(store, pairs, options.actor);
   return { removed: done.length, pairs: done };
 }
 
-/** The pairs whose loser was deleted; one store handle, one transaction per batch of deletes. */
-function deletePairs(store: Consolidation, pairs: readonly DedupPair[], actor: string | undefined): DedupPair[] {
+/** The pairs whose loser was deleted; one store call, one transaction per batch of deletes. */
+async function deletePairs(
+  store: StoreWith<'consolidation'>,
+  pairs: readonly DedupPair[],
+  actor: string | undefined,
+): Promise<DedupPair[]> {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
-  const gone = store.deleteInBatches(targets, { actor, automatic: true });
+  const gone = await store.consolidation.deleteInBatches(targets, { actor, automatic: true });
   return pairs.filter((_, i) => gone[i]);
 }

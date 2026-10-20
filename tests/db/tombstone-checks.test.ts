@@ -1,4 +1,4 @@
-// Sleep's tombstone checks answer per tenant on one lazily opened handle, write their refusal rows on it, and do nothing under a dry run.
+// Sleep's tombstone checks answer per tenant, write their refusal rows through the store, and do nothing under a dry run.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -8,7 +8,8 @@ import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { tombstoneChecks as checksOver } from '../../src/domain/consolidate/tombstones.js';
 
 const roots: string[] = [];
 const DIGEST = rejectionDigest('the staging password is hunter2');
@@ -54,38 +55,32 @@ const refusal = (targetId: string): AppendAuditOpts => ({
   metadata: { digest: DIGEST },
 });
 
-const tombstoneChecks = (root: string, dryRun: boolean) =>
-  sqliteSyncStore(root).localFiles.consolidation.tombstoneChecks(dryRun);
+const tombstoneChecks = (root: string, dryRun: boolean) => checksOver(sqliteStore(root), dryRun);
 
 describe('tombstoneChecks', () => {
-  it('finds a tombstone only under the tenant that rejected the value, and writes the refusal row', () => {
+  it('finds a tombstone only under the tenant that rejected the value, and writes the refusal row', async () => {
     const root = storeWithTombstone();
     const checks = tombstoneChecks(root, false);
-    try {
-      expect(checks.find('ta', DIGEST)?.reason).toBe('leaked');
-      expect(checks.find('tb', DIGEST)).toBeNull();
-      expect(checks.find('ta', rejectionDigest('another value'))).toBeNull();
-      checks.audit(refusal('m1'));
-    } finally {
-      checks.close();
-    }
+    expect((await checks.find('ta', DIGEST))?.reason).toBe('leaked');
+    expect(await checks.find('tb', DIGEST)).toBeNull();
+    expect(await checks.find('ta', rejectionDigest('another value'))).toBeNull();
+    await checks.audit(refusal('m1'));
     expect(refusals(root, 'ta').map((e) => [e.actor, e.targetId, e.metadata])).toEqual([
       ['sleep', 'm1', { digest: DIGEST }],
     ]);
   });
 
-  it('under a dry run finds nothing, writes nothing and never opens the store', () => {
+  it('under a dry run finds nothing, writes nothing and never opens the store', async () => {
     const root = storeWithTombstone();
     const checks = tombstoneChecks(path.join(root, 'no-store-here'), true);
-    expect(checks.find('ta', DIGEST)).toBeNull();
-    checks.audit(refusal('m1'));
-    checks.close();
+    expect(await checks.find('ta', DIGEST)).toBeNull();
+    await checks.audit(refusal('m1'));
     expect(fs.existsSync(path.join(root, 'no-store-here'))).toBe(false);
   });
 
-  it('an unused set of checks closes without ever opening the store', () => {
+  it('an unused set of checks never opens the store', () => {
     const root = storeWithTombstone();
-    tombstoneChecks(path.join(root, 'no-store-here'), false).close();
+    tombstoneChecks(path.join(root, 'no-store-here'), false);
     expect(fs.existsSync(path.join(root, 'no-store-here'))).toBe(false);
   });
 });

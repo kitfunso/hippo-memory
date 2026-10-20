@@ -15,9 +15,9 @@ import {
   resolveProjectIdentity,
   type ProjectIdentity,
 } from '../../base/scope/project-identity.js';
-import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
-import type { AgentImport, ImportTarget } from '../../store/port/agent-import.js';
-import { syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
+import { syncContainer, type ContainerOutcome } from './apply.js';
+import type { ContainerWork, StoreSession } from './container-view.js';
+import { handOver, warnUnpurged } from './handover.js';
 import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
@@ -26,16 +26,15 @@ import { legacyWork, type LegacyWork } from './legacy.js';
 import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
 import { addTally, emptyReport, mergeReports, toolReport, type ImportReport, type ToolReport } from './report.js';
-import { containerId, containerPrefix, splitSource } from './source.js';
+import { containerId, containerPrefix } from './source.js';
 import {
-  AGENT_MEMORY_SOURCE_PREFIX,
   AGENT_MEMORY_TOOLS,
   isToolId,
   toolSourcePrefix,
   type AgentMemoryTool,
   type ToolId,
 } from '../../base/memory/agent-memory-tools.js';
-import type { Adapter, AdapterContext, Listing, Scope } from './types.js';
+import type { Adapter, AdapterContext, ImportStore, ImportStores, Listing, Scope } from './types.js';
 
 export const ADAPTERS: readonly Adapter[] = [
   claudeCodeAdapter,
@@ -60,7 +59,7 @@ export interface SyncOptions {
   /** How long a busy store is waited on before its containers are skipped. */
   readonly busyWaitMs?: number;
   /** Opens each target store; the caller's, so this module never builds a store adapter. */
-  readonly agentImport: AgentImport;
+  readonly stores: ImportStores;
 }
 
 interface Pass {
@@ -82,15 +81,15 @@ interface Pass {
  * init, sleep, `import --agents` and the daily runner: a local store gets its project pass then the user pass; the
  * global store the user pass only.
  */
-export function importForStore(hippoRoot: string, opts: SyncOptions): ImportReport {
+export async function importForStore(hippoRoot: string, opts: SyncOptions): Promise<ImportReport> {
   if (isGlobalStoreRoot(hippoRoot)) return importUserMemories(hippoRoot, opts);
-  const report = importProjectMemories(hippoRoot, opts);
-  mergeReports(report, importUserMemories(hippoRoot, opts));
+  const report = await importProjectMemories(hippoRoot, opts);
+  mergeReports(report, await importUserMemories(hippoRoot, opts));
   return report;
 }
 
 /** A local store's project pass with legacy adoption; `init --scan` runs it per repository and the user pass once. */
-export function importProjectMemories(hippoRoot: string, opts: SyncOptions): ImportReport {
+export async function importProjectMemories(hippoRoot: string, opts: SyncOptions): Promise<ImportReport> {
   const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
   return runPass(
     {
@@ -108,7 +107,7 @@ export function importProjectMemories(hippoRoot: string, opts: SyncOptions): Imp
 }
 
 /** Every tool's user-level memory into the global store, created on demand, with no origin. */
-export function importUserMemories(invokingRoot: string, opts: SyncOptions): ImportReport {
+export async function importUserMemories(invokingRoot: string, opts: SyncOptions): Promise<ImportReport> {
   const ctx = context(opts.machine, {});
   return runPass(
     {
@@ -127,10 +126,14 @@ export function importUserMemories(invokingRoot: string, opts: SyncOptions): Imp
 
 /** Session end in a folder with no store of its own: the session's project into the global store with its origin, the
  * session folder's notes, then the user pass. */
-export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
+export async function importAtSessionEnd(
+  cwd: string,
+  transcriptPath: string | undefined,
+  opts: SyncOptions,
+): Promise<ImportReport> {
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
-  const report = runPass(
+  const report = await runPass(
     {
       scope: 'project',
       target: globalRoot,
@@ -142,19 +145,21 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
     },
     opts,
   );
-  if (transcriptPath !== undefined) mergeReports(report, importSessionFolder(globalRoot, transcriptPath, cwd, opts));
-  mergeReports(report, importUserMemories(globalRoot, opts));
+  if (transcriptPath !== undefined) {
+    mergeReports(report, await importSessionFolder(globalRoot, transcriptPath, cwd, opts));
+  }
+  mergeReports(report, await importUserMemories(globalRoot, opts));
   return report;
 }
 
 /** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its
  * home notes user-global wherever it ends. No git call, so post-compact can run it. */
-export function importSessionFolder(
+export async function importSessionFolder(
   hippoRoot: string,
   transcriptPath: string,
   cwd: string | null,
   opts: SyncOptions,
-): ImportReport {
+): Promise<ImportReport> {
   const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
   if (project === null) return emptyReport();
   // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts
@@ -239,8 +244,7 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
   return out;
 }
 
-function runPass(pass: Pass, opts: SyncOptions): ImportReport {
-  const ai = opts.agentImport;
+async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) => listSafely(a, pass, report));
@@ -248,16 +252,15 @@ function runPass(pass: Pass, opts: SyncOptions): ImportReport {
   let store: OpenStore | null = null;
   let synced: ContainerWork[] = [];
   try {
-    store = openTarget(ai, pass.target, hasItems, opts);
-    if (store !== null) synced = syncStore(pass, listings, store, opts, report);
+    store = await openTarget(pass.target, hasItems, opts);
+    if (store !== null) synced = await syncStore(pass, listings, store, opts, report);
   } catch (err) {
-    report.warnings.push(
-      `agent memories not synced into ${pass.target}: ${ai.isBusy(err) ? 'the store was busy' : errorMessage(err)}`,
-    );
+    const why = opts.stores.isBusy(err) ? 'the store was busy' : errorMessage(err);
+    report.warnings.push(`agent memories not synced into ${pass.target}: ${why}`);
   } finally {
-    store?.target.close();
+    await store?.store.close();
   }
-  if (pass.handover && !opts.dryRun) handOver(ai, synced, path.dirname(pass.target), opts, report);
+  if (pass.handover && !opts.dryRun) await handOver(synced, path.dirname(pass.target), opts, report);
   return report;
 }
 
@@ -287,91 +290,125 @@ function listSafely(adapter: Adapter, pass: Pass, report: ImportReport): Listing
 }
 
 interface OpenStore {
-  readonly ai: AgentImport;
-  readonly target: ImportTarget;
+  readonly store: ImportStore;
+  /** The folder whose config scores the rows; a stand-in plans by the absent target's, its defaults. */
+  readonly root: string;
   readonly global: boolean;
 }
 
-/**
- * A store that does not exist yet is created only when there is something to put in it; a dry run plans against an
- * empty stand-in.
- */
-function openTarget(ai: AgentImport, target: string, hasItems: boolean, opts: SyncOptions): OpenStore | null {
+/** A store that does not exist yet is created only when there is something to put in it; a dry run plans against an
+ * empty stand-in. */
+async function openTarget(target: string, hasItems: boolean, opts: SyncOptions): Promise<OpenStore | null> {
   const global = isGlobalStoreRoot(target);
   if (!isInitialized(target)) {
-    if (opts.dryRun) return { ai, target: ai.openStandIn(opts.tenantId), global };
+    if (opts.dryRun) return { store: opts.stores.standIn(), root: target, global };
     if (!hasItems) return null;
-    ai.create(target);
+    await opts.stores.create(target);
   }
-  return { ai, target: ai.open(target, opts.tenantId, { busyWaitMs: opts.busyWaitMs }), global };
+  return { store: opts.stores.open(target, { busyWaitMs: opts.busyWaitMs }), root: target, global };
 }
 
 function storeSession(pass: Pass, store: OpenStore, opts: SyncOptions, legacy: LegacyWork | null): StoreSession {
-  const config = opts.configAt(store.target.root);
+  const config = opts.configAt(store.root);
   return {
-    target: store.target,
-    tenantId: store.target.tenantId,
+    store: store.store,
+    tenantId: opts.tenantId,
     baseHalfLifeDays: config.defaultHalfLifeDays,
     strength: strengthOptionsOf(config.runtime),
     originProject: pass.originProject,
-    isDuplicate: duplicateCheck(store, [pass.originProject ?? '', ...pass.legacyOrigins], legacy?.adopted ?? new Set()),
+    visible: store.global ? [pass.originProject ?? '', ...pass.legacyOrigins] : null,
+    adopted: legacy?.adopted ?? new Set(),
     dryRun: opts.dryRun === true,
   };
 }
 
-function syncStore(
+/** One pass's store as each of its containers syncs into it. */
+interface PassStore {
+  readonly pass: Pass;
+  readonly session: StoreSession;
+  readonly legacy: LegacyWork | null;
+  /** The project's earlier names; each container's rows under them move to its prefix. */
+  readonly earlier: readonly string[];
+  /** A project's rows in the global store are parted by origin: a worktree and its main checkout share a folder. */
+  readonly partition: string | null;
+  readonly platform: NodeJS.Platform;
+  readonly isBusy: ImportStores['isBusy'];
+}
+
+type SyncedContainer = ContainerOutcome & { readonly work: ContainerWork };
+
+async function syncStore(
   pass: Pass,
   listings: readonly Listing[],
   store: OpenStore,
   opts: SyncOptions,
   report: ImportReport,
-): ContainerWork[] {
-  const legacy = pass.legacy ? legacyWork(store.target, listings) : null;
+): Promise<ContainerWork[]> {
+  const legacy = pass.legacy ? await legacyWork(store.store.agentImport, opts.tenantId, listings) : null;
   const session = storeSession(pass, store, opts, legacy);
-  // A project's rows in the global store are parted by origin: a worktree and its main checkout share a Claude folder.
   const partition = store.global && pass.scope === 'project' ? (pass.originProject ?? '') : null;
   const earlier =
-    partition === null || partition === '' ? [] : earlierNames(store.target, partition, pass.legacyOrigins);
+    partition === null || partition === ''
+      ? []
+      : await earlierNames(store.store, opts.tenantId, [partition, ...pass.legacyOrigins]);
+  const at: PassStore = {
+    pass,
+    session,
+    legacy,
+    earlier,
+    partition,
+    platform: opts.machine.platform,
+    isBusy: opts.stores.isBusy,
+  };
   const synced: ContainerWork[] = [];
   let remembered = 0;
   for (const listing of listings) {
-    const tool = toolOf(listing.tool);
-    const out = toolReport(report, tool.id);
-    for (const container of listing.containers) {
-      if (!container.readable) {
-        out.tally.unreadable++;
-        continue;
-      }
-      const work = containerWork(tool, container, {
-        platform: opts.machine.platform,
-        legacy,
-        origin: partition ?? '',
-        earlier,
-      });
-      const outcome = syncOne(store.ai, session, work, { out, report });
-      if (outcome === null) continue;
-      synced.push(work);
+    for (const outcome of await syncListing(at, listing, report)) {
+      synced.push(outcome.work);
       remembered += outcome.tally.imported + outcome.tally.replaced;
-      if (!session.dryRun) afterCommit(store.target, outcome, report);
-    }
-    if (session.dryRun) {
-      out.unlisted += unlistedRows(store.target, {
-        tool,
-        scope: pass.scope,
-        listing,
-        platform: opts.machine.platform,
-        partition: partition === null ? null : [partition, ...earlier],
-      });
     }
   }
-  if (remembered > 0 && !session.dryRun) bumpRemembered(store.target, remembered, report);
+  if (remembered > 0 && !session.dryRun) await bumpRemembered(store.store, remembered, report);
+  return synced;
+}
+
+async function syncListing(at: PassStore, listing: Listing, report: ImportReport): Promise<SyncedContainer[]> {
+  const tool = toolOf(listing.tool);
+  const out = toolReport(report, tool.id);
+  const synced: SyncedContainer[] = [];
+  for (const container of listing.containers) {
+    if (!container.readable) {
+      out.tally.unreadable++;
+      continue;
+    }
+    const work = containerWork(tool, container, {
+      platform: at.platform,
+      legacy: at.legacy,
+      origin: at.partition ?? '',
+      earlier: at.earlier,
+    });
+    const outcome = await syncOne(at.session, work, { out, report, isBusy: at.isBusy });
+    if (outcome === null) continue;
+    synced.push({ ...outcome, work });
+    warnUnpurged(outcome.unpurged, report);
+  }
+  if (at.session.dryRun) {
+    out.unlisted += await unlistedRows(at.session, {
+      tool,
+      scope: at.pass.scope,
+      listing,
+      platform: at.platform,
+      partition: at.partition === null ? null : [at.partition, ...at.earlier],
+    });
+  }
   return synced;
 }
 
 /** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
-function earlierNames(target: ImportTarget, id: string, legacyOrigins: readonly string[]): string[] {
-  const names = [id, ...legacyOrigins];
-  return [...legacyOrigins, ...namesFoldedInto(target.projectTagReads(), names)].filter((n) => n !== '' && n !== id);
+async function earlierNames(store: ImportStore, tenantId: string, names: readonly string[]): Promise<string[]> {
+  const [id, ...legacyOrigins] = names;
+  const folded = await namesFoldedInto(store.projectTags, tenantId, names);
+  return [...legacyOrigins, ...folded].filter((n) => n !== '' && n !== id);
 }
 
 interface ContainerWorkOptions {
@@ -401,22 +438,28 @@ function containerWork(
   };
 }
 
-/**
- * Null when the container was skipped: a busy store waits for the next sync, any other failure is a warning and the
- * sync goes on.
- */
-function syncOne(
-  ai: AgentImport,
+/** Null when the container was skipped: a busy store, or one that changed under both plans, waits for the next sync;
+ * any other failure is a warning and the sync goes on. */
+async function syncOne(
   session: StoreSession,
   work: ContainerWork,
-  { out, report }: { readonly out: ToolReport; readonly report: ImportReport },
-): ContainerOutcome | null {
+  {
+    out,
+    report,
+    isBusy,
+  }: { readonly out: ToolReport; readonly report: ImportReport; readonly isBusy: PassStore['isBusy'] },
+): Promise<ContainerOutcome | null> {
   try {
-    const outcome = syncContainer(session, work);
+    const outcome = await syncContainer(session, work);
+    if (outcome === null) {
+      out.tally.busy++;
+      report.warnings.push(`${out.label}: ${work.container.path} skipped, the store changed while it was read`);
+      return null;
+    }
     addTally(out.tally, outcome.tally);
     return outcome;
   } catch (err) {
-    if (ai.isBusy(err)) {
+    if (isBusy(err)) {
       out.tally.busy++;
       report.warnings.push(`${out.label}: ${work.container.path} skipped, the store was busy`);
     } else {
@@ -426,52 +469,16 @@ function syncOne(
   }
 }
 
-function afterCommit(
-  target: ImportTarget,
-  outcome: Pick<ContainerOutcome, 'mirror' | 'purge'>,
-  report: ImportReport,
-): void {
-  for (const entry of outcome.mirror) target.writeMirror(entry);
-  for (const id of outcome.purge) {
-    try {
-      target.removeMirror(id);
-    } catch (err) {
-      // A legacy-mirror import on an empty store would bring the row back live, and the next sync sets it aside again.
-      report.warnings.push(`mirror of ${id} not removed: ${errorMessage(err)}`);
-    }
-  }
-}
-
-function bumpRemembered(target: ImportTarget, remembered: number, report: ImportReport): void {
+async function bumpRemembered(store: ImportStore, remembered: number, report: ImportReport): Promise<void> {
   try {
-    target.bumpRemembered(remembered);
+    await store.lessonWrites.bumpRemembered(remembered);
   } catch (err) {
     report.warnings.push(`remembered counter not updated: ${errorMessage(err)}`);
   }
 }
 
-/**
- * Design 6: only text stored by another path counts, and in the global store only rows visible where the new row goes.
- */
-function duplicateCheck(
-  store: OpenStore,
-  origins: readonly string[],
-  adopted: ReadonlySet<string>,
-): (text: string) => boolean {
-  const visible = store.global ? origins : null;
-  // Only the rows holding the text's words can hold the text, so the store is asked for those alone.
-  return (text) => {
-    const key = duplicateKey(text);
-    return store.target
-      .rowsHoldingOutsideSourcePrefix(text, AGENT_MEMORY_SOURCE_PREFIX, visible)
-      .some((r) => !adopted.has(r.id) && heldTextKeys(r).includes(key));
-  };
-}
-
-/**
- * Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder); `partition`
- * limits it to one project's names.
- */
+/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder);
+ * `partition` limits it to one project's names. */
 interface UnlistedRowsOptions {
   readonly tool: AgentMemoryTool;
   readonly scope: Scope;
@@ -480,75 +487,15 @@ interface UnlistedRowsOptions {
   readonly partition: readonly string[] | null;
 }
 
-function unlistedRows(target: ImportTarget, options: UnlistedRowsOptions): number {
+async function unlistedRows(session: StoreSession, options: UnlistedRowsOptions): Promise<number> {
   const { tool, scope, listing, platform, partition } = options;
   const listed = listing.containers.flatMap((c) =>
     (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, name))),
   );
-  return target
-    .liveBySourcePrefix(`${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`)
+  const prefix = `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`;
+  return (await session.store.agentImport.liveBySourcePrefix(session.tenantId, prefix))
     .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p)))
     .filter((row) => partition === null || partition.includes(row.originProject ?? '')).length;
-}
-
-/**
- * Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for
- * containers its store now syncs.
- */
-function handOver(
-  ai: AgentImport,
-  synced: readonly ContainerWork[],
-  projectRoot: string,
-  opts: SyncOptions,
-  report: ImportReport,
-): void {
-  const globalRoot = resolveGlobalRootDir();
-  if (synced.length === 0 || !isInitialized(globalRoot)) return;
-  let target: ImportTarget | undefined;
-  try {
-    target = ai.open(globalRoot, opts.tenantId, { busyWaitMs: opts.busyWaitMs });
-    // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
-    // Names folded into this project's in the global store were its rows too.
-    const names = projectNames(resolveProjectIdentity(projectRoot));
-    const origins = [...new Set([...names, ...namesFoldedInto(target.projectTagReads(), names), ''])];
-    for (const work of synced) handOverContainer(target, work, { origins, platform: opts.machine.platform, report });
-  } catch (err) {
-    report.warnings.push(
-      `global copies not handed over: ${ai.isBusy(err) ? 'the global store was busy' : errorMessage(err)}`,
-    );
-  } finally {
-    target?.close();
-  }
-}
-
-interface HandOverContainerOptions {
-  readonly origins: readonly string[];
-  readonly platform: NodeJS.Platform;
-  readonly report: ImportReport;
-}
-
-function handOverContainer(target: ImportTarget, work: ContainerWork, options: HandOverContainerOptions): void {
-  const { origins, platform, report } = options;
-  // A note the local pass could not read has no local row yet, so its global copy stays until it does.
-  const unread = new Set(work.container.skipped);
-  const mirror: MemoryEntry[] = [];
-  const purge: string[] = [];
-  target.inContainer('hand_over_container', false, (tx) => {
-    for (const origin of origins) {
-      const prefix = containerPrefix(
-        work.tool.id,
-        containerId(work.container.path, work.container.scope, platform, origin),
-      );
-      for (const row of tx.liveBySourcePrefix(target.tenantId, prefix)) {
-        if (!row.tags.includes(work.tool.tag) || unread.has(splitSource(row.source, prefix).key)) continue;
-        const result = tx.setAside(work.tool.tag, row, 'handover');
-        if (result.kind === 'untagged') mirror.push(result.entry);
-        else purge.push(result.id);
-      }
-    }
-  });
-  toolReport(report, work.tool.id).tally.handedOver += mirror.length + purge.length;
-  afterCommit(target, { mirror, purge }, report);
 }
 
 function toolOf(id: ToolId): AgentMemoryTool {

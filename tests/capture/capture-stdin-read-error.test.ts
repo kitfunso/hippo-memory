@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe('cmdCapture reading stdin', () => {
-  it('logs the error that stopped the read, then prints the usual advice and sets exit code 1', () => {
+  it('logs the error that stopped the read, then prints the usual advice and sets exit code 1', async () => {
     const root = makeRoot('capture-stdin');
     const target = captureTarget(root);
     // The stdin read is the first readFileSync cmdCapture makes, so the one failure lands on it.
@@ -28,7 +28,7 @@ describe('cmdCapture reading stdin', () => {
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    cmdCapture(target, { tenantId: 'default', source: 'stdin', dryRun: true, global: false });
+    await cmdCapture(target, { tenantId: 'default', source: 'stdin', dryRun: true, global: false });
 
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('reading stdin failed: EAGAIN');
     expect(read).toHaveBeenCalledWith(0, 'utf8');

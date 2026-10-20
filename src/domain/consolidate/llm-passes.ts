@@ -37,12 +37,12 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
 type SleepLlm = ReturnType<typeof sleepLlm>;
 
 /** Counts the survivors extraction could read and returns the first `limit` of them, holding no others. */
-function extractionBatch(run: SleepRun, limit: number): MemoryEntry[] {
+async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
-  for (const e of run.survivors.rows()) if (e.extractedFrom) extractedFromIds.add(e.extractedFrom);
+  for await (const e of run.survivors.rows()) if (e.extractedFrom) extractedFromIds.add(e.extractedFrom);
   const batch: MemoryEntry[] = [];
   let candidates = 0;
-  for (const e of run.survivors.rows()) {
+  for await (const e of run.survivors.rows()) {
     const candidate =
       e.layer === Layer.Episodic &&
       !e.supersededBy &&
@@ -58,12 +58,10 @@ function extractionBatch(run: SleepRun, limit: number): MemoryEntry[] {
   return batch;
 }
 
-const dagStore = (run: SleepRun) => ({ consolidation: run.store });
-
 export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
   const llm = sleepLlm(run, fetcher);
   // 1.6. Batch extraction: extract facts from episodic memories missing them
-  const batch = extractionBatch(run, llm.apiKey !== '' && !run.dryRun ? EXTRACTION_BATCH_LIMIT : 0);
+  const batch = await extractionBatch(run, llm.apiKey !== '' && !run.dryRun ? EXTRACTION_BATCH_LIMIT : 0);
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
     // The DAG passes call the same API with the same key and model, so they would fail the same way.
@@ -94,7 +92,8 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
     try {
       const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError });
       if (facts.length > 0) {
-        extractedCount += storeExtractedFacts(run.learning, candidate, facts, run.config.defaultHalfLifeDays).length;
+        const stored = await storeExtractedFacts(run.store, candidate, facts, run.config.defaultHalfLifeDays);
+        extractedCount += stored.length;
       }
     } catch (err) {
       report(errorMessage(err));
@@ -119,7 +118,7 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   // buildDag clusters only unparented facts, so only those are held; the gate counts every fact as it always did.
   const extractedFacts: MemoryEntry[] = [];
   let facts = 0;
-  for (const e of run.survivors.rows()) {
+  for await (const e of run.survivors.rows()) {
     if (!(e.tags.includes('extracted') && e.dagLevel === DAG_LEVEL.extracted && !e.supersededBy && isReusable(e))) {
       continue;
     }
@@ -129,7 +128,7 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   if (facts < 3) return;
   try {
     const { buildDag } = await import('./dag.js');
-    const dagResult = await buildDag(dagStore(run), extractedFacts, {
+    const dagResult = await buildDag(run.store, extractedFacts, {
       ...llmOpts,
       onError: llmError('dag'),
       baseHalfLifeDays: run.config.defaultHalfLifeDays,
@@ -192,9 +191,9 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const { buildEntityProfiles } = await import('./dag.js');
-    const l2Summaries = run.store.unprofiledTopicSummaries();
+    const l2Summaries = await run.store.consolidation.unprofiledTopicSummaries();
     if (l2Summaries.length >= 2) {
-      const profileResult = await buildEntityProfiles(dagStore(run), l2Summaries, {
+      const profileResult = await buildEntityProfiles(run.store, l2Summaries, {
         ...llmOpts,
         onError: llmError('dag profiles'),
         baseHalfLifeDays: run.config.defaultHalfLifeDays,

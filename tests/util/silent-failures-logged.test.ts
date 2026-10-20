@@ -149,7 +149,7 @@ describe('repo scan in init', () => {
 });
 
 describe('capture log append', () => {
-  it('warns once when appends fail after the banner', () => {
+  it('warns once when appends fail after the banner', async () => {
     initTestStore(root);
     const logFile = path.join(root, 'capture.log');
     const blank = path.join(root, 'blank.txt');
@@ -168,7 +168,7 @@ describe('capture log append', () => {
       process.stdout.write(`${line}
 `),
     );
-    cmdCapture(captureTarget(root), {
+    await cmdCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'file',
       filePath: blank,

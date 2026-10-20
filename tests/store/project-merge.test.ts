@@ -58,7 +58,7 @@ function mirror(id: string): string | null {
 }
 
 describe('hippo projects merge', () => {
-  it('sets aside only notes the target already holds, re-tags everything else, and a dry run writes nothing', () => {
+  it('sets aside only notes the target already holds, re-tags everything else, and a dry run writes nothing', async () => {
     const held = note('the deploy script needs node 22 or newer', 'repo');
     const copy = note('the deploy script needs node 22 or newer', 'repo-wt-a');
     const kept = note('the release notes live in changelog.d', 'repo-wt-a');
@@ -67,12 +67,12 @@ describe('hippo projects merge', () => {
     const other = row('an unrelated project memory', 'elsewhere');
     open();
 
-    const dry = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: true });
+    const dry = await projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: true });
     expect(dry.setAside).toEqual([copy.id]);
     expect(byId().get(lesson.id)!.originProject).toBe('repo-wt-a');
     expect(dry.backup).toBeNull();
 
-    const r = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
+    const r = await projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
     const rows = byId();
     expect(rows.has(copy.id)).toBe(false);
     expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.originProject).toBe('repo');
@@ -100,13 +100,15 @@ describe('hippo projects merge', () => {
     );
   });
 
-  it('refuses user-global and unknown as either side', () => {
+  it('refuses user-global and unknown as either side', async () => {
     open();
-    expect(() => projectNameMerge(ctx(), { from: '', into: 'repo', dryRun: true })).toThrow(/user-global/);
-    expect(() => projectNameMerge(ctx(), { from: 'repo-wt-a', into: ' ', dryRun: true })).toThrow(/user-global/);
+    await expect(projectNameMerge(ctx(), { from: '', into: 'repo', dryRun: true })).rejects.toThrow(/user-global/);
+    await expect(projectNameMerge(ctx(), { from: 'repo-wt-a', into: ' ', dryRun: true })).rejects.toThrow(
+      /user-global/,
+    );
   });
 
-  it('re-tags dormant rows and compaction records too, so a restore does not come back hidden', () => {
+  it('re-tags dormant rows and compaction records too, so a restore does not come back hidden', async () => {
     open();
     const faded = createMemory('a faded worktree lesson about the cache', { layer: Layer.Semantic });
     db.prepare(
@@ -122,7 +124,7 @@ describe('hippo projects merge', () => {
       `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'repo-wt-a', 'auto', '/x', ?)`,
     ).run(T, new Date().toISOString());
 
-    const r = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
+    const r = await projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
 
     expect(r.dormantRestamped).toEqual([faded.id]);
     expect(r.compactions).toBe(1);
@@ -131,7 +133,7 @@ describe('hippo projects merge', () => {
 });
 
 describe('hippo projects repair', () => {
-  it('re-tags by parents: one project, two projects; leaves an untraceable or truly user-global merge alone', () => {
+  it('re-tags by parents: one project, two projects; leaves an untraceable or truly user-global merge alone', async () => {
     const b1 = row('proj-b parent one', 'proj-b');
     const b2 = row('proj-b parent two', 'proj-b');
     const c1 = row('proj-c parent', 'proj-c');
@@ -144,10 +146,10 @@ describe('hippo projects repair', () => {
     const global = merged([g1.id]);
     open();
 
-    expect(projectNameRepair(ctx(), { dryRun: true }).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
+    expect((await projectNameRepair(ctx(), { dryRun: true })).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
     expect(byId().get(one.id)!.originProject).toBe('');
 
-    const r = projectNameRepair(ctx(), { dryRun: false });
+    const r = await projectNameRepair(ctx(), { dryRun: false });
     const rows = byId();
     expect(rows.get(one.id)!.originProject).toBe('proj-b');
     expect(rows.has(two.id)).toBe(false);
@@ -159,7 +161,7 @@ describe('hippo projects repair', () => {
     expect(mirror(two.id)).toBeNull();
   });
 
-  it('repairs exactly the two re-tagged and two set-aside rows and leaves the other rows of the store as they were', () => {
+  it('repairs exactly the two re-tagged and two set-aside rows and leaves the other rows of the store as they were', async () => {
     const b1 = row('proj-b parent one', 'proj-b');
     const b2 = row('proj-b parent two', 'proj-b');
     const c1 = row('proj-c parent', 'proj-c');
@@ -170,7 +172,7 @@ describe('hippo projects repair', () => {
     const aside = [merged([b1.id, c1.id]), merged([b2.id, c1.id])];
     open();
 
-    const r = projectNameRepair(ctx(), { dryRun: false });
+    const r = await projectNameRepair(ctx(), { dryRun: false });
     const rows = byId();
     expect(r.toProject.map((p) => p.id).sort()).toEqual(tagged.map((e) => e.id).sort());
     expect(r.setAside.slice().sort()).toEqual(aside.map((e) => e.id).sort());
@@ -181,7 +183,7 @@ describe('hippo projects repair', () => {
     expect(mirror(aside[0].id)).toBeNull();
   });
 
-  it('sets aside a project-tagged import whose text, spacing aside, a user-global import holds, and nothing else', () => {
+  it('sets aside a project-tagged import whose text, spacing aside, a user-global import holds, and nothing else', async () => {
     note('the home folder note every session can see', '');
     const copy = note('the home folder note every session can see', 'repo-wt-a');
     const own = note('a note only this worktree imported', 'repo-wt-a');
@@ -190,10 +192,11 @@ describe('hippo projects repair', () => {
     const saved = row('the home folder note every session can see', 'repo-wt-a');
     open();
 
-    expect([...projectNameRepair(ctx(), { dryRun: true }).copies].sort()).toEqual([copy.id, reflowed.id].sort());
+    const dry = await projectNameRepair(ctx(), { dryRun: true });
+    expect([...dry.copies].sort()).toEqual([copy.id, reflowed.id].sort());
     expect(byId().has(copy.id)).toBe(true);
 
-    const r = projectNameRepair(ctx(), { dryRun: false });
+    const r = await projectNameRepair(ctx(), { dryRun: false });
     const rows = byId();
     expect([...r.copies].sort()).toEqual([copy.id, reflowed.id].sort());
     expect([rows.has(copy.id), rows.has(own.id), rows.has(saved.id)]).toEqual([false, true, true]);
@@ -205,7 +208,7 @@ describe('hippo projects repair', () => {
     expect(mirror(copy.id)).toBeNull();
   });
 
-  it('in the global store, folds a name whose every recorded folder still on disk resolves to one other project', () => {
+  it('in the global store, folds a name whose every recorded folder still on disk resolves to one other project', async () => {
     vi.stubEnv('HIPPO_HOME', home);
     const repo = join(home, 'work', 'repo');
     mkdirSync(join(repo, '.git'), { recursive: true });
@@ -220,16 +223,16 @@ describe('hippo projects repair', () => {
     compaction.run(T, 'c3', 'gone-name', join(home, 'removed'), new Date().toISOString());
     compaction.run(T, 'c4', 'repo', repo, new Date().toISOString());
     compaction.run(T, 'c5', 'hand-name', repo, new Date().toISOString());
-    projectNameMerge(ctx(), { from: 'repo-wt-b', into: 'hand-name', dryRun: false });
+    await projectNameMerge(ctx(), { from: 'repo-wt-b', into: 'hand-name', dryRun: false });
 
-    const r = projectNameRepair(ctx(), { dryRun: false });
+    const r = await projectNameRepair(ctx(), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'old-name', into: 'repo' }]);
     expect(byId().get(lesson.id)!.originProject).toBe('repo');
     expect(byId().get(kept.id)!.originProject).toBe('gone-name');
     expect(mirror(lesson.id)).toContain('origin_project: repo');
   });
 
-  it('skips a fold into a name that itself folds, so the result never depends on run order', () => {
+  it('skips a fold into a name that itself folds, so the result never depends on run order', async () => {
     vi.stubEnv('HIPPO_HOME', home);
     for (const name of ['b', 'c']) mkdirSync(join(home, 'work', name, '.git'), { recursive: true });
     const lesson = row('a lesson two renames back', 'a');
@@ -244,34 +247,34 @@ describe('hippo projects repair', () => {
       source: 'consolidation',
       parents: [row('parent under b', 'b').id, row('parent under c', 'c').id],
     });
-    const dry = projectNameRepair(ctx(), { dryRun: true });
+    const dry = await projectNameRepair(ctx(), { dryRun: true });
     expect(dry.folds).toEqual([{ from: 'b', into: 'c' }]);
     // Planned against the folded names, as apply sees them: both parents are under c.
     expect([dry.toProject, dry.setAside]).toEqual([[{ id: merged.id, origin: 'c' }], []]);
-    expect(projectNameRepair(ctx(), { dryRun: false }).toProject).toEqual(dry.toProject);
+    expect((await projectNameRepair(ctx(), { dryRun: false })).toProject).toEqual(dry.toProject);
     expect(byId().get(lesson.id)!.originProject).toBe('a');
   });
 
-  it('folds nothing in a project store, whose names never came from a cwd', () => {
+  it('folds nothing in a project store, whose names never came from a cwd', async () => {
     const repo = join(home, 'work', 'repo');
     mkdirSync(join(repo, '.git'), { recursive: true });
     open();
     db.prepare(
       `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'old-name', 'auto', ?, ?)`,
     ).run(T, repo, new Date().toISOString());
-    expect(projectNameRepair(ctx(), { dryRun: true }).folds).toEqual([]);
+    expect((await projectNameRepair(ctx(), { dryRun: true })).folds).toEqual([]);
   });
 });
 
 describe('hippo projects list', () => {
-  it('counts live rows per project and the imported notes that are copies held under another name', () => {
+  it('counts live rows per project and the imported notes that are copies held under another name', async () => {
     note('shared note one about the build', '');
     note('shared note one about the build', 'repo-wt-a');
     note('a note only this worktree imported', 'repo-wt-a');
     row('a saved lesson', 'repo-wt-a');
     open();
 
-    expect(projectNameList(ctx()).find((p) => p.origin === 'repo-wt-a')).toMatchObject({
+    expect((await projectNameList(ctx())).find((p) => p.origin === 'repo-wt-a')).toMatchObject({
       live: 3,
       imported: 2,
       copiesElsewhere: 1,

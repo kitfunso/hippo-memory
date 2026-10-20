@@ -2,12 +2,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { loadEveryTenantEntries, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 
 const BASE = Date.parse('2026-05-01T00:00:00.000Z');
 
@@ -17,7 +16,7 @@ function row(content: string, minute: number, extra: Partial<MemoryEntry> = {}):
 }
 
 describe('the spacing the candidates read takes out', () => {
-  it('is every code point JavaScript reads as \\s, so each copy apart from spacing is found', () => {
+  it('is every code point JavaScript reads as \\s, so each copy apart from spacing is found', async () => {
     const root = makeStore('dedupe-spaces').root;
     const spaces: string[] = [];
     for (let cp = 0; cp <= 0xffff; cp++) if (/\s/.test(String.fromCharCode(cp))) spaces.push(String.fromCharCode(cp));
@@ -25,7 +24,7 @@ describe('the spacing the candidates read takes out', () => {
       root,
       spaces.flatMap((space, i) => [row(`copy${i} a${space}b`, 2 * i), row(`copy${i} a b`, 2 * i + 1)]),
     );
-    const { pairs } = deduplicateStore(sqliteConsolidation(handlesOf(root)), { dryRun: true });
+    const { pairs } = await deduplicateStore(sqliteStore(root), { dryRun: true });
     expect(pairs).toHaveLength(spaces.length);
     expect(spaces).toHaveLength(25);
   });
@@ -55,32 +54,32 @@ describe('deduplicateStore over the duplicate candidates', () => {
     ]);
   });
 
-  const store = () => sqliteConsolidation(handlesOf(root));
+  const store = () => sqliteStore(root);
 
-  it('finds the pairs, in the order, that a read of every row finds', () => {
-    const candidates = deduplicateStore(store(), { dryRun: true });
-    const everyRow = deduplicateStore(store(), { dryRun: true, pages: [loadEveryTenantEntries(root)] });
+  it('finds the pairs, in the order, that a read of every row finds', async () => {
+    const candidates = await deduplicateStore(store(), { dryRun: true });
+    const everyRow = await deduplicateStore(store(), { dryRun: true, pages: [loadEveryTenantEntries(root)] });
     expect(candidates).toEqual(everyRow);
     expect(candidates.pairs.map((p) => p.removedContent.includes('acme'))).toEqual([true, false, false]);
   });
 
-  it('reads the same rows when the store holds five times more rows without a copy', () => {
-    const before = recordStatements(() => deduplicateStore(store(), { dryRun: true }));
+  it('reads the same rows when the store holds five times more rows without a copy', async () => {
+    const before = await recordStatementsAsync(() => deduplicateStore(store(), { dryRun: true }));
     writeEntriesTogether(
       root,
       Array.from({ length: 65 }, (_, i) => row(`filler without a copy ${i}`, 100 + i)),
     );
-    const after = recordStatements(() => deduplicateStore(store(), { dryRun: true }));
+    const after = await recordStatementsAsync(() => deduplicateStore(store(), { dryRun: true }));
     expect(after.rowsRead).toBe(before.rowsRead);
     expect(after.statements.length).toBe(before.statements.length);
     expect(after.result).toEqual(before.result);
   });
 
-  it('deletes the copies in one transaction with a forget row for each', () => {
-    const { result, statements } = recordStatements(() => deduplicateStore(store(), { actor: 'cli' }));
+  it('deletes the copies in one transaction with a forget row for each', async () => {
+    const { result, statements } = await recordStatementsAsync(() => deduplicateStore(store(), { actor: 'cli' }));
     expect(result.removed).toBe(3);
     expect(countMatching(statements, /^BEGIN IMMEDIATE/)).toBe(1);
     expect(countMatching(statements, /INSERT INTO audit_log/)).toBe(3);
-    expect(deduplicateStore(store(), { dryRun: true }).pairs).toEqual([]);
+    expect((await deduplicateStore(store(), { dryRun: true })).pairs).toEqual([]);
   });
 });

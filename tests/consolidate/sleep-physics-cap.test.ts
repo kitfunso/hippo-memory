@@ -10,7 +10,8 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { tombstoneChecks } from '../../src/domain/consolidate/tombstones.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -49,12 +50,11 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
 
 /** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
-  const { learning, consolidation: store } = sqliteSyncStore(root).localFiles;
-  const rows = new SleepRows(store, new Map(), SLEEP_PAGE_ROWS);
+  const store = sqliteStore(root);
+  const rows = new SleepRows(store.consolidation, new Map(), SLEEP_PAGE_ROWS);
   const survivors = new Survivors(rows);
   for (const e of entries) survivors.keep(e.id, e.strength);
   return {
-    learning,
     tenantId: 'default',
     store,
     now: new Date('2026-01-03T00:00:00.000Z'),
@@ -64,7 +64,7 @@ function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
     result: newConsolidationResult(false),
     rows,
     retirable: () => false,
-    tombstones: store.tombstoneChecks(false),
+    tombstones: tombstoneChecks(store, false),
     survivors,
     pendingRefreshes: [],
     pendingWrites: [],
@@ -76,7 +76,7 @@ function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
 }
 
 describe('sleep physics cap', () => {
-  it('moves only the most recently recalled particles past the cap and leaves the rest as stored', () => {
+  it('moves only the most recently recalled particles past the cap and leaves the rest as stored', async () => {
     const root = makeRoot('physics-cap');
     roots.push(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ physics: { enabled: true } }));
@@ -99,11 +99,7 @@ describe('sleep physics cap', () => {
     const seeded = storedParticles(root);
     const leftOut = new Set(entries.slice(0, STORED - CAP).map((e) => e.id));
     const run = sleepRunOver(root, entries);
-    try {
-      physicsPass(run, CAP);
-    } finally {
-      run.tombstones.close();
-    }
+    await physicsPass(run, CAP);
 
     expect(run.result.physicsSimulated).toBe(CAP);
     expect(run.result.details.some((d) => d.includes(`the ${CAP} most recently recalled of ${STORED}`))).toBe(true);

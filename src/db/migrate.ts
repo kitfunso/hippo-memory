@@ -13,13 +13,13 @@ import {
 } from './continuity.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations/index.js';
 import { placeholders } from '../base/util/sql.js';
+import { IncompatibleBinaryError } from '../base/errors/store-open.js';
 
 export function getCurrentSchemaVersion(): number {
   return CURRENT_SCHEMA_VERSION;
 }
 
-/** Thrown by {@link assertBinaryCompatible}; doctor uses it to pick the upgrade fix over a generic permissions fix. */
-export class IncompatibleBinaryError extends Error {}
+export { IncompatibleBinaryError };
 
 function assertMinBinary(minRequired: string | null | undefined): void {
   if (minRequired && compareSemver(minRequired, PACKAGE_VERSION) > 0) {

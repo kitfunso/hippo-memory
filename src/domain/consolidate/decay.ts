@@ -64,9 +64,9 @@ function liveStrength(run: SleepRun, entry: MemoryEntry): number {
 // Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits, runs rescueSet
 // per tenant, then commits.
 // Rescued entries stay full survivors for this cycle's later passes.
-export function decayPass(run: SleepRun): DecayOutcome {
+export async function decayPass(run: SleepRun): Promise<DecayOutcome> {
   if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);
-  for (const page of run.rows.pages()) {
+  for await (const page of run.rows.pages()) {
     for (const entry of page) {
       const strength = liveStrength(run, entry);
       if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
@@ -101,12 +101,12 @@ interface Verdict {
 }
 
 // --- Phase 1: classify (zero commits) ---
-function classifyByStrength(run: SleepRun) {
+async function classifyByStrength(run: SleepRun) {
   const verdicts: Verdict[] = [];
   const candidates: MvCandidate[] = [];
   // The weights were trained on clock-basis strength, so only the switches and the ratio carry over.
   const mvRules = clockBasisOf(run.decayOpts);
-  for (const page of run.rows.pages()) {
+  for await (const page of run.rows.pages()) {
     for (const entry of page) {
       const live = liveStrength(run, entry);
       const condemned = run.retirable(entry) && live < DECAY_THRESHOLD;
@@ -124,8 +124,8 @@ function reportRescue(result: ConsolidationResult, id: string, strength: number,
   result.details.push(`  🛟 ${id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`);
 }
 
-function decayWithMemoryValue(run: SleepRun): DecayOutcome {
-  const { verdicts, candidates } = classifyByStrength(run);
+async function decayWithMemoryValue(run: SleepRun): Promise<DecayOutcome> {
+  const { verdicts, candidates } = await classifyByStrength(run);
   const condemnedIds = new Set(verdicts.filter((v) => v.condemned).map((v) => v.id));
   // Phase 2a: rescue decision (pure compute); runs under --dry-run too (only the pendingDeletes flush and the logRun
   // audit write are !dryRun-gated).
@@ -136,7 +136,7 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
   let rescuedIds = new Set<string>();
   if (condemnedIds.size > 0) {
     // Ranks only the rows a rescue or the warning reads, so ranking a tenant holds no row's text but a tie's.
-    rankById = rankCandidates(
+    rankById = await rankCandidates(
       candidates,
       (id) => condemnedIds.has(id),
       (ids) => run.rows.pagesOf(ids),
@@ -145,23 +145,23 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
     rescuedIds = rescueSet([], condemnedIds, run.now, { precomputedRanks: rankById });
     reportNonFiniteScores(run.result, rankById);
   }
-  return { rescuedIds, rescuedEntries: commitVerdicts(run, verdicts, rescuedIds, rankById), rankById };
+  return { rescuedIds, rescuedEntries: await commitVerdicts(run, verdicts, rescuedIds, rankById), rankById };
 }
 
 // --- Phase 2b: commit in run order ---
 // Rescued entries appended at the tail would be starved by order-sensitive passes like extraction's slice(0,20).
-function commitVerdicts(
+async function commitVerdicts(
   run: SleepRun,
   verdicts: readonly Verdict[],
   rescuedIds: ReadonlySet<string>,
   rankById: ReadonlyMap<string, MvRankInfo>,
-): DecayOutcome['rescuedEntries'] {
+): Promise<DecayOutcome['rescuedEntries']> {
   // Carried forward to logRun, where the mv_rescue audit rows are written: writing them here, before
   // batchWriteAndDelete, would assert rescues whose effects might never land if a later phase throws.
   const rescuedEntries: DecayOutcome['rescuedEntries'] = [];
   for (const page of chunked(verdicts, run.rows.pageRows)) {
     const faded = page.filter((v) => v.condemned && !rescuedIds.has(v.id)).map((v) => v.id);
-    const fadedRows = new Map(run.rows.read(faded).map((row) => [row.id, row]));
+    const fadedRows = new Map((await run.rows.read(faded)).map((row) => [row.id, row]));
     for (const v of page) {
       if (!v.condemned) {
         keepSurvivor(run, v, v.live);

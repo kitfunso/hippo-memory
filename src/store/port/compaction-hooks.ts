@@ -1,20 +1,26 @@
-// The local compaction hooks' record work: synchronous and hippo.db's own, since the spool and the transcript a replay
-// reads sit beside the folder.
+// The local compaction hooks' record work, as data: the spool and the transcript a replay reads stay with the surface,
+// and each line a step would log comes back as a note for the surface's own log.
 import type { CompactionStart } from './compactions.js';
 
-/** Every method logs a failure through `log` and never throws, so a hook still exits 0. */
+/** Each method opens hippo.db with the hook's wait, so a busy store costs the hook a bounded delay. */
 export interface CompactionHooks {
-  /** PreCompact's `started` record; its id, or null. */
-  start(tenantId: string, start: Omit<CompactionStart, 'originProject'>, log: Log): string | null;
+  /** PreCompact's `started` record; its id. */
+  start(tenantId: string, start: Omit<CompactionStart, 'originProject'>): Promise<string>;
   /** Marks the record as having its snapshot saved. */
-  markSnapshotSaved(tenantId: string, recordId: string, log: Log): void;
-  /** PostCompact's save: the summary's record, then its items; `spoolReason` is set when the store was busy. */
-  save(save: CompactionSave): CompactionSaveOutcome;
-  /** Finishes what a killed hook or a busy store left; how many compactions it saved. */
-  replay(tenantId: string, sources: ReplaySources, log: Log, opts: ReplayOptions): number;
+  markSnapshotSaved(tenantId: string, recordId: string): Promise<void>;
+  /** PostCompact's save: the summary's record, then its items. Never throws. */
+  save(save: CompactionSave): Promise<CompactionSaveOutcome>;
+  /** Writes the items of `summarised` records a killed hook or a busy store left, until `deadline`. */
+  saveStalled(tenantId: string, opts: StalledOptions): Promise<StalledSaved>;
+  /** Puts one spooled summary on its record, as its PostCompact would have; the record its items go under. */
+  recordSpooled(spooled: SpooledSummary, wait: StoreWait): Promise<RecordedCompaction>;
+  /** Writes a recorded summary's items; a failure is answered beside the notes logged before it. */
+  saveRecordItems(tenantId: string, record: RecordedCompaction, opts: ItemsOptions): Promise<ItemsSaved>;
+  /** The `started` records whose PostCompact never came, young enough that their transcript may still hold them. */
+  openRecords(tenantId: string, wait: StoreWait): Promise<OpenCompaction[]>;
+  /** Fills an open record with the summary its transcript held, or closes it as no-summary when `text` is null. */
+  fill(tenantId: string, record: OpenCompaction, text: CompactionText | null, opts: ItemsOptions): Promise<FillOutcome>;
 }
-
-export type Log = (message: string) => void;
 
 /** One PostCompact summary to save; its items start on `baseHalfLifeDays`, the config default. */
 export interface CompactionSave {
@@ -22,7 +28,6 @@ export interface CompactionSave {
   readonly meta: Omit<CompactionStart, 'originProject'>;
   readonly text: CompactionText;
   readonly at: Date;
-  readonly log: Log;
   readonly baseHalfLifeDays: number;
 }
 
@@ -44,6 +49,7 @@ export interface CompactionSaveResult {
 export interface CompactionSaveOutcome {
   result: CompactionSaveResult;
   spoolReason: string | null;
+  notes: string[];
 }
 
 /** One spooled summary, as plain data. */
@@ -54,28 +60,59 @@ export interface SpooledSummary {
   at: Date;
 }
 
-/** Records one spooled summary; it calls `recorded` once the store holds it, so the file is done even if a later step
- * throws. */
-export type SpoolRecorder = (spooled: SpooledSummary, recorded: () => void) => void;
-
-/** A summary read out of a transcript, scrubbed; `listed` is false when it had no memories section. */
-export interface TranscriptText {
-  text: CompactionText;
-  listed: boolean;
+/** How long a call waits on a locked store; unset is the store's default wait. */
+export interface StoreWait {
+  readonly busyWaitMs?: number;
 }
 
-/** The file work a replay needs, handed in by the caller so the store holds none of it. */
-export interface ReplaySources {
-  /** Feeds each spooled summary to `record`; returns how many it imported. */
-  importSpool(tenantId: string, deadline: number, record: SpoolRecorder): number;
-  transcriptExists(transcriptPath: string): boolean;
-  /** The summary a transcript holds between two moments, or null when it is not (yet) there. */
-  transcriptText(transcriptPath: string, afterMs: number, beforeMs: number): TranscriptText | null;
+/** The config default a replayed item's memory starts on. */
+export interface ItemsOptions extends StoreWait {
+  readonly baseHalfLifeDays: number;
 }
 
-export interface ReplayOptions {
-  busyWaitMs?: number;
-  deadline?: number;
-  /** The config default a replayed item's memory starts on. */
-  baseHalfLifeDays: number;
+/** No record is started after `deadline`, a Date.now() value. */
+export interface StalledOptions extends ItemsOptions {
+  readonly deadline: number;
+}
+
+export interface StalledSaved {
+  saved: number;
+  notes: string[];
+}
+
+/** A record as its items' save needs it. */
+export interface CompactionRef {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly originProject: string;
+  /** Where the session ran, so rows held under the project's older folder name count too. */
+  readonly cwd: string | null;
+}
+
+export interface RecordedCompaction extends CompactionRef {
+  readonly items: readonly string[];
+}
+
+/** A `started` record and its session's next compaction start, which ends the transcript window it fills from. */
+export interface OpenCompaction extends CompactionRef {
+  readonly transcriptPath: string | null;
+  readonly startedAt: string;
+  readonly nextStartedAt: string | null;
+}
+
+/** Why a step failed; `busy` when the store was locked, so a replay stops and a later one tries again. */
+export interface StepFailure {
+  readonly busy: boolean;
+  readonly message: string;
+}
+
+export interface ItemsSaved {
+  notes: string[];
+  failure: StepFailure | null;
+}
+
+export interface FillOutcome {
+  /** True when the record took the summary and its items were written. */
+  saved: boolean;
+  notes: string[];
 }

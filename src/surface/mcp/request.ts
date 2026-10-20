@@ -4,7 +4,6 @@ import { currentSignal } from '../../base/util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
 import type { HippoStore } from '../../store/index.js';
 import { hasGroup } from '../../store/index.js';
-import { storeMeets } from '../../store/local/index.js';
 import type { TokenSurface } from '../../store/port/token-ledger.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -80,7 +79,7 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
 /** A call with no context yet (tools/list on stdio) lists every tool. */
 function runsOn(store: HippoStore | undefined, toolName: string): boolean {
   const need = TOOL_HANDLERS.get(toolName)?.needs;
-  return store === undefined || need === undefined || storeMeets(store, need);
+  return store === undefined || need === undefined || hasGroup(store, need);
 }
 
 type ToolRun = (args: Record<string, JsonValue>) => string | Promise<string>;

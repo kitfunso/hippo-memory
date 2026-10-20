@@ -188,27 +188,27 @@ function storeWithFoldableTag(flagged: boolean): TaggedStore {
   return { store, id: entry.id };
 }
 
-function repairOnce(store: string): void {
-  projectNameRepairOnce(cliApiContext(store, 'default'));
+async function repairOnce(store: string): Promise<void> {
+  await projectNameRepairOnce(cliApiContext(store, 'default'));
 }
 
 describe('the one-time sleep repair', () => {
-  it("leaves a flagged store's rows under the tag the caller gave them", () => {
+  it("leaves a flagged store's rows under the tag the caller gave them", async () => {
     const { store, id } = storeWithFoldableTag(true);
-    repairOnce(store);
+    await repairOnce(store);
     expect(originOf(store, id)).toBe('hippo-team');
   });
 
-  it("folds the legacy name into the folder's id on a store that is not shared", () => {
+  it("folds the legacy name into the folder's id on a store that is not shared", async () => {
     const { store, id } = storeWithFoldableTag(false);
-    repairOnce(store);
+    await repairOnce(store);
     expect(originOf(store, id)).toBe('server-id');
   });
 });
 
 const ITEM = 'The billing service drains its queue before every deploy.';
 
-function compact(store: string, cwd: string | null): void {
+async function compact(store: string, cwd: string | null): Promise<void> {
   const payload = {
     sessionId: `s-${cwd === null ? 'none' : 'cwd'}`,
     trigger: 'auto',
@@ -216,7 +216,7 @@ function compact(store: string, cwd: string | null): void {
     transcriptPath: null,
     compactSummary: summaryWith([ITEM]),
   };
-  expect(saveCompaction(compactionFolder(store), payload, () => undefined).written).toBe(1);
+  expect((await saveCompaction(compactionFolder(store), payload, () => undefined)).written).toBe(1);
 }
 
 const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>
@@ -225,27 +225,27 @@ const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>
     .map((e) => e.originProject);
 
 describe('compaction items', () => {
-  it("take the session folder's project on a flagged store", () => {
+  it("take the session folder's project on a flagged store", async () => {
     const member = path.join(tmp, 'member', 'app');
     fs.mkdirSync(path.join(member, '.git'), { recursive: true });
     for (const { store } of layouts(true)) {
-      compact(store, member);
+      await compact(store, member);
       expect(itemOrigins(store)).toEqual(['app']);
     }
   });
 
-  it('are stamped NULL on a flagged store when the session folder is unknown', () => {
+  it('are stamped NULL on a flagged store when the session folder is unknown', async () => {
     for (const { store } of layouts(true)) {
-      compact(store, null);
+      await compact(store, null);
       expect(itemOrigins(store)).toEqual([null]);
     }
   });
 
-  it('keep the folder stamp on a store that is not shared', () => {
+  it('keep the folder stamp on a store that is not shared', async () => {
     const member = path.join(tmp, 'member', 'app');
     fs.mkdirSync(path.join(member, '.git'), { recursive: true });
     for (const { store, folderStamp } of layouts(false)) {
-      compact(store, member);
+      await compact(store, member);
       expect(itemOrigins(store)).toEqual([folderStamp]);
     }
   });

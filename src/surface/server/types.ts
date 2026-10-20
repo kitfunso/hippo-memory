@@ -3,12 +3,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../../api/index.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
-import type { HippoStore, OptionalGroup } from '../../store/index.js';
+import type { HippoStore, OptionalGroup, StoreGroup } from '../../store/index.js';
 import type { StoreReach } from '../../store/port.js';
 import type { ConfigReader } from '../../base/config/config.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
-import type { StoreNeed } from '../../store/local/index.js';
 
 export interface ServerHandle {
   port: number;
@@ -40,11 +39,12 @@ export interface AddonCall {
 }
 
 /** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the returned
- * value as 200 JSON. Unset, `storeReady` means hippo.db's local files; `loop: 'off'` runs it off-thread like core's. */
+ * value as 200 JSON. Unset, `storeReady` means the route runs on hippo.db alone; `loop: 'off'` runs it off-thread like
+ * core's. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
-  readonly storeReady?: StoreNeed;
+  readonly storeReady?: StoreGroup;
   readonly loop?: 'off';
 }
 
@@ -105,6 +105,9 @@ export interface ServerCounts {
 
 export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
+  /** The store is hippo.db rather than a caller's own: its folder's config.json decides shared-ness, and an add-on
+   * route naming no group runs on it alone. */
+  onHippoDb: boolean;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   reachOf: (shared: boolean) => StoreReach;
   /** This server's own config reader: each request reads config.json through it. */
@@ -133,11 +136,9 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
 
-/** A route's store status: the optional group or local files it needs, a `sqliteOnly` reason, or neither for a route
- * that runs on any store; never both. */
-type StoreStatus =
-  | { storeReady?: OptionalGroup | 'localFiles'; sqliteOnly?: never }
-  | { sqliteOnly: string; storeReady?: never };
+/** A route's store status: the optional group it needs, a `sqliteOnly` reason, or neither for a route that runs on any
+ * store; never both. */
+type StoreStatus = { storeReady?: OptionalGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for a
  * route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */

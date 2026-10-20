@@ -413,32 +413,15 @@ const rows: Row[] = [
     output: ['src/api/y.ts:1 imports src/store/local/index.ts', 'src/domain/d.ts:2 imports src/store/local/index.ts'],
   },
   {
-    name: 'a store/local import that .store-local-pending.json names with a reason passes',
+    name: 'a store/local import fails even when an old .store-local-pending.json lists it',
     files: {
       ...LOCAL_BASE,
       'src/api/y.ts': LOCAL_IMPORT,
       '.store-local-pending.json': JSON.stringify([{ file: 'api/y.ts', why: 'the next PR moves it' }]),
     },
     map: LOCAL_MAP,
-    status: 0,
-    output: ['Layer order OK'],
-  },
-  {
-    name: 'a pending entry with no reason, or with no store/local import left, fails',
-    files: {
-      ...LOCAL_BASE,
-      'src/api/y.ts': LOCAL_IMPORT,
-      '.store-local-pending.json': JSON.stringify([
-        { file: 'api/y.ts', why: ' ' },
-        { file: 'api/gone.ts', why: 'moved' },
-      ]),
-    },
-    map: LOCAL_MAP,
     status: 1,
-    output: [
-      '.store-local-pending.json: src/api/y.ts gives no reason',
-      '.store-local-pending.json: src/api/gone.ts no longer imports src/store/local/; delete the entry',
-    ],
+    output: ['src/api/y.ts:1 imports src/store/local/index.ts'],
   },
   {
     name: 'isLocalStore in the api or domain fails, and so does hippoRoot in the api',

@@ -7,11 +7,9 @@ import * as dagModule from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
 import { configReader } from '../../src/base/config/config.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { makeOkFetcher, getRow, forceMarkDirty, rejectValue, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
 
 afterEach(() => {
@@ -52,7 +50,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const fetcher = makeOkFetcher('synthetic-summary-X-from-fetcher-mocked-out');
 
     // Invoke buildDag with injected fetcher
-    const buildResult = await buildDag(sqliteSyncStore(hippoRoot).localFiles, [factA, factB, factC], {
+    const buildResult = await buildDag(sqliteStore(hippoRoot), [factA, factB, factC], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'test-key',
       fetcher,
@@ -83,7 +81,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
 
     // Now run rebuildDirtySummaries — must report attempted=0
-    const rebuildResult = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const rebuildResult = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -125,7 +123,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Host-wide input, exactly like consolidate.ts:543's `extractedFacts`
     // (survivors filtered host-wide, no tenant slicing by the caller) —
     // buildDag itself must do the tenant separation, not its caller.
-    const result = await buildDag(sqliteSyncStore(hippoRoot).localFiles, [...aFacts, ...bFacts], {
+    const result = await buildDag(sqliteStore(hippoRoot), [...aFacts, ...bFacts], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'test-key',
       fetcher,
@@ -271,7 +269,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Fetcher regenerates content byte-identical to the tombstoned value —
     // the deterministic-summarization scenario the AT1 P1a fix guards.
     const fetcher = makeOkFetcher(rejectedContent);
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'test-key',
       fetcher,
       cap: 20,
@@ -327,7 +325,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher('fresh-regenerated-summary-content-T4');
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'test-key',
       fetcher,
       cap: 20,

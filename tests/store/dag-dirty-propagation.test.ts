@@ -14,7 +14,7 @@ import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
 
@@ -33,7 +33,7 @@ describe('child-write dirty-flag propagation', () => {
     hippoRoot = makeRoot('dag-e2');
   });
 
-  it('test #1: invalidateMatching → writeEntry on fact with dag_parent_id → parent marked dirty', () => {
+  it('test #1: invalidateMatching → writeEntry on fact with dag_parent_id → parent marked dirty', async () => {
     // Setup: summary + child fact whose content matches an invalidation target.
     const summary = createMemory('python deployment runbook', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -59,11 +59,7 @@ describe('child-write dirty-flag propagation', () => {
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
     db.close();
     // Act: invalidateMatching writes the fact back through writeEntry (L97).
-    invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
-      { from: 'FRED cache', to: null, type: 'removal' },
-      'default',
-    );
+    await invalidateMatching(sqliteStore(hippoRoot), { from: 'FRED cache', to: null, type: 'removal' }, 'default');
     // Assert: parent dirty again.
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });

@@ -1,16 +1,12 @@
-// What `hippo doctor` and `hippo support-bundle` read from hippo.db's own files: synchronous and read-only, so a check
-// never creates, migrates or locks the store it inspects.
-import type { ProjectTagReads } from './project-tags.js';
+// What `hippo doctor` and `hippo support-bundle` read from hippo.db's own files: read-only, so a check never creates,
+// migrates or locks the store it inspects.
 import type { JsonObject } from '../../base/util/json.js';
-import { IncompatibleBinaryError } from '../../db/index.js';
 
 export interface Diagnostics {
-  /** Throws when the store cannot be opened or its schema version read. */
-  health(cutoffs: HealthCutoffs): StoreHealth;
+  /** Rejects when the store cannot be opened or its schema version read. */
+  health(cutoffs: HealthCutoffs): Promise<StoreHealth>;
   /** Schema version, oldest allowed binary and row count of every table; never reads a memory column. */
-  inventory(): StoreInventory;
-  /** `read` runs on the tenant's project-tag rows, whose reads end when it returns. */
-  projectTags<T>(tenantId: string, read: (reads: ProjectTagReads) => T): T;
+  inventory(): Promise<StoreInventory>;
 }
 
 export interface CompactionCounts {
@@ -52,11 +48,6 @@ export interface StoreHealth {
   /** Undefined inside a read that worked means the store never slept. */
   readonly lastSleep: Attempt<string | undefined>;
   readonly compactions: Attempt<CompactionCounts>;
-}
-
-/** Whether health() refused the store because its schema is newer than this binary reads. */
-export function needsNewerHippo<E>(err: E): boolean {
-  return err instanceof IncompatibleBinaryError;
 }
 
 export interface StoreInventory {

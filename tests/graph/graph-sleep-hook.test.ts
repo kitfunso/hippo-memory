@@ -269,7 +269,7 @@ describe('sleep enqueue-hook', () => {
     // FK-cascade-deletes, so a drain-TIME tenant load would drop T entirely. The
     // dirty-tenant snapshot taken before the deleting phases must still rebuild T.
     const phases: Partial<SleepPhases> = {
-      deduplicateStore: () => {
+      deduplicateStore: async () => {
         deleteEntry(tc.hippoRoot, d.memoryId!);
         return { removed: 1, pairs: [] };
       },
@@ -312,8 +312,8 @@ describe('sleep enqueue-hook', () => {
     const foreign = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'other', {
       decisionText: 'Adopt Redis as a cache',
     });
-    expect(() =>
-      sqliteStore(tc.hippoRoot).localFiles.graphRebuild.applyOps(
+    await expect(
+      sqliteStore(tc.hippoRoot).graphRebuild.applyOps(
         T,
         [
           { op: 'insertEntity', entity: entity('policy', d.memoryId!) },
@@ -321,7 +321,7 @@ describe('sleep enqueue-hook', () => {
         ],
         { from: 0, holdMs: Infinity },
       ),
-    ).toThrow();
+    ).rejects.toThrow();
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // insert rolled back
   });
 

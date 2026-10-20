@@ -73,12 +73,12 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     ({ base: tmpDir, root: hippoRoot } = makeStore('l9-neg'));
   });
 
-  it('case 1: invalidateMatching(..., tenant-a) does NOT weaken tenant-b matches', () => {
+  it('case 1: invalidateMatching(..., tenant-a) does NOT weaken tenant-b matches', async () => {
     seedFor(hippoRoot, 'tenant-a', 'REST API uses Bearer tokens', { tags: ['api'] });
     const bId = seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
-    const result = invalidateMatching(
-      hookStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      hookStore(hippoRoot),
       { from: 'REST', to: 'GraphQL', type: 'migration' },
       'tenant-a',
     );
@@ -162,7 +162,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(refineCallSources).toBe(0); // cross-tenant parent was silently skipped
   });
 
-  it('case 5: cmdCapture (file source) dedup AND write are both tenant-scoped via options.tenantId', () => {
+  it('case 5: cmdCapture (file source) dedup AND write are both tenant-scoped via options.tenantId', async () => {
     // Use a fixture that actually triggers extractFromTexts.
     // 'we decided to X' matches DECISION_PATTERNS and extracts as a decision.
     const fixtureText = 'we decided to use Bearer tokens for HTTP authentication next quarter.';
@@ -185,7 +185,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // Capture with tenant-a scope. The dedup branch in cmdCaptureCore calls
     // loadAllEntries(targetRoot, options.tenantId='tenant-a') and sees NOTHING
     // (tenant-b's seed is invisible), so the extracted decision IS written.
-    cmdCapture(captureTarget(hippoRoot), {
+    await cmdCapture(captureTarget(hippoRoot), {
       source: 'file',
       filePath: fixturePath,
       dryRun: false,
@@ -211,7 +211,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // tenant-a skips it as a duplicate of tenant-a's own row.
     const fixturePath2 = join(tmpDir, 'capture-fixture2.txt');
     fs.writeFileSync(fixturePath2, fixtureText, 'utf8');
-    cmdCapture(captureTarget(hippoRoot), {
+    await cmdCapture(captureTarget(hippoRoot), {
       tenantId: 'tenant-a',
       source: 'file',
       filePath: fixturePath2,
@@ -430,11 +430,11 @@ describe('invalidate onlyId', () => {
     ({ root: hippoRoot } = makeStore('l9-onlyid'));
   });
 
-  it('onlyId naming a tenant-B memory under tenant-A scope invalidates nothing', () => {
+  it('onlyId naming a tenant-B memory under tenant-A scope invalidates nothing', async () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'tenant B private memory', { tags: ['private'] });
 
-    const result = invalidateMatching(
-      hookStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      hookStore(hippoRoot),
       { from: `id:${bId}`, to: null, type: 'removal' },
       'tenant-a',
       { onlyId: bId },

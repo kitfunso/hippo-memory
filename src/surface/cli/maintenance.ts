@@ -5,7 +5,7 @@ import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../base/embeddings/provider.js';
 import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
 import { memoryCountAll } from '../../api/memories/memories.js';
-import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
+import { cliConfig, cliApiContext, cliStore, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
@@ -70,7 +70,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );
 
-  const result = deduplicateStore(cliLocalFiles(hippoRoot).consolidation, { dryRun });
+  const result = await deduplicateStore(cliStore(hippoRoot), { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
@@ -81,7 +81,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
   printDedupPairs(result, dryRun);
 }
 
-type DedupResult = ReturnType<typeof deduplicateStore>;
+type DedupResult = Awaited<ReturnType<typeof deduplicateStore>>;
 
 function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   // Group by reason

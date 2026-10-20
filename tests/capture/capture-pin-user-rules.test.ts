@@ -51,8 +51,8 @@ describe('capture pins the rules a person states', () => {
     vi.unstubAllEnvs();
   });
 
-  it("pins the person's rule and leaves their decision and the agent's rule unpinned", () => {
-    capture([
+  it("pins the person's rule and leaves their decision and the agent's rule unpinned", async () => {
+    await capture([
       { role: 'user', text: `${TAUGHT} ${USER_DECISION}` },
       { role: 'assistant', text: AGENT_RULE },
     ]);
@@ -65,22 +65,22 @@ describe('capture pins the rules a person states', () => {
   });
 
   it('the prompt hook injects the stated rule on a later prompt that shares none of its words', async () => {
-    capture([{ role: 'user', text: TAUGHT }]);
+    await capture([{ role: 'user', text: TAUGHT }]);
     expect(await injected()).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
   });
 
   it('the same rule from the agent stays behind the prompt gate', async () => {
-    capture([{ role: 'assistant', text: TAUGHT }]);
+    await capture([{ role: 'assistant', text: TAUGHT }]);
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([
       expect.stringContaining('never edit CHANGELOG.md'),
     ]);
     expect(await injected()).toEqual([]);
   });
 
-  it('a file capture names no speaker, so its rules stay unpinned', () => {
+  it('a file capture names no speaker, so its rules stay unpinned', async () => {
     const file = join(scratch, 'notes.md');
     writeFileSync(file, TAUGHT);
-    cmdCapture(captureTarget(root), {
+    await cmdCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'file',
       filePath: file,

@@ -33,12 +33,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-/** The real clock with the hold a test picks, and a pause that yields once instead of waiting out the real gap. */
-const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({
-  ...WRITE_BUDGET,
-  holdMs,
-  pause,
-});
+/** The hold a test picks; the store's pause, read at each flush, yields once instead of waiting out the real gap. */
+const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): Pick<WriteBudget, 'holdMs'> => {
+  vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(pause);
+  return { holdMs };
+};
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -269,6 +268,7 @@ function storeFacts(fx: Fixture) {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
 });
 
@@ -318,8 +318,8 @@ describe('chunked consolidation flush', () => {
     });
     const fx = seed({ clusters: 12, dormant: 10, filler: 20 });
     const ctx: FullContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-    const atNow: typeof runConsolidation = (local, opts) =>
-      runConsolidation(local, { ...opts, now: NOW, budget: stopsOnSecondPause });
+    const atNow: typeof runConsolidation = (store, opts) =>
+      runConsolidation(store, { ...opts, now: NOW, budget: stopsOnSecondPause });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
 
@@ -375,8 +375,8 @@ describe('chunked consolidation flush', () => {
       ),
     );
     const ctx: FullContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-    const oneChunk: typeof runConsolidation = (local, opts) =>
-      runConsolidation(local, { ...opts, now: NOW, budget: budget(Infinity) });
+    const oneChunk: typeof runConsolidation = (store, opts) =>
+      runConsolidation(store, { ...opts, now: NOW, budget: budget(Infinity) });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');
 

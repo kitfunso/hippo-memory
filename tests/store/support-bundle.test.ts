@@ -165,9 +165,9 @@ function seed(): Seeded {
 }
 
 describe('buildSupportBundle', () => {
-  it('the default bundle redacts every canary, home form and secret, and keeps what it should', () => {
+  it('the default bundle redacts every canary, home form and secret, and keeps what it should', async () => {
     const s = seed();
-    const bundle = buildSupportBundle({
+    const bundle = await buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',
       cwd: s.cwd,
@@ -227,14 +227,14 @@ describe('buildSupportBundle', () => {
     expect(parsed.logs.tails).toBeUndefined();
   });
 
-  it('swaps a short-name or symlinked form of the home that HIPPO_HOME passes through unresolved', () => {
+  it('swaps a short-name or symlinked form of the home that HIPPO_HOME passes through unresolved', async () => {
     const s = seed();
     // tmpdir() is often an 8.3 short form on Windows and a symlink on macOS; elsewhere this is the plain path.
     const aliasHome = join(tmpdir(), basename(s.home));
     const aliasGlobal = join(aliasHome, 'global');
     vi.stubEnv('HIPPO_HOME', aliasGlobal);
     initTestStore(aliasGlobal);
-    const bundle = buildSupportBundle({
+    const bundle = await buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',
       cwd: s.cwd,
@@ -252,7 +252,7 @@ describe('buildSupportBundle', () => {
     expect(globalStore.path).toBe(join('~', 'global'));
   });
 
-  it('swaps a home alias that a log line quotes through the temp folder', () => {
+  it('swaps a home alias that a log line quotes through the temp folder', async () => {
     const s = seed();
     const aliasHome = join(tmpdir(), basename(s.home));
     mkdirSync(join(s.home, 'tmp'));
@@ -261,7 +261,7 @@ describe('buildSupportBundle', () => {
     // os.tmpdir() reads these on every call, so the bundle sees a temp folder under the home's alias.
     for (const k of Object.keys(saved)) vi.stubEnv(k, join(aliasHome, 'tmp'));
     let bundle: JsonObject;
-    bundle = buildSupportBundle({
+    bundle = await buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',
       cwd: s.cwd,
@@ -275,7 +275,7 @@ describe('buildSupportBundle', () => {
     ]);
   });
 
-  it('swaps the home in every spelling a log line uses: JSON-escaped, file URL, Claude Code folder name', () => {
+  it('swaps the home in every spelling a log line uses: JSON-escaped, file URL, Claude Code folder name', async () => {
     // A space and an accented letter, so the file URL spelling differs from the path.
     const home = join(tmp('hippo-bundle-home-'), 'José Q');
     const cwd = join(home, 'proj');
@@ -292,7 +292,7 @@ describe('buildSupportBundle', () => {
       ].join('\n'),
     );
 
-    const bundle = buildSupportBundle({
+    const bundle = await buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',
       cwd,
@@ -313,9 +313,9 @@ describe('buildSupportBundle', () => {
     }
   });
 
-  it('includeLogs adds tails with known secret shapes gone; memory text in a log is not (documented opt-in)', () => {
+  it('includeLogs adds tails with known secret shapes gone; memory text in a log is not (documented opt-in)', async () => {
     const s = seed();
-    const bundle = buildSupportBundle({
+    const bundle = await buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',
       cwd: s.cwd,
@@ -348,7 +348,7 @@ describe('buildSupportBundle', () => {
 
   it.skipIf(process.platform !== 'win32')(
     'swaps a Windows home however a shell mounts its drive, short name included',
-    () => {
+    async () => {
       const s = seed();
       // tmpdir() is usually the 8.3 short form; HIPPO_HOME under it makes the bundle find that alias of the home.
       const shortHome = join(tmpdir(), basename(s.home));
@@ -370,7 +370,7 @@ describe('buildSupportBundle', () => {
         ].join('\n'),
       );
 
-      const bundle = buildSupportBundle({
+      const bundle = await buildSupportBundle({
         diagnosticsAt,
         tenantId: 'default',
         cwd: s.cwd,
@@ -393,7 +393,7 @@ describe('buildSupportBundle', () => {
 
   it.skipIf(process.platform !== 'win32')(
     'swaps a one-folder Windows home only after its drive, and a drive root never',
-    () => {
+    async () => {
       const s = seed();
       // A custom HOME of Q:\x or Q:\home names a folder any path may hold, however long; the home need not exist to be swapped.
       const lines = (n: string): string[] => [
@@ -410,9 +410,9 @@ describe('buildSupportBundle', () => {
         `Q:\\${n}y\\proj`,
         `foo-q-${n}-proj`,
       ];
-      const swapped = (home: string, input: string[]): string[] => {
+      const swapped = async (home: string, input: string[]): Promise<string[]> => {
         writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: input }));
-        const bundle = buildSupportBundle({
+        const bundle = await buildSupportBundle({
           diagnosticsAt,
           tenantId: 'default',
           cwd: s.cwd,
@@ -424,7 +424,7 @@ describe('buildSupportBundle', () => {
         return JSON.parse(JSON.stringify(bundle)).stores[0].config.gitLearnPatterns;
       };
       for (const n of ['x', 'home']) {
-        expect(swapped(`Q:\\${n}`, lines(n)), n).toEqual([
+        expect(await swapped(`Q:\\${n}`, lines(n)), n).toEqual([
           '~\\proj',
           '~/proj',
           '~\\\\proj',
@@ -435,12 +435,12 @@ describe('buildSupportBundle', () => {
           ...lines(n).slice(7),
         ]);
       }
-      expect(swapped('\\home', ['\\home\\proj', '/usr/home/proj'])).toEqual(['~\\proj', '/usr/home/proj']);
-      expect(swapped('Q:\\', lines('x'))).toEqual(lines('x'));
+      expect(await swapped('\\home', ['\\home\\proj', '/usr/home/proj'])).toEqual(['~\\proj', '/usr/home/proj']);
+      expect(await swapped('Q:\\', lines('x'))).toEqual(lines('x'));
     },
   );
 
-  it('a log tail that starts inside a private key drops the rest of the key', () => {
+  it('a log tail that starts inside a private key drops the rest of the key', async () => {
     const s = seed();
     // About 325 KB of key body, so the 256 KiB tail window starts after the BEGIN line.
     const bodyLine = `MIIE${'Q'.repeat(60)}`;
@@ -450,7 +450,7 @@ describe('buildSupportBundle', () => {
     );
     const parsed = JSON.parse(
       JSON.stringify(
-        buildSupportBundle({
+        await buildSupportBundle({
           diagnosticsAt,
           tenantId: 'default',
           cwd: s.cwd,
@@ -469,14 +469,14 @@ describe('buildSupportBundle', () => {
     expect(tail).toContain('after the key');
   });
 
-  it('never writes to the store: hippo.db bytes and an older schema_version are unchanged', () => {
+  it('never writes to the store: hippo.db bytes and an older schema_version are unchanged', async () => {
     const s = seed();
     const db = openHippoDb(s.hippoRoot);
     setMeta(db, 'schema_version', '45');
     closeHippoDb(db);
 
     const before = sha256(join(s.hippoRoot, 'hippo.db'));
-    buildSupportBundle({
+    await buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',
       cwd: s.cwd,
@@ -492,12 +492,12 @@ describe('buildSupportBundle', () => {
     closeHippoDb(check);
   });
 
-  it('lists the store files as they were: its own doctor check does not add an empty -wal', () => {
+  it('lists the store files as they were: its own doctor check does not add an empty -wal', async () => {
     const s = seed();
     expect(existsSync(join(s.hippoRoot, 'hippo.db-wal'))).toBe(false);
     const parsed = JSON.parse(
       JSON.stringify(
-        buildSupportBundle({
+        await buildSupportBundle({
           diagnosticsAt,
           tenantId: 'default',
           cwd: s.cwd,
@@ -511,13 +511,13 @@ describe('buildSupportBundle', () => {
     expect(Object.keys(parsed.stores[0].files)).toEqual(['hippo.db']);
   });
 
-  it('a bare cwd has no stores; a bare .hippo is one error entry', () => {
+  it('a bare cwd has no stores; a bare .hippo is one error entry', async () => {
     const home = tmp('hippo-bundle-empty-home-');
     const cwd = join(home, 'proj');
     mkdirSync(cwd, { recursive: true });
     vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
 
-    const bundle = buildSupportBundle({
+    const bundle = await buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',
       cwd,
@@ -533,7 +533,7 @@ describe('buildSupportBundle', () => {
     mkdirSync(join(cwd, '.hippo'));
     const bare = JSON.parse(
       JSON.stringify(
-        buildSupportBundle({
+        await buildSupportBundle({
           diagnosticsAt,
           tenantId: 'default',
           cwd,
@@ -548,7 +548,7 @@ describe('buildSupportBundle', () => {
     expect(bare.stores[0].error).toMatch(/no hippo\.db here/);
   });
 
-  it('a hippo.db that is not a database is one error entry with the open error', () => {
+  it('a hippo.db that is not a database is one error entry with the open error', async () => {
     const home = tmp('hippo-bundle-notdb-home-');
     const cwd = join(home, 'proj');
     mkdirSync(join(cwd, '.hippo'), { recursive: true });
@@ -557,7 +557,7 @@ describe('buildSupportBundle', () => {
 
     const parsed = JSON.parse(
       JSON.stringify(
-        buildSupportBundle({
+        await buildSupportBundle({
           diagnosticsAt,
           tenantId: 'default',
           cwd,

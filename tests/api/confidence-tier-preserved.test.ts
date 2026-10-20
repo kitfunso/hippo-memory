@@ -70,13 +70,13 @@ describe('confidence tier survives sleep', () => {
     expect(loadedInvalidated.confidence).toBe('stale');
   });
 
-  it('replay skips both an aged-out survivor and a deliberately marked one', () => {
+  it('replay skips both an aged-out survivor and a deliberately marked one', async () => {
     const now = new Date();
     const aged = agedEntry({ confidence: 'observed' });
     const marked = agedEntry({ confidence: 'stale' });
     const fresh = { ...agedEntry({ confidence: 'observed' }), lastRetrieved: now.toISOString() };
 
-    const picked = sampleForReplay([aged, marked, fresh], 3, now, 42);
+    const picked = await sampleForReplay([aged, marked, fresh], 3, now, 42);
     expect(picked).toEqual([fresh.id]);
   });
 

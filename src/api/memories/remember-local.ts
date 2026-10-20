@@ -9,7 +9,7 @@ import { embedMemory, folderIndex, type EmbedOutcome } from '../../domain/search
 import { errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
-import type { Context, LocalContext } from '../types.js';
+import type { Context, ContextWith } from '../types.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 // The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
@@ -84,7 +84,7 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
 
 /** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index
  * is logged. */
-function indexInBackground(ctx: LocalContext, entry: MemoryEntry): Promise<EmbedOutcome> {
+function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
   const target = folderIndex({ store: ctx.store, config: ctx.config });
   return embedMemory(target, entry).then((outcome) => {
     if (outcome === 'failed') {
@@ -98,7 +98,7 @@ function indexInBackground(ctx: LocalContext, entry: MemoryEntry): Promise<Embed
 
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A
  * refused value throws as `remember` does. */
-export async function rememberLocally(ctx: LocalContext, input: LocalRememberInput): Promise<LocalRememberOutcome> {
+export async function rememberLocally(ctx: Context, input: LocalRememberInput): Promise<LocalRememberOutcome> {
   const schemaFit = await ctx.store.contextReads.schemaFit(ctx.tenantId, input.content, input.fitTags ?? input.tags);
   const verdict = await salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
@@ -146,7 +146,7 @@ export type FactExtraction =
 /** Extracts facts from a row just stored and stores them beside it.
  * Best-effort: a failure is named in the result, never thrown. */
 export async function extractRememberedFacts(
-  ctx: LocalContext,
+  ctx: ContextWith<'learning'>,
   entry: MemoryEntry,
   request: FactExtractionRequest,
 ): Promise<FactExtraction> {
@@ -168,7 +168,7 @@ export async function extractRememberedFacts(
       },
     });
     if (found.length > 0) {
-      storeExtractedFacts(ctx.store.localFiles.learning, entry, found, defaultHalfLifeDays);
+      await storeExtractedFacts(ctx.store, entry, found, defaultHalfLifeDays);
       facts = found.length;
     }
   } catch (cause) {

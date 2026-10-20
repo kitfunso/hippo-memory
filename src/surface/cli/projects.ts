@@ -50,9 +50,9 @@ function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-function projectsList(ctx: CliContext, flags: CliFlags): void {
+async function projectsList(ctx: CliContext, flags: CliFlags): Promise<void> {
   const root = ctx.hippoRoot;
-  const projects = api.projectNameList(ctx);
+  const projects = await api.projectNameList(ctx);
   if (flags['json']) {
     console.log(JSON.stringify({ store: root, projects }, null, 2));
     return;
@@ -67,10 +67,10 @@ function projectsList(ctx: CliContext, flags: CliFlags): void {
   }
 }
 
-function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): void {
+async function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): Promise<void> {
   const apply = flagIsTrue(flags, 'apply');
   const [from, into] = [args[1] ?? '', args[2] ?? ''];
-  const r = api.projectNameMerge(ctx, { from, into, dryRun: !apply });
+  const r = await api.projectNameMerge(ctx, { from, into, dryRun: !apply });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
@@ -94,10 +94,10 @@ function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): void {
   );
 }
 
-function projectsRepair(ctx: CliContext, flags: CliFlags): void {
+async function projectsRepair(ctx: CliContext, flags: CliFlags): Promise<void> {
   const root = ctx.hippoRoot;
   const apply = flagIsTrue(flags, 'apply');
-  const r = api.projectNameRepair(ctx, { dryRun: !apply });
+  const r = await api.projectNameRepair(ctx, { dryRun: !apply });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
@@ -130,13 +130,13 @@ function projectsRepair(ctx: CliContext, flags: CliFlags): void {
   );
 }
 
-export function handleProjects({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleProjects({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const ctx = cliApiContext(resolveAuthRoot(hippoRoot, flags), tenantId);
   const sub = args[0] ?? 'list';
   try {
-    if (sub === 'list') return projectsList(ctx, flags);
-    if (sub === 'merge') return projectsMerge(ctx, args, flags);
-    if (sub === 'repair') return projectsRepair(ctx, flags);
+    if (sub === 'list') return await projectsList(ctx, flags);
+    if (sub === 'merge') return await projectsMerge(ctx, args, flags);
+    if (sub === 'repair') return await projectsRepair(ctx, flags);
     printError('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
     process.exitCode = 1;
   } catch (err) {

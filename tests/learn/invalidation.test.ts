@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
@@ -54,14 +54,14 @@ describe('invalidateMatching', () => {
     ({ root: hippoRoot } = makeStore('invalidation'));
   });
 
-  it('weakens memories matching the invalidation target', () => {
+  it('weakens memories matching the invalidation target', async () => {
     const mem = createMemory('REST API endpoint /users returns paginated results', {
       tags: ['api', 'rest'],
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'REST',
         to: 'GraphQL',
@@ -77,14 +77,14 @@ describe('invalidateMatching', () => {
     expect(updated!.halfLifeDays).toBeLessThan(mem.halfLifeDays);
   });
 
-  it('does not touch unrelated memories', () => {
+  it('does not touch unrelated memories', async () => {
     const mem = createMemory('Database connection pool max is 20', {
       tags: ['database'],
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'REST',
         to: 'GraphQL',
@@ -98,15 +98,15 @@ describe('invalidateMatching', () => {
     expect(updated!.halfLifeDays).toBe(mem.halfLifeDays);
   });
 
-  it('does not touch pinned memories', () => {
+  it('does not touch pinned memories', async () => {
     const mem = createMemory('REST API uses OAuth2 tokens', {
       tags: ['api', 'rest'],
       pinned: true,
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'REST',
         to: 'GraphQL',
@@ -126,7 +126,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     ({ root: hippoRoot } = makeStore('inv-safety'));
   });
 
-  it('BYSTANDER LOCK: a multi-token pattern containing a tag word does not invalidate that tag', () => {
+  it('BYSTANDER LOCK: a multi-token pattern containing a tag word does not invalidate that tag', async () => {
     // The incident shape: pattern tokens include "hippo"; bystander is tagged
     // exactly `hippo` but its CONTENT overlaps < 0.5 with the pattern. On the
     // pre-fix code (token-level tagMatch) this fired; it must not now.
@@ -135,8 +135,8 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     });
     writeEntry(hippoRoot, bystander);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'hippo salience gate experiment',
         to: null,
@@ -153,14 +153,14 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(updated!.halfLifeDays).toBe(bystander.halfLifeDays);
   });
 
-  it('secondary: hyphenated sibling tags are also untouched', () => {
+  it('secondary: hyphenated sibling tags are also untouched', async () => {
     const sibling = createMemory('Roadmap planning for next quarter cycles', {
       tags: ['hippo-roadmap'],
     });
     writeEntry(hippoRoot, sibling);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'hippo salience gate experiment',
         to: null,
@@ -173,14 +173,14 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(readEntry(hippoRoot, sibling.id)!.tags).not.toContain('invalidated');
   });
 
-  it('exact full-pattern tag match still fires', () => {
+  it('exact full-pattern tag match still fires', async () => {
     const mem = createMemory('Quarterly roadmap priorities for the project', {
       tags: ['hippo-roadmap'],
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'hippo-roadmap',
         to: null,
@@ -193,14 +193,14 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(readEntry(hippoRoot, mem.id)!.confidence).toBe('stale');
   });
 
-  it('content matching (>=0.5 overlap) is unchanged regardless of tags', () => {
+  it('content matching (>=0.5 overlap) is unchanged regardless of tags', async () => {
     const mem = createMemory('REST API endpoint returns paginated results', {
       tags: ['unrelated-tag'],
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'REST API',
         to: 'GraphQL',
@@ -212,14 +212,14 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(result.invalidated).toBe(1);
   });
 
-  it('dryRun evaluates matches but writes nothing', () => {
+  it('dryRun evaluates matches but writes nothing', async () => {
     const mem = createMemory('REST API uses Bearer tokens everywhere', {
       tags: ['api'],
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       { from: 'REST API', to: 'GraphQL', type: 'migration' },
       'default',
       { dryRun: true },
@@ -236,7 +236,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(untouched!.tags).not.toContain('invalidated');
   });
 
-  it('onlyId invalidates exactly that memory and nothing else', () => {
+  it('onlyId invalidates exactly that memory and nothing else', async () => {
     const targetMem = createMemory('Completely unrelated content about gardening', {
       tags: ['garden'],
     });
@@ -246,8 +246,8 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     writeEntry(hippoRoot, targetMem);
     writeEntry(hippoRoot, other);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       { from: `id:${targetMem.id}`, to: 'manual correction', type: 'migration' },
       'default',
       { onlyId: targetMem.id },
@@ -259,12 +259,12 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(readEntry(hippoRoot, other.id)!.confidence).toBe(other.confidence);
   });
 
-  it('onlyId with an unknown id invalidates nothing', () => {
+  it('onlyId with an unknown id invalidates nothing', async () => {
     const mem = createMemory('Some memory content here', { tags: ['x'] });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       { from: 'id:mem_doesnotexist0000', to: null, type: 'removal' },
       'default',
       { onlyId: 'mem_doesnotexist0000' },
@@ -274,12 +274,12 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(result.targets).toEqual([]);
   });
 
-  it('onlyId on a pinned memory is skipped and reported', () => {
+  it('onlyId on a pinned memory is skipped and reported', async () => {
     const mem = createMemory('Pinned canonical fact', { tags: ['law'], pinned: true });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       { from: `id:${mem.id}`, to: null, type: 'removal' },
       'default',
       { onlyId: mem.id },
@@ -290,12 +290,12 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(readEntry(hippoRoot, mem.id)!.confidence).toBe(mem.confidence);
   });
 
-  it('pattern-mode pinned matches are reported in skippedPinned', () => {
+  it('pattern-mode pinned matches are reported in skippedPinned', async () => {
     const mem = createMemory('REST API canonical contract', { tags: ['api'], pinned: true });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       {
         from: 'REST API',
         to: 'GraphQL',
@@ -316,14 +316,14 @@ describe('invalidateMatching dryRun + onlyId composition', () => {
     ({ root: hippoRoot } = makeStore('inv-compose'));
   });
 
-  it('previews a single id without writing (the headline safety workflow)', () => {
+  it('previews a single id without writing (the headline safety workflow)', async () => {
     const mem = createMemory('Memory line one\nline two of the same memory', {
       tags: ['x'],
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
       { from: `id:${mem.id}`, to: null, type: 'removal' },
       'default',
       { dryRun: true, onlyId: mem.id },

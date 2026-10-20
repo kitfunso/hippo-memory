@@ -9,7 +9,6 @@
  * dormant, and a dormant memory older than `retentionDays` (default 180, 0 =
  * forever) is deleted for good. Real SQLite throughout.
  */
-import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
@@ -40,7 +39,7 @@ import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import * as api from '../../src/api/index.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
@@ -278,7 +277,8 @@ describe('dormant retention', () => {
         closeHippoDb(other);
       }
     };
-    const result = await consolidate(home, { now: new Date(), budget: { ...WRITE_BUDGET, holdMs: 0, pause } });
+    const spy = vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(pause);
+    const result = await consolidate(home, { now: new Date(), budget: { holdMs: 0 } }).finally(() => spy.mockRestore());
     expect(result.dormantExpired).toBe(4);
     expect(pauses).toBe(4);
     expect(ids).toContain(kept);

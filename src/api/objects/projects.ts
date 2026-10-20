@@ -1,6 +1,5 @@
-// Project names for every front end: list them, fold one into another, and repair old tags; the store opens hippo.db
-// and owns each transaction.
-// SHORTCUT: hippo.db only, through localFiles; a served group when another store needs project calls.
+// Project names for every front end: list them, fold one into another, and repair old tags; the store owns each
+// transaction.
 import {
   listProjects,
   mergeProjects,
@@ -9,9 +8,10 @@ import {
   type MergeResult,
   type ProjectSummary,
   type RepairResult,
+  type StoreFolder,
 } from '../../domain/sharing/project-merge.js';
-import type { ProjectTagStore } from '../../store/port/project-tags.js';
-import type { LocalContext } from '../types.js';
+import type { ProjectTagScope } from '../../store/port/project-tags.js';
+import { sharedStoreOf, type ContextWith } from '../types.js';
 
 export type {
   MergeResult,
@@ -19,7 +19,7 @@ export type {
   ProjectSummary,
   RepairResult,
 } from '../../domain/sharing/project-merge.js';
-export type { ProjectFold } from '../../domain/agent-memories/project-folds.js';
+export type { ProjectFold } from '../../store/port/project-tags.js';
 
 export interface MergeProjectNamesOptions {
   from: string;
@@ -28,29 +28,39 @@ export interface MergeProjectNamesOptions {
   dryRun: boolean;
 }
 
-function onProjects<T>(ctx: LocalContext, fn: (store: ProjectTagStore) => T): T {
-  return ctx.store.localFiles.projectTags.on({ tenantId: ctx.tenantId, actor: ctx.actor.subject }, fn);
+/** A repair reads the store's folder as well as its rows. */
+type RepairContext = ContextWith<'projectTags' | 'folderFiles'>;
+
+function scopeOf(ctx: ContextWith<'projectTags'>): ProjectTagScope {
+  return { tenantId: ctx.tenantId, actor: ctx.actor.subject };
+}
+
+async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
+  if (ctx.reach?.isGlobal) return { isGlobal: true };
+  const { project } = await ctx.store.folderFiles.home();
+  return { isGlobal: false, shared: sharedStoreOf(ctx), project };
 }
 
 /** Live rows per project name in the caller's tenant, newest write first. */
-export function projectNameList(ctx: LocalContext): ProjectSummary[] {
-  return onProjects(ctx, listProjects);
+export function projectNameList(ctx: ContextWith<'projectTags'>): Promise<ProjectSummary[]> {
+  return listProjects(ctx.store.projectTags, ctx.tenantId);
 }
 
-/**
- * Folds project `from` into `into`, backed up and audited as `ctx.actor`; throws on user-global, unknown or equal
- * names.
- */
-export function projectNameMerge(ctx: LocalContext, opts: MergeProjectNamesOptions): MergeResult {
-  return onProjects(ctx, (store) => mergeProjects(store, opts));
+/** Folds project `from` into `into`, backed up and audited as `ctx.actor`; rejects on user-global, unknown or equal
+ * names. */
+export function projectNameMerge(
+  ctx: ContextWith<'projectTags'>,
+  opts: MergeProjectNamesOptions,
+): Promise<MergeResult> {
+  return mergeProjects(ctx.store.projectTags, scopeOf(ctx), opts);
 }
 
 /** Sets aside stray imports, folds renamed projects and re-tags sleep's user-global merges; a dry run only plans. */
-export function projectNameRepair(ctx: LocalContext, opts: { dryRun: boolean }): RepairResult {
-  return onProjects(ctx, (store) => repairProjects(store, opts));
+export async function projectNameRepair(ctx: RepairContext, opts: { dryRun: boolean }): Promise<RepairResult> {
+  return repairProjects(ctx.store.projectTags, scopeOf(ctx), await folderOf(ctx), opts);
 }
 
 /** The repair sleep runs once per store; null when it already ran. */
-export function projectNameRepairOnce(ctx: LocalContext): RepairResult | null {
-  return onProjects(ctx, repairOnceOnSleep);
+export async function projectNameRepairOnce(ctx: RepairContext): Promise<RepairResult | null> {
+  return repairOnceOnSleep(ctx.store.projectTags, scopeOf(ctx), await folderOf(ctx));
 }

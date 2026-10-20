@@ -13,7 +13,7 @@ import {
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -450,7 +450,7 @@ describe('invalidation during git learning', () => {
     tmpDir = makeRoot('inv-learn');
   });
 
-  it('invalidates old memories when learning a migration commit', () => {
+  it('invalidates old memories when learning a migration commit', async () => {
     // Setup: create an existing memory about webpack
     const mem = createMemory('webpack config uses HtmlWebpackPlugin for output', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -465,7 +465,7 @@ describe('invalidation during git learning', () => {
     expect(target!.to).toBe('vite');
 
     // Invalidate matching memories
-    const result = invalidateMatching(sqliteSyncStore(tmpDir).localFiles.learning, target!, 'default');
+    const result = await invalidateMatching(sqliteStore(tmpDir), target!, 'default');
     expect(result.invalidated).toBe(1);
 
     // Verify the old memory was weakened

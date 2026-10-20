@@ -1,8 +1,7 @@
 // consolidate() handed an integrator's store changes that store, never the folder a path form or the environment names.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
-import { consolidate } from '../../src/index.js';
-import type { LocalStore } from '../../src/store/local/index.js';
+import { consolidate, type SleepStore } from '../../src/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb, ftsRowCounts, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -43,9 +42,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('consolidate on an integrator store with local files', () => {
+describe('consolidate on an integrator store with the sleep groups', () => {
   it("repairs the integrator's store and leaves another folder's drift alone", async () => {
-    const store: LocalStore = { ...sqliteStore(b) };
+    const store: SleepStore = { ...sqliteStore(b) };
 
     const result = await consolidate(store);
 

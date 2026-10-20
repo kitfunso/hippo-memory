@@ -151,7 +151,7 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   /** Sleeps the folder's own store; reports its own failure. */
   sleep: () => Promise<void>;
   /** Imports the session's agent notes into the global store, for a folder that does not sleep here. */
-  importAgentNotes: () => void;
+  importAgentNotes: () => Promise<void>;
   readScan: (log: (line: string) => void) => Scan | null;
   /** This session's saved place in its transcript: the turns after it, and moving it past `turns`. */
   cursor: {
@@ -161,7 +161,11 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   /** The project the session ran in. */
   currentProject: () => ProjectRef;
   /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it failed, having said why. */
-  capture: (into: Context, turns: readonly Turn[] | undefined, originProject: ProjectRef | undefined) => boolean;
+  capture: (
+    into: Context,
+    turns: readonly Turn[] | undefined,
+    originProject: ProjectRef | undefined,
+  ) => Promise<boolean>;
   digest: (scan: Scan | null, key: string, log: (line: string) => void) => Promise<void>;
   workingState: (log: (line: string) => void) => ReturnType<SessionClose['workingState']>;
   evidence: () => HandoffEvidence;
@@ -193,7 +197,7 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
   if (!hasOwnStore(ctx)) {
     w.log('skip sleep: this folder has no store of its own', { startFresh: true });
-    w.importAgentNotes();
+    await w.importAgentNotes();
     return;
   }
   if (w.mode !== 'turn' || !w.sessionId) return w.sleep();
@@ -215,13 +219,13 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
 
 /** Captures the session into `into`; a reply's close takes only the turns after the session's cursor, then moves it, so
  * each reply is extracted once. */
-function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
+async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
   ctx: Context,
   into: Context,
   scan: Scan | null,
   w: SessionEndWork<Turn, Scan>,
-): void {
-  const capture = (turns: readonly Turn[] | undefined): boolean => {
+): Promise<void> {
+  const capture = async (turns: readonly Turn[] | undefined): Promise<boolean> => {
     // With no transcript of its own, capture would read this as a manual run and scan every project.
     if (!w.transcriptPath) {
       w.log('skip capture: no transcript for this session');
@@ -231,7 +235,7 @@ function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
     return w.capture(into, turns, hasOwnStore(ctx) ? undefined : w.currentProject());
   };
   if (w.mode !== 'turn') {
-    capture(scan?.turns);
+    await capture(scan?.turns);
     return;
   }
   if (!w.transcriptPath || !w.sessionId || !scan) {
@@ -243,7 +247,7 @@ function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
     w.log('skip capture: no new turns since the last reply');
     return;
   }
-  if (capture(fresh)) w.cursor.save(w.sessionId, w.transcriptPath, scan.turns);
+  if (await capture(fresh)) w.cursor.save(w.sessionId, w.transcriptPath, scan.turns);
 }
 
 /** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx` names, in that order. */
@@ -272,7 +276,7 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
   await sleepStep(ctx, w);
   flushRereadLog();
   const scan = w.readScan((line) => w.log(line));
-  captureStep(ctx, into, scan, w);
+  await captureStep(ctx, into, scan, w);
   await w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) => w.log(line));
   // Only this session's snapshot, and only after sleep and capture.
   const closeLog = (line: string): void => w.log(line);

@@ -10,10 +10,9 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { makeOkFetcher, getRow, forceMarkDirty, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
 
 afterEach(() => {
@@ -40,7 +39,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher('newly-generated-summary-content-X');
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'test-key',
       fetcher,
       cap: 20,
@@ -111,10 +110,10 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher();
-    await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
+    await rebuildDirtySummaries(sqliteStore(hippoRoot), { apiKey: 'k', fetcher, cap: 20 });
 
     // Second call — should be no-op
-    const result2 = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result2 = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -162,7 +161,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       return new Response(JSON.stringify({ content: [{ text: 'rebuilt-tenant-content-XX' }] }), { status: 200 });
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -189,7 +188,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         writeEntry(hippoRoot, child);
         forceMarkDirty(hippoRoot, sum.id);
       }
-      return rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+      return rebuildDirtySummaries(sqliteStore(hippoRoot), {
         apiKey: 'k',
         fetcher: makeOkFetcher(),
         cap: 20,
@@ -219,7 +218,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher();
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -291,7 +290,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       return new Response(JSON.stringify({ content: [{ text: 'second-summary-ok-content-XX' }] }), { status: 200 });
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -324,7 +323,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       apiKey: 'k',
       fetcher,
       cap: 20,

@@ -122,11 +122,11 @@ const mergePartnersOf = (texts: readonly string[]) => mergePartners(texts.map((t
 const cases = SIZES.flatMap((n) => Array.from({ length: SEEDS_PER_SIZE }, (_, s) => ({ n, seed: n * 101 + s })));
 
 describe('sleep overlap index matches the pairwise passes', () => {
-  it.each(cases)('conflicts match for $n memories (seed $seed)', ({ n, seed }) => {
+  it.each(cases)('conflicts match for $n memories (seed $seed)', async ({ n, seed }) => {
     const rnd = mulberry32(seed);
     const entries = randomEntries(rnd, n);
     const rescued = new Set(entries.filter(() => rnd() < 0.1).map((e) => e.id));
-    expect(detectConflicts(entries, NOW, { rescuedIds: rescued })).toEqual(
+    expect(await detectConflicts(entries, NOW, { rescuedIds: rescued })).toEqual(
       pairwiseDetectConflicts(entries, NOW, {}, rescued),
     );
   });
@@ -138,7 +138,7 @@ describe('sleep overlap index matches the pairwise passes', () => {
     expect(texts.map((_, i) => partnersOf(i))).toEqual(pairwiseMergePartners(texts));
   });
 
-  it('keeps pairs that sit exactly on each threshold', () => {
+  it('keeps pairs that sit exactly on each threshold', async () => {
     const shared = ['aa', 'bb', 'cc', 'dd', 'ee', 'ff', 'gg'];
     // 7 shared of 20 distinct tokens is a Jaccard of exactly 0.35; dropping one shared token falls just under.
     const onMerge = [
@@ -162,7 +162,7 @@ describe('sleep overlap index matches the pairwise passes', () => {
       created: NOW.toISOString(),
       lastRetrieved: NOW.toISOString(),
     }));
-    const got = detectConflicts(onConflict, NOW);
+    const got = await detectConflicts(onConflict, NOW);
     expect(got).toEqual(pairwiseDetectConflicts(onConflict, NOW));
     expect(got.map((c) => [c.memory_a_id, c.memory_b_id])).toEqual([['c0', 'c1']]);
   });

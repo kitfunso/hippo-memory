@@ -38,7 +38,7 @@ import { isInitialized } from '../../base/scope/project-identity.js';
 import { importUserMemories } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
 import { getGlobalRoot } from '../../domain/sharing/global-store.js';
-import { cliLocalFiles, cliSyncOptions } from './api-context.js';
+import { cliStore, cliSyncOptions } from './api-context.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -416,7 +416,7 @@ function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forc
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
 // Detection and install logic live in src/domain/hooks/.
 
-export function handleSetup({ tenantId, flags }: CommandContext): void {
+export async function handleSetup({ tenantId, flags }: CommandContext): Promise<void> {
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
@@ -438,7 +438,7 @@ export function handleSetup({ tenantId, flags }: CommandContext): void {
 
   if (!flags['no-learn']) {
     console.log('');
-    const imported = importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine(), { dryRun }));
+    const imported = await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine(), { dryRun }));
     printAgentImport(imported, dryRun ? '[dry-run] ' : '');
   }
 
@@ -554,13 +554,13 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = replayCompactions({ root: globalRoot, files: cliLocalFiles(globalRoot), tenantId }, warn);
+    const finished = await replayCompactions({ root: globalRoot, store: cliStore(globalRoot), tenantId }, warn);
     if (finished > 0) {
       console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
     }
     await repairQualityOnceAt(globalRoot, tenantId);
   }
-  printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine())), '');
+  printAgentImport(await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
   if (workspaces.length === 0) {

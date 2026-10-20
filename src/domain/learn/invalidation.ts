@@ -1,5 +1,6 @@
-import type { Learning } from '../../store/port/learning.js';
 import type { HippoStore } from '../../store/index.js';
+import type { StoreWith } from '../../store/port.js';
+import type { Learning } from '../../store/port/learning.js';
 import { chunked } from '../../base/util/chunked.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import { MINUTE_MS } from '../../base/util/time.js';
@@ -98,17 +99,17 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
  * 'invalidated' tag; pinned are skipped).
  * Tag matching is EXACT: the FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
  * mass-weaken every memory with that tag. */
-export function invalidateMatching(
-  learning: Learning,
+export async function invalidateMatching(
+  store: StoreWith<'learning'>,
   target: InvalidationTarget,
   tenantId: string,
   options?: InvalidationOptions,
-): InvalidationResult {
+): Promise<InvalidationResult> {
   // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's id is invisible.
   if (options?.onlyId !== undefined) {
-    const entries = [learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
+    const entries = [await store.learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
     const { result, weakened } = weakenMatches(entries, target, options);
-    learning.writeEntriesTogether(weakened);
+    await store.lessonWrites.writeTogether(weakened);
     return result;
   }
   const tokens = invalidationTokenize(target.from);
@@ -118,7 +119,7 @@ export function invalidateMatching(
   const weakened: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
-    const page = learning.entriesMentioning(tokens, tag, tenantId, { limit: MENTION_PAGE_ROWS, after });
+    const page = await store.learning.entriesMentioning(tokens, tag, tenantId, { limit: MENTION_PAGE_ROWS, after });
     const found = weakenMatches(page.entries, target, options);
     result.invalidated += found.result.invalidated;
     result.targets.push(...found.result.targets);
@@ -128,7 +129,7 @@ export function invalidateMatching(
     after = page.next ?? undefined;
   } while (after);
   // One write for every page, so a failed invalidation weakens none of them.
-  learning.writeEntriesTogether(weakened);
+  await store.lessonWrites.writeTogether(weakened);
   return result;
 }
 
@@ -557,23 +558,23 @@ function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): stri
 /** An outcome row is stamped before it commits, so the recheck starts a little before the first read. */
 const CONFIRM_RECHECK_MARGIN_MS = MINUTE_MS;
 
-function tagChurnStale(
+async function tagChurnStale(
   learning: Learning,
   tenantId: string,
   toTag: readonly MemoryEntry[],
   confirmedAt: Map<string, string>,
   firstReadAt: number,
-): void {
+): Promise<void> {
   // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence. Only
   // outcomes since the first read can have landed, so that is all the recheck reads.
   const recheckSince = new Date(firstReadAt - CONFIRM_RECHECK_MARGIN_MS).toISOString();
-  const confirmedSince = learning.confirmedOutcomeTimes(tenantId, recheckSince);
+  const confirmedSince = await learning.confirmedOutcomeTimes(tenantId, recheckSince);
   const unconfirmed = toTag.filter((stale) => {
     const seen = confirmedSince.get(stale.id);
     return seen === undefined || seen === confirmedAt.get(stale.id);
   });
   if (unconfirmed.length === 0) return;
-  learning.addTagToEntries(
+  await learning.addTagToEntries(
     tenantId,
     unconfirmed.map((stale) => stale.id),
     CHURN_STALE_TAG,
@@ -608,11 +609,11 @@ function recordChurnEvidence(
 
 /** The good-outcome times the candidates' anchors need, and the anchor of each: its last confirmation, if that is later
  * than its creation. */
-function readChurnAnchors(learning: Learning, tenantId: string, candidates: readonly ChurnCandidate[]) {
+async function readChurnAnchors(learning: Learning, tenantId: string, candidates: readonly ChurnCandidate[]) {
   const firstReadAt = Date.now();
   // A confirmation older than the oldest candidate cannot move any anchor, so the read starts there.
   const oldestCreated = candidates.reduce((oldest, c) => Math.min(oldest, Date.parse(c.entry.created)), Infinity);
-  const confirmedAt = learning.confirmedOutcomeTimes(tenantId, new Date(oldestCreated).toISOString());
+  const confirmedAt = await learning.confirmedOutcomeTimes(tenantId, new Date(oldestCreated).toISOString());
   // Compared as epoch ms, not strings: imported rows may carry offsets or other ISO forms.
   const anchorOf = (entry: MemoryEntry): string => {
     const confirmed = confirmedAt.get(entry.id);
@@ -626,16 +627,20 @@ function readChurnAnchors(learning: Learning, tenantId: string, candidates: read
 
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only
  * adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
-export function detectChurnStale(learning: Learning, repo: ChurnRepo, opts: DetectChurnStaleOptions): ChurnStaleResult {
+export async function detectChurnStale(
+  { learning }: StoreWith<'learning'>,
+  repo: ChurnRepo,
+  opts: DetectChurnStaleOptions,
+): Promise<ChurnStaleResult> {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
-  const entries = learning.currentEntriesFromOrigins(opts.tenantId, origins);
+  const entries = await learning.currentEntriesFromOrigins(opts.tenantId, origins);
   const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
-  const { confirmedAt, firstReadAt, anchorOf } = readChurnAnchors(learning, opts.tenantId, candidates);
+  const { confirmedAt, firstReadAt, anchorOf } = await readChurnAnchors(learning, opts.tenantId, candidates);
 
   const needs: ChurnNeeds = {
     paths: candidates.some((c) => c.refs.paths.length > 0),
@@ -654,7 +659,7 @@ export function detectChurnStale(learning: Learning, repo: ChurnRepo, opts: Dete
     // leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
-    if (!dryRun && toTag.length > 0) tagChurnStale(learning, opts.tenantId, toTag, confirmedAt, firstReadAt);
+    if (!dryRun && toTag.length > 0) await tagChurnStale(learning, opts.tenantId, toTag, confirmedAt, firstReadAt);
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);
     throw err;

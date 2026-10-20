@@ -9,7 +9,11 @@ import { duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import type { Captures } from '../../src/store/local/index.js';
+import type { Captures } from '../../src/store/port/captures.js';
+import type { Sync } from '../../src/store/sqlite/served.js';
+import { captureExtractedItems } from '../../src/surface/capture/command.js';
+import type { ExtractedItem } from '../../src/surface/capture/extract.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 
 let root: string;
 
@@ -108,43 +112,47 @@ describe('compactions.saveCallerItems', () => {
   });
 });
 
-describe('localFiles.captures.write', () => {
-  const write = (...args: Parameters<Captures['write']>) => sqliteSyncStore(root).localFiles.captures.write(...args);
-  const item = (content: string) => ({ content, makeEntry: () => createMemory(content, { source: 'capture' }) });
+describe('captures.write', () => {
+  const write = (...args: Parameters<Sync<Captures>['write']>) => sqliteSyncStore(root).captures.write(...args);
+  const entry = (content: string) => createMemory(content, { source: 'capture' });
 
-  it('writes new items, skips a repeat inside the batch and counts a rejected value', () => {
+  it('writes each new entry and counts a rejected value', () => {
+    const rejected = 'Never cache the session token in local storage.';
+    reject(rejected);
+    const first = 'Always run the migration dry run before the real one.';
+    const outcomes = write([entry(first), entry(rejected)], { lean: true });
+    expect(outcomes).toEqual(['captured', 'rejected']);
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([first]);
+  });
+});
+
+describe('captureExtractedItems', () => {
+  const item = (content: string): ExtractedItem => ({ content, category: 'decision', tags: [] });
+  const options = { tenantId: undefined, originProject: undefined, lean: true };
+  const capture = (items: ExtractedItem[], keys: Set<string>) =>
+    captureExtractedItems(captureTarget(root), options, items, keys);
+
+  it('writes new items, skips a repeat inside the batch and counts a rejected value', async () => {
     const rejected = 'Never cache the session token in local storage.';
     reject(rejected);
     const keys = new Set<string>();
     const first = 'Always run the migration dry run before the real one.';
-    const outcomes = write([item(first), item(first), item(rejected)], keys, { lean: true });
-    expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
-    expect(keys.has(duplicateKey(first))).toBe(true);
+    expect(await capture([item(first), item(first), item(rejected)], keys)).toEqual({
+      captured: 1,
+      skipped: 1,
+      rejected: 1,
+    });
+    expect([...keys]).toEqual([duplicateKey(first)]);
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([first]);
   });
 
-  it('hands each captured entry to onCaptured, which is where the caller embeds it', () => {
-    const rejected = 'Never log the raw bearer token on a failed request.';
-    reject(rejected);
-    const kept = 'Rotate the signing key before the old one expires.';
-    const seen: string[] = [];
-    const outcomes = write([item(kept), item(kept), item(rejected)], new Set(), {
-      lean: true,
-      onCaptured: (e) => seen.push(e.content),
-    });
-    expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
-    expect(seen).toEqual([kept]);
-  });
-
-  it('skips an item whose text the store already holds without building its entry', () => {
+  it('skips an item whose text the store already holds and writes nothing for it', async () => {
     const held = 'Keep the changelog fragment in the same commit as the code.';
-    let built = false;
-    const outcomes = write(
-      [{ content: held, makeEntry: () => ((built = true), createMemory(held)) }],
-      new Set([duplicateKey(held)]),
-      { lean: true },
-    );
-    expect(outcomes).toEqual(['skipped']);
-    expect(built).toBe(false);
+    expect(await capture([item(held)], new Set([duplicateKey(held)]))).toEqual({
+      captured: 0,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(loadAllEntries(root, 'default')).toEqual([]);
   });
 });

@@ -564,9 +564,9 @@ describe('personal memories walk (plan lane T)', () => {
     const item = extractFromTexts([said])[0]!.content;
     await post(keys.A.plaintext, { content: item, personal: true, project: { name: 'alpha' } });
     const req = (sessionId: string) => ({ sessionId, project: { name: 'alpha', legacyName: 'alpha' }, texts: [said] });
-    expect(captureSessionTexts(ctxOf('B'), req('walk-capture-1'))).toMatchObject({ captured: 1, skipped: 0 });
+    expect(await captureSessionTexts(ctxOf('B'), req('walk-capture-1'))).toMatchObject({ captured: 1, skipped: 0 });
     expect(loadAllEntries(store, 'default').filter((e) => e.content === item && !e.scope)).toHaveLength(1);
-    expect(captureSessionTexts(ctxOf('B'), req('walk-capture-2'))).toMatchObject({ captured: 0, skipped: 1 });
+    expect(await captureSessionTexts(ctxOf('B'), req('walk-capture-2'))).toMatchObject({ captured: 0, skipped: 1 });
   });
 
   it("line 11: api.authGrant of A's scope is 400, and a resolver scope list naming it opens nothing (F8)", async () => {

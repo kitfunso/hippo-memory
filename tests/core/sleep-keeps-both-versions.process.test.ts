@@ -30,12 +30,10 @@ import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { REAL_IO } from '../_helpers/real-io.js';
@@ -152,7 +150,7 @@ async function sleepMany(root: string): Promise<void> {
   const start = Date.now();
   for (const day of [1, 2, 3, 4, 5, 6, 7, 600]) {
     await consolidate(root, { now: new Date(start + day * DAY) });
-    deduplicateStore(sqliteConsolidation(handlesOf(root)));
+    await deduplicateStore(sqliteStore(root));
   }
 }
 
@@ -208,7 +206,7 @@ describe('sleep keeps both versions', () => {
     expect(loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic)).toHaveLength(1);
   });
 
-  it('dedup keeps a pair whose text differs in a value', () => {
+  it('dedup keeps a pair whose text differs in a value', async () => {
     const root = newRoot();
     const pairs = [
       ['The dev server port is 3000', 'The dev server port is 5173'],
@@ -221,7 +219,7 @@ describe('sleep keeps both versions', () => {
     ];
     for (const text of pairs.flat()) writeEntry(root, createMemory(text));
 
-    expect(deduplicateStore(sqliteConsolidation(handlesOf(root))).removed).toBe(0);
+    expect((await deduplicateStore(sqliteStore(root))).removed).toBe(0);
     expect(loadAllEntries(root, 'default')).toHaveLength(6);
   });
 
@@ -230,7 +228,7 @@ describe('sleep keeps both versions', () => {
     const text = 'The staging service listens on port 4400.';
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
 
-    expect(deduplicateStore(sqliteConsolidation(handlesOf(root)), { threshold: 1 }).removed).toBe(1);
+    expect((await deduplicateStore(sqliteStore(root), { threshold: 1 })).removed).toBe(1);
     expect(loadAllEntries(root, 'default')).toHaveLength(1);
 
     const cli = newRoot();
@@ -683,7 +681,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     }
   });
 
-  it('Claude Code memory import', () => {
+  it('Claude Code memory import', async () => {
     const root = newRoot();
     write(root, OLD);
     const home = tmp();
@@ -692,17 +690,17 @@ describe('a new value is never skipped as a copy of an old one', () => {
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'port.md'), `---\nname: port\n---\n${NEW}\n`);
 
-    const imported = (): number =>
+    const imported = async (): Promise<number> =>
       totalTally(
-        importProjectMemories(root, {
+        await importProjectMemories(root, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport({}),
+          stores: sqliteImportStores({}),
           machine: { home, env: {}, platform: process.platform, ...REAL_IO },
         }),
       ).imported;
-    expect(imported()).toBe(1);
-    expect(imported()).toBe(0);
+    expect(await imported()).toBe(1);
+    expect(await imported()).toBe(0);
   });
 
   it('import', () => {
@@ -712,7 +710,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     expect([result.imported, result.skipped]).toEqual([1, 1]);
   });
 
-  it('capture', () => {
+  it('capture', async () => {
     const root = newRoot();
     const note = 'decision: cap the connection pool at 15k';
     const [item] = extractFromTexts([note]);
@@ -721,7 +719,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     writeFileSync(file, `${note}\n`);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    cmdCapture(captureTarget(root), {
+    await cmdCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'file',
       filePath: file,

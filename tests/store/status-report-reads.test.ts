@@ -105,7 +105,7 @@ describe('physics status stats', () => {
     const entries = Array.from({ length: n }, (_, i) => createMemory(`particle memory ${i}`));
     writeEntriesTogether(root, entries);
     const saved = particles(entries.map((e) => e.id));
-    sqliteSyncStore(root).localFiles.consolidation.saveParticles(saved);
+    sqliteSyncStore(root).consolidation.saveParticles(saved);
     return saved;
   }
 

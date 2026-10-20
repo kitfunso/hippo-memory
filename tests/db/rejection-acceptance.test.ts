@@ -78,7 +78,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
       'utf8',
     );
 
-    expect(() =>
+    await expect(
       cmdCapture(captureTarget(home), {
         tenantId: 'default',
         source: 'file',
@@ -86,7 +86,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
         dryRun: false,
         global: false,
       }),
-    ).not.toThrow();
+    ).resolves.toBeUndefined();
 
     const contents = loadEveryTenantEntries(home).map((e) => e.content);
     expect(contents).not.toContain(xContent);
@@ -487,7 +487,7 @@ describe('capture dry-run tombstone accuracy', () => {
     );
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    cmdCapture(captureTarget(home), {
+    await cmdCapture(captureTarget(home), {
       tenantId: 'default',
       source: 'file',
       filePath: fixturePath,
@@ -501,7 +501,7 @@ describe('capture dry-run tombstone accuracy', () => {
     expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
     // Real run agrees: the tombstoned item is refused, the sibling lands.
-    cmdCapture(captureTarget(home), {
+    await cmdCapture(captureTarget(home), {
       tenantId: 'default',
       source: 'file',
       filePath: fixturePath,

@@ -3,6 +3,9 @@
 // (scripts/check-layers.mjs).
 export { sqliteReach, sqliteStore } from './store.js';
 export { sqliteDashboardReads } from './dashboard-reads.js';
+export { sqliteImportFiles } from './import-files.js';
+export { sqliteImportStores } from './agent-import-stores.js';
+export { isHippoDbStore } from './hippo-db-stores.js';
 export { runDetachedSqliteRequest, runSqliteBatch, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
 export { sqliteServerRuntime, type ServerRuntimeOptions, type SqliteServerRuntime } from './server-runtime.js';
 export { tenantOfApiKey, type ResolveOptions } from './tenant.js';

@@ -294,16 +294,15 @@ describe('ledger readers skip arm rows', () => {
 });
 
 describe('doctor', () => {
-  const pilotCheck = () => {
+  const pilotCheck = async () => {
     vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-    return runDoctor({ diagnosticsAt, tenantId: 'default', cwd: tmp, home: tmp, version: 'test' }).checks.find(
-      (c) => c.id === 'pilot',
-    );
+    const report = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd: tmp, home: tmp, version: 'test' });
+    return report.checks.find((c) => c.id === 'pilot');
   };
 
-  it('reports the pilot only when the rate is above 0', () => {
-    expect(pilotCheck()).toBeUndefined();
+  it('reports the pilot only when the rate is above 0', async () => {
+    expect(await pilotCheck()).toBeUndefined();
     writeConfig({ holdoutRateBp: 2000 });
-    expect(pilotCheck()).toMatchObject({ status: 'info', detail: expect.stringContaining('about 20%') });
+    expect(await pilotCheck()).toMatchObject({ status: 'info', detail: expect.stringContaining('about 20%') });
   });
 });

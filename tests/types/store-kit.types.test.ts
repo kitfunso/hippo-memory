@@ -16,14 +16,13 @@ import {
   type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
 import type { LossAversion } from '../../src/base/memory/memory.js';
-import type { LocalStore } from '../../src/store/local/index.js';
 
 declare const store: HippoStore;
 
 describe('hippo-memory/store-kit entry types', () => {
-  it('sqliteStore takes a root path and the ratio its root read, and returns a store with every group and local files', () => {
+  it('sqliteStore takes a root path and the ratio its root read, and returns a store with every group', () => {
     expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string, rules?: LossAversion]>();
-    expectTypeOf(sqliteStore).returns.toEqualTypeOf<LocalStore & StoreGroups>();
+    expectTypeOf(sqliteStore).returns.toEqualTypeOf<HippoStore & StoreGroups>();
     // @ts-expect-error the root is a path string
     typeOnly(() => sqliteStore({ hippoRoot: '/tmp/root' }));
   });
@@ -41,12 +40,27 @@ describe('hippo-memory/store-kit entry types', () => {
     typeOnly(() => requireGroup(store, 'base'));
   });
 
-  it('the optional groups are a closed set of names, and local files are not on the port', () => {
+  it('the optional groups are a closed set of names, and no localFiles group is left', () => {
     expectTypeOf<OptionalGroup>().toEqualTypeOf<
-      'vectorViews' | 'readiness' | 'lastRecall' | 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing'
+      | 'vectorViews'
+      | 'readiness'
+      | 'lastRecall'
+      | 'ledger'
+      | 'embeddingIndex'
+      | 'promotion'
+      | 'folderFiles'
+      | 'sharing'
+      | 'consolidation'
+      | 'learning'
+      | 'captures'
+      | 'compactionHooks'
+      | 'projectTags'
+      | 'diagnostics'
+      | 'graphRebuild'
+      | 'agentImport'
     >();
     expectTypeOf<'localFiles' extends StoreGroup ? true : false>().toEqualTypeOf<false>();
-    // @ts-expect-error a store's local files sit beside the port, not in a group
+    // @ts-expect-error hippo.db's folder work is the optional groups above, not one localFiles group
     typeOnly(() => hasGroup(store, 'localFiles'));
   });
 

@@ -21,7 +21,7 @@ import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/
 import { NO_MERGE_TAGS } from '../../src/domain/sharing/share.js';
 import { forget, dormantList, sleep, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,
@@ -32,7 +32,6 @@ import {
   readEntry,
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
@@ -329,7 +328,7 @@ describe('dedupe and audit leave a kept row alone', () => {
   it.each([
     ['kept', KEPT_SOURCE, true],
     ['merged-source', 'consolidation', false],
-  ])('dedupe removes a weaker duplicate only when it is not kept (%s)', (_label, source, survives) => {
+  ])('dedupe removes a weaker duplicate only when it is not kept (%s)', async (_label, source, survives) => {
     const root = newRoot();
     const text = 'the build cache lives in /var/cache/hippo on the CI runners';
     const keeper = createMemory7(text);
@@ -337,7 +336,7 @@ describe('dedupe and audit leave a kept row alone', () => {
     writeEntry(root, keeper);
     writeEntry(root, copy);
 
-    deduplicateStore(sqliteConsolidation(handlesOf(root)));
+    await deduplicateStore(sqliteStore(root));
 
     expect(readEntry(root, keeper.id)).not.toBeNull();
     expect(readEntry(root, copy.id) !== null).toBe(survives);

@@ -9,7 +9,7 @@ import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
 import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
-import type { GlobalStores, LocalStore } from '../local/index.js';
+import { asHippoDb } from './hippo-db-stores.js';
 
 const offLoopStores = new WeakSet<HippoStore>();
 
@@ -190,9 +190,9 @@ export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
   rules: LossAversion = {},
-): LocalStore & StoreGroups {
+): HippoStore & StoreGroups {
   const inProcess = sqliteStore(hippoRoot, rules);
-  const store: LocalStore & StoreGroups = {
+  const store: HippoStore & StoreGroups = {
     ...inProcess,
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(executor, inProcess.vectors),
@@ -204,14 +204,20 @@ export function workerSqliteStore(
     close: () => executor.close(),
   };
   offLoopStores.add(store);
-  return store;
+  return asHippoDb(store);
+}
+
+/** The operator's global stores a server opens beside its own, closed with it. */
+export interface GlobalStores {
+  readonly open: (root: string) => HippoStore & StoreGroups;
+  readonly close: () => Promise<void>;
 }
 
 /** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server
  * thread; each is built at first use, since the global store can appear while the server runs. */
 export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
   if (!runsOffLoop(served)) return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
-  const opened = new Map<string, LocalStore & StoreGroups>();
+  const opened = new Map<string, HippoStore & StoreGroups>();
   return {
     open(root) {
       const known = opened.get(root);

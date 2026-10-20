@@ -9,11 +9,11 @@ import {
 import * as sources from '../surface/importers/sources.js';
 import { importMarkdown as importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVault as importVaultInto } from '../surface/importers/vault.js';
-import { runSqliteBatch, runSqliteRequest, sqliteStore } from '../store/sqlite/index.js';
+import { runSqliteBatch, runSqliteRequest, sqliteImportFiles, sqliteStore } from '../store/sqlite/index.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
-  return { ...options, target: { root, files: sqliteStore(root).localFiles, batch: runSqliteBatch } };
+  return { ...options, target: { root, files: sqliteImportFiles(root), batch: runSqliteBatch } };
 }
 
 /** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them

@@ -5,7 +5,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from './base/scope/project-identity.js';
 import { getGlobalRoot } from './domain/sharing/global-store.js';
-import { needsNewerHippo, type Diagnostics, type StoreHealth } from './store/port/diagnostics.js';
+import type { StoreHealth } from './store/port/diagnostics.js';
+import type { StoreGroups } from './store/port.js';
+import { needsNewerHippo } from './base/errors/store-open.js';
 import { loadConfig } from './base/config/config.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './base/session/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './surface/capture/compaction-spool.js';
@@ -56,8 +58,11 @@ export interface DoctorOptions {
   /** Stands in for the fs the spool check reads; a test makes one call fail. */
   spoolFs?: SpoolFs;
   /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the store. */
-  diagnosticsAt: (hippoRoot: string) => Diagnostics;
+  diagnosticsAt: (hippoRoot: string) => DoctorStore;
 }
+
+/** What doctor reads of a store: its health and, for the global store, its project tags. */
+export type DoctorStore = Pick<StoreGroups, 'diagnostics' | 'projectTags'>;
 
 /** Minimum Node.js version hippo supports (package.json engines). */
 export const MIN_NODE = '22.16.0';
@@ -222,9 +227,9 @@ function compactionsCheck(
 }
 
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
-function projectsCheck(global: Diagnostics, globalRoot: string, tenantId: string): DoctorCheck {
+async function projectsCheck(global: DoctorStore, tenantId: string): Promise<DoctorCheck> {
   try {
-    const r = global.projectTags(tenantId, (reads) => planProjectRepair(reads, globalRoot));
+    const r = await planProjectRepair(global.projectTags, tenantId, { isGlobal: true });
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0
@@ -383,10 +388,15 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
 }
 
 /** Checks that read the store's database; a store that cannot be opened becomes one failed schema check. */
-function databaseChecks(diagnostics: Diagnostics, store: string, now: Date, spoolFs?: SpoolFs): DoctorCheck[] {
+async function databaseChecks(
+  { diagnostics }: DoctorStore,
+  store: string,
+  now: Date,
+  spoolFs?: SpoolFs,
+): Promise<DoctorCheck[]> {
   let health: StoreHealth;
   try {
-    health = diagnostics.health({
+    health = await diagnostics.health({
       since: new Date(now.getTime() - 7 * DAY_MS).toISOString(),
       stuckBefore: new Date(now.getTime() - REPLAY_AFTER_MS).toISOString(),
       transcriptFloor: new Date(now.getTime() - TRANSCRIPT_FILL_WINDOW_MS).toISOString(),
@@ -468,7 +478,7 @@ function claudeCodeCheck(home: string): DoctorCheck {
 }
 
 /** Run every check. Never throws for a broken install; broken parts become failed checks. */
-export function runDoctor(opts: DoctorOptions): DoctorReport {
+export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   const cwd = opts.cwd ?? process.cwd();
   const home = opts.home ?? os.homedir();
   const now = opts.now ?? new Date();
@@ -482,7 +492,7 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);
   if (store !== null) {
-    checks.push(...databaseChecks(opts.diagnosticsAt(store), store, now, opts.spoolFs));
+    checks.push(...(await databaseChecks(opts.diagnosticsAt(store), store, now, opts.spoolFs)));
   }
 
   const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
@@ -495,7 +505,7 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
         `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }
-  if (hasGlobal) checks.push(projectsCheck(opts.diagnosticsAt(globalRoot), globalRoot, opts.tenantId));
+  if (hasGlobal) checks.push(await projectsCheck(opts.diagnosticsAt(globalRoot), opts.tenantId));
 
   checks.push(claudeCodeCheck(home));
 

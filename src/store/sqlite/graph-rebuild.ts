@@ -1,7 +1,6 @@
 // hippo.db's GraphRebuild group: a rebuild's ops through the row writers in graph-writes.ts, one transaction a call.
 import { type DatabaseSyncLike, SLEEP_DB_WAIT_MS } from '../../db/index.js';
 import { clock } from '../../base/util/write-budget.js';
-import { storedGraphOn } from './graph-reads.js';
 import type {
   DesiredRelation,
   GraphOp,
@@ -9,7 +8,7 @@ import type {
   ApplyGraphOpsResult,
   GraphRebuild,
 } from '../port/graph-rebuild.js';
-import type { StoredGraph } from '../port/graph-reads.js';
+import type { Sync } from './served.js';
 import {
   deleteEntityRow,
   deleteRelationRow,
@@ -74,14 +73,13 @@ function applyGraphOpsOn(
   ops: readonly GraphOp[],
   opts: ApplyGraphOpsOptions,
 ): ApplyGraphOpsResult {
-  const now = opts.clock ?? clock;
-  const begunAt = now();
+  const begunAt = clock();
   let next = opts.from;
   let skipped = 0;
   while (next < ops.length) {
     if (!applyGraphOp(db, tenantId, ops[next])) skipped += 1;
     next += 1;
-    if (now() - begunAt >= opts.holdMs) break;
+    if (clock() - begunAt >= opts.holdMs) break;
   }
   return { next, skipped };
 }
@@ -97,26 +95,9 @@ function applyGraphOpsAt(
   return runGraphRebuildTransaction(db, tenantId, (tx) => applyGraphOpsOn(tx, tenantId, ops, opts));
 }
 
-/** Reads the stored graph, diffs it with `diff` and applies every op under one lock, so two concurrent rebuilds
- * serialize instead of both inserting a missing row. Returns how many ops were skipped as stale. */
-function rebuildGraphAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  memoryIds: readonly string[],
-  diff: (stored: StoredGraph) => readonly GraphOp[],
-): number {
-  return runGraphRebuildTransaction(db, tenantId, (tx) => {
-    const ops = diff(storedGraphOn(tx, tenantId, memoryIds));
-    return applyGraphOpsOn(tx, tenantId, ops, { from: 0, holdMs: Infinity }).skipped;
-  });
-}
-
 // Sleep's wait, not a request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
 const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
-export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {
-  return {
-    ...bound<Pick<GraphRebuild, 'applyOps'>>(on, { applyOps: applyGraphOpsAt }, openForChunk),
-    ...bound<Pick<GraphRebuild, 'rebuild'>>(on, { rebuild: rebuildGraphAt }),
-  };
+export function sqliteGraphRebuild(on: OnHandle): Sync<GraphRebuild> {
+  return bound<GraphRebuild>(on, { applyOps: applyGraphOpsAt }, openForChunk);
 }
