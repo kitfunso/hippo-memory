@@ -10,7 +10,6 @@ import {
   objectGet,
   objectList,
   objectStates,
-  objectSupersede,
   type ObjectWrites,
   type WriteOrigin,
 } from '../../api/objects/objects.js';
@@ -136,10 +135,12 @@ async function supersedeVersion<K extends VersionedKindName, B>(
   if (body === undefined) {
     fail(`hippo ${kind.names.cmd} supersede requires ${kind.bodyRequired} for the new version.`);
   }
+  const existing = foundOrExit(await objectGet(ctx, kind.kind, id), kind.names.noun, id);
   const from = { id, changeSummary: nonEmptyStringFlag(flags, 'change') };
-  const next = (existing: ObjectByKind[K]): ObjectWrites[K] => kind.write(kind.keyOf(existing), body, from);
-  const found = await refusalExits(() => objectSupersede(ctx, kind.kind, id, next, shellFolder()));
-  const created = foundOrExit(found, kind.names.noun, id);
+  // The lookup stays outside refusalExits so a store error reaches runCli; the save's own check is the active-state one.
+  const created = await refusalExits(() =>
+    objectCreate(ctx, kind.kind, kind.write(kind.keyOf(existing), body, from), shellFolder()),
+  );
   printSaved(`${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`, created);
 }
 
