@@ -1,6 +1,7 @@
 import { compareSemver } from '../base/util/version.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
+import { cachedStatement } from './statement-cache.js';
 
 export const META_TABLE_DDL = `
     CREATE TABLE IF NOT EXISTS meta (
@@ -15,7 +16,9 @@ export function ensureMetaTable(db: DatabaseSyncLike): void {
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {
   if (!tableExists(db, 'meta')) return 0;
-  const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value?: string } | undefined;
+  const row = cachedStatement(db, `SELECT value FROM meta WHERE key = 'schema_version'`).get() as
+    | { value?: string }
+    | undefined;
   const version = Number(row?.value ?? 0);
   return Number.isFinite(version) ? version : 0;
 }
@@ -23,32 +26,33 @@ export function getSchemaVersion(db: DatabaseSyncLike): number {
 /** SQLite's own `user_version` stamp, which can differ from the `meta` schema_version row. */
 export function pragmaUserVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA user_version always answers one row.
-  return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+  return (cachedStatement(db, 'PRAGMA user_version').get() as { user_version: number }).user_version;
 }
 
 /** The connection's commit counter: it moves when another connection commits. */
 export function pragmaDataVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA data_version always answers one row.
-  return (db.prepare('PRAGMA data_version').get() as { data_version: number }).data_version;
+  return (cachedStatement(db, 'PRAGMA data_version').get() as { data_version: number }).data_version;
 }
 
 export function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO meta(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
   ).run(String(version));
   db.exec(`PRAGMA user_version = ${Math.max(0, Math.trunc(version))}`);
 }
 
 export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): string {
-  const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
+  const row = cachedStatement(db, `SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
   return row?.value ?? fallback;
 }
 
 export function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
-  db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
-    key,
-    value,
-  );
+  cachedStatement(
+    db,
+    `INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+  ).run(key, value);
 }
 
 /**

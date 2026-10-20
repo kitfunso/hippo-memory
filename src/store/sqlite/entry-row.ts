@@ -1,18 +1,12 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import {
-  type DatabaseSyncLike,
-  ftsRowCounts,
-  openHippoDb,
-  isFtsAvailable,
-  repairFtsDrift,
-  setFtsInSync,
-} from '../../db/index.js';
+import { type DatabaseSyncLike, ftsRowCounts, isFtsAvailable, repairFtsDrift, setFtsInSync } from '../../db/index.js';
 import { fallbackOrigin, originFromSource } from '../../base/scope/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { StoreFiles } from './open.js';
 import { chunked } from '../../base/util/chunked.js';
+import { MEMORY_ROW_COLUMNS } from './rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../base/util/sql.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a sound. */
@@ -22,7 +16,7 @@ function rejectLegacyTenantKey(entry: MemoryEntry): void {
   }
 }
 
-export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
+export function upsertEntryRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
   rejectLegacyTenantKey(entry);
   checkRejectionGuard(db, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
@@ -30,52 +24,11 @@ export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: Memory
 
 /** The row alone, with no rejection guard or full-text row, for `upsertEntryRow` and for `batchWriteAndDelete`, which
  * probes tombstones and indexes per batch. Returns whether the row is new. */
-export function upsertMemoryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): boolean {
+export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boolean {
   const isNewRow = db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(entry.id) === undefined;
   db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
   return isNewRow;
 }
-
-/** The columns a row write sets, in memoryRowValues' order; the upsert and the batch update share it. */
-const MEMORY_ROW_COLUMNS = [
-  'id',
-  'created',
-  'last_retrieved',
-  'retrieval_count',
-  'strength',
-  'half_life_days',
-  'layer',
-  'tags_json',
-  'emotional_valence',
-  'schema_fit',
-  'source',
-  'outcome_score',
-  'outcome_positive',
-  'outcome_negative',
-  'conflicts_with_json',
-  'pinned',
-  'confidence',
-  'content',
-  'parents_json',
-  'starred',
-  'trace_outcome',
-  'source_session_id',
-  'valid_from',
-  'superseded_by',
-  'extracted_from',
-  'dag_level',
-  'dag_parent_id',
-  'kind',
-  'scope',
-  'owner',
-  'artifact_ref',
-  'tenant_id',
-  'origin_project',
-  'descendant_count',
-  'earliest_at',
-  'latest_at',
-  'dag_level_3_built_at',
-] as const;
 
 const UPDATED_COLUMNS = MEMORY_ROW_COLUMNS.slice(1);
 
@@ -149,7 +102,7 @@ function markFtsDrifted(db: DatabaseSyncLike): void {
   }
 }
 
-export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry, isNewRow = false): void {
+export function syncFtsRow(db: DatabaseSyncLike, entry: MemoryEntry, isNewRow = false): void {
   if (!isFtsAvailable(db)) return;
   try {
     if (!isNewRow) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);
@@ -169,11 +122,11 @@ export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntr
   }
 }
 
-export function ftsRowExists(db: ReturnType<typeof openHippoDb>, id: string): boolean {
+export function ftsRowExists(db: DatabaseSyncLike, id: string): boolean {
   return db.prepare('SELECT id FROM memories_fts WHERE id = ?').get(id) !== undefined;
 }
 
-export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): void {
+export function deleteFtsRow(db: DatabaseSyncLike, id: string): void {
   if (!isFtsAvailable(db)) return;
   try {
     db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
@@ -189,11 +142,7 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
 
 /** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the whole index; then one
  * insert per row. */
-export function replaceFtsRows(
-  db: ReturnType<typeof openHippoDb>,
-  rows: readonly MemoryEntry[],
-  staleIds: readonly string[],
-): void {
+export function replaceFtsRows(db: DatabaseSyncLike, rows: readonly MemoryEntry[], staleIds: readonly string[]): void {
   if (!isFtsAvailable(db)) return;
   let kept: ReadonlySet<string> = new Set();
   if (staleIds.length > 0) {

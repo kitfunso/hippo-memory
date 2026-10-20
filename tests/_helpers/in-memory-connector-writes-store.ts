@@ -1,7 +1,7 @@
 // A store other than hippo.db for the ConnectorWrites group, built on the in-memory entry-writes store: it copies the event logs and
 // the quarantine records out of hippo.db once, then keeps both in memory and lands them exactly when the staged entry does.
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { EntryWrites, HippoStore } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { ConnectorEvent, ConnectorWrites } from '../../src/store/port.js';
@@ -49,7 +49,7 @@ const EVENTS_SQL = `SELECT 'slack' AS connector, event_id AS eventKey, memory_id
 const RECORDS_SQL = `SELECT tenant_id AS tenantId, memory_id AS memoryId, original_scope AS originalScope, reason, status, quarantined_at AS quarantinedAt
   FROM memory_quarantine ORDER BY quarantined_at, memory_id`;
 
-function onDb<T>(hippoRoot: string, read: (db: ReturnType<typeof openHippoDb>) => T): T {
+function onDb<T>(hippoRoot: string, read: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(hippoRoot);
   try {
     return read(db);

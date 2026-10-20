@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import { openHippoDb, isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
+import { isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
@@ -9,7 +9,7 @@ import { originInSql } from '../../base/scope/project-identity.js';
 import { topVectorMatches, type VectorIndex } from '../../db/vector-store.js';
 import { type MemoryRow, MEMORY_SELECT_COLUMNS, MEMORY_SEARCH_COLUMNS, rowToEntry } from './rows.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { placeholders } from '../../base/util/sql.js';
 import type { OriginFilter } from '../port/types.js';
@@ -63,7 +63,7 @@ interface SearchRowsOptions {
 }
 
 function loadSearchRows(
-  db: ReturnType<typeof openHippoDb>,
+  db: DatabaseSyncLike,
   query: string,
   limit: number,
   tenantId: TenantId,
@@ -255,8 +255,8 @@ export async function loadVectorCandidateEntriesAt(
   if (matches.length === 0) return [];
   const rows = cachedStatement(
     db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(matches.length)})`,
-  ).all(...matches.map((m) => m.id)) as MemoryRow[];
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))`,
+  ).all(JSON.stringify(matches.map((m) => m.id))) as MemoryRow[];
   const byId = new Map(rows.map((r) => [r.id, rowToEntry(r)]));
   return matches.flatMap((m) => byId.get(m.id) ?? []);
 }
@@ -273,6 +273,7 @@ export function pickRarestFtsQuery(
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
+  // One cached shape per term count: an IN list over a virtual table needs one mark per term to keep its lookups.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,

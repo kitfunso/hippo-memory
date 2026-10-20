@@ -6,6 +6,7 @@ import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { RejectedValueRow } from '../port/rejections.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 // SAFETY: every read cast to this row selects REJECTED_VALUE_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface RawRejectedValueRow {
@@ -35,12 +36,11 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
 /** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case cost; a miss ends the
  * guard. */
 export function findRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): RejectedValueRow | null {
-  const row = db
-    .prepare(
-      `SELECT ${REJECTED_VALUE_COLUMNS}
+  const row = cachedStatement(
+    db,
+    `SELECT ${REJECTED_VALUE_COLUMNS}
        FROM rejected_values WHERE tenant_id = ? AND digest = ?`,
-    )
-    .get(tenantId, digest) as RawRejectedValueRow | undefined;
+  ).get(tenantId, digest) as RawRejectedValueRow | undefined;
   return row ? rowToRejectedValue(row) : null;
 }
 
@@ -58,7 +58,8 @@ export function insertRejectedValue(
     normalizedChars: number;
   },
 ): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO rejected_values(tenant_id, digest, reason, rejected_by, rejected_at, source_memory_id, ` +
       `normalized_chars)
      VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -81,18 +82,20 @@ export function insertRejectedValue(
 
 /** Delete a tombstone by tenant + exact digest: the `unreject` verb, the only escape hatch. */
 export function deleteRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): boolean {
-  const result = db.prepare(`DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`).run(tenantId, digest);
+  const result = cachedStatement(db, `DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`).run(
+    tenantId,
+    digest,
+  );
   return (result.changes ?? 0) > 0;
 }
 
 /** List tombstones for a tenant, newest first: the `rejections` verb. */
 export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): RejectedValueRow[] {
-  const rows = db
-    .prepare(
-      `SELECT ${REJECTED_VALUE_COLUMNS}
+  const rows = cachedStatement(
+    db,
+    `SELECT ${REJECTED_VALUE_COLUMNS}
        FROM rejected_values WHERE tenant_id = ? ORDER BY rejected_at DESC, digest ASC`,
-    )
-    .all(tenantId) as RawRejectedValueRow[];
+  ).all(tenantId) as RawRejectedValueRow[];
   return rows.map(rowToRejectedValue);
 }
 
@@ -106,7 +109,7 @@ export function checkRejectionGuard(db: DatabaseSyncLike, tenantId: string, entr
 
   // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is read as a
   // tenantId-only upsert introduces content there.
-  const storedRow = db.prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
+  const storedRow = cachedStatement(db, `SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
     | { content: string; tenant_id: string }
     | undefined;
   const isNewRow = storedRow === undefined;

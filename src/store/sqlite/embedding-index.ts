@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { countAllEntriesAt, loadEntriesByIdsAt, loadEntryIdsPageAt } from './entry-reads.js';
+import { countAllEntriesAt, loadEntriesByIdsAt, loadEntryIdsByIdAt } from './entry-reads.js';
 import type { EmbeddingIndex } from '../port/embedding-index.js';
 import {
   type VectorRebuild,
@@ -44,7 +44,7 @@ function beginRebuild(open: Handles['open']): VectorRebuild {
 
 const entryRowsAt: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsPage' | 'entriesByIds' | 'coverage'>> = {
   entryCount: countAllEntriesAt,
-  entryIdsPage: (db, page) => loadEntryIdsPageAt(db, ALL_TENANTS, page),
+  entryIdsPage: loadEntryIdsByIdAt,
   entriesByIds: (db, ids) => loadEntriesByIdsAt(db, ids, ALL_TENANTS),
   coverage: vectorCoverageAt,
 };

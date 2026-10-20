@@ -64,7 +64,7 @@ describe('repairQualityOnce', () => {
 
   it('reads the tenant once per plan, and under its lock the apply reads only the rows it moves', () => {
     seed(root, CUT);
-    const tenantPage = /FROM memories WHERE tenant_id = \? ORDER BY created/;
+    const tenantPage = /FROM memories WHERE 1 AND tenant_id = \? ORDER BY created/;
     const preview = recordStatements(() =>
       repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect }),
     );
@@ -76,7 +76,7 @@ describe('repairQualityOnce', () => {
     expect(countMatching(statements, tenantPage)).toBe(1);
     expect(statements).toContain('BEGIN IMMEDIATE');
     expect(countMatching(locked, tenantPage)).toBe(0);
-    expect(countMatching(locked, /FROM memories WHERE id IN \(\?\)/)).toBeGreaterThan(0);
+    expect(countMatching(locked, /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)/)).toBeGreaterThan(0);
   });
 
   it('marks a clean store done without a backup', () => {

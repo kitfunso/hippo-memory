@@ -132,7 +132,7 @@ export type { LessonWrites } from './port/lesson-writes.js';
 export type { Ledger, LedgerTurn, PilotArmOptions } from './port/ledger.js';
 export type {
   EmbeddingIndex,
-  EntryIdPage,
+  IdPage,
   IdPageRequest,
   StoredVectorSummary,
   VectorCoverage,

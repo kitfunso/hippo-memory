@@ -2,7 +2,6 @@
 // so each method covers the whole store.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
-import type { EntryCursor } from './types.js';
 
 export interface EmbeddingIndex {
   /** Whether another model than `providerId` built the stored vectors; an unreadable index answers false. */
@@ -10,8 +9,8 @@ export interface EmbeddingIndex {
   /** Records `providerId`'s index identity as what built the vectors. */
   saveModel(providerId: string): Promise<void>;
   entryCount(): Promise<number>;
-  /** Up to `page.limit` memory ids, by created then id, after `page.after`; `next` is null on the last page. */
-  entryIdsPage(page: IdPageRequest): Promise<EntryIdPage>;
+  /** Up to `page.limit` memory ids in id order after `page.afterId`: a re-embed needs each row once, not time order. */
+  entryIdsPage(page: IdPageRequest): Promise<IdPage>;
   /** The rows of `ids` that exist, in no set order. */
   entriesByIds(ids: readonly string[]): Promise<MemoryEntry[]>;
   summary(): Promise<StoredVectorSummary>;
@@ -30,8 +29,8 @@ export interface EmbeddingIndex {
   closeRebuild(rebuild: string): Promise<void>;
   /** Drops the vectors of deleted memories. */
   pruneOrphans(): Promise<void>;
-  /** Up to `page.limit` ids with no vector, by created then id, after `page.after`; `next` is null on the last page. */
-  pendingIds(page: IdPageRequest): Promise<EntryIdPage>;
+  /** Up to `page.limit` ids with no vector, in id order after `page.afterId`. */
+  pendingIds(page: IdPageRequest): Promise<IdPage>;
   /** Replaces every particle with a fresh one per memory that has a stored vector; answers how many. */
   resetParticles(): Promise<number>;
   /** A first particle for `entry` at `vector`, unless it has one. */
@@ -46,15 +45,16 @@ export interface EmbeddingIndex {
 /** One memory's vector. */
 export type VectorRow = readonly [memoryId: string, vector: readonly number[]];
 
+/** A page in id order: up to `limit` ids after `afterId`, or from the first id when it is unset. */
 export interface IdPageRequest {
   readonly limit: number;
-  readonly after?: EntryCursor;
+  readonly afterId?: string;
 }
 
-/** EntryPage with only each row's id. */
-export interface EntryIdPage {
+/** A page of memory ids in id order, and the id the next page starts after; null on the last page. */
+export interface IdPage {
   readonly ids: string[];
-  readonly next: EntryCursor | null;
+  readonly next: string | null;
 }
 
 export interface VectorCoverage {

@@ -14,6 +14,7 @@ import type { StoreFiles } from './open.js';
 import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import type { ContinuityKey } from '../port/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
 export const HANDOFF_COLUMNS =
@@ -29,31 +30,30 @@ function insertHandoffRow(
   stamp: ReturnType<typeof continuityStamp> | null,
   now: string,
 ) {
-  return db
-    .prepare(
-      `\n      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, ` +
-        `scope, tenant_id, created_at, ` +
-        `constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)\n` +
-        `      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n    `,
-    )
-    .run(
-      handoff.sessionId,
-      handoff.repoRoot ?? null,
-      handoff.taskId ?? null,
-      handoff.summary,
-      handoff.nextAction ?? null,
-      JSON.stringify(handoff.artifacts ?? []),
-      handoff.scope ?? null,
-      tenantId,
-      now,
-      JSON.stringify(handoff.constraints ?? []),
-      handoff.evidence ? JSON.stringify(handoff.evidence) : null,
-      handoff.outcome ?? null,
-      handoff.targetRuntime ?? null,
-      handoff.cardId ?? null,
-      stamp?.owner ?? null,
-      stamp?.origin ?? null,
-    );
+  return cachedStatement(
+    db,
+    `\n      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, ` +
+      `scope, tenant_id, created_at, ` +
+      `constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)\n` +
+      `      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n    `,
+  ).run(
+    handoff.sessionId,
+    handoff.repoRoot ?? null,
+    handoff.taskId ?? null,
+    handoff.summary,
+    handoff.nextAction ?? null,
+    JSON.stringify(handoff.artifacts ?? []),
+    handoff.scope ?? null,
+    tenantId,
+    now,
+    JSON.stringify(handoff.constraints ?? []),
+    handoff.evidence ? JSON.stringify(handoff.evidence) : null,
+    handoff.outcome ?? null,
+    handoff.targetRuntime ?? null,
+    handoff.cardId ?? null,
+    stamp?.owner ?? null,
+    stamp?.origin ?? null,
+  );
 }
 
 /** Save a session handoff record; returns the persisted handoff. */
@@ -72,7 +72,7 @@ export function saveSessionHandoffAt(
   const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
 
   const id = Number(result.lastInsertRowid ?? 0);
-  const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`).get(id) as
+  const row = cachedStatement(db, `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`).get(id) as
     | SessionHandoffDbRow
     | undefined;
   if (!row) {
@@ -137,15 +137,16 @@ export function loadLatestHandoffAt(
 ): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
   const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT ${HANDOFF_COLUMNS}
     FROM session_handoffs
     WHERE ${conditions.join(' AND ')}
     ORDER BY created_at DESC, id DESC
     LIMIT 1
-  `)
-    .get(...params) as SessionHandoffDbRow | undefined;
+  `,
+  ).get(...params) as SessionHandoffDbRow | undefined;
 
   return row ? rowToSessionHandoff(row) : null;
 }
@@ -153,13 +154,14 @@ export function loadLatestHandoffAt(
 /** Load a specific handoff by its row ID. */
 export function loadHandoffByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
   assertTenantId('loadHandoffById', tenantId);
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT ${HANDOFF_COLUMNS}
     FROM session_handoffs
     WHERE id = ? AND tenant_id = ?
-  `)
-    .get(id, tenantId) as SessionHandoffDbRow | undefined;
+  `,
+  ).get(id, tenantId) as SessionHandoffDbRow | undefined;
 
   return row ? rowToSessionHandoff(row) : null;
 }
@@ -172,9 +174,9 @@ export function stampHandoffOutcomeAt(
   outcome: HandoffOutcome,
 ): number {
   assertTenantId('stampHandoffOutcome', tenantId);
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
   UPDATE session_handoffs SET outcome = ?
   WHERE tenant_id = ? AND session_id = ? AND outcome IS NULL
     AND id = (
@@ -183,8 +185,7 @@ export function stampHandoffOutcomeAt(
       ORDER BY created_at DESC, id DESC LIMIT 1
     )
     `,
-    )
-    .run(outcome, tenantId, sessionId, tenantId, sessionId);
+  ).run(outcome, tenantId, sessionId, tenantId, sessionId);
   return Number(result.changes ?? 0);
 }
 
@@ -199,35 +200,34 @@ function replaceTranscriptHandoffAt(
   const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key);
   const newest =
     `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC, id ` + `DESC LIMIT 1`;
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
     UPDATE session_handoffs SET repo_root = ?, task_id = ?, summary = ?, next_action = ?, artifacts_json = ?, scope =
     ?, created_at = ?,
       constraints_json = ?, evidence_json = ?, outcome = ?, target_runtime = ?, card_id = ?
     WHERE id = (${newest}) AND json_valid(evidence_json) AND json_extract(evidence_json, '$.derivedFrom') =
     'transcript'
   `,
-    )
-    .run(
-      handoff.repoRoot ?? null,
-      handoff.taskId ?? null,
-      handoff.summary,
-      handoff.nextAction ?? null,
-      JSON.stringify(handoff.artifacts ?? []),
-      handoff.scope ?? null,
-      new Date().toISOString(),
-      JSON.stringify(handoff.constraints ?? []),
-      handoff.evidence ? JSON.stringify(handoff.evidence) : null,
-      handoff.outcome ?? null,
-      handoff.targetRuntime ?? null,
-      handoff.cardId ?? null,
-      ...params,
-    );
+  ).run(
+    handoff.repoRoot ?? null,
+    handoff.taskId ?? null,
+    handoff.summary,
+    handoff.nextAction ?? null,
+    JSON.stringify(handoff.artifacts ?? []),
+    handoff.scope ?? null,
+    new Date().toISOString(),
+    JSON.stringify(handoff.constraints ?? []),
+    handoff.evidence ? JSON.stringify(handoff.evidence) : null,
+    handoff.outcome ?? null,
+    handoff.targetRuntime ?? null,
+    handoff.cardId ?? null,
+    ...params,
+  );
   if (Number(result.changes ?? 0) === 0) return null;
-  const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(...params) as
-    | SessionHandoffDbRow
-    | undefined;
+  const row = cachedStatement(db, `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(
+    ...params,
+  ) as SessionHandoffDbRow | undefined;
   return row ? rowToSessionHandoff(row) : null;
 }
 
@@ -324,13 +324,14 @@ export function writeSessionEndHandoffAt(
 
 function sessionOutcomeAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): HandoffOutcome | null {
   const content = (
-    db
-      .prepare(`
+    cachedStatement(
+      db,
+      `
     SELECT content FROM session_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = 'session_complete'
     ORDER BY created_at DESC, id DESC LIMIT 1
-  `)
-      .get(tenantId, sessionId) as { content?: string } | undefined
+  `,
+    ).get(tenantId, sessionId) as { content?: string } | undefined
   )?.content;
   return isHandoffOutcome(content) ? content : null;
 }

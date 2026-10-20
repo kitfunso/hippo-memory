@@ -7,6 +7,7 @@ import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
 import { errorMessage, log } from '../base/util/log.js';
+import { MAX_HOOK_FIELD_LEN } from '../base/util/limits.js';
 import type { Ledger } from '../store/port.js';
 import type {
   DeliveryBlockState,
@@ -195,7 +196,7 @@ function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   const hookEvent = hookPayloadString(init.stdinText, 'hook_event_name');
   const rawToolUseId = hookPayloadString(init.stdinText, 'tool_use_id')?.trim() ?? '';
   // Cut as failure_log cuts its payload fields: the payload is not trusted to be short.
-  const toolUseId = rawToolUseId !== '' ? rawToolUseId.slice(0, 128) : null;
+  const toolUseId = rawToolUseId !== '' ? rawToolUseId.slice(0, MAX_HOOK_FIELD_LEN) : null;
   const sessionState: DeliverySessionState = subagent
     ? 'subagent'
     : payloadSession !== null

@@ -25,7 +25,6 @@ import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.j
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { EntryCursor } from '../../store/port/types.js';
 
 const STORE_PAGE = 64;
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.
@@ -58,9 +57,9 @@ async function stageEmbeddingIndex(
   provider: EmbeddingProvider,
 ): Promise<number> {
   let staged = 0;
-  let after: EntryCursor | undefined;
+  let afterId: string | undefined;
   do {
-    const page = await index.entryIdsPage({ limit: ID_PAGE, after });
+    const page = await index.entryIdsPage({ limit: ID_PAGE, afterId });
     for await (const entries of entryPages(index, page.ids)) {
       // A hard transport or auth failure throws here, before the commit, so the old index and identity stay.
       const vectors = await provider.embed(
@@ -69,8 +68,8 @@ async function stageEmbeddingIndex(
       );
       staged += await index.stageRebuild(rebuild, embeddedRows(entries, vectors));
     }
-    after = page.next ?? undefined;
-  } while (after);
+    afterId = page.next ?? undefined;
+  } while (afterId !== undefined);
   return staged;
 }
 
@@ -463,14 +462,14 @@ async function backfillAllPending(
   model: string,
 ): Promise<{ count: number; backfillError: unknown }> {
   let count = 0;
-  let after: EntryCursor | undefined;
+  let afterId: string | undefined;
   do {
-    const page = await index.pendingIds({ limit: ID_PAGE, after });
+    const page = await index.pendingIds({ limit: ID_PAGE, afterId });
     const done = await backfillPending(index, provider, page.ids, model);
     count += done.count;
     if (done.backfillError) return { count, backfillError: done.backfillError };
-    after = page.next ?? undefined;
-  } while (after);
+    afterId = page.next ?? undefined;
+  } while (afterId !== undefined);
   return { count, backfillError: undefined };
 }
 
