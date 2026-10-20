@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeAll, vi, beforeEach, afterEach } from 'vitest';
 import { mintAdminKey } from '../_helpers/admin-server.js';
-import { rmSync, existsSync, writeFileSync, statSync, readFileSync } from 'node:fs';
+import { rmSync, existsSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { detectServer, type ServerInfo } from '../../src/server/server-detect.js';
 import { boundPort } from '../_helpers/listen.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
@@ -35,12 +36,6 @@ function makeWorkspace(): string {
   return home;
 }
 
-// writePidfile renames a finished temp file into place, so an existing pidfile is always whole JSON.
-function pidfilePort(pidfilePath: string): number {
-  // SAFETY: serve() writes the pidfile as JSON with the numeric port it bound (src/server/server-detect.ts writePidfile).
-  return (JSON.parse(readFileSync(pidfilePath, 'utf8')) as { port: number }).port;
-}
-
 interface SpawnedServer {
   child: ChildProcessByStdio<null, Readable, Readable>;
   port: number;
@@ -65,23 +60,18 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
     stderrBuf += chunk.toString('utf8');
   });
 
-  // Wait for the pidfile to appear AND /health to respond. The pidfile-only
-  // gate is racy because writePidfile fires synchronously before the listen
-  // ack returns to userland; combine with a real health probe to be safe.
+  // detectServer is the CLI's own reader: it skips the empty claim serve() writes first and answers only once /health
+  // reports the pidfile's started_at.
   const pidfilePath = join(workspace, '.hippo', 'server.pid');
-  let port = 0;
+  const ready: ServerInfo[] = [];
   await waitFor(
     async () => {
       if (child.exitCode !== null) {
         throw new Error(`hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`);
       }
-      if (!existsSync(pidfilePath)) return false;
-      port = pidfilePort(pidfilePath);
-      try {
-        return (await fetch(`http://127.0.0.1:${port}/health`)).status === 200;
-      } catch {
-        return false; // server not up yet
-      }
+      const info = await detectServer(join(workspace, '.hippo'));
+      if (info !== null) ready.push(info);
+      return ready.length > 0;
     },
     { timeoutMs: 10_000, intervalMs: 100, what: 'server ready' },
   ).catch((err: Error) => {
@@ -107,7 +97,9 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
     }
   };
 
-  return { child, port, url: `http://127.0.0.1:${port}`, stop };
+  const [info] = ready;
+  if (info === undefined) throw new Error('server ready without pidfile info');
+  return { child, port: info.port, url: info.url, stop };
 }
 
 interface CliResult {
