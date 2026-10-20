@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { Card } from '../../src/base/records/card.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, outsideRequestStores } from '../../src/db/index.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -136,12 +136,15 @@ function recordPrepares<T>(fn: () => T) {
   }
 }
 
+// Each measured call runs outside the test's request, so it prepares on a fresh connection as one CLI command does.
 describe('statements one completion prepares and runs', () => {
   // Writes three families of 1, 10 and 100 cards to a real store.
   it('do not grow with the child count: one read of the children and one update for all it promotes', () => {
     const runs = [1, 10, 100].map((children) => {
       const family = seedFamily(children);
-      const log = recordStatements(() => recordPrepares(() => completeCard(root, TENANT, family.parent, 'success')));
+      const log = recordStatements(() =>
+        recordPrepares(() => outsideRequestStores(() => completeCard(root, TENANT, family.parent, 'success'))),
+      );
       expect(log.result.result?.promotedChildren).toHaveLength(family.promotable.size);
       return { prepared: log.result.prepared, run: log.statements };
     });
@@ -158,7 +161,9 @@ describe('statements one completion prepares and runs', () => {
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents = Array.from({ length: 20 }, (_, i) => createCard(root, TENANT, { title: `parent ${i}` }).id);
     const log = recordStatements(() =>
-      recordPrepares(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
+      recordPrepares(() =>
+        outsideRequestStores(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
+      ),
     );
     expect(countMatching(log.result.prepared, 'INSERT INTO card_deps')).toBe(1);
     expect(countMatching(log.statements, 'INSERT INTO card_deps')).toBe(20);
