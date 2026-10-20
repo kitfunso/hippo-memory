@@ -1,13 +1,11 @@
 // `hippo capture --last-session` for a caller whose transcript was read on another machine: its project names the rows,
 // never the store's folder.
 import { BadRequestError } from '../core/api-errors.js';
-import type { Context } from '../api/types.js';
+import type { LocalContext } from '../api/types.js';
 import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { longestWord, storedTextKeys } from '../util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
-import { isLocalStore } from '../store/local/index.js';
-import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { extractFromTexts } from './extract.js';
 
@@ -45,14 +43,13 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
  * Synchronous from the dedup read to the last write, so no other write lands between them. No console output and no
  * process.exit.
  */
-export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): SessionCaptureResult {
+export function captureSessionTexts(ctx: LocalContext, req: SessionCaptureRequest): SessionCaptureResult {
   assertSessionCapture(req);
   const extracted = extractFromTexts(req.texts.map(scrubForSharing));
   // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
-  // The dedup read and the writes both sit in the request's own hippo.db; ./server publishes this with a plain Context.
-  if (!isLocalStore(ctx.store)) throw new StoreNotPortedError(ctx.store.kind, 'localFiles');
+  // The dedup read and the writes both sit in the request's own hippo.db, so only a store with local files fits.
   const local = ctx.store.localFiles;
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other
   // projects' rows do not.

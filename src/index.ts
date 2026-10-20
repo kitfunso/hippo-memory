@@ -65,6 +65,8 @@ export {
 } from './core/card.js';
 export { ConsolidationResult } from './consolidate/run.js';
 export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
+// Named in the signatures of sleep and consolidate, so a caller needs them to type its own variable.
+export type { LocalContext, LocalStore };
 /** Sleeps the whole store under `ctx`, whose store carries the local files a sleep pass works on. */
 export async function sleep(ctx: LocalContext, opts?: SleepOpts): Promise<SleepResult> {
   return sleepStore(ctx, opts);
