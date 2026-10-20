@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/core/search-types.js';
-import { getReranker } from '../../src/rerankers/index.js';
-import { createClefReranker, parseClefReply, type ClefModel } from '../../src/rerankers/clef.js';
-import type { RerankerFn } from '../../src/rerankers/types.js';
-import { cliReranker } from '../../src/cli/api-context.js';
-import { envClefSettings } from '../../src/util/env.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
+import { getReranker } from '../../src/domain/rerankers/index.js';
+import { createClefReranker, parseClefReply, type ClefModel } from '../../src/domain/rerankers/clef.js';
+import type { RerankerFn } from '../../src/domain/rerankers/types.js';
+import { cliReranker } from '../../src/surface/cli/api-context.js';
+import { envClefSettings } from '../../src/base/util/env.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 
 /** `model` with the CLEF transport the environment names at each call, as a root reads it into RuntimeSettings. */
 function clefUnderEnv(model: ClefModel): RerankerFn {

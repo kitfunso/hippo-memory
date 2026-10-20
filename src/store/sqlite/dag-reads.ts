@@ -1,7 +1,7 @@
 // hippo.db's DagReads group: the reads session assembly and summary drill-down run, with a summary's descendants a page
 // at a time.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import {
   selectEntriesByIds,
   TENANT_IS,
@@ -9,12 +9,12 @@ import {
   loadSessionRawMemoriesAt,
   selectChildrenByParent,
 } from './entry-reads.js';
-import { chunked } from '../../util/chunked.js';
+import { chunked } from '../../base/util/chunked.js';
 import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../port.js';
 import type { Sync } from './served.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import { placeholders } from '../../util/sql.js';
-import { descendantAdmits } from '../../core/read-admission.js';
+import { placeholders } from '../../base/util/sql.js';
+import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';

@@ -1,6 +1,6 @@
 // hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up the mirror folders.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { duplicateKey } from '../../util/same-text.js';
+import { duplicateKey } from '../../base/util/same-text.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';

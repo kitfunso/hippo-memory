@@ -80,7 +80,7 @@ export const v35: Migration = {
   version: 35,
   up: (db) => {
     // project_brief first-class object: repo-scoped `summary` superseding like v34 skills; refreshBrief
-    // (objects/project-briefs.ts) builds it from receipts.
+    // (domain/objects/project-briefs.ts) builds it from receipts.
     // The schema needs only `repo`; column names were checked against SQLite reserved words.
     if (!tableExists(db, 'project_briefs')) {
       db.exec(PROJECT_BRIEFS_TABLE);

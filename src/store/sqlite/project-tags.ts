@@ -1,10 +1,10 @@
 // hippo.db's ProjectTags group: the rows `hippo projects` and sleep's tag repair read and write on one handle, so the
-// merge and repair rules in src/sharing/project-merge.ts decide without holding it.
+// merge and repair rules in src/domain/sharing/project-merge.ts decide without holding it.
 import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { withBackup } from '../../db/backup.js';
-import { calculateStrength, type LossAversion } from '../../core/memory.js';
-import { MAX_AUDIT_LIMIT } from '../../util/limits.js';
-import { READ_PAGE_ROWS, rowsInPages } from '../../util/pages.js';
+import { calculateStrength, type LossAversion } from '../../base/memory/memory.js';
+import { MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
+import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import {
   compactionOriginsWithCwd,

@@ -1,10 +1,10 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
-import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
+import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type { HippoStore } from '../store/port.js';
-import type { HippoConfig } from '../core/config.js';
+import type { HippoConfig } from '../base/config/config.js';
 import type { OptionalGroup, StoreWith } from '../store/port.js';
-import type { ConfiguredFolder } from '../search/embed-memories.js';
+import type { ConfiguredFolder } from '../domain/search/embed-memories.js';
 import type { CallerState } from './callers.js';
 import type { LocalStore, StoreReach } from '../store/local/index.js';
 

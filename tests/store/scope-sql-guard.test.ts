@@ -8,7 +8,7 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 const HAND_ROLLED =
   /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
 // The deny list lives with the JS predicates; the SQL that reads it lives with the other SQL twins.
-const SCOPE_MODULES = [join('core', 'recall-scope.ts'), join('store', 'sqlite', 'rule-sql.ts')];
+const SCOPE_MODULES = [join('base', 'scope', 'recall-scope.ts'), join('store', 'sqlite', 'rule-sql.ts')];
 const ALLOWED = new Set(SCOPE_MODULES);
 // Migrations stamp the legacy marker once, as data, and never read through it.
 const EXEMPT_DIR = `db${sep}migrations${sep}`;

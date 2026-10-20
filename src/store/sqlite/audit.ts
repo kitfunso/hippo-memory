@@ -1,14 +1,14 @@
-import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
+import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { keysetAfter } from '../../util/keyset.js';
-import type { JsonValue } from '../../util/json.js';
-import { parseStoredObject } from '../../util/stored-json.js';
+import { keysetAfter } from '../../base/util/keyset.js';
+import type { JsonValue } from '../../base/util/json.js';
+import { parseStoredObject } from '../../base/util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent, JsonObject } from '../port/types.js';
-import type { AuditOp } from '../../core/audit-ops.js';
+import type { AuditOp } from '../../base/records/audit-ops.js';
 import type { QueryAuditOptions } from '../port/audit-log.js';
 import type { AuditPrune } from '../port/audit-maintenance.js';
 import type { ListAuditAfterOpts } from '../port/key-audit.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { cachedStatement } from './statement-cache.js';
 
 // node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a

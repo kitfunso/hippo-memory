@@ -2,17 +2,17 @@
 // the same name, which takes its store from the caller. The eval kit's embedMemory and loadRecallSearchEntries take a
 // folder the same way.
 
-import type { MemoryEntry } from '../core/memory.js';
-import type { SearchResult } from '../core/search-types.js';
+import type { MemoryEntry } from '../base/memory/memory.js';
+import type { SearchResult } from '../base/rank/search-types.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 import type { OriginFilter } from '../store/port/types.js';
 import { loadRecallSearchEntries as loadRecallByOptions } from '../store/search-rows.js';
-import type { TenantId } from '../util/tenant.js';
-import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../search/embed-memories.js';
-import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../search/hybrid.js';
-import { loadConfig } from '../core/config.js';
-import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../search/physics-search.js';
-import type { VectorSource } from '../search/vector.js';
+import type { TenantId } from '../base/util/tenant.js';
+import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../domain/search/embed-memories.js';
+import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
+import { loadConfig } from '../base/config/config.js';
+import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
+import type { VectorSource } from '../domain/search/vector.js';
 
 /** hippo.db under `hippoRoot` when the caller passed no store. */
 export function folderVectorSource({

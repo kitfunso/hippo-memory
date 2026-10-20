@@ -31,17 +31,20 @@ describe('check-cli-recall-writes: memory writers and the store opener', () => {
 
   it('flags each writer a CLI file names, imports included, and skips comments and other folders', () => {
     file(
-      'cli/watch.ts',
-      "import { writeEntry } from '../store/entry-writes.js';\n// deleteEntry in a comment\nwriteEntry(root, entry);\n",
+      'surface/cli/watch.ts',
+      "import { writeEntry } from '../../store/entry-writes.js';\n// deleteEntry in a comment\nwriteEntry(root, entry);\n",
     );
-    file('cli/batch.ts', 'batchWriteAndDelete(root, [], []);\ndeleteEntryCore(db, id);\ndeleteEntry(root, id);\n');
+    file(
+      'surface/cli/batch.ts',
+      'batchWriteAndDelete(root, [], []);\ndeleteEntryCore(db, id);\ndeleteEntry(root, id);\n',
+    );
     file('api/refine.ts', "import { writeEntry } from '../store/entry-writes.js';\n");
     expect(findCliStoreWrites(dir)).toEqual([
-      { file: 'cli/batch.ts', line: 1, name: 'batchWriteAndDelete' },
-      { file: 'cli/batch.ts', line: 2, name: 'deleteEntryCore' },
-      { file: 'cli/batch.ts', line: 3, name: 'deleteEntry' },
-      { file: 'cli/watch.ts', line: 1, name: 'writeEntry' },
-      { file: 'cli/watch.ts', line: 3, name: 'writeEntry' },
+      { file: 'surface/cli/batch.ts', line: 1, name: 'batchWriteAndDelete' },
+      { file: 'surface/cli/batch.ts', line: 2, name: 'deleteEntryCore' },
+      { file: 'surface/cli/batch.ts', line: 3, name: 'deleteEntry' },
+      { file: 'surface/cli/watch.ts', line: 1, name: 'writeEntry' },
+      { file: 'surface/cli/watch.ts', line: 3, name: 'writeEntry' },
     ]);
   });
 
@@ -51,24 +54,24 @@ describe('check-cli-recall-writes: memory writers and the store opener', () => {
   });
 
   it('excepts no CLI file from the store opener, projects and sleep included', () => {
-    file('cli/projects.ts', 'const db = openHippoDb(root);\nwriteEntry(root, entry);\n');
-    file('cli/sleep.ts', 'const db = openHippoDb(root);\n');
+    file('surface/cli/projects.ts', 'const db = openHippoDb(root);\nwriteEntry(root, entry);\n');
+    file('surface/cli/sleep.ts', 'const db = openHippoDb(root);\n');
     expect(STORE_WRITER_EXCEPTIONS).toEqual({});
     expect(findCliStoreWrites(dir)).toEqual([
-      { file: 'cli/projects.ts', line: 1, name: 'openHippoDb' },
-      { file: 'cli/projects.ts', line: 2, name: 'writeEntry' },
-      { file: 'cli/sleep.ts', line: 1, name: 'openHippoDb' },
+      { file: 'surface/cli/projects.ts', line: 1, name: 'openHippoDb' },
+      { file: 'surface/cli/projects.ts', line: 2, name: 'writeEntry' },
+      { file: 'surface/cli/sleep.ts', line: 1, name: 'openHippoDb' },
     ]);
   });
 
   it('exits 1 naming the file and line, and 0 once the import is gone', () => {
     const run = (): { status: number | null; stdout: string; stderr: string } =>
       spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf-8' });
-    file('cli/watch.ts', "import { writeEntry } from '../store/entry-writes.js';\n");
+    file('surface/cli/watch.ts', "import { writeEntry } from '../../store/entry-writes.js';\n");
     const failed = run();
     expect(failed.status).toBe(1);
-    expect(failed.stderr).toContain(`${dir}/cli/watch.ts:1: writeEntry`);
-    file('cli/watch.ts', "import { remember } from '../api/index.js';\n");
+    expect(failed.stderr).toContain(`${dir}/surface/cli/watch.ts:1: writeEntry`);
+    file('surface/cli/watch.ts', "import { remember } from '../../api/index.js';\n");
     const passed = run();
     expect(passed.status).toBe(0);
     expect(passed.stdout).toContain('only through functions that take the root. OK.');

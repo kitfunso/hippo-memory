@@ -6,12 +6,12 @@ import { join } from 'node:path';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../../src/entry/store-kit.js';
 import { folderVectorSource, hybridSearch } from '../../src/entry/folder-search.js';
-import { resolveVectorArm } from '../../src/search/vector.js';
+import { resolveVectorArm } from '../../src/domain/search/vector.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
-import { log as hippoLog } from '../../src/util/log.js';
-import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import { log as hippoLog } from '../../src/base/util/log.js';
+import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
@@ -30,7 +30,7 @@ import { inMemoryVectorStore } from '../_helpers/in-memory-vector-store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

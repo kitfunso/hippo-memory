@@ -1,13 +1,13 @@
 // rankRecall in process: what it ranks, what it hands back for the caller to write, where haltBefore stops it, and its re-rank stages.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
-import type { RerankerFn } from '../../src/rerankers/types.js';
+import type { RerankerFn } from '../../src/domain/rerankers/types.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 

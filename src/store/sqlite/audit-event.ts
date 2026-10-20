@@ -1,11 +1,11 @@
-import { errorMessage } from '../../util/log.js';
+import { errorMessage } from '../../base/util/log.js';
 import { openHippoDb } from '../../db/index.js';
 import { appendAuditEvent } from './audit.js';
-import { reportAuditWriteFailure } from '../../core/audit-report.js';
-import { RejectedValueError } from '../../core/api-errors.js';
-import type { JsonValue } from '../../util/json.js';
-import { CLI_ACTOR } from '../../core/actor.js';
-import type { AuditOp } from '../../core/audit-ops.js';
+import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
+import type { JsonValue } from '../../base/util/json.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
+import type { AuditOp } from '../../base/records/audit-ops.js';
 
 export interface AuditOptions {
   readonly targetId?: string;

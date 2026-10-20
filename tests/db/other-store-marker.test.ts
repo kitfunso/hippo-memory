@@ -13,7 +13,7 @@ import {
   withSharedStoreHandles,
   withSqliteAllowed,
 } from '../../src/db/index.js';
-import { PROTECTED_ROWS as repairProtection } from '../../src/core/memory-audit.js';
+import { PROTECTED_ROWS as repairProtection } from '../../src/base/memory/memory-audit.js';
 import * as serverEntry from '../../src/server.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';

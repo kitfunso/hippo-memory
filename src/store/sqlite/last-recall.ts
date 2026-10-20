@@ -11,7 +11,7 @@ import type { Handles, StoreFiles } from './open.js';
 import type { HippoIndex } from './rows.js';
 import type { EntryTarget } from '../port/entry-writes.js';
 import { bound, boundWithFiles, type FileBodies } from './bound.js';
-import type { LossAversion } from '../../core/memory.js';
+import type { LossAversion } from '../../base/memory/memory.js';
 import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites } from '../port.js';
 import type { Sync } from './served.js';

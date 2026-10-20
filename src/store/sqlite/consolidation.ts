@@ -1,5 +1,5 @@
 // hippo.db's Consolidation group: sleep's reads and writes, the DAG summaries, half-life moves and tombstone checks.
-import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
 import {
   type DatabaseSyncLike,
   withWriteScope,
@@ -8,18 +8,18 @@ import {
   closeHippoDb,
   SLEEP_DB_WAIT_MS,
 } from '../../db/index.js';
-import { assertTenantId } from '../../core/tenant-id.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { findRejectedValue } from './rejection.js';
-import { rejectionDigest } from '../../core/rejection-digest.js';
-import { log, errorMessage } from '../../util/log.js';
+import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { log, errorMessage } from '../../base/util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow, ftsDriftAt } from './entry-row.js';
-import { chunked } from '../../util/chunked.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
-import { DIGEST_DISPLAY_CHARS } from '../../util/token-text.js';
-import { placeholders } from '../../util/sql.js';
-import { CLI_ACTOR } from '../../core/actor.js';
+import { chunked } from '../../base/util/chunked.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
+import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
+import { placeholders } from '../../base/util/sql.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type {
   RebuildPatch,
   HalfLifeMove,
@@ -39,7 +39,7 @@ import {
 } from './entry-reads.js';
 import { setHalfLivesAt, writeEntriesTogetherAt, writeEntryAt } from './entry-writes.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, type Handles, waitingOpener } from './open.js';
-import { reportAuditWriteFailure } from '../../core/audit-report.js';
+import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import {
   commitInChunksAt,
   deleteEntriesOneByOneAt,
@@ -63,7 +63,7 @@ import {
 } from './bound.js';
 import type { AppendAuditOpts } from '../port/types.js';
 
-// Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private
+// Sleep-cycle rebuild surface: lives here, not in src/domain/consolidate/dag.ts, because it needs module-private
 // MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
 // orchestrator rebuildDirtySummaries().
 

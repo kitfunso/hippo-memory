@@ -1,4 +1,4 @@
-import { errorFields, errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { isSqliteBusy } from './busy-code.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 

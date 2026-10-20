@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 
 describe('README MCP tool list', () => {
   it('names exactly the tools the MCP server lists', async () => {

@@ -7,11 +7,11 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { remember } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
 beforeEach(() => {

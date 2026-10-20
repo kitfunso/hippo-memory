@@ -8,9 +8,9 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { hybridSearch } from '../dist/index.js';
-import { buildCorpus } from '../dist/search/bm25.js';
+import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { loadAllEntries } from '../dist/entry/testing.js';
-import { cliReranker as getReranker } from '../dist/cli/api-context.js';
+import { cliReranker as getReranker } from '../dist/surface/cli/api-context.js';
 
 // Literal, not new Date(): a bare Date() drifted 26min between Lane 12/13 runs
 // and moved a rank. Passing `now` below also short-circuits HIPPO_FAKE_NOW.
@@ -200,7 +200,7 @@ for (let i = 0; i < cases.length; i++) {
 console.error(`phase 1 done: ${rows.length} candidate sets built, cross-encoder scored\n`);
 
 // ---------- Phase 2: Jev calls, pooled for wall-clock, one call per query ----------
-// Aggregate-only spy: dist/rerankers/jev.ts is frozen for this run (a second
+// Aggregate-only spy: dist/domain/rerankers/jev.ts is frozen for this run (a second
 // agent is building concurrently), so outcomes are read off fetch, not edited in.
 const jevStats = { calls: 0, ok: 0, failed: 0, partial: 0 };
 const realFetch = globalThis.fetch;

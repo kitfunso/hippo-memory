@@ -1,17 +1,17 @@
 // Test seams for add-ons and hippo's own suite. Not for production code; no semver guarantee beyond the major version.
-import { fromWire, toWire, type MemoryWire } from '../core/memory-wire.js';
+import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
 import type { openHippoDb } from '../db/index.js';
 import { upsertEntryRow } from '../store/sqlite/entry-row.js';
 import type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
 import { batchWriteAndDelete, loadAllEntries, writeEntry } from '../store/sqlite/folder-forms.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
-export { ambientSecretAdmit } from '../core/read-admission.js';
+export { ambientSecretAdmit } from '../base/scope/read-admission.js';
 export { initStore } from '../store/sqlite/handles.js';
 export { loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/folder-forms.js';
 export type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
 export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
 // Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these forms.
-export type { MemoryWire } from '../core/memory-wire.js';
+export type { MemoryWire } from '../base/memory/memory-wire.js';
 export {
   ambientSecretAdmitWire,
   calculateStrengthWire,
@@ -23,7 +23,7 @@ export {
   type WireStrengthInputs,
 } from './wire-kit.js';
 // Benchmarks and token evals seed and read hippo.db on a handle they open themselves.
-export { resolveTenantId } from '../server/boot.js';
+export { resolveTenantId } from '../surface/server/boot.js';
 export { upsertEntryRow } from '../store/sqlite/entry-row.js';
 export { writeEntryDbOnly } from '../store/sqlite/entry-writes.js';
 export { buildIndexFromDb, writeIndexMirror } from '../store/sqlite/mirrors.js';

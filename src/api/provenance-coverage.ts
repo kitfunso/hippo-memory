@@ -1,4 +1,4 @@
-import { MemoryEntry } from '../core/memory.js';
+import { MemoryEntry } from '../base/memory/memory.js';
 
 export interface ProvenanceCoverage {
   rawTotal: number;

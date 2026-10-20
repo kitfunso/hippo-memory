@@ -1,5 +1,5 @@
 // The strings a context block prints. The budget prices these same strings, so selection and print cannot drift.
-import { MINUTE_MS } from '../util/time.js';
+import { MINUTE_MS } from '../base/util/time.js';
 import {
   calculateStrength,
   confidenceFacets,
@@ -7,11 +7,11 @@ import {
   strengthOptionsOf,
   type MemoryEntry,
   type StrengthOptions,
-} from '../core/memory.js';
-import { evalNow } from '../core/ablation.js';
-import { estimateTokens } from '../util/token-text.js';
-import { renderAmbientSummary, type AmbientState } from '../core/ambient.js';
-import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
+} from '../base/memory/memory.js';
+import { evalNow } from '../base/memory/ablation.js';
+import { estimateTokens } from '../base/util/token-text.js';
+import { renderAmbientSummary, type AmbientState } from '../base/memory/ambient.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from '../base/session/handoff.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type {
   AssembleCost,
@@ -24,7 +24,7 @@ import type {
   DrillDownResult,
   DrillDownSummary,
 } from './index.js';
-import { DATE_PREFIX_CHARS } from '../util/token-text.js';
+import { DATE_PREFIX_CHARS } from '../base/util/token-text.js';
 import { INSTRUCTION_LIKE_TAG } from './instruction-detect.js';
 
 /** The frame around a member's row the instruction check flagged, so the agent reading the block treats it as data. */

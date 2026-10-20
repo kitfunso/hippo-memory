@@ -1,8 +1,8 @@
 // An audit row that fails to write must not undo the mutation, and must not vanish silently either.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createMemory } from '../../src/core/memory.js';
+import { createMemory } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { auditWriteFailureCount } from '../../src/core/audit-report.js';
+import { auditWriteFailureCount } from '../../src/base/records/audit-report.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, writeEntry, readEntry } from '../_helpers/root-forms.js';
 

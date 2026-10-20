@@ -34,8 +34,8 @@
 import { readFileSync, writeFileSync, mkdirSync, createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { tokenize } from '../../dist/util/tokenize.js';
-import { rrfFuse, RRF_K } from '../../dist/search/rrf.js';
+import { tokenize } from '../../dist/base/util/tokenize.js';
+import { rrfFuse, RRF_K } from '../../dist/domain/search/rrf.js';
 
 // ---------------------------------------------------------------------------
 // CLI parsing

@@ -1,7 +1,7 @@
-import type { MemoryEntry } from '../../core/memory.js';
-import type { SessionHandoff } from '../../core/handoff.js';
-import type { AmbientTallies } from '../../core/ambient.js';
-import type { AmbientAdmission, AmbientRefusalReason } from '../../core/read-admission.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { SessionHandoff } from '../../base/session/handoff.js';
+import type { AmbientTallies } from '../../base/memory/ambient.js';
+import type { AmbientAdmission, AmbientRefusalReason } from '../../base/scope/read-admission.js';
 import type { ContinuityKey } from './types.js';
 
 export type { AmbientAdmission, AmbientRefusalReason };

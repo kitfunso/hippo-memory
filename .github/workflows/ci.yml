@@ -74,7 +74,7 @@ jobs:
         run: node scripts/check-api-root-calls.mjs
       - name: config.json read only by the surface layer
         run: node scripts/check-config-reads.mjs
-      - name: process.env read only through src/util/env.ts
+      - name: process.env read only through src/base/util/env.ts
         run: node scripts/check-env-reads.mjs
       - name: process.exit only in the files check-process-exit lists
         run: node scripts/check-process-exit.mjs
@@ -238,7 +238,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/@huggingface/transformers/.cache
-          key: hf-models-4.2.0-${{ hashFiles('src/embeddings/local.ts', 'src/rerankers/cross-encoder.ts') }}
+          key: hf-models-4.2.0-${{ hashFiles('src/base/embeddings/local.ts', 'src/domain/rerankers/cross-encoder.ts') }}
       - run: npm run build
       # The zero-dep `test` job skips these; here the backend is installed.
       - name: Cross-encoder against the real model

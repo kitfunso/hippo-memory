@@ -1,6 +1,6 @@
 // Store-wide status reads: counts, stats, vector index state and the correction and provenance reports.
 
-import type { PhysicsParticle } from '../core/physics.js';
+import type { PhysicsParticle } from '../base/rank/physics.js';
 import type { LegacyStats } from '../store/port/reports.js';
 import type { StatusCounts } from '../store/port/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';

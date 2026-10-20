@@ -1,7 +1,7 @@
-// The SQL twins of the model's rules in src/core: strength and keep (memory.ts), recall scope (recall-scope.ts); keep
+// The SQL twins of the model's rules in src/base: strength and keep (memory.ts), recall scope (recall-scope.ts); keep
 // each in step with its JS half.
-import { DAY_MS } from '../../util/time.js';
-import { isDecayAblated, isOutcomeSlowAblated, isRecallBoostAblated } from '../../core/ablation.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { isDecayAblated, isOutcomeSlowAblated, isRecallBoostAblated } from '../../base/memory/ablation.js';
 import {
   DECAY_BASE,
   EMOTIONAL_MULTIPLIERS,
@@ -14,9 +14,9 @@ import {
   type EmotionalValence,
   type KeepPair,
   type LossAversion,
-} from '../../core/memory.js';
-import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../core/recall-scope.js';
-import { placeholders } from '../../util/sql.js';
+} from '../../base/memory/memory.js';
+import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../base/scope/recall-scope.js';
+import { placeholders } from '../../base/util/sql.js';
 import { REWARD_FACTOR_SQL } from '../../db/decay-key.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;

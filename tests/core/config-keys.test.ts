@@ -2,9 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { DEFAULT_CONFIG, loadConfig, type HippoConfig } from '../../src/core/config.js';
-import { log } from '../../src/util/log.js';
-import type { JsonValue } from '../../src/util/json.js';
+import { DEFAULT_CONFIG, loadConfig, type HippoConfig } from '../../src/base/config/config.js';
+import { log } from '../../src/base/util/log.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 
 type ConfigKey = Exclude<keyof HippoConfig, 'runtime'>;
 

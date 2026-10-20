@@ -1,20 +1,20 @@
 // What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume packet and the JSON
 // rows.
 
-import { confidenceFacets, Layer } from '../../core/memory.js';
-import type { ResultCost, SearchResult } from '../../core/search-types.js';
-import { getReranker } from '../../rerankers/index.js';
-import { isClefModel } from '../../rerankers/clef.js';
-import { JEV_DEFAULT_TOP_K } from '../../rerankers/jev.js';
-import type { RerankerFn } from '../../rerankers/types.js';
-import { explainMatch } from '../../search/explain.js';
-import { fitBudget } from '../../search/finalize.js';
+import { confidenceFacets, Layer } from '../../base/memory/memory.js';
+import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
+import { getReranker } from '../../domain/rerankers/index.js';
+import { isClefModel } from '../../domain/rerankers/clef.js';
+import { JEV_DEFAULT_TOP_K } from '../../domain/rerankers/jev.js';
+import type { RerankerFn } from '../../domain/rerankers/types.js';
+import { explainMatch } from '../../domain/search/explain.js';
+import { fitBudget } from '../../domain/search/finalize.js';
 import type { ContinuityBlock } from '../../store/port.js';
-import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../core/recall-scope.js';
+import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { Context, LocalContext } from '../types.js';
 import type { LocalFiles } from '../../store/local/index.js';
 
-export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../graph/recall.js';
+export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
 /** The global store beside this one ('' when the call reaches none), whether this one is it, and the boosting scope. */
 export interface CliRecallSetting {

@@ -7,7 +7,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { ConnectorEvent, ConnectorWrites } from '../../src/store/port.js';
 import { inMemoryEntryWritesStore, type InMemoryEntryWritesStore } from './in-memory-entry-writes-store.js';
 import type { StoreSide } from './store-conformance.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 /** One event log row; the delivery id and event name are GitHub's and null for Slack. */
 export interface LoggedEvent {

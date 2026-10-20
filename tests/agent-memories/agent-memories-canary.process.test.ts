@@ -4,10 +4,10 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
-import { sanitizeCwd } from '../../src/agent-memories/qwen-code.js';
-import { AGENT_MEMORY_TOOLS } from '../../src/core/agent-memory-tools.js';
-import { isInitialized } from '../../src/core/project-identity.js';
+import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
+import { sanitizeCwd } from '../../src/domain/agent-memories/qwen-code.js';
+import { AGENT_MEMORY_TOOLS } from '../../src/base/memory/agent-memory-tools.js';
+import { isInitialized } from '../../src/base/scope/project-identity.js';
 import {
   closeWorld,
   codexSummary,
@@ -26,10 +26,10 @@ import { initTestStore } from '../_helpers/store-template.js';
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
 const { importForStore, importAtSessionEnd } = await import(syncUrl);
-const { currentMachine } = await import(new URL('../util/agent-homes.js', syncUrl).href);
+const { currentMachine } = await import(new URL('../../base/util/agent-homes.js', syncUrl).href);
 const { homedir } = await import('node:os');
-const { loadConfig } = await import(new URL('../core/config.js', syncUrl).href);
-const { sqliteAgentImport } = await import(new URL('../store/sqlite/agent-import.js', syncUrl).href);
+const { loadConfig } = await import(new URL('../../base/config/config.js', syncUrl).href);
+const { sqliteAgentImport } = await import(new URL('../../store/sqlite/agent-import.js', syncUrl).href);
 const machine = mode === 'negative' ? { home: cleanHome, env: {}, platform: process.platform }
   : mode === 'env' ? currentMachine() : { home: homedir(), env: {}, platform: process.platform };
 const warnings = [...importForStore(root, { configAt: loadConfig, tenantId: 'default', agentImport: sqliteAgentImport({}), machine }).warnings];
@@ -171,7 +171,14 @@ function controlRun(name: string): Run {
 }
 
 function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise<WorkerOut> {
-  const args = [join(w.dir, 'worker.mjs'), distUrl('agent-memories/sync.js'), mode, run.local, w.home, storeless];
+  const args = [
+    join(w.dir, 'worker.mjs'),
+    distUrl('domain/agent-memories/sync.js'),
+    mode,
+    run.local,
+    w.home,
+    storeless,
+  ];
   const env = { ...process.env, ...decoyEnv, HIPPO_HOME: run.global, ...extraEnv };
   return new Promise((resolve, fail) => {
     const child = spawn(process.execPath, args, { env, windowsHide: true });

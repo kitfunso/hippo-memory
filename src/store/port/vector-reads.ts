@@ -1,9 +1,9 @@
-import type { MemoryEntry } from '../../core/memory.js';
-import type { PhysicsParticle } from '../../core/physics.js';
-import type { RecallScopeFilter } from '../../core/recall-scope.js';
-import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { PhysicsParticle } from '../../base/rank/physics.js';
+import type { RecallScopeFilter } from '../../base/scope/recall-scope.js';
+import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import type { OriginFilter } from './types.js';
-import type { TenantId } from '../../util/tenant.js';
+import type { TenantId } from '../../base/util/tenant.js';
 
 export type { EmbeddingIndexState, RecallScopeFilter };
 

@@ -3,8 +3,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { inspect } from 'node:util';
-import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
-import { saveSkill } from '../../src/objects/skills.js';
+import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
+import { saveSkill } from '../../src/domain/objects/skills.js';
 import type { StoreGroups } from '../../src/store/index.js';
 import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -16,12 +16,12 @@ import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from
 import { FAKE_NOW, freshStore, SESSION, TENANT } from '../_helpers/recall-golden-seed.js';
 import { cleanups, holdWriteLock, mirrorFiles, onDb, patientStore, undoAll } from '../_helpers/store-worker-server.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { rejectValue } from '../../src/trust/reject-flow.js';
+import { rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 type Served = LocalStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;

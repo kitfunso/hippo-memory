@@ -23,16 +23,16 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // hippo internals — use dist so we call production code paths
-import { createMemory } from '../dist/core/memory.js';
+import { createMemory } from '../dist/base/memory/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../dist/entry/testing.js';
-import { embedMemory } from '../dist/search/embed-memories.js';
-import { loadConfig } from '../dist/core/config.js';
-import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/embeddings/local.js';
+import { embedMemory } from '../dist/domain/search/embed-memories.js';
+import { loadConfig } from '../dist/base/config/config.js';
+import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/base/embeddings/local.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { hybridSearch } from '../dist/index.js';
 import { physicsSearch } from '../dist/entry/store-kit.js';
-import { buildCorpus } from '../dist/search/bm25.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../dist/core/physics-config.js';
+import { buildCorpus } from '../dist/domain/search/bm25.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../dist/base/rank/physics-config.js';
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -55,7 +55,7 @@ const DATA_PATH = path.join(REPO, 'benchmarks', 'longmemeval', 'data', 'longmeme
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 // ---------------------------------------------------------------------------
-// Metrics (matching src/eval/eval.ts)
+// Metrics (matching src/domain/eval/eval.ts)
 // ---------------------------------------------------------------------------
 
 function mrr(returned, expectedSet) {

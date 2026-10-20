@@ -6,12 +6,12 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Actor, Context } from '../../src/api/index.js';
-import { handleCommentDeleted } from '../../src/connectors/github/deletion.js';
-import { ingestEvent } from '../../src/connectors/github/ingest.js';
-import { handleMessageDeleted } from '../../src/connectors/slack/deletion.js';
-import { ingestMessage } from '../../src/connectors/slack/ingest.js';
+import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';
+import { ingestEvent } from '../../src/surface/connectors/github/ingest.js';
+import { handleMessageDeleted } from '../../src/surface/connectors/slack/deletion.js';
+import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
@@ -20,7 +20,7 @@ import {
   type InMemoryConnectorEventsStore,
 } from '../_helpers/in-memory-connector-events-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const slackActor: Actor = { subject: 'connector:slack', role: 'admin' };

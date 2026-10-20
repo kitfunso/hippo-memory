@@ -12,13 +12,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { pushGoal } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 type HippoRecallToolArgs = {
   query: string;
@@ -40,7 +40,7 @@ function callTool(name: string, args: HippoRecallToolArgs, ctx: McpContext) {
 
 function extractText(res: McpResponse | null): string {
   // SAFETY: hippo_recall's MCP tool result envelope always carries
-  // result.content per src/mcp/server.ts; McpResponse.result is typed
+  // result.content per src/surface/mcp/server.ts; McpResponse.result is typed
   // unknown at the transport layer since it varies per tool.
   return (res as { result?: { content: Array<{ text: string }> } } | null)?.result?.content?.[0]?.text ?? '';
 }

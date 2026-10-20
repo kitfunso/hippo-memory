@@ -9,7 +9,7 @@ import {
   type GitHubIssueCommentEvent,
   type GitHubPullRequestEvent,
   type GitHubPullRequestReviewCommentEvent,
-} from '../../src/connectors/github/types.js';
+} from '../../src/surface/connectors/github/types.js';
 
 const repo = {
   full_name: 'octo/hello',

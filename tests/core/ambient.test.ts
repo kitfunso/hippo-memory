@@ -5,8 +5,8 @@ import {
   type MemoryEntry,
   type EmotionalValence,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/core/memory.js';
-import { computeAmbientState, renderAmbientSummary, formatAmbientVector } from '../../src/core/ambient.js';
+} from '../../src/base/memory/memory.js';
+import { computeAmbientState, renderAmbientSummary, formatAmbientVector } from '../../src/base/memory/ambient.js';
 
 function mem(
   content: string,

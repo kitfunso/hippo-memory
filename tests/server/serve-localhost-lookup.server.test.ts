@@ -2,7 +2,7 @@
 import { promises as dns } from 'node:dns';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { type LookupAll, loopbackBindHosts } from '../../src/server/loopback.js';
+import { type LookupAll, loopbackBindHosts } from '../../src/surface/server/loopback.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 afterEach(() => {

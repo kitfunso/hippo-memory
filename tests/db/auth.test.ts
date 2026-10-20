@@ -3,7 +3,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, validateApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { listApiKeys } from '../_helpers/root-forms.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 describe('auth', () => {
   it('createApiKey returns plaintext exactly once and stores hash', () => {

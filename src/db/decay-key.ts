@@ -1,4 +1,4 @@
-import { REWARD_SLOPE } from '../core/memory.js';
+import { REWARD_SLOPE } from '../base/memory/memory.js';
 
 export const DECAY_KEY_INDEX = 'idx_memories_decay_key';
 

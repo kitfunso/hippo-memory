@@ -22,7 +22,7 @@ describe('the store picks no embedding provider', () => {
     const storeExports = Object.keys(await import('../../src/store/sqlite/vector-index.js'));
     expect(storeExports).not.toContain('embedMemory');
     expect(storeExports).not.toContain('embedAll');
-    expect(Object.keys(await import('../../src/search/embed-memories.js'))).toEqual(
+    expect(Object.keys(await import('../../src/domain/search/embed-memories.js'))).toEqual(
       expect.arrayContaining(['embedMemory', 'embedAll']),
     );
   });

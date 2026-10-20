@@ -8,7 +8,7 @@ import {
   openHippoDbReadOnly,
 } from '../../db/index.js';
 import { listTableNames } from '../../db/tables.js';
-import { errorMessage } from '../../util/log.js';
+import { errorMessage } from '../../base/util/log.js';
 import { countFailuresSince } from './failure-log.js';
 import { lastConsolidationAt } from './index-and-stats.js';
 import type { JsonObject } from '../port/types.js';

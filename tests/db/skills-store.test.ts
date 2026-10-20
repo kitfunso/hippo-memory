@@ -13,10 +13,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { saveSkill, closeSkill, loadSkills, skillsMarkdown } from '../../src/objects/skills.js';
+import { saveSkill, closeSkill, loadSkills, skillsMarkdown } from '../../src/domain/objects/skills.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 function safeRmSync(p: string): void {
   try {

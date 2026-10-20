@@ -1,8 +1,8 @@
 // The two sides a sharing call takes, built from folders as the CLI builds them.
-import { getGlobalRoot } from '../../src/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
-import type { ConfiguredFolder } from '../../src/search/embed-memories.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import type { ConfiguredFolder } from '../../src/domain/search/embed-memories.js';
 
 /** The folder's hippo.db beside its folder, with its config as the CLI loads it. */
 export function folderStore(root: string): ConfiguredFolder {

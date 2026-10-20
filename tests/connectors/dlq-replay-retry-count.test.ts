@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parkInDlq } from '../../src/connectors/dlq.js';
-import { githubDlq, replayDlqEntry as replayGitHub } from '../../src/connectors/github/dlq.js';
-import { slackDlq, replayDlqEntry as replaySlack } from '../../src/connectors/slack/dlq.js';
+import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { githubDlq, replayDlqEntry as replayGitHub } from '../../src/surface/connectors/github/dlq.js';
+import { slackDlq, replayDlqEntry as replaySlack } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 describe('failed replay bumps retry_count by exactly one, for both connectors', () => {
   let root: string;

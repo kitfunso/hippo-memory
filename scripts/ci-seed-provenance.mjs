@@ -11,7 +11,7 @@
  * (tests/store/github-provenance-parity.test.ts, tests/connectors/slack-provenance-parity.test.ts)
  * cover the wide matrix.
  *
- * cwd routing: src/core/project-identity.ts's getHippoRoot is `path.join(cwd, '.hippo')`
+ * cwd routing: src/base/scope/project-identity.ts's getHippoRoot is `path.join(cwd, '.hippo')`
  * unconditionally. The CLI does NOT honor HIPPO_HOME for the local store,
  * only the global/shared path. So we spawn the CLI with `cwd: root`, not via
  * env var (codex round 1 P0 on docs/plans/2026-05-05-provenance-ci-gate.md).
@@ -23,10 +23,10 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../dist/entry/testing.js';
 import { sqliteStore } from '../dist/store/sqlite/store.js';
-import { ingestEvent } from '../dist/connectors/github/ingest.js';
-import { ingestMessage } from '../dist/connectors/slack/ingest.js';
+import { ingestEvent } from '../dist/surface/connectors/github/ingest.js';
+import { ingestMessage } from '../dist/surface/connectors/slack/ingest.js';
 import { adminActor } from '../dist/api/index.js';
-import { loadConfig } from '../dist/core/config.js';
+import { loadConfig } from '../dist/base/config/config.js';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');

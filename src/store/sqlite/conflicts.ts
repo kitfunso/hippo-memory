@@ -1,19 +1,19 @@
 // hippo.db's Conflicts group: listing and resolving the memory_conflicts rows.
-import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../util/tenant.js';
+import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
-import { rejectionDigest, normalizeValueForRejection } from '../../core/rejection-digest.js';
+import { rejectionDigest, normalizeValueForRejection } from '../../base/records/rejection-digest.js';
 import { archiveRawMemory } from './raw-archive.js';
 import { MEMORY_CONFLICT_COLUMNS, type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
-import { chunked } from '../../util/chunked.js';
-import { ownScopeTouches } from '../../core/recall-scope.js';
+import { chunked } from '../../base/util/chunked.js';
+import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { placeholders } from '../../util/sql.js';
-import type { KeysetClause } from '../../util/keyset.js';
+import { placeholders } from '../../base/util/sql.js';
+import type { KeysetClause } from '../../base/util/keyset.js';
 import type { DetectedConflict } from '../local/consolidation.js';
 import type {
   ConflictListQuery,

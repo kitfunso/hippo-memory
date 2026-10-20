@@ -1,7 +1,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ingestMessage } from '../../src/connectors/slack/ingest.js';
-import { handleMessageDeleted } from '../../src/connectors/slack/deletion.js';
+import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
+import { handleMessageDeleted } from '../../src/surface/connectors/slack/deletion.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

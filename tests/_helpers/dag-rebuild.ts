@@ -1,9 +1,9 @@
 // Fetchers, dirty-summary setters and entry builders the DAG rebuild tests share.
 import { vi } from 'vitest';
 import { openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest, normalizeValueForRejection } from '../../src/core/rejection-digest.js';
+import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
 
 /**
  * Build a fetcher that returns the same synthetic content for every call.

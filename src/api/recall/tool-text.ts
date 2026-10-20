@@ -1,16 +1,16 @@
 // Text the MCP recall and context tools print, and what each printed piece costs the token budget.
 
-import { truncateWithEllipsis } from '../../util/ellipsize.js';
-import type { SearchResult } from '../../core/search-types.js';
+import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
+import type { SearchResult } from '../../base/rank/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../../store/port/sessions.js';
-import { confidenceLabel } from '../../core/memory.js';
+import { confidenceLabel } from '../../base/memory/memory.js';
 import type { ContextCost } from '../context-types.js';
 import type { ContinuityBlock, RecallResult, RecallResultItem } from './types.js';
-import { formatHandoffEvidenceLine, type SessionHandoff } from '../../core/handoff.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
 import { printedTokens } from '../context-render.js';
 import { detectAnchoring } from './finish.js';
 import { detectAvailabilityBias } from '../availability.js';
-import { estimateTokens } from '../../util/token-text.js';
+import { estimateTokens } from '../../base/util/token-text.js';
 
 const MCP_PREVIEW_CHARS = 200;
 

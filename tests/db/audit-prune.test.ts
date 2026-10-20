@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { parseOlderThanFlag } from '../../src/cli/audit-prune.js';
+import { parseOlderThanFlag } from '../../src/surface/cli/audit-prune.js';
 import { auditPrune, computeCutoff } from '../../src/api/auth/audit.js';
 import { adminActor } from '../../src/api/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

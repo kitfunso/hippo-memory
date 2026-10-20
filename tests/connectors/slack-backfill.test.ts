@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { backfillChannel, type SlackHistoryFetcher } from '../../src/connectors/slack/backfill.js';
+import { backfillChannel, type SlackHistoryFetcher } from '../../src/surface/connectors/slack/backfill.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

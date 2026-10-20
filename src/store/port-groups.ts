@@ -1,9 +1,9 @@
 // The store groups for sessions, cards, goals, conflicts, dormant memories and reports; type-only, apart from port.ts
 // so that file stays under the size gate.
-import type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
-import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
-import type { MemoryEntry } from '../core/memory.js';
-import type { TenantId } from '../util/tenant.js';
+import type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
+import type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
+import type { MemoryEntry } from '../base/memory/memory.js';
+import type { TenantId } from '../base/util/tenant.js';
 import type { CardDetail } from './port/cards.js';
 import type { StatusCounts, StrengthTallies } from './port/reports.js';
 import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './port/dormant.js';
@@ -19,7 +19,7 @@ import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
 import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
 import type { TokenSummary } from './port/token-ledger.js';
 import type { WorkingMemoryItem } from './port/sessions.js';
-import type { DormantRevival } from '../core/dormant-revival.js';
+import type { DormantRevival } from '../base/memory/dormant-revival.js';
 import type { Goal, ContinuityKey, EntryCursor, EntryPage, JsonObject } from './port/types.js';
 
 export interface WorkingMemoryFilter {

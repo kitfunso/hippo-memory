@@ -5,7 +5,7 @@ import {
   failureFields,
   isPermanentFailure,
   sendAnthropicMessage,
-} from '../../src/util/anthropic-messages.js';
+} from '../../src/base/util/anthropic-messages.js';
 
 const REPLY_CAP_BYTES = 1024 * 1024;
 

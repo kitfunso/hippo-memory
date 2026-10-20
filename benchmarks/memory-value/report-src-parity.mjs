@@ -107,11 +107,11 @@ function guard(cond, message) {
 // nothing about the code actually on disk. Checked, and the dist modules
 // dynamically imported, only after this guard passes.
 // ---------------------------------------------------------------------------
-const DIST_MEMORY_VALUE_PATH = path.join(REPO_ROOT, 'dist', 'consolidate/memory-value.js');
+const DIST_MEMORY_VALUE_PATH = path.join(REPO_ROOT, 'dist', 'domain/consolidate/memory-value.js');
 const DIST_STORE_PATH = path.join(REPO_ROOT, 'dist', 'entry', 'testing.js');
 const SRC_WATCH_PATHS = [
-  path.join(REPO_ROOT, 'src', 'consolidate/memory-value.ts'),
-  path.join(REPO_ROOT, 'src', 'consolidate/memory-value-weights.ts'),
+  path.join(REPO_ROOT, 'src', 'domain/consolidate/memory-value.ts'),
+  path.join(REPO_ROOT, 'src', 'domain/consolidate/memory-value-weights.ts'),
 ];
 
 function assertDistFresh() {

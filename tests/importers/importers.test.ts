@@ -14,7 +14,7 @@ import {
   importMarkdown,
   importEntries,
 } from '../../src/entry/importers.js';
-import type { ImportOptions } from '../../src/importers/core.js';
+import type { ImportOptions } from '../../src/surface/importers/core.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 

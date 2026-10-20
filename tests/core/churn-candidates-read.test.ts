@@ -1,8 +1,8 @@
 // detectChurnStale reads only the current rows of the projects it checks, and counts and skips the same rows as a whole-tenant read.
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { MemoryEntry } from '../../src/core/memory.js';
-import { detectChurnStale } from '../../src/learn/invalidation.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import { detectChurnStale } from '../../src/domain/learn/invalidation.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

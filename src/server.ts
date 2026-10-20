@@ -16,13 +16,13 @@ import {
   type PromptHookOptions,
   type PromptHookRequest,
 } from './api/prompt-hook.js';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
 import { isLocalStore, type LocalStore } from './store/local/index.js';
 import type { LocalContext } from './api/types.js';
 import { sqliteReach } from './store/sqlite/store.js';
-import { loadConfig } from './core/config.js';
+import { loadConfig } from './base/config/config.js';
 
-export { serve } from './server/boot.js';
+export { serve } from './surface/server/boot.js';
 
 async function promptHookContext(
   ctx: Context,
@@ -57,9 +57,9 @@ export {
   type LocalContext,
   type LocalStore,
 };
-export { isCrossSite, LOOPBACK_HOST_HEADER } from './util/http-util.js';
-export { clientIpForRateLimit } from './server/client-ip.js';
-export { isLoopback, isReservedActor } from './server/auth.js';
+export { isCrossSite, LOOPBACK_HOST_HEADER } from './base/util/http-util.js';
+export { clientIpForRateLimit } from './surface/server/client-ip.js';
+export { isLoopback, isReservedActor } from './surface/server/auth.js';
 export type {
   AddonCall,
   AddonRoute,
@@ -68,16 +68,20 @@ export type {
   ResolvedBearer,
   ServeOpts,
   ServerHandle,
-} from './server/types.js';
+} from './surface/server/types.js';
 // ServeOpts takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.
 export type { HippoStore } from './store/index.js';
 // An add-on route replies 4xx with HttpError, renders the prompt hook elsewhere with promptHookContext, and types its
 // body as JsonValue.
-export { HttpError } from './util/http-util.js';
+export { HttpError } from './base/util/http-util.js';
 export type { CallerProject } from './api/prompt-hook.js';
-export type { JsonValue } from './util/json.js';
+export type { JsonValue } from './base/util/json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own machine.
-export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
+export {
+  captureSessionTexts,
+  type SessionCaptureRequest,
+  type SessionCaptureResult,
+} from './surface/capture/session-texts.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot
 // reach.
 export type { AuthCreateOpts, AuthCreateResult };
@@ -90,22 +94,22 @@ export {
   preCompactForCaller,
   type CallerHookOutput,
   type CallerPreCompactRequest,
-} from './capture/pre-compact-caller.js';
-export { compactResumeForCaller, type CallerCompactResumeRequest } from './capture/compact-resume-caller.js';
+} from './surface/capture/pre-compact-caller.js';
+export { compactResumeForCaller, type CallerCompactResumeRequest } from './surface/capture/compact-resume-caller.js';
 export {
   saveCompactionItemsForCaller,
   type CallerItemsRequest,
   type CallerItemsResult,
-} from './capture/compaction-items-caller.js';
+} from './surface/capture/compaction-items-caller.js';
 export {
   captureFailureForCaller,
   type CallerFailureRequest,
   type CallerFailureResult,
-} from './capture/failure-caller.js';
+} from './surface/capture/failure-caller.js';
 export {
   sessionEndHandoffForCaller,
   type CallerEvidence,
   type CallerSessionEndRequest,
   type CallerSessionEndResult,
-} from './capture/session-end-caller.js';
-export type { WorkingState } from './capture/working-state.js';
+} from './surface/capture/session-end-caller.js';
+export type { WorkingState } from './surface/capture/working-state.js';

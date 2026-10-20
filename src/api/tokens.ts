@@ -1,11 +1,11 @@
 // Token-use and failure reports.
 
-import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
+import { rethrowIfSqliteBlocked } from '../base/util/sqlite-blocked.js';
 import type { TokenSummary, TokenSurface } from '../store/port/token-ledger.js';
 import type { FailureSummary } from '../store/port/failure-log.js';
-import { errorMessage, log, errorFields } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../base/util/log.js';
 import type { Context } from './types.js';
-import { DAY_MS } from '../util/time.js';
+import { DAY_MS } from '../base/util/time.js';
 
 /** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since a ledger failure must
  * not fail the recall or context call. */

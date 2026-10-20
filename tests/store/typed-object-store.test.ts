@@ -1,51 +1,69 @@
 // Store rules every typed object shares, one table row per kind; a rule only one kind has stays in its <kind>-store test.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import type { CustomerNote, Decision, Policy, Process, ProjectBrief, Skill } from '../../src/core/object-types.js';
+import type {
+  CustomerNote,
+  Decision,
+  Policy,
+  Process,
+  ProjectBrief,
+  Skill,
+} from '../../src/base/records/object-types.js';
 import {
   saveCustomerNote,
   closeCustomerNote,
   loadCustomerNoteById,
   loadCustomerNotes,
   VALID_NOTE_STATES,
-} from '../../src/objects/customer-notes.js';
-import { saveSkill, closeSkill, loadSkillById, loadSkills, VALID_SKILL_STATES } from '../../src/objects/skills.js';
+} from '../../src/domain/objects/customer-notes.js';
+import {
+  saveSkill,
+  closeSkill,
+  loadSkillById,
+  loadSkills,
+  VALID_SKILL_STATES,
+} from '../../src/domain/objects/skills.js';
 import {
   savePolicy,
   closePolicy,
   loadPolicyById,
   loadPolicies,
   VALID_POLICY_STATES,
-} from '../../src/objects/policies.js';
+} from '../../src/domain/objects/policies.js';
 import {
   saveProjectBrief,
   closeProjectBrief,
   loadProjectBriefById,
   loadProjectBriefs,
   VALID_BRIEF_STATES,
-} from '../../src/objects/project-briefs.js';
+} from '../../src/domain/objects/project-briefs.js';
 import {
   saveProcess,
   closeProcess,
   loadProcessById,
   loadProcesses,
   VALID_PROCESS_STATES,
-} from '../../src/objects/processes.js';
+} from '../../src/domain/objects/processes.js';
 import {
   saveDecision,
   closeDecision,
   loadDecisionById,
   loadDecisions,
   VALID_DECISION_STATES,
-} from '../../src/objects/decisions.js';
-import { openIncident, loadIncidentById, loadIncidents, VALID_INCIDENT_STATES } from '../../src/objects/incidents.js';
+} from '../../src/domain/objects/decisions.js';
+import {
+  openIncident,
+  loadIncidentById,
+  loadIncidents,
+  VALID_INCIDENT_STATES,
+} from '../../src/domain/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntryThenFail } from '../_helpers/failing-write.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
 
 let home: string;

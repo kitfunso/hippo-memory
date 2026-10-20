@@ -1,6 +1,6 @@
-import type { JsonValue } from '../../util/json.js';
-import type { KeysetPosition } from '../../util/keyset.js';
-import type { TenantId } from '../../util/tenant.js';
+import type { JsonValue } from '../../base/util/json.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import type { TenantId } from '../../base/util/tenant.js';
 
 /** A key to insert and the actor and metadata of its auth_create row, whose tenant and target are the key's. Neither
  * holds the plaintext. */

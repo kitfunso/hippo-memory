@@ -1,7 +1,7 @@
 // The store worker's two readers answer a nearest-row read alike, though only the first holds the vector graph.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

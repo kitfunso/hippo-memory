@@ -1,6 +1,6 @@
-import type { SavableDescriptor } from '../../objects/descriptor.js';
-import { saveObject } from '../../objects/lifecycle.js';
-import type { ObjectByKind, SavableKind } from '../../core/object-types.js';
+import type { SavableDescriptor } from '../../domain/objects/descriptor.js';
+import { saveObject } from '../../domain/objects/lifecycle.js';
+import type { ObjectByKind, SavableKind } from '../../base/records/object-types.js';
 import type { Objects } from '../../store/port.js';
 import type { Context } from '../types.js';
 

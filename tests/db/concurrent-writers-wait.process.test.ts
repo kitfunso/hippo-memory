@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
-import { createMemory } from '../../src/core/memory.js';
+import { createMemory } from '../../src/base/memory/memory.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { distUrl, withDb } from '../_helpers/agent-memories-world.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
@@ -92,7 +92,7 @@ describe('two hippo processes writing to one store at once', () => {
       holder.exec('BEGIN IMMEDIATE');
       workers = Array.from({ length: WORKERS }, (_, i) =>
         startWorker([
-          distUrl('core/memory.js'),
+          distUrl('base/memory/memory.js'),
           distUrl('entry/testing.js'),
           root,
           getHippoDbPath(root),

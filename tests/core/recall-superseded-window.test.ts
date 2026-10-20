@@ -3,7 +3,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { assemble, retrieve, supersede } from '../../src/api/index.js';

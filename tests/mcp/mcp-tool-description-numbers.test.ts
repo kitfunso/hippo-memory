@@ -1,8 +1,8 @@
 // A tool description that states a default must state the value the code reads, and hippo_outcome states no fixed half-life delta.
 import { describe, expect, it } from 'vitest';
-import { TOOLS } from '../../src/mcp/tools.js';
-import { DEFAULT_CONFIG } from '../../src/core/config.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../src/core/search-types.js';
+import { TOOLS } from '../../src/surface/mcp/tools.js';
+import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../src/base/rank/search-types.js';
 
 function descriptions(toolName: string): string {
   const tool = TOOLS.find((t) => t.name === toolName);

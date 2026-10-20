@@ -1,6 +1,6 @@
 // The sleep cycle: decay, consolidation, dedupe, graph extraction and the other maintenance passes.
 
-import type { AmbientState } from '../../core/ambient.js';
+import type { AmbientState } from '../../base/memory/ambient.js';
 import type { LocalContext } from '../types.js';
 import { runSleep } from './sleep-run.js';
 

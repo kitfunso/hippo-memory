@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 
 export interface EntryWrite {
   readonly entry: MemoryEntry;

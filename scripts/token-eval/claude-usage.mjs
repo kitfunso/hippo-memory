@@ -33,9 +33,9 @@ import { fileURLToPath } from 'node:url';
 
 import { openHippoDb, closeHippoDb } from '../../dist/db/index.js';
 import { tokensBySession } from '../../dist/entry/testing.js';
-import { getGlobalRoot } from '../../dist/sharing/global-store.js';
-import { isInitialized } from '../../dist/core/project-identity.js';
-import { priceUsage, uncachedEquivalentInput } from '../../dist/eval/eval-stats.js';
+import { getGlobalRoot } from '../../dist/domain/sharing/global-store.js';
+import { isInitialized } from '../../dist/base/scope/project-identity.js';
+import { priceUsage, uncachedEquivalentInput } from '../../dist/domain/eval/eval-stats.js';
 
 const BUCKETS = [
   ['inputTokens', 'input_tokens'],

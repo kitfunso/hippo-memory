@@ -13,10 +13,10 @@ import {
   type MemoryEntry,
   type StrengthOptions,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { outcome, retrieve } from '../../src/api/index.js';
-import { cliApiContext } from '../../src/cli/api-context.js';
-import { envRuntimeSettings } from '../../src/util/env.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';

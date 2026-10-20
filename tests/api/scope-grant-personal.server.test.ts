@@ -6,7 +6,7 @@ import * as api from '../../src/api/index.js';
 import { createApiKey, grantScope, readApiKeyRecord } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { mapApiError } from '../../src/api/error-reply.js';
-import { canReadScope } from '../../src/core/recall-scope.js';
+import { canReadScope } from '../../src/base/scope/recall-scope.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

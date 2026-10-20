@@ -1,11 +1,11 @@
 // Folder-keyed forms for code that holds a folder and no store: the eval kit hippo-memory/testing publishes, the
 // scripts and benchmarks that import dist/ by path, and a recall's best-effort write to the global store.
 
-import type { AmbientTallies } from '../../core/ambient.js';
-import type { SessionHandoff } from '../../core/handoff.js';
-import type { LossAversion, MemoryEntry } from '../../core/memory.js';
+import type { AmbientTallies } from '../../base/memory/ambient.js';
+import type { SessionHandoff } from '../../base/session/handoff.js';
+import type { LossAversion, MemoryEntry } from '../../base/memory/memory.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb } from '../../db/index.js';
-import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
+import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
 import { loadAmbientTalliesAt } from './ambient.js';
 import { batchWriteAndDeleteAt } from './delete-and-batch.js';
 import { loadAllEntriesAt, loadEntriesPageAt, readEntryAt } from './entry-reads.js';
@@ -27,7 +27,7 @@ import { appendSessionEventAt } from './sessions.js';
 import { saveActiveTaskSnapshotAt } from './task-snapshots.js';
 import { loadEmbeddingIndexAt } from './vector-index.js';
 import { onHandle, openStore } from './handles.js';
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../port/types.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */

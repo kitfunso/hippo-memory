@@ -6,10 +6,10 @@ import {
   isContentWorthStoring,
   isReusable,
   isWorthSurfacing,
-} from '../../src/core/memory-quality.js';
-import { auditMemory } from '../../src/core/memory-audit.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../../src/core/memory.js';
-import { mergedText } from '../../src/util/same-text.js';
+} from '../../src/base/memory/memory-quality.js';
+import { auditMemory } from '../../src/base/memory/memory-audit.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../../src/base/memory/memory.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 
 const make = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
   createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options });

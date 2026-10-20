@@ -36,7 +36,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfig } from '../../dist/core/config.js';
+import { loadConfig } from '../../dist/base/config/config.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../../dist/store/sqlite/folder-forms.js';

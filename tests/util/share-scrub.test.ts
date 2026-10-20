@@ -1,7 +1,7 @@
 // scrubForSharing: transcript text bound for another machine loses secrets, emails and the user name in home paths.
 import { describe, expect, it } from 'vitest';
-import { maskHomePaths, USER_SEGMENT } from '../../src/util/home-path.js';
-import { scrubForSharing } from '../../src/capture/share-scrub.js';
+import { maskHomePaths, USER_SEGMENT } from '../../src/base/util/home-path.js';
+import { scrubForSharing } from '../../src/surface/capture/share-scrub.js';
 import { ASSIGNED_SECRET, ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
 

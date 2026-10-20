@@ -14,11 +14,11 @@
  * spy never poisons later tests.
  */
 
-import { ingestMessage } from '../../src/connectors/slack/ingest.js';
+import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { loadTenantEntries as loadAllEntries } from '../../src/store/sqlite/folder-forms.js';
 import { adminActor } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 export interface SmokeOpts {
   hippoRoot: string;

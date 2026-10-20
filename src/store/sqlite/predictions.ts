@@ -1,17 +1,17 @@
 // hippo.db's Predictions group: the queries the CLI and the MCP tools run.
-import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
-import { BadRequestError, NotFoundError } from '../../core/api-errors.js';
+import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
+import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { writeEntryRowAt } from './entry-writes.js';
-import { assertTenantId } from '../../core/tenant-id.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { appendAuditEvent } from './audit.js';
-import { keysetAfter, type KeysetPosition } from '../../util/keyset.js';
+import { keysetAfter, type KeysetPosition } from '../../base/util/keyset.js';
 import type { PredictionSave, Predictions } from '../port.js';
 import type { Sync } from './served.js';
-import { type ClosureState, VALID_CLOSURE_STATES } from '../../core/prediction.js';
-import { plural } from '../../util/format.js';
-import { CLI_ACTOR } from '../../core/actor.js';
+import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
+import { plural } from '../../base/util/format.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { PredictionBaserate } from '../port/types.js';
 import type { Prediction, PredictionListQuery, SavePredictionOptions } from '../port/predictions.js';
 import { openStore } from './handles.js';

@@ -4,7 +4,7 @@ import {
   backfillChannel,
   type SlackHistoryFetcher,
   type SlackHistoryPage,
-} from '../../src/connectors/slack/backfill.js';
+} from '../../src/surface/connectors/slack/backfill.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

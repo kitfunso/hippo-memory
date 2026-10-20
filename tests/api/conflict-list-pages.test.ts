@@ -11,8 +11,8 @@ import {
   type Actor,
   type ConflictPageOptions,
 } from '../../src/api/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import type { KeysetPosition } from '../../src/util/keyset.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import type { KeysetPosition } from '../../src/base/util/keyset.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';

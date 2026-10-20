@@ -1,6 +1,6 @@
 // The handlers run here with process.exit, process.kill and the listener registration stubbed, so no test ends the worker.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { exitAfterFlush, installCrashHandlers, installSignalHandlers } from '../../src/util/crash-handlers.js';
+import { exitAfterFlush, installCrashHandlers, installSignalHandlers } from '../../src/base/util/crash-handlers.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 
 let listeners: Map<string, Listener[]>;

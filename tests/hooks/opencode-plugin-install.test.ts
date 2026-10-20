@@ -19,8 +19,8 @@ import {
   installOpencodePlugin,
   uninstallOpencodePlugin,
   resolveOpencodePluginPath,
-} from '../../src/hooks/opencode.js';
-import { detectInstalledTools } from '../../src/hooks/shared.js';
+} from '../../src/domain/hooks/opencode.js';
+import { detectInstalledTools } from '../../src/domain/hooks/shared.js';
 
 /** The plugin text installOpencodePlugin writes into the current (fake) home. */
 function installedSource(): string {

@@ -7,9 +7,9 @@ import {
   deriveOriginProject,
   assertCallerProject,
   MAX_PROJECT_ALIASES,
-} from '../../src/core/project-identity.js';
-import { BadRequestError } from '../../src/core/api-errors.js';
-import { MAX_ID_LEN } from '../../src/util/limits.js';
+} from '../../src/base/scope/project-identity.js';
+import { BadRequestError } from '../../src/base/errors/api-errors.js';
+import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

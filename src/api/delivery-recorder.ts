@@ -1,12 +1,12 @@
 // In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why
 // each was rejected, what reached stdout. No DB access (the caller hands build()'s output to
 // src/store/recall-trace.ts); hashes, ids, counts and enums only, never text.
-import type { MemoryEntry } from '../core/memory.js';
-import { evalNow } from '../core/ablation.js';
-import { scoreOverlap, type PromptRecallGate } from '../core/prompt-recall.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
-import { blockHash, estimateTokens } from '../util/token-text.js';
-import { errorMessage, log } from '../util/log.js';
+import type { MemoryEntry } from '../base/memory/memory.js';
+import { evalNow } from '../base/memory/ablation.js';
+import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
+import { blockHash, estimateTokens } from '../base/util/token-text.js';
+import { errorMessage, log } from '../base/util/log.js';
 import type { Ledger } from '../store/local/ledger.js';
 import type {
   DeliveryBlockState,
@@ -19,7 +19,7 @@ import type {
   DeliverySessionState,
   DeliveryStage,
   DeliveryWriteStore,
-} from '../core/delivery.js';
+} from '../base/session/delivery.js';
 /** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a prompt. */
 const carriesPrompt = (type: DeliveryEventType): boolean => type === 'prompt-submit' || type === 'pinned-manual';
 

@@ -1,8 +1,8 @@
 // When a write starts a background sleep; api remember and the session-close hook share it.
 
-import { errorFields, errorMessage, log } from '../../util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoStore } from '../../store/port.js';
-import type { HippoConfig } from '../../core/config.js';
+import type { HippoConfig } from '../../base/config/config.js';
 import type { Context } from '../types.js';
 
 /**

@@ -1,5 +1,5 @@
 import type { DatabaseSyncLike } from './sqlite.js';
-import { errorCode, log, errorFields } from '../util/log.js';
+import { errorCode, log, errorFields } from '../base/util/log.js';
 
 /** Column names of one table; empty when the table is missing. */
 export function tableColumns(db: DatabaseSyncLike, tableName: string): Set<string> {

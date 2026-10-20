@@ -3,17 +3,17 @@
  *
  * Strategy: runCliAs (mirrors tests/connectors/slack-cli.test.ts) for
  * end-to-end argv/exit-code behaviour. The backfill happy paths call
- * handleGitHub in-process against a stubbed global fetch, so no request reaches GitHub. src/cli/github.ts is intentionally kept side-effect
+ * handleGitHub in-process against a stubbed global fetch, so no request reaches GitHub. src/surface/cli/github.ts is intentionally kept side-effect
  * free so it can be imported in-process.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { parkInDlq } from '../../src/connectors/dlq.js';
-import { githubDlq } from '../../src/connectors/github/dlq.js';
-import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/cli/github.js';
-import type { JsonValue } from '../../src/util/json.js';
+import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
+import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

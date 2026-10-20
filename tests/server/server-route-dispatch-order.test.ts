@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { routeLookup } from '../../src/server/route-lookup.js';
-import { routeLabel, routeMatches, V1_ROUTES } from '../../src/server/route-table.js';
-import type { Route } from '../../src/server/types.js';
+import { routeLookup } from '../../src/surface/server/route-lookup.js';
+import { routeLabel, routeMatches, V1_ROUTES } from '../../src/surface/server/route-table.js';
+import type { Route } from '../../src/surface/server/types.js';
 
 const METHODS = ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'] as const;
 const findV1Route = routeLookup(V1_ROUTES, routeMatches);

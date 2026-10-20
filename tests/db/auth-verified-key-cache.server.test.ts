@@ -4,8 +4,8 @@ import { rmSync } from 'node:fs';
 
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { verifyApiKeyCached, VerifiedKeyCache } from '../../src/server/api-key.js';
-import type { VerifiedApiKey } from '../../src/core/api-key.js';
+import { verifyApiKeyCached, VerifiedKeyCache } from '../../src/surface/server/api-key.js';
+import type { VerifiedApiKey } from '../../src/base/scope/api-key.js';
 import { authRevoke, authGrant } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

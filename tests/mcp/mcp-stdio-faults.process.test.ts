@@ -6,12 +6,12 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { embedAll } from '../../src/search/embed-memories.js';
+import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 
-const serverPath = path.resolve('dist/mcp/server.js');
+const serverPath = path.resolve('dist/surface/mcp/server.js');
 let tmpHome: string;
 const procs: ChildProcessWithoutNullStreams[] = [];
 
@@ -129,7 +129,7 @@ function crashScript(failure: string): string {
     file,
     [
       `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
-      `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/cli/api-context.js')).href)});`,
+      `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/surface/cli/api-context.js')).href)});`,
       'startStdioLoop(cliStdioHost());',
       `setTimeout(() => { ${failure} }, 50);`,
     ].join('\n'),

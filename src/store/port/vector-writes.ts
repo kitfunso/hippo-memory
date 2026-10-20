@@ -1,6 +1,6 @@
-import type { PhysicsParticle } from '../../core/physics.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import type { TenantId } from '../../util/tenant.js';
+import type { PhysicsParticle } from '../../base/rank/physics.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { TenantId } from '../../base/util/tenant.js';
 
 /** One memory's vector, computed by the caller's embedding provider. */
 export interface VectorRowWrite {

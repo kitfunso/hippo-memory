@@ -2,8 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { classifyOriginProject } from '../../src/core/project-identity.js';
-import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { classifyOriginProject } from '../../src/base/scope/project-identity.js';
+import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import {
   compactionMemories,
   compactionRows,

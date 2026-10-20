@@ -4,7 +4,12 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  computeSchemaFit,
+  deriveHalfLife,
+  DEFAULT_HALF_LIFE_DAYS,
+  type MemoryEntry,
+} from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

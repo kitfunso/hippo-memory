@@ -1,15 +1,15 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner binding.
-import { freshActiveSnapshot } from '../../core/session-snapshot.js';
+import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
-import { assertTenantId } from '../../core/tenant-id.js';
-import { TASK_OWNER_MIN_BINARY } from '../../util/version.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
 import type { TaskSnapshot, SessionEvent, SessionEventInput, WorkingMemoryItem } from '../port/sessions.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import type { ContinuityKey, JsonObject } from '../port/types.js';
-import { parseStoredObject } from '../../util/stored-json.js';
+import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
   loadHandoffByIdAt,
   loadLatestHandoffAt,

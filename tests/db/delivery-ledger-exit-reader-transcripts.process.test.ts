@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { blockHash } from '../../src/util/token-text.js';
+import { blockHash } from '../../src/base/util/token-text.js';
 import { seed, verdictOf, type Verdict } from '../_helpers/host-transcript.js';
 import { dispose, hippo, project, type Project } from '../_helpers/delivery-boundary.js';
 import { fire } from '../_helpers/host-transcript.js';

@@ -1,13 +1,13 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { strengthSql } from './rule-sql.js';
-import { SECRET_TAGS } from '../../util/secret-detect.js';
-import { originInSql } from '../../core/project-identity.js';
+import { SECRET_TAGS } from '../../base/util/secret-detect.js';
+import { originInSql } from '../../base/scope/project-identity.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
-import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../core/ambient.js';
-import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../core/memory.js';
-import { placeholders } from '../../util/sql.js';
+import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../base/memory/ambient.js';
+import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../base/memory/memory.js';
+import { placeholders } from '../../base/util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
-import { isJsonNumber, isJsonString, parseJson } from '../../util/json.js';
+import { isJsonNumber, isJsonString, parseJson } from '../../base/util/json.js';
 
 /**
  * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match.

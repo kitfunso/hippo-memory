@@ -1,5 +1,5 @@
-import { refineStore } from '../../src/cli/refine-llm.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { refineStore } from '../../src/surface/cli/refine-llm.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from './default-half-life-memory.js';
 import { makeRoot } from './make-root.js';
 import { readEntry, writeEntry } from './root-forms.js';

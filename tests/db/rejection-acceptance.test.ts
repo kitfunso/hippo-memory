@@ -21,16 +21,16 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue, findRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest, normalizeValueForRejection } from '../../src/core/rejection-digest.js';
-import { RejectedValueError } from '../../src/core/api-errors.js';
-import { cmdCapture } from '../../src/capture/command.js';
+import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
+import { RejectedValueError } from '../../src/base/errors/api-errors.js';
+import { cmdCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
-import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { autoShare } from '../../src/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
+import { autoShare } from '../../src/domain/sharing/share.js';
 import * as api from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
 import { importEntries, importVault } from '../../src/entry/importers.js';
@@ -40,7 +40,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

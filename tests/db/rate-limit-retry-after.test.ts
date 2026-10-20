@@ -7,8 +7,8 @@ import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { createRateLimiter } from '../../src/server/rate-limit.js';
-import { heartbeatVerdict } from '../../src/server/auth.js';
+import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
+import { heartbeatVerdict } from '../../src/surface/server/auth.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { packageScriptsAt } from '../../src/learn/churn-git.js';
+import { packageScriptsAt } from '../../src/domain/learn/churn-git.js';
 import { onHandle, openStore } from '../../src/store/sqlite/handles.js';
 
 let dir: string;

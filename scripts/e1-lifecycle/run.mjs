@@ -49,13 +49,13 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory, applyOutcome } from '../../dist/core/memory.js';
+import { createMemory, applyOutcome } from '../../dist/base/memory/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
 import { withSharedStoreHandles } from '../../dist/db/index.js';
-import { hybridSearch } from '../../dist/search/hybrid.js';
-import { outcomeMultiplier } from '../../dist/search/boosts.js';
-import { markRetrieved } from '../../dist/core/memory.js';
-import { isRecallBoostAblated, evalNow as _resetAblationCacheForTests } from '../../dist/core/ablation.js';
+import { hybridSearch } from '../../dist/domain/search/hybrid.js';
+import { outcomeMultiplier } from '../../dist/domain/search/boosts.js';
+import { markRetrieved } from '../../dist/base/memory/memory.js';
+import { isRecallBoostAblated, evalNow as _resetAblationCacheForTests } from '../../dist/base/memory/ablation.js';
 import { generateProtocol, GENERATOR_VERSION } from './generate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

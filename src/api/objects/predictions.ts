@@ -1,4 +1,4 @@
-import { predictionMirror } from '../../core/prediction.js';
+import { predictionMirror } from '../../base/records/prediction.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../../store/port.js';
 import type { Context } from '../types.js';
 import type { Prediction, SavePredictionOptions } from '../../store/port/predictions.js';

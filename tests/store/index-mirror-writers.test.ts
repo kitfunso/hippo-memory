@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { rejectValue } from '../../src/trust/reject-flow.js';
+import { rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, loadLastRecall, saveIndex, writeEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';

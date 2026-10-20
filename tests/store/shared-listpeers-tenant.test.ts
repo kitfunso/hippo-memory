@@ -8,12 +8,12 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { folderStore } from '../_helpers/sharing-stores.js';
-import { listPeers } from '../../src/sharing/share.js';
-import { Layer } from '../../src/core/memory.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import { listPeers } from '../../src/domain/sharing/share.js';
+import { Layer } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 function makeSharedEntry(opts: { id: string; project: string; tenantId: string }): MemoryEntry {
   return {

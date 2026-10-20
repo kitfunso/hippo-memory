@@ -13,16 +13,16 @@ import {
   importMarkdown,
   importVault,
 } from '../../src/entry/importers.js';
-import { type ImportOptions, type ImportResult } from '../../src/importers/core.js';
-import { captureToolFailure } from '../../src/capture/capture-error.js';
+import { type ImportOptions, type ImportResult } from '../../src/surface/importers/core.js';
+import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { captureError, partitionLessons } from '../../src/learn/autolearn.js';
+import { captureError, partitionLessons } from '../../src/domain/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { addWorkspace } from '../../src/connectors/slack/workspaces.js';
-import { replayDlqEntry } from '../../src/connectors/slack/dlq.js';
+import { addWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
+import { replayDlqEntry } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {

@@ -2,9 +2,9 @@
 // walks them in memory from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { savePolicy } from '../../src/objects/policies.js';
-import { canReadScope } from '../../src/core/recall-scope.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { savePolicy } from '../../src/domain/objects/policies.js';
+import { canReadScope } from '../../src/base/scope/recall-scope.js';
 import { type HippoStore } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import {
@@ -27,7 +27,7 @@ import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
 import { objectsAt } from './objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from './root-forms.js';
 
 export interface InMemoryGraphReadsStore extends StoreSide {

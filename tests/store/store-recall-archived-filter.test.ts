@@ -19,7 +19,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 function makeRawMemory(id: string, content: string, tenantId = 'default'): MemoryEntry {

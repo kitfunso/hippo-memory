@@ -2,7 +2,7 @@
  * T3 primary-key-preservation tests (docs/plans/2026-07-09-recall-determinism.md).
  *
  * The T2 rule for non-score-primary sort sites is: the site's true primary
- * key must keep winning; compareEntryIdentity (src/core/compare.ts) is ONLY a
+ * key must keep winning; compareEntryIdentity (src/base/rank/compare.ts) is ONLY a
  * tail for when the primary key ties. Each site below gets a "primary
  * wins" case (real pipeline where practical) plus a "tail decides" tie
  * case (comparator-level where invoking the full pipeline to engineer an
@@ -17,15 +17,15 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve } from '../../src/api/index.js';
-import { estimateTokens } from '../../src/util/token-text.js';
-import type { SearchResult } from '../../src/core/search-types.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { graphExpandRecall } from '../../src/graph/recall.js';
+import { graphExpandRecall } from '../../src/domain/graph/recall.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { compareEntryIdentity, type EntryIdentity } from '../../src/core/compare.js';
+import { compareEntryIdentity, type EntryIdentity } from '../../src/base/rank/compare.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';

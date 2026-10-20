@@ -1,12 +1,19 @@
 // hippo.db's Cards group: the agent work board.
-import { generateId } from '../../core/memory.js';
+import { generateId } from '../../base/memory/memory.js';
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
-import { SessionHandoff, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../../core/handoff.js';
-import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../../core/card.js';
-import { assertTenantId } from '../../core/tenant-id.js';
-import { chunked } from '../../util/chunked.js';
+import { SessionHandoff, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../../base/session/handoff.js';
+import {
+  Card,
+  CardStatus,
+  CardRun,
+  CardComment,
+  CARD_LEASE_MS,
+  assertCardTransition,
+} from '../../base/records/card.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { chunked } from '../../base/util/chunked.js';
 import { HANDOFF_COLUMNS, type SessionHandoffDbRow } from './handoffs.js';
-import { placeholders } from '../../util/sql.js';
+import { placeholders } from '../../base/util/sql.js';
 import type { CardDetail } from '../port/cards.js';
 import type { CardCreate, Cards } from '../port-groups.js';
 import type { Sync } from './served.js';

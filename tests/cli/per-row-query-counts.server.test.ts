@@ -3,18 +3,18 @@
 import { describe, it, expect } from 'vitest';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { outcome } from '../../src/api/memories/outcome.js';
 import { quarantineList } from '../../src/api/auth/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
-import { quarantineScopeFor } from '../../src/trust/quarantine.js';
+import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import { buildMemoryDetail } from '../../src/api/dashboard/queries.js';
 import { snapshotsOf } from '../_helpers/dashboard-fixture.js';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadEntriesByIds, replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 import {
   ROW_READ,

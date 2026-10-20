@@ -8,8 +8,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs, runCli, usageText, verbUsage } from '../../src/cli.js';
-import type { VerbFlags } from '../../src/cli/flags.js';
-import { COMMANDS } from '../../src/cli/verbs.js';
+import type { VerbFlags } from '../../src/surface/cli/flags.js';
+import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 
@@ -161,7 +161,7 @@ describe('CLI help output is byte-identical and runs nothing', () => {
 
   it('every verb row names a handle<Verb> export and never a cmd<Name>', () => {
     // Read from source: the spies above replaced each run function.
-    const dir = resolve(__dirname, '..', '..', 'src', 'cli', 'verbs');
+    const dir = resolve(__dirname, '..', '..', 'src', 'surface', 'cli', 'verbs');
     const rowCall = /\bverb\(\(\) => import\('[^']+'\), '(\w+)'/g;
     const names = readdirSync(dir).flatMap((file) =>
       [...readFileSync(join(dir, file), 'utf8').matchAll(rowCall)].map((m) => m[1]),

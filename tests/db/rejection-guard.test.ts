@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest, normalizeValueForRejection } from '../../src/core/rejection-digest.js';
-import { RejectedValueError } from '../../src/core/api-errors.js';
+import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
+import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, applyRebuildResult, writeEntry, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';

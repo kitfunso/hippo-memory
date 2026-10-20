@@ -8,8 +8,8 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
-import type { JsonValue } from '../../src/util/json.js';
-import { log } from '../../src/util/log.js';
+import type { JsonValue } from '../../src/base/util/json.js';
+import { log } from '../../src/base/util/log.js';
 import { type Callers, leftBehind, type MovedReadsSeed, seedMovedReads } from '../_helpers/moved-reads-seed.js';
 import { CLEARED_ENV, FAKE_NOW, freshStore, TENANT } from '../_helpers/recall-golden-seed.js';
 import {

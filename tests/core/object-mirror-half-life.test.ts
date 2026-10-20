@@ -2,16 +2,21 @@
 // migration has run and on the configured default after, with the strength the decay function gives the stored row.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { loadConfig } from '../../src/core/config.js';
-import { saveCustomerNote } from '../../src/objects/customer-notes.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { saveDecision } from '../../src/objects/decisions.js';
-import { openIncident } from '../../src/objects/incidents.js';
-import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../src/core/memory.js';
-import { savePolicy } from '../../src/objects/policies.js';
-import { saveProcess } from '../../src/objects/processes.js';
-import { saveProjectBrief } from '../../src/objects/project-briefs.js';
-import { saveSkill } from '../../src/objects/skills.js';
+import { saveDecision } from '../../src/domain/objects/decisions.js';
+import { openIncident } from '../../src/domain/objects/incidents.js';
+import {
+  calculateStrength,
+  deriveHalfLife,
+  LEGACY_TYPED_HALF_LIFE,
+  type MemoryEntry,
+} from '../../src/base/memory/memory.js';
+import { savePolicy } from '../../src/domain/objects/policies.js';
+import { saveProcess } from '../../src/domain/objects/processes.js';
+import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
+import { saveSkill } from '../../src/domain/objects/skills.js';
 import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';

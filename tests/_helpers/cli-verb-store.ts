@@ -9,7 +9,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type CreateMemoryOptions,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { ownStderr } from './own-stderr.js';
 import { runInProcess } from './run-in-process.js';

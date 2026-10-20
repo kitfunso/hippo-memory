@@ -7,7 +7,7 @@ import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_proces
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { detectServer, type ServerInfo } from '../../src/server/server-detect.js';
+import { detectServer, type ServerInfo } from '../../src/surface/server/server-detect.js';
 import { boundPort } from '../_helpers/listen.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';

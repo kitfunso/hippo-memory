@@ -2,9 +2,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { consolidate } from '../../src/index.js';
-import { createMemory, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { markRetrieved } from '../../src/core/memory.js';
-import { sampleForReplay } from '../../src/consolidate/replay.js';
+import {
+  createMemory,
+  resolveConfidence,
+  type MemoryEntry,
+  DEFAULT_HALF_LIFE_DAYS,
+} from '../../src/base/memory/memory.js';
+import { markRetrieved } from '../../src/base/memory/memory.js';
+import { sampleForReplay } from '../../src/domain/consolidate/replay.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

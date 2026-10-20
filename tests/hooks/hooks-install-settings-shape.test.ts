@@ -3,11 +3,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../../src/cli.js';
-import { COMMANDS } from '../../src/cli/verbs.js';
-import { undeclaredFlags, type VerbFlags } from '../../src/cli/flags.js';
-import { HOOKS } from '../../src/hooks/hook-blocks.js';
-import { installJsonHooks, resolveJsonHookPaths } from '../../src/hooks/json-hooks.js';
-import { installOpencodePlugin, resolveOpencodePluginPath } from '../../src/hooks/opencode.js';
+import { COMMANDS } from '../../src/surface/cli/verbs.js';
+import { undeclaredFlags, type VerbFlags } from '../../src/surface/cli/flags.js';
+import { HOOKS } from '../../src/domain/hooks/hook-blocks.js';
+import { installJsonHooks, resolveJsonHookPaths } from '../../src/domain/hooks/json-hooks.js';
+import { installOpencodePlugin, resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 let env: FakeHomeHandle;

@@ -2,12 +2,12 @@
  * v0.28 — listMemoryConflicts '*' sentinel test (E2 real-edges).
  *
  * Verifies the new 'all statuses' sentinel and that existing 'open' callers
- * (cli.ts, mcp/server.ts, dashboard.ts, consolidate-extraction.test.ts) see
+ * (cli.ts, surface/mcp/server.ts, dashboard.ts, consolidate-extraction.test.ts) see
  * NO behaviour change.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts, writeEntry } from '../_helpers/root-forms.js';

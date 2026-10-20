@@ -15,36 +15,36 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/delete-and-batch.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { saveDecision } from '../../src/objects/decisions.js';
-import { openIncident } from '../../src/objects/incidents.js';
-import { saveProcess } from '../../src/objects/processes.js';
-import { savePolicy } from '../../src/objects/policies.js';
-import { saveSkill } from '../../src/objects/skills.js';
-import { saveProjectBrief } from '../../src/objects/project-briefs.js';
-import { saveCustomerNote } from '../../src/objects/customer-notes.js';
+import { saveDecision } from '../../src/domain/objects/decisions.js';
+import { openIncident } from '../../src/domain/objects/incidents.js';
+import { saveProcess } from '../../src/domain/objects/processes.js';
+import { savePolicy } from '../../src/domain/objects/policies.js';
+import { saveSkill } from '../../src/domain/objects/skills.js';
+import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
+import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { consolidate } from '../../src/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import {
   createMemory,
   Layer,
   calculateStrength,
   DEFAULT_HALF_LIFE_DAYS,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest } from '../../src/core/rejection-digest.js';
-import { RejectedValueError } from '../../src/core/api-errors.js';
+import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
+import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import * as api from '../../src/api/index.js';
-import { WRITE_BUDGET } from '../../src/util/write-budget.js';
+import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
-import type { AuditOp } from '../../src/core/audit-ops.js';
+import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;

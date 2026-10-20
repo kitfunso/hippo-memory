@@ -11,25 +11,25 @@ const MAP = {
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
 const ROUTE_CALLS = [
-  "import { requireGroup } from '../../x.js';",
+  "import { requireGroup } from '../../../x.js';",
   "export const r = (s) => requireGroup(s, 'g');",
   '',
 ].join('\n');
 const ROUTE_CLEAN = [
   '// not requireGroup',
-  "import { graphRows } from '../../api/graph.js';",
+  "import { graphRows } from '../../../api/graph.js';",
   'export const r = graphRows;',
   '',
 ].join('\n');
 const ROUTE_MAP = {
   order: ['low', 'high'],
-  folders: { sub: 'high', server: 'high' },
+  folders: { sub: 'high', surface: 'high' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
 const ROOT_CAP = { rootFiles: 2 };
 const CLI_MAP = {
   order: ['low', 'high'],
-  folders: { sub: 'high', cli: 'high', store: 'low' },
+  folders: { sub: 'high', surface: 'high', store: 'low' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
 const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
@@ -48,15 +48,15 @@ const DB_FILES = {
 const SCOPE_ONLY = { 'api/y.ts': { names: ['scope'], why: 'the request scope stays in db' } };
 const SQLITE_MAP = {
   order: ['low', 'high'],
-  folders: { sub: 'high', api: 'high', connectors: 'high', mcp: 'high', store: 'low' },
+  folders: { sub: 'high', api: 'high', surface: 'high', store: 'low' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
 const SQLITE_BASE = {
   'src/a.ts': '',
   'src/b.ts': '',
   'src/api/keep.ts': '',
-  'src/connectors/keep.ts': '',
-  'src/mcp/keep.ts': '',
+  'src/surface/connectors/keep.ts': '',
+  'src/surface/mcp/keep.ts': '',
   'src/store/sqlite/store.ts': 'export const storeFor = 1;\nexport type S = 1;\n',
 };
 const PORT_BASE = {
@@ -68,16 +68,17 @@ const PORT_BASE = {
   'src/store/local/index.ts': 'export const isLocal = 1;\n',
 };
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
+const SURFACE_SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../../store/sqlite/store.js';\n";
 const DASHBOARD_MAP = {
   order: ['low', 'high'],
-  folders: { sub: 'high', api: 'high', cli: 'high', dashboard: 'high', store: 'low' },
+  folders: { sub: 'high', api: 'high', surface: 'high', store: 'low' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
 const DASHBOARD_BASE = {
   'src/a.ts': '',
   'src/b.ts': '',
   'src/api/read.ts': 'export const read = 1;\n',
-  'src/cli/out.ts': 'export const cli = 1;\n',
+  'src/surface/cli/out.ts': 'export const cli = 1;\n',
   'src/store/rows.ts': 'export const rule = 1;\n',
   'src/store/port.ts': 'export type R = 1;\n',
 };
@@ -129,35 +130,39 @@ const rows: Row[] = [
   },
   {
     name: 'a route that calls requireGroup fails with file:line',
-    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/server/routes/r.ts': ROUTE_CALLS },
+    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/surface/server/routes/r.ts': ROUTE_CALLS },
     map: ROUTE_MAP,
     status: 1,
-    output: ['server/routes/r.ts:1', 'server/routes/r.ts:2'],
+    output: ['surface/server/routes/r.ts:1', 'surface/server/routes/r.ts:2'],
   },
   {
     name: 'a route that imports storeFor fails',
-    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/server/routes/r.ts': "import { storeFor } from '../../x.js';\n" },
+    files: {
+      'src/a.ts': '',
+      'src/b.ts': '',
+      'src/surface/server/routes/r.ts': "import { storeFor } from '../../../x.js';\n",
+    },
     map: ROUTE_MAP,
     status: 1,
-    output: ['server/routes/r.ts:1'],
+    output: ['surface/server/routes/r.ts:1'],
   },
   {
     name: 'a route that goes through an api function passes, and a comment naming requireGroup is ignored',
-    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/server/routes/r.ts': ROUTE_CLEAN },
+    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/surface/server/routes/r.ts': ROUTE_CLEAN },
     map: ROUTE_MAP,
     status: 0,
     output: ['Layer order OK'],
   },
   {
     name: 'a CLI runtime import of the store fails with file:line',
-    files: { ...CLI_BASE, 'src/cli/v.ts': "export const v = 1;\nimport { s } from '../store/s.js';\n" },
+    files: { ...CLI_BASE, 'src/surface/cli/v.ts': "export const v = 1;\nimport { s } from '../../store/s.js';\n" },
     map: CLI_MAP,
     status: 1,
-    output: ['src/cli/v.ts:2 imports src/store/s.ts at runtime'],
+    output: ['src/surface/cli/v.ts:2 imports src/store/s.ts at runtime'],
   },
   {
     name: 'a CLI type-only import of the store passes',
-    files: { ...CLI_BASE, 'src/cli/v.ts': "import type { S } from '../store/s.js';\nexport type V = S;\n" },
+    files: { ...CLI_BASE, 'src/surface/cli/v.ts': "import type { S } from '../../store/s.js';\nexport type V = S;\n" },
     map: CLI_MAP,
     status: 0,
     output: ['Layer order OK'],
@@ -197,8 +202,10 @@ const rows: Row[] = [
     name: 'an allowlisted CLI store import with a reason passes',
     files: {
       ...CLI_BASE,
-      'src/cli/v.ts': "import { s } from '../store/s.js';\n",
-      '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: 'a constant' }]),
+      'src/surface/cli/v.ts': "import { s } from '../../store/s.js';\n",
+      '.cli-store-allowlist.json': JSON.stringify([
+        { file: 'surface/cli/v.ts', target: 'store/s.ts', why: 'a constant' },
+      ]),
     },
     map: CLI_MAP,
     status: 0,
@@ -208,15 +215,18 @@ const rows: Row[] = [
     name: 'an allowlist entry with no reason or no matching import fails',
     files: {
       ...CLI_BASE,
-      'src/cli/v.ts': "import { s } from '../store/s.js';\n",
+      'src/surface/cli/v.ts': "import { s } from '../../store/s.js';\n",
       '.cli-store-allowlist.json': JSON.stringify([
-        { file: 'cli/v.ts', target: 'store/s.ts', why: ' ' },
-        { file: 'cli/w.ts', target: 'store/s.ts', why: 'gone' },
+        { file: 'surface/cli/v.ts', target: 'store/s.ts', why: ' ' },
+        { file: 'surface/cli/w.ts', target: 'store/s.ts', why: 'gone' },
       ]),
     },
     map: CLI_MAP,
     status: 1,
-    output: ['src/cli/v.ts -> src/store/s.ts gives no reason', 'src/cli/w.ts -> src/store/s.ts matches no import'],
+    output: [
+      'src/surface/cli/v.ts -> src/store/s.ts gives no reason',
+      'src/surface/cli/w.ts -> src/store/s.ts matches no import',
+    ],
   },
   {
     name: 'an allowed name the file no longer imports fails as stale',
@@ -282,12 +292,16 @@ const rows: Row[] = [
   },
   {
     name: 'a connectors or mcp file that imports the SQLite adapter fails the same way',
-    files: { ...SQLITE_BASE, 'src/connectors/c.ts': SQLITE_IMPORT, 'src/mcp/m.ts': SQLITE_IMPORT },
+    files: {
+      ...SQLITE_BASE,
+      'src/surface/connectors/c.ts': SURFACE_SQLITE_IMPORT,
+      'src/surface/mcp/m.ts': SURFACE_SQLITE_IMPORT,
+    },
     map: SQLITE_MAP,
     status: 1,
     output: [
-      'src/connectors/c.ts:2 imports src/store/sqlite/store.ts',
-      'src/mcp/m.ts:2 imports src/store/sqlite/store.ts',
+      'src/surface/connectors/c.ts:2 imports src/store/sqlite/store.ts',
+      'src/surface/mcp/m.ts:2 imports src/store/sqlite/store.ts',
     ],
   },
   {
@@ -332,23 +346,23 @@ const rows: Row[] = [
     name: 'a dashboard import of the store or the CLI fails, runtime or type-only',
     files: {
       ...DASHBOARD_BASE,
-      'src/dashboard/a.ts': "import { rule } from '../store/rows.js';\nexport const a = rule;\n",
-      'src/dashboard/b.ts': "import type { R } from '../store/port.js';\nexport type B = R;\n",
-      'src/dashboard/c.ts': "export const c = 1;\nimport { cli } from '../cli/out.js';\n",
+      'src/surface/dashboard/a.ts': "import { rule } from '../../store/rows.js';\nexport const a = rule;\n",
+      'src/surface/dashboard/b.ts': "import type { R } from '../../store/port.js';\nexport type B = R;\n",
+      'src/surface/dashboard/c.ts': "export const c = 1;\nimport { cli } from '../cli/out.js';\n",
     },
     map: DASHBOARD_MAP,
     status: 1,
     output: [
-      'src/dashboard/a.ts:1 imports src/store/rows.ts',
-      'src/dashboard/b.ts:1 imports src/store/port.ts',
-      'src/dashboard/c.ts:2 imports src/cli/out.ts',
+      'src/surface/dashboard/a.ts:1 imports src/store/rows.ts',
+      'src/surface/dashboard/b.ts:1 imports src/store/port.ts',
+      'src/surface/dashboard/c.ts:2 imports src/surface/cli/out.ts',
     ],
   },
   {
     name: 'a dashboard import of src/api passes',
     files: {
       ...DASHBOARD_BASE,
-      'src/dashboard/a.ts': "import { read } from '../api/read.js';\nexport const a = read;\n",
+      'src/surface/dashboard/a.ts': "import { read } from '../../api/read.js';\nexport const a = read;\n",
     },
     map: DASHBOARD_MAP,
     status: 0,

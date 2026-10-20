@@ -1,6 +1,6 @@
 // The 50+ seeded lessons both benchmark test files query; useBenchmarkCorpus writes them to a fresh store.
 import { beforeAll } from 'vitest';
-import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 

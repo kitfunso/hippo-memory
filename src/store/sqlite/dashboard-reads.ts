@@ -2,9 +2,9 @@
 import { type DatabaseSyncLike, closeHippoDb, getHippoDbPath, openHippoDbReadOnly } from '../../db/index.js';
 import { withReadSnapshot } from '../../db/busy.js';
 import { tableExists } from '../../db/tables.js';
-import type { Layer, MemoryKind } from '../../core/memory.js';
-import type { KeysetPosition } from '../../util/keyset.js';
-import { MAX_LIST_LIMIT } from '../../util/limits.js';
+import type { Layer, MemoryKind } from '../../base/memory/memory.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { conflictPageAt, openConflictsNamingAt } from './conflicts.js';
 import type {
   DashboardRow,

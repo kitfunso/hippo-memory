@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { adminActor, ConflictError, NotFoundError, conflictResolve } from '../../src/api/index.js';
-import { handleResolve } from '../../src/cli/curate.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleResolve } from '../../src/surface/cli/curate.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts, readEntry, writeEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 const TENANT = 'default';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';

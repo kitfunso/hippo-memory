@@ -16,12 +16,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { embedMemory } from '../../src/search/embed-memories.js';
-import { isEmbeddingAvailable } from '../../src/embeddings/local.js';
+import { embedMemory } from '../../src/domain/search/embed-memories.js';
+import { isEmbeddingAvailable } from '../../src/base/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 import { physicsSearch } from '../../src/entry/folder-search.js';
 import { consolidate } from '../../src/index.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 
 import { injectStream } from '../../scripts/lifecycle-stress/inject.mjs';
 import { localIndex } from '../_helpers/cli-stores.js';

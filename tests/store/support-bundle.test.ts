@@ -16,7 +16,7 @@ import {
   getCurrentSchemaVersion,
   setMeta,
 } from '../../src/db/index.js';
-import type { JsonValue } from '../../src/util/json.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import type { JsonObject } from '../../src/store/port/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';

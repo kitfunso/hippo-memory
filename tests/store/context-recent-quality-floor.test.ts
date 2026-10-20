@@ -4,7 +4,7 @@
  *
  * Covers the plan's 7-test list against the `includeRecent` block inside
  * `api.contextGet`'s `pinnedOnly` branch (src/api/index.ts:2456-2491), which now
- * filters candidates with `isWorthSurfacing` (src/core/memory-quality.ts) before
+ * filters candidates with `isWorthSurfacing` (src/base/memory/memory-quality.ts) before
  * slicing to `includeRecent`.
  *
  * Real-DB per project convention. Tests 1-6 seed entries directly via
@@ -18,7 +18,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'path';
 import { rmSync } from 'node:fs';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { contextGet } from '../../src/api/index.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';

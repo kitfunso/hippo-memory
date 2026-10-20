@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { objectMirror } from '../../src/objects/lifecycle.js';
+import { objectMirror } from '../../src/domain/objects/lifecycle.js';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type {
   BriefReceipt,
@@ -13,7 +13,7 @@ import type {
   ObjectKind,
   ObjectRefusal,
   SavableKind,
-} from '../../src/core/object-types.js';
+} from '../../src/base/records/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/store/port.js';
 import { inMemoryObjectsStore } from '../_helpers/in-memory-objects-store.js';
 import {
@@ -25,10 +25,10 @@ import {
   type SideResult,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
-import type { AuditOp } from '../../src/core/audit-ops.js';
-import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import type { AuditOp } from '../../src/base/records/audit-ops.js';
+import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 export const T1 = '2026-03-01T12:00:01.000Z';

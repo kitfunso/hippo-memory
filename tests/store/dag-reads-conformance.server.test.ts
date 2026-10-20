@@ -21,7 +21,7 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const SESSION = 'sess-dag';
 const PRIVATE = 'slack:private:C1';

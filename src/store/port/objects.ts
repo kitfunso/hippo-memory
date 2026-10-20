@@ -9,9 +9,9 @@ import type {
   Policy,
   SavableKind,
   Skill,
-} from '../../core/object-types.js';
-import type { KeysetPosition } from '../../util/keyset.js';
-import type { MemoryEntry } from '../../core/memory.js';
+} from '../../base/records/object-types.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 
 /** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, every value of the kind's
  * one filter column (customer, repo) when `filter` is. Neither is ever empty; a kind with no filter column ignores

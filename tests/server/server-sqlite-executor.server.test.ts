@@ -2,10 +2,10 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
-import { log } from '../../src/util/log.js';
+import { log } from '../../src/base/util/log.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/store/index.js';
-import { predictionMirror } from '../../src/core/prediction.js';
+import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { sqlitePredictions } from '../../src/store/sqlite/predictions.js';
 import { served } from '../../src/store/sqlite/served.js';

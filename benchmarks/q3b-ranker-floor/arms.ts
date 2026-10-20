@@ -2,13 +2,13 @@
 
 import { adminActor, retrieve, retrieveRanking, retrieveWithCliCore, type Context } from '../../dist/api/index.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
-import { engineFlags } from '../../dist/cli/flag-values.js';
-import { loadConfig } from '../../dist/core/config.js';
-import { getReranker } from '../../dist/rerankers/index.js';
-import { envActiveScope as detectScope } from '../../dist/util/env.js';
-import type { SearchResult } from '../../dist/core/search-types.js';
-import { getGlobalRoot } from '../../dist/sharing/global-store.js';
-import { getHippoRoot, isInitialized } from '../../dist/core/project-identity.js';
+import { engineFlags } from '../../dist/surface/cli/flag-values.js';
+import { loadConfig } from '../../dist/base/config/config.js';
+import { getReranker } from '../../dist/domain/rerankers/index.js';
+import { envActiveScope as detectScope } from '../../dist/base/util/env.js';
+import type { SearchResult } from '../../dist/base/rank/search-types.js';
+import { getGlobalRoot } from '../../dist/domain/sharing/global-store.js';
+import { getHippoRoot, isInitialized } from '../../dist/base/scope/project-identity.js';
 import { resolveTenantId } from '../../dist/entry/testing.js';
 import { STAGE_LABEL, stagesNotRun, type Arm, type EvalQuery } from './queries.ts';
 

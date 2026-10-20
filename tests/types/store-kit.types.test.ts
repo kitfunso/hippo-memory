@@ -15,7 +15,7 @@ import {
   type StoreGroups,
   type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
-import type { LossAversion } from '../../src/core/memory.js';
+import type { LossAversion } from '../../src/base/memory/memory.js';
 import type { LocalStore } from '../../src/store/local/index.js';
 
 declare const store: HippoStore;

@@ -1,12 +1,12 @@
 // Sync down asks the local store about each global row's id and text: the same copies as the whole local key set
 // gave, with the local full-text index in sync or not, and no local row read that holds none of those texts.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb, setFtsInSync } from '../../src/db/index.js';
-import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { mergedText } from '../../src/util/same-text.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';

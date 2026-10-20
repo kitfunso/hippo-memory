@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRateLimit } from '../../src/connectors/github/ratelimit.js';
+import { parseRateLimit } from '../../src/surface/connectors/github/ratelimit.js';
 
 describe('parseRateLimit', () => {
   it('returns secondary rate-limit with Retry-After seconds on 429', () => {

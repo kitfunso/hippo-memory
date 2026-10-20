@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { search } from '../../src/search/bm25-search.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { search } from '../../src/domain/search/bm25-search.js';
 
 const mk = (text: string) => createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 

@@ -3,9 +3,9 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
-import { cliStdioHost } from '../../src/cli/api-context.js';
-import type { McpHost } from '../../src/mcp/protocol.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
+import { cliStdioHost } from '../../src/surface/cli/api-context.js';
+import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import {
   CLEARED_ENV,
   FAKE_NOW,
@@ -34,7 +34,7 @@ async function tool(s: Store, name: string, args: ToolArgs): Promise<string> {
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
     { ...host.contextFor(s.root, TENANT), project: NO_PROJECT },
   );
-  // SAFETY: a tools/call result is written by src/mcp/request.ts as { content: [{ text }], isError? }.
+  // SAFETY: a tools/call result is written by src/surface/mcp/request.ts as { content: [{ text }], isError? }.
   const result = res?.result as { content?: { text: string }[] } | undefined;
   return result?.content?.[0]?.text ?? JSON.stringify(res?.error);
 }

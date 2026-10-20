@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../../src/db/index.js';
 import { v14 } from '../../src/db/migrations/v14.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';

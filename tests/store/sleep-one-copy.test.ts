@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
-import { computeAmbientState } from '../../src/core/ambient.js';
+import { computeAmbientState } from '../../src/base/memory/ambient.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';

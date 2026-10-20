@@ -5,7 +5,7 @@ import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { serveStaticFile, staticFileUnder } from '../src/dashboard/static-file.js';
+import { serveStaticFile, staticFileUnder } from '../src/surface/dashboard/static-file.js';
 import { boundPort } from './_helpers/listen.js';
 
 let dir: string;

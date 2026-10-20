@@ -5,11 +5,11 @@ import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { inspect } from 'node:util';
-import { GitReadError, gitLsFilesAtHead } from '../../src/learn/churn-git.js';
-import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
-import { createListener } from '../../src/server/tls.js';
-import { parseSteps } from '../../src/consolidate/trace.js';
-import { loadConfig } from '../../src/core/config.js';
+import { GitReadError, gitLsFilesAtHead } from '../../src/domain/learn/churn-git.js';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { createListener } from '../../src/surface/server/tls.js';
+import { parseSteps } from '../../src/domain/consolidate/trace.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
-import type { JsonValue } from '../../src/util/json.js';
+import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 import { trySymlink } from '../_helpers/symlink.js';
 import {
   dispose,

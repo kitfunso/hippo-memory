@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { type MemoryEntry, type EmotionalValence } from '../../src/core/memory.js';
+import { type MemoryEntry, type EmotionalValence } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { computeSalience } from '../../src/core/salience.js';
+import { computeSalience } from '../../src/base/memory/salience.js';
 
 function mem(content: string, opts: { tags?: string[]; emotionalValence?: EmotionalValence } = {}): MemoryEntry {
   const entry = createMemory(content, { tags: opts.tags ?? [] });

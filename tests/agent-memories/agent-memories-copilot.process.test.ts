@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { copilotAdapter } from '../../src/agent-memories/copilot.js';
-import type { AdapterContext, Scope } from '../../src/agent-memories/types.js';
+import { copilotAdapter } from '../../src/domain/agent-memories/copilot.js';
+import type { AdapterContext, Scope } from '../../src/domain/agent-memories/types.js';
 
 let tmp: string;
 beforeEach(() => {

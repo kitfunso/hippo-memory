@@ -1,7 +1,7 @@
 // hippo.db's own vector index: what embedding under its folder lock and the embed and status verbs read and write.
 // Vectors and particles carry no tenant, so each method covers the whole store.
-import type { MemoryEntry } from '../../core/memory.js';
-import type { PhysicsParticle } from '../../core/physics.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { PhysicsParticle } from '../../base/rank/physics.js';
 import type { EntryIdPage } from './consolidation.js';
 import type { EntryCursor } from '../port/types.js';
 

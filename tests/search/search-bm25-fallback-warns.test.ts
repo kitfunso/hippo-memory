@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'v
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { embedMemory } from '../../src/search/embed-memories.js';
+import { embedMemory } from '../../src/domain/search/embed-memories.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';

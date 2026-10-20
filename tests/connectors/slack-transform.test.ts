@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { messageToRememberOpts } from '../../src/connectors/slack/transform.js';
+import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
 
 describe('messageToRememberOpts', () => {
   it('produces kind=raw + slack:// artifact_ref + scope from channel privacy', () => {

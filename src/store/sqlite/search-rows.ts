@@ -1,21 +1,21 @@
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import { openHippoDb, isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
-import { tokenize } from '../../util/tokenize.js';
-import { recallScopeFilter, type RecallScopeFilter } from '../../core/recall-scope.js';
+import { tokenize } from '../../base/util/tokenize.js';
+import { recallScopeFilter, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
-import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../../core/prompt-recall.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
-import { originInSql } from '../../core/project-identity.js';
+import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../../base/rank/prompt-recall.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { originInSql } from '../../base/scope/project-identity.js';
 import { topVectorMatches, type VectorIndex } from '../../db/vector-store.js';
 import { type MemoryRow, MEMORY_SELECT_COLUMNS, MEMORY_SEARCH_COLUMNS, rowToEntry } from './rows.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../core/search-types.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import { cachedStatement } from './statement-cache.js';
-import { escapeLike } from '../../util/escape.js';
-import { placeholders } from '../../util/sql.js';
+import { escapeLike } from '../../base/util/escape.js';
+import { placeholders } from '../../base/util/sql.js';
 import type { OriginFilter } from '../port/types.js';
 import type { RecallSearchEntriesOptions } from '../local/sharing.js';
 import type { VectorCandidateSpec } from '../port/vector-reads.js';
-import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is

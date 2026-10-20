@@ -3,7 +3,7 @@
 import { vi } from 'vitest';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import { type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
@@ -14,7 +14,7 @@ import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
 import type { QuarantineRow } from '../../src/store/port/quarantine.js';
 import { writeEntry } from './root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface InMemoryQuarantineStore extends StoreSide {
   readonly store: HippoStore & { readonly quarantine: Quarantine };

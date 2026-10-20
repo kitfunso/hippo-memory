@@ -2,9 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { cmdPreCompact } from '../../src/capture/compact.js';
-import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
-import { normalizeHookPayload } from '../../src/cli/stdin.js';
+import { cmdPreCompact } from '../../src/surface/capture/compact.js';
+import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
+import { normalizeHookPayload } from '../../src/surface/cli/stdin.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 import {
   SNAPSHOT_TASK,

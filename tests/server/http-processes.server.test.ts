@@ -11,7 +11,7 @@ import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import type { Process } from '../../src/objects/processes.js';
+import type { Process } from '../../src/domain/objects/processes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let home: string;

@@ -1,10 +1,10 @@
 // Takes an imported agent note out of recall on the caller's transaction; the note sync and the project repair both use
 // it.
 import { appendAuditEvent } from './audit.js';
-import { SYNC_ACTOR } from '../../core/agent-memory-tools.js';
+import { SYNC_ACTOR } from '../../base/memory/agent-memory-tools.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { insertDormantRow } from './dormant-rows.js';
-import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
+import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
 import type { SetAsideResult, SetAsideWhy } from '../local/project-tags.js';
 

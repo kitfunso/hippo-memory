@@ -11,7 +11,7 @@ import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import type { Decision } from '../../src/objects/decisions.js';
+import type { Decision } from '../../src/domain/objects/decisions.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {

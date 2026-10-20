@@ -1,5 +1,5 @@
 // The built-in store's sharing reads and writes: the existing functions, bound to this store.
-import { ALL_TENANTS } from '../../util/tenant.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { tallySourcesAt } from './candidates.js';
 import {
   loadEntriesByIdsAt,

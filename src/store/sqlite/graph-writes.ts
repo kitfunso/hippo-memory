@@ -1,9 +1,9 @@
 // The writer of the entities and relations tables. Every row resolves a consolidated source first, never a raw memory;
 // the schema triggers are the backstop for a write that skips this module.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { assertTenantId } from '../../core/tenant-id.js';
-import { MAX_ENTITY_NAME_LEN } from '../../core/entity-name.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { cachedStatement } from './statement-cache.js';
 import {
   GRAPH_ENTITY_TYPES,

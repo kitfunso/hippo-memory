@@ -4,10 +4,10 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../../src/index.js';
-import { strengthBucket } from '../../src/consolidate/dedupe.js';
+import { strengthBucket } from '../../src/domain/consolidate/dedupe.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
@@ -173,7 +173,7 @@ describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
     const modules = runtimeReexports(readFileSync(resolve(REPO_ROOT, 'src', 'index.ts'), 'utf-8'));
     // src/index.ts, not this test, sets the list; these two prove the scan reads a multi-line block and a mixed line.
-    expect(modules).toEqual(expect.arrayContaining(['./core/card.js', './graph/recall.js']));
+    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './domain/graph/recall.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
 

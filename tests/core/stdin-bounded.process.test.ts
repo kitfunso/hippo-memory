@@ -4,7 +4,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getHippoRoot } from '../../src/core/project-identity.js';
+import { getHippoRoot } from '../../src/base/scope/project-identity.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { waitFor } from '../_helpers/wait-for.js';

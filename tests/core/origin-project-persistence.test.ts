@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { serializeEntry, deserializeEntry } from '../../src/core/markdown.js';
+import { serializeEntry, deserializeEntry } from '../../src/base/memory/markdown.js';
 import { stampOriginProject } from '../../src/store/sqlite/entry-row.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';

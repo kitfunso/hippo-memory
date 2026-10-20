@@ -1,8 +1,8 @@
 // Mechanical behaviour over the benchmark corpus: decay, strengthening, error priority, outcome feedback and the token budget.
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, applyOutcome, type MemoryEntry } from '../../src/core/memory.js';
-import { search } from '../../src/search/bm25-search.js';
-import { markRetrieved } from '../../src/core/memory.js';
+import { calculateStrength, applyOutcome, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { search } from '../../src/domain/search/bm25-search.js';
+import { markRetrieved } from '../../src/base/memory/memory.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { createMemory7, tmpDir, daysAgo, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';

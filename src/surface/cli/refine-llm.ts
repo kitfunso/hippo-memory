@@ -1,0 +1,194 @@
+/**
+ * LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in;
+ * idempotent via the `llm-refined` tag.
+ * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
+
+import { MemoryEntry, Layer } from '../../base/memory/memory.js';
+import { REFINED_TAG, storeRefinement, type Context } from '../../api/index.js';
+import { memoryList, memoryListByIds, type TenantReach } from '../../api/memories/memories.js';
+import { cliApiContext } from './api-context.js';
+import { chunked } from '../../base/util/chunked.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
+import {
+  failureFields,
+  sendAnthropicMessage,
+  type AnthropicMessageFailure,
+} from '../../base/util/anthropic-messages.js';
+import { log } from '../../base/util/log.js';
+
+const MAX_REFINE_SOURCES = 8;
+const REFINE_SOURCE_CHARS = 400;
+
+// Output budget for one refined memory, and the shortest reply kept as a refinement.
+const REFINE_MAX_TOKENS = 800;
+const REFINE_MIN_CHARS = 10;
+const CONSOLIDATED_MARKERS = ['[Consolidated from', '[Consolidated pattern from'];
+
+export interface RefineOptions {
+  apiKey: string;
+  model?: string;
+  limit?: number;
+  dryRun?: boolean;
+  /** Ignore the llm-refined tag and re-refine everything eligible. */
+  all?: boolean;
+  /** Injected for testing — defaults to the real fetch. */
+  fetcher?: typeof fetch;
+  /**
+   * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are
+   * skipped.
+   */
+  tenantId?: string;
+}
+
+export interface RefineResult {
+  scanned: number;
+  refined: number;
+  skipped: number;
+  failed: number;
+  details: Array<{ id: string; status: 'refined' | 'skipped' | 'failed'; reason?: string }>;
+}
+
+/**
+ * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API
+ * call failed.
+ */
+async function refineSemanticMemory(
+  merged: string,
+  sources: MemoryEntry[],
+  opts: { apiKey: string; model?: string; fetcher?: typeof fetch },
+): Promise<string | null> {
+  const sourceBlock = sources
+    .slice(0, MAX_REFINE_SOURCES)
+    .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`)
+    .join('\n\n');
+
+  const prompt =
+    `You are refining a semantic memory in an agent's memory store. ` +
+    `The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. ` +
+    `Produce a single coherent semantic memory that captures the underlying principle.
+
+Rules:
+- Output ONLY the refined content — no preamble, no quote marks, no "Here is...".
+- Keep it concise: one paragraph, no headers, no bullet lists unless the sources are inherently a list.
+- Preserve specific facts (names, numbers, paths, IDs) from the sources.
+- Generalize: state the pattern, not each instance.
+- Do NOT include the "[Consolidated from N ...]" marker.
+
+Current merged content:
+${redactSecretsStrict(merged)}
+
+Source memories (up to 8 shown):
+${sourceBlock}`;
+
+  const reply = await sendAnthropicMessage({
+    apiKey: opts.apiKey,
+    model: opts.model,
+    maxTokens: REFINE_MAX_TOKENS,
+    prompt,
+    fetcher: opts.fetcher,
+  });
+  if (!reply.ok) {
+    log.warn(describeRefineFailure(reply.failure), failureFields(reply.failure));
+    return null;
+  }
+  if (reply.text.length < REFINE_MIN_CHARS) {
+    log.warn('refine: response was empty or too short to use');
+    return null;
+  }
+  return reply.text;
+}
+
+function describeRefineFailure(failure: AnthropicMessageFailure): string {
+  switch (failure.kind) {
+    case 'request':
+      return `refine: request failed: ${failure.message}`;
+    case 'http':
+      return `refine: API answered HTTP ${failure.status}${failure.detail ? `: ${failure.detail}` : ''}`;
+    case 'unreadable':
+      return `refine: unreadable response: ${failure.message}`;
+    case 'empty':
+      return 'refine: response held no text';
+  }
+}
+
+function isConsolidated(entry: MemoryEntry): boolean {
+  if (entry.layer !== Layer.Semantic) return false;
+  return CONSOLIDATED_MARKERS.some((m) => entry.content.startsWith(m));
+}
+
+/**
+ * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it
+ * (unless `all`).
+ */
+export async function refineStore(hippoRoot: string, opts: RefineOptions): Promise<RefineResult> {
+  const result: RefineResult = {
+    scanned: 0,
+    refined: 0,
+    skipped: 0,
+    failed: 0,
+    details: [],
+  };
+
+  // No tenant means every tenant, so the ctx's own tenant is never read.
+  const ctx = cliApiContext(hippoRoot, opts.tenantId ?? '');
+  const reach: TenantReach = { everyTenant: opts.tenantId === undefined };
+  const entries = await memoryList(ctx, reach);
+  let processed = 0;
+
+  for (const entry of entries) {
+    if (!isConsolidated(entry)) continue;
+    result.scanned++;
+
+    if (!opts.all && entry.tags.includes(REFINED_TAG)) {
+      result.skipped++;
+      result.details.push({ id: entry.id, status: 'skipped', reason: 'already refined' });
+      continue;
+    }
+
+    if (opts.limit !== undefined && processed >= opts.limit) break;
+    processed++;
+
+    await refineOneEntry(ctx, reach, entry, opts, result);
+  }
+
+  return result;
+}
+
+async function refineOneEntry(
+  ctx: Context,
+  reach: TenantReach,
+  entry: MemoryEntry,
+  opts: RefineOptions,
+  result: RefineResult,
+): Promise<void> {
+  // Best-effort: walk parents_json (schema v9) to fetch originals. When parents aren't recorded we still refine using
+  // just the merged content.
+  const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
+  // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped, so refine still works from the merged
+  // content alone.
+  const chunks = await Promise.all(chunked(parentIds).map((chunk) => memoryListByIds(ctx, chunk, reach)));
+  const found = new Map(chunks.flat().map((p) => [p.id, p]));
+  const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
+
+  const refined = await refineSemanticMemory(entry.content, sources, {
+    apiKey: opts.apiKey,
+    model: opts.model,
+    fetcher: opts.fetcher,
+  });
+
+  if (refined === null) {
+    result.failed++;
+    result.details.push({ id: entry.id, status: 'failed', reason: 'api error or empty response' });
+    return;
+  }
+
+  if (opts.dryRun) {
+    result.refined++;
+    result.details.push({ id: entry.id, status: 'refined', reason: 'dry-run (no write)' });
+    return;
+  }
+
+  await storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenantId), entry, refined);
+  result.refined++;
+  result.details.push({ id: entry.id, status: 'refined' });
+}

@@ -22,7 +22,7 @@ const LEDGER_COMPARE = process.argv.includes('--ledger-compare');
 const CONTENTION = process.argv.includes('--contention');
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
-const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'core/memory.js')));
+const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'base/memory/memory.js')));
 const { initStore, writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'entry', 'testing.js')));
 
 // Same seed, vocabulary and prompts as scripts/z1-latency.mjs, so the context numbers compare.
@@ -223,7 +223,7 @@ function checkBounds(arms) {
 }
 
 async function ledgerCompare() {
-  const { estimateTokens } = await import(pathToFileURL(path.join(REPO, 'dist', 'util', 'token-text.js')));
+  const { estimateTokens } = await import(pathToFileURL(path.join(REPO, 'dist', 'base', 'util', 'token-text.js')));
   const stores = [];
   const arms = {};
   try {

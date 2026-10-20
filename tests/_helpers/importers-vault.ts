@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { type ImportOptions } from '../../src/importers/core.js';
+import { type ImportOptions } from '../../src/surface/importers/core.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

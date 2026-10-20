@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync, type ChildProcess } from 'node:child_process';
-import { createMemory } from '../../src/core/memory.js';
+import { createMemory } from '../../src/base/memory/memory.js';
 import {
   closeHippoDb,
   getHippoDbPath,

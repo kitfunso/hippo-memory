@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isSlackEventEnvelope, isSlackMessageEvent } from '../../src/connectors/slack/types.js';
-import type { JsonValue } from '../../src/util/json.js';
+import { isSlackEventEnvelope, isSlackMessageEvent } from '../../src/surface/connectors/slack/types.js';
+import type { JsonValue } from '../../src/base/util/json.js';
 
 describe('slack types', () => {
   it('accepts a well-formed event envelope', () => {

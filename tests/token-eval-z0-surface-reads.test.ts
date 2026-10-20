@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/base/memory/memory.js';
 import { contextBlockLines } from '../src/api/context-render.js';
 import { injectedRows } from '../scripts/token-eval/surfaces.mjs';
 import { storedAt, shownAtStart } from '../scripts/token-eval/leaks.mjs';

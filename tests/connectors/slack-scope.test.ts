@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scopeFromChannel } from '../../src/connectors/slack/scope.js';
+import { scopeFromChannel } from '../../src/surface/connectors/slack/scope.js';
 
 describe('scopeFromChannel', () => {
   it('public channel → slack:public:<id>', () => {

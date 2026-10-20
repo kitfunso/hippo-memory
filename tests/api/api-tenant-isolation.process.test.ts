@@ -7,11 +7,11 @@ import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember, promote, supersede } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { ConflictError } from '../../src/core/api-errors.js';
+import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { readEntry } from '../_helpers/root-forms.js';
 
 /**

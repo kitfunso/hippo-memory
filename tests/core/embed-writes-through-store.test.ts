@@ -5,11 +5,11 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
-import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { embeddingIndexIdentity, embeddingInputText } from '../../src/embeddings/index-identity.js';
-import { embedAll, embedMemory, type EmbedTarget } from '../../src/search/embed-memories.js';
-import { loadConfig } from '../../src/core/config.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
+import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
+import { embedAll, embedMemory, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
@@ -19,7 +19,7 @@ import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_h
 import { localIndex } from '../_helpers/cli-stores.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';

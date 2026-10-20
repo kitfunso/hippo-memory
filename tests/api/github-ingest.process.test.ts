@@ -2,16 +2,16 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { ingestEvent, type IngestEvent, type IngestInput } from '../../src/connectors/github/ingest.js';
-import type { IngestResult } from '../../src/connectors/ingest.js';
-import { computeIdempotencyKey } from '../../src/connectors/github/signature.js';
-import { issueEventToRememberOpts } from '../../src/connectors/github/transform.js';
+import { ingestEvent, type IngestEvent, type IngestInput } from '../../src/surface/connectors/github/ingest.js';
+import type { IngestResult } from '../../src/surface/connectors/ingest.js';
+import { computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
+import { issueEventToRememberOpts } from '../../src/surface/connectors/github/transform.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
   GitHubPullRequestEvent,
   GitHubPullRequestReviewCommentEvent,
-} from '../../src/connectors/github/types.js';
+} from '../../src/surface/connectors/github/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { stageScratchWinner } from '../_helpers/race-winner.js';
 import { makeRoot } from '../_helpers/make-root.js';

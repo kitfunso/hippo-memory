@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { replayCompactions, saveCompaction } from '../../src/capture/compaction-record.js';
+import { replayCompactions, saveCompaction } from '../../src/surface/capture/compaction-record.js';
 import { compactionByRequest, saveItems } from '../../src/store/sqlite/compactions-record.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
@@ -17,10 +17,10 @@ import {
   summaryWith,
   type Scratch,
 } from '../_helpers/compaction-hooks.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { log as hippoLog } from '../../src/util/log.js';
+import { log as hippoLog } from '../../src/base/util/log.js';
 
 const MINUTE = 60_000;
 const ITEMS = [

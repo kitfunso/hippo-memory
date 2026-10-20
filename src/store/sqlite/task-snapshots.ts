@@ -1,11 +1,11 @@
 // The active task snapshot rows and the continuity key that scopes them, for the Sessions group and the handoffs.
-import { isSharedStore } from '../../core/config.js';
+import { isSharedStore } from '../../base/config/config.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
-import { originInSql } from '../../core/project-identity.js';
-import { assertTenantId } from '../../core/tenant-id.js';
-import { redactSecretsStrict } from '../../util/secret-detect.js';
-import { TASK_OWNER_MIN_BINARY } from '../../util/version.js';
+import { originInSql } from '../../base/scope/project-identity.js';
+import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
+import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { TASK_SNAPSHOT_COLUMNS, type TaskSnapshotRow, rowToTaskSnapshot } from './rows.js';
 import type { TaskSnapshot, SnapshotInput } from '../port/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './mirrors.js';

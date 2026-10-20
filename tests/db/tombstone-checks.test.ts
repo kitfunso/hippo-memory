@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest } from '../../src/core/rejection-digest.js';
+import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';

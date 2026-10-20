@@ -1,8 +1,8 @@
 // hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its own.
 // A file apart from rejection.ts: sqlite/open.ts imports that one, so an open there would be an import cycle.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import { heldTexts } from '../../util/same-text.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import { heldTexts } from '../../base/util/same-text.js';
 import { audit } from './audit-event.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import {
@@ -19,11 +19,11 @@ import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import { deleteRejectedValue, insertRejectedValue, listRejectedValues, checkRejectionGuard } from './rejection.js';
-import { normalizeValueForRejection, rejectionDigest } from '../../core/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { AppliedRejection, LiftedRejection, Rejection, RejectionCheck, Rejections } from '../port/rejections.js';
-import { mergedSuccessor } from '../../core/merged-row.js';
-import { rejectedText, rejectionReaches } from '../../core/rejection-text.js';
-import { RejectedValueError } from '../../core/api-errors.js';
+import { mergedSuccessor } from '../../base/memory/merged-row.js';
+import { rejectedText, rejectionReaches } from '../../base/records/rejection-text.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles } from './bound.js';
 import type { Sync } from './served.js';

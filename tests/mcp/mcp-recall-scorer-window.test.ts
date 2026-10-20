@@ -12,13 +12,13 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 function callTool(
@@ -40,7 +40,7 @@ function callTool(
 /** Extract the rendered text from a `hippo_recall` MCP tool result. */
 function extractResultText(response: McpResponse | null): string {
   // SAFETY: hippo_recall's success response is written by this MCP server
-  // under test (src/mcp/server.ts) and always shapes `result` as
+  // under test (src/surface/mcp/server.ts) and always shapes `result` as
   // { content: [{ text: string }, ...] } for a text-content tool result.
   const result = response?.result as { content?: Array<{ text: string }> } | undefined;
   return result?.content?.[0]?.text ?? '';
@@ -106,7 +106,7 @@ describe('MCP hippo_recall scorer_window', () => {
     const text = extractResultText(result);
     expect(text).toContain('Found 30 memories:');
     // Appendix renders "## Fresh tail / substituted summaries" header
-    // (src/mcp/server.ts:470). Confirm the appendix path fired with the
+    // (src/surface/mcp/server.ts:470). Confirm the appendix path fired with the
     // beta rows that physics didn't score.
     expect(text).toContain('Fresh tail / substituted summaries');
   });

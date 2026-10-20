@@ -8,11 +8,11 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { adminActor } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
-import { loadConfig } from '../../src/core/config.js';
-import { isJsonObject, tryParseJson } from '../../src/util/json.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { isJsonObject, tryParseJson } from '../../src/base/util/json.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 

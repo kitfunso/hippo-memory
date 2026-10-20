@@ -5,14 +5,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { serializeEntry } from '../../src/core/markdown.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { applyOutcomeAt, writeEntriesTogetherAt, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const open: DatabaseSyncLike[] = [];
 afterEach(() => {

@@ -5,7 +5,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authCreate, authCreateSelf, authListRows, type AuthCreateResult } from '../../src/api/index.js';
-import { verifyApiKeyCached } from '../../src/server/api-key.js';
+import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore } from '../../src/entry/store-kit.js';
@@ -18,7 +18,7 @@ import {
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyListItem } from '../../src/store/port/key-writes.js';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 
 let fixture: TwoTenantFixture;
 let owned: OwnedKeys;

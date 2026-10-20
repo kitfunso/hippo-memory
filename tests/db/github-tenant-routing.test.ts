@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { resolveTenantForGitHub, type GitHubFallback } from '../../src/connectors/github/tenant-routing.js';
+import { resolveTenantForGitHub, type GitHubFallback } from '../../src/surface/connectors/github/tenant-routing.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { envTenant } from '../../src/util/env.js';
+import { envTenant } from '../../src/base/util/env.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): GitHubFallback => ({ hostTenant: envTenant(), allowUnknown });

@@ -3,10 +3,10 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockIns
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/embeddings/transformers.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { embedQueryBy } from '../../src/search/vector.js';
-import { loadConfig } from '../../src/core/config.js';
+import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/base/embeddings/transformers.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { embedQueryBy } from '../../src/domain/search/vector.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 type Pipe = (input: string) => Promise<{ data: number[] }>;
 type PipelineFn = (task: string, model: string) => Promise<Pipe>;

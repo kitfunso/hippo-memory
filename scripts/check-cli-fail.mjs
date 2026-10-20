@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fails when a CLI file prints an error and then throws CliExit(1) by hand. fail() in src/cli/exit.ts does both,
+// Fails when a CLI file prints an error and then throws CliExit(1) by hand. fail() in src/surface/cli/exit.ts does both,
 // so the message and the exit code cannot drift apart. Zero allowed, no baseline.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -64,7 +64,7 @@ function listSourceFiles(dir) {
 }
 
 /**
- * Finds every print-then-throw pair in src/cli.ts and src/cli/ under srcDir.
+ * Finds every print-then-throw pair in src/cli.ts and src/surface/cli/ under srcDir.
  * @param {string} srcDir
  * @returns {{ file: string, line: number }[]}
  */
@@ -74,7 +74,7 @@ export function findFailPairs(srcDir) {
     listSourceFiles(root)
       .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
       // exit.ts holds the one allowed pair: the body of fail().
-      .filter(([file]) => (file === 'cli.ts' || file.startsWith('cli/')) && file !== 'cli/exit.ts')
+      .filter(([file]) => (file === 'cli.ts' || file.startsWith('surface/cli/')) && file !== 'surface/cli/exit.ts')
       .flatMap(([file, p]) => failPairLines(readFileSync(p, 'utf8')).map((line) => ({ file, line })))
       .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
   );
@@ -87,7 +87,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error(`\n${hits.length} printError + throw new CliExit(1) pair(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}`);
-    console.error('\nFix: call fail(...) from src/cli/exit.ts, which prints the message and exits 1.\n');
+    console.error('\nFix: call fail(...) from src/surface/cli/exit.ts, which prints the message and exits 1.\n');
     process.exit(1);
   }
   console.log('Every CLI error exit goes through fail(). OK.');

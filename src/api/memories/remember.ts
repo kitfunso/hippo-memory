@@ -2,7 +2,7 @@
 
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../store/port.js';
 import { detectInstruction, INSTRUCTION_LIKE_TAG } from '../instruction-detect.js';
-import { quarantineScopeFor } from '../../trust/quarantine.js';
+import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
 import {
   createMemory,
   type ConfidenceLevel,
@@ -10,12 +10,17 @@ import {
   type MemoryEntry,
   type MemoryKind,
   type TraceOutcome,
-} from '../../core/memory.js';
-import { vetSecrets } from '../../util/secret-detect.js';
-import { assertCallerProject } from '../../core/project-identity.js';
-import { BadRequestError, ForbiddenError } from '../../core/api-errors.js';
-import { assertClientScope, canReadScope, personalScopeOf, ScopeForbiddenError } from '../../core/recall-scope.js';
-import { isQuarantineScope } from '../../trust/quarantine.js';
+} from '../../base/memory/memory.js';
+import { vetSecrets } from '../../base/util/secret-detect.js';
+import { assertCallerProject } from '../../base/scope/project-identity.js';
+import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
+import {
+  assertClientScope,
+  canReadScope,
+  personalScopeOf,
+  ScopeForbiddenError,
+} from '../../base/scope/recall-scope.js';
+import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import type { Context } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 

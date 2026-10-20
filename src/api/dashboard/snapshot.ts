@@ -10,9 +10,9 @@ import {
   type LossAversion,
   type MemoryEntry,
   type StrengthInputs,
-} from '../../core/memory.js';
-import { AT_RISK_BELOW, STRONG_FROM } from '../../core/strength-bands.js';
-import { isQuarantineScope } from '../../trust/quarantine.js';
+} from '../../base/memory/memory.js';
+import { AT_RISK_BELOW, STRONG_FROM } from '../../base/memory/strength-bands.js';
+import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import type {
   ConflictPair,
   DashboardReads,
@@ -30,8 +30,8 @@ import type {
   ScatterGrid,
   ScatterPoints,
 } from './types.js';
-import { DAY_MS } from '../../util/time.js';
-import { round1 } from '../../util/format.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { round1 } from '../../base/util/format.js';
 
 export { DAY_MS };
 export const LAYERS: readonly Layer[] = ['buffer', 'episodic', 'semantic', 'trace'];

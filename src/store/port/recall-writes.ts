@@ -1,4 +1,4 @@
-import type { RerankStep } from '../../core/search-types.js';
+import type { RerankStep } from '../../base/rank/search-types.js';
 import type { OriginFilter, AppendAuditOpts } from './types.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */

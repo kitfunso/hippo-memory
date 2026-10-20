@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { contextGet } from '../../src/api/index.js';
-import { BadRequestError } from '../../src/core/api-errors.js';
+import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

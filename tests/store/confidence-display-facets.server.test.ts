@@ -11,17 +11,17 @@ import {
   resolveConfidence,
   type MemoryEntry,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/core/memory.js';
-import { serveDashboard } from '../../src/server/dashboard-listener.js';
-import type { ServerHandle } from '../../src/server/types.js';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+} from '../../src/base/memory/memory.js';
+import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
+import type { ServerHandle } from '../../src/surface/server/types.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { sessionCookie } from '../_helpers/dashboard-fixture.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {

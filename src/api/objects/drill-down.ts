@@ -1,10 +1,10 @@
 // DAG drill-down from a summary to its children.
 
 import type { SummaryDescendants } from '../../store/port.js';
-import { estimateTokens } from '../../util/token-text.js';
-import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
-import { personalScopeOf } from '../../core/recall-scope.js';
-import { descendantAdmits, type DescendantAdmission } from '../../core/read-admission.js';
+import { estimateTokens } from '../../base/util/token-text.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
+import { personalScopeOf } from '../../base/scope/recall-scope.js';
+import { descendantAdmits, type DescendantAdmission } from '../../base/scope/read-admission.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from '../types.js';
 

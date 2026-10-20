@@ -1,14 +1,14 @@
 // `hippo projects` list, merge and repair plan on a store of several projects, imports, sleep-merged rows and dormant
 // snapshots: the answers the whole-tenant read gave, from reads that skip the rows each one does not touch.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { ProjectTagStore } from '../../src/store/local/project-tags.js';
-import { listProjects, mergeProjects, planProjectRepair } from '../../src/sharing/project-merge.js';
-import { mergedText } from '../../src/util/same-text.js';
+import { listProjects, mergeProjects, planProjectRepair } from '../../src/domain/sharing/project-merge.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

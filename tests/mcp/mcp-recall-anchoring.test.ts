@@ -12,13 +12,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
-import { cliConfig } from '../../src/cli/api-context.js';
+import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { createCallerState } from '../../src/api/callers.js';
 
@@ -37,7 +37,7 @@ function callTool(reqId: number, name: string, args: RecallToolArgs, ctx: McpCon
 
 function extractText(res: McpResponse | null): string {
   // SAFETY: handleMcpRequest's 'tools/call' case always wraps tool output in
-  // MCP's { content: [{ type: 'text', text }] } shape (src/mcp/server.ts);
+  // MCP's { content: [{ type: 'text', text }] } shape (src/surface/mcp/server.ts);
   // McpResponse.result is `unknown` only because different tools return
   // different payloads.
   const r = res?.result as { content?: Array<{ text?: string }> } | undefined;

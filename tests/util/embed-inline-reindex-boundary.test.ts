@@ -2,10 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isJsonObject, type JsonValue } from '../../src/util/json.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
-import { embedMemory } from '../../src/search/embed-memories.js';
-import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
+import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { embedMemory } from '../../src/domain/search/embed-memories.js';
+import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -8,7 +8,7 @@ import { serve, type AddonRoute, type ServeOpts } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
-import { clientLimitKey } from '../../src/server/client-ip.js';
+import { clientLimitKey } from '../../src/surface/server/client-ip.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { withoutLocalFiles } from '../_helpers/port-only-store.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';

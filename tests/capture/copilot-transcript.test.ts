@@ -3,9 +3,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { collectSessionTurns } from '../../src/capture/transcript.js';
-import { transcriptWorkingState } from '../../src/capture/working-state.js';
-import { copilotTranscriptFor, copilotTurn } from '../../src/capture/copilot-transcript.js';
+import { collectSessionTurns } from '../../src/surface/capture/transcript.js';
+import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
+import { copilotTranscriptFor, copilotTurn } from '../../src/surface/capture/copilot-transcript.js';
 import { copilotEventsJsonl, copilotEventsTail, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 
 afterEach(() => {

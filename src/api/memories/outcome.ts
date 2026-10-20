@@ -1,6 +1,6 @@
 // Outcome feedback on recalled memories.
 
-import { personalScopeOf } from '../../core/recall-scope.js';
+import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
 
 /** An id outside ctx.tenantId, or in someone else's personal scope, is skipped, so a stale id never fails the call.

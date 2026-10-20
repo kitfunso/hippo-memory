@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import type { CallerItems, CallerItemsSaved, MemoryEntry } from '../../src/entry/store-kit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { normalizeValueForRejection, rejectionDigest } from '../../src/core/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryCompactionsStore } from '../_helpers/in-memory-compactions-store.js';

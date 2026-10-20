@@ -1,9 +1,9 @@
 // Leaf module so entry-writes.ts and raw-archive.ts can both mark a parent summary dirty without importing each other.
-import { errorMessage } from '../../util/log.js';
+import { errorMessage } from '../../base/util/log.js';
 import { appendAuditEvent } from './audit.js';
-import { reportAuditWriteFailure } from '../../core/audit-report.js';
+import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { DAG_LEVEL } from '../../core/memory.js';
+import { DAG_LEVEL } from '../../base/memory/memory.js';
 import type { AppendAuditOpts } from '../port/types.js';
 
 const MARK_DIRTY_WHERE = `tenant_id = ?

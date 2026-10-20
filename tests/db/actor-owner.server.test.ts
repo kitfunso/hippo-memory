@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
-import { verifyApiKeyCached } from '../../src/server/api-key.js';
+import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { ownerOrSubject, type Actor } from '../../src/api/index.js';
 import {
   ownerOrSubject as exportedOwnerOrSubject,

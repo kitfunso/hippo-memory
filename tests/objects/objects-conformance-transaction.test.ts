@@ -5,7 +5,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { TENANT_A } from '../_helpers/store-conformance.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import type { AuditOp } from '../../src/core/audit-ops.js';
+import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import {
   T2,
   T3,

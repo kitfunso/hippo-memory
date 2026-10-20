@@ -5,14 +5,14 @@
 
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { OnHandle } from './open.js';
-import type { RerankStep } from '../../core/search-types.js';
-import { DELIVERY_LEDGER_VERSION, isBoundaryEvent } from '../../core/delivery.js';
-import type { DeliveryEventInput } from '../../core/delivery.js';
-import { errorFields, errorMessage, log } from '../../util/log.js';
-import { DAY_MS } from '../../util/time.js';
-import { blockHash } from '../../util/token-text.js';
-import { placeholders, rowsPerStatement, valuesRows } from '../../util/sql.js';
-import { chunked } from '../../util/chunked.js';
+import type { RerankStep } from '../../base/rank/search-types.js';
+import { DELIVERY_LEDGER_VERSION, isBoundaryEvent } from '../../base/session/delivery.js';
+import type { DeliveryEventInput } from '../../base/session/delivery.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { blockHash } from '../../base/util/token-text.js';
+import { placeholders, rowsPerStatement, valuesRows } from '../../base/util/sql.js';
+import { chunked } from '../../base/util/chunked.js';
 import type { RecallTraceInput } from '../port/recall-writes.js';
 
 /** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step

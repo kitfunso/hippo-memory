@@ -2,7 +2,7 @@
  * v1.12.13 / C5 — cutoff transparency for the MCP hippo_recall path.
  *
  * Proof-of-fix for the plan-eng-critic round 1 CRIT: MCP runs a SECOND
- * physics/hybrid pipeline (src/mcp/server.ts loadAllEntries -> scope filter
+ * physics/hybrid pipeline (src/surface/mcp/server.ts loadAllEntries -> scope filter
  * -> physicsSearch/hybridSearch) for the user-visible memory list AFTER
  * apiRecall. If suppressionSummary were attached only to apiResult, MCP
  * users would see counts describing a DIFFERENT pipeline than the memories
@@ -25,12 +25,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 afterEach(() => {

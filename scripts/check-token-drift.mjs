@@ -60,7 +60,7 @@ const LEGACY_HEX_PATTERNS = [
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
 
-const SCAN_PATHS = ['ui/index.html', 'ui/src', 'src/dashboard/dashboard.ts'];
+const SCAN_PATHS = ['ui/index.html', 'ui/src', 'src/surface/dashboard/dashboard.ts'];
 
 const EXEMPT_FILES = new Set([
   // The canonical token sources — they SHOULD contain the new parchment

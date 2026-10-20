@@ -3,18 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { contextGet } from '../../src/api/index.js';
-import { containerId, containerPrefix } from '../../src/agent-memories/source.js';
-import { importAtSessionEnd } from '../../src/agent-memories/sync.js';
+import { containerId, containerPrefix } from '../../src/domain/agent-memories/source.js';
+import { importAtSessionEnd } from '../../src/domain/agent-memories/sync.js';
 import { saveItems } from '../../src/store/sqlite/compactions-record.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
-import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
-import { planProjectRepair } from '../../src/sharing/project-merge.js';
+import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { planProjectRepair } from '../../src/domain/sharing/project-merge.js';
 import { projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { projectTagReads } from '../../src/store/sqlite/project-tags.js';
-import { cliApiContext } from '../../src/cli/api-context.js';
-import { resolveProjectIdentity } from '../../src/core/project-identity.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { resolveProjectIdentity } from '../../src/base/scope/project-identity.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import {
   closeWorld,
@@ -27,8 +27,8 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/core/config.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -93,11 +93,11 @@ const sync = (cwd: string) =>
 async function nextProcess() {
   vi.resetModules();
   const [syncMod, projects, roots, agentImport, config] = await Promise.all([
-    import('../../src/agent-memories/sync.js'),
+    import('../../src/domain/agent-memories/sync.js'),
     import('../../src/api/objects/projects.js'),
-    import('../../src/cli/api-context.js'),
+    import('../../src/surface/cli/api-context.js'),
     import('../../src/store/sqlite/agent-import.js'),
-    import('../../src/core/config.js'),
+    import('../../src/base/config/config.js'),
   ]);
   return {
     sync: (cwd: string) =>

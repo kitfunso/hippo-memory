@@ -17,7 +17,7 @@ import {
   type AuthCreateSelfResult,
   type AuthRevokeResult,
 } from '../../src/api/index.js';
-import { ForbiddenError } from '../../src/core/api-errors.js';
+import { ForbiddenError } from '../../src/base/errors/api-errors.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

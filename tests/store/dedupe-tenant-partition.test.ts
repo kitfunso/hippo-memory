@@ -24,7 +24,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
-import { deduplicateStore, type DedupPair } from '../../src/consolidate/dedupe.js';
+import { deduplicateStore, type DedupPair } from '../../src/domain/consolidate/dedupe.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { makeRoot } from '../_helpers/make-root.js';

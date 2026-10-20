@@ -1,5 +1,5 @@
 // MCP reaches the store through src/api or the port, never the SQLite adapter. The api checks no store group, so the
-// memory routes leave every capability check to the server's one edge helper (src/server/store-edge.ts).
+// memory routes leave every capability check to the server's one edge helper (src/surface/server/store-edge.ts).
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,11 +22,11 @@ function linesMatching(files: readonly string[], re: RegExp): string[] {
 }
 
 describe('surface reach into the store', () => {
-  it('no src/mcp file imports the SQLite adapter', () => {
-    expect(linesMatching(tsFilesUnder('mcp'), /['"](\.\.\/)+store\/sqlite\//)).toEqual([]);
+  it('no src/surface/mcp file imports the SQLite adapter', () => {
+    expect(linesMatching(tsFilesUnder('surface/mcp'), /['"](\.\.\/)+store\/sqlite\//)).toEqual([]);
   });
 
   it('the memory routes import nothing from src/store and decide no store capability', () => {
-    expect(linesMatching(['server/routes/memories.ts'], /['"](\.\.\/)+store\/|\bhasGroup\b/)).toEqual([]);
+    expect(linesMatching(['surface/server/routes/memories.ts'], /['"](\.\.\/)+store\/|\bhasGroup\b/)).toEqual([]);
   });
 });

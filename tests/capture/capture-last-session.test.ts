@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { summariseTranscript, resolveLastSessionTranscript } from '../../src/capture/transcript.js';
+import { summariseTranscript, resolveLastSessionTranscript } from '../../src/surface/capture/transcript.js';
 import { trySymlink } from '../_helpers/symlink.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 

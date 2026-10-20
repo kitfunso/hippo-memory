@@ -9,9 +9,9 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ingestEvent, type IngestEvent } from '../../src/connectors/github/ingest.js';
+import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
-import type { GitHubIssueEvent, GitHubIssueCommentEvent } from '../../src/connectors/github/types.js';
+import type { GitHubIssueEvent, GitHubIssueCommentEvent } from '../../src/surface/connectors/github/types.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

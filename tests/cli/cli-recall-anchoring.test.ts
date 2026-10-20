@@ -3,11 +3,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { handleRecall } from '../../src/cli/recall.js';
-import { resolveTenantId } from '../../src/server/boot.js';
+import { handleRecall } from '../../src/surface/cli/recall.js';
+import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

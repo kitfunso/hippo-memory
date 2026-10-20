@@ -1,11 +1,11 @@
-import { DEFAULT_TENANT_ID } from '../../util/tenant.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Layer, type MemoryEntry } from '../../core/memory.js';
-import { dumpFrontmatter } from '../../util/yaml.js';
+import { Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { dumpFrontmatter } from '../../base/util/yaml.js';
 import { openHippoDb, getMeta, CONSOLIDATION_RUNS_KEPT } from '../../db/index.js';
 import { oncePerStore } from '../../db/connect.js';
-import { errorFields, errorMessage, log } from '../../util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   type HippoIndex,
   type IndexEntry,
@@ -23,8 +23,8 @@ import {
 import type { LegacyStats } from '../port/reports.js';
 import type { MemoryConflict } from '../port/conflicts.js';
 import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
-import { serializeEntry } from '../../core/markdown.js';
-import { writeFileAtomic } from '../../util/atomic-write.js';
+import { serializeEntry } from '../../base/memory/markdown.js';
+import { writeFileAtomic } from '../../base/util/atomic-write.js';
 import type { StoreFiles } from './open.js';
 
 const SCORE_DECIMALS = 3;

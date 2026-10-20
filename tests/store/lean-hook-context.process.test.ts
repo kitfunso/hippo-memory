@@ -2,12 +2,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { estimateTokens } from '../../src/util/token-text.js';
-import type { SearchResult } from '../../src/core/search-types.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { graphExpandRecall } from '../../src/graph/recall.js';
+import { graphExpandRecall } from '../../src/domain/graph/recall.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

@@ -2,9 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { runConsolidation } from '../../src/consolidate/sleep.js';
-import { loadConfig } from '../../src/core/config.js';
-import { calculateStrength, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { calculateStrength, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';

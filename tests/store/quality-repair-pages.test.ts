@@ -1,11 +1,11 @@
 // Quality repair over a tenant larger than one page: the same plan and the same moves as one whole read gave.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { PROTECTED_ROWS } from '../../src/core/memory-audit.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { PROTECTED_ROWS } from '../../src/base/memory/memory-audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { mergedText } from '../../src/util/same-text.js';
+import { mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { repairAutomaticMemories } from '../_helpers/root-forms.js';

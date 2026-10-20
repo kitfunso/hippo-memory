@@ -8,8 +8,8 @@ import {
   detectRegressions,
   resultToBaseline,
   formatResult,
-} from '../../src/eval/eval-suite.js';
-import { handleEval } from '../../src/cli/eval.js';
+} from '../../src/domain/eval/eval-suite.js';
+import { handleEval } from '../../src/surface/cli/eval.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 
 describe('eval-suite scoring', () => {

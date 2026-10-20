@@ -9,7 +9,7 @@ import {
   registerWorkspace,
   runDailyMaintenance,
   workspaceRegistryPath,
-} from '../../src/cli/scheduler.js';
+} from '../../src/surface/cli/scheduler.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 

@@ -4,7 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { handleRecall } from '../../src/cli/recall.js';
+import { handleRecall } from '../../src/surface/cli/recall.js';
 import { forget } from '../../src/api/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';

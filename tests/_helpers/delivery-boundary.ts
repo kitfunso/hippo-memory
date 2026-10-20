@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from './delivery-events.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';

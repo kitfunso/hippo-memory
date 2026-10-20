@@ -1,30 +1,30 @@
 #!/usr/bin/env node
-// Hippo CLI entry point: parses argv and dispatches each verb through the table in cli/verbs.ts.
+// Hippo CLI entry point: parses argv and dispatches each verb through the table in surface/cli/verbs.ts.
 // `hippo help` prints the verb list from that table, so no list is kept here.
 
-import { envSkipAutoIntegrations, envTenant, validateFlags } from './util/env.js';
+import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
-import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
-import { getHippoRoot } from './core/project-identity.js';
-import { readPackageVersion } from './core/package-root.js';
-import { printGitHubBackfillUsage } from './cli/github.js';
-import { printError } from './cli/output.js';
-import { exitAfterFlush } from './util/crash-handlers.js';
-import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
+import { repairCodexWrapperIfInstalled } from './domain/hooks/codex-wrapper.js';
+import { getHippoRoot } from './base/scope/project-identity.js';
+import { readPackageVersion } from './base/config/package-root.js';
+import { printGitHubBackfillUsage } from './surface/cli/github.js';
+import { printError } from './surface/cli/output.js';
+import { exitAfterFlush } from './base/util/crash-handlers.js';
+import { errorFields, errorMessage, isLevelEnabled, log } from './base/util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './store/port.js';
-import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
+import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './surface/cli/flag-values.js';
 import {
   USAGE_HEADER,
   USAGE_EXAMPLES,
   printAuditPruneUsage,
   printSlackBackfillUsage,
   printSlackWorkspacesUsage,
-} from './cli/usage.js';
-import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
-import { COMMANDS } from './cli/verbs.js';
-import type { VerbSpec } from './cli/verb-row.js';
-import { CliExit, fail } from './cli/exit.js';
+} from './surface/cli/usage.js';
+import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './surface/cli/flags.js';
+import { COMMANDS } from './surface/cli/verbs.js';
+import type { VerbSpec } from './surface/cli/verb-row.js';
+import { CliExit, fail } from './surface/cli/exit.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
@@ -246,7 +246,7 @@ async function main(command: string, args: string[], flags: CliFlags, hippoRoot:
     throw new CliExit(1);
   }
   const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
-  await (spec.scoped ? (await import('./cli/api-context.js')).cliRequest(run) : run());
+  await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
 }
 
 /** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe side. */

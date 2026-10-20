@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Per-verb flag reads: for each row of the verb table in src/cli/verbs/, the flags its handler and every function it hands the flags object to read.
+// Per-verb flag reads: for each row of the verb table in src/surface/cli/verbs/, the flags its handler and every function it hands the flags object to read.
 // It follows the object, so a flags object built elsewhere does not count toward a verb. Usage: cli-flag-reads.mjs [--json]
 
 import { createRequire } from 'node:module';
@@ -481,10 +481,10 @@ function rowHandler(env, call) {
   return { run: made, bound: boundParams(env, null, factory, init.arguments) };
 }
 
-/** The handler of every `verb(...)` row of the verb table in src/cli/verbs/. */
+/** The handler of every `verb(...)` row of the verb table in src/surface/cli/verbs/. */
 function commandRows(env) {
   const { ts, program, repo } = env;
-  const verbsDir = path.resolve(repo, 'src', 'cli', 'verbs');
+  const verbsDir = path.resolve(repo, 'src', 'surface', 'cli', 'verbs');
   const rows = [];
   const find = (node) => {
     if (
@@ -500,7 +500,7 @@ function commandRows(env) {
     ts.forEachChild(node, find);
   };
   for (const sf of program.getSourceFiles()) if (path.dirname(path.resolve(sf.fileName)) === verbsDir) find(sf);
-  if (rows.length === 0) throw new Error('no verb rows found in src/cli/verbs/');
+  if (rows.length === 0) throw new Error('no verb rows found in src/surface/cli/verbs/');
   return rows;
 }
 

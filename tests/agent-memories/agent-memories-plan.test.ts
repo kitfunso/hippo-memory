@@ -10,7 +10,7 @@ import {
   type LegacyTarget,
   type LiveRow,
   type PlanItem,
-} from '../../src/agent-memories/plan.js';
+} from '../../src/domain/agent-memories/plan.js';
 
 const DAY1 = '2026-09-01T00:00:00.000Z';
 const DAY2 = '2026-09-02T00:00:00.000Z';

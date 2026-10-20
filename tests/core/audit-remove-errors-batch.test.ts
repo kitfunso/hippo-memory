@@ -2,8 +2,8 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { AuditIssue } from '../../src/core/memory-audit.js';
-import { computeSchemaFit, schemaFitFrom, schemaFitSourceOf } from '../../src/core/memory.js';
+import type { AuditIssue } from '../../src/base/memory/memory-audit.js';
+import { computeSchemaFit, schemaFitFrom, schemaFitSourceOf } from '../../src/base/memory/memory.js';
 import { auditRemoveErrors } from '../../src/api/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

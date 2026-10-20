@@ -1,21 +1,21 @@
 /** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (SQLite may leave empty -wal and
  * -shm files); never touches memory content. */
-import { envByName, processEnv } from './util/env.js';
+import { envByName, processEnv } from './base/util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from './core/project-identity.js';
-import { realpathOrResolve } from './util/real-path.js';
-import { getGlobalRoot } from './sharing/global-store.js';
+import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from './base/scope/project-identity.js';
+import { realpathOrResolve } from './base/util/real-path.js';
+import { getGlobalRoot } from './domain/sharing/global-store.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
-import { loadConfig } from './core/config.js';
-import { redactSecretsStrict } from './util/secret-detect.js';
-import { type JsonValue, isJsonString, isJsonObject, tryReadJsonFile } from './util/json.js';
-import { tryParseUrl } from './util/net.js';
-import { ignoringCodes, PATH_UNREADABLE } from './util/expected-errors.js';
-import { escapeRegex } from './util/escape.js';
-import { errorMessage } from './util/log.js';
+import { loadConfig } from './base/config/config.js';
+import { redactSecretsStrict } from './base/util/secret-detect.js';
+import { type JsonValue, isJsonString, isJsonObject, tryReadJsonFile } from './base/util/json.js';
+import { tryParseUrl } from './base/util/net.js';
+import { ignoringCodes, PATH_UNREADABLE } from './base/util/expected-errors.js';
+import { escapeRegex } from './base/util/escape.js';
+import { errorMessage } from './base/util/log.js';
 import type { JsonObject } from './store/port/types.js';
 
 export interface SupportBundleOptions extends DoctorOptions {
@@ -32,7 +32,7 @@ const TAIL_MAX_LINE_CHARS = 2000;
 // key body.
 const ORPHAN_KEY_END_RE = /^[\s\S]*-----END [A-Z ]*PRIVATE KEY-----/;
 
-// The other env vars hippo reads outside the HIPPO_ prefix (src/embeddings/provider.ts, connectors/*).
+// The other env vars hippo reads outside the HIPPO_ prefix (src/base/embeddings/provider.ts, surface/connectors/*).
 const OTHER_ENV_NAMES: readonly string[] = [
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',

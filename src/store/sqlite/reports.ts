@@ -1,5 +1,5 @@
 // hippo.db's Reports group: the tenant reports, listings and usage reports the status verbs print.
-import type { LossAversion, MemoryEntry } from '../../core/memory.js';
+import type { LossAversion, MemoryEntry } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { summarizeTokenUse } from './token-ledger.js';

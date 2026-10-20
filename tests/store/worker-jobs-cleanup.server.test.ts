@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { MessageChannel } from 'node:worker_threads';
 import { RequestStores } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { serveJobs } from '../../src/store/sqlite/worker-jobs.js';
 import type { Job } from '../../src/store/sqlite/worker-ops.js';
-import { log } from '../../src/util/log.js';
+import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const roots: string[] = [];

@@ -18,7 +18,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
@@ -27,10 +27,10 @@ import {
   closeIncident,
   loadIncidentById,
   loadIncidents,
-} from '../../src/objects/incidents.js';
+} from '../../src/domain/objects/incidents.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {

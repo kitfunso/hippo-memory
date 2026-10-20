@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadPhysicsState, savePhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { refreshParticleProperties } from '../../src/core/particle-refresh.js';
-import { float32ToBuffer, bufferToFloat32 } from '../../src/util/vector-codec.js';
-import { initializeParticle } from '../../src/core/physics.js';
-import type { PhysicsParticle } from '../../src/core/physics.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.js';
+import { float32ToBuffer, bufferToFloat32 } from '../../src/base/util/vector-codec.js';
+import { initializeParticle } from '../../src/base/rank/physics.js';
+import type { PhysicsParticle } from '../../src/base/rank/physics.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {

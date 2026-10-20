@@ -1,9 +1,9 @@
 // Session context assembly under a token budget.
 
-import { estimateTokens } from '../util/token-text.js';
-import type { MemoryEntry } from '../core/memory.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
-import { projectNames } from '../core/project-identity.js';
+import { estimateTokens } from '../base/util/token-text.js';
+import type { MemoryEntry } from '../base/memory/memory.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
+import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';
@@ -95,8 +95,8 @@ export async function assemble(ctx: Context, sessionId: string, opts: AssembleOp
 
   const tailItems = tailRows.map(freshTailItem);
 
-  // Byte compare is chronological for the fixed-form UTC ISO timestamps (invariant documented in src/core/memory.ts
-  // above MemoryEntry).
+  // Byte compare is chronological for the fixed-form UTC ISO timestamps (invariant documented in
+  // src/base/memory/memory.ts above MemoryEntry).
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));

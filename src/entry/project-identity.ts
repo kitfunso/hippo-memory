@@ -6,4 +6,4 @@ export {
   resolveProjectIdentity,
   type ProjectIdentity,
   type ResolveProjectIdentityOpts,
-} from '../core/project-identity.js';
+} from '../base/scope/project-identity.js';

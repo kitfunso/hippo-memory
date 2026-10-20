@@ -8,13 +8,13 @@ import { join } from 'node:path';
 import { SqliteBlockedError, withSqliteBlocked } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
 import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vector-index.js';
-import { resolveVectorArm } from '../../src/search/vector.js';
+import { resolveVectorArm } from '../../src/domain/search/vector.js';
 import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { strengthenRetrieved } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
@@ -50,20 +50,20 @@ const ROWS: readonly Row[] = [
     'false',
   ],
   [
-    'search/vector.ts resolveVectorArm',
+    'domain/search/vector.ts resolveVectorArm',
     /fillVectorArm/,
     async (root) =>
       `embeddings ${(await resolveVectorArm('deploy', [], folderVectorSource({ hippoRoot: root }), {})).useEmbeddings}`,
     'embeddings false',
   ],
   [
-    'search/physics-search.ts physicsQueryVector',
+    'domain/search/physics-search.ts physicsQueryVector',
     /physicsQueryVector/,
     async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root })),
     'ranked 1',
   ],
   [
-    'search/physics-search.ts withVectorCandidates',
+    'domain/search/physics-search.ts withVectorCandidates',
     /withVectorCandidates/,
     async (root) =>
       ranked(
@@ -76,7 +76,7 @@ const ROWS: readonly Row[] = [
     'ranked 1',
   ],
   [
-    'search/physics-search.ts loadCandidateParticles',
+    'domain/search/physics-search.ts loadCandidateParticles',
     /loadCandidateParticles/,
     async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root, queryEmbedding: [1, 0, 0] })),
     'ranked 1',

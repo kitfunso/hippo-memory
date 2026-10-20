@@ -8,7 +8,7 @@
       "checked": "2026-10-03",
       "names": ["Claude Code", "claude-code"],
       "integration": ["native-hooks", "native-plugin"],
-      "sources": ["src/hooks/json-hooks.ts", "src/capture", "src/core/capture-contract.ts", "src/capture/compaction-record.ts", "src/capture/capture-error.ts", "extensions/claude-code-plugin", "integrations/claude-code.md"],
+      "sources": ["src/domain/hooks/json-hooks.ts", "src/surface/capture", "src/base/session/capture-contract.ts", "src/surface/capture/compaction-record.ts", "src/surface/capture/capture-error.ts", "extensions/claude-code-plugin", "integrations/claude-code.md"],
       "claims": ["README.md", "package.json", "website/src/pages/claude-code.astro"],
       "routes": {
         "promptContext": "UserPromptSubmit runs hippo context --pinned-only",
@@ -47,7 +47,7 @@
         }
       ],
       "owner": "maintainer",
-      "nextAction": "Save lessons before compaction, not only after it from the summary; record a live save-and-resume run for automatic and manual compaction; move the tool-failure payload reader onto src/core/capture-contract.ts.",
+      "nextAction": "Save lessons before compaction, not only after it from the summary; record a live save-and-resume run for automatic and manual compaction; move the tool-failure payload reader onto src/base/session/capture-contract.ts.",
       "roadmap": "AZ4"
     },
     {
@@ -55,7 +55,7 @@
       "checked": "2026-10-03",
       "names": ["Codex", "codex"],
       "integration": ["native-hooks", "wrapper"],
-      "sources": ["src/hooks", "src/capture/codex-patch.ts", "integrations/codex.md"],
+      "sources": ["src/domain/hooks", "src/surface/capture/codex-patch.ts", "integrations/codex.md"],
       "claims": ["README.md", "package.json", "website/src/pages/codex.astro"],
       "routes": {
         "promptContext": "UserPromptSubmit runs hippo context --pinned-only",
@@ -188,7 +188,7 @@
       "checked": "2026-10-03",
       "names": ["OpenCode", "opencode"],
       "integration": ["native-plugin"],
-      "sources": ["src/hooks/opencode.ts", "integrations/opencode.md"],
+      "sources": ["src/domain/hooks/opencode.ts", "integrations/opencode.md"],
       "claims": ["README.md", "package.json"],
       "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": "session.idle runs hippo session-end", "compactResume": null },
       "upstream": { "preLossEvent": "experimental.session.compacting", "beforeTrimOrReset": null },
@@ -237,7 +237,7 @@
       "checked": "2026-10-03",
       "names": ["Pi"],
       "integration": ["native-plugin", "instruction-file"],
-      "sources": ["extensions/pi-extension", "src/hooks"],
+      "sources": ["extensions/pi-extension", "src/domain/hooks"],
       "claims": ["README.md"],
       "routes": {
         "promptContext": "session_start injects context",
@@ -306,7 +306,7 @@
       "checked": "2026-10-07",
       "names": ["VS Code"],
       "integration": ["native-hooks", "instruction-file", "mcp-recipe"],
-      "sources": ["src/hooks/copilot.ts", "src/hooks/json-hooks.ts", "src/cli/session-hooks.ts", "src/capture/session-worker.ts", "integrations/copilot.md", "extensions/mcp"],
+      "sources": ["src/domain/hooks/copilot.ts", "src/domain/hooks/json-hooks.ts", "src/surface/cli/session-hooks.ts", "src/surface/capture/session-worker.ts", "integrations/copilot.md", "extensions/mcp"],
       "claims": ["extensions/mcp/README.md", "integrations/copilot.md"],
       "routes": {
         "promptContext": "sessionStart in ~/.copilot/hooks/hippo.json runs hippo context --pinned-only --format copilot; <User>/prompts/hippo.instructions.md asks the agent to call hippo_recall at the start of each task, through the hippo server in <User>/mcp.json",
@@ -340,7 +340,7 @@
       "checked": "2026-10-07",
       "names": ["Copilot CLI", "GitHub Copilot coding agent", "GitHub Copilot"],
       "integration": ["native-hooks", "instruction-file", "mcp-recipe"],
-      "sources": ["src/hooks/copilot.ts", "src/hooks/json-hooks.ts", "src/capture/session-worker.ts", "integrations/copilot.md"],
+      "sources": ["src/domain/hooks/copilot.ts", "src/domain/hooks/json-hooks.ts", "src/surface/capture/session-worker.ts", "integrations/copilot.md"],
       "claims": ["README.md", "ROADMAP.md", "integrations/copilot.md"],
       "routes": {
         "promptContext": "sessionStart runs hippo context --pinned-only --format copilot in the Copilot CLI and VS Code's Local agent; the CLI's instructions block and VS Code's prompts/hippo.instructions.md also ask the agent to call hippo_recall at the start of each task",
@@ -516,7 +516,7 @@
         { "name": "custom CLI, HTTP, TypeScript and Python agents", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
       ],
       "owner": "maintainer",
-      "nextAction": "Publish a registration recipe over src/core/capture-contract.ts so a developer who owns the harness wires turn checkpoints and a before-trim flush once.",
+      "nextAction": "Publish a registration recipe over src/base/session/capture-contract.ts so a developer who owns the harness wires turn checkpoints and a before-trim flush once.",
       "roadmap": "AZ4"
     }
   ]

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { createCrossEncoderReranker } from '../../src/rerankers/cross-encoder.js';
+import { createCrossEncoderReranker } from '../../src/domain/rerankers/cross-encoder.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/core/search-types.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
 
 const crossEncoderReranker = createCrossEncoderReranker();
 

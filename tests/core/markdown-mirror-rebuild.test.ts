@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { serializeEntry } from '../../src/core/markdown.js';
+import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

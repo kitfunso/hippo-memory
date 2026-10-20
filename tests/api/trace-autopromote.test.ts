@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { consolidate } from '../../src/index.js';
 import { listMemoryConflicts, loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 

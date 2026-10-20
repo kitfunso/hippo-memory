@@ -10,7 +10,7 @@ import {
   createMemory,
   DEFAULT_HALF_LIFE_DAYS,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { contextGet, retrieve } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { extractFromTexts } from '../../src/capture/extract.js';
-import { isContentWorthStoring } from '../../src/core/memory-quality.js';
+import { extractFromTexts } from '../../src/surface/capture/extract.js';
+import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
 
 /**
  * Family coverage sweep (DF2).

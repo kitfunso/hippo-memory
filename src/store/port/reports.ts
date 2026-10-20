@@ -1,6 +1,6 @@
 // The tallies and counters the Reports group returns.
-import type { JsonValue } from '../../util/json.js';
-import type { ConfidenceLevel, Layer } from '../../core/memory.js';
+import type { JsonValue } from '../../base/util/json.js';
+import type { ConfidenceLevel, Layer } from '../../base/memory/memory.js';
 
 /** Named field set for the legacy `stats.json` mirror: the only fields any caller reads. */
 export interface LegacyStats {

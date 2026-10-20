@@ -1,7 +1,7 @@
 // A resolver is plugin code, so its scopes are bounded like the tenant and subject beside them.
 import { afterEach, expect, it } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { MAX_ID_LEN } from '../../src/util/limits.js';
+import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let handle: ServerHandle | undefined;

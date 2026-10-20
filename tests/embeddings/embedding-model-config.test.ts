@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
@@ -37,7 +37,7 @@ type EmbedRequestBody = { model: string; input: string[]; input_type?: string };
 
 function parseEmbedRequestBody(raw: string): EmbedRequestBody {
   // SAFETY: this body is captured from the repo's own ApiEmbeddingProvider
-  // (src/embeddings/provider.ts API_SHAPES.voyage.buildBody), which always
+  // (src/base/embeddings/provider.ts API_SHAPES.voyage.buildBody), which always
   // POSTs exactly `{ model, input, input_type? }`.
   return JSON.parse(raw) as EmbedRequestBody;
 }
@@ -97,7 +97,7 @@ describe('embedding model configuration', () => {
   it('resolves the configured embedding model when no explicit override is provided', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { resolveEmbeddingModel } = await import('../../src/embeddings/local.js');
+    const { resolveEmbeddingModel } = await import('../../src/base/embeddings/local.js');
 
     expect(resolveEmbeddingModel(loadConfig(tmpDir).embeddings)).toBe('custom/model');
   });
@@ -107,11 +107,11 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../../src/embeddings/provider.js');
+      const { resolveEmbeddingProvider } = await import('../../src/base/embeddings/provider.js');
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
-      const { createMemory } = await import('../../src/core/memory.js');
+      const { createMemory } = await import('../../src/base/memory/memory.js');
 
       // The provider is built from the configured model (real resolver, no
       // interception): 'voyage:custom/model' proves 'custom/model' flowed
@@ -157,7 +157,7 @@ describe('embedding model configuration', () => {
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
-      const { createMemory } = await import('../../src/core/memory.js');
+      const { createMemory } = await import('../../src/base/memory/memory.js');
 
       // Real staleness: the cached index was built under a DIFFERENT model
       // identity than the one config.json now selects, so
@@ -181,10 +181,10 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../../src/embeddings/provider.js');
+      const { resolveEmbeddingProvider } = await import('../../src/base/embeddings/provider.js');
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
-      const { createMemory } = await import('../../src/core/memory.js');
+      const { createMemory } = await import('../../src/base/memory/memory.js');
 
       // In sync (no reindex needed) but genuinely empty: no embeddings.json
       // was ever written for this store, so no candidate has a cached vector.

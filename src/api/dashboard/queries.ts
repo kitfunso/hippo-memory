@@ -1,6 +1,6 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
-import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
+import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import type { HippoStore } from '../../store/port.js';
 import type { ConflictPair, DashboardText } from '../../store/local/dashboard-reads.js';
 import {
@@ -16,9 +16,9 @@ import {
   type ProjectAgg,
   type Snapshot,
 } from './snapshot.js';
-import { AT_RISK_BELOW, STRONG_FROM } from '../../core/strength-bands.js';
-import { chunked } from '../../util/chunked.js';
-import { pct, plural, round1 } from '../../util/format.js';
+import { AT_RISK_BELOW, STRONG_FROM } from '../../base/memory/strength-bands.js';
+import { chunked } from '../../base/util/chunked.js';
+import { pct, plural, round1 } from '../../base/util/format.js';
 import type {
   ChipCounts,
   DecayOutlook,

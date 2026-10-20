@@ -21,8 +21,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { simulate, computeSystemEnergy, vecNormalize } from '../dist/core/physics.js';
-import { mergePhysicsConfig } from '../dist/core/physics-config.js';
+import { simulate, computeSystemEnergy, vecNormalize } from '../dist/base/rank/physics.js';
+import { mergePhysicsConfig } from '../dist/base/rank/physics-config.js';
 
 // ---- flags ----
 

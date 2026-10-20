@@ -15,7 +15,7 @@ import {
 } from '../../src/entry/store-kit.js';
 import type { StoreSide } from './store-conformance.js';
 import { portOnlyStore } from './port-only-store.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface InMemoryKeyAuditStore extends StoreSide {
   readonly store: HippoStore & { readonly keyAudit: KeyAudit };

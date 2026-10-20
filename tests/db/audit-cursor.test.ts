@@ -7,7 +7,7 @@ import { auditPrune } from '../../src/api/auth/audit.js';
 import { adminActor } from '../../src/api/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 
 const INSERT_SQL =
   'INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)';

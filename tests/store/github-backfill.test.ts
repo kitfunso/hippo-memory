@@ -13,12 +13,12 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { backfillRepo } from '../../src/connectors/github/backfill.js';
+import { backfillRepo } from '../../src/surface/connectors/github/backfill.js';
 import {
   GitHubFetchError,
   type GitHubFetcher,
   type GitHubBackfillPage,
-} from '../../src/connectors/github/octokit-client.js';
+} from '../../src/surface/connectors/github/octokit-client.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

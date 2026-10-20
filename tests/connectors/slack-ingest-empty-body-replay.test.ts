@@ -14,9 +14,9 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
-import { ingestMessage } from '../../src/connectors/slack/ingest.js';
+import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { adminActor } from '../../src/api/index.js';
-import type { ChannelMeta } from '../../src/connectors/slack/scope.js';
+import type { ChannelMeta } from '../../src/surface/connectors/slack/scope.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore } from '../_helpers/make-root.js';
 

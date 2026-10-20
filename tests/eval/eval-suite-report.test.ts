@@ -5,7 +5,7 @@ import {
   resultToBaseline,
   type EvalSuiteResult,
   type FeatureResult,
-} from '../../src/eval/eval-suite.js';
+} from '../../src/domain/eval/eval-suite.js';
 
 const feature = (category: FeatureResult['category'], ndcgAt5: number, mrr = 0.8): FeatureResult => ({
   category,

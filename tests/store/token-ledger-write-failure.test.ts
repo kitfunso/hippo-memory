@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { adminActor, recordTokens } from '../../src/api/index.js';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -12,7 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { folderFiles } from '../_helpers/cli-stores.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 

@@ -9,13 +9,13 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   Layer,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
-import { DAY_MS } from '../../src/util/time.js';
-import { handleStatus } from '../../src/cli/status.js';
+import { DAY_MS } from '../../src/base/util/time.js';
+import { handleStatus } from '../../src/surface/cli/status.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';

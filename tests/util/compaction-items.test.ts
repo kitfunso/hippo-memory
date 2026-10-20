@@ -8,7 +8,7 @@ import {
   compactSummaryBody,
   parseCompactionItems,
   selectItemRows,
-} from '../../src/util/compaction-items.js';
+} from '../../src/base/util/compaction-items.js';
 
 const FIXTURE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

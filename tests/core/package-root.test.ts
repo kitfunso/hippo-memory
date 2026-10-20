@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 
-import { PACKAGE_ROOT } from '../../src/core/package-root.js';
+import { PACKAGE_ROOT } from '../../src/base/config/package-root.js';
 
 // PACKAGE_ROOT must name the folder that holds package.json, bin/ and dist-ui/.
 describe('PACKAGE_ROOT', () => {

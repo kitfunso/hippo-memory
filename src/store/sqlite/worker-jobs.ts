@@ -1,11 +1,11 @@
 // A store worker's side of the executor: one job at a time, on one connection the thread holds for its life.
 import type { MessagePort } from 'node:worker_threads';
-import { auditWriteFailureCount } from '../../core/audit-report.js';
+import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
-import { errorFields, log } from '../../util/log.js';
-import { requestScopes } from '../../util/request-scope.js';
+import { errorFields, log } from '../../base/util/log.js';
+import { requestScopes } from '../../base/util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
 import { flushHeldMirrors } from './mirrors.js';

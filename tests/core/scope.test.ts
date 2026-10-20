@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { scopeMatch } from '../../src/core/active-scope.js';
-import { envActiveScope } from '../../src/util/env.js';
+import { scopeMatch } from '../../src/base/rank/active-scope.js';
+import { envActiveScope } from '../../src/base/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

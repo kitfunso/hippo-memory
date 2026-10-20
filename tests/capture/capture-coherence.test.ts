@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractFromTexts } from '../../src/capture/extract.js';
+import { extractFromTexts } from '../../src/surface/capture/extract.js';
 
 /**
  * DF2 — capture extractor: keyword-preserving, clause-bounded capture.

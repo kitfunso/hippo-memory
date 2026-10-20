@@ -3,12 +3,12 @@
 // log file.
 
 import * as path from 'path';
-import type { HandoffEvidence } from '../core/handoff.js';
-import type { ProjectRef } from '../core/project-identity.js';
+import type { HandoffEvidence } from '../base/session/handoff.js';
+import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
-import { readApiCalls, type TranscriptCalls } from '../core/transcript-calls.js';
-import { truncateCodePointSafe } from '../util/transcript-tail.js';
-import { errorMessage, log, errorFields } from '../util/log.js';
+import { readApiCalls, type TranscriptCalls } from '../base/session/transcript-calls.js';
+import { truncateCodePointSafe } from '../base/util/transcript-tail.js';
+import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
 import type { Context } from './types.js';

@@ -1,9 +1,9 @@
 // Root-keyed forms tests call; production code goes through the store port or the At forms.
 
-import { CLI_ACTOR } from '../../src/core/actor.js';
-import type { Card, CardComment, CardRun } from '../../src/core/card.js';
-import type { HandoffOutcome, SessionHandoff } from '../../src/core/handoff.js';
-import type { MemoryEntry } from '../../src/core/memory.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import type { Card, CardComment, CardRun } from '../../src/base/records/card.js';
+import type { HandoffOutcome, SessionHandoff } from '../../src/base/session/handoff.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { recordAuditEventsRowByRowAt, type FailedAuditEvent } from '../../src/store/sqlite/audit.js';
 import {
   githubEventRecordAt,
@@ -13,11 +13,11 @@ import {
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/sqlite/connectors/slack.js';
 import { promote } from '../../src/api/memories/promote.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { resolveTenantId } from '../../src/server/boot.js';
+import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { apiCtx } from './api-ctx.js';
-import type { WriteBudget } from '../../src/util/write-budget.js';
-import type { PhysicsParticle } from '../../src/core/physics.js';
-import { assertTenantId } from '../../src/core/tenant-id.js';
+import type { WriteBudget } from '../../src/base/util/write-budget.js';
+import type { PhysicsParticle } from '../../src/base/rank/physics.js';
+import { assertTenantId } from '../../src/base/scope/tenant-id.js';
 import { getMeta } from '../../src/db/index.js';
 import {
   EMBEDDING_MODEL_META_KEY,
@@ -81,7 +81,7 @@ import {
 import { readLastRecall } from '../../src/store/sqlite/mirrors.js';
 import { waitingOpener, type StoreFiles } from '../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
-import type { RepairProtection } from '../../src/core/memory-audit.js';
+import type { RepairProtection } from '../../src/base/memory/memory-audit.js';
 import type { QualityRepairResult } from '../../src/store/port/audit-maintenance.js';
 
 export {
@@ -110,8 +110,8 @@ import { listApiKeyRows } from '../../src/store/sqlite/auth.js';
 import type { ApiKeyListItem, ListApiKeysOpts } from '../../src/store/port/key-writes.js';
 import { findPromotableSessionsAt, listSessionEventsAt } from '../../src/store/sqlite/sessions.js';
 import { loadActiveTaskSnapshotAt } from '../../src/store/sqlite/task-snapshots.js';
-import { freshActiveSnapshot } from '../../src/core/session-snapshot.js';
-import type { ApiCall } from '../../src/core/transcript-calls.js';
+import { freshActiveSnapshot } from '../../src/base/session/session-snapshot.js';
+import type { ApiCall } from '../../src/base/session/transcript-calls.js';
 import { recordRereadsAt } from '../../src/store/sqlite/token-ledger.js';
 import {
   loadStoredParticlesAt,
@@ -120,8 +120,8 @@ import {
   seedStoredParticleAt,
   storedVectorSummaryAt,
 } from '../../src/store/sqlite/vector-index.js';
-import type { KeysetPosition } from '../../src/util/keyset.js';
-import { MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT } from '../../src/util/limits.js';
+import type { KeysetPosition } from '../../src/base/util/keyset.js';
+import { MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT } from '../../src/base/util/limits.js';
 import type {
   AppendAuditOpts,
   HeldText,
@@ -148,10 +148,10 @@ import type {
   RebuildPatch,
 } from '../../src/store/local/consolidation.js';
 import type { Prediction, PredictionClose } from '../../src/store/port/predictions.js';
-import type { ClosureState } from '../../src/core/prediction.js';
+import type { ClosureState } from '../../src/base/records/prediction.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
 import type { StoredVectorSummary } from '../../src/store/local/embedding-index.js';
-import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import type { EntryCursor } from '../../src/store/port/types.js';
 
 export function loadAmbientCandidates(

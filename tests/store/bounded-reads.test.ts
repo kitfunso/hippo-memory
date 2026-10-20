@@ -1,8 +1,8 @@
 // Reads that once took a whole tenant or backlog at a time now come a page at a time and answer the same. Real store.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { tallyAmbientEntries } from '../../src/core/ambient.js';
-import { DEFAULT_HALF_LIFE_DAYS, createMemory, type MemoryEntry } from '../../src/core/memory.js';
+import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';
+import { DEFAULT_HALF_LIFE_DAYS, createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import {
   loadEntriesMentioningAt,
   loadEntryIdsPageAt,
@@ -15,9 +15,9 @@ import { upsertVectors } from '../../src/db/vector-store.js';
 import { projectTagReads } from '../../src/store/sqlite/project-tags.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { SleepRows } from '../../src/consolidate/survivors.js';
-import { rowsInPages } from '../../src/util/pages.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { SleepRows } from '../../src/domain/consolidate/survivors.js';
+import { rowsInPages } from '../../src/base/util/pages.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';

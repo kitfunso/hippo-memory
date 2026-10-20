@@ -15,11 +15,11 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
-import { VALID_CLOSURE_STATES } from '../../src/core/prediction.js';
+import { VALID_CLOSURE_STATES } from '../../src/base/records/prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,

@@ -4,12 +4,17 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/core/api-errors.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { StoreBusyError } from '../../src/store/port.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE } from '../../src/util/http-util.js';
+import {
+  BodyTimeoutError,
+  BodyTooLargeError,
+  HttpError,
+  INTERNAL_ERROR_MESSAGE,
+} from '../../src/base/util/http-util.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 

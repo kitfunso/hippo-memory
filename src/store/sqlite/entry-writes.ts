@@ -6,12 +6,12 @@ import {
   markRetrieved,
   entryAfterOutcome,
   strengthOptionsOf,
-} from '../../core/memory.js';
+} from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
-import { chunked } from '../../util/chunked.js';
-import { RejectedValueError, ConflictError, NotFoundError } from '../../core/api-errors.js';
+import { chunked } from '../../base/util/chunked.js';
+import { RejectedValueError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { markSummaryDirtyInTx, markSummariesDirtyInTx, summaryDirtyAuditRow } from './summary-dirty.js';
-import { errorMessage, log, errorFields } from '../../util/log.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { appendAuditEvent, appendAuditEventsAt } from './audit.js';
 import { selectEntriesByIds } from './entry-reads.js';
@@ -27,11 +27,11 @@ import {
 import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeEntryMirrorsIn } from './mirrors.js';
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
-import { CLI_ACTOR } from '../../core/actor.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../local/agent-import.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
-import { ownScopeTouches } from '../../core/recall-scope.js';
+import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite } from '../port.js';
 import type { Sync } from './served.js';

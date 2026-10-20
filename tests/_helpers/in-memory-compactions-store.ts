@@ -18,11 +18,11 @@ import {
   generateId,
   Layer,
   markRetrieved,
-} from '../../src/core/memory.js';
-import { isContentWorthStoring } from '../../src/core/memory-quality.js';
-import { REPLAY_AFTER_MS } from '../../src/core/compaction-timing.js';
-import { itemWords, restates, writableItemRows } from '../../src/util/compaction-items.js';
-import { detectSecret } from '../../src/util/secret-detect.js';
+} from '../../src/base/memory/memory.js';
+import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
+import { REPLAY_AFTER_MS } from '../../src/base/session/compaction-timing.js';
+import { itemWords, restates, writableItemRows } from '../../src/base/util/compaction-items.js';
+import { detectSecret } from '../../src/base/util/secret-detect.js';
 import {
   inMemoryEntryWritesStore,
   tombstoneKey,

@@ -5,11 +5,11 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { rejectionDigest } from '../../src/core/rejection-digest.js';
+import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
-import type { AuditOp } from '../../src/core/audit-ops.js';
+import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 
 let root: string;

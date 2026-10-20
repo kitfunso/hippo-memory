@@ -1,7 +1,7 @@
 // KeyWrites answers alike on hippo.db and on a store held in memory: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { mintApiKey } from '../../src/core/api-key.js';
+import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../../src/entry/store-kit.js';
 import {
@@ -21,7 +21,7 @@ import {
   type SideResult,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
-import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
+import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const EXPIRES = '2026-04-01T12:00:05.000Z';

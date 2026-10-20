@@ -1,6 +1,6 @@
 // The agent-memories import's reach into a store chosen by root; synchronous, so each container's writes stay in one
 // transaction that never spans an await.
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { ProjectTagReads } from './project-tags.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
 import type { AppendAuditOpts, DormantSnapshot } from '../port/types.js';

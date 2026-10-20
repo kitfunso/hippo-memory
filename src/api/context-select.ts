@@ -1,29 +1,29 @@
 // contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
-import { recallScopeFilter } from '../core/recall-scope.js';
-import { calculateStrength, strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../core/memory.js';
-import { auditQueryFields } from '../core/audit-report.js';
+import { recallScopeFilter } from '../base/scope/recall-scope.js';
+import { calculateStrength, strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../base/memory/memory.js';
+import { auditQueryFields } from '../base/records/audit-report.js';
 import type { ContextReads, HippoStore } from '../store/port.js';
-import { isWorthSurfacing } from '../core/memory-quality.js';
-import { rankBothStores } from '../sharing/search-both.js';
-import { evalNow } from '../core/ablation.js';
-import { searchByEngine } from '../search/engine.js';
-import { vectorSourceOf } from '../search/hybrid.js';
-import type { HybridVectorCandidates, VectorSource } from '../search/vector.js';
-import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
-import { compareScoredResults } from '../core/compare.js';
-import { scopeMatch } from '../core/active-scope.js';
-import { scopeBoostFor } from '../search/boosts.js';
-import { type HippoConfig } from '../core/config.js';
-import type { ProjectRef } from '../core/project-identity.js';
-import type { AmbientAdmission } from '../core/read-admission.js';
+import { isWorthSurfacing } from '../base/memory/memory-quality.js';
+import { rankBothStores } from '../domain/sharing/search-both.js';
+import { evalNow } from '../base/memory/ablation.js';
+import { searchByEngine } from '../domain/search/engine.js';
+import { vectorSourceOf } from '../domain/search/hybrid.js';
+import type { HybridVectorCandidates, VectorSource } from '../domain/search/vector.js';
+import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../base/rank/search-types.js';
+import { compareScoredResults } from '../base/rank/compare.js';
+import { scopeMatch } from '../base/rank/active-scope.js';
+import { scopeBoostFor } from '../domain/search/boosts.js';
+import { type HippoConfig } from '../base/config/config.js';
+import type { ProjectRef } from '../base/scope/project-identity.js';
+import type { AmbientAdmission } from '../base/scope/read-admission.js';
 import {
   promptTokens,
   contentTokens,
   gatePromptRecall,
   type PromptRecallMetric,
   type PromptRecallGate,
-} from '../core/prompt-recall.js';
+} from '../base/rank/prompt-recall.js';
 import type { DeliveryObserver } from './delivery-recorder.js';
 import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';

@@ -23,7 +23,7 @@ import { iterateEveryTenantEntriesAt } from '../../src/store/sqlite/entry-reads.
 import { passesSpec, type FilterRow } from './in-memory-vector-store.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 export interface InMemoryVectorWritesStore extends StoreSide {
   readonly store: HippoStore & { readonly vectors: VectorReads; readonly vectorWrites: VectorWrites };

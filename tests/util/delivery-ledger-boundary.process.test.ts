@@ -2,8 +2,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { blockHash, estimateTokens } from '../../src/util/token-text.js';
-import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
+import { blockHash, estimateTokens } from '../../src/base/util/token-text.js';
+import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
 import { copilotPayload } from '../_helpers/copilot-hooks.js';
 import {
   PROMPT_HOOK,

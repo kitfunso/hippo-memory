@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'crypto';
-import { isWellFormedSlackRequest, verifySlackSignature } from '../../src/connectors/slack/signature.js';
+import { isWellFormedSlackRequest, verifySlackSignature } from '../../src/surface/connectors/slack/signature.js';
 
 const SECRET = 'shhh';
 

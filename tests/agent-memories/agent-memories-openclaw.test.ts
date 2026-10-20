@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { sha256Hex } from '../../src/agent-memories/keys.js';
-import { openclawAdapter } from '../../src/agent-memories/openclaw.js';
-import type { AdapterContext } from '../../src/agent-memories/types.js';
+import { sha256Hex } from '../../src/domain/agent-memories/keys.js';
+import { openclawAdapter } from '../../src/domain/agent-memories/openclaw.js';
+import type { AdapterContext } from '../../src/domain/agent-memories/types.js';
 
 let tmp: string;
 

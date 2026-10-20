@@ -5,21 +5,21 @@ import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
-import { gitLayout } from '../../src/agent-memories/git.js';
-import { containerId, containerPrefix } from '../../src/agent-memories/source.js';
+import { gitLayout } from '../../src/domain/agent-memories/git.js';
+import { containerId, containerPrefix } from '../../src/domain/agent-memories/source.js';
 import {
   importAtSessionEnd,
   importForStore,
   importProjectMemories,
   importSessionFolder,
-} from '../../src/agent-memories/sync.js';
+} from '../../src/domain/agent-memories/sync.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
-import { cliApiContext } from '../../src/cli/api-context.js';
-import type { ImportReport } from '../../src/agent-memories/report.js';
-import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
-import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
-import { autoShare } from '../../src/sharing/share.js';
-import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import type { ImportReport } from '../../src/domain/agent-memories/report.js';
+import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { deriveOriginProject, isInitialized } from '../../src/base/scope/project-identity.js';
+import { autoShare } from '../../src/domain/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import {
   agentRows,
   closeWorld,
@@ -38,12 +38,12 @@ import {
   writeConfig,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';

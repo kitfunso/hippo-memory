@@ -5,7 +5,7 @@ import { createServer, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
-import { classifyTransportFailure, HttpResponseError } from '../../src/cli/client.js';
+import { classifyTransportFailure, HttpResponseError } from '../../src/surface/cli/client.js';
 import { boundPort } from '../_helpers/listen.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -20,7 +20,7 @@ const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
 function assertFreshBuild(): void {
   const dist = statSync(CLI_PATH).mtimeMs;
-  for (const name of ['cli.ts', 'cli/client.ts', 'server/server-detect.ts']) {
+  for (const name of ['cli.ts', 'surface/cli/client.ts', 'surface/server/server-detect.ts']) {
     const src = statSync(join(REPO_ROOT, 'src', name)).mtimeMs;
     if (src > dist) {
       throw new Error(

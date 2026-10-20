@@ -3,10 +3,10 @@
 // is a second step, which the caller runs after it has reported the write. Nothing here prints; the caller reports from
 // what comes back.
 
-import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../core/memory.js';
-import { computeSalience, type SalienceResult } from '../../core/salience.js';
-import { embedMemory, folderIndex, type EmbedOutcome } from '../../search/embed-memories.js';
-import { errorMessage, log } from '../../util/log.js';
+import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
+import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
+import { embedMemory, folderIndex, type EmbedOutcome } from '../../domain/search/embed-memories.js';
+import { errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, LocalContext } from '../types.js';
@@ -158,7 +158,7 @@ export async function extractRememberedFacts(
   let facts = 0;
   try {
     // Loaded on demand, so a write that extracts nothing does not pay for the module.
-    const { extractFacts, storeExtractedFacts } = await import('../../learn/extract.js');
+    const { extractFacts, storeExtractedFacts } = await import('../../domain/learn/extract.js');
     const found = await extractFacts(entry.content, {
       apiKey,
       model: extraction.model,

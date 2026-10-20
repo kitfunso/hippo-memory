@@ -1,5 +1,5 @@
 // The dormant-memory shapes the Dormant group takes and returns.
-import type { MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 
 /** A dormant memory as listed to a user. */
 export interface DormantMemory {

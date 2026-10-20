@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '../../util/tenant.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import {
   Layer,
   FALLBACK_HALF_LIFE_DAYS,
@@ -6,10 +6,10 @@ import {
   type MemoryEntry,
   type ConfidenceLevel,
   type MemoryKind,
-} from '../../core/memory.js';
-import { log } from '../../util/log.js';
-import { type JsonValue, tryParseJson } from '../../util/json.js';
-import { parseStoredObject, warnDamagedColumn, type StoredJsonSite } from '../../util/stored-json.js';
+} from '../../base/memory/memory.js';
+import { log } from '../../base/util/log.js';
+import { type JsonValue, tryParseJson } from '../../base/util/json.js';
+import { parseStoredObject, warnDamagedColumn, type StoredJsonSite } from '../../base/util/stored-json.js';
 import type { SessionEvent, TaskSnapshot } from '../port/sessions.js';
 import type { MemoryConflict } from '../port/conflicts.js';
 

@@ -2,10 +2,10 @@
 // real store, and the key, grant, audit, goal and policy rows each run leaves.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { handleAuth } from '../../src/cli/auth.js';
-import { handleGoal } from '../../src/cli/goals.js';
+import { handleAuth } from '../../src/surface/cli/auth.js';
+import { handleGoal } from '../../src/surface/cli/goals.js';
 import * as api from '../../src/api/index.js';
-import { verifyApiKeyCached } from '../../src/server/api-key.js';
+import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';

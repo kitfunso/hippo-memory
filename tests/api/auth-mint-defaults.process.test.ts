@@ -2,10 +2,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { adminActor, authCreate } from '../../src/api/index.js';
-import { handleAuth } from '../../src/cli/auth.js';
+import { handleAuth } from '../../src/surface/cli/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { EXPIRING_KEYS_MIN_BINARY } from '../../src/util/version.js';
+import { EXPIRING_KEYS_MIN_BINARY } from '../../src/base/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';

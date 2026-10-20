@@ -5,13 +5,13 @@ import { execFileSync } from 'node:child_process';
 import { describe, it, expect } from 'vitest';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { cliRequest } from '../../src/cli/api-context.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { learn, CLI_LEARN } from '../../src/api/sleep/learn.js';
 import { importEntries, importVault } from '../../src/entry/importers.js';
-import { invalidateMatching, detectChurnStale } from '../../src/learn/invalidation.js';
-import { deduplicateStore } from '../../src/consolidate/dedupe.js';
-import { buildDag } from '../../src/consolidate/dag.js';
+import { invalidateMatching, detectChurnStale } from '../../src/domain/learn/invalidation.js';
+import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
+import { buildDag } from '../../src/domain/consolidate/dag.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import {

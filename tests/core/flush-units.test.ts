@@ -2,10 +2,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { familyUnits, groupFlush } from '../../src/consolidate/flush-units.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { familyUnits, groupFlush } from '../../src/domain/consolidate/flush-units.js';
 import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../../src/db/index.js';
-import type { WriteBudget } from '../../src/util/write-budget.js';
+import type { WriteBudget } from '../../src/base/util/write-budget.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { commitInChunks, writeEntry } from '../_helpers/root-forms.js';

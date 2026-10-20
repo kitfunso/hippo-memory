@@ -5,7 +5,7 @@
     "why": "STORE_BUSY_MESSAGE, the exit message for a busy store; a constant, not a store read"
   },
   {
-    "file": "cli/api-context.ts",
+    "file": "surface/cli/api-context.ts",
     "target": "store/sqlite/store.ts",
     "why": "the CLI composition root builds the SQLite store each api call runs on"
   }

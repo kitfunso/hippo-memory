@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-config-reads.mjs');
-const LAYERS = { folders: { api: 'api', cli: 'surface', core: 'base', store: 'store' }, rootFiles: {} };
+const LAYERS = { folders: { api: 'api', surface: 'surface', base: 'base', store: 'store' }, rootFiles: {} };
 
 function withFixture(
   files: Record<string, string>,
@@ -41,11 +41,11 @@ describe('check-config-reads.mjs', () => {
     });
   });
 
-  it('passes at the baseline and ignores surface files, core/config.ts, comments and type uses', () => {
+  it('passes at the baseline and ignores surface files, base/config/config.ts, comments and type uses', () => {
     const files = {
       'src/store/a.ts': READ,
-      'src/cli/b.ts': READ,
-      'src/core/config.ts': READ,
+      'src/surface/cli/b.ts': READ,
+      'src/base/config/config.ts': READ,
       'src/store/c.ts': '// loadConfig(root) is read by the caller\ntype T = typeof loadConfig;\n',
     };
     withFixture(files, { 'src/store/a.ts': 1 }, (run) => {

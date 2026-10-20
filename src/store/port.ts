@@ -1,12 +1,12 @@
 // The async store interface and its groups: every method answers a Promise and takes only data, so any backend can
 // serve it from any thread, and hippo.db is one adapter. Type-only apart from the group probes and the store errors.
-import { StoreNotPortedError } from '../util/sqlite-blocked.js';
+import { StoreNotPortedError } from '../base/util/sqlite-blocked.js';
 import type { SessionAndAdminGroups } from './port-groups.js';
-import type { MemoryEntry } from '../core/memory.js';
-import type { TenantId } from '../util/tenant.js';
+import type { MemoryEntry } from '../base/memory/memory.js';
+import type { TenantId } from '../base/util/tenant.js';
 import type { TokenUse } from './port/token-ledger.js';
 import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
-import type { SessionHandoff } from '../core/handoff.js';
+import type { SessionHandoff } from '../base/session/handoff.js';
 import type { AuditMaintenance } from './port/audit-maintenance.js';
 import type { LessonWrites } from './port/lesson-writes.js';
 import type { VectorReads } from './port/vector-reads.js';

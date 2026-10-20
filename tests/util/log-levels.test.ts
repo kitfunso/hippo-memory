@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { errorFields, formatLogLine, isLevelEnabled, log } from '../../src/util/log.js';
-import { runWithRequestId } from '../../src/util/request-scope.js';
+import { errorFields, formatLogLine, isLevelEnabled, log } from '../../src/base/util/log.js';
+import { runWithRequestId } from '../../src/base/util/request-scope.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -15,8 +15,8 @@ let stderrSpy: ReturnType<typeof vi.spyOn>;
 async function freshLog() {
   vi.resetModules();
   const [logModule, storedJson] = await Promise.all([
-    import('../../src/util/log.js'),
-    import('../../src/util/stored-json.js'),
+    import('../../src/base/util/log.js'),
+    import('../../src/base/util/stored-json.js'),
   ]);
   return { log: logModule.log, warnDamagedColumn: storedJson.warnDamagedColumn };
 }

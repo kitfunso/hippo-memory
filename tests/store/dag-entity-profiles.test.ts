@@ -12,11 +12,11 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { openHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { buildEntityProfiles, rebuildDirtySummaries } from '../../src/consolidate/dag.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { buildEntityProfiles, rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../../src/api/index.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { isDagSummary } from '../../src/search/boosts.js';
+import { isDagSummary } from '../../src/domain/search/boosts.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -275,7 +275,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     let capturedPrompt: string | undefined;
     const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
       // SAFETY: this fetcher is invoked only by rebuildDirtySummaries's Anthropic call
-      // below, which always sends `body: JSON.stringify({...})` (src/consolidate/dag.ts).
+      // below, which always sends `body: JSON.stringify({...})` (src/domain/consolidate/dag.ts).
       const body = init?.body ? JSON.parse(init.body as string) : {};
       capturedPrompt = body?.messages?.[0]?.content ?? '';
       return new Response(JSON.stringify({ content: [{ text: 'rebuilt-alice-profile-content-yyy' }] }), {

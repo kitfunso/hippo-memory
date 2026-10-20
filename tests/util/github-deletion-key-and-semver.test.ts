@@ -14,8 +14,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { compareSemver } from '../../src/util/version.js';
-import { computeIdempotencyKey, computeDeletionKey } from '../../src/connectors/github/signature.js';
+import { compareSemver } from '../../src/base/util/version.js';
+import { computeIdempotencyKey, computeDeletionKey } from '../../src/surface/connectors/github/signature.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

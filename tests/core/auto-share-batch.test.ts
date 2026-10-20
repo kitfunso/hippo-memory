@@ -3,14 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { autoShare } from '../../src/sharing/share.js';
-import { getGlobalRoot } from '../../src/sharing/global-store.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { autoShare } from '../../src/domain/sharing/share.js';
+import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
 

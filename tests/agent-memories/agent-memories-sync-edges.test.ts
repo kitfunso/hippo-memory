@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { forget, reject, dormantRestore, supersede } from '../../src/api/index.js';
-import { importForStore } from '../../src/agent-memories/sync.js';
-import type { ImportReport } from '../../src/agent-memories/report.js';
+import { importForStore } from '../../src/domain/agent-memories/sync.js';
+import type { ImportReport } from '../../src/domain/agent-memories/report.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { removeEntryMirrors } from '../../src/store/sqlite/mirrors.js';
 import { deleteEntryRowInTx } from '../../src/store/sqlite/entry-writes.js';
 import {
@@ -27,7 +27,7 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 

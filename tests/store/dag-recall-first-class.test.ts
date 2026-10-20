@@ -14,18 +14,18 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { openHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
-import type { SearchResult } from '../../src/core/search-types.js';
-import type { RerankerOptions, RerankResult } from '../../src/rerankers/types.js';
-import { searchBothHybrid } from '../../src/sharing/search-both.js';
+import type { SearchResult } from '../../src/base/rank/search-types.js';
+import type { RerankerOptions, RerankResult } from '../../src/domain/rerankers/types.js';
+import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
-import type { PhysicsParticle } from '../../src/core/physics.js';
+import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { envRuntimeSettings } from '../../src/util/env.js';
-import { ALL_TENANTS } from '../../src/util/tenant.js';
+import { envRuntimeSettings } from '../../src/base/util/env.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

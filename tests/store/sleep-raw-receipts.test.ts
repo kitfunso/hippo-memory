@@ -13,9 +13,9 @@
  * Real SQLite throughout, no mocks.
  */
 import { describe, it, expect } from 'vitest';
-import { RawAppendOnlyError } from '../../src/core/raw-append-only.js';
+import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
 import { consolidate } from '../../src/index.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';

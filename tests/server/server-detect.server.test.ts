@@ -9,7 +9,7 @@ import {
   writePidfile,
   removePidfileIfOwned,
   ServerUnresponsiveError,
-} from '../../src/server/server-detect.js';
+} from '../../src/surface/server/server-detect.js';
 import { serve } from '../../src/server.js';
 import { boundPort } from '../_helpers/listen.js';
 

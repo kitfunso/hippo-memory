@@ -2,16 +2,16 @@
 // lives in one place. The code lives in src/api/, one module per domain; this barrel keeps every import path that
 // callers already use.
 
-export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../core/api-errors.js';
+export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../base/errors/api-errors.js';
 
 // The recall-side scope predicates live in recall-scope.ts (leaf) so shared.ts can use them without an import cycle.
-export { isPrivateScope, passesScopeFilterForRecall } from '../core/recall-scope.js';
-export { passesCliRecallScopeFilter, ScopeForbiddenError } from '../core/recall-scope.js';
+export { isPrivateScope, passesScopeFilterForRecall } from '../base/scope/recall-scope.js';
+export { passesCliRecallScopeFilter, ScopeForbiddenError } from '../base/scope/recall-scope.js';
 export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from '../store/port/token-ledger.js';
 export type { FailureSummary } from '../store/port/failure-log.js';
 
 // classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
-export { classifyOriginProject } from '../core/project-identity.js';
+export { classifyOriginProject } from '../base/scope/project-identity.js';
 
 export { RecallContractError, adminActor, contextReach, ownerOrSubject, requireHostAdmin } from './types.js';
 export type { Actor, Context, ContextReach, GlobalInReach } from './types.js';

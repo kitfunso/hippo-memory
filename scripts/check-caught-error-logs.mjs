@@ -193,7 +193,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error(`${f}: ${n} log calls in a failure path without errorFields(err) (baseline ${base[f] ?? 0})`);
     }
     console.error(
-      'Fix: pass errorFields(err) from src/util/log.ts as the fields argument, or spread it into the existing fields.',
+      'Fix: pass errorFields(err) from src/base/util/log.ts as the fields argument, or spread it into the existing fields.',
     );
     process.exit(1);
   } else {

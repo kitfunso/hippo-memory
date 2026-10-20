@@ -4,21 +4,21 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../../src/core/agent-memory-tools.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../../src/base/memory/agent-memory-tools.js';
 import {
   COMPACTION_MEMORY_TAG,
   COMPACTION_SOURCE_PREFIX,
   KEEP_PAIRS,
   canAutoDelete,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import { AUTO_DELETABLE } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
-import { deduplicateStore } from '../../src/consolidate/dedupe.js';
-import { auditMemory } from '../../src/core/memory-audit.js';
+import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
+import { auditMemory } from '../../src/base/memory/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { NO_MERGE_TAGS } from '../../src/sharing/share.js';
+import { NO_MERGE_TAGS } from '../../src/domain/sharing/share.js';
 import { forget, dormantList, sleep, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';

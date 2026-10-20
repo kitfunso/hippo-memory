@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 // copy (coding-standards: prefer established code over a fresh
 // implementation when one already exists in-repo).
 import { mulberry32 } from '../../scripts/lib/prng.mjs';
-import { evalNow as _resetAblationCacheForTests } from '../../dist/core/ablation.js';
+import { evalNow as _resetAblationCacheForTests } from '../../dist/base/memory/ablation.js';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..', '..');

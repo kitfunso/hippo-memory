@@ -1,6 +1,6 @@
 // Pins the status and error text of every HTTP route, plus one literal field per route's valid reply, so a dispatch change cannot move a reply.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { createMemory } from '../../src/core/memory.js';
+import { createMemory } from '../../src/base/memory/memory.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { COMPACTION_DB_WAIT_MS } from '../../src/core/compaction-timing.js';
+import { COMPACTION_DB_WAIT_MS } from '../../src/base/session/compaction-timing.js';
 import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../../src/db/index.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {

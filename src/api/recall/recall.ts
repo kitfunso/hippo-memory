@@ -1,19 +1,19 @@
 // Read path: one typed entry per recall ranker (retrieve, retrieveRanking; the CLI core is in request.ts).
 
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../core/search-types.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import { boostByGoals } from '../../search/goal-boost.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import { boostByGoals } from '../../domain/search/goal-boost.js';
 import type { RecallSearchArgs, RecallWrites } from '../../store/port.js';
-import { searchByEngine } from '../../search/engine.js';
-import { vectorSourceOf } from '../../search/hybrid.js';
-import type { HybridVectorCandidates } from '../../search/vector.js';
-import type { PhysicsConfig } from '../../core/physics-config.js';
+import { searchByEngine } from '../../domain/search/engine.js';
+import { vectorSourceOf } from '../../domain/search/hybrid.js';
+import type { HybridVectorCandidates } from '../../domain/search/vector.js';
+import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import {
   passesScopeFilterForRecall,
   assertScopeRequestAllowed,
   personalScopeOf,
   recallScopeFilter,
-} from '../../core/recall-scope.js';
+} from '../../base/scope/recall-scope.js';
 import type { RecallOptions, RecallResult, RecallWindowOptions, ShowRanking, StoreRanking } from './types.js';
 import { type Context, ownerOrSubject, RecallContractError, sharedStoreOf } from '../types.js';
 import {

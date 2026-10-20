@@ -1,7 +1,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { parkInDlq, listDlq } from '../../src/connectors/dlq.js';
-import { githubDlq, replayDlqEntry, type DlqBucket } from '../../src/connectors/github/dlq.js';
+import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
+import { githubDlq, replayDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

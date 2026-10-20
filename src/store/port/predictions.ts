@@ -1,6 +1,6 @@
-import type { MemoryEntry } from '../../core/memory.js';
-import type { ClosureState } from '../../core/prediction.js';
-import type { KeysetPosition } from '../../util/keyset.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { ClosureState } from '../../base/records/prediction.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { PredictionBaserate } from './types.js';
 
 /** A claim to save and the memory row that mirrors it into recall: core builds it with `predictionMirror` in the tenant

@@ -23,11 +23,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve } from '../../src/api/index.js';
-import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
@@ -61,7 +61,7 @@ function callMcpTool(home: string, name: string, args: ScopeToolArgs) {
 
 function extractText(res: McpResponse | null): string {
   // SAFETY: handleMcpRequest's 'tools/call' case always wraps tool output in
-  // MCP's { content: [{ type: 'text', text }] } shape (src/mcp/server.ts);
+  // MCP's { content: [{ type: 'text', text }] } shape (src/surface/mcp/server.ts);
   // McpResponse.result is `unknown` only because different tools return
   // different payloads.
   const r = res?.result as { content?: Array<{ text?: string }> } | undefined;

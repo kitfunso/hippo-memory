@@ -2,12 +2,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { particlesToSimulate, physicsPass } from '../../src/consolidate/physics-pass.js';
-import { newConsolidationResult, type SleepRun } from '../../src/consolidate/run.js';
-import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from '../../src/consolidate/survivors.js';
-import { loadConfig } from '../../src/core/config.js';
-import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import type { PhysicsParticle } from '../../src/core/physics.js';
+import { particlesToSimulate, physicsPass } from '../../src/domain/consolidate/physics-pass.js';
+import { newConsolidationResult, type SleepRun } from '../../src/domain/consolidate/run.js';
+import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from '../../src/domain/consolidate/survivors.js';
+import { loadConfig } from '../../src/base/config/config.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';

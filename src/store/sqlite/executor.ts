@@ -2,14 +2,14 @@
 // so the event loop keeps answering.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
-import { addAuditWriteFailures } from '../../core/audit-report.js';
-import type { LossAversion } from '../../core/memory.js';
+import { addAuditWriteFailures } from '../../base/records/audit-report.js';
+import type { LossAversion } from '../../base/memory/memory.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
 import { StoreBusyError } from '../port.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
-import { DeadlineExceededError } from '../../util/http-util.js';
-import { errorFields, errorMessage, log } from '../../util/log.js';
-import { requestScopes } from '../../util/request-scope.js';
+import { DeadlineExceededError } from '../../base/util/http-util.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { requestScopes } from '../../base/util/request-scope.js';
 import { decodeError } from './error-codec.js';
 import { workerCounts } from './executor-counts.js';
 import { markAllTenants } from './tenant-wire.js';

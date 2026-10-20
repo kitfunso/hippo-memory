@@ -16,23 +16,23 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember, retrieve } from '../../src/api/index.js';
-import { ingestEvent, type IngestEvent } from '../../src/connectors/github/ingest.js';
-import type { IngestResult } from '../../src/connectors/ingest.js';
-import { handleCommentDeleted } from '../../src/connectors/github/deletion.js';
-import { computeIdempotencyKey } from '../../src/connectors/github/signature.js';
-import { resolveTenantForGitHub, type GitHubFallback } from '../../src/connectors/github/tenant-routing.js';
+import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
+import type { IngestResult } from '../../src/surface/connectors/ingest.js';
+import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';
+import { computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
+import { resolveTenantForGitHub, type GitHubFallback } from '../../src/surface/connectors/github/tenant-routing.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
   GitHubPullRequestEvent,
   GitHubPullRequestReviewCommentEvent,
-} from '../../src/connectors/github/types.js';
+} from '../../src/surface/connectors/github/types.js';
 import { randomUUID } from 'node:crypto';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { envTenant } from '../../src/util/env.js';
+import { envTenant } from '../../src/base/util/env.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.

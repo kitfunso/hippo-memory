@@ -1,9 +1,9 @@
 // `hippo context` without --pinned-only through the built CLI: its delivery_events row and the recall trace it links.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import { blockHash, estimateTokens } from '../../src/util/token-text.js';
-import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { blockHash, estimateTokens } from '../../src/base/util/token-text.js';
+import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import {
   PROMPT_HOOK,
   dispose,

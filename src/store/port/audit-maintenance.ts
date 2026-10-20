@@ -1,4 +1,4 @@
-import type { RepairProtection } from '../../core/memory-audit.js';
+import type { RepairProtection } from '../../base/memory/memory-audit.js';
 
 export type { RepairProtection };
 

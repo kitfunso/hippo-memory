@@ -19,7 +19,7 @@ import {
   type TestedEstimate,
   type VerdictResult,
   type VerdictSpec,
-} from '../../src/eval/eval-stats.js';
+} from '../../src/domain/eval/eval-stats.js';
 
 describe('four-bucket cost accounting', () => {
   const usage = {

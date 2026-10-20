@@ -8,19 +8,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { Layer } from '../../src/core/memory.js';
+import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordTokenUse, lastSentState, summarizeTokenUse } from '../../src/store/sqlite/token-ledger.js';
-import { shouldSkipUnchanged } from '../../src/core/skip-unchanged.js';
-import { hookPayloadSessionId } from '../../src/util/hook-payload.js';
-import { blockHash } from '../../src/util/token-text.js';
+import { shouldSkipUnchanged } from '../../src/base/session/skip-unchanged.js';
+import { hookPayloadSessionId } from '../../src/base/util/hook-payload.js';
+import { blockHash } from '../../src/base/util/token-text.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { handleMcpRequest } from '../../src/mcp/server.js';
+import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 beforeEach(() => {

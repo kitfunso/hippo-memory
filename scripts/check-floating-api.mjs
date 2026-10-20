@@ -15,7 +15,7 @@ export const API_WRITES = {
   'src/api/memories/promote.ts': ['supersede', 'rawArchive'],
   'src/api/memories/remember.ts': ['remember'],
   'src/api/memories/remember-local.ts': ['rememberLocally'],
-  'src/importers/vault.ts': ['importVault'],
+  'src/surface/importers/vault.ts': ['importVault'],
 };
 
 const CHAIN = new Set(['then', 'catch', 'finally']);

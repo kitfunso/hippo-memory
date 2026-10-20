@@ -1,18 +1,18 @@
 // The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the same messages.
 // retrieveWithCliCore is the CLI ranking core's entry: it ranks with rankRecall, then records the list shown once.
-import { BadRequestError, ForbiddenError } from '../../core/api-errors.js';
-import type { SearchResult } from '../../core/search-types.js';
+import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
+import type { SearchResult } from '../../base/rank/search-types.js';
 import {
   decidePlanningFallacy,
   autodebiasMode,
   detectPlanningClaim,
   type PlanningFallacyDecision,
-} from '../../predictions/planning-fallacy.js';
-import { reportAuditWriteFailure } from '../../core/audit-report.js';
+} from '../../domain/predictions/planning-fallacy.js';
+import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { HippoStore, LastRecall, LastRecallWrites } from '../../store/port.js';
-import { type JsonValue, isJsonString } from '../../util/json.js';
-import { MAX_ID_LEN } from '../../util/limits.js';
-import { estimateTokens } from '../../util/token-text.js';
+import { type JsonValue, isJsonString } from '../../base/util/json.js';
+import { MAX_ID_LEN } from '../../base/util/limits.js';
+import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContextOptions } from '../context-types.js';
 import type { Context } from '../types.js';
 import { rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';

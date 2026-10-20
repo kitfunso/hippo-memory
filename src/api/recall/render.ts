@@ -1,7 +1,7 @@
 // Recall text pieces the CLI and MCP presenters share, so the budget loop, cutoff wording and hints cannot drift apart.
 
-import type { SearchResult } from '../../core/search-types.js';
-import { estimateTokens } from '../../util/token-text.js';
+import type { SearchResult } from '../../base/rank/search-types.js';
+import { estimateTokens } from '../../base/util/token-text.js';
 import {
   detectAnchoring,
   biasHintEnabled,

@@ -10,12 +10,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -39,7 +39,7 @@ function callTool(reqId: number, name: string, args: ToolArgs, ctx: McpContext) 
 
 function extractText(res: McpResponse | null): string {
   // SAFETY: a successful tools/call response always carries
-  // result.content[0].text (src/mcp/server.ts handleMcpRequest 'tools/call'
+  // result.content[0].text (src/surface/mcp/server.ts handleMcpRequest 'tools/call'
   // case constructs this exact shape).
   const result = res?.result as { content?: Array<{ text?: string }> } | undefined;
   return result?.content?.[0]?.text ?? '';

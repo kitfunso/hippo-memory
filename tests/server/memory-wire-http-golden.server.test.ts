@@ -2,7 +2,7 @@
 // move a key an HTTP client reads.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { DEFAULT_TENANT_ID } from '../../src/util/tenant.js';
+import { DEFAULT_TENANT_ID } from '../../src/base/util/tenant.js';
 import { recallableEntry } from '../_helpers/every-field-entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW } from '../_helpers/recall-golden-seed.js';

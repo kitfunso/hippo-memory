@@ -8,8 +8,8 @@ import { getMeta, pragmaUserVersion, setMeta } from '../../db/meta.js';
 import { tableColumns } from '../../db/tables.js';
 import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
-import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
-import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../core/memory-audit.js';
+import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
+import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../base/memory/memory-audit.js';
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,

@@ -1,10 +1,10 @@
 // The recall an agent's tool prints: the ranked list cut to the caller's token budget, with the hints and the Cutoff
 // block that describe that list. The shown ids are kept for the caller's next outcome.
 
-import { fitBudget } from '../../search/finalize.js';
-import type { SearchResult } from '../../core/search-types.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../util/same-text.js';
-import { estimateTokens } from '../../util/token-text.js';
+import { fitBudget } from '../../domain/search/finalize.js';
+import type { SearchResult } from '../../base/rank/search-types.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { estimateTokens } from '../../base/util/token-text.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from '../types.js';

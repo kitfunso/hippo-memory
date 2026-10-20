@@ -8,9 +8,9 @@ import {
   llmTimeoutMs,
   llmTotalMs,
   parseRetryAfterMs,
-} from '../../src/util/http-retry.js';
-import { envLlmTimeoutMs } from '../../src/util/env.js';
-import { classifyTransportFailure } from '../../src/cli/client.js';
+} from '../../src/base/util/http-retry.js';
+import { envLlmTimeoutMs } from '../../src/base/util/env.js';
+import { classifyTransportFailure } from '../../src/surface/cli/client.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

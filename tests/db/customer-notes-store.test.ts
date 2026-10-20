@@ -12,10 +12,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { saveCustomerNote, closeCustomerNote, loadCustomerNotes } from '../../src/objects/customer-notes.js';
+import { saveCustomerNote, closeCustomerNote, loadCustomerNotes } from '../../src/domain/objects/customer-notes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -70,7 +70,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       expect(memRow.content).toContain('renewal call notes');
       expect(memRow.source).toBe('customer_note');
       // SAFETY: metadata_json is always a JSON object with a customer_note_create
-      // audit's fields (see src/objects/customer-notes.ts saveCustomerNote audit write).
+      // audit's fields (see src/domain/objects/customer-notes.ts saveCustomerNote audit write).
       const rows = db
         .prepare(`SELECT metadata_json FROM audit_log WHERE op='customer_note_create' AND target_id=?`)
         .all(String(n.id)) as Array<{ metadata_json: string }>;

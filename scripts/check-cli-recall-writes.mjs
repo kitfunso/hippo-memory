@@ -37,7 +37,7 @@ export const SHARED_WRITERS = [
 ];
 
 /** The files that implement the recall verbs, relative to the source root. */
-export const RECALL_VERB_FILES = ['cli/recall.ts', 'cli/explain.ts'];
+export const RECALL_VERB_FILES = ['surface/cli/recall.ts', 'surface/cli/explain.ts'];
 
 /** The memory writers and the store opener. A CLI verb reaches them through a root-taking function in src/api or the module that owns the rows. */
 export const STORE_WRITERS = ['writeEntry', 'deleteEntry', 'deleteEntryCore', 'batchWriteAndDelete', 'openHippoDb'];
@@ -102,7 +102,7 @@ function findInCli(srcDir, bannedIn) {
   const root = resolve(srcDir);
   return listSourceFiles(root)
     .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
-    .filter(([file]) => file === 'cli.ts' || file.startsWith('cli/'))
+    .filter(([file]) => file === 'cli.ts' || file.startsWith('surface/cli/'))
     .flatMap(([file, p]) => namedOnLines(readFileSync(p, 'utf8'), bannedIn(file)).map((hit) => ({ file, ...hit })))
     .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name));
 }

@@ -12,20 +12,20 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   Layer,
   type MemoryEntry,
-} from '../../src/core/memory.js';
+} from '../../src/base/memory/memory.js';
 import * as api from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
-import { buildDag, buildEntityProfiles } from '../../src/consolidate/dag.js';
-import { storeExtractedFacts } from '../../src/learn/extract.js';
+import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.js';
+import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
 import { importGenericFile, importVault } from '../../src/entry/importers.js';
-import { cmdCapture } from '../../src/capture/command.js';
+import { cmdCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
-import { importProjectMemories } from '../../src/agent-memories/sync.js';
+import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

@@ -6,7 +6,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { readAuthHeader } from '../../src/server/auth.js';
+import { readAuthHeader } from '../../src/surface/server/auth.js';
 import type { RememberResult } from '../../src/api/index.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';

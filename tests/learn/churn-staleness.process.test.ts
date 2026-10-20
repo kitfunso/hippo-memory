@@ -4,8 +4,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { extractChurnRefs, detectChurnStale } from '../../src/learn/invalidation.js';
-import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { extractChurnRefs, detectChurnStale } from '../../src/domain/learn/invalidation.js';
+import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import * as api from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -19,7 +19,9 @@ import { initGitRepo, commit, DAY, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '.
 
 describe('extractChurnRefs', () => {
   it('extracts a plain path reference', () => {
-    expect(extractChurnRefs('see src/learn/invalidation.ts for details').paths).toEqual(['src/learn/invalidation.ts']);
+    expect(extractChurnRefs('see src/domain/learn/invalidation.ts for details').paths).toEqual([
+      'src/domain/learn/invalidation.ts',
+    ]);
   });
 
   it('strips a :line or :line-line suffix from a path', () => {
@@ -28,7 +30,7 @@ describe('extractChurnRefs', () => {
   });
 
   it('normalizes backslashes and strips a leading ./', () => {
-    expect(extractChurnRefs('see ./src\\learn\\churn-git.ts').paths).toEqual(['src/learn/churn-git.ts']);
+    expect(extractChurnRefs('see ./src\\learn\\churn-git.ts').paths).toEqual(['src/domain/learn/churn-git.ts']);
   });
 
   it('captures an extension whole when a shorter one is its prefix (json/js, tsx/ts)', () => {

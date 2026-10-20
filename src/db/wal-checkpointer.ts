@@ -2,7 +2,7 @@
 // request on the event loop.
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { errorFields, errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 
 // WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long write pays the

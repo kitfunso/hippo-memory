@@ -1,5 +1,5 @@
-import type { MemoryEntry } from '../../core/memory.js';
-import type { DescendantAdmission } from '../../core/read-admission.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { DescendantAdmission } from '../../base/scope/read-admission.js';
 
 /** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project,
  * unset keeps every origin. */

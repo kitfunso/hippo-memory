@@ -2,8 +2,8 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
-import { extractFacts, type ExtractedFact } from '../../src/learn/extract.js';
-import { generateDagSummary } from '../../src/consolidate/dag-summary.js';
+import { extractFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
+import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
 import { refineOne } from '../_helpers/refine-one.js';
 
 afterAll(() => {

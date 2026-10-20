@@ -1,8 +1,8 @@
 // The vector side of a store for the embed and import verbs: embed what is missing, count coverage, re-seed physics.
 // Vectors and physics rows carry no tenant, so each op covers the whole store and needs the host admin.
 
-import type { EmbeddingProvider } from '../embeddings/provider.js';
-import { embedAll, folderIndex } from '../search/embed-memories.js';
+import type { EmbeddingProvider } from '../base/embeddings/provider.js';
+import { embedAll, folderIndex } from '../domain/search/embed-memories.js';
 import type { VectorCoverage } from '../store/local/embedding-index.js';
 import { requireHostAdmin, type LocalContext } from './types.js';
 
