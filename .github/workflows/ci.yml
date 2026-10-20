@@ -311,6 +311,9 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
+          # On Windows a store write-and-close cycle costs 69 ms in runner.temp (D:) against 175 ms in the default TEMP (C:).
+          TEMP: ${{ runner.os == 'Windows' && runner.temp || '' }}
+          TMP: ${{ runner.os == 'Windows' && runner.temp || '' }}
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:

@@ -31,7 +31,7 @@
  * retention is exact and reproducible regardless of which random ids win a
  * tie.
  */
-import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -149,11 +149,21 @@ describe('split determinism', () => {
 // ---------------------------------------------------------------------------
 
 describe('memory-value harness (real stores)', () => {
-  beforeEach(cleanupScratch);
+  // (b) to (d) only read what the pipeline wrote, so they share one run per question instead of four.
+  const runs = new Map<string, Awaited<ReturnType<typeof runPipeline>>>();
+  beforeAll(() =>
+    benchmarkStores.withSharedStoreHandles(async () => {
+      clearAblationEnv();
+      vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', HARNESS_SCRATCH_ROOT);
+      cleanupScratch();
+      for (const q of QUESTIONS) runs.set(q.question_id, await runPipeline(q));
+    }),
+  );
+  const runOf = (q: (typeof QUESTIONS)[number]) => runs.get(q.question_id)!;
 
-  it('(b) features.jsonl rows == ingested memories; >=6 non-constant post-simulation', async () => {
+  it('(b) features.jsonl rows == ingested memories; >=6 non-constant post-simulation', () => {
     for (const q of QUESTIONS) {
-      const { ingestResult, extractResult } = await runPipeline(q);
+      const { ingestResult, extractResult } = runOf(q);
       expect(extractResult.rows).toBe(ingestResult.memoryCount);
       expect(ingestResult.memoryCount).toBe(10); // fixture is exactly 10 turns/question, none empty
 
@@ -166,7 +176,7 @@ describe('memory-value harness (real stores)', () => {
     }
   });
 
-  it('schema_fit is wired to the REAL computeSchemaFit(text, [], entriesSoFar) path — verified by independent replay', async () => {
+  it('schema_fit is wired to the REAL computeSchemaFit(text, [], entriesSoFar) path — verified by independent replay', () => {
     // Coordinator's fix-round ask was "assert schema_fit varies". Measured
     // reality: computeSchemaFit returns the neutral 0.5 before ever reaching
     // the content-overlap branch — via the empty-store guard (src/base/memory/memory.ts:558)
@@ -182,7 +192,6 @@ describe('memory-value harness (real stores)', () => {
     // store), which is the property that actually matters — a false
     // "it varies" assertion would not have been true and is not asserted.
     for (const q of QUESTIONS) {
-      await runPipeline(q);
       const rows = jsonlRows<{ memory_id: string; features: { schema_fit: number } }>(featuresPathFor(q.question_id));
       const rowById = new Map(rows.map((r) => [r.memory_id, r]));
       const gold = jsonFile<{ memories: Array<{ id: string }> }>(goldPathFor(q.question_id));
@@ -212,10 +221,7 @@ describe('memory-value harness (real stores)', () => {
     }
   });
 
-  it('(c) recency retention is exact for the hand-computable case', async () => {
-    for (const q of QUESTIONS) {
-      await runPipeline(q);
-    }
+  it('(c) recency retention is exact for the hand-computable case', () => {
     const result = evaluateAll(
       QUESTIONS.map((q) => ({ questionId: q.question_id, split: 'train' as const })),
       { budgets: [0.3], primaryBudget: 0.3 },
@@ -235,9 +241,8 @@ describe('memory-value harness (real stores)', () => {
     expect(recencyByQuestion.get('fixture_q_b')).toBe(0.75);
   });
 
-  it('(d) no NaN anywhere in extracted features', async () => {
+  it('(d) no NaN anywhere in extracted features', () => {
     for (const q of QUESTIONS) {
-      await runPipeline(q);
       const rows = jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id));
       for (const row of rows) {
         for (const [name, value] of Object.entries(row.features)) {
@@ -270,6 +275,7 @@ describe('memory-value harness (real stores)', () => {
       return { rowCounts, goldCounts, recency };
     }
 
+    cleanupScratch();
     const run1 = await runOnceAndScore();
     for (const q of QUESTIONS) removeAfterRequest(questionDir(q.question_id), benchmarkStores);
     const run2 = await runOnceAndScore();

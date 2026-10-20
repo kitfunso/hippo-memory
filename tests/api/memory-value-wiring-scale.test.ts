@@ -7,12 +7,9 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { rescueSet } from '../../src/domain/consolidate/memory-value.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  loadEveryTenantEntries,
-  loadSessionDecayContext,
-  writeEntriesTogether,
-  batchWriteAndDelete,
-} from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, loadSessionDecayContext, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
@@ -26,6 +23,18 @@ import {
 } from '../_helpers/memory-value-wiring.js';
 
 useMemoryValueScratch();
+oneRequestPerTest();
+
+/** The rows on hippo.db alone, in one transaction: no test here reads a markdown mirror, and a mirror file per seeded
+ *  row was most of this file's disk writes. */
+function seedRows(root: string, rows: readonly MemoryEntry[]): void {
+  const db = openHippoDb(root);
+  try {
+    withWriteScope(db, 'seed_rows', () => rows.forEach((entry) => writeEntryDbOnly(db, entry)));
+  } finally {
+    closeHippoDb(db);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // (h) scale characterization (~2,000 entries, 3 tenants)
@@ -142,7 +151,7 @@ describe('(h) scale characterization', () => {
 
     initTestStore(dir);
     enableMemoryValue(dir, { replay: { count: 0 }, autoTraceCapture: false });
-    batchWriteAndDelete(dir, entries, []);
+    seedRows(dir, entries);
 
     const loaded = loadEveryTenantEntries(dir);
     expect(loaded.length).toBe(entries.length);
@@ -256,7 +265,7 @@ describe('(h) scale characterization', () => {
       }
       return true;
     });
-    batchWriteAndDelete(dirMutated, seedForMutated, []);
+    seedRows(dirMutated, seedForMutated);
 
     await consolidate(dirMutated, { now: NOW });
 
@@ -306,8 +315,6 @@ function parseRemovedIds(details: string[]): Set<string> {
 // (i) dry-run parity
 // ---------------------------------------------------------------------------
 describe('(i) dry-run parity', () => {
-  // The (h) seed is bound by mirror-file writes, which one shared handle does not change.
-  oneRequestPerTest();
   it('dry-run preview decisions match a real run on a cloned store', async () => {
     const dirDry = makeRoot('case');
     const dirReal = makeRoot('case');
