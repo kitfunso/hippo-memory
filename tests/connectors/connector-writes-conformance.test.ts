@@ -130,7 +130,15 @@ const write =
 const archive =
   (id: string, event: ConnectorEvent): Call =>
   (g) =>
-    g.archiveConnectorEntry({ tenantId: TENANT_A, actor: ACTOR, ownScope: null, id, reason: 'source deleted', event });
+    g.archiveConnectorEntry({
+      tenantId: TENANT_A,
+      actor: ACTOR,
+      ownScope: null,
+      role: 'admin',
+      id,
+      reason: 'source deleted',
+      event,
+    });
 
 /** The audit rows a run added, without the ids and times both sides already matched on. */
 const added = (side: Side): Omit<AuditEvent, 'id' | 'ts'>[] =>
@@ -411,6 +419,7 @@ describe('on hippo.db the companion rows commit with the entry or not at all', (
       tenantId: TENANT_A,
       actor: ACTOR,
       ownScope: null,
+      role: 'admin',
       id: raw.id,
       reason: 'source deleted',
       event: slack('Ev_refused'),
