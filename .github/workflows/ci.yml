@@ -284,16 +284,14 @@ jobs:
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
   # One Windows job set the wall time of the whole run, so the Windows suite splits in two.
   suite:
-    name: suite (${{ matrix.os }}, ${{ matrix.shard }}, ${{ matrix.variant }})
+    name: suite (${{ matrix.os }}, ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, shard: 1/2, variant: H100 }
-          - { os: windows-latest, shard: 2/2, variant: H100 }
-          - { os: windows-latest, shard: 1/2, variant: H1000 }
-          - { os: windows-latest, shard: 2/2, variant: H1000 }
-          - { os: macos-latest, shard: 1/1, variant: H100 }
+          - { os: windows-latest, shard: 1/2 }
+          - { os: windows-latest, shard: 2/2 }
+          - { os: macos-latest, shard: 1/1 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
@@ -303,12 +301,6 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - name: Variant (throwaway)
-        if: matrix.variant == 'H1000'
-        shell: bash
-        run: |
-          sed -i 's/^const INLINE_CHECKPOINT_PAGES = 100;/const INLINE_CHECKPOINT_PAGES = 1000;/' src/db/wal-checkpointer.ts
-          git diff --stat
       - run: npm run build
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}
