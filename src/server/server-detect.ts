@@ -217,6 +217,8 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
 
   let info: ServerInfo;
   try {
+    // A serve() still binding leaves an empty or port-0 claim: nothing answers yet, but a live claimant keeps the file.
+    if (startingClaim(path)) return null;
     const parsed = JSON.parse(readFileSync(path, 'utf8'));
     if (!isServerInfo(parsed)) throw new TypeError('it is not a JSON object with a pid, port, url and started_at');
     info = parsed;
@@ -225,9 +227,6 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     removePidfile(hippoRoot);
     return null;
   }
-
-  // Port 0 is a claim from a serve() still binding: nothing answers yet, but a live claimant keeps the file.
-  if (info.port === 0 && pidIsAlive(info.pid)) return null;
 
   if (!isLiveLoopbackTarget(info)) {
     removePidfile(hippoRoot);
