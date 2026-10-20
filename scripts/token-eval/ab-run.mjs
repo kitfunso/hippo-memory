@@ -310,7 +310,7 @@ async function main() {
     fs.writeFileSync(path.join(out, 'ABANDONED'), `${err.message}\nlast completed: ${progress.last}\n`);
     throw err;
   } finally {
-    if (objectLockRetries.count) console.log(`Git object-lock retries (antivirus holding a fresh object): ${objectLockRetries.count}.`);
+    if (objectLockRetries.count) console.log(`Git scan-lock retries (antivirus holding a file git just wrote): ${objectLockRetries.count}.`);
   }
   // ab-analyze averages unequal seed counts unpaired, so Z0 records go to the Z0 analyzer, which pairs shared seeds.
   console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs (pairs shared seeds; it lands with PR #357), never ab-analyze.mjs.`);
