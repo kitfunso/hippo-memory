@@ -1,35 +1,34 @@
 // The api functions the dashboard's reader thread runs: a memory's detail, and the detail after a dashboard write.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, memoryPin } from '../../src/api/index.js';
 import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../../src/api/dashboard/detail.js';
-import type { SnapshotService } from '../../src/api/dashboard/snapshot.js';
-import * as conflicts from '../../src/store/sqlite/conflicts.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
-import { NOW, makeStore, seed, snapshotsOf, type TmpStore } from '../_helpers/dashboard-fixture.js';
+import { NOW, dashboardOf, makeStore, seed, type DashboardView, type TmpStore } from '../_helpers/dashboard-fixture.js';
 
 let store: TmpStore;
 let ctx: FullContext;
-let snapshots: SnapshotService;
+let view: DashboardView;
 const at = { fresh: false, nowMs: NOW };
 
 beforeEach(() => {
   store = makeStore('hippo-dash-detail');
   ctx = apiCtx(store.hippoRoot, 'default', adminActor('dashboard'));
-  snapshots = snapshotsOf(store.hippoRoot, () => NOW);
+  view = dashboardOf(store.hippoRoot, () => NOW);
 });
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  snapshots.close();
+afterEach(async () => {
+  await view.reads.close();
   store.cleanup();
 });
 
-describe('dashboardMemoryDetail', () => {
-  it("answers a live memory's detail, stamped with the snapshot the client holds", async () => {
-    const live = seed(store.hippoRoot, 'a live fact', { tags: ['ops'] });
-    const held = snapshots.get('default').id;
+const heldId = async (): Promise<number> => (await view.clock.at('default')).id;
 
-    const detail = await dashboardMemoryDetail(ctx, snapshots, live.id, at);
+describe('dashboardMemoryDetail', () => {
+  it("answers a live memory's detail, stamped with the snapshot id the client holds", async () => {
+    const live = seed(store.hippoRoot, 'a live fact', { tags: ['ops'] });
+    const held = await heldId();
+
+    const detail = await dashboardMemoryDetail(ctx, view, live.id, at);
 
     expect(detail).toMatchObject({ id: live.id, content: 'a live fact', tags: ['ops'], snapshotId: held });
   });
@@ -40,51 +39,47 @@ describe('dashboardMemoryDetail', () => {
     const other = seed(store.hippoRoot, 'theirs', { tenantId: 'tenant_b' });
 
     for (const id of [old.id, other.id, 'mem_missing']) {
-      expect(await dashboardMemoryDetail(ctx, snapshots, id, at)).toBeNull();
+      expect(await dashboardMemoryDetail(ctx, view, id, at)).toBeNull();
     }
   });
 
-  it('rebuilds the snapshot first when the read is fresh', async () => {
+  it('takes a new snapshot id first when the read is fresh', async () => {
     const live = seed(store.hippoRoot, 'a live fact');
-    const held = snapshots.get('default').id;
+    const held = await heldId();
 
-    const detail = await dashboardMemoryDetail(ctx, snapshots, live.id, { fresh: true, nowMs: NOW });
+    const detail = await dashboardMemoryDetail(ctx, view, live.id, { fresh: true, nowMs: NOW });
 
     expect(detail!.snapshotId).toBeGreaterThan(held);
   });
 });
 
 describe('dashboardDetailAfterWrite', () => {
-  it('drops the snapshot after a committed write, so the next read rebuilds', async () => {
+  it('drops the held id after a committed write, so the next read takes a new one', async () => {
     seed(store.hippoRoot, 'a live fact');
-    const held = snapshots.get('default').id;
+    const held = await heldId();
 
-    expect(await dashboardDetailAfterWrite(ctx, snapshots, { changed: true }, NOW)).toBeNull();
+    expect(await dashboardDetailAfterWrite(ctx, view, { changed: true }, NOW)).toBeNull();
 
-    expect(snapshots.get('default').id).toBeGreaterThan(held);
+    expect(await heldId()).toBeGreaterThan(held);
   });
 
-  it('keeps the snapshot when nothing committed', async () => {
+  it('keeps the held id when nothing committed', async () => {
     seed(store.hippoRoot, 'a live fact');
-    const held = snapshots.get('default').id;
+    const held = await heldId();
 
-    await dashboardDetailAfterWrite(ctx, snapshots, { changed: false }, NOW);
+    await dashboardDetailAfterWrite(ctx, view, { changed: false }, NOW);
 
-    expect(snapshots.get('default').id).toBe(held);
+    expect(await heldId()).toBe(held);
   });
 
-  it('answers the pinned detail stamped with the last build while a rebuild would fail, which the next read reports', async () => {
+  it('answers the pinned detail stamped with the last id issued, which the next read moves past', async () => {
     const target = seed(store.hippoRoot, 'pin me');
-    const held = snapshots.get('default').id;
-    // Every build pages the open conflicts; no write and no detail read does.
-    vi.spyOn(conflicts, 'conflictPageAt').mockImplementation(() => {
-      throw new Error('forced rebuild failure');
-    });
+    const held = await heldId();
 
     const entry = await memoryPin(ctx, target.id, true);
-    const detail = await dashboardDetailAfterWrite(ctx, snapshots, { changed: true, entry }, NOW);
+    const detail = await dashboardDetailAfterWrite(ctx, view, { changed: true, entry }, NOW);
 
     expect(detail).toMatchObject({ id: target.id, pinned: true, band: 'pinned', snapshotId: held });
-    expect(() => snapshots.get('default')).toThrow('forced rebuild failure');
+    expect(await heldId()).toBeGreaterThan(held);
   });
 });

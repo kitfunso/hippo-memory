@@ -21,6 +21,8 @@ function healthyStore() {
     },
     prepare: (sql) => raw.prepare(sql),
     close: () => raw.close(),
+    function: (name, options, fn) => raw.function(name, options, fn),
+    aggregate: (name, options) => raw.aggregate(name, options),
   };
   runMigrations(db);
   expect(getMeta(db, 'fts5_available')).toBe('1');

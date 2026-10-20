@@ -4,7 +4,6 @@ import type { AgentImport } from './agent-import.js';
 import type { Captures } from './captures.js';
 import type { CompactionHooks } from './compaction-hooks.js';
 import type { Consolidation } from './consolidation.js';
-import type { DashboardReads } from './dashboard-reads.js';
 import type { Diagnostics } from './diagnostics.js';
 import type { EmbeddingIndex } from './embedding-index.js';
 import type { GraphRebuild } from './graph-rebuild.js';
@@ -19,14 +18,6 @@ export type { AgentImport, ContainerTx, ImportTarget } from './agent-import.js';
 export type { Captures } from './captures.js';
 export type { CompactionHooks } from './compaction-hooks.js';
 export type { Consolidation } from './consolidation.js';
-export type {
-  ConflictPair,
-  DashboardReads,
-  DashboardRow,
-  DashboardScan,
-  DashboardText,
-  ExcludedCounts,
-} from './dashboard-reads.js';
 export type { Diagnostics } from './diagnostics.js';
 export type { EmbeddingIndex } from './embedding-index.js';
 export type { GraphRebuild } from './graph-rebuild.js';
@@ -53,7 +44,6 @@ export interface LocalFiles {
   readonly graphRebuild: GraphRebuild;
   readonly embeddingIndex: EmbeddingIndex;
   readonly ledger: Ledger;
-  readonly dashboard: DashboardReads;
   /** The rejected-value probe of a dry run that cannot await: the CLI's capture and the importers. */
   readonly rejections: { refusedAmong(checks: readonly RejectionCheck[]): boolean[] };
 }

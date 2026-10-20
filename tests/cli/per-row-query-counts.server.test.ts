@@ -9,8 +9,9 @@ import { quarantineList } from '../../src/api/auth/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
-import { buildMemoryDetail } from '../../src/api/dashboard/queries.js';
-import { snapshotsOf } from '../_helpers/dashboard-fixture.js';
+import { dashboardDetailAfterWrite } from '../../src/api/dashboard/detail.js';
+import { buildOverview } from '../../src/api/dashboard/overview.js';
+import { dashboardOf } from '../_helpers/dashboard-fixture.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadEntriesByIds, replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
@@ -193,7 +194,7 @@ describe('outcome with a repeated id', () => {
   });
 });
 
-describe('buildMemoryDetail', () => {
+describe('the dashboard detail', () => {
   it('reads the conflicts naming a memory and their other sides in a fixed number of queries', async () => {
     const work: number[][] = [];
     for (const n of SIZES) {
@@ -204,21 +205,21 @@ describe('buildMemoryDetail', () => {
         ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
         { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
       ]);
-      const options = { snapshotId: 1, nowMs: Date.now(), embedded: false, lossAversion: {} };
-      const store = sqliteStore(root);
+      const view = dashboardOf(root, () => Date.now());
       const { result, statements } = await recordStatementsAsync(() =>
-        buildMemoryDetail(store, 'default', subject, options),
+        dashboardDetailAfterWrite(ctxFor(root), view, { changed: false, entry: subject }, Date.now()),
       );
-      expect(result.conflicts.map((c) => c.other.id).sort()).toEqual(others.map((e) => e.id).sort());
-      expect(result.conflicts.every((c) => c.reason === 'names the subject')).toBe(true);
+      await view.reads.close();
+      expect(result?.conflicts.map((c) => c.other.id).sort()).toEqual(others.map((e) => e.id).sort());
+      expect(result?.conflicts.every((c) => c.reason === 'names the subject')).toBe(true);
       work.push([countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)]);
     }
     expect(work[1]).toEqual(work[0]);
   });
 });
 
-describe('the dashboard snapshot build', () => {
-  it('reads no whole row, and no row at all for a memory it leaves out', () => {
+describe('the dashboard overview', () => {
+  it('reads no whole row, and no row at all for a memory it leaves out', async () => {
     const read: number[] = [];
     for (const n of SIZES) {
       const root = freshRoot('qc-dash-build');
@@ -227,15 +228,16 @@ describe('the dashboard snapshot build', () => {
         ...rows(n, 'archived', { kind: 'archived' }),
         ...rows(n, 'replaced', { kind: 'superseded' }),
       ]);
-      const service = snapshotsOf(root, () => Date.now());
+      const { reads, clock } = dashboardOf(root, () => Date.now());
       try {
-        const { result, statements, rowsRead } = recordStatements(() => service.get('default'));
-        expect(result.facts).toHaveLength(4);
+        const stamp = await clock.at('default');
+        const { result, statements, rowsRead } = await recordStatementsAsync(() => buildOverview(reads, stamp));
+        expect(result.total).toBe(4);
         expect(result.excluded).toEqual({ superseded: n, archived: n, quarantined: 0 });
         expect(countMatching(statements, ROW_READ)).toBe(0);
         read.push(rowsRead);
       } finally {
-        service.close();
+        await reads.close();
       }
     }
     expect(read[1]).toBe(read[0]);

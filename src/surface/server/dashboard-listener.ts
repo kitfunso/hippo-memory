@@ -31,7 +31,7 @@ export interface DashboardOpts {
   readonly token: string;
   /** Dates the strength projections; the eval clock when unset. */
   readonly now?: () => number;
-  /** Ages the snapshot cache; the wall clock when unset. */
+  /** Ages the snapshot id; the wall clock when unset. */
   readonly cacheClock?: () => number;
   /** Stop and exit on SIGINT or SIGTERM; only `hippo dashboard` sets it. */
   readonly handleSignals?: boolean;
