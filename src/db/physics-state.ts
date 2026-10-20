@@ -10,7 +10,6 @@ import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../ba
 import type { PhysicsParticle } from '../base/rank/physics.js';
 import { initializeParticle } from '../base/rank/physics.js';
 import { chunked } from '../base/util/chunked.js';
-import { placeholders } from '../base/util/sql.js';
 import { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 import { cachedStatement } from './statement-cache.js';
 
@@ -55,13 +54,12 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
   if (memoryIds && memoryIds.length > 0) {
     // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
     for (const chunk of chunked(memoryIds)) {
-      const marks = placeholders(chunk.length);
       rows.push(
         ...(cachedStatement(
           db,
           `SELECT ${PHYSICS_COLUMNS}
-         FROM memory_physics WHERE memory_id IN (${marks})`,
-        ).all(...chunk) as PhysicsRow[]),
+         FROM memory_physics WHERE memory_id IN (SELECT value FROM json_each(?))`,
+        ).all(JSON.stringify(chunk)) as PhysicsRow[]),
       );
     }
   } else {

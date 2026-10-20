@@ -1,7 +1,6 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
 import { generateId } from '../../base/memory/memory.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { placeholders } from '../../base/util/sql.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
@@ -219,9 +218,9 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
     db,
     `
     SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
-    FROM retrieval_policy WHERE id IN (${placeholders(policyIds.length)})
+    FROM retrieval_policy WHERE id IN (SELECT value FROM json_each(?))
   `,
-  ).all(...policyIds) as Array<{
+  ).all(JSON.stringify(policyIds)) as Array<{
     id: string;
     goal_id: string;
     policy_type: RetrievalPolicy['policyType'];
@@ -252,8 +251,8 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
 export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): GoalRecallLogRow[] {
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.memoryId))];
-  const local = cachedStatement(db, `SELECT id FROM memories WHERE id IN (${placeholders(ids.length)})`).all(
-    ...ids,
+  const local = cachedStatement(db, `SELECT id FROM memories WHERE id IN (SELECT value FROM json_each(?))`).all(
+    JSON.stringify(ids),
   ) as Array<{
     id: string;
   }>;

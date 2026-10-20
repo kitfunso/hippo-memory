@@ -18,7 +18,6 @@ import { syncFtsRow, ftsDriftAt } from './entry-row.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
-import { placeholders } from '../../base/util/sql.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type {
   RebuildPatch,
@@ -145,13 +144,13 @@ function childrenOfSummariesAt(
         `
         SELECT ${MEMORY_SELECT_COLUMNS}
           FROM memories
-         WHERE dag_parent_id IN (${placeholders(slice.length)})
+         WHERE dag_parent_id IN (SELECT value FROM json_each(?))
            AND tenant_id = ?
            AND kind != 'archived'
            AND superseded_by IS NULL
          ORDER BY created ASC, id ASC
       `,
-      ).all(...slice, tenantId) as MemoryRow[];
+      ).all(JSON.stringify(slice), tenantId) as MemoryRow[];
       for (const entry of rows.map(rowToEntry)) {
         const key = childrenKey(tenantId, entry.dagParentId ?? '');
         const list = out.get(key);

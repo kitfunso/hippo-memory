@@ -193,10 +193,10 @@ function transitionCards(
   const sql = `
     UPDATE cards SET status = ?, updated_at = ?, lease_until = ?, heartbeat_at =
     ?${extra?.setSql ? `, ${extra.setSql}` : ''}
-    WHERE id IN (${placeholders(cardIds.length)}) AND tenant_id = ? AND status IN
+    WHERE id IN (SELECT value FROM json_each(?)) AND tenant_id = ? AND status IN
     (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
   `;
-  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), ...cardIds, tenantId, ...from];
+  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), JSON.stringify(cardIds), tenantId, ...from];
   const result = cachedStatement(db, sql).run(...params);
   return Number(result.changes ?? 0);
 }
@@ -255,11 +255,10 @@ function createCardAt(db: DatabaseSyncLike, tenantId: string, input: CardCreate)
  * write scope. */
 function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: readonly string[]): boolean {
   if (dependsOn.length === 0) return true;
-  const marks = placeholders(dependsOn.length);
-  const rows = cachedStatement(db, `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${marks})`).all(
-    tenantId,
-    ...dependsOn,
-  ) as Array<{ id: string; status: string }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+  ).all(tenantId, JSON.stringify(dependsOn)) as Array<{ id: string; status: string }>;
   const found = new Map(rows.map((r) => [r.id, r.status]));
   // Pre-check before any write: a typo'd --depends-on can never commit a card row.
   for (const parentId of dependsOn) {

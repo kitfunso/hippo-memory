@@ -22,7 +22,6 @@ import {
   type StoredRelation,
 } from '../port/graph-reads.js';
 import { chunked } from '../../base/util/chunked.js';
-import { placeholders } from '../../base/util/sql.js';
 import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
 import type { Sync } from './served.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
@@ -120,14 +119,13 @@ function loadEntitiesByIdsAt(db: DatabaseSyncLike, tenantId: string, ids: readon
   if (ids.length === 0) return [];
   const out: Entity[] = [];
   for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
-    const ph = placeholders(slice.length);
     const rows = cachedStatement(
       db,
       `
       SELECT ${ENTITY_COLS} FROM entities
-      WHERE tenant_id = ? AND id IN (${ph})
+      WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))
     `,
-    ).all(tenantId, ...slice) as EntityRow[];
+    ).all(tenantId, JSON.stringify(slice)) as EntityRow[];
     out.push(...rows.map(rowToEntity));
   }
   return out;
@@ -152,16 +150,17 @@ function loadNeighborRelationsAt(
   // below; harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
   const byId = new Map<number, Relation>();
   for (const slice of chunked(entityIds, GRAPH_ID_BATCH)) {
-    const ph = placeholders(slice.length);
+    const ids = JSON.stringify(slice);
     const rows = cachedStatement(
       db,
       `
       SELECT ${RELATION_COLS} FROM relations
-      WHERE tenant_id = ? AND (from_entity_id IN (${ph}) OR to_entity_id IN (${ph}))
+      WHERE tenant_id = ?
+        AND (from_entity_id IN (SELECT value FROM json_each(?)) OR to_entity_id IN (SELECT value FROM json_each(?)))
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `,
-    ).all(tenantId, ...slice, ...slice, limit) as RelationRow[];
+    ).all(tenantId, ids, ids, limit) as RelationRow[];
     for (const r of rows) byId.set(r.id, rowToRelation(r));
   }
   return Array.from(byId.values());
@@ -182,16 +181,17 @@ function loadRelationsAmongAt(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
   }
-  const ph = placeholders(entityIds.length);
+  const ids = JSON.stringify(entityIds);
   const rows = cachedStatement(
     db,
     `
     SELECT ${RELATION_COLS} FROM relations
-    WHERE tenant_id = ? AND from_entity_id IN (${ph}) AND to_entity_id IN (${ph})
+    WHERE tenant_id = ? AND from_entity_id IN (SELECT value FROM json_each(?))
+      AND to_entity_id IN (SELECT value FROM json_each(?))
     ORDER BY created_at DESC, id DESC
     LIMIT ?
   `,
-  ).all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
+  ).all(tenantId, ids, ids, limit) as RelationRow[];
   return rows.map(rowToRelation);
 }
 
@@ -202,16 +202,15 @@ function loadEntitiesByMemoryIdAt(db: DatabaseSyncLike, tenantId: string, memory
   if (memoryIds.length === 0) return [];
   const out: Entity[] = [];
   for (const slice of chunked(memoryIds, GRAPH_ID_BATCH)) {
-    const ph = placeholders(slice.length);
     // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
     const rows = cachedStatement(
       db,
       `
       SELECT ${ENTITY_COLS} FROM entities
-      WHERE tenant_id = ? AND memory_id IN (${ph})
+      WHERE tenant_id = ? AND memory_id IN (SELECT value FROM json_each(?))
       ORDER BY id ASC
     `,
-    ).all(tenantId, ...slice) as EntityRow[];
+    ).all(tenantId, JSON.stringify(slice)) as EntityRow[];
     out.push(...rows.map(rowToEntity));
   }
   return out;
@@ -285,8 +284,8 @@ function readableOnly<T extends { memoryId: string | null }>(
   for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
     const rows = cachedStatement(
       db,
-      `SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(slice.length)})`,
-    ).all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;
+      `SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(slice)) as Array<{ id: string; scope: string | null }>;
     for (const r of rows) if (canRead(r.scope)) readable.add(r.id);
   }
   return items.filter((i) => i.memoryId === null || readable.has(i.memoryId));

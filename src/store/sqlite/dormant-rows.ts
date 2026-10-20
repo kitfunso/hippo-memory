@@ -7,7 +7,6 @@ import type { JsonValue } from '../../base/util/json.js';
 import type { SqlFragment } from './rule-sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { placeholders } from '../../base/util/sql.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { DormantMove } from '../local/consolidation.js';
@@ -254,8 +253,8 @@ export function dormantTextsByIds(
     const rows = cachedStatement(
       db,
       `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories ` +
-        `WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-    ).all(tenantId, ...chunk) as DormantText[];
+        `WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(chunk)) as DormantText[];
     for (const row of rows) byId.set(row.id, row);
   }
   return byId;
@@ -272,8 +271,8 @@ export function dormantSnapshotsByIds(
     const rows = cachedStatement(
       db,
       `SELECT ${DORMANT_COLUMNS}
-         FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-    ).all(tenantId, ...chunk) as DormantRow[];
+         FROM dormant_memories WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(chunk)) as DormantRow[];
     for (const row of rows) {
       const snapshot = toSnapshot(row);
       if (snapshot) byId.set(row.id, snapshot);

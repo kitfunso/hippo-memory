@@ -309,7 +309,8 @@ function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: 
   const width = DELIVERY_CANDIDATE_COLUMNS.length;
   const columns = DELIVERY_CANDIDATE_COLUMNS.join(', ');
   for (const chunk of chunked(input.candidates, rowsPerStatement(width))) {
-    cachedStatement(db, `INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`).run(
+    // Prepared per call: the last chunk's row count differs, so a cached text per count would crowd out hot ones.
+    db.prepare(`INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`).run(
       ...chunk.flatMap((c) => [
         eventId,
         input.tenantId,

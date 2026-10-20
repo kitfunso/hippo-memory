@@ -148,8 +148,8 @@ function eachStoredVector(
     read(
       cachedStatement(
         db,
-        `SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${placeholders(chunk.length)})`,
-      ).all(...chunk) as StoredVectorRow[],
+        `SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (SELECT value FROM json_each(?))`,
+      ).all(JSON.stringify(chunk)) as StoredVectorRow[],
     );
   }
 }

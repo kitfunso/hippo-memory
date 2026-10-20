@@ -418,11 +418,10 @@ function openIncidentRow(
   const { incidentText, context, linkedMemoryIds } = open.fields;
   const held = new Set<string>();
   for (const ids of chunked(linkedMemoryIds)) {
-    const marks = placeholders(ids.length);
-    const found = cachedStatement(db, `SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`).all(
-      tenantId,
-      ...ids,
-    ) as Array<{ id: string }>;
+    const found = cachedStatement(
+      db,
+      `SELECT id FROM memories WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(ids)) as Array<{ id: string }>;
     for (const r of found) held.add(r.id);
   }
   const missing = linkedMemoryIds.find((linkId) => !held.has(linkId));

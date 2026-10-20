@@ -13,7 +13,6 @@ import { chunked } from '../../base/util/chunked.js';
 import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../port.js';
 import type { Sync } from './served.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import { placeholders } from '../../base/util/sql.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
@@ -48,8 +47,6 @@ interface ChildGroup extends DescendantOrigin {
   readonly n: number;
 }
 
-const marks = (ids: readonly string[]): string => placeholders(ids.length);
-
 /** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full count
  * in `sizes`. */
 function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {
@@ -83,9 +80,9 @@ function keyedLevel(
     const keys = cachedStatement(
       db,
       `SELECT id, dag_parent_id, scope, origin_project AS originProject FROM memories ` +
-        `WHERE dag_parent_id IN (${marks(chunk)}) AND ` +
+        `WHERE dag_parent_id IN (SELECT value FROM json_each(?)) AND ` +
         `${TENANT_IS} ORDER BY created ASC, id ASC`,
-    ).all(...chunk, walk.tenantId) as ChildKey[];
+    ).all(JSON.stringify(chunk), walk.tenantId) as ChildKey[];
     for (const key of keys) {
       const bucket = byParent.get(key.dag_parent_id);
       if (bucket) bucket.push(key);
@@ -120,9 +117,10 @@ function countedLevel(
     const groups = cachedStatement(
       db,
       `SELECT dag_parent_id, scope, origin_project AS originProject, COUNT(*) AS n FROM memories ` +
-        `WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? GROUP BY dag_parent_id, scope, ` +
+        `WHERE dag_parent_id IN (SELECT value FROM json_each(?)) AND ${TENANT_IS} AND id <> ? ` +
+        `GROUP BY dag_parent_id, scope, ` +
         `origin_project`,
-    ).all(...chunk, walk.tenantId, walk.summary.id) as ChildGroup[];
+    ).all(JSON.stringify(chunk), walk.tenantId, walk.summary.id) as ChildGroup[];
     for (const group of groups) {
       if (!walk.admit(group)) return null;
       perParent.set(group.dag_parent_id, (perParent.get(group.dag_parent_id) ?? 0) + Number(group.n));
@@ -172,10 +170,11 @@ function childrenInOrder(
   for (const chunk of chunked([...parents])) {
     const rows = cachedStatement(
       db,
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND ` +
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+        `WHERE dag_parent_id IN (SELECT value FROM json_each(?)) AND ${TENANT_IS} AND ` +
         `id <> ? ` +
         `ORDER BY created ASC, id ASC LIMIT ?`,
-    ).all(...chunk, walk.tenantId, walk.summary.id, limit) as MemoryRow[];
+    ).all(JSON.stringify(chunk), walk.tenantId, walk.summary.id, limit) as MemoryRow[];
     for (const row of rows) {
       const bucket = byParent.get(row.dag_parent_id ?? '');
       if (bucket) bucket.push(rowToEntry(row));
