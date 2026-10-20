@@ -5,6 +5,7 @@ import type { DeliveryRecorder } from '../../api/delivery-recorder.js';
 import { isSubagentPayload } from '../../base/util/hook-payload.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { autoDetectContext } from '../../api/context-auto.js';
+import { processGit } from '../../base/util/git-runner.js';
 import { resolveProjectIdentity } from '../../base/scope/project-identity.js';
 import { bookLedgerTurn, ledgerReachOf } from '../../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
@@ -166,7 +167,7 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
 
 function contextQuery(args: string[], flags: CliFlags): string {
   const query = args.join(' ').trim();
-  return !query && flags['auto'] ? autoDetectContext() : query;
+  return !query && flags['auto'] ? autoDetectContext(processGit) : query;
 }
 
 function renderContextView(view: ContextView, format: string, query: string): void {

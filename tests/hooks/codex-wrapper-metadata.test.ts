@@ -3,11 +3,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ensureCodexWrapperInstalled,
-  resolveCodexWrapperPaths,
-  uninstallCodexWrapper,
-} from '../../src/domain/hooks/codex-wrapper.js';
+import { ensureCodexWrapperInstalled, uninstallCodexWrapper } from '../../src/surface/hooks-install/codex-wrapper.js';
+import { resolveCodexWrapperPaths } from '../../src/domain/hooks/codex-wrapper.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 const LAUNCHER = process.platform === 'win32' ? 'codex.cmd' : 'codex';

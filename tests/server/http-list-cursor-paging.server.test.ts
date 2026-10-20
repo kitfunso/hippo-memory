@@ -3,6 +3,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { rmSync } from 'node:fs';
+import { listObjects } from '../../src/domain/objects/lifecycle.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -10,10 +11,10 @@ import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import * as api from '../../src/api/index.js';
 import { loadDecisions, saveDecision } from '../../src/domain/objects/decisions.js';
-import { loadIncidents, openIncident } from '../../src/domain/objects/incidents.js';
-import { loadProcesses, saveProcess } from '../../src/domain/objects/processes.js';
+import { INCIDENT, openIncident } from '../../src/domain/objects/incidents.js';
+import { PROCESS } from '../../src/domain/objects/processes.js';
 import { loadPolicies, savePolicy } from '../../src/domain/objects/policies.js';
-import { loadSkills, saveSkill } from '../../src/domain/objects/skills.js';
+import { SKILL } from '../../src/domain/objects/skills.js';
 import { loadProjectBriefs, saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { loadCustomerNotes, saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
@@ -24,6 +25,7 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { listApiKeys, loadAllPredictions } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { cliSave } from '../_helpers/cli-save-site.js';
 
 const ROWS = 7;
 const PAGE = 3;
@@ -65,7 +67,7 @@ async function seedTenant(tenantId: string, count: number): Promise<void> {
       { incidentText: `${tenantId} incident ${i}` },
       'cli',
     );
-    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+    await cliSave(home, tenantId, PROCESS, {
       processName: `${tenantId} process ${i}`,
       steps: ['one', 'two'],
     });
@@ -73,7 +75,7 @@ async function seedTenant(tenantId: string, count: number): Promise<void> {
       policyName: `${tenantId} policy ${i}`,
       policyText: 'keep it short',
     });
-    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+    await cliSave(home, tenantId, SKILL, {
       skillName: `${tenantId} skill ${i}`,
       instructions: 'do the thing',
     });
@@ -188,10 +190,10 @@ describe('no paging params: the body a small store got before cursors existed', 
     ['/v1/quarantine', async () => json(await api.quarantineList(ctx(), { status: 'pending' }))],
     ['/v1/predictions', () => json(loadAllPredictions(home, 'default', { limit: 100 }))],
     ['/v1/decisions', async () => json(await loadDecisions(objectsAt(home), 'default', { limit: 100 }))],
-    ['/v1/incidents', async () => json(await loadIncidents(objectsAt(home), 'default', { limit: 100 }))],
-    ['/v1/processes', async () => json(await loadProcesses(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/incidents', async () => json(await listObjects(objectsAt(home), INCIDENT, 'default', { limit: 100 }))],
+    ['/v1/processes', async () => json(await listObjects(objectsAt(home), PROCESS, 'default', { limit: 100 }))],
     ['/v1/policies', async () => json(await loadPolicies(objectsAt(home), 'default', { limit: 100 }))],
-    ['/v1/skills', async () => json(await loadSkills(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/skills', async () => json(await listObjects(objectsAt(home), SKILL, 'default', { limit: 100 }))],
     ['/v1/project-briefs', async () => json(await loadProjectBriefs(objectsAt(home), 'default', { limit: 100 }))],
     ['/v1/customer-notes', async () => json(await loadCustomerNotes(objectsAt(home), 'default', { limit: 100 }))],
   ]);

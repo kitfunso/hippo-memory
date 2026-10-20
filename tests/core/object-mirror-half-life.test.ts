@@ -2,6 +2,7 @@
 // migration has run and on the configured default after, with the strength the decay function gives the stored row.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
+import { saveObject } from '../../src/domain/objects/lifecycle.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -14,9 +15,9 @@ import {
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
-import { saveProcess } from '../../src/domain/objects/processes.js';
+import { PROCESS } from '../../src/domain/objects/processes.js';
 import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
-import { saveSkill } from '../../src/domain/objects/skills.js';
+import { SKILL } from '../../src/domain/objects/skills.js';
 import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -63,12 +64,11 @@ async function saveOneOfEach(root: string): Promise<void> {
     { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] },
     ACTOR,
   );
-  await saveProcess(
+  await saveObject(
     objectsAt(root),
-    loadConfig(root).defaultHalfLifeDays,
-    TENANT,
+    PROCESS,
+    { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
     { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' },
-    ACTOR,
   );
   await savePolicy(
     objectsAt(root),
@@ -77,12 +77,11 @@ async function saveOneOfEach(root: string): Promise<void> {
     { policyName: 'retention', policyText: 'keep ninety days', validFrom: '2026-01-01' },
     ACTOR,
   );
-  await saveSkill(
+  await saveObject(
     objectsAt(root),
-    loadConfig(root).defaultHalfLifeDays,
-    TENANT,
+    SKILL,
+    { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
     { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' },
-    ACTOR,
   );
   await saveProjectBrief(
     objectsAt(root),

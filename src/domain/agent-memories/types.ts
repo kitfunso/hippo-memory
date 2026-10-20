@@ -1,13 +1,12 @@
 // The contract between a tool's adapter, which knows where its memory lives, and the sync, which knows no tool.
 import type { ToolId } from '../../base/memory/agent-memory-tools.js';
+import type { Machine } from '../../base/util/agent-homes.js';
 
 export type Scope = 'project' | 'user';
 
-/** All an adapter may know about the machine; it reads nothing else from the process, so tests can fake it all. */
-export interface AdapterContext {
-  readonly home: string;
-  readonly env: Readonly<Record<string, string | undefined>>;
-  readonly platform: NodeJS.Platform;
+/** All an adapter may know about the machine, its disk and git included; it reads nothing else, so tests can fake it
+ * all. */
+export interface AdapterContext extends Machine {
   readonly projectRoot?: string;
 }
 

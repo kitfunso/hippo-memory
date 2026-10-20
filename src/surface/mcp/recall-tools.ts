@@ -3,6 +3,7 @@
 import * as path from 'path';
 import { drillDown as apiDrillDown, assemble as apiAssemble, contextGet as apiGetContext } from '../../api/index.js';
 import { autoDetectContext } from '../../api/context-auto.js';
+import { processGit } from '../../base/util/git-runner.js';
 import { sharedStoreOf } from '../../api/types.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/context-render.js';
@@ -102,7 +103,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
   const result = await apiGetContext(mcpApiContext(ctx), {
     // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a
     // query.
-    q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),
+    q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(processGit),
     budget,
     exactScope,
     currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd),

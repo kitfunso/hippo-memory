@@ -6,6 +6,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { mapApiError } from '../../api/error-reply.js';
 import { HttpError, sendJson } from '../../base/util/http-util.js';
 import { MINUTE_MS } from '../../base/util/time.js';
+import type { RouteParams } from './types.js';
 
 // The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -175,10 +176,6 @@ export function parseRequest(req: IncomingMessage): ParsedRoute {
   };
 }
 
-/**
- * Pattern matcher for /v1/memories/:id/<action> (no router dependency); null if `path` does not match, else each :param
- * name mapped to its value.
- */
 function decodePathSegment(segment: string): string {
   try {
     return decodeURIComponent(segment);
@@ -188,7 +185,23 @@ function decodePathSegment(segment: string): string {
   }
 }
 
-export function matchPath(pattern: string, path: string): Record<string, string> | null {
+export const INT_PARAM = '(int)';
+const DIGITS = /^\d+$/;
+
+/** A pattern segment's param name: `id` for both `:id` and `:id(int)`. */
+function paramName(spec: string): string {
+  return spec.slice(1, spec.endsWith(INT_PARAM) ? -INT_PARAM.length : undefined);
+}
+
+/** The value a `:name` segment takes: decoded text, or for `:name(int)` digits only; null when the segment misses. */
+function paramValue(spec: string, segment: string): string | null {
+  // Digits need no decoding, so an escape in an id segment misses the row rather than throwing a 400.
+  if (spec.endsWith(INT_PARAM)) return DIGITS.test(segment) ? segment : null;
+  return segment.length === 0 ? null : decodePathSegment(segment);
+}
+
+/** The params of a pattern such as `/v1/policies/:id(int)/close`, by name, or null when `path` is another path. */
+export function matchPath(pattern: string, path: string): RouteParams | null {
   const patternParts = pattern.split('/');
   const pathParts = path.split('/');
   if (patternParts.length !== pathParts.length) return null;
@@ -196,12 +209,13 @@ export function matchPath(pattern: string, path: string): Record<string, string>
   for (let i = 0; i < patternParts.length; i++) {
     const pp = patternParts[i]!;
     const ap = pathParts[i]!;
-    if (pp.startsWith(':')) {
-      if (ap.length === 0) return null;
-      params[pp.slice(1)] = decodePathSegment(ap);
-    } else if (pp !== ap) {
-      return null;
+    if (!pp.startsWith(':')) {
+      if (pp !== ap) return null;
+      continue;
     }
+    const value = paramValue(pp, ap);
+    if (value === null) return null;
+    params[paramName(pp)] = value;
   }
   return params;
 }

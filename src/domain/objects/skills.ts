@@ -4,13 +4,10 @@
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
-import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Skill, SkillStatus } from '../../base/records/object-types.js';
 import type { Objects } from '../../store/port.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { Skill, SkillStatus } from '../../base/records/object-types.js';
 
@@ -19,7 +16,7 @@ export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>
 /** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a larger cap than the 4096 short-field
  *  convention. */
 export const MAX_SKILL_NAME_LEN = 256;
-const MAX_SKILL_INSTRUCTIONS_LEN = 8192;
+export const MAX_SKILL_INSTRUCTIONS_LEN = 8192;
 export const MAX_SKILL_TRIGGER_LEN = 1024;
 /** Aggregate bound on a single export render so the export body is never unbounded.
  *  Realistic active-skill counts are tens; 1000 is a generous bound. */
@@ -36,13 +33,6 @@ export interface SaveSkillOptions {
   supersedesSkillId?: number;
   /** Extra memory tags merged after ['skill']. */
   extraTags?: string[];
-}
-
-export interface ListSkillsOptions {
-  status?: SkillStatus;
-  limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
-  after?: KeysetPosition;
 }
 
 /** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the exported
@@ -95,30 +85,6 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
     };
   },
 };
-
-/** Create a skill, or a new version superseding an existing one, in the `objects` store group's one transaction. */
-export function saveSkill(
-  objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveSkillOptions,
-  actor: string = CLI_ACTOR,
-): Promise<Skill> {
-  return saveObject(objects, SKILL, { baseHalfLifeDays, tenantId, actor }, opts);
-}
-
-/** Close (retire) an active skill; a superseded row is terminal. */
-export function closeSkill(objects: Objects, tenantId: string, id: number, actor: string = CLI_ACTOR): Promise<Skill> {
-  return closeObject(objects, SKILL, tenantId, id, actor);
-}
-
-export function loadSkillById(objects: Objects, tenantId: string, id: number): Promise<Skill | null> {
-  return objectById(objects, SKILL, tenantId, id);
-}
-
-export function loadSkills(objects: Objects, tenantId: string, opts: ListSkillsOptions = {}): Promise<Skill[]> {
-  return listObjects(objects, SKILL, tenantId, opts);
-}
 
 /** Render the tenant's ACTIVE skills into one AGENTS.md / CLAUDE.md-style markdown block (H2 per skill, ordered by
  *  skill_name) and return it; writes no file. Bounded by MAX_EXPORT_SKILLS rows; instructions are emitted verbatim. */

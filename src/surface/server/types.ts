@@ -142,15 +142,23 @@ type StoreStatus =
  * route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
 export type RouteAuth = 'caller' | 'admin' | 'host-admin-local' | 'webhook-signature' | 'dashboard-session';
 
-export type RouteEndpoint<R> =
+/** A pattern row's params by name; a `:name(int)` value holds digits only. */
+export type RouteParams = Readonly<Record<string, string>>;
+
+/** An exact path, or a pattern whose `:name` segments arrive as params, each paired with one method's handler. */
+export type PathEndpoint<R> =
   | { path: string; handler: (r: R) => Promise<void> }
-  | { pattern: string; handler: (r: R, params: Record<string, string>) => Promise<void> }
+  | { pattern: string; handler: (r: R, params: RouteParams) => Promise<void> };
+
+/** The dashboard's app pages also take any path outside its JSON API, which an expression says and a pattern cannot. */
+export type RouteEndpoint<R> =
+  | PathEndpoint<R>
   | { regex: RegExp; handler: (r: R, match: RegExpMatchArray) => Promise<void> };
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with one method's handler. Under another
- * store it runs only with its `storeReady` group; its SQLite work runs on a worker thread when the store has one. */
+/** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under another store it runs
+ * only with its `storeReady` group; its SQLite work runs on a worker thread when the store has one. */
 export type Route = { method: string } & StoreStatus &
   (
-    | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & RouteEndpoint<AuthedRouteRequest>)
-    | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
+    | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & PathEndpoint<AuthedRouteRequest>)
+    | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
   );

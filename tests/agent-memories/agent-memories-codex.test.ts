@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import { createHash } from 'node:crypto';
 import { codexAdapter } from '../../src/domain/agent-memories/codex.js';
 import type { AdapterContext } from '../../src/domain/agent-memories/types.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 const made: string[] = [];
 const tmp = () => {
@@ -18,6 +19,7 @@ const ctxOf = (home: string, env: Record<string, string> = {}): AdapterContext =
   home,
   env,
   platform: process.platform,
+  ...REAL_IO,
 });
 const summaryIn = (codexHome: string) => path.join(codexHome, 'memories', 'memory_summary.md');
 

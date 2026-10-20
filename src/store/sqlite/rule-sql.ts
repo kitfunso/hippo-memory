@@ -88,7 +88,7 @@ export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFrag
   return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };
 }
 
-/** SQL twin of canTouchScope, which is also canReadScope for an admin: every row but another person's personal one.
+/** SQL twin of ownScopeTouches, which is also canReadScope for an admin: every row but another person's personal one.
  * LIKE folds ASCII case as isPersonalScope's /i does. */
 export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
   const notPersonal = `${col}scope IS NULL OR ${col}scope NOT LIKE '${PERSONAL_SCOPE_PREFIX}%'`;

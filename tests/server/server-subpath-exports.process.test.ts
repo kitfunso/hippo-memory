@@ -90,6 +90,7 @@ const STORE_KIT_VALUES = [
   'PROTECTED_ROWS',
   'rankVectorRows',
   'rarestFtsQuery',
+  'readerReaches',
   'repairKeeps',
   'RECALL_DEFAULT_DENY_SCOPES',
   'RejectedValueError',
@@ -100,6 +101,7 @@ const STORE_KIT_VALUES = [
   'sqliteStore',
   'StoreBusyError',
   'tallyAmbientEntries',
+  'targetReader',
 ];
 const STORE_KIT_TYPES = [
   'ActiveGoals',
@@ -157,6 +159,7 @@ const STORE_KIT_TYPES = [
   'RecallWrites',
   'RecentOrigins',
   'RetrievalPolicy',
+  'ScopeReader',
   'SelfKeyMint',
   'SessionEvent',
   'SessionHandoff',

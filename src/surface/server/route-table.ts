@@ -12,7 +12,7 @@ import {
   type WebhookRequest,
 } from '../../base/util/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
-import { matchPath, noteAccess } from './request.js';
+import { INT_PARAM, matchPath, noteAccess } from './request.js';
 import { routeLookup } from './route-lookup.js';
 import {
   handleApproveQuarantine,
@@ -24,27 +24,6 @@ import {
   handleRevokeAuthKey,
 } from './routes/admin.js';
 import {
-  handleCloseCustomerNote,
-  handleCreateCustomerNote,
-  handleGetCustomerNote,
-  handleListCustomerNotes,
-  handleSupersedeCustomerNote,
-} from './routes/customer-notes.js';
-import {
-  handleCloseDecision,
-  handleCreateDecision,
-  handleGetDecision,
-  handleListDecisions,
-  handleSupersedeDecision,
-} from './routes/decisions.js';
-import {
-  handleCloseIncident,
-  handleCreateIncident,
-  handleGetIncident,
-  handleListIncidents,
-  handleResolveIncident,
-} from './routes/incidents.js';
-import {
   handleApplyOutcome,
   handleArchiveMemory,
   handleCreateMemory,
@@ -54,45 +33,17 @@ import {
   handleSleep,
   handleSupersedeMemory,
 } from './routes/memories.js';
-import {
-  handleClosePolicy,
-  handleCreatePolicy,
-  handleGetPolicy,
-  handleListPolicies,
-  handlePoliciesAsOf,
-  handleSupersedePolicy,
-} from './routes/policies.js';
-import {
-  handleClosePrediction,
-  handleCreatePrediction,
-  handleGetPrediction,
-  handleListPredictions,
-  handlePredictionStats,
-} from './routes/predictions.js';
-import {
-  handleCloseProcess,
-  handleCreateProcess,
-  handleGetProcess,
-  handleListProcesses,
-  handleSupersedeProcess,
-} from './routes/processes.js';
-import {
-  handleCloseProjectBrief,
-  handleCreateProjectBrief,
-  handleGetProjectBrief,
-  handleListProjectBriefs,
-  handleRefreshProjectBrief,
-  handleSupersedeProjectBrief,
-} from './routes/project-briefs.js';
+import { kindRows } from './routes/kind-routes.js';
+import { objectRoutes, versionedRoutes } from './routes/object-routes.js';
+import { CUSTOMER_NOTE_ROUTES } from './routes/customer-notes.js';
+import { DECISION_ROUTES } from './routes/decisions.js';
+import { INCIDENT_ROUTES } from './routes/incidents.js';
+import { POLICY_ROUTES } from './routes/policies.js';
+import { PREDICTION_ROUTES } from './routes/predictions.js';
+import { PROCESS_ROUTES } from './routes/processes.js';
+import { PROJECT_BRIEF_ROUTES } from './routes/project-briefs.js';
+import { SKILL_ROUTES } from './routes/skills.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './routes/recall.js';
-import {
-  handleCloseSkill,
-  handleCreateSkill,
-  handleExportSkills,
-  handleGetSkill,
-  handleListSkills,
-  handleSupersedeSkill,
-} from './routes/skills.js';
 import { parseJsonBody } from './validation.js';
 import type { AuthedRouteRequest, ResolvedServeOptions, Route, RouteRequest, RouteEndpoint } from './types.js';
 
@@ -224,264 +175,14 @@ export const V1_ROUTES: readonly Route[] = [
     auth: 'admin',
     handler: handleListAudit,
   },
-  {
-    method: 'POST',
-    path: '/v1/predictions',
-    auth: 'caller',
-    handler: handleCreatePrediction,
-  },
-  {
-    method: 'GET',
-    path: '/v1/predictions',
-    auth: 'caller',
-    handler: handleListPredictions,
-  },
-  {
-    method: 'GET',
-    path: '/v1/predictions/stats',
-    auth: 'caller',
-    handler: handlePredictionStats,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/predictions\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetPrediction,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/predictions\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleClosePrediction,
-  },
-  {
-    method: 'POST',
-    path: '/v1/decisions',
-    auth: 'caller',
-    handler: handleCreateDecision,
-  },
-  {
-    method: 'GET',
-    path: '/v1/decisions',
-    auth: 'caller',
-    handler: handleListDecisions,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/decisions\/(\d+)\/supersede$/,
-    auth: 'caller',
-    handler: handleSupersedeDecision,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/decisions\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleCloseDecision,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/decisions\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetDecision,
-  },
-  {
-    method: 'POST',
-    path: '/v1/incidents',
-    auth: 'caller',
-    handler: handleCreateIncident,
-  },
-  {
-    method: 'GET',
-    path: '/v1/incidents',
-    auth: 'caller',
-    handler: handleListIncidents,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/incidents\/(\d+)\/resolve$/,
-    auth: 'caller',
-    handler: handleResolveIncident,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/incidents\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleCloseIncident,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/incidents\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetIncident,
-  },
-  {
-    method: 'POST',
-    path: '/v1/processes',
-    auth: 'caller',
-    handler: handleCreateProcess,
-  },
-  {
-    method: 'GET',
-    path: '/v1/processes',
-    auth: 'caller',
-    handler: handleListProcesses,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/processes\/(\d+)\/supersede$/,
-    auth: 'caller',
-    handler: handleSupersedeProcess,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/processes\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleCloseProcess,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/processes\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetProcess,
-  },
-  {
-    method: 'POST',
-    path: '/v1/policies',
-    auth: 'caller',
-    handler: handleCreatePolicy,
-  },
-  {
-    method: 'GET',
-    path: '/v1/policies',
-    auth: 'caller',
-    handler: handleListPolicies,
-  },
-  {
-    method: 'GET',
-    path: '/v1/policies/asof',
-    auth: 'caller',
-    handler: handlePoliciesAsOf,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/policies\/(\d+)\/supersede$/,
-    auth: 'caller',
-    handler: handleSupersedePolicy,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/policies\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleClosePolicy,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/policies\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetPolicy,
-  },
-  {
-    method: 'POST',
-    path: '/v1/skills',
-    auth: 'caller',
-    handler: handleCreateSkill,
-  },
-  {
-    method: 'GET',
-    path: '/v1/skills',
-    auth: 'caller',
-    handler: handleListSkills,
-  },
-  {
-    method: 'GET',
-    path: '/v1/skills/export',
-    auth: 'caller',
-    handler: handleExportSkills,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/skills\/(\d+)\/supersede$/,
-    auth: 'caller',
-    handler: handleSupersedeSkill,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/skills\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleCloseSkill,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/skills\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetSkill,
-  },
-  {
-    method: 'POST',
-    path: '/v1/project-briefs',
-    auth: 'caller',
-    handler: handleCreateProjectBrief,
-  },
-  {
-    method: 'GET',
-    path: '/v1/project-briefs',
-    auth: 'caller',
-    handler: handleListProjectBriefs,
-  },
-  {
-    method: 'POST',
-    path: '/v1/project-briefs/refresh',
-    auth: 'caller',
-    handler: handleRefreshProjectBrief,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/project-briefs\/(\d+)\/supersede$/,
-    auth: 'caller',
-    handler: handleSupersedeProjectBrief,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/project-briefs\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleCloseProjectBrief,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/project-briefs\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetProjectBrief,
-  },
-  {
-    method: 'POST',
-    path: '/v1/customer-notes',
-    auth: 'caller',
-    handler: handleCreateCustomerNote,
-  },
-  {
-    method: 'GET',
-    path: '/v1/customer-notes',
-    auth: 'caller',
-    handler: handleListCustomerNotes,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/customer-notes\/(\d+)\/supersede$/,
-    auth: 'caller',
-    handler: handleSupersedeCustomerNote,
-  },
-  {
-    method: 'POST',
-    regex: /^\/v1\/customer-notes\/(\d+)\/close$/,
-    auth: 'caller',
-    handler: handleCloseCustomerNote,
-  },
-  {
-    method: 'GET',
-    regex: /^\/v1\/customer-notes\/(\d+)$/,
-    auth: 'caller',
-    handler: handleGetCustomerNote,
-  },
+  ...kindRows(PREDICTION_ROUTES),
+  ...objectRoutes(DECISION_ROUTES),
+  ...objectRoutes(INCIDENT_ROUTES),
+  ...versionedRoutes(PROCESS_ROUTES),
+  ...versionedRoutes(POLICY_ROUTES),
+  ...versionedRoutes(SKILL_ROUTES),
+  ...versionedRoutes(PROJECT_BRIEF_ROUTES),
+  ...versionedRoutes(CUSTOMER_NOTE_ROUTES),
   {
     method: 'POST',
     path: '/v1/connectors/slack/events',
@@ -541,16 +242,11 @@ async function passAuthGate(
   return ctx;
 }
 
-/**
- * The route as the access line names it; a regex route reads as its pattern would, so no line carries a caller's id.
- */
+/** The route as the access line names it: params by name without their type, so no line carries a caller's id. */
 export function routeLabel(route: RouteEndpoint<never>): string {
   if ('path' in route) return route.path;
-  if ('pattern' in route) return route.pattern;
-  return route.regex.source
-    .replace(/^\^|\$$/g, '')
-    .replaceAll('\\/', '/')
-    .replaceAll('(\\d+)', ':id');
+  if ('pattern' in route) return route.pattern.replaceAll(INT_PARAM, '');
+  return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/');
 }
 
 const findV1Route = routeLookup(V1_ROUTES, routeMatches);

@@ -4,25 +4,18 @@ import { MINUTE_MS } from '../../base/util/time.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
-import {
-  installJsonHooks,
-  uninstallJsonHooks,
-  checkUninstallable,
-  copilotHookEvents,
-  resolveJsonHookPaths,
-} from '../../domain/hooks/json-hooks.js';
-import { detectInstalledTools, type JsonHookTarget, type ToolDetection } from '../../domain/hooks/shared.js';
+import { copilotHookEvents, resolveJsonHookPaths } from '../../domain/hooks/json-hooks.js';
+import { checkUninstallable, installJsonHooks, uninstallJsonHooks } from '../hooks-install/json-hooks.js';
+import type { JsonHookTarget, ToolDetection } from '../../domain/hooks/shared.js';
+import { detectInstalledTools } from '../hooks-install/detect.js';
 import {
   ensureCodexWrapperInstalled,
   installCodexWrapper,
   detectRealCodexPath,
   uninstallCodexWrapper,
-} from '../../domain/hooks/codex-wrapper.js';
-import {
-  installOpencodePlugin,
-  uninstallOpencodePlugin,
-  resolveOpencodePluginPath,
-} from '../../domain/hooks/opencode.js';
+} from '../hooks-install/codex-wrapper.js';
+import { resolveOpencodePluginPath } from '../../domain/hooks/opencode.js';
+import { installOpencodePlugin, uninstallOpencodePlugin } from '../hooks-install/opencode.js';
 import {
   type CopilotInstallResult,
   type CopilotUninstallResult,
@@ -38,12 +31,9 @@ import {
   COPILOT_CLI_MCP,
   VSCODE_MCP,
   copilotMcpSnippet,
-  copilotPaths,
-  installCopilot,
-  isCopilotCliPresent,
   isMcpFailure,
-  uninstallCopilot,
 } from '../../domain/hooks/copilot.js';
+import { copilotPaths, installCopilot, isCopilotCliPresent, uninstallCopilot } from '../hooks-install/copilot.js';
 import { isInitialized } from '../../base/scope/project-identity.js';
 import { importUserMemories } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../base/util/agent-homes.js';

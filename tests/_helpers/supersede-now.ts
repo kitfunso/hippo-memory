@@ -2,7 +2,7 @@
 import type { Context } from '../../src/api/types.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { createSuccessor } from '../../src/base/memory/memory.js';
-import { personalScopeOf } from '../../src/base/scope/recall-scope.js';
+import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -52,7 +52,7 @@ export function supersedeNow(ctx: Context, oldId: string, newContent: string): s
   const write = {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
-    ownScope: personalScopeOf(ctx.actor),
+    ...scopeReaderOf(ctx.actor),
     oldId,
     successor,
   };

@@ -371,14 +371,19 @@ const rowLabel = (row, sf) => {
   const text = (p) => (p && ts.isPropertyAssignment(p) ? p.initializer.getText(sf) : '?');
   return `${text(m).replace(/'/g, '')} ${text(where).replace(/'/g, '')}`;
 };
+const KIND_ROWS = 'src/surface/server/routes/kind-routes.ts';
+const builtRows = (row) => /^\.\.\.(kindRows|objectRoutes|versionedRoutes)\(/.test(row.getText());
 
-/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal sqliteOnly) and the sorted `METHOD path` of the sqliteOnly rows. */
+/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal sqliteOnly) and the sorted `METHOD path` of the sqliteOnly rows. A spread of one kind's built rows needs none, as kind-routes.ts builds them all and names no status. */
 function readRoutes(sf) {
   const array = declaredValue(sf, 'V1_ROUTES');
   if (!array || !ts.isArrayLiteralExpression(array)) return routeFail('V1_ROUTES is not declared as an array literal');
+  if (array.elements.some(builtRows) && /storeReady|sqliteOnly/.test(readFileSync(KIND_ROWS, 'utf8'))) {
+    return routeFail('builds rows that name a storeReady or sqliteOnly', KIND_ROWS);
+  }
   let needsHippoDb = 0;
   const sqliteOnly = [];
-  for (const row of array.elements) {
+  for (const row of array.elements.filter((r) => !builtRows(r))) {
     const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
     if (!ts.isObjectLiteralExpression(row)) return routeFail(`V1_ROUTES has a spread or non-object element (${at})`);
     const label = rowLabel(row, sf);
@@ -389,13 +394,8 @@ function readRoutes(sf) {
       return routeFail(`V1_ROUTES row ${label} has a storeReady that is not a string literal`);
     }
     if (only) {
-      if (
-        !(
-          ts.isPropertyAssignment(only) &&
-          ts.isStringLiteralLike(only.initializer) &&
-          only.initializer.text.trim() !== ''
-        )
-      ) {
+      const reason = ts.isPropertyAssignment(only) && only.initializer;
+      if (!reason || !ts.isStringLiteralLike(reason) || reason.text.trim() === '') {
         return routeFail(`V1_ROUTES row ${label} has a sqliteOnly that is not a non-empty string literal`);
       }
       sqliteOnly.push(label);

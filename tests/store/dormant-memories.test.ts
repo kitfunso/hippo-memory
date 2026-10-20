@@ -17,9 +17,9 @@ import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/delete-and-batch.js
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
-import { saveProcess } from '../../src/domain/objects/processes.js';
+import { PROCESS } from '../../src/domain/objects/processes.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
-import { saveSkill } from '../../src/domain/objects/skills.js';
+import { SKILL } from '../../src/domain/objects/skills.js';
 import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
@@ -46,6 +46,7 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { cliSave } from '../_helpers/cli-save-site.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };
@@ -629,7 +630,7 @@ const objectSavers: [string, string, (home: string) => Promise<{ memoryId: strin
     'process',
     'processes',
     async (home) =>
-      await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      await cliSave(home, 'default', PROCESS, {
         processName: 'Release',
         steps: ['tag', 'publish'],
       }),
@@ -647,7 +648,7 @@ const objectSavers: [string, string, (home: string) => Promise<{ memoryId: strin
     'skill',
     'skills',
     async (home) =>
-      await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      await cliSave(home, 'default', SKILL, {
         skillName: 'Run tests',
         instructions: 'npm test before commit',
       }),

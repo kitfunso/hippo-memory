@@ -6,7 +6,7 @@ import { log } from '../../base/util/log.js';
 import type { RateLimiter } from './rate-limit.js';
 import { HttpError } from '../../base/util/http-util.js';
 
-const IPV6_PREFIX_GROUPS = 4;
+const IPV6_PREFIX_GROUPS = 3;
 
 /**
  * Rate-limit key: the socket's remote address, which behind a TLS proxy collapses into one bucket unauthenticated
@@ -100,7 +100,7 @@ export function assertClientIpHeaderPinned(): void {
   if (proxyTrust(envTrustedProxies()) === undefined) throw new UntrustedClientIpHeaderError(header);
 }
 
-/** The key for one subscriber: an IPv6 address's /64, since one host may hold the whole /64; any other key as is. */
+/** The key for one subscriber: an IPv6 address's /48, since one site may hold all 65,536 /64s in it; else as is. */
 function subscriberKey(ip: string): string {
   const bare = ip.split('%')[0]!;
   if (bare.toLowerCase().startsWith('::ffff:') && isIP(bare.slice(7)) === 4) return bare.slice(7);
@@ -115,10 +115,11 @@ function subscriberKey(ip: string): string {
   return `${groups
     .slice(0, IPV6_PREFIX_GROUPS)
     .map((g) => parseInt(g, 16).toString(16))
-    .join(':')}::/64`;
+    .join(':')}::/48`;
 }
 
-/** The one key every per-address limit and slot count uses, so rotating inside a /64 never buys a fresh bucket. */
+/** The one key every per-address limit and slot count uses, so rotating /64s inside a /48 never buys a fresh bucket
+ * or evicts another client's. */
 export function clientLimitKey(req: IncomingMessage): string {
   return subscriberKey(clientIpForRateLimit(req));
 }

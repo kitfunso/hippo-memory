@@ -12,6 +12,7 @@ import {
   resolveCommitBefore,
   packageScriptsAt,
   type ChurnCommit,
+  type ChurnRepo,
 } from './churn-git.js';
 import type { EntryCursor } from '../../store/port/types.js';
 
@@ -426,12 +427,12 @@ interface ChurnNeeds {
 
 /** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers the answer. */
 function churnCommitLookups(
-  repoRoot: string,
+  repo: ChurnRepo,
 ): Pick<ChurnGitView, 'resolveAnchorCommit' | 'symbolsPresentAt' | 'scriptsAt'> {
   const anchorCommitCache = new Map<string, string | null>();
   const resolveAnchorCommit = (anchorIso: string): string | null => {
     if (!anchorCommitCache.has(anchorIso)) {
-      anchorCommitCache.set(anchorIso, resolveCommitBefore(repoRoot, anchorIso));
+      anchorCommitCache.set(anchorIso, resolveCommitBefore(repo, anchorIso));
     }
     return anchorCommitCache.get(anchorIso) ?? null;
   };
@@ -441,7 +442,7 @@ function churnCommitLookups(
     const known = symbolsAtCommit.get(hash) ?? new Set<string>();
     const missing = symbols.filter((s) => !known.has(s));
     if (missing.length > 0) {
-      for (const s of gitGrepPresence(repoRoot, missing, hash)) known.add(s);
+      for (const s of gitGrepPresence(repo, missing, hash)) known.add(s);
       symbolsAtCommit.set(hash, known);
     }
     return known;
@@ -450,7 +451,7 @@ function churnCommitLookups(
   const scriptsAtCommit = new Map<string, Record<string, string> | null>();
   const scriptsAt = (hash: string): Record<string, string> | null | undefined => {
     if (!scriptsAtCommit.has(hash)) {
-      scriptsAtCommit.set(hash, packageScriptsAt(repoRoot, hash));
+      scriptsAtCommit.set(hash, packageScriptsAt(repo, hash));
     }
     return scriptsAtCommit.get(hash);
   };
@@ -459,20 +460,20 @@ function churnCommitLookups(
 }
 
 function loadChurnGitView(
-  repoRoot: string,
+  repo: ChurnRepo,
   projectName: string,
   candidates: readonly ChurnCandidate[],
   anchorOf: (entry: MemoryEntry) => string,
   needs: ChurnNeeds,
 ): ChurnGitView {
-  const headFiles = gitLsFilesAtHead(repoRoot);
+  const headFiles = gitLsFilesAtHead(repo);
   let windowLog: ChurnCommit[] = [];
   if (needs.paths) {
     const minAnchor = candidates.reduce<string>((min, c) => {
       const a = anchorOf(c.entry);
       return min === '' || a < min ? a : min;
     }, '');
-    windowLog = fetchChurnWindowLog(repoRoot, minAnchor);
+    windowLog = fetchChurnWindowLog(repo, minAnchor);
   }
   const touchedInWindow = new Set<string>();
   for (const c of windowLog) for (const f of c.files) touchedInWindow.add(f.path);
@@ -480,19 +481,19 @@ function loadChurnGitView(
   const headIndex = buildTrackedIndex(headFiles);
 
   const presentAtHeadSymbols = needs.symbols
-    ? gitGrepPresence(repoRoot, [...new Set(candidates.flatMap((c) => c.refs.symbols))], 'HEAD')
+    ? gitGrepPresence(repo, [...new Set(candidates.flatMap((c) => c.refs.symbols))], 'HEAD')
     : new Set<string>();
-  const headScripts = needs.scripts ? packageScriptsAt(repoRoot, 'HEAD') : null;
+  const headScripts = needs.scripts ? packageScriptsAt(repo, 'HEAD') : null;
 
   return {
-    repoRoot,
+    repoRoot: repo.root,
     projectName,
     windowLog,
     trackedIndex,
     headIndex,
     presentAtHeadSymbols,
     headScripts,
-    ...churnCommitLookups(repoRoot),
+    ...churnCommitLookups(repo),
   };
 }
 
@@ -625,11 +626,7 @@ function readChurnAnchors(learning: Learning, tenantId: string, candidates: read
 
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only
  * adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
-export function detectChurnStale(
-  learning: Learning,
-  repoRoot: string,
-  opts: DetectChurnStaleOptions,
-): ChurnStaleResult {
+export function detectChurnStale(learning: Learning, repo: ChurnRepo, opts: DetectChurnStaleOptions): ChurnStaleResult {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
@@ -652,7 +649,7 @@ export function detectChurnStale(
   const result: ChurnStaleResult = { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned, dryRun, preview: [] };
 
   try {
-    const git = loadChurnGitView(repoRoot, opts.legacyName ?? opts.projectName, candidates, anchorOf, needs);
+    const git = loadChurnGitView(repo, opts.legacyName ?? opts.projectName, candidates, anchorOf, needs);
     // Collected here and written only after every candidate's evidence is computed, so a GitReadError mid-loop cannot
     // leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { sha256Hex } from '../../src/domain/agent-memories/keys.js';
 import { openclawAdapter } from '../../src/domain/agent-memories/openclaw.js';
 import type { AdapterContext } from '../../src/domain/agent-memories/types.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 let tmp: string;
 
@@ -29,7 +30,7 @@ function write(file: string, content: string | Buffer): string {
 }
 
 function ctxFor(env: Record<string, string | undefined> = {}, over: Partial<AdapterContext> = {}): AdapterContext {
-  return { home: at('home'), env, platform: process.platform, ...over };
+  return { home: at('home'), env, platform: process.platform, ...REAL_IO, ...over };
 }
 
 const hash12 = (text: string): string => sha256Hex(text).slice(0, 12);

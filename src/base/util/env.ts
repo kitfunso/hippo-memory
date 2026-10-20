@@ -303,4 +303,5 @@ export const envSlackAllowUnknownTeamFallback = bool('SLACK_ALLOW_UNKNOWN_TEAM_F
 export const envGitHubToken = text('GITHUB_TOKEN');
 export const envGitHubWebhookSecret = text('GITHUB_WEBHOOK_SECRET');
 export const envGitHubWebhookSecretPrevious = text('GITHUB_WEBHOOK_SECRET_PREVIOUS');
+export const envGitHubWebhookSecretPreviousUntil = text('GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL');
 export const envGitHubAllowUnknownInstallationFallback = bool('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK');

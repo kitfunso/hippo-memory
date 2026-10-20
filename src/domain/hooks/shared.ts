@@ -1,8 +1,7 @@
 import { processEnv } from '../../base/util/env.js';
-import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { claudeConfigDir, codexHomeDir, homeDir, vscodeDataFolders } from '../../base/util/agent-homes.js';
+import { homeDir } from '../../base/util/agent-homes.js';
 
 export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
@@ -35,13 +34,6 @@ export function copilotHomeDir(
   return env.COPILOT_HOME || path.join(home, '.copilot');
 }
 
-/**
- * Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder.
- */
-export function isCodexPresent(home: string = homeDir()): boolean {
-  return fs.statSync(codexHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
-}
-
 /** hippo's own hooks file, in the hooks folder the Copilot CLI reads. */
 export function copilotHooksFile(): string {
   return path.join(copilotHomeDir(), 'hooks', 'hippo.json');
@@ -53,30 +45,6 @@ export function copilotHooksFile(): string {
  */
 export function vscodeUserHooksFile(home: string = os.homedir()): string {
   return path.join(home, '.copilot', 'hooks', 'hippo.json');
-}
-
-/**
- * The VS Code User folders that exist; Stable and Insiders keep their own, and only an edition the user has run has
- * one.
- */
-export function vscodeUserDirs(
-  env: Readonly<Record<string, string | undefined>> = processEnv(),
-  home: string = os.homedir(),
-): string[] {
-  return vscodeDataFolders({ env, home, platform: process.platform })
-    .map((dir) => path.join(dir, 'User'))
-    .filter((dir) => fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true);
-}
-
-/**
- * Copilot counts as installed only when its config folder or a VS Code User folder exists, so setup never creates
- * ~/.copilot on a machine with neither.
- */
-export function isCopilotPresent(home: string = os.homedir()): boolean {
-  return (
-    fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true ||
-    vscodeUserDirs(processEnv(), home).length > 0
-  );
 }
 
 /**
@@ -98,68 +66,4 @@ export function defaultSleepLogPath(): string {
  * Nothing reads it programmatically; overridden by `--log-file`. */
 export function defaultPreCompactLogPath(): string {
   return path.join(homeDir(), '.hippo', 'logs', 'pre-compact.log');
-}
-
-export function ensureDir(dir: string): void {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-const COPILOT_NOTES =
-  'hooks in hooks/hippo.json, the MCP server in ' +
-  'mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and ' +
-  'prompts/hippo.instructions.md';
-
-/**
- * Detect which AI coding tools are installed from config directory presence; `hippo setup` uses it to pick JSON-hook
- * installs.
- */
-export function detectInstalledTools(): ToolDetection[] {
-  const home = homeDir();
-  const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
-  const claudeDir = claudeConfigDir();
-  return [
-    { name: 'claude-code', configDir: claudeDir, detected: fs.existsSync(claudeDir), kind: 'json-hook' },
-    {
-      name: 'opencode',
-      configDir: '~/.config/opencode',
-      detected: exists('.config', 'opencode'),
-      kind: 'plugin',
-      notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts',
-    },
-    {
-      name: 'openclaw',
-      configDir: '~/.openclaw',
-      detected: exists('.openclaw'),
-      kind: 'plugin',
-      notes: 'install via `openclaw plugins install hippo-memory`',
-    },
-    {
-      name: 'codex',
-      configDir: '~/.codex',
-      detected: isCodexPresent(home),
-      kind: 'wrapper',
-      notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation',
-    },
-    {
-      name: 'copilot',
-      configDir: copilotHomeDir(),
-      detected: isCopilotPresent(),
-      kind: 'json-hook',
-      notes: COPILOT_NOTES,
-    },
-    {
-      name: 'cursor',
-      configDir: '~/.cursor',
-      detected: exists('.cursor'),
-      kind: 'markdown-instruction',
-      notes: 'no hook API - patches AGENTS.md in the project',
-    },
-    {
-      name: 'pi',
-      configDir: '~/.pi',
-      detected: exists('.pi'),
-      kind: 'markdown-instruction',
-      notes: 'no hook API - patches AGENTS.md in the project',
-    },
-  ];
 }
