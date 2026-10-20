@@ -302,41 +302,32 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # Test stores on a RAM disk: Linux runs green without one, but on Windows 29 files time out (#992) and D: stalls (#903).
-      # Arsenal Image Mounter, not ImDisk: an ImDisk volume skips the mount manager, so realpathSync.native throws EISDIR.
-      - name: Temp dir on a RAM disk
+      - name: Diag disk and Defender (throwaway)
         if: runner.os == 'Windows'
-        timeout-minutes: 5
         run: |
-          $src = 'https://github.com/ArsenalRecon/Arsenal-Image-Mounter/raw/642f08bd3452df09c119c1fb18e45b18f77ad6e5'
-          $aim = Join-Path $env:RUNNER_TEMP 'aim'
-          $zips = @{
-            'll'  = @("$src/Command%20line%20applications/aim_ll.zip", '2055d72571eedef5b6f5dbb325ef8600ff189dea6675f1021c59df414c49626c')
-            'drv' = @("$src/DriverSetup/DriverFiles.zip", '709dac0a2e6a0cfff7b332ccafd688f30f0e56926eb68c0f5b8ab44083f02fe8')
-          }
-          foreach ($name in $zips.Keys) {
-            $url, $want = $zips[$name]
-            Invoke-WebRequest $url -OutFile "$aim-$name.zip"
-            $got = (Get-FileHash "$aim-$name.zip" -Algorithm SHA256).Hash.ToLower()
-            if ($got -ne $want) { throw "$name.zip hash $got, want $want" }
-            Expand-Archive "$aim-$name.zip" "$aim\$name"
-          }
-          Set-StorageSetting -NewDiskPolicy OnlineAll
-          & "$aim\ll\x64\aim_ll.exe" --install "$aim\drv"
-          if ($LASTEXITCODE) { throw "aim_ll --install failed: $LASTEXITCODE" }
-          & "$aim\ll\x64\aim_ll.exe" -a -t vm -s 4G -m R: -p "/fs:ntfs /q /y"
-          if ($LASTEXITCODE) { throw "aim_ll attach failed: $LASTEXITCODE" }
-          $d = 'R:\tmp'
-          New-Item -ItemType Directory -Force $d | Out-Null
-          node -e "require('fs').realpathSync.native(process.argv[1])" $d
-          if ($LASTEXITCODE) { throw "realpathSync.native fails on the RAM disk" }
-          "TEMP=$d" >> $env:GITHUB_ENV
-          "TMP=$d" >> $env:GITHUB_ENV
+          Get-MpComputerStatus | Format-List AMRunningMode,AntivirusEnabled,RealTimeProtectionEnabled,OnAccessProtectionEnabled,IoavProtectionEnabled,BehaviorMonitorEnabled
+          "ExclusionPath: $((Get-MpPreference).ExclusionPath -join ';')"
+          "DisableRealtimeMonitoring: $((Get-MpPreference).DisableRealtimeMonitoring)"
+          Get-Volume | Format-Table DriveLetter,FileSystem,DriveType,Size,SizeRemaining
+          Get-PhysicalDisk | Format-Table FriendlyName,MediaType,BusType,Size
+          "TEMP=$env:TEMP RUNNER_TEMP=$env:RUNNER_TEMP NUMBER_OF_PROCESSORS=$env:NUMBER_OF_PROCESSORS"
+          node --no-warnings .diag/bench-io.mjs $env:TEMP 60 "C-temp   "
+          node --no-warnings .diag/bench-io.mjs $env:RUNNER_TEMP 60 "D-runner "
+          New-Item -ItemType Directory -Force C:\diag-excl | Out-Null
+          New-Item -ItemType Directory -Force C:\diag-plain | Out-Null
+          Add-MpPreference -ExclusionPath C:\diag-excl
+          node --no-warnings .diag/bench-io.mjs C:\diag-plain 60 "C-plain  "
+          node --no-warnings .diag/bench-io.mjs C:\diag-excl 60 "C-excl   "
+          node --no-warnings .diag/par.mjs $env:TEMP 4 40
       - name: Vitest
-        # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
-        run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+        run: npx vitest run --shard=${{ matrix.shard }}
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
+          NODE_OPTIONS: --require ${{ github.workspace }}/.diag/count.cjs
+          DIAG_OUT: ${{ runner.temp }}/diag
+      - name: Diag summary (throwaway)
+        if: always()
+        run: node .diag/summary.mjs "${{ runner.temp }}/diag"
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
