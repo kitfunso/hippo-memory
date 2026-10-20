@@ -6,7 +6,7 @@ import * as path from 'path';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import type { CompactionText, Log } from '../../store/local/compaction-hooks.js';
 import type { PostCompactPayload } from './compaction-record.js';
-import { isSqliteBusy } from '../../db/busy-code.js';
+import { isStoreBusy } from '../../store/port.js';
 import { errorMessage } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
 
@@ -534,7 +534,7 @@ function importFailed(
 ): FileOutcome {
   const { text, recorded, cause, log } = options;
   const { name } = entry;
-  const busy = isSqliteBusy(cause);
+  const busy = isStoreBusy(cause);
   if (recorded) {
     // The record stays `summarised`, so the stalled-record step of a later replay writes its items.
     log(

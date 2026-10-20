@@ -35,10 +35,10 @@ const CLI_MAP = {
 const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
 type DbAllowed = Record<string, { names: string[]; why: string }>;
 const dbMap = (allowed: DbAllowed) => ({
-  order: ['low', 'db', 'high'],
-  folders: { sub: 'high', db: 'db', api: 'high' },
+  order: ['low', 'db', 'store', 'high'],
+  folders: { sub: 'high', db: 'db', store: 'store', api: 'high' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
-  dbReach: { layer: 'db', from: ['api'], allowed },
+  dbReach: { layer: 'db', through: 'store', allowed },
 });
 const DB_FILES = {
   'src/a.ts': '',
@@ -188,6 +188,24 @@ const rows: Row[] = [
     map: dbMap({}),
     status: 1,
     output: ['api/y.ts:1 imports Handle from db/x.ts', 'api/y.ts:2 imports * from db/x.ts'],
+  },
+  {
+    name: 'a file in any folder above the store, or a root file, that imports the db layer fails',
+    files: {
+      ...DB_FILES,
+      'src/b.ts': "import { open } from './db/x.js';\nexport const b = open;\n",
+      'src/sub/c.ts': "export const c = 1;\nimport { scope } from '../db/x.js';\n",
+    },
+    map: dbMap({}),
+    status: 1,
+    output: ['b.ts:1 imports open from db/x.ts', 'sub/c.ts:2 imports scope from db/x.ts'],
+  },
+  {
+    name: 'a store file may import the db layer',
+    files: { ...DB_FILES, 'src/store/s.ts': "import { open } from '../db/x.js';\nexport const s = open;\n" },
+    map: dbMap({}),
+    status: 0,
+    output: ['Layer order OK'],
   },
   {
     name: 'an allowed name passes and an unlisted one beside it fails',

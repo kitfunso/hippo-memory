@@ -5,7 +5,6 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/t
 import { createMemory, Layer, MemoryEntry } from '../../base/memory/memory.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { getGlobalRoot } from '../../domain/sharing/global-store.js';
-import { withRequestStoresSync } from '../../db/request-stores.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../base/config/config.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
@@ -59,6 +58,8 @@ export interface ImportOptions {
 export interface ImportTarget {
   readonly root: string;
   readonly files: LocalFiles;
+  /** Runs the import's writes as one batch on the store, which for hippo.db opens it once. */
+  readonly batch: <T>(run: () => T) => T;
 }
 
 /** `ImportOptions` with the store the import writes to. */
@@ -83,9 +84,9 @@ export function importEntries(chunks: string[], source: string, tags: string[], 
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // One scope, so the store opens once however many chunks land: each write, or a dry run's guard probe, shares its
+  // One batch, so the store opens once however many chunks land: each write, or a dry run's guard probe, shares its
   // handle.
-  return withRequestStoresSync(() => {
+  return options.target.batch(() => {
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw);
 

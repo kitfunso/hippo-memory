@@ -18,6 +18,7 @@ import type { HippoStore, StoreGroups } from '../../store/index.js';
 import type { OptionalGroup } from '../../store/port.js';
 import {
   runDetachedSqliteRequest,
+  runSqliteBatch,
   runSqliteHookRequest,
   runSqliteRequest,
   sqliteReach,
@@ -81,6 +82,11 @@ export function cliSyncOptions(
 /** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other surface opens one. */
 export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
   return runSqliteRequest(run, 'cli');
+}
+
+/** One handle per store for a synchronous batch, such as an import's writes, that runs outside any request. */
+export function cliBatch<T>(run: () => T): T {
+  return runSqliteBatch(run);
 }
 
 /** The CLI's store is hippo.db, which sets every optional group and its local files, so its verbs call the api

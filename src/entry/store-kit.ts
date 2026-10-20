@@ -140,7 +140,7 @@ export {
   rankVectorRows,
   type VectorMatch,
   type VectorRow,
-} from '../db/vector-store.js';
+} from '../store/sqlite/index.js';
 export { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 export { replacesIndex } from '../base/embeddings/index-identity.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
@@ -157,7 +157,7 @@ export { SECRET_TAGS } from '../base/util/secret-detect.js';
 export { tallyAmbientEntries } from '../base/memory/ambient.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
 // store copy --db writes the marker into the other store's folder.
-export { OTHER_STORE_MARKER } from '../db/index.js';
+export { OTHER_STORE_MARKER } from '../store/sqlite/index.js';
 // An add-on that serves a team store checks the flag before it starts.
 export { isSharedStore } from '../base/config/config.js';
 // A Context carries its store's config, so an integrator that builds one loads it here.

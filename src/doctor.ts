@@ -5,10 +5,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from './base/scope/project-identity.js';
 import { getGlobalRoot } from './domain/sharing/global-store.js';
-import type { StoreHealth } from './store/local/diagnostics.js';
-import type { Diagnostics } from './store/local/diagnostics.js';
+import { needsNewerHippo, type Diagnostics, type StoreHealth } from './store/local/diagnostics.js';
 import { loadConfig } from './base/config/config.js';
-import { getCurrentSchemaVersion, IncompatibleBinaryError } from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './base/session/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './surface/capture/compaction-spool.js';
 import { isEmbeddingAvailable } from './base/embeddings/local.js';
@@ -398,15 +396,14 @@ function databaseChecks(diagnostics: Diagnostics, store: string, now: Date, spoo
         id: 'schema',
         status: 'fail',
         detail: `cannot open the database: ${errorMessage(err)}`,
-        fix:
-          err instanceof IncompatibleBinaryError
-            ? 'npm install -g hippo-memory@latest'
-            : 'check file permissions on the .hippo folder',
+        fix: needsNewerHippo(err)
+          ? 'npm install -g hippo-memory@latest'
+          : 'check file permissions on the .hippo folder',
       },
     ];
   }
   return [
-    schemaCheck(health.schemaVersion, getCurrentSchemaVersion()),
+    schemaCheck(health.schemaVersion, health.binarySchemaVersion),
     memoriesCheck(health.memories, health.dormant),
     ftsCheck(health.fts),
     tokensCheck(health.tokens),

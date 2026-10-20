@@ -8,6 +8,7 @@ import {
   scopedBusyWait,
   SERVER_DB_WAIT_MS,
 } from '../../db/index.js';
+import { withRequestStoresSync } from '../../db/request-stores.js';
 
 export type RequestPreset = 'cli' | 'hook' | 'server';
 
@@ -32,6 +33,11 @@ export async function runSqliteHookRequest<T>(fn: () => T | Promise<T>): Promise
     noteStoreBusy('hook skipped');
     return undefined;
   }
+}
+
+/** A synchronous batch, such as an import's writes, opens each store once; inside a request it joins that scope. */
+export function runSqliteBatch<T>(fn: () => T): T {
+  return withRequestStoresSync(fn);
 }
 
 /** A scope of its own: the caller closes a handle the work holds across its pauses; the lock wait carries over. */

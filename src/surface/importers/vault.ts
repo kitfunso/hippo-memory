@@ -7,7 +7,6 @@ import { remember, rawArchive, isPrivateScope, type Context } from '../../api/in
 import type { HippoStore } from '../../store/port.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { runWithRequestStores } from '../../db/request-stores.js';
 import { loadConfig } from '../../base/config/config.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -23,12 +22,18 @@ import type { RawRefRow } from '../../store/port/context-reads.js';
 
 type VaultRow = RawRefRow;
 
+/** The store a vault import writes to and the batch a dry run's guard probes share; a composition root builds it. */
+export interface VaultTarget {
+  readonly store: HippoStore;
+  readonly batch: <T>(run: () => Promise<T>) => Promise<T>;
+}
+
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on the in-memory
  * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
 export async function importVault(
   folderPath: string,
   options: ImportOptions,
-  store: HippoStore,
+  target: VaultTarget,
 ): Promise<ImportResult> {
   const hippoRoot = options.hippoRoot;
   const identity = vaultIdentityOrThrow(options);
@@ -46,7 +51,7 @@ export async function importVault(
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
-  return syncVaultFolder(folderPath, options, store, identity);
+  return syncVaultFolder(folderPath, options, target, identity);
 }
 
 function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): Context {
@@ -64,7 +69,7 @@ function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): C
 async function syncVaultFolder(
   folderPath: string,
   options: ImportOptions,
-  store: HippoStore,
+  { store, batch }: VaultTarget,
   { vaultName, scope }: VaultIdentity,
 ): Promise<ImportResult> {
   const hippoRoot = options.hippoRoot;
@@ -94,8 +99,8 @@ async function syncVaultFolder(
   const importNotes = async (): Promise<void> => {
     for (const relpath of relpaths) await importVaultNote(run, relpath);
   };
-  // A dry run probes the rejection guard once per changed note; one scope lets every probe share a handle.
-  if (dryRun) await runWithRequestStores(importNotes);
+  // A dry run probes the rejection guard once per changed note; one batch lets every probe share a handle.
+  if (dryRun) await batch(importNotes);
   else await importNotes();
 
   await archiveVanishedNotes(run);

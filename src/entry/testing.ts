@@ -1,11 +1,11 @@
 // Test seams for add-ons and hippo's own suite. Not for production code; no semver guarantee beyond the major version.
 import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
-import type { openHippoDb } from '../db/index.js';
 import {
   batchWriteAndDelete,
   loadAllEntries,
   upsertEntryRow,
   writeEntry,
+  type openHippoDb,
   type WriteEntryOptions,
 } from '../store/sqlite/fixtures.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
