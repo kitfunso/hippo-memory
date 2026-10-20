@@ -8,8 +8,9 @@ import { serializeEntry } from '../../src/core/markdown.js';
 import { syncMirrorFiles } from '../../src/store/sqlite/mirrors.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 let home: string;
 
@@ -22,14 +23,21 @@ function freshRoot(): string {
 describe('syncMirrorFiles', () => {
   it('rewrites every mirror byte for byte when the rows span more than one page', () => {
     const root = freshRoot();
-    writeEntriesTogether(
-      root,
-      Array.from({ length: 530 }, (_, i) => ({ ...createMemory(`paged mirror row number ${i}`), id: `mem_page_${i}` })),
-    );
+    const seed = openHippoDb(root);
+    try {
+      // Rows with no mirror files, so the sync below writes every one.
+      seed.exec('BEGIN');
+      for (let i = 0; i < 530; i++) {
+        writeEntryDbOnly(seed, { ...createMemory(`paged mirror row number ${i}`), id: `mem_page_${i}` });
+      }
+      seed.exec('COMMIT');
+    } finally {
+      closeHippoDb(seed);
+    }
     const entries = loadAllEntries(root, 'default').filter((e) => e.id.startsWith('mem_page_'));
     expect(entries).toHaveLength(530);
     const files = entries.map((e) => path.join(root, e.layer, `${e.id}.md`));
-    for (const f of files) fs.rmSync(f);
+    expect(files.filter((f) => fs.existsSync(f))).toEqual([]);
 
     const db = openHippoDb(root);
     try {

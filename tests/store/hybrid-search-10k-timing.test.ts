@@ -9,8 +9,10 @@ import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -59,7 +61,15 @@ describe('hybrid recall at 10k rows', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       }),
     );
-    batchWriteAndDelete(store, entries, []);
+    // Rows only: recall reads no markdown mirror, and off a RAM disk writing 11k of them was most of the seed's time.
+    const db = openHippoDb(store);
+    try {
+      db.exec('BEGIN');
+      for (const entry of entries) writeEntryDbOnly(db, entry);
+      db.exec('COMMIT');
+    } finally {
+      closeHippoDb(db);
+    }
     saveEmbeddingIndex(store, Object.fromEntries(entries.map((e, i) => [e.id, vector(i + 1)])));
   }
 
