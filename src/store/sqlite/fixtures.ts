@@ -8,4 +8,3 @@ export { buildIndexFromDb, writeIndexMirror } from './mirrors.js';
 export { loadVectorCandidateEntriesAt } from './search-rows.js';
 export { writeDeliveryEventOnHandle } from './recall-trace.js';
 export { recordTokenUse, tokensBySession } from './token-ledger.js';
-export type { openHippoDb } from '../../db/index.js';

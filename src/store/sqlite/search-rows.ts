@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import { openHippoDb, isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
+import { isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
@@ -63,7 +63,7 @@ interface SearchRowsOptions {
 }
 
 function loadSearchRows(
-  db: ReturnType<typeof openHippoDb>,
+  db: DatabaseSyncLike,
   query: string,
   limit: number,
   tenantId: TenantId,

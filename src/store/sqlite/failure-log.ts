@@ -2,6 +2,7 @@
 // of its own.
 import { ConflictError } from '../../base/errors/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
+import { MAX_HOOK_FIELD_LEN } from '../../base/util/limits.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/failure-log.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
@@ -10,9 +11,6 @@ import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import type { Sync } from './served.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-
-/** Longest session id or tool name kept; the hook payload is not trusted to be short. */
-const MAX_FIELD = 128;
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
 function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
@@ -29,8 +27,8 @@ function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   ).run(
     now,
     event.tenantId,
-    event.sessionId?.slice(0, MAX_FIELD) ?? null,
-    event.tool?.slice(0, MAX_FIELD) ?? null,
+    event.sessionId?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
+    event.tool?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
     event.outcome,
     event.rule ?? null,
     event.sigHash ?? null,
@@ -56,7 +54,7 @@ export function requestOutcome(
   ).get(tenantId, requestId) as { outcome: FailureOutcome; session_id: string | null } | undefined;
   if (row === undefined) return null;
   // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
-  if (row.session_id !== sessionId.slice(0, MAX_FIELD)) {
+  if (row.session_id !== sessionId.slice(0, MAX_HOOK_FIELD_LEN)) {
     throw new ConflictError('request id belongs to another session');
   }
   return row.outcome;

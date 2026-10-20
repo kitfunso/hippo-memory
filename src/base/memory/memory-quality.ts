@@ -1,76 +1,6 @@
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, DAG_LEVEL, type MemoryEntry } from './memory.js';
 import { heldTexts } from '../util/same-text.js';
-
-export const STOP_WORDS = new Set([
-  'the',
-  'a',
-  'an',
-  'is',
-  'was',
-  'are',
-  'were',
-  'be',
-  'been',
-  'being',
-  'to',
-  'of',
-  'in',
-  'for',
-  'on',
-  'with',
-  'at',
-  'by',
-  'from',
-  'it',
-  'this',
-  'that',
-  'and',
-  'or',
-  'but',
-  'not',
-  'no',
-  'so',
-  'if',
-  'do',
-  'did',
-  'does',
-  'has',
-  'had',
-  'have',
-  'will',
-  'would',
-  'could',
-  'should',
-  'may',
-  'might',
-  'can',
-  'shall',
-  'we',
-  'i',
-  'you',
-  'they',
-  'he',
-  'she',
-  'my',
-  'our',
-  'your',
-  'its',
-  'his',
-  'her',
-  'their',
-  'up',
-  'out',
-  'just',
-  'also',
-  'then',
-  'than',
-  'some',
-  'all',
-  'any',
-  'each',
-  'very',
-  'too',
-]);
+import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
 export type AutomaticMemoryDefect =
   | 'too-short'
@@ -97,7 +27,7 @@ export function substantiveWordCount(text: string): number {
   const spacedCount = text
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length > 2 && !STOP_WORDS.has(w)).length;
+    .filter((w) => w.length > 2 && !MEMORY_QUALITY_STOPWORDS.has(w)).length;
   return spacedCount + Math.floor(cjkLetterCount / 2);
 }
 

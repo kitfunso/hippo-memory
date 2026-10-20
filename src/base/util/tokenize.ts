@@ -6,18 +6,16 @@ export function tokenize(text: string): string[] {
     .filter((t) => t.length > 1);
 }
 
-/** Jaccard overlap of the two texts' token sets; two empty texts count as identical. */
-export function textOverlap(a: string, b: string): number {
-  const setA = new Set(tokenize(a));
-  const setB = new Set(tokenize(b));
-  if (setA.size === 0 && setB.size === 0) return 1;
-  if (setA.size === 0 || setB.size === 0) return 0;
-
+/** Jaccard overlap of two token sets; two empty sets count as identical. */
+export function jaccardSets(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  if (a.size === 0 && b.size === 0) return 1;
+  if (a.size === 0 || b.size === 0) return 0;
   let intersection = 0;
-  for (const t of setA) {
-    if (setB.has(t)) intersection++;
-  }
+  for (const t of a) if (b.has(t)) intersection++;
+  return intersection / (a.size + b.size - intersection);
+}
 
-  const union = setA.size + setB.size - intersection;
-  return intersection / union;
+/** Jaccard overlap of the two texts' token sets. */
+export function textOverlap(a: string, b: string): number {
+  return jaccardSets(new Set(tokenize(a)), new Set(tokenize(b)));
 }

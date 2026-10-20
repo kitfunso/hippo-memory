@@ -1,6 +1,7 @@
 import type { Learning } from '../../store/local/learning.js';
 import type { HippoStore } from '../../store/index.js';
 import { chunked } from '../../base/util/chunked.js';
+import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/memory.js';
 import {
@@ -216,55 +217,12 @@ function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarg
   return { result, weakened };
 }
 
-const STOPWORDS = new Set([
-  'the',
-  'an',
-  'is',
-  'it',
-  'in',
-  'on',
-  'at',
-  'to',
-  'for',
-  'of',
-  'by',
-  'and',
-  'or',
-  'but',
-  'not',
-  'with',
-  'from',
-  'that',
-  'this',
-  'was',
-  'are',
-  'be',
-  'has',
-  'had',
-  'have',
-  'been',
-  'will',
-  'would',
-  'could',
-  'should',
-  'do',
-  'does',
-  'did',
-  'all',
-  'our',
-  'old',
-  'new',
-  'use',
-  'used',
-  'using',
-]);
-
 function invalidationTokenize(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s_.-]/g, ' ')
     .split(/\s+/)
-    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+    .filter((t) => t.length >= 2 && !INVALIDATION_STOPWORDS.has(t));
 }
 
 function matchScore(fromTokens: string[], contentTokens: string[]): number {

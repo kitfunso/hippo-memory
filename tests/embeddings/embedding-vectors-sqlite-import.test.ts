@@ -5,6 +5,7 @@ import * as path from 'path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import {
   openHippoDb,
+  type DatabaseSyncLike,
   closeHippoDb,
   getMeta,
   setMeta,
@@ -46,7 +47,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function withDb<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {
+function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
     return fn(db);
