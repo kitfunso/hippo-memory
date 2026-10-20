@@ -4,12 +4,12 @@ import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../../store/port/sessions.js';
 import { confidenceLabel } from '../../base/memory/memory.js';
-import type { ContextCost } from '../context-types.js';
-import type { ContinuityBlock, RecallResult, RecallResultItem } from './types.js';
+import type { ContextCost } from '../../api/context-types.js';
+import type { ContinuityBlock, RecallResult, RecallResultItem } from '../../api/recall/types.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
-import { printedTokens } from '../context-render.js';
-import { detectAnchoring } from './finish.js';
-import { detectAvailabilityBias } from '../availability.js';
+import { printedTokens } from '../../api/context-render.js';
+import { detectAnchoring } from '../../api/recall/finish.js';
+import { detectAvailabilityBias } from '../../api/availability.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 
 const MCP_PREVIEW_CHARS = 200;

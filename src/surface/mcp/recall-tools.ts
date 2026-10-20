@@ -8,15 +8,8 @@ import { resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/p
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/context-render.js';
 import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
 import { resolveClientKey } from '../../api/recall/last-recalled.js';
-import { toolRecallText } from '../../api/recall/tool-recall.js';
-import {
-  formatMemories,
-  memoriesReserve,
-  snapshotPiece,
-  handoffPiece,
-  trailPiece,
-  contextCost,
-} from '../../api/recall/tool-text.js';
+import { toolRecallText } from './tool-recall.js';
+import { formatMemories, memoriesReserve, snapshotPiece, handoffPiece, trailPiece, contextCost } from './tool-text.js';
 import { isJsonString } from '../../base/util/json.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../../api/recall/request.js';
 

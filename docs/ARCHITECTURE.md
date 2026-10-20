@@ -608,13 +608,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `runResolveTool`: AT1: optional rejectLoser + reason, threaded straight through to resolveConflict's opts (plan §5 — mirrors the CLI's --reject-loser).
 - `runPeersTool`: D4 v1.12.10: tenant-scope the cross-project peer discovery. tenantId is the caller's tenant (matches hippo_share above); passing undefined would restore the pre-D4 host-wide behaviour.
 
-### src/api/recall/tool-text.ts
+### src/surface/mcp/tool-text.ts
 - `planningSection`: J3.2: the hint depends on the query alone, so api.retrieve's copy is the one shown; JSON.stringify fences the phrase.
 
 ### src/surface/mcp/protocol.ts
 - `McpContext.scopes`: EI2: scope grants for the HTTP-MCP caller's key.
 
-### src/api/recall/tool-recall.ts
+### src/surface/mcp/tool-recall.ts
 - `recallPresenter render`: J1, J2 and C5: the hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
 
 ### src/surface/mcp/request.ts

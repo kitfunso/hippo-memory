@@ -4,31 +4,20 @@ import { envActiveScope, envHippoSessionId } from '../../base/util/env.js';
 import type { CallerState } from '../../api/callers.js';
 import { Layer } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
-import { estimateTokens } from '../../base/util/token-text.js';
+import { estimateTokens, shrinkToFit, tokenPurse } from '../../base/util/token-text.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import * as api from '../../api/index.js';
 import type { PlanningFallacyOutput } from '../../domain/predictions/planning-fallacy.js';
-import {
-  availabilityPool,
-  cutoffClauses,
-  detectRecallHints,
-  handoffText,
-  hashQueryText,
-  printedTokens,
-  sessionRing,
-  sessionTrailText,
-  settleTokens,
-  shownRecallRows,
-  shrinkToFit,
-  snapshotText,
-  suppressionSummary,
-  tokenPurse,
-  type RankRecallResult,
-  type RankStage,
-  type RecallGraphHops,
-  type RecallGraphStream,
-  type RecallReranker,
-} from '../../api/cli-surface.js';
+import { hashQueryText, sessionRing, shownRecallRows } from '../../api/recall/finish.js';
+import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../../api/context-render.js';
+import type {
+  RankRecallResult,
+  RankStage,
+  RecallGraphHops,
+  RecallGraphStream,
+  RecallReranker,
+} from '../../api/recall/pipeline.js';
+import { availabilityPool, cutoffClauses, detectRecallHints, suppressionSummary } from '../mcp/recall-text.js';
 import {
   cliRecallOrigin,
   cliRecallReranker,

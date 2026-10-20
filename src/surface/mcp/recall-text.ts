@@ -1,7 +1,7 @@
-// Recall text pieces the CLI and MCP presenters share, so the budget loop, cutoff wording and hints cannot drift apart.
+// Recall text pieces the CLI and MCP presenters share, so the cutoff wording and the hints cannot drift apart.
+// They sit in mcp, not cli: cli imports server and server imports mcp, so mcp importing cli would close a cycle.
 
 import type { SearchResult } from '../../base/rank/search-types.js';
-import { estimateTokens } from '../../base/util/token-text.js';
 import {
   detectAnchoring,
   biasHintEnabled,
@@ -9,40 +9,9 @@ import {
   type AnchoringHint,
   type HintConfig,
   type RingBuffer,
-} from './finish.js';
-import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
-import type { RecallSuppressionSummary } from './types.js';
-
-/** A token allowance that sections pay from in print order; one that does not fit is refused whole. */
-export function tokenPurse(allowance: number) {
-  let left = allowance;
-  return {
-    pays(tokens: number): boolean {
-      if (tokens > left) return false;
-      left -= tokens;
-      return true;
-    },
-    left: (): number => left,
-  };
-}
-
-/** Renders `count` rows, then drops the lowest-ranked one until the text fits `budget` or only `floor` rows remain. */
-export function shrinkToFit<R>(
-  count: number,
-  floor: number,
-  budget: number,
-  render: (kept: number) => R,
-  textOf: (rendered: R) => string,
-): R {
-  let kept = count;
-  let rendered = render(kept);
-  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each drop.
-  while (kept > floor && estimateTokens(textOf(rendered)) > budget) {
-    kept--;
-    rendered = render(kept);
-  }
-  return rendered;
-}
+} from '../../api/recall/finish.js';
+import { detectAvailabilityBias, type AvailabilityHint } from '../../api/availability.js';
+import type { RecallSuppressionSummary } from '../../api/recall/types.js';
 
 /** The clause strings of the cutoff text; each surface frames them in its own line or section. */
 export function cutoffClauses(s: RecallSuppressionSummary): string[] {

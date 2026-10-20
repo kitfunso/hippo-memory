@@ -4,7 +4,7 @@ import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../base/rank/search-types.js';
 import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../base/session/session-snapshot.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
-import { estimateTokens } from '../base/util/token-text.js';
+import { estimateTokens, tokenPurse } from '../base/util/token-text.js';
 import { markRetrieved, strengthOptionsOf, type MemoryEntry } from '../base/memory/memory.js';
 import { evalNow } from '../base/memory/ablation.js';
 import { dropHeldCopies } from '../base/util/same-text.js';
@@ -36,7 +36,6 @@ import {
 } from './context-select.js';
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
-import { tokenPurse } from './recall/render.js';
 import { type Context, ownerOrSubject } from './types.js';
 import type {
   ContextCandidateFilter,

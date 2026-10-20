@@ -4,10 +4,10 @@
 import { fitBudget } from '../../domain/search/finalize.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
-import { estimateTokens } from '../../base/util/token-text.js';
+import { estimateTokens, shrinkToFit, tokenPurse } from '../../base/util/token-text.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
-import type { CallerProject } from '../prompt-hook.js';
-import type { Context } from '../types.js';
+import type { CallerProject } from '../../api/prompt-hook.js';
+import type { Context } from '../../api/types.js';
 import {
   callerOf,
   hashQueryText,
@@ -16,18 +16,16 @@ import {
   shownRecallRows,
   type HintConfig,
   type RingBuffer,
-} from './finish.js';
-import { retrieveRanking } from './recall.js';
+} from '../../api/recall/finish.js';
+import { retrieveRanking } from '../../api/recall/recall.js';
 import {
   availabilityPool,
   cutoffClauses,
   detectRecallHints,
-  shrinkToFit,
   suppressionSummary,
-  tokenPurse,
   type SuppressionCounts,
-} from './render.js';
-import type { SharedRecallOptions } from './request.js';
+} from './recall-text.js';
+import type { SharedRecallOptions } from '../../api/recall/request.js';
 import {
   formatContinuityBlock,
   formatMemories,
@@ -38,7 +36,7 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './tool-text.js';
-import type { RecallSuppressionSummary, ShowRanking } from './types.js';
+import type { RecallSuppressionSummary, ShowRanking } from '../../api/recall/types.js';
 
 /**
  * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands back its hint rows.

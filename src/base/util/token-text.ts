@@ -20,3 +20,34 @@ export function estimateTokens(text: string): number {
 export function blockHash(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, FINGERPRINT_HEX_CHARS);
 }
+
+/** A token allowance that sections pay from in print order; one that does not fit is refused whole. */
+export function tokenPurse(allowance: number) {
+  let left = allowance;
+  return {
+    pays(tokens: number): boolean {
+      if (tokens > left) return false;
+      left -= tokens;
+      return true;
+    },
+    left: (): number => left,
+  };
+}
+
+/** Renders `count` rows, then drops the lowest-ranked one until the text fits `budget` or only `floor` rows remain. */
+export function shrinkToFit<R>(
+  count: number,
+  floor: number,
+  budget: number,
+  render: (kept: number) => R,
+  textOf: (rendered: R) => string,
+): R {
+  let kept = count;
+  let rendered = render(kept);
+  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each drop.
+  while (kept > floor && estimateTokens(textOf(rendered)) > budget) {
+    kept--;
+    rendered = render(kept);
+  }
+  return rendered;
+}
