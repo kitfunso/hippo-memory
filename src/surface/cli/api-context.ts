@@ -27,7 +27,7 @@ import {
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { getReranker, type RerankerFn } from '../../domain/rerankers/index.js';
-import { createCallerState, type CallerState } from '../../api/callers.js';
+import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
 import type { LocalFiles, LocalStore } from '../../store/local/index.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
@@ -47,9 +47,9 @@ export function cliStore(hippoRoot: string): LocalStore & StoreGroups {
   return sqliteStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
 }
 
-/** A folder's hippo.db beside its folder, as sharing and sync take each side; the global one may not exist yet. */
-export function cliFolder(hippoRoot: string): ConfiguredFolder {
-  return { root: hippoRoot, store: cliStore(hippoRoot), config: cliConfig(hippoRoot) };
+/** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */
+export function cliFolder(hippoRoot: string): ConfiguredFolder<LocalStore & StoreGroups> {
+  return { store: cliStore(hippoRoot), config: cliConfig(hippoRoot) };
 }
 
 /** The folder's hippo.db for a verb that runs a sleep pass by itself. */
@@ -90,8 +90,8 @@ export function cliBatch<T>(run: () => T): T {
 }
 
 /** The CLI's store is hippo.db, which sets every optional group and its local files, so its verbs call the api
- * unchecked. */
-export type CliContext = LocalContext & ContextWith<OptionalGroup>;
+ * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
+export type CliContext = LocalContext & ContextWith<OptionalGroup> & { readonly hippoRoot: string };
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config. */
 function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
@@ -121,20 +121,28 @@ export function cliSecondStore(root: string): GlobalInReach {
 /** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one, probed once here. */
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
   const store = cliStore(hippoRoot);
-  return ledgerReachOf({ hippoRoot, reach: cliReach(hippoRoot, store), store, config: cliConfig(hippoRoot) });
+  return ledgerReachOf({ reach: cliReach(hippoRoot, store), store, config: cliConfig(hippoRoot) });
 }
 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. One
  * host per stdio loop, so its callers live as long as the loop. */
 export function cliStdioHost(): McpHost {
   const hostTenantId = envTenant();
-  const callers = createCallerState({
-    hostTenantId,
-    run: (root) =>
-      runDetachedSqliteRequest(() =>
-        runConsolidation(cliLocalFiles(root), { config: cliConfig(root), tenantId: hostTenantId }),
-      ).then(() => {}),
-  });
+  const shared = createCallerState();
+  // The rings span the loop; each folder keeps an auto-sleep bound to it, as a write's context names no folder.
+  const byRoot = new Map<string, CallerState>();
+  const callersAt = (root: string): CallerState => {
+    let callers = byRoot.get(root);
+    if (callers === undefined) {
+      const run = (): Promise<void> =>
+        runDetachedSqliteRequest(() =>
+          runConsolidation(cliLocalFiles(root), { config: cliConfig(root), tenantId: hostTenantId }),
+        ).then(() => {});
+      callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
+      byRoot.set(root, callers);
+    }
+    return callers;
+  };
   return {
     contextFor(hippoRoot, tenantId) {
       const store = cliStore(hippoRoot);
@@ -148,7 +156,7 @@ export function cliStdioHost(): McpHost {
         store,
         config: cliConfig(hippoRoot),
         reach: cliReach(hippoRoot, store),
-        callers,
+        callers: callersAt(hippoRoot),
       };
     },
     runRequest: cliRequest,

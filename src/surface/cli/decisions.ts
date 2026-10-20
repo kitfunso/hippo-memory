@@ -9,7 +9,7 @@ import * as decisionsModule from '../../domain/objects/decisions.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { cliConfig, cliApiContext } from './api-context.js';
+import { cliApiContext } from './api-context.js';
 import type { Context } from '../../api/index.js';
 import {
   closeObject,
@@ -67,7 +67,7 @@ export async function handleDecide({ hippoRoot, tenantId, args, flags }: Command
 }
 
 async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags): Promise<void> {
-  const { hippoRoot, tenantId } = ctx;
+  const { tenantId } = ctx;
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than silently creating a
@@ -91,7 +91,7 @@ async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags)
   }
 
   const decisionPathTags = extractPathTags(process.cwd());
-  const { defaultHalfLifeDays } = cliConfig(hippoRoot);
+  const { defaultHalfLifeDays } = ctx.config;
   const created = await decisionsModule.saveDecision(objectsOf(ctx), defaultHalfLifeDays, tenantId, {
     decisionText,
     context,

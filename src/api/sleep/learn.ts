@@ -132,7 +132,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
   const strength = strengthOptionsOf(ctx.config.runtime);
-  const target = { hippoRoot: ctx.hippoRoot, store: ctx.store, embeddings: ctx.config.embeddings, strength };
+  const target = { store: ctx.store, embeddings: ctx.config.embeddings, strength };
   for (const entry of landed) embedMemoryDetached(target, entry);
 }
 

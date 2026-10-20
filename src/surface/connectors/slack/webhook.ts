@@ -183,7 +183,6 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     resolvedTenant = envTenant();
   }
   const ctx: Context = {
-    hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
     store: d.store,

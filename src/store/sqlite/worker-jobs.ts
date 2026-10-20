@@ -34,8 +34,6 @@ function workerOps({ hippoRoot, lossAversionRatio }: WorkerInit, graphs: VectorG
     ...sync,
     vectors: { ...sqliteVectorReads(handles, graphs), storedVectors: packed },
     vectorViews: { storedVectorViews: packed },
-    promotion: sync.localFiles.promotion,
-    sharing: sync.localFiles.sharing,
   };
 }
 

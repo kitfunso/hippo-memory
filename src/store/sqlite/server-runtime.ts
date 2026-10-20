@@ -1,7 +1,6 @@
 // What a server serves hippo.db with, built in one place: the worker store, the connection held beside it, the global
 // stores and the worker counts, so a server root never names the executor or the holder.
-import type { HippoStore } from '../port.js';
-import type { StoreReach } from '../local/index.js';
+import type { HippoStore, StoreReach } from '../port.js';
 import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
 import { workerCounts } from './executor-counts.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from './held-connection.js';

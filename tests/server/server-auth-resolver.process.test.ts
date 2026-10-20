@@ -457,7 +457,6 @@ describe('auth resolver and key routes', () => {
 
 describe('exported authRevoke for add-ons', () => {
   const ctx = (tenantId: string): Context => ({
-    hippoRoot: home,
     store: sqliteStore(home),
     config: loadConfig(home),
     tenantId,

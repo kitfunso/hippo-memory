@@ -8,15 +8,26 @@ import { V1_ROWS } from '../_helpers/v1-route-rows.js';
 /** A V1_ROWS key as a request line, each :param slot filled with 1. */
 export const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 
+// The local files and the groups they became, none of which the stub holds.
+const FOLDER_NEEDS: ReadonlySet<string> = new Set([
+  'localFiles',
+  'ledger',
+  'embeddingIndex',
+  'promotion',
+  'folderFiles',
+  'sharing',
+]);
+
 /** The entries that need hippo.db's local files, which no store but hippo.db's has. */
 export function localFileRoutes(): string[] {
-  return V1_ROWS.filter(({ route }) => route.storeReady === 'localFiles' || route.sqliteOnly !== undefined).map(
-    ({ key }) => requestLine(key),
-  );
+  return V1_ROWS.filter(
+    ({ route }) =>
+      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) || route.sqliteOnly !== undefined,
+  ).map(({ key }) => requestLine(key));
 }
 
 /** hippo.db's groups, each fenced by serve() for a 'stub' store so a handler reaching one answers 501, without the
- * optional three or the local files. */
+ * optional groups or the local files. */
 export function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
   return {
     ...withoutLocalFiles(sqliteStore(root)),

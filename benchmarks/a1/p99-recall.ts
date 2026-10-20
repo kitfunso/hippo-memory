@@ -260,7 +260,7 @@ async function main(): Promise<void> {
     const cluster = pick(rng, TAG_CLUSTERS);
     const content = buildContent(rng, cluster);
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' }, store: sqliteStore(home), config },
+      { tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' }, store: sqliteStore(home), config },
       { content, tags: [cluster.tag] },
     );
     if ((i + 1) % 1000 === 0) {

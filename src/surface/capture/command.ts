@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../../base/util/same-text.js';
-import { embedMemoryDetached } from '../../domain/search/embed-memories.js';
+import { embedMemoryDetached, type EmbedTarget } from '../../domain/search/embed-memories.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../../base/scope/project-identity.js';
@@ -11,7 +11,7 @@ import { teeStdStreams } from '../../base/util/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
-import type { FolderFiles, LocalFiles } from '../../store/local/index.js';
+import type { LocalFiles } from '../../store/local/index.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -43,6 +43,8 @@ export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
   readonly files: LocalFiles;
+  /** Where each captured row's vector goes. */
+  readonly index: EmbedTarget;
 }
 
 export function cmdCapture(target: CaptureTarget, options: CaptureOptions): void {
@@ -120,7 +122,7 @@ function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): void {
 }
 
 function captureFromCli(
-  { root, files, config }: CaptureTarget,
+  { files, config, index }: CaptureTarget,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
@@ -130,7 +132,7 @@ function captureFromCli(
     originProject: options.originProject,
     lean: false,
   };
-  const into = { root, files, config };
+  const into = { files, config, index };
   if (!options.dryRun) return captureExtractedItems(into, writeOpts, extracted, keys);
   return previewCapture(files.rejections, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
@@ -233,13 +235,15 @@ export interface CaptureWriteOptions {
   readonly lean: boolean;
 }
 
-/** A folder's files with the config its root loaded for this capture. */
-export interface ConfiguredFiles extends FolderFiles {
+/** A folder's files with the config its root loaded for this capture, and where its rows' vectors go. */
+export interface ConfiguredFiles {
+  readonly files: LocalFiles;
   readonly config: HippoConfig;
+  readonly index: EmbedTarget;
 }
 
 export function captureExtractedItems(
-  { root, files, config }: ConfiguredFiles,
+  { files, config, index }: ConfiguredFiles,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
@@ -250,7 +254,6 @@ export function captureExtractedItems(
     content: item.content,
     makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
   }));
-  const index = { hippoRoot: root, embeddingIndex: files.embeddingIndex, embeddings: config.embeddings };
   const outcomes = files.captures.write(items, keys, {
     actor: options.actor,
     lean: options.lean,

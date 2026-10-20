@@ -62,7 +62,7 @@ interface HippoDbIndex {
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
 function on(hippoRoot: string, store: HippoStore): EmbedTarget {
-  return { hippoRoot, store, embeddings: loadConfig(hippoRoot).embeddings, strength: {} };
+  return { store, embeddings: loadConfig(hippoRoot).embeddings, strength: {} };
 }
 
 function markedFolder(config?: ConfigFile): string {

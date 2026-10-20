@@ -10,10 +10,10 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/t
 import { placeholders } from '../../base/util/sql.js';
 import { duplicateKey, longestWord } from '../../base/util/same-text.js';
 import { tenantAnd } from './tenant.js';
-import type { EntryIdPage } from '../local/consolidation.js';
+import type { EntryIdPage } from '../port/embedding-index.js';
 import type { RawRefRow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../local/project-tags.js';
-import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../local/sharing.js';
+import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
 import type { SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/dag-reads.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 

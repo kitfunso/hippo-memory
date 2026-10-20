@@ -7,6 +7,7 @@ import type { SessionEvent } from '../port/sessions.js';
 import type { AppendAuditOpts, EntryCursor, EntryPage } from '../port/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 import type { RejectedValueRow } from '../port/rejections.js';
+import type { EntryIdPage } from '../port/embedding-index.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
@@ -130,12 +131,6 @@ export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'qua
 
 /** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
 export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
-
-/** EntryPage with only each row's id. */
-export interface EntryIdPage {
-  readonly ids: string[];
-  readonly next: EntryCursor | null;
-}
 
 /** Session decay context: the data needed for session-based and adaptive decay. */
 export interface SessionDecayContext {

@@ -5,8 +5,8 @@ import type { LegacyStats } from '../store/port/reports.js';
 import type { StatusCounts } from '../store/port/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
-import { requireHostAdmin, type Context, type LocalContext } from './types.js';
-import type { StoredVectorSummary } from '../store/local/embedding-index.js';
+import { requireHostAdmin, type Context, type ContextWith } from './types.js';
+import type { StoredVectorSummary } from '../store/port.js';
 
 export interface StoreStatus {
   stats: LegacyStats;
@@ -21,23 +21,23 @@ export async function storeStatus(ctx: Context, now: Date, atRiskBelow: number):
 }
 
 /** Ids and dimension of the stored vectors. Every tenant, so the host admin only. */
-export function vectorSummary(ctx: LocalContext): StoredVectorSummary {
+export async function vectorSummary(ctx: ContextWith<'embeddingIndex'>): Promise<StoredVectorSummary> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.localFiles.embeddingIndex.summary();
+  return ctx.store.embeddingIndex.summary();
 }
 
 /**
  * Whether the stored vectors were built by a different model than `providerId`. Every tenant, so the host admin only.
  */
-export function embeddingReindexNeeded(ctx: LocalContext, providerId: string): boolean {
+export async function embeddingReindexNeeded(ctx: ContextWith<'embeddingIndex'>, providerId: string): Promise<boolean> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.localFiles.embeddingIndex.requiresReindex(providerId);
+  return ctx.store.embeddingIndex.requiresReindex(providerId);
 }
 
 /** Every stored physics particle. Every tenant, so the host admin only. */
-export function storedParticles(ctx: LocalContext): PhysicsParticle[] {
+export async function storedParticles(ctx: ContextWith<'embeddingIndex'>): Promise<PhysicsParticle[]> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.localFiles.embeddingIndex.particles();
+  return ctx.store.embeddingIndex.particles();
 }
 
 /** Correction latency over every superseded row in the store. Every tenant, so the host admin only. */

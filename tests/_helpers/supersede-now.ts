@@ -1,5 +1,8 @@
 // Supersede race helpers: a winner that commits in another process, and one that runs to its commit before it returns.
 import type { Context } from '../../src/api/types.js';
+
+/** A caller's Context with the folder its store sits in, which these helpers reopen. */
+type RootedContext = Pick<Context, 'tenantId' | 'actor'> & { readonly hippoRoot: string };
 import { loadConfig } from '../../src/base/config/config.js';
 import { createSuccessor } from '../../src/base/memory/memory.js';
 import { personalScopeOf } from '../../src/base/scope/recall-scope.js';
@@ -13,7 +16,7 @@ import { initTestStore } from './store-template.js';
 
 /** A supersede another process wins: it copies a successor from a scratch store and links `oldId` to it under the write lock. */
 export async function stageSupersedeWinner(
-  ctx: Context,
+  ctx: RootedContext,
   oldId: string,
   newContent: string,
 ): Promise<StagedWinner & { successorId: string }> {
@@ -42,7 +45,7 @@ export async function stageSupersedeWinner(
 }
 
 /** api.supersede's read and write on hippo.db, run to its commit before it returns; answers the successor's id. */
-export function supersedeNow(ctx: Context, oldId: string, newContent: string): string {
+export function supersedeNow(ctx: RootedContext, oldId: string, newContent: string): string {
   const [old] = loadEntriesByIds(ctx.hippoRoot, [oldId], ctx.tenantId);
   if (!old) throw new Error(`no row ${oldId} in tenant ${ctx.tenantId} to supersede`);
   const successor = createSuccessor(old, newContent, {

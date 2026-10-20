@@ -9,7 +9,7 @@ import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { folderFiles } from '../_helpers/cli-stores.js';
+import { ledgerAt } from '../_helpers/cli-stores.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
@@ -124,22 +124,22 @@ describe('token ledger write failures', () => {
     }
   });
 
-  it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
+  it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', async () => {
     const store = makeRoot('ledger-notadb', { init: false });
-    const write = (): void => {
-      bookTokenUse(
+    const write = async (): Promise<void> => {
+      await bookTokenUse(
         { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 },
-        { local: { ...folderFiles(store), config: DEFAULT_CONFIG } },
+        { local: { ...ledgerAt(store), config: DEFAULT_CONFIG } },
       );
     };
     initTestStore(store);
     fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');
     for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(store, `hippo.db${suffix}`), { force: true });
-    write();
+    await write();
     expect(stderrSpy.mock.calls).toEqual([]);
 
     vi.stubEnv('HIPPO_LOG', 'debug');
-    write();
+    await write();
     expect(skippedLines()).toHaveLength(1);
     expect(skippedLines()[0]).toMatch(/^\[hippo\] debug: token ledger row skipped: file is not a database ts=\S+\n$/);
   });

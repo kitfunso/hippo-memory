@@ -244,7 +244,7 @@ describe('agent memory sync: routing and sharing', () => {
     await dormantRestore(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
-    expect(syncGlobalToLocal(...sharingStores(w.local, w.global))).toBe(1);
+    expect(await syncGlobalToLocal(...sharingStores(w.local, w.global))).toBe(1);
     expect(agentRows(w.local)).toEqual([]);
     expect(loadAllEntries(w.local, 'default').map((e) => e.content)).toEqual([CONTROL]);
   });
@@ -262,7 +262,7 @@ describe('agent memory sync: routing and sharing', () => {
     plainRow(w.local, CONTROL, 'proj');
 
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    const shared = autoShare(...sharingStores(w.local), { tenantId: ALL_TENANTS, minScore: 0, stats });
+    const shared = await autoShare(...sharingStores(w.local), { tenantId: ALL_TENANTS, minScore: 0, stats });
     expect(shared.map((e) => e.content)).toEqual([CONTROL]);
     expect(stats.neverAutoShareSkipped).toBe(2);
   });

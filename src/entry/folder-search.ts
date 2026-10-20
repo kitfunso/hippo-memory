@@ -60,7 +60,7 @@ export async function physicsSearch(
 export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
   const store = sqliteStore(hippoRoot);
   try {
-    return await embedInto(folderIndex({ root: hippoRoot, store, config: loadConfig(hippoRoot) }), entry);
+    return await embedInto(folderIndex({ store, config: loadConfig(hippoRoot) }), entry);
   } finally {
     await store.close();
   }

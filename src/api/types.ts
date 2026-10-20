@@ -1,12 +1,12 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type { HippoStore } from '../store/port.js';
+import type { HippoStore, StoreReach } from '../store/port.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { OptionalGroup, StoreWith } from '../store/port.js';
+import type { GlobalTargetGroup, OptionalGroup, StoreWith } from '../store/port.js';
 import type { ConfiguredFolder } from '../domain/search/embed-memories.js';
 import type { CallerState } from './callers.js';
-import type { LocalStore, StoreReach } from '../store/local/index.js';
+import type { LocalStore } from '../store/local/index.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -34,13 +34,12 @@ export interface GlobalInReach {
 }
 
 /** A store reach as a composition root sets it: each global store carries its own config, so the api reads no file. */
-export interface ContextReach extends StoreReach {
+export interface ContextReach extends Omit<StoreReach, 'global' | 'globalTarget'> {
   readonly global?: GlobalInReach;
-  readonly globalTarget?: ConfiguredFolder;
+  readonly globalTarget?: ConfiguredFolder<StoreWith<GlobalTargetGroup>>;
 }
 
 export interface Context {
-  hippoRoot: string;
   tenantId: string;
   actor: Actor;
   /** Built by a composition root; every api function reads and writes storage only through it. */
@@ -66,7 +65,7 @@ export function contextReach(reach: StoreReach, configAt: (root: string) => Hipp
   let withConfig: ContextReach = rest;
   if (global !== undefined) withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
   if (globalTarget !== undefined) {
-    withConfig = { ...withConfig, globalTarget: { ...globalTarget, config: at(globalTarget.root) } };
+    withConfig = { ...withConfig, globalTarget: { store: globalTarget.store, config: at(globalTarget.root) } };
   }
   return withConfig;
 }

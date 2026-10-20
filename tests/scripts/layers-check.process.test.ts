@@ -71,6 +71,9 @@ const PORT_BASE = {
   'src/store/port/types.ts': 'export type T = 1;\n',
   'src/store/local/index.ts': 'export const isLocal = 1;\n',
 };
+const LOCAL_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, domain: 'high' } };
+const LOCAL_BASE = { ...PORT_BASE, 'src/domain/keep.ts': '' };
+const LOCAL_IMPORT = "import { isLocal } from '../store/local/index.js';\nexport const y = isLocal;\n";
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
 const DOOR_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/index.js';\n";
 const FIXTURES_IMPORT = "import { seed } from '../store/sqlite/fixtures.js';\nexport const z = seed;\n";
@@ -383,19 +386,79 @@ const rows: Row[] = [
     output: ['src/api/y.ts:1 imports src/store/rows.ts', 'src/api/z.ts:1 imports src/store/rows.ts'],
   },
   {
-    name: 'an api import of port.ts, port-groups.ts, port/ or local/ passes',
+    name: 'an api import of port.ts, port-groups.ts or port/ passes',
     files: {
       ...PORT_BASE,
       'src/api/y.ts': [
         "import type { P } from '../store/port.js';",
         "import type { G } from '../store/port-groups.js';",
         "import type { T } from '../store/port/types.js';",
-        "import { isLocal } from '../store/local/index.js';",
-        'export type Y = [P, G, T, typeof isLocal];',
+        'export type Y = [P, G, T];',
         '',
       ].join('\n'),
     },
     map: SQLITE_MAP,
+    status: 0,
+    output: ['Layer order OK'],
+  },
+  {
+    name: 'an api or domain import of store/local fails, runtime or type-only',
+    files: {
+      ...LOCAL_BASE,
+      'src/api/y.ts': "import type { isLocal } from '../store/local/index.js';\nexport type Y = typeof isLocal;\n",
+      'src/domain/d.ts': "export const d = 1;\nimport { isLocal } from '../store/local/index.js';\n",
+    },
+    map: LOCAL_MAP,
+    status: 1,
+    output: ['src/api/y.ts:1 imports src/store/local/index.ts', 'src/domain/d.ts:2 imports src/store/local/index.ts'],
+  },
+  {
+    name: 'a store/local import that .store-local-pending.json names with a reason passes',
+    files: {
+      ...LOCAL_BASE,
+      'src/api/y.ts': LOCAL_IMPORT,
+      '.store-local-pending.json': JSON.stringify([{ file: 'api/y.ts', why: 'the next PR moves it' }]),
+    },
+    map: LOCAL_MAP,
+    status: 0,
+    output: ['Layer order OK'],
+  },
+  {
+    name: 'a pending entry with no reason, or with no store/local import left, fails',
+    files: {
+      ...LOCAL_BASE,
+      'src/api/y.ts': LOCAL_IMPORT,
+      '.store-local-pending.json': JSON.stringify([
+        { file: 'api/y.ts', why: ' ' },
+        { file: 'api/gone.ts', why: 'moved' },
+      ]),
+    },
+    map: LOCAL_MAP,
+    status: 1,
+    output: [
+      '.store-local-pending.json: src/api/y.ts gives no reason',
+      '.store-local-pending.json: src/api/gone.ts no longer imports src/store/local/; delete the entry',
+    ],
+  },
+  {
+    name: 'isLocalStore in the api or domain fails, and so does hippoRoot in the api',
+    files: {
+      ...LOCAL_BASE,
+      'src/api/y.ts': 'export const y = 1;\nexport const root = (ctx) => ctx.hippoRoot;\n',
+      'src/domain/d.ts': 'export const isLocalStore = 1;\n',
+    },
+    map: LOCAL_MAP,
+    status: 1,
+    output: ['src/api/y.ts:2 names hippoRoot', 'src/domain/d.ts:1 names isLocalStore'],
+  },
+  {
+    name: 'hippoRoot in an api comment or in the domain passes',
+    files: {
+      ...LOCAL_BASE,
+      'src/api/y.ts': '// the hippoRoot a surface keeps\nexport const y = 1;\n',
+      'src/domain/d.ts': 'export const root = (o) => o.hippoRoot;\n',
+    },
+    map: LOCAL_MAP,
     status: 0,
     output: ['Layer order OK'],
   },

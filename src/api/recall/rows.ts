@@ -9,10 +9,9 @@ import { JEV_DEFAULT_TOP_K } from '../../domain/rerankers/jev.js';
 import type { RerankerFn } from '../../domain/rerankers/types.js';
 import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
-import type { ContinuityBlock } from '../../store/port.js';
+import type { ContinuityBlock, HippoStore } from '../../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
-import type { Context, LocalContext } from '../types.js';
-import type { LocalFiles } from '../../store/local/index.js';
+import type { Context, ContextWith } from '../types.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
@@ -45,15 +44,16 @@ export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRec
 
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
  *  window-capped, so this is a floor on a large store. */
-export function scopeHiddenCount(
-  ctx: LocalContext,
+export async function scopeHiddenCount(
+  ctx: ContextWith<'sharing'>,
   query: string,
-  global: LocalFiles | undefined,
+  global: HippoStore | undefined,
   requested: string | undefined,
-): number {
-  const probe = [ctx.store.localFiles, global].flatMap(
-    (local) => local?.sharing.searchEntries(query, undefined, ctx.tenantId) ?? [],
+): Promise<number> {
+  const probes = [ctx.store.sharing, global?.sharing].map(
+    async (sharing) => (await sharing?.searchEntries(query, undefined, ctx.tenantId)) ?? [],
   );
+  const probe = (await Promise.all(probes)).flat();
   return probe.filter((e) => !passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
 }
 

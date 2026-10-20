@@ -1,9 +1,8 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { ConnectorEvent } from '../../store/port.js';
+import type { ConnectorEvent, StoreHome } from '../../store/port.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/memory.js';
-import { fallbackOrigin } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderIndex } from '../../domain/search/embed-memories.js';
 import { sharedStoreOf, type Context } from '../types.js';
@@ -23,12 +22,15 @@ export async function promote(ctx: Context, id: string): Promise<PromoteResult> 
   // sqliteReach sets it beside hippo.db's files, so only a context built without a reach lacks it.
   const target = ctx.reach?.globalTarget;
   if (target === undefined) throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
+  // The route gates on the group, so only an api caller with another store reaches this.
+  const folder = ctx.store.folderFiles;
+  if (folder === undefined) throw new Error('promote needs a store kept as files in a folder, which its copy names');
   assertPromotable(id, entry);
 
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole
   // promote.
-  const globalEntry = globalCopyOf(ctx.hippoRoot, entry, sharedStoreOf(ctx));
-  await target.store.localFiles.promotion.writeCopy(globalEntry, {
+  const globalEntry = globalCopyOf(await folder.home(), entry, sharedStoreOf(ctx));
+  await target.store.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
     sourceId: id,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
@@ -40,12 +42,12 @@ export async function promote(ctx: Context, id: string): Promise<PromoteResult> 
 
 /** The copy of a local memory, with a new `g_` id so it cannot collide. A project store's NULL row gets its folder
  * back; a shared store's folder is no caller's project, so NULL stays and the label names no path. */
-function globalCopyOf(localRoot: string, entry: MemoryEntry, shared: boolean): MemoryEntry {
+function globalCopyOf(local: StoreHome, entry: MemoryEntry, shared: boolean): MemoryEntry {
   return {
     ...entry,
     id: generateId('g'),
-    source: shared ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
-    originProject: entry.originProject ?? fallbackOrigin(localRoot, shared),
+    source: shared ? `shared::${new Date().toISOString()}` : `promoted:${local.folder}`,
+    originProject: entry.originProject ?? (shared ? null : local.project.name),
   };
 }
 

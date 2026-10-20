@@ -32,7 +32,7 @@ export async function saveCompactionItemsForCaller(ctx: Context, req: CallerItem
     throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
   }
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
+  if (await callerInHoldout(ctx, req.sessionId)) return { written: 0 };
   const { written, notes } = await ctx.store.compactions.saveCallerItems(ctx.tenantId, {
     sessionId: req.sessionId,
     trigger: req.trigger,

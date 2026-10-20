@@ -36,7 +36,6 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
   const { store, snapshots } = readerStore(hippoRoot, clock);
   // A fresh Context per call, so a config edit shows on the next request.
   const context = (): LocalContext => ({
-    hippoRoot,
     tenantId,
     actor: adminActor(DASHBOARD_ACTOR),
     store,

@@ -3,29 +3,28 @@
 
 import type { EmbeddingProvider } from '../base/embeddings/provider.js';
 import { embedAll, folderIndex } from '../domain/search/embed-memories.js';
-import type { VectorCoverage } from '../store/local/embedding-index.js';
-import { requireHostAdmin, type LocalContext } from './types.js';
+import type { VectorCoverage } from '../store/port.js';
+import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
-export async function memoryEmbedMissing(ctx: LocalContext, provider?: EmbeddingProvider): Promise<number> {
+export async function memoryEmbedMissing(ctx: Context, provider?: EmbeddingProvider): Promise<number> {
   requireHostAdmin(ctx, 'Embedding the store');
-  const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store, config: ctx.config });
-  return embedAll(target, undefined, provider);
+  return embedAll(folderIndex({ store: ctx.store, config: ctx.config }), undefined, provider);
 }
 
 /** How many vectors the store holds, live memory or not. */
-export function storedVectorCount(ctx: LocalContext): number {
-  return embedCoverage(ctx).vectors;
+export async function storedVectorCount(ctx: ContextWith<'embeddingIndex'>): Promise<number> {
+  return (await embedCoverage(ctx)).vectors;
 }
 
 /** Memories against vectors, counted in the store, for the embed status and backfill lines. */
-export function embedCoverage(ctx: LocalContext): VectorCoverage {
+export async function embedCoverage(ctx: ContextWith<'embeddingIndex'>): Promise<VectorCoverage> {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return ctx.store.localFiles.embeddingIndex.coverage();
+  return ctx.store.embeddingIndex.coverage();
 }
 
 /** Re-seed every memory's physics particle from its vector; returns how many it reset. */
-export function resetPhysicsFromVectors(ctx: LocalContext): number {
+export async function resetPhysicsFromVectors(ctx: ContextWith<'embeddingIndex'>): Promise<number> {
   requireHostAdmin(ctx, 'Resetting physics');
-  return ctx.store.localFiles.embeddingIndex.resetParticles();
+  return ctx.store.embeddingIndex.resetParticles();
 }

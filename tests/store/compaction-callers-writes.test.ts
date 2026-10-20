@@ -42,7 +42,6 @@ describe('saveCompactionItemsForCaller', () => {
   it('writes with ownerOrSubject as actor and the project as origin', async () => {
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     const unowned: Context = {
-      hippoRoot: root,
       store: sqliteStore(root),
       config: loadConfig(root),
       tenantId: TENANT,

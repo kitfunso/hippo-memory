@@ -36,7 +36,7 @@ import {
 } from './context-select.js';
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
-import { type Context, ownerOrSubject } from './types.js';
+import { type Context, type ContextReach, ownerOrSubject } from './types.js';
 import type {
   ContextCandidateFilter,
   AmbientRecallRequest,
@@ -46,7 +46,6 @@ import type {
 } from '../store/port/context-reads.js';
 import type { ContinuityKey } from '../store/port/types.js';
 import type { RecallTraceInput } from '../store/port/recall-writes.js';
-import type { StoreReach } from '../store/local/index.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -211,23 +210,21 @@ function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boo
   );
 }
 
-const isolationWarned = new Set<string>();
+const isolationWarned = new WeakSet<HippoStore>();
 
 /**
  * A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses there.
  */
-function warnIsolationIgnored(hippoRoot: string): void {
-  if (isolationWarned.has(hippoRoot)) return;
-  isolationWarned.add(hippoRoot);
-  log.warn(
-    `${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`,
-  );
+function warnIsolationIgnored(store: HippoStore): void {
+  if (isolationWarned.has(store)) return;
+  isolationWarned.add(store);
+  log.warn('"contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.');
 }
 
 /** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOptions) {
   // No reach means an integrator's own store: one project, no global store beside it.
-  const reach: StoreReach = ctx.reach ?? { hasLocal: true, isGlobal: false, shared: ctx.config.sharedStore };
+  const reach: ContextReach = ctx.reach ?? { hasLocal: true, isGlobal: false, shared: ctx.config.sharedStore };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || reach.shared;
   // A store serving many people is not its operator's, so the operator's own global store stays out; the root sets
@@ -278,7 +275,7 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
   if (sharedStore && projectId(currentProject).trim() === '') {
     throw new BadRequestError("a shared store needs the caller's project");
   }
-  if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.hippoRoot);
+  if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.store);
   const includeCrossProject = opts.crossProject === true || (!isolationEnabled && !sharedStore);
 
   // Decided before the ambient loads so the pinned-only FTS candidate query can share their connection.

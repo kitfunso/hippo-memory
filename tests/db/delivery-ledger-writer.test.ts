@@ -13,8 +13,7 @@ import type { DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '..
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { runWithRequestId } from '../../src/base/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from '../_helpers/count-statements.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import type { Ledger } from '../../src/store/local/ledger.js';
+import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 
@@ -360,7 +359,7 @@ describe('writeDeliveryEventOnHandle', () => {
 describe('the delivery ledger prune', () => {
   const prunes = (log: StatementLog<number | null>): number =>
     countMatching(log.statements, /^DELETE FROM delivery_events/);
-  const writeVia = (ledger: Ledger, promptHash: string, ms: number) =>
+  const writeVia = (ledger: ReturnType<typeof sqliteSyncStore>['ledger'], promptHash: string, ms: number) =>
     recordStatements(() => ledger.writeDeliveryEvent(event({ promptHash, ts: at(ms) })));
 
   afterEach(() => {
@@ -370,13 +369,13 @@ describe('the delivery ledger prune', () => {
   it("runs at most once a minute per store, and again once the store's minute has passed", () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.parse('2026-09-01T00:00:00.000Z'));
-    const { ledger } = sqliteSyncStore(root).localFiles;
+    const { ledger } = sqliteSyncStore(root);
     expect([writeVia(ledger, 'p1', 0), writeVia(ledger, 'p2', 30_000)].map(prunes)).toEqual([1, 0]);
     vi.setSystemTime(Date.parse('2026-09-01T00:00:59.000Z'));
     expect(prunes(writeVia(ledger, 'p3', 59_000))).toBe(0);
     vi.setSystemTime(Date.parse('2026-09-01T00:01:01.000Z'));
     expect(prunes(writeVia(ledger, 'p4', 61_000))).toBe(1);
-    expect(prunes(writeVia(sqliteSyncStore(root).localFiles.ledger, 'another store', 62_000))).toBe(1);
+    expect(prunes(writeVia(sqliteSyncStore(root).ledger, 'another store', 62_000))).toBe(1);
     expect(count('delivery_events')).toBe(5);
   });
 
@@ -453,7 +452,7 @@ describe('createDeliveryRecorder row building', () => {
   });
   const recorder = (payload: Record<string, string> = {}) =>
     createDeliveryRecorder({
-      ledger: sqliteSyncStore(root).localFiles.ledger,
+      ledger: sqliteStore(root).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -465,12 +464,8 @@ describe('createDeliveryRecorder row building', () => {
       }),
     });
   const built = (rec: ReturnType<typeof recorder>): DeliveryEventInput => {
-    let input: DeliveryEventInput | null = null;
-    rec.flush((i) => {
-      input = i;
-      return 1;
-    });
-    if (input === null) throw new Error('recorder wrote nothing');
+    const input = rec.takeEvent();
+    if (input === null) throw new Error('recorder built nothing');
     return input;
   };
 
@@ -558,12 +553,10 @@ describe('createDeliveryRecorder row building', () => {
     expect(built(rec).blockState).toBe('disabled');
   });
 
-  it('writes once per call, so the fallback flush after a shared-handle flush writes nothing', () => {
+  it('hands its event out once, so the fallback flush after a turn carried it writes nothing', () => {
     const rec = recorder();
-    const write = vi.fn(() => 1);
-    rec.flush(write);
-    rec.flush(write);
-    expect(write).toHaveBeenCalledTimes(1);
+    expect(rec.takeEvent()).not.toBeNull();
+    expect(rec.takeEvent()).toBeNull();
   });
 });
 

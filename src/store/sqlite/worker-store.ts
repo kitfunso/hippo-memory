@@ -9,7 +9,7 @@ import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
 import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
-import type { GlobalStores, LocalFiles, LocalStore } from '../local/index.js';
+import type { GlobalStores, LocalStore } from '../local/index.js';
 
 const offLoopStores = new WeakSet<HippoStore>();
 
@@ -144,16 +144,16 @@ function sessionAndAdminGroups(executor: SqliteExecutor, inProcess: StoreGroups)
   };
 }
 
-// LocalFiles stays in process but for the methods a served route calls.
-function localFilesOn(executor: SqliteExecutor, inProcess: LocalFiles): LocalFiles {
-  const { promotion, sharing } = WORKER_OPS;
+type FolderGroups = Pick<StoreGroups, 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing'>;
+
+function folderGroups(executor: SqliteExecutor, inProcess: StoreGroups): FolderGroups {
+  const ops = WORKER_OPS;
   return {
-    ...inProcess,
-    promotion: onWorkers(executor, 'promotion', promotion, inProcess.promotion),
-    sharing: {
-      ...inProcess.sharing,
-      ...onWorkers<Pick<LocalFiles['sharing'], 'sourceTallies'>>(executor, 'sharing', sharing, inProcess.sharing),
-    },
+    ledger: onWorkers(executor, 'ledger', ops.ledger, inProcess.ledger),
+    embeddingIndex: onWorkers(executor, 'embeddingIndex', ops.embeddingIndex, inProcess.embeddingIndex),
+    promotion: onWorkers(executor, 'promotion', ops.promotion, inProcess.promotion),
+    folderFiles: onWorkers(executor, 'folderFiles', ops.folderFiles, inProcess.folderFiles),
+    sharing: onWorkers(executor, 'sharing', ops.sharing, inProcess.sharing),
   };
 }
 
@@ -172,7 +172,7 @@ export function workerSqliteStore(
     ...vectorGroups(executor, inProcess.vectors),
     ...recallAndWriteGroups(executor, inProcess),
     ...sessionAndAdminGroups(executor, inProcess),
-    localFiles: localFilesOn(executor, inProcess.localFiles),
+    ...folderGroups(executor, inProcess),
     readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
     close: () => executor.close(),
   };
@@ -184,7 +184,7 @@ export function workerSqliteStore(
  * thread; each is built at first use, since the global store can appear while the server runs. */
 export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
   if (!runsOffLoop(served)) return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
-  const opened = new Map<string, LocalStore>();
+  const opened = new Map<string, LocalStore & StoreGroups>();
   return {
     open(root) {
       const known = opened.get(root);

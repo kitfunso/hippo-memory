@@ -523,11 +523,11 @@ function servedOptsFor(
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
   const { store } = runtime;
-  const sleeps = createSleepQueue();
+  const sleeps = createSleepQueue(opts.hippoRoot);
   const counts: ServerCounts = { handlerDeadlines: 0, autoSleeps: 0 };
-  const run = (root: string): Promise<void> => {
+  const run = (): Promise<void> => {
     counts.autoSleeps += 1;
-    return sleeps.consolidate(root);
+    return sleeps.consolidate();
   };
   const sleepsHere = opts.autoSleep !== false && isLocalStore(store);
   const autoSleep = sleepsHere ? { run, hostTenantId: envTenant() } : undefined;

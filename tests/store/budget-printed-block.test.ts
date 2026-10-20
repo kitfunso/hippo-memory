@@ -324,11 +324,11 @@ describe('assemble and drill', () => {
 
   it('never evicts the fresh tail, even when the tail alone exceeds the budget', async () => {
     const rows = seedSession(5);
-    const r = await assemble(
-      { ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
-      sid,
-      { budget: 20, freshTailCount: 2, cost: assembleCost(sid) },
-    );
+    const r = await assemble({ ...ctx, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, sid, {
+      budget: 20,
+      freshTailCount: 2,
+      cost: assembleCost(sid),
+    });
     expect(r.items.map((it) => it.id)).toEqual(rows.slice(3));
     expect(r.evicted).toBe(3);
   });
@@ -346,11 +346,10 @@ describe('assemble and drill', () => {
 
   it('drill keeps the first child when it alone exceeds the budget', async () => {
     const id = seedSummary(3);
-    const r = await drillDown(
-      { ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
-      id,
-      { budget: 5, cost: drillCost },
-    );
+    const r = await drillDown({ ...ctx, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, id, {
+      budget: 5,
+      cost: drillCost,
+    });
     expect('children' in r && r.children.map((c) => c.content)).toEqual([line(0)]);
   });
 });

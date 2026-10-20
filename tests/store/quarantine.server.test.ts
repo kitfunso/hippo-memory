@@ -229,13 +229,15 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     expect(quarantineRow(home, id)?.status).toBe('pending');
   });
 
-  it('autoShare never offers a quarantined row, so sleep cannot abort on it', () => {
+  it('autoShare never offers a quarantined row, so sleep cannot abort on it', async () => {
     const globalHome = makeRoot('quarantine-global', { init: false });
     vi.stubEnv('HIPPO_HOME', globalHome);
     expect(
-      autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true }).map((e) => e.id),
+      (await autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true })).map((e) => e.id),
     ).not.toContain(id);
-    expect(() => autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0 })).not.toThrow();
+    await expect(autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0 })).resolves.toBeInstanceOf(
+      Array,
+    );
   });
 });
 

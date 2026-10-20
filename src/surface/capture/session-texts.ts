@@ -7,6 +7,7 @@ import { assertCallerProject, projectNames } from '../../base/scope/project-iden
 import { longestWord, storedTextKeys } from '../../base/util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
+import { folderIndex } from '../../domain/search/embed-memories.js';
 import { extractFromTexts } from './extract.js';
 
 const MAX_TEXTS = 30;
@@ -61,7 +62,7 @@ export function captureSessionTexts(ctx: LocalContext, req: SessionCaptureReques
     },
   );
   const tally = captureExtractedItems(
-    { root: ctx.hippoRoot, files: local, config: ctx.config },
+    { files: local, config: ctx.config, index: folderIndex(ctx) },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,

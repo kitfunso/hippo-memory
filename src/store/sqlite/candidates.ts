@@ -27,7 +27,7 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../port/context-reads.js';
-import type { SourceTally } from '../local/sharing.js';
+import type { SourceTally } from '../port/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../port/reports.js';
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';

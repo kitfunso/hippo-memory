@@ -100,6 +100,7 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
     event: 'inject',
     items: 2,
     tokens: 120,
+    hash: 'block-seeded',
     now: FAKE_NOW,
   });
   await rejectValue(s, { tenantId: TENANT, actor: ACTOR, reason: 'wrong', value: REFUSED });
@@ -195,7 +196,41 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     /^\[ true \]$/,
   ),
   read('failureLog.requestOutcome', (s) => s.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION), "'stored'"),
-  read('sharing.sourceTallies', (s) => s.localFiles.sharing.sourceTallies(TENANT), /count: [1-9]/),
+  read('sharing.sourceTallies', (s) => s.sharing.sourceTallies(TENANT), /count: [1-9]/),
+];
+
+/** The groups that were the local files: the index sleep and `hippo embed` fill, the ledger, the folder and sharing. */
+const FOLDER_GROUP_READS: readonly Read[] = [
+  read('embeddingIndex.requiresReindex', (s) => s.embeddingIndex.requiresReindex('another-provider'), /^true$/),
+  read('embeddingIndex.entryCount', (s) => s.embeddingIndex.entryCount(), /^[1-9]\d*$/),
+  read('embeddingIndex.entryIdsPage', (s) => s.embeddingIndex.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
+  read('embeddingIndex.entriesByIds', (s) => s.embeddingIndex.entriesByIds(['mem_p_plain', 'mem_missing']), PLAIN),
+  read('embeddingIndex.summary', (s) => s.embeddingIndex.summary(), 'mem_p_noise'),
+  read('embeddingIndex.coverage', (s) => s.embeddingIndex.coverage(), /memories: [1-9]/),
+  read('embeddingIndex.particles', (s) => s.embeddingIndex.particles(), 'mem_p_noise'),
+  read('embeddingIndex.pendingIds', (s) => s.embeddingIndex.pendingIds({ limit: 50 }), 'mem_p_fill0'),
+  read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
+  read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
+  read('sharing.entriesPage', (s) => s.sharing.entriesPage(TENANT, { limit: 3 }), /id: 'mem_/),
+  read(
+    'sharing.entriesWithSignals',
+    (s) =>
+      s.sharing.entriesWithSignals({ tags: [], sourcePrefix: 'never', minRetrievals: 0, valences: [] }, TENANT, {
+        limit: 3,
+      }),
+    /id: 'mem_/,
+  ),
+  read('sharing.textKeysPage', (s) => s.sharing.textKeysPage(TENANT, { limit: 3 }), /id: 'mem_/),
+  read('sharing.textKeysHolding', (s) => s.sharing.textKeysHolding(TENANT, [PLAIN]), 'mem_p_plain'),
+  read('sharing.textsHolding', (s) => s.sharing.textsHolding(TENANT, ['deploy'], {}), PLAIN),
+  read('sharing.takenIds', (s) => s.sharing.takenIds(['mem_p_plain', 'mem_missing']), "[ 'mem_p_plain' ]"),
+  read('sharing.entriesByIds', (s) => s.sharing.entriesByIds(['mem_p_plain', 'mem_missing']), PLAIN),
+  read('sharing.searchEntries', (s) => s.sharing.searchEntries('deploy', 50, TENANT), 'mem_p_plain'),
+  read(
+    'sharing.recallEntries',
+    (s) => s.sharing.recallEntries('deploy', { limit: 50, tenantId: TENANT }),
+    'mem_p_plain',
+  ),
 ];
 
 const READS: readonly Read[] = [
@@ -374,6 +409,7 @@ const READS: readonly Read[] = [
   read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
   read('readiness.ping', (s) => s.readiness.ping(), /^undefined$/),
   ...SESSION_AND_ADMIN_READS,
+  ...FOLDER_GROUP_READS,
 ];
 
 interface Write {
@@ -471,7 +507,7 @@ const WRITES: readonly Write[] = [
   write(
     'promotion.writeCopy',
     (s) =>
-      s.localFiles.promotion.writeCopy(PROMOTED, {
+      s.promotion.writeCopy(PROMOTED, {
         actor: ACTOR,
         sourceId: 'mem_p_plain',
         auditAs: { tenantId: TENANT, actor: ACTOR },

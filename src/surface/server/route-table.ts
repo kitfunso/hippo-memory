@@ -153,8 +153,8 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
     auth: 'caller',
-    // The copy goes to the operator's global store, which only a hippo.db server reaches.
-    storeReady: 'localFiles',
+    // The copy names its source folder and goes to the operator's global store, which only a folder store reaches.
+    storeReady: 'folderFiles',
     handler: handlePromoteMemory,
   },
   {

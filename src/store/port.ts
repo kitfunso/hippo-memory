@@ -27,6 +27,12 @@ import type { Readiness } from './port/readiness.js';
 import type { LastRecall } from './port/last-recall.js';
 import type { RecallSearchArgs, RecallWrites } from './port/recall-writes.js';
 import type { ConnectorEvents, ConnectorWrites } from './port/connectors.js';
+import type { Ledger } from './port/ledger.js';
+import type { EmbeddingIndex } from './port/embedding-index.js';
+import type { Promotion } from './port/promotion.js';
+import type { FolderFiles } from './port/folder-files.js';
+import type { Sharing } from './port/sharing.js';
+export type { FolderStore, GlobalTargetGroup, StoreReach } from './port/reach.js';
 import type {
   ApiKeyRecord,
   ActiveGoals,
@@ -123,8 +129,29 @@ export type {
 export type { GraphViewQuery, GraphRows, GraphReads } from './port/graph-reads.js';
 export type { AuditMaintenance } from './port/audit-maintenance.js';
 export type { LessonWrites } from './port/lesson-writes.js';
+export type { Ledger, LedgerTurn, PilotArmOptions } from './port/ledger.js';
+export type {
+  EmbeddingIndex,
+  EntryIdPage,
+  IdPageRequest,
+  StoredVectorSummary,
+  VectorCoverage,
+  VectorRow,
+} from './port/embedding-index.js';
+export type { PromotedCopy, Promotion } from './port/promotion.js';
+export type { FolderFiles, StoreHome } from './port/folder-files.js';
+export type {
+  EntrySignals,
+  EntryTextKey,
+  EntryTextKeyPage,
+  PageRequest,
+  RecallSearchEntriesOptions,
+  Sharing,
+  SourceTally,
+  TextsHoldingOptions,
+} from './port/sharing.js';
 
-/** Every group a store sets whole; only the three in OptionalGroup may be left unset. */
+/** Every group a store sets whole; only those in OptionalGroup may be left unset. */
 export interface StoreGroups extends SessionAndAdminGroups {
   readonly auditMaintenance: AuditMaintenance;
   readonly lessonWrites: LessonWrites;
@@ -153,10 +180,28 @@ export interface StoreGroups extends SessionAndAdminGroups {
   readonly readiness: Readiness;
   /** Unset on a store that keeps no last recall, where context writes none for the CLI's no-ids outcome to read. */
   readonly lastRecall: LastRecall;
+  /** Unset on a store that keeps no token ledger, where a hook books no rows and every session takes the hash arm. */
+  readonly ledger: Ledger;
+  /** Unset on a store without its own index, where embedding goes through `vectors` and `vectorWrites`. */
+  readonly embeddingIndex: EmbeddingIndex;
+  /** Set on the operator's global store, which promote copies into; unset, the promote route answers 501. */
+  readonly promotion: Promotion;
+  /** Unset on a store that is not files in a folder, where init, share and sync down answer 501. */
+  readonly folderFiles: FolderFiles;
+  /** Unset on a store that shares no rows with the operator's global store; share and peers answer 501 there. */
+  readonly sharing: Sharing;
 }
 
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
-export type OptionalGroup = 'vectorViews' | 'readiness' | 'lastRecall';
+export type OptionalGroup =
+  | 'vectorViews'
+  | 'readiness'
+  | 'lastRecall'
+  | 'ledger'
+  | 'embeddingIndex'
+  | 'promotion'
+  | 'folderFiles'
+  | 'sharing';
 
 export type StoreGroup = 'base' | keyof StoreGroups;
 

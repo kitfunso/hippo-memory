@@ -89,7 +89,6 @@ describe('retrieve with the CLI ranking core', () => {
     };
     const store: HippoStore = { ...inner, lastRecall: traced };
     const ctx: Context = {
-      hippoRoot,
       tenantId: 'default',
       actor: adminActor('cli'),
       store,

@@ -1,5 +1,5 @@
-// One turn's token rows and delivery event through hippo.db's Ledger (src/store/sqlite/ledger-group.ts).
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+// One turn's token rows and delivery event through hippo.db's Ledger (src/store/sqlite/ledger.ts).
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
@@ -7,7 +7,8 @@ import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import type { TokenUse } from '../../src/store/port/token-ledger.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { log } from '../../src/base/util/log.js';
 
 const HASH = 'aaaaaaaaaaaaaaaa';
 // Run once per connection open; the delivery writer resets busy_timeout, so that pragma would overcount.
@@ -57,7 +58,7 @@ function deliveryCount(): number {
 
 function recorder(): DeliveryRecorder {
   return createDeliveryRecorder({
-    ledger: sqliteSyncStore(root).localFiles.ledger,
+    ledger: sqliteStore(root).ledger,
     storeHash: HASH,
     writeStore: 'local',
     tenantId: 'default',
@@ -77,47 +78,42 @@ function failRowsOn(surface: string): void {
 describe('Ledger.recordTurn', () => {
   it('books the rows in order and then the delivery event, on one store open', () => {
     const rec = recorder();
-    const log = recordStatements(() =>
-      sqliteSyncStore(root).localFiles.ledger.recordTurn({
-        uses: [use(), use({ surface: 'hook_recall' })],
-        delivery: (write) => rec.flush(write),
-      }),
+    const delivery = rec.takeEvent() ?? undefined;
+    const run = recordStatements(() =>
+      sqliteSyncStore(root).ledger.recordTurn({ uses: [use(), use({ surface: 'hook_recall' })], delivery }),
     );
-    expect(countMatching(log.statements, STORE_OPEN)).toBe(1);
-    const lastTokenRow = log.statements.map((sql) => sql.includes('INSERT INTO token_ledger')).lastIndexOf(true);
-    expect(log.statements.findIndex((sql) => sql.includes('INSERT INTO delivery_events'))).toBeGreaterThan(
+    expect(countMatching(run.statements, STORE_OPEN)).toBe(1);
+    const lastTokenRow = run.statements.map((sql) => sql.includes('INSERT INTO token_ledger')).lastIndexOf(true);
+    expect(run.statements.findIndex((sql) => sql.includes('INSERT INTO delivery_events'))).toBeGreaterThan(
       lastTokenRow,
     );
     expect(ledgerSurfaces()).toEqual(['hook', 'hook_recall']);
     expect(deliveryCount()).toBe(1);
   });
 
-  it('without onRowError the first failed row throws: no later row and no delivery event', () => {
+  it('without perRow the first failed row stops the rest, and the delivery event still lands', () => {
     failRowsOn('hook');
     const rec = recorder();
-    expect(() =>
-      sqliteSyncStore(root).localFiles.ledger.recordTurn({
-        uses: [use(), use({ surface: 'hook_recall' })],
-        delivery: (write) => rec.flush(write),
-      }),
-    ).toThrow('row boom');
+    sqliteSyncStore(root).ledger.recordTurn({
+      uses: [use(), use({ surface: 'hook_recall' })],
+      delivery: rec.takeEvent() ?? undefined,
+    });
     expect(ledgerSurfaces()).toEqual([]);
-    expect(deliveryCount()).toBe(0);
+    expect(deliveryCount()).toBe(1);
   });
 
-  it('with onRowError a failed row is reported, the other rows land and the delivery event is stored', () => {
+  it('with perRow a failed row is noted, the other rows land and the delivery event is stored', () => {
     failRowsOn('hook');
     const rec = recorder();
-    const failed: string[] = [];
-    sqliteSyncStore(root).localFiles.ledger.recordTurn({
+    const noted = vi.spyOn(log, 'warnThenDebug');
+    sqliteSyncStore(root).ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
-      onRowError: (error) => {
-        failed.push(String(error));
-      },
-      delivery: (write) => rec.flush(write),
+      perRow: true,
+      delivery: rec.takeEvent() ?? undefined,
     });
-    expect(failed).toHaveLength(1);
-    expect(failed[0]).toContain('row boom');
+    expect(noted.mock.calls.filter(([key]) => key === 'token-ledger-row')).toHaveLength(1);
+    expect(String(noted.mock.calls[0]?.[1])).toContain('row boom');
+    noted.mockRestore();
     expect(ledgerSurfaces()).toEqual(['hook_recall']);
     expect(deliveryCount()).toBe(1);
   });
@@ -125,13 +121,13 @@ describe('Ledger.recordTurn', () => {
 
 describe('Ledger.lastSent', () => {
   it('reads the last injected hash and the skips since it, and null for a session with no rows', () => {
-    sqliteSyncStore(root).localFiles.ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
-    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 's1', 'hook')).toEqual({
+    sqliteSyncStore(root).ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
+    expect(sqliteSyncStore(root).ledger.lastSent('default', 's1', 'hook')).toEqual({
       hash: HASH,
       skipsSince: 1,
     });
-    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 's1', 'context')).toBeNull();
-    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 'other', 'hook')).toBeNull();
-    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', undefined, 'hook')).toBeNull();
+    expect(sqliteSyncStore(root).ledger.lastSent('default', 's1', 'context')).toBeNull();
+    expect(sqliteSyncStore(root).ledger.lastSent('default', 'other', 'hook')).toBeNull();
+    expect(sqliteSyncStore(root).ledger.lastSent('default', undefined, 'hook')).toBeNull();
   });
 });

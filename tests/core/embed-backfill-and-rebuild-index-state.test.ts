@@ -12,7 +12,7 @@ import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embed
 import { embedAll, embedMemory } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
-import { cliLocalFiles } from '../../src/surface/cli/api-context.js';
+import { cliStore } from '../../src/surface/cli/api-context.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -25,7 +25,7 @@ import {
   loadEmbeddingIndex,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import type { EmbeddingIndex } from '../../src/store/local/index.js';
+import type { EmbeddingIndex } from '../../src/store/port.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
@@ -267,24 +267,18 @@ describe('a model identity change on hippo.db', () => {
   it('stages the rebuild one page of vectors at a time, and the live index changes only at the commit', async () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
-    const index = cliLocalFiles(root).embeddingIndex;
+    const index = cliStore(root).embeddingIndex;
     const staged: number[] = [];
     const liveWhileStaging: IndexState[] = [];
     const watched: EmbeddingIndex = {
       ...index,
-      beginRebuild: () => {
-        const rebuild = index.beginRebuild();
-        return {
-          ...rebuild,
-          stage: (rows) => {
-            liveWhileStaging.push(indexOn(root));
-            staged.push(rows.length);
-            return rebuild.stage(rows);
-          },
-        };
+      stageRebuild: (id, rows) => {
+        liveWhileStaging.push(indexOn(root));
+        staged.push(rows.length);
+        return index.stageRebuild(id, rows);
       },
     };
-    const target = { hippoRoot: root, embeddingIndex: watched, embeddings: loadConfig(root).embeddings };
+    const target = { embeddingIndex: watched, embeddings: loadConfig(root).embeddings };
     expect(await embedAll(target, undefined, fake('fake-new'))).toBe(ROWS);
     expect(staged).toEqual([PAGE, PAGE, PAGE, PAGE, ROWS - 4 * PAGE]);
     expect(liveWhileStaging).toEqual(staged.map(() => before));

@@ -322,10 +322,9 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   const callers = opts.callers;
   if (id !== null) {
     const actor = bearerActor(id);
-    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store, reach, config, callers };
+    return { tenantId: id.tenantId, actor, store: opts.store, reach, config, callers };
   }
   return {
-    hippoRoot: opts.hippoRoot,
     tenantId: envTenant(),
     actor: keylessLocalActor(),
     store: opts.store,

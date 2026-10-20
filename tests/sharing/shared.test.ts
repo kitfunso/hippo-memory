@@ -119,13 +119,13 @@ describe('syncGlobalToLocal', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  it('copies global entries into local', () => {
+  it('copies global entries into local', async () => {
     const entry1 = createMemory('global lesson one');
     const entry2 = createMemory('global lesson two');
     writeEntry(globalRoot, entry1);
     writeEntry(globalRoot, entry2);
 
-    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
     expect(count).toBe(2);
 
     const localEntries = loadAllEntries(localRoot, 'default');
@@ -134,18 +134,18 @@ describe('syncGlobalToLocal', () => {
     expect(ids).toContain(entry2.id);
   });
 
-  it('skips entries already in local store', () => {
+  it('skips entries already in local store', async () => {
     const entry = createMemory('already local');
     writeEntry(globalRoot, entry);
     writeEntry(localRoot, entry); // already exists
 
-    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
     expect(count).toBe(0);
   });
 
-  it('returns 0 when global store does not exist', () => {
+  it('returns 0 when global store does not exist', async () => {
     const nonexistent = path.join(os.tmpdir(), 'hippo-no-global-' + Date.now());
-    const count = syncGlobalToLocal(...sharingStores(localRoot, nonexistent));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, nonexistent));
     expect(count).toBe(0);
   });
 });

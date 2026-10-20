@@ -31,7 +31,7 @@ function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): 
   const store = storeAt(hippoRoot);
   const reach = contextReach(sqliteReach(hippoRoot, store, undefined, storeAt), loadConfig);
   const config = loadConfig(hippoRoot);
-  return sleep({ hippoRoot, tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
+  return sleep({ tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
 }
 
 /** Resolves to the exit code once the channel has taken the reply, or failed to. */

@@ -8,6 +8,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { log } from '../../src/base/util/log.js';
 
 const savedCwd = process.cwd();
 let cwd: string;
@@ -80,12 +81,19 @@ describe('hippo import embedding backfill', () => {
     );
 
     vi.stubEnv('OPENAI_API_KEY', '');
-    const r = await hippo('--markdown', 'notes.md');
+    // The backfill runs on past the verb, as the real process stays up for it, so the run waits for its warning.
+    let warned: (line: string) => void = () => {};
+    const warning = new Promise<string>((resolve) => (warned = resolve));
+    const warn = vi.spyOn(log, 'warn').mockImplementation((line) => warned(line));
+    const r = await runInProcess(async () => {
+      await runCli(['node', 'hippo', 'import', '--markdown', 'notes.md']);
+      await warning;
+    }).finally(() => warn.mockRestore());
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Imported: +2/);
     expect(contents()).toHaveLength(2);
-    expect(r.stderr).toMatch(
-      /warn: import: embedding backfill failed \(.*OPENAI_API_KEY is not set.*\); 2 rows have no vector; run 'hippo embed' to backfill/,
+    expect(await warning).toMatch(
+      /^import: embedding backfill failed \(.*OPENAI_API_KEY is not set.*\); 2 rows have no vector; run 'hippo embed' to backfill$/,
     );
   });
 });

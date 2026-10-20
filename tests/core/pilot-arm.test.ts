@@ -17,7 +17,7 @@ import { firstPilotArmHash } from '../../src/store/sqlite/token-ledger-rows.js';
 import { hashArm, type PilotArm } from '../../src/base/session/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
 import { runDoctor } from '../../src/doctor.js';
-import { diagnosticsAt, folderFiles } from '../_helpers/cli-stores.js';
+import { diagnosticsAt, ledgerAt } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -221,15 +221,15 @@ describe('pilot arm helpers', () => {
     db.exec('ROLLBACK');
   });
 
-  it('says at debug level why an arm or a ledger row was not stored', () => {
+  it('says at debug level why an arm or a ledger row was not stored', async () => {
     vi.stubEnv('HIPPO_LOG', 'debug');
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
-      bookTokenUse(
+      await bookTokenUse(
         { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 },
-        { local: { ...folderFiles(root), config: DEFAULT_CONFIG } },
+        { local: { ...ledgerAt(root), config: DEFAULT_CONFIG } },
       );
     } finally {
       vi.stubEnv('HIPPO_LOG', undefined);

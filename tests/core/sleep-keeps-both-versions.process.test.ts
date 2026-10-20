@@ -731,7 +731,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     expect(texts(root)).toContain(item.content);
   });
 
-  it('autoShare', () => {
+  it('autoShare', async () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
     initTestStore(getGlobalRoot());
     write(getGlobalRoot(), LONG_OLD);
@@ -740,7 +740,9 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_OLD.replace(' ', '  '));
 
     expect(
-      autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true }).map((e) => e.content),
+      (await autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true })).map(
+        (e) => e.content,
+      ),
     ).toEqual([LONG_NEW]);
   });
 

@@ -91,7 +91,6 @@ function origins(db: DatabaseSyncLike, table: string): string[] {
 describe('caller calls under a foreign environment', () => {
   it("each of the five calls writes only to ctx.tenantId and the body's project", async () => {
     const ctx: Context = {
-      hippoRoot: root,
       store: sqliteStore(root),
       config: loadConfig(root),
       tenantId: TENANT,

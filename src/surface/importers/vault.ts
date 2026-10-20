@@ -56,7 +56,6 @@ export async function importVault(
 
 function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): Context {
   return {
-    hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not a bearer-authed request. rawArchive /
     // remember thread this into audit.
