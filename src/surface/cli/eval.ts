@@ -5,17 +5,20 @@ import * as fs from 'fs';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
-import { isInitialized } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { folderVectorSource } from '../../entry/folder-search.js';
-import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../../domain/eval/eval.js';
 import {
-  runFeatureEval,
+  bootstrapCorpus,
+  compareSummaries,
+  detectRegressions,
   formatResult,
   resultToBaseline,
-  detectRegressions,
+  runEval,
+  runFeatureEval,
   type EvalBaseline,
-} from '../../domain/eval/eval-suite.js';
+  type EvalCase,
+  type EvalSummary,
+} from '../../api/eval.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
@@ -75,7 +78,7 @@ async function runCorpusEval(
   flags: CliFlags,
 ): Promise<EvalSummary> {
   const cases = readCorpus(corpusPath);
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   const localBump = flags['equal-sources']
     ? 1.0
     : (numberFlag(flags, 'local-bump') ?? cliConfig(hippoRoot).search.localBump);

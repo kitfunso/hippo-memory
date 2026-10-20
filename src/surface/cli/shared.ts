@@ -4,9 +4,8 @@
 import { envApiKey, envRequireServer } from '../../base/util/env.js';
 import { execFileSync } from 'child_process';
 import { isSharedStore } from '../../base/config/config.js';
-import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/invalidation.js';
-import { resolveProjectIdentity, isInitialized } from '../../base/scope/project-identity.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { type ChurnStaleResult, detectChurnStale } from '../../api/repo-learning.js';
+import { resolveProjectIdentity, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
@@ -40,7 +39,7 @@ export function runChurnStaleForRepo(
     windowsHide: true,
   }).trim();
   const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
   return roots.map((root) => {
     // One store failing must not abort sleep's later phases or skip the other store.
@@ -165,7 +164,7 @@ export async function learnFromRepo(
 export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
   if (flags['global']) {
     cliInitGlobal();
-    return getGlobalRoot();
+    return resolveGlobalRootDir();
   }
   requireInit(hippoRoot);
   return hippoRoot;

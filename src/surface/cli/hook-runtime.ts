@@ -8,11 +8,10 @@ import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { cliLedgerReach, cliSyncOptions } from './api-context.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../../base/util/hook-payload.js';
-import { importAtSessionEnd } from '../../domain/agent-memories/sync.js';
+import { importAtSessionEnd } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
-import { summaryLine } from '../../domain/agent-memories/report.js';
-import { getHippoRoot, isInitialized } from '../../base/scope/project-identity.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { summaryLine } from '../../api/agent-memory-report.js';
+import { getHippoRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CliFlags } from './flag-values.js';
@@ -30,7 +29,7 @@ export function logSessionEndImport(
   transcriptPath: string | undefined,
 ): void {
   try {
-    const sync = cliSyncOptions(getGlobalRoot(), tenantId, currentMachine());
+    const sync = cliSyncOptions(resolveGlobalRootDir(), tenantId, currentMachine());
     const report = importAtSessionEnd(process.cwd(), transcriptPath, sync);
     const line = summaryLine(report);
     if (line !== null) appendSessionEndCloseLog(logFile, line);
@@ -108,7 +107,7 @@ export async function resetHookInjection(
  * Pre-compact and compact-resume must agree, or a snapshot is looked for in the other store. */
 export function hookStoreRoot(hippoRoot: string): string {
   if (isInitialized(hippoRoot)) return hippoRoot;
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   return isInitialized(globalRoot) ? globalRoot : hippoRoot;
 }
 

@@ -2,15 +2,14 @@
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import * as path from 'path';
-import { unrejectValue, listRejectionsForTenant } from '../../domain/trust/reject-flow.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { isGitRepo } from '../../api/repo-learning.js';
 import { processGit } from '../../base/util/git-runner.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import * as client from './client.js';
-import { cliConfig, cliApiContext, cliStore } from './api-context.js';
+import { cliConfig, cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -29,7 +28,6 @@ import { errorMessage } from '../../base/util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
 const REJECTED_DIGEST_LIST_CHARS = 16;
@@ -285,7 +283,7 @@ function printRejected(result: Awaited<ReturnType<typeof api.rejectOnHost>>, rea
 
 export async function handleRejections({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const rows = await listRejectionsForTenant(cliStore(root), tenantId);
+  const rows = await api.listRejections(cliApiContext(root, tenantId));
 
   if (flags['json']) {
     console.log(JSON.stringify({ rejections: rows }, null, 2));
@@ -316,7 +314,7 @@ export async function handleUnreject({ hippoRoot, tenantId, args, flags }: Comma
     fail('Usage: hippo unreject <digest-or-prefix>');
   }
 
-  const outcome = await unrejectValue(cliStore(root), tenantId, digestOrPrefix, CLI_ACTOR);
+  const outcome = await api.liftRejection(cliApiContext(root, tenantId), digestOrPrefix);
   if (outcome.status === 'not_found') {
     fail(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
   }

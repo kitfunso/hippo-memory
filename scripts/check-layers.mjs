@@ -7,6 +7,7 @@
 // So does any import, re-export or import() (type-only too) into src/store/sqlite/** from a file outside src/store that
 // SQLITE_ROOTS does not name, and so does naming sqliteSyncStore there: every other file takes its store handed down.
 // A root imports only the adapter's doors in SQLITE_DOORS, so no root names a module behind them.
+// So does a runtime import from src/surface/cli/** or src/surface/mcp/** into src/domain, unless .surface-domain-pending.json lists the file: commands reach business logic through src/api.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and local/**, which the next rule covers: the api reads the store through the port and takes shared rules from src/base.
 // So does an import from src/api/** or src/domain/** into src/store/local/** that .store-local-pending.json does not name with a reason, any isLocalStore there, and any hippoRoot in src/api/**: both read the store through its port groups.
 // So does any import, runtime or type-only, from src/surface/dashboard/** into src/store, src/db or src/surface/cli: the dashboard reads through src/api, with no baseline.
@@ -169,6 +170,45 @@ function cliStoreProblems(srcDir) {
     ...allowed
       .filter((e) => !foundKeys.has(key(e)))
       .map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} matches no import; delete the entry`),
+  ];
+}
+
+const SURFACE_DOMAIN_PENDING = '.surface-domain-pending.json';
+const isCommandFile = (file) => file.startsWith('surface/cli/') || file.startsWith('surface/mcp/');
+
+/** Runtime imports from the CLI or MCP commands into src/domain, one per (file, target), as src-relative paths. */
+function findSurfaceDomainImports(srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = new Map();
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!isCommandFile(from)) continue;
+    for (const { spec, line, kind } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = kind === 'runtime' ? resolveSpecifier(file, spec) : null;
+      const to = target && rel(target);
+      if (to?.startsWith('domain/') && !out.has(`${from}\t${to}`)) {
+        out.set(`${from}\t${to}`, { file: from, target: to, line });
+      }
+    }
+  }
+  return [...out.values()];
+}
+
+/** Command imports of src/domain the pending list does not name, a list with no reason, and listed files with none left. */
+function surfaceDomainProblems(srcDir) {
+  const pending = readJson(SURFACE_DOMAIN_PENDING, { why: '', files: [] });
+  const listed = new Set(pending.files);
+  const found = findSurfaceDomainImports(srcDir);
+  const importers = new Set(found.map((e) => e.file));
+  return [
+    ...found
+      .filter((e) => !listed.has(e.file))
+      .map((e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; call a src/api function instead`),
+    ...(listed.size > 0 && !String(pending.why ?? '').trim() ? [`${SURFACE_DOMAIN_PENDING} gives no reason`] : []),
+    ...pending.files
+      .filter((f) => !importers.has(f))
+      .map((f) => `${SURFACE_DOMAIN_PENDING}: src/${f} no longer imports src/domain at runtime; delete the entry`),
   ];
 }
 
@@ -426,6 +466,13 @@ const cliProblems = cliStoreProblems('src');
 if (cliProblems.length > 0 && !args.includes('--list')) {
   console.error('The CLI reaches the store past src/api:');
   for (const p of cliProblems) console.error(`  ${p}`);
+  process.exit(1);
+}
+
+const surfaceDomain = surfaceDomainProblems('src');
+if (surfaceDomain.length > 0 && !args.includes('--list')) {
+  console.error('A CLI or MCP command imports src/domain past src/api:');
+  for (const p of surfaceDomain) console.error(`  ${p}`);
   process.exit(1);
 }
 

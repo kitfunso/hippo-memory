@@ -10,22 +10,21 @@ import { isCodexPresent } from '../hooks-install/detect.js';
 import { isCodexWrapperInstalled } from '../hooks-install/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks-install/opencode.js';
 import { initMemoryStore } from '../../api/store-init.js';
-import { isInitialized } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
-import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { isGitRepo } from '../../api/repo-learning.js';
 import { processGit } from '../../base/util/git-runner.js';
-import { importForStore, importProjectMemories, importUserMemories } from '../../domain/agent-memories/sync.js';
+import { importForStore, importProjectMemories, importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
-import { emptyReport, mergeReports } from '../../domain/agent-memories/report.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { emptyReport, mergeReports } from '../../api/agent-memory-report.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock } from '../../domain/hooks/hook-blocks.js';
+import { appendHookBlock, HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks-install/instructions.js';
 
 // An unreadable or vanished folder is expected while scanning; any other failure is worth a line.
 const QUIET_SCAN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR']);
@@ -110,7 +109,7 @@ function installScanHooks(repos: readonly string[]): void {
 }
 
 function initGlobalFirst(): string {
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   if (!isInitialized(globalRoot)) {
     cliInitGlobal();
     console.log(`Initialized global store at ${globalRoot}\n`);
@@ -176,7 +175,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
 }
 
 function initGlobalOnly(tenantId: string, flags: CliFlags): void {
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
   } else {
@@ -222,7 +221,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
     console.log('   Files: hippo.db stats.json');
   }
 
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   registerWorkspace(globalRoot, path.dirname(hippoRoot));
 
   if (initInstallsIntegrations(flags)) {
@@ -298,9 +297,7 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
       refreshShippedBlock(targetPath, existing, hook);
       continue;
     }
-    const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
-    const sep = existing.endsWith('\n') ? '\n' : '\n\n';
-    writeFileAtomic(targetPath, existing + sep + block + '\n');
+    appendHookBlock(targetPath, existing, hookDef);
     console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
   }
 }

@@ -33,6 +33,9 @@ import { copilotHomeDir } from '../../domain/hooks/shared.js';
 import { vscodeUserDirs } from './detect.js';
 import { installJsonHooks, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
+// The MCP hosts the installer merges into, and the snippet and failure test its caller prints from.
+export { COPILOT_CLI_MCP, VSCODE_MCP, copilotMcpSnippet, isMcpFailure } from '../../domain/hooks/copilot.js';
+
 function profileDirs(userDir: string): string[] {
   const dir = path.join(userDir, 'profiles');
   if (!fs.existsSync(dir)) return [];

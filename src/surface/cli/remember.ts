@@ -17,12 +17,11 @@ import {
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { isInitialized } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { renderTraceContent, parseSteps } from '../../domain/consolidate/trace.js';
-import { extractPathTags } from '../../domain/search/path-context.js';
+import { parseSteps, traceRecord } from '../../api/memories/trace.js';
+import { extractPathTags } from '../../api/memories/remember-local.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
 import * as client from './client.js';
 import { cliApiContext, cliConfig, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
@@ -117,7 +116,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
 
 async function cmdRemember(hippoRoot: string, tenantId: string, text: string, flags: CliFlags): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
-  const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
+  const targetRoot = useGlobal ? resolveGlobalRootDir() : hippoRoot;
 
   if (useGlobal) {
     cliInitGlobal();
@@ -266,21 +265,13 @@ async function cmdTraceRecord(hippoRoot: string, tenantId: string, flags: CliFla
   const sessionId = stringFlagOrExit(flags, 'session') || null;
   const tags = traceTags(flags);
 
-  const content = renderTraceContent({
+  const { id } = await traceRecord(cliApiContext(hippoRoot, tenantId), {
     task,
     steps,
     outcome,
-  });
-
-  const { id } = await api.remember(cliApiContext(hippoRoot, tenantId), {
-    content,
+    sessionId,
     tags,
-    local: {
-      layer: Layer.Trace,
-      source: stringFlagOrExit(flags, 'source') ?? 'cli',
-      traceOutcome: outcome,
-      sourceSessionId: sessionId,
-    },
+    source: stringFlagOrExit(flags, 'source') ?? 'cli',
   });
 
   console.log(`Recorded trace ${id} (outcome=${outcome}, ${steps.length} steps)`);
@@ -293,7 +284,7 @@ async function cmdTrace(hippoRoot: string, tenantId: string, id: string, flags: 
   // Look in local store first, then global.
   let entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
   let sourceLabel: 'local' | 'global' = 'local';
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   if (!entry && isInitialized(globalRoot)) {
     entry = await memoryGet(cliApiContext(globalRoot, tenantId), id);
     sourceLabel = 'global';

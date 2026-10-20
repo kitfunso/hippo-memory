@@ -4,18 +4,21 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { resolveCodexSessionTranscript } from '../capture/codex-session.js';
-import { resolveCodexWrapperPaths } from '../../domain/hooks/codex-wrapper.js';
-import { installedRealCodexPath } from '../hooks-install/codex-wrapper.js';
-import { resolveJsonHookPaths } from '../../domain/hooks/json-hooks.js';
+import { installedRealCodexPath, resolveCodexWrapperPaths } from '../hooks-install/codex-wrapper.js';
+import { resolveJsonHookPaths } from '../hooks-install/json-hooks.js';
 import { readSessionScan, recordSessionDigest, type SessionScan } from '../capture/session-digest.js';
 import { captureToolFailure } from '../capture/capture-error.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { importSessionFolder } from '../../domain/agent-memories/sync.js';
+import { importSessionFolder } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
-import { summaryLine } from '../../domain/agent-memories/report.js';
-import { resolveProjectIdentity, isInitialized, type ProjectRef } from '../../base/scope/project-identity.js';
+import { summaryLine } from '../../api/agent-memory-report.js';
+import {
+  resolveProjectIdentity,
+  isInitialized,
+  type ProjectRef,
+  resolveGlobalRootDir,
+} from '../../base/scope/project-identity.js';
 import { cmdCapture, type CaptureOptions, type CaptureTarget } from '../capture/command.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
@@ -49,7 +52,7 @@ import {
 } from '../../api/prompt-hook.js';
 import type { DeliveryRecorder } from '../../api/delivery-recorder.js';
 import { printError } from './output.js';
-import { folderIndex } from '../../domain/search/embed-memories.js';
+import { folderIndex } from '../../api/embeddings.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
 import {
@@ -727,7 +730,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     captureSource === 'last-session' && !transcriptPath ? await readHookStdin() : { text: undefined, timedOut: false };
 
   const useGlobal = boolFlag(flags, 'global');
-  cmdCapture(captureTarget(useGlobal ? getGlobalRoot() : hippoRoot), {
+  cmdCapture(captureTarget(useGlobal ? resolveGlobalRootDir() : hippoRoot), {
     source: captureSource,
     filePath: captureFile,
     transcriptPath,

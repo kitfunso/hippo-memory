@@ -13,6 +13,9 @@ import {
   type OpencodePluginInstallResult,
 } from '../../domain/hooks/opencode.js';
 
+// The installer module exposes the path it installs to.
+export { resolveOpencodePluginPath } from '../../domain/hooks/opencode.js';
+
 /** `jsonRepairFailed`: opencode.json is there but does not parse, so it was left alone. */
 function migrateLegacyOpencodeHooksBlock() {
   const configPath = resolveOpencodeConfigPath();

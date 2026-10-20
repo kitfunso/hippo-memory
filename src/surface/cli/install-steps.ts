@@ -3,8 +3,7 @@
 import * as path from 'path';
 import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'child_process';
 import type { InstallResult } from '../../domain/hooks/json-hooks.js';
-import { installJsonHooks } from '../hooks-install/json-hooks.js';
-import { CODEX_TRUST_LINE } from '../../domain/hooks/shared.js';
+import { CODEX_TRUST_LINE, installJsonHooks } from '../hooks-install/json-hooks.js';
 import { envSkipSchedule } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import {

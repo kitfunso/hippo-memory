@@ -3,13 +3,8 @@ import { objectCreate } from '../../../api/objects/objects.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import { type JsonValue, isJsonNumber } from '../../../base/util/json.js';
 import type { AuthedRouteRequest } from '../types.js';
-import {
-  MAX_SHORT_FIELD_LEN,
-  parseJsonBody,
-  getString,
-  requiredString,
-  type RequiredStringRule,
-} from '../validation.js';
+import { parseJsonBody, getString, requiredString, type RequiredStringRule } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { ObjectRouteConfig } from './object-routes.js';
 
 const TEXT: RequiredStringRule = { max: MAX_SHORT_FIELD_LEN, untrimmed: true };

@@ -11,6 +11,9 @@ import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, LocalContext } from '../types.js';
 
+// The tags a caller in this process adds from the folder it runs in.
+export { extractPathTags } from '../../domain/search/path-context.js';
+
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 // The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
 // tenant, and a window past this reads more than a duplicate check needs.

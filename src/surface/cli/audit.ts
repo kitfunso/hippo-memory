@@ -8,7 +8,7 @@ import { parseOlderThanFlag } from './audit-prune.js';
 import { cliApiContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, parseListLimit, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
@@ -127,7 +127,7 @@ async function cmdAuditLog(hippoRoot: string, tenantId: string, args: string[], 
 async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
   const result = await api.memoryQualityRepair(
-    cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId),
+    cliApiContext(flags['global'] ? resolveGlobalRootDir() : hippoRoot, tenantId),
     apply,
   );
   if (flags['json']) {

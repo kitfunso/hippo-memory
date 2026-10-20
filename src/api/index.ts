@@ -61,7 +61,16 @@ export type {
 } from './objects/drill-down.js';
 export { outcome, outcomeForLastRecall } from './memories/outcome.js';
 export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
-export { forget, reject, rejectOnHost, unreject } from './memories/forget.js';
+export { forget, liftRejection, listRejections, reject, rejectOnHost, unreject } from './memories/forget.js';
+export {
+  AUTO_SHARE_MIN_SCORE,
+  autoShareToGlobal,
+  sharePeers,
+  shareToGlobal,
+  syncFromGlobal,
+  transferScore,
+} from './sharing.js';
+export type { SharePeer } from './sharing.js';
 export { memoryPin } from './memories/pin.js';
 export type { ForgetResult, RejectOptions, RejectResult } from './memories/forget.js';
 export { conflictListAll, conflictGet, conflictList, conflictListOpen, conflictResolve } from './memories/conflicts.js';
