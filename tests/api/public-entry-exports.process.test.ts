@@ -53,7 +53,7 @@ describe('package entry re-exports strengthBucket', () => {
     expect(out.one).toBe(100);
     // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/consolidate\/dedupe\.js';$/m);
+    expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/domain\/consolidate\/dedupe\.js';$/m);
   });
 });
 
