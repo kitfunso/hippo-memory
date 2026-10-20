@@ -28,7 +28,7 @@ import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeE
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { RenameSourceOptions } from '../local/agent-import.js';
+import type { RenameSourceOptions } from '../port/agent-import.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';

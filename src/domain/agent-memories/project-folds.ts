@@ -1,7 +1,7 @@
 // Project names folded into others, read from the audit trail: the sync files imports under the surviving name, and
 // `hippo projects` repair agrees.
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
-import type { ProjectTagReads } from '../../store/local/project-tags.js';
+import type { ProjectTagReads } from '../../store/port/project-tags.js';
 import type { JsonValue } from '../../base/util/json.js';
 
 export interface ProjectFold {

@@ -1,7 +1,7 @@
 // Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can
 // commit in short transactions.
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { DormantMove, FlushComponent, StrengthRefresh } from '../../store/local/consolidation.js';
+import type { DormantMove, FlushComponent, StrengthRefresh } from '../../store/port/consolidation.js';
 
 /** Sleep's queued ops: decay's strength refreshes, then full writes, deletes and dormant moves. */
 export interface PendingOps {

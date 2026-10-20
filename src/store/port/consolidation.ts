@@ -3,10 +3,10 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 import type { WriteBudget } from '../../base/util/write-budget.js';
-import type { SessionEvent } from '../port/sessions.js';
-import type { AppendAuditOpts, EntryCursor, EntryPage } from '../port/types.js';
+import type { SessionEvent } from './sessions.js';
+import type { AppendAuditOpts, EntryCursor, EntryPage } from './types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { RejectedValueRow } from '../port/rejections.js';
+import type { RejectedValueRow } from './rejections.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {

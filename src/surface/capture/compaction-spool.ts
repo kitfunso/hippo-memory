@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
-import type { CompactionText, Log } from '../../store/local/compaction-hooks.js';
+import type { CompactionText, Log } from '../../store/port/compaction-hooks.js';
 import type { PostCompactPayload } from './compaction-record.js';
 import { isStoreBusy } from '../../store/port.js';
 import { errorMessage } from '../../base/util/log.js';

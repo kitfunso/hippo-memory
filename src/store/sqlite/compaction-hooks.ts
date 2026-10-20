@@ -6,7 +6,7 @@ import {
   saveCompactionAt,
 } from './compactions-record.js';
 import type { OnHandle } from './open.js';
-import type { CompactionHooks } from '../local/compaction-hooks.js';
+import type { CompactionHooks } from '../port/compaction-hooks.js';
 
 export function sqliteCompactionHooks(on: OnHandle): CompactionHooks {
   return {

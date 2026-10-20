@@ -21,7 +21,7 @@ import type {
   CompactionCounts,
   TokenTally,
   Diagnostics,
-} from '../local/diagnostics.js';
+} from '../port/diagnostics.js';
 import type { OnHandle } from './open.js';
 import { projectTagReads } from './project-tags.js';
 import { bound, type Bodies } from './bound.js';

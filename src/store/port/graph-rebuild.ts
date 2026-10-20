@@ -1,6 +1,6 @@
 // The graph rebuild's writes: synchronous, because `rebuild` runs its diff inside hippo.db's own write lock.
-import type { StoredGraph } from '../port/graph-reads.js';
-import type { EntityType, RelationType, SourceObjectType } from '../port/graph-reads.js';
+import type { StoredGraph } from './graph-reads.js';
+import type { EntityType, RelationType, SourceObjectType } from './graph-reads.js';
 
 export interface GraphRebuild {
   /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past `opts.holdMs`. */

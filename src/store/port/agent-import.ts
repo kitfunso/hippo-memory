@@ -3,7 +3,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { ProjectTagReads } from './project-tags.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
-import type { AppendAuditOpts, DormantSnapshot } from '../port/types.js';
+import type { AppendAuditOpts, DormantSnapshot } from './types.js';
 
 /** The calls one container's sync makes inside its transaction, bound to the target store's handle and root. */
 export interface ContainerTx {

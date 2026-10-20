@@ -92,6 +92,14 @@ import type { Rejections } from '../port/rejections.js';
 import type { FailureLog } from '../port/failure-log.js';
 import type { Compactions } from '../port/compactions.js';
 import type { LocalFiles } from '../local/local-files.js';
+import type { Consolidation } from '../port/consolidation.js';
+import type { Learning } from '../port/learning.js';
+import type { Captures } from '../port/captures.js';
+import type { CompactionHooks } from '../port/compaction-hooks.js';
+import type { ProjectTags } from '../port/project-tags.js';
+import type { Diagnostics } from '../port/diagnostics.js';
+import type { GraphRebuild } from '../port/graph-rebuild.js';
+import type { AgentImport } from '../port/agent-import.js';
 import { served } from './served.js';
 import { isSharedStore } from '../../base/config/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
@@ -111,18 +119,38 @@ type AsyncOnly = 'vectors';
 // LocalFiles is written synchronous already, and Sync would erase its plain methods.
 export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>> & Pick<LocalStore, 'localFiles'>;
 
-function sqliteLocalFiles(handles: Handles): LocalFiles {
+type LocalGroups = Pick<
+  StoreGroups,
+  | 'consolidation'
+  | 'learning'
+  | 'captures'
+  | 'compactionHooks'
+  | 'projectTags'
+  | 'diagnostics'
+  | 'graphRebuild'
+  | 'agentImport'
+>;
+
+/** The groups that read and write hippo.db's own files beside its rows. */
+function sqliteLocalGroups(handles: Handles): LocalGroups {
   const { on } = handles;
   return {
-    ensureFiles: () => on(() => undefined, openStore),
     consolidation: sqliteConsolidation(handles),
-    agentImport: sqliteAgentImport(handles.files),
+    learning: sqliteLearning(on),
     captures: sqliteCaptures(on),
     compactionHooks: sqliteCompactionHooks(on),
     projectTags: sqliteProjectTags(on),
-    learning: sqliteLearning(on),
     diagnostics: sqliteDiagnostics(on),
     graphRebuild: sqliteGraphRebuild(on),
+    agentImport: sqliteAgentImport(handles.files),
+  };
+}
+
+function sqliteLocalFiles(handles: Handles, groups: LocalGroups): LocalFiles {
+  const { on } = handles;
+  return {
+    ensureFiles: () => on(() => undefined, openStore),
+    ...groups,
     rejections: sqliteRefusedAmong(on),
     importKeys: sqliteImportKeys(on),
   };
@@ -135,10 +163,12 @@ export function sqliteSyncStore(
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly>> {
   const handles = handlesOf(hippoRoot, rules);
   const { on } = handles;
-  const localFiles = sqliteLocalFiles(handles);
+  const localGroups = sqliteLocalGroups(handles);
+  const localFiles = sqliteLocalFiles(handles, localGroups);
   return {
     kind: 'sqlite',
     localFiles,
+    ...localGroups,
     ...sqliteBaseReads(on),
     ...sqliteRecallWrites(on),
     keyAudit: sqliteKeyAudit(on),
@@ -341,6 +371,14 @@ export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): LocalS
     promotion: served<Promotion>(sync.promotion),
     folderFiles: served<FolderFiles>(sync.folderFiles),
     sharing: served<Sharing>(sync.sharing),
+    consolidation: served<Consolidation>(sync.consolidation),
+    learning: served<Learning>(sync.learning),
+    captures: served<Captures>(sync.captures),
+    compactionHooks: served<CompactionHooks>(sync.compactionHooks),
+    projectTags: served<ProjectTags>(sync.projectTags),
+    diagnostics: served<Diagnostics>(sync.diagnostics),
+    graphRebuild: served<GraphRebuild>(sync.graphRebuild),
+    agentImport: served<AgentImport>(sync.agentImport),
     close: async () => sync.close(),
   };
 }

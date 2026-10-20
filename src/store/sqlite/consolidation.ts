@@ -26,7 +26,7 @@ import type {
   HalfLifeRows,
   TombstoneChecks,
   Consolidation,
-} from '../local/consolidation.js';
+} from '../port/consolidation.js';
 import { appendAuditEvent, recordAuditEventsRowByRowAt } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt, replaceDetectedConflictsAt } from './conflicts.js';
 import {

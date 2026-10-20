@@ -7,7 +7,7 @@ import {
   type StrengthOptions,
 } from '../../base/memory/memory.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import type { ContainerTx, ImportTarget } from '../../store/local/agent-import.js';
+import type { ContainerTx, ImportTarget } from '../../store/port/agent-import.js';
 import { itemHash } from './keys.js';
 import { planContainer, type ContainerPlan, type DormantRow, type LiveRow, type PlannedWrite } from './plan.js';
 import { emptyTally, type Tally } from './report.js';

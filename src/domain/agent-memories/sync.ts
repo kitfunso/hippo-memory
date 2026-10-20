@@ -16,7 +16,7 @@ import {
   type ProjectIdentity,
 } from '../../base/scope/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
-import type { AgentImport, ImportTarget } from '../../store/local/agent-import.js';
+import type { AgentImport, ImportTarget } from '../../store/port/agent-import.js';
 import { syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
 import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';

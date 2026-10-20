@@ -4,7 +4,7 @@ import type { CompactionFolder } from '../../src/surface/capture/compaction-reco
 import { cliLocalFiles, cliStore } from '../../src/surface/cli/api-context.js';
 import { folderIndex, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import type { Diagnostics } from '../../src/store/local/diagnostics.js';
+import type { Diagnostics } from '../../src/store/port/diagnostics.js';
 import type { FolderFiles } from '../../src/store/local/index.js';
 import type { StoreGroups } from '../../src/store/port.js';
 

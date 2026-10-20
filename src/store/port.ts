@@ -32,6 +32,14 @@ import type { EmbeddingIndex } from './port/embedding-index.js';
 import type { Promotion } from './port/promotion.js';
 import type { FolderFiles } from './port/folder-files.js';
 import type { Sharing } from './port/sharing.js';
+import type { Consolidation } from './port/consolidation.js';
+import type { Learning } from './port/learning.js';
+import type { Captures } from './port/captures.js';
+import type { CompactionHooks } from './port/compaction-hooks.js';
+import type { ProjectTags } from './port/project-tags.js';
+import type { Diagnostics } from './port/diagnostics.js';
+import type { GraphRebuild } from './port/graph-rebuild.js';
+import type { AgentImport } from './port/agent-import.js';
 export type { FolderStore, GlobalTargetGroup, StoreReach } from './port/reach.js';
 import type {
   ApiKeyRecord,
@@ -191,6 +199,22 @@ export interface StoreGroups extends SessionAndAdminGroups {
   readonly folderFiles: FolderFiles;
   /** Unset on a store that shares no rows with the operator's global store; share and peers answer 501 there. */
   readonly sharing: Sharing;
+  /** Sleep's reads and writes over every tenant; unset, sleep and consolidate answer 501. */
+  readonly consolidation: Consolidation;
+  /** The learn passes' reads and writes. */
+  readonly learning: Learning;
+  /** `hippo capture`'s writes and its dedup read. */
+  readonly captures: Captures;
+  /** The compaction hooks' records and their replay. */
+  readonly compactionHooks: CompactionHooks;
+  /** The project names a store holds, listed, folded and repaired. */
+  readonly projectTags: ProjectTags;
+  /** What `hippo doctor` and `hippo status` read of the store's own files. */
+  readonly diagnostics: Diagnostics;
+  /** The graph rebuild's writes. */
+  readonly graphRebuild: GraphRebuild;
+  /** The agent-memories import's reads and its container writes. */
+  readonly agentImport: AgentImport;
 }
 
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
@@ -202,7 +226,21 @@ export type OptionalGroup =
   | 'embeddingIndex'
   | 'promotion'
   | 'folderFiles'
-  | 'sharing';
+  | 'sharing'
+  | 'consolidation'
+  | 'learning'
+  | 'captures'
+  | 'compactionHooks'
+  | 'projectTags'
+  | 'diagnostics'
+  | 'graphRebuild'
+  | 'agentImport';
+
+/** The groups a sleep runs on. */
+export type SleepGroup = 'consolidation' | 'learning' | 'graphRebuild';
+
+/** A store a sleep can run on. */
+export type SleepStore = StoreWith<SleepGroup>;
 
 export type StoreGroup = 'base' | keyof StoreGroups;
 

@@ -17,7 +17,7 @@ import {
   rowToRelation,
   ENTITY_COLS,
 } from './graph-rows.js';
-import type { SourceObjectRef } from '../local/graph-rebuild.js';
+import type { SourceObjectRef } from '../port/graph-rebuild.js';
 import type { EntityType, RelationType, SourceKind, SourceObjectType, Entity, Relation } from '../port/graph-reads.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.

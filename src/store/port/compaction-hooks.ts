@@ -1,6 +1,6 @@
 // The local compaction hooks' record work: synchronous and hippo.db's own, since the spool and the transcript a replay
 // reads sit beside the folder.
-import type { CompactionStart } from '../port/compactions.js';
+import type { CompactionStart } from './compactions.js';
 
 /** Every method logs a failure through `log` and never throws, so a hook still exits 0. */
 export interface CompactionHooks {

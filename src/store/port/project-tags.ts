@@ -2,8 +2,8 @@
 // and fixes its mirror files.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { DormantReason } from './consolidation.js';
-import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
-import type { DormantSnapshot } from '../port/types.js';
+import type { AppendAuditOpts, AuditEvent } from './types.js';
+import type { DormantSnapshot } from './types.js';
 
 export interface ProjectTags {
   /** Runs `fn` on the tenant's project-tag rows and writes, on a handle opened for this call and closed after. */

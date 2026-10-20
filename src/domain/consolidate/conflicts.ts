@@ -5,7 +5,7 @@ import { isPersonalScope } from '../../base/scope/recall-scope.js';
 import { CONFLICT_STOPWORDS } from '../../base/util/stopwords.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { DECAY_THRESHOLD } from './decay.js';
-import type { DetectedConflict } from '../../store/local/consolidation.js';
+import type { DetectedConflict } from '../../store/port/consolidation.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
 // on stopword-filtered tokens only applies after a polarity signal, so it filters drive-by topic similarity, not

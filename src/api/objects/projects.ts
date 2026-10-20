@@ -10,7 +10,7 @@ import {
   type ProjectSummary,
   type RepairResult,
 } from '../../domain/sharing/project-merge.js';
-import type { ProjectTagStore } from '../../store/local/project-tags.js';
+import type { ProjectTagStore } from '../../store/port/project-tags.js';
 import type { LocalContext } from '../types.js';
 
 export type {

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from './base/scope/project-identity.js';
 import { getGlobalRoot } from './domain/sharing/global-store.js';
-import { needsNewerHippo, type Diagnostics, type StoreHealth } from './store/local/diagnostics.js';
+import { needsNewerHippo, type Diagnostics, type StoreHealth } from './store/port/diagnostics.js';
 import { loadConfig } from './base/config/config.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './base/session/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './surface/capture/compaction-spool.js';

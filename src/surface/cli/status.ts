@@ -30,7 +30,7 @@ import {
   vectorSummary,
 } from '../../api/status.js';
 import type { StatusCounts } from '../../store/port/reports.js';
-import type { Diagnostics } from '../../store/local/diagnostics.js';
+import type { Diagnostics } from '../../store/port/diagnostics.js';
 import type { ParticleStats } from '../../store/port.js';
 import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 

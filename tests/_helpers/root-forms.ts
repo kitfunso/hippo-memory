@@ -146,7 +146,7 @@ import type {
   LoadedRows,
   SessionDecayContext,
   RebuildPatch,
-} from '../../src/store/local/consolidation.js';
+} from '../../src/store/port/consolidation.js';
 import type { Prediction, PredictionClose } from '../../src/store/port/predictions.js';
 import type { ClosureState } from '../../src/base/records/prediction.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';

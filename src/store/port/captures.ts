@@ -1,6 +1,6 @@
 // `hippo capture`'s reads and writes: synchronous and hippo.db's own, since each row is mirrored beside the folder and
 // handed to the caller's embed callback.
-import type { HeldText } from '../port/types.js';
+import type { HeldText } from './types.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { TenantId } from '../../base/util/tenant.js';
 

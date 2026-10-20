@@ -1,4 +1,4 @@
-import type { Learning } from '../../store/local/learning.js';
+import type { Learning } from '../../store/port/learning.js';
 import type { HippoStore } from '../../store/index.js';
 import { chunked } from '../../base/util/chunked.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';

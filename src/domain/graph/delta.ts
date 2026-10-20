@@ -7,7 +7,7 @@ import type {
   DesiredRelation,
   GraphOp,
   NaturalKey,
-} from '../../store/local/graph-rebuild.js';
+} from '../../store/port/graph-rebuild.js';
 import type { StoredEntity, StoredGraph, StoredRelation } from '../../store/port/graph-reads.js';
 
 export type { DesiredEntity, DesiredGraph, DesiredRelation, GraphOp, NaturalKey };

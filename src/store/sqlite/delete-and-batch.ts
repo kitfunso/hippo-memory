@@ -18,7 +18,7 @@ import { chunked } from '../../base/util/chunked.js';
 import { placeholders } from '../../base/util/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../local/consolidation.js';
+import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../port/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/store/dormant-memories.test.ts pins it to the schema. */

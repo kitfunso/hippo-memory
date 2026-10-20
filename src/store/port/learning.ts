@@ -1,6 +1,6 @@
 // The store work of the learn passes, kept apart from port.ts. Plain return values, like the rest of LocalFiles.
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { EntryCursor, EntryPage } from '../port/types.js';
+import type { EntryCursor, EntryPage } from './types.js';
 
 /** What auto-learn, extraction and invalidation read and write on hippo.db. */
 export interface Learning {

@@ -13,7 +13,7 @@ import type {
   Log,
   ReplayOptions,
   ReplaySources,
-} from '../../store/local/compaction-hooks.js';
+} from '../../store/port/compaction-hooks.js';
 import { loadConfig } from '../../base/config/config.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';

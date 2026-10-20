@@ -157,6 +157,32 @@ function folderGroups(executor: SqliteExecutor, inProcess: StoreGroups): FolderG
   };
 }
 
+type LocalGroups = Pick<
+  StoreGroups,
+  | 'consolidation'
+  | 'learning'
+  | 'captures'
+  | 'compactionHooks'
+  | 'projectTags'
+  | 'diagnostics'
+  | 'graphRebuild'
+  | 'agentImport'
+>;
+
+function localGroups(executor: SqliteExecutor, inProcess: StoreGroups): LocalGroups {
+  const ops = WORKER_OPS;
+  return {
+    consolidation: onWorkers(executor, 'consolidation', ops.consolidation, inProcess.consolidation),
+    learning: onWorkers(executor, 'learning', ops.learning, inProcess.learning),
+    captures: onWorkers(executor, 'captures', ops.captures, inProcess.captures),
+    compactionHooks: onWorkers(executor, 'compactionHooks', ops.compactionHooks, inProcess.compactionHooks),
+    projectTags: onWorkers(executor, 'projectTags', ops.projectTags, inProcess.projectTags),
+    diagnostics: onWorkers(executor, 'diagnostics', ops.diagnostics, inProcess.diagnostics),
+    graphRebuild: onWorkers(executor, 'graphRebuild', ops.graphRebuild, inProcess.graphRebuild),
+    agentImport: onWorkers(executor, 'agentImport', ops.agentImport, inProcess.agentImport),
+  };
+}
+
 /** `sqliteStore` with every method the op table places on a worker answered from one; close() closes `executor` and
  * resolves once its threads have exited. `executor` defaults to threads of the store's own, with the server's lock
  * wait; `rules` must be the ones it was built with. */
@@ -173,6 +199,7 @@ export function workerSqliteStore(
     ...recallAndWriteGroups(executor, inProcess),
     ...sessionAndAdminGroups(executor, inProcess),
     ...folderGroups(executor, inProcess),
+    ...localGroups(executor, inProcess),
     readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
     close: () => executor.close(),
   };

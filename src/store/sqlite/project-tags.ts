@@ -40,7 +40,7 @@ import type {
   ProjectTagWrites,
   TagRewrite,
   ProjectTags,
-} from '../local/project-tags.js';
+} from '../port/project-tags.js';
 import type { EntryCursor } from '../port/types.js';
 
 const TX_LABEL = 'merge_projects';
