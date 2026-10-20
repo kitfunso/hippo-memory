@@ -165,8 +165,10 @@ describe('autoShare prefilter', () => {
   });
 
   it('reads only the rows that can clear a score above neutral', () => {
-    for (let i = 0; i < 60; i++) put(`plain ${i}`);
-    const errorId = put('error', {}, ['error']);
+    const errorId = withRequestStoresSync(() => {
+      for (let i = 0; i < 60; i++) put(`plain ${i}`);
+      return put('error', {}, ['error']);
+    });
     for (const tenantId of ['default', ALL_TENANTS] as const) {
       const { result, statements, rowsRead } = recordStatements(() =>
         autoShare(...sharingStores(root), { dryRun: true, tenantId }),
