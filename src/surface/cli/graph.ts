@@ -2,7 +2,8 @@
 
 import * as fs from 'fs';
 import { extractGraph } from '../../domain/graph/extract.js';
-import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../../domain/graph/view.js';
+import { buildGraphModel, DEFAULT_VIEW_LIMIT } from '../../domain/graph/view.js';
+import { renderGraphHtml, renderGraphCanvas } from './graph-page.js';
 import { printError } from './output.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
