@@ -1,7 +1,8 @@
 // What crosses between the server thread and a store worker, and which kind of worker runs each store method.
-import type { HippoStore, LocalFiles, StoreGroups } from '../port.js';
+import type { HippoStore, StoreGroups } from '../port.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
+import type { LocalFiles } from '../local/index.js';
 
 /** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every write. */
 export type OpMode = 'read' | 'write';
@@ -10,10 +11,7 @@ export type OpMode = 'read' | 'write';
  * thread alone holds the store's vector graph and a second copy would double its memory. */
 export type OpRoute = OpMode | 'pinned-read';
 
-/** 'server' keeps a method on the calling thread: it takes a function, and a function cannot be copied to a thread. */
-export type OpPlace = OpRoute | 'server';
-
-export type OpPlaces<G> = { readonly [M in keyof G]: OpPlace };
+export type OpPlaces<G> = { readonly [M in keyof G]: OpRoute };
 
 type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 
@@ -214,7 +212,7 @@ export const WORKER_OPS = {
   dormant: {
     list: 'read',
     holds: 'read',
-    restore: 'server',
+    restore: 'write',
     forget: 'write',
   },
   reports: {
@@ -230,7 +228,7 @@ export const WORKER_OPS = {
     createdSinceLastSleep: 'read',
   },
   rejections: {
-    apply: 'server',
+    apply: 'write',
     lift: 'write',
     list: 'read',
     refusedAmong: 'read',
@@ -253,7 +251,7 @@ export const WORKER_OPS = {
   sharing: {
     sourceTallies: 'read',
   },
-} as const satisfies { readonly [G in Exclude<keyof StoreGroups, 'localFiles'>]: OpPlaces<StoreGroups[G]> } & {
+} as const satisfies { readonly [G in keyof StoreGroups]: OpPlaces<StoreGroups[G]> } & {
   readonly base: OpPlaces<BaseMethods>;
   readonly promotion: OpPlaces<LocalFiles['promotion']>;
   readonly sharing: OpPlaces<Pick<LocalFiles['sharing'], 'sourceTallies'>>;

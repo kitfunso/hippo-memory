@@ -10,7 +10,8 @@ import {
   selectChildrenByParent,
 } from './entry-reads.js';
 import { chunked } from '../../util/chunked.js';
-import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk, Sync } from '../port.js';
+import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../port.js';
+import type { Sync } from './served.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { placeholders } from '../../util/sql.js';
 import { descendantAdmits } from '../../core/read-admission.js';

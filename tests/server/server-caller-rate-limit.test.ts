@@ -10,6 +10,7 @@ import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { clientLimitKey } from '../../src/server/client-ip.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { withoutLocalFiles } from '../_helpers/port-only-store.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
 beforeEach(() => {
@@ -208,9 +209,8 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
     };
     // hippo.db's groups, which serve() fences for this kind, less the local files an add-on route needs.
     const store: HippoStore = {
-      ...sqliteStore(root),
+      ...withoutLocalFiles(sqliteStore(root)),
       kind: 'stub',
-      localFiles: undefined,
       findApiKey: async () => record,
       searchRecallEntries: unported,
       entriesByIds: unported,

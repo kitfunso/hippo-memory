@@ -1,9 +1,12 @@
 // A store other than hippo.db for the Rejections group, built on the in-memory entry-writes store: it copies the tombstones out
-// of hippo.db once and removes rows from the memories that store holds, with only what hippo-memory/store-kit exports.
+// of hippo.db once and removes rows from the memories that store holds, with store-kit and the two text rules in src/core.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { mergedSuccessor } from '../../src/core/merged-row.js';
+import { rejectedText } from '../../src/core/rejection-text.js';
 import {
   heldTexts,
   normalizeValueForRejection,
+  ownScopeTouches,
   rejectionDigest,
   type AppliedRejection,
   type HippoStore,
@@ -51,7 +54,7 @@ function removeHolders(
 ): Omit<AppliedRejection, 'digest' | 'content'> {
   const { tenantId, actor, reason } = rejection;
   const rows = [...tx.rows.values()]
-    .filter((e) => e.tenantId === tenantId && rejection.inReach(e.scope))
+    .filter((e) => e.tenantId === tenantId && ownScopeTouches(rejection.ownScope, e.scope ?? null))
     .sort(byCreated);
   const direct = rows.filter((e) => holds(e.content));
   const merged = rows.filter((e) => !holds(e.content) && heldTexts(e).some(holds));
@@ -71,7 +74,7 @@ function removeHolders(
     removedIds.push(row.id);
   }
   for (const row of merged) {
-    const successor = rejection.successorOf(row, holds, new Set(removedIds));
+    const successor = mergedSuccessor(row, holds, new Set(removedIds));
     remove(row);
     removedIds.push(row.id);
     if (!successor) continue;
@@ -95,7 +98,8 @@ function rejectionsOn(base: InMemoryEntryWritesStore, rows: RejectedValueRow[]):
     async apply(rejection) {
       const { tenantId, actor, reason, memoryId } = rejection;
       const source = memoryId === undefined ? undefined : base.rowById(memoryId);
-      const content = rejection.textOf(
+      const content = rejectedText(
+        rejection,
         source && { content: source.content, tenant_id: source.tenantId, scope: source.scope ?? null },
       );
       const digest = rejectionDigest(content);

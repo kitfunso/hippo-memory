@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { MemoryEntry } from '../core/memory.js';
 import { duplicateKey } from '../util/same-text.js';
 import { maskEmails } from '../util/secret-detect.js';
-import type { ImportTarget } from '../store/port/agent-import.js';
+import type { ImportTarget } from '../store/local/agent-import.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
 import { MIN_ITEM_CHARS, storedText } from './source.js';
 import type { Container, Listing } from './types.js';

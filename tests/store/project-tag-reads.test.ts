@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import type { ProjectTagStore } from '../../src/store/port/project-tags.js';
+import type { ProjectTagStore } from '../../src/store/local/project-tags.js';
 import { listProjects, mergeProjects, planProjectRepair } from '../../src/sharing/project-merge.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { recordStatements } from '../_helpers/count-statements.js';

@@ -1,5 +1,5 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../core/memory.js';
-import type { Learning } from '../store/port/learning.js';
+import type { Learning } from '../store/local/learning.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import {

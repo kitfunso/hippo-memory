@@ -1,5 +1,4 @@
-import type { Learning } from '../store/port/learning.js';
-import type { EntryCursor } from '../store/port/consolidation.js';
+import type { Learning } from '../store/local/learning.js';
 import type { HippoStore } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
 import { MINUTE_MS } from '../util/time.js';
@@ -13,6 +12,7 @@ import {
   packageScriptsAt,
   type ChurnCommit,
 } from './churn-git.js';
+import type { EntryCursor } from '../store/port/types.js';
 
 const HEADLINE_CHARS = 60;
 // Rows decoded per read of the rows that may mention a target; the match pass runs page by page.

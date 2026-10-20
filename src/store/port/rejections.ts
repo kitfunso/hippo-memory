@@ -1,5 +1,4 @@
 // The Rejections group, kept apart from port.ts: the tombstones `hippo reject` writes and every write guard reads.
-import type { MemoryEntry } from '../../core/memory.js';
 
 export interface RejectionCheck {
   readonly tenantId: string;
@@ -28,8 +27,6 @@ export interface RejectedValueRow {
   normalizedChars: number | null;
 }
 
-export type HoldsValue = (text: string) => boolean;
-
 /** The text, tenant and scope of the memory a rejection names. */
 export interface RejectionSource {
   content: string;
@@ -37,26 +34,18 @@ export interface RejectionSource {
   scope: string | null;
 }
 
-/** One rejection as the store applies it. The three functions are the caller's policy over plain rows; none is handed
- * the handle. */
+/** One rejection as the store applies it, all data. A sleep-merged row holding the text gives way to the successor
+ * hippo.db's merged-row rule builds from its other texts. */
 export interface Rejection {
   readonly tenantId: string;
   readonly actor: string;
   readonly reason: string;
-  /** The memory whose row `textOf` is given; unset when the caller supplies the text itself. */
+  /** Reject this memory's current text: a row outside `tenantId` refuses as not found, a personal one as a bad
+   * request, both before any write. Unset, `value` is the text. */
   readonly memoryId?: string;
-  /** The text to reject. `source` is undefined when `memoryId` is unset or names no row; a throw refuses before any
-   * write. */
-  readonly textOf: (source: RejectionSource | undefined) => string;
-  /** False for a row this caller may not remove. */
-  readonly inReach: (scope: string | null | undefined) => boolean;
-  /** What replaces a merged row once the rejected text leaves it: undefined when it holds none, null when nothing else
-   * is left. */
-  readonly successorOf: (
-    row: MemoryEntry,
-    holdsValue: HoldsValue,
-    removedIds: ReadonlySet<string>,
-  ) => MemoryEntry | null | undefined;
+  readonly value?: string;
+  /** The caller's personal scope, the only personal rows the sweep removes; null leaves every personal row. */
+  readonly ownScope: string | null;
 }
 
 export interface AppliedRejection {

@@ -6,7 +6,6 @@ import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, strengthOptionsOf } from '../core/memory.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
-import type { FolderStore, LocalFiles } from '../store/port.js';
 import { isPersonalScope, isQuarantineScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
@@ -17,8 +16,9 @@ import { ALL_TENANTS, type TenantId } from '../util/tenant.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
-import type { EntryCursor } from '../store/port/consolidation.js';
-import type { EntrySignals, PageRequest, Sharing } from '../store/port/sharing.js';
+import type { EntrySignals, PageRequest, Sharing } from '../store/local/sharing.js';
+import type { FolderStore, LocalFiles } from '../store/local/index.js';
+import type { EntryCursor } from '../store/port/types.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([

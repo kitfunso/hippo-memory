@@ -24,9 +24,9 @@ import {
   cliApiContext,
   cliFolder,
   cliInitGlobal,
+  cliLocalFiles,
   cliStore,
   cliSyncOptions,
-  cliSyncStore,
   type CliContext,
 } from './api-context.js';
 import { printError } from './output.js';
@@ -201,7 +201,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     extraTags,
     hippoRoot,
     tenantId,
-    target: { root: targetRoot, store: cliSyncStore(targetRoot) },
+    target: { root: targetRoot, files: cliLocalFiles(targetRoot) },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through

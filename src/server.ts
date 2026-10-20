@@ -17,7 +17,8 @@ import {
   type PromptHookRequest,
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
-import { hasGroup } from './store/port.js';
+import { isLocalStore, type LocalStore } from './store/local/index.js';
+import type { LocalContext } from './api/types.js';
 import { sqliteReach } from './store/sqlite/store.js';
 import { loadConfig } from './core/config.js';
 
@@ -29,14 +30,15 @@ async function promptHookContext(
   opts?: PromptHookOptions,
 ): ReturnType<typeof renderPromptHook> {
   // Only hippo.db has a global store beside it; an add-on's own store reads as one project.
-  const sqliteBacked = hasGroup(ctx.store, 'localFiles');
+  const sqliteBacked = isLocalStore(ctx.store);
   const reach =
     ctx.reach ??
     (sqliteBacked ? contextReach(sqliteReach(ctx.hippoRoot, ctx.store, opts?.sharedStore), loadConfig) : undefined);
   return renderPromptHook({ ...ctx, reach }, req, opts);
 }
 
-// Add-on packages mint and revoke keys through these without importing the whole api surface.
+// Add-on packages mint and revoke keys through these without importing the whole api surface; a route narrows its
+// Context with isLocalStore before captureSessionTexts.
 export {
   authCreate,
   authCreateSelf,
@@ -44,6 +46,7 @@ export {
   BadRequestError,
   ConflictError,
   ForbiddenError,
+  isLocalStore,
   NotFoundError,
   promptHookContext,
   type AuthCreateSelfOpts,
@@ -51,6 +54,8 @@ export {
   type AuthRevokeResult,
   type Context,
   type Actor,
+  type LocalContext,
+  type LocalStore,
 };
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './util/http-util.js';
 export { clientIpForRateLimit } from './server/client-ip.js';

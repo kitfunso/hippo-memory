@@ -1,8 +1,8 @@
 // Sleep holds ids, strengths and the few rows a pass changed; every other row is read back a page at a time by id.
 import type { MemoryEntry } from '../core/memory.js';
-import type { Consolidation } from '../store/port.js';
-import type { EntryCursor } from '../store/port/consolidation.js';
 import { chunked } from '../util/chunked.js';
+import type { Consolidation } from '../store/local/index.js';
+import type { EntryCursor } from '../store/port/types.js';
 
 /** Rows per read: one id-list query's worth, so a page is one statement and about a megabyte of rows. */
 export const SLEEP_PAGE_ROWS = 500;

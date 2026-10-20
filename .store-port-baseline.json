@@ -15,7 +15,6 @@
   "portImportsFromSql": 0,
   "buildsOutsideRoots": 0,
   "groupChecksInApi": 0,
-  "portFunctionParams": 21,
   "storeFilesWithoutSqlList": [],
   "openersOutsideByFile": {},
   "sqlOutsideByFile": {},

@@ -1,5 +1,11 @@
 import { adminActor } from '../api/index.js';
-import { contextReach, type ContextReach, type ContextWith, type GlobalInReach } from '../api/types.js';
+import {
+  contextReach,
+  type ContextReach,
+  type ContextWith,
+  type GlobalInReach,
+  type LocalContext,
+} from '../api/types.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
 import type { SyncOptions } from '../agent-memories/sync.js';
 import type { Machine } from '../util/agent-homes.js';
@@ -9,19 +15,19 @@ import { runConsolidation } from '../consolidate/sleep.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
-import type { LocalFiles, OptionalGroup } from '../store/port.js';
+import type { OptionalGroup } from '../store/port.js';
 import {
   runDetachedSqliteRequest,
   runSqliteHookRequest,
   runSqliteRequest,
   sqliteReach,
   sqliteStore,
-  sqliteSyncStore,
 } from '../store/sqlite/store.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../util/env.js';
 import { getReranker, type RerankerFn } from '../rerankers/index.js';
 import { createCallerState, type CallerState } from '../api/callers.js';
+import type { LocalFiles, LocalStore } from '../store/local/index.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an
  * unchanged config.json once. */
@@ -36,7 +42,7 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
 }
 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
-export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
+export function cliStore(hippoRoot: string): LocalStore & StoreGroups {
   return sqliteStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
 }
 
@@ -45,14 +51,9 @@ export function cliFolder(hippoRoot: string): ConfiguredFolder {
   return { root: hippoRoot, store: cliStore(hippoRoot), config: cliConfig(hippoRoot) };
 }
 
-/** hippo.db whose calls answer at once, for a hook or verb that counts each statement against its own time. */
-export function cliSyncStore(hippoRoot: string): ReturnType<typeof sqliteSyncStore> {
-  return sqliteSyncStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
-}
-
 /** The folder's hippo.db for a verb that runs a sleep pass by itself. */
 export function cliLocalFiles(hippoRoot: string): LocalFiles {
-  return cliSyncStore(hippoRoot).localFiles;
+  return cliStore(hippoRoot).localFiles;
 }
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
@@ -82,8 +83,9 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
   return runSqliteRequest(run, 'cli');
 }
 
-/** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api unchecked. */
-export type CliContext = ContextWith<OptionalGroup>;
+/** The CLI's store is hippo.db, which sets every optional group and its local files, so its verbs call the api
+ * unchecked. */
+export type CliContext = LocalContext & ContextWith<OptionalGroup>;
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config. */
 function cliReach(hippoRoot: string, store: HippoStore): ContextReach {

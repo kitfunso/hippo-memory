@@ -1,7 +1,8 @@
 import type { Context } from '../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { hasGroup, type StoreGroup, type HippoStore } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
+import { storeMeets, type StoreNeed } from '../store/local/index.js';
 import type { HippoConfig } from '../core/config.js';
 import { HttpError, JSON_HEADERS, STORE_NOT_PORTED_MESSAGE, sendJson, type WebhookRequest } from '../util/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
@@ -618,12 +619,12 @@ export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: str
   return true;
 }
 
-/** The group a row needs: a sqliteOnly row needs hippo.db's local files, a row naming none runs on any store. */
-function routeGroup(route: Route): StoreGroup | undefined {
+/** What a row needs: a sqliteOnly row needs hippo.db's local files, a row naming none runs on any store. */
+function routeGroup(route: Route): StoreNeed | undefined {
   return route.sqliteOnly === undefined ? route.storeReady : 'localFiles';
 }
 
-/** A route answers 501 without running when the store lacks the group it needs. */
-function assertRoutePorted(opts: ResolvedServeOptions, group: StoreGroup | undefined): void {
-  if (group !== undefined && !hasGroup(opts.store, group)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+/** A route answers 501 without running when the store lacks what it needs. */
+function assertRoutePorted(opts: ResolvedServeOptions, need: StoreNeed | undefined): void {
+  if (need !== undefined && !storeMeets(opts.store, need)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }

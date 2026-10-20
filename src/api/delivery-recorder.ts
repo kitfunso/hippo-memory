@@ -7,7 +7,7 @@ import { scoreOverlap, type PromptRecallGate } from '../core/prompt-recall.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
-import type { Ledger } from '../store/port/ledger.js';
+import type { Ledger } from '../store/local/ledger.js';
 import type {
   DeliveryBlockState,
   DeliveryCandidateInput,

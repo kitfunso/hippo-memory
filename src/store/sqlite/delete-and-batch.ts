@@ -17,7 +17,7 @@ import { clock, type WriteBudget } from '../../util/write-budget.js';
 import { chunked } from '../../util/chunked.js';
 import { placeholders } from '../../util/sql.js';
 import { CLI_ACTOR } from '../../core/actor.js';
-import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../port/consolidation.js';
+import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../local/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/store/dormant-memories.test.ts pins it to the schema. */

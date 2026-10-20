@@ -5,7 +5,6 @@
 
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { MemoryEntry, canAutoDelete, LEGACY_TYPED_HALF_LIFE, type DecayOptions } from '../core/memory.js';
-import type { Consolidation, LocalFiles } from '../store/port.js';
 import type { HippoConfig } from '../core/config.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -22,6 +21,7 @@ import { DAY_MS } from '../util/time.js';
 import { plural } from '../util/format.js';
 import type { AppendAuditOpts } from '../store/port/types.js';
 import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from './survivors.js';
+import type { Consolidation, LocalFiles } from '../store/local/index.js';
 
 export type ConsolidateOptions = {
   dryRun?: boolean;

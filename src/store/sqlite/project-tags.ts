@@ -40,8 +40,8 @@ import type {
   ProjectTagWrites,
   TagRewrite,
   ProjectTags,
-} from '../port/project-tags.js';
-import type { EntryCursor } from '../port/consolidation.js';
+} from '../local/project-tags.js';
+import type { EntryCursor } from '../port/types.js';
 
 const TX_LABEL = 'merge_projects';
 const AUTO_REPAIR_META_KEY = 'project_repair_auto';

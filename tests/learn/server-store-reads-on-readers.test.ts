@@ -5,7 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { inspect } from 'node:util';
 import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
 import { saveSkill } from '../../src/objects/skills.js';
-import type { HippoStore, StoreGroups } from '../../src/store/index.js';
+import type { StoreGroups } from '../../src/store/index.js';
+import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { packVectors, vectorCopiesOf, vectorViewsOf } from '../../src/store/sqlite/vector-pack.js';
 import { WORKER_OPS } from '../../src/store/sqlite/worker-ops.js';
@@ -22,7 +23,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
-type Served = HippoStore & StoreGroups;
+type Served = LocalStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
 
 const NOW = new Date(FAKE_NOW);

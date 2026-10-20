@@ -6,11 +6,11 @@
  */
 
 import { textOverlap } from '../util/tokenize.js';
-import type { Consolidation } from '../store/port.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
 import { derivationPartitionKey } from '../core/recall-scope.js';
 import { duplicateKey } from '../util/same-text.js';
+import type { Consolidation } from '../store/local/index.js';
 
 export interface DedupPair {
   kept: string;

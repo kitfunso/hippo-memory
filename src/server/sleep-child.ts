@@ -5,7 +5,7 @@ import { runConsolidation } from '../consolidate/sleep.js';
 import { isStoreBusy } from '../store/port.js';
 import { configReader } from '../core/config.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
-import { sqliteReach, sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
+import { sqliteReach, sqliteStore } from '../store/sqlite/store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../util/env.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
@@ -50,7 +50,7 @@ process.once('message', (message) => {
   const job = message as SleepJob;
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
-      ? runConsolidation(sqliteSyncStore(job.hippoRoot, { lossAversionRatio: envLossAversionRatio() }).localFiles, {
+      ? runConsolidation(storeAt(job.hippoRoot).localFiles, {
           config: loadConfig(job.hippoRoot),
           tenantId: envTenant(),
         })

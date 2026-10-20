@@ -16,13 +16,14 @@ import {
   type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
 import type { LossAversion } from '../../src/core/memory.js';
+import type { LocalStore } from '../../src/store/local/index.js';
 
 declare const store: HippoStore;
 
 describe('hippo-memory/store-kit entry types', () => {
-  it('sqliteStore takes a root path and the ratio its root read, and returns a store with every optional group', () => {
+  it('sqliteStore takes a root path and the ratio its root read, and returns a store with every group and local files', () => {
     expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string, rules?: LossAversion]>();
-    expectTypeOf(sqliteStore).returns.toEqualTypeOf<HippoStore & StoreGroups>();
+    expectTypeOf(sqliteStore).returns.toEqualTypeOf<LocalStore & StoreGroups>();
     // @ts-expect-error the root is a path string
     typeOnly(() => sqliteStore({ hippoRoot: '/tmp/root' }));
   });
@@ -40,8 +41,11 @@ describe('hippo-memory/store-kit entry types', () => {
     typeOnly(() => requireGroup(store, 'base'));
   });
 
-  it('the optional groups are a closed set of four names', () => {
-    expectTypeOf<OptionalGroup>().toEqualTypeOf<'localFiles' | 'vectorViews' | 'readiness' | 'lastRecall'>();
+  it('the optional groups are a closed set of three names, and local files are not on the port', () => {
+    expectTypeOf<OptionalGroup>().toEqualTypeOf<'vectorViews' | 'readiness' | 'lastRecall'>();
+    expectTypeOf<'localFiles' extends StoreGroup ? true : false>().toEqualTypeOf<false>();
+    // @ts-expect-error a store's local files sit beside the port, not in a group
+    typeOnly(() => hasGroup(store, 'localFiles'));
   });
 
   it('SupersedeWrite names the row being replaced and its successor', () => {

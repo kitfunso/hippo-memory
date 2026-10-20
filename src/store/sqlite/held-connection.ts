@@ -11,7 +11,8 @@ import {
   withSqliteBlocked,
   withSqliteOffLoop,
 } from '../../db/index.js';
-import { hasGroup, type HippoStore } from '../port.js';
+import type { HippoStore } from '../port.js';
+import { isLocalStore } from '../local/index.js';
 import { runSqliteRequest } from './request-scope.js';
 import { runsOffLoop } from './worker-store.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../../db/wal-checkpointer.js';
@@ -68,7 +69,7 @@ function holdSqliteConnection(hippoRoot: string): StoreHolder {
 
 /** The holder for the store a server serves: hippo.db's held connection, else a fence that keeps hippo.db shut. */
 export function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
-  if (hasGroup(store, 'localFiles')) return holdSqliteConnection(hippoRoot);
+  if (isLocalStore(store)) return holdSqliteConnection(hippoRoot);
   log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
   // A missed port under another store would otherwise create and write a hippo.db that store never reads.
   return {

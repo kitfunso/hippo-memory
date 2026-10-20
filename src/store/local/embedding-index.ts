@@ -2,7 +2,8 @@
 // Vectors and particles carry no tenant, so each method covers the whole store.
 import type { MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
-import type { EntryCursor, EntryIdPage } from './consolidation.js';
+import type { EntryIdPage } from './consolidation.js';
+import type { EntryCursor } from '../port/types.js';
 
 export interface EmbeddingIndex {
   /** Whether another model than `providerId` built the stored vectors; an unreadable index answers false. */

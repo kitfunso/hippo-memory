@@ -26,6 +26,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'api_key:caller';
 const SHARED = 'the launch date is march third';
+const ALICE = 'personal:private:alice';
 
 type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind' | 'content' | 'summaryDirty'>;
 type Value = AppliedRejection | LiftedRejection | RejectedValueRow[] | boolean[] | Row[];
@@ -40,6 +41,7 @@ interface Seeded {
   readonly child: MemoryEntry;
   readonly summary: MemoryEntry;
   readonly noteB: MemoryEntry;
+  readonly own: MemoryEntry;
 }
 
 let fixture: TwoTenantFixture;
@@ -63,6 +65,7 @@ function seed(dir: string): Seeded {
     merged: a('Merged notes\n\n- the office moves in june\n- badges are reissued in july', { source: 'consolidation' }),
     child: a('launch comms are drafted by marketing', { dagParentId: summary.id }),
     noteB: createMemory(SHARED, { tenantId: TENANT_B }),
+    own: a('my parking spot is level three', { scope: ALICE }),
   };
   for (const entry of [...Object.values(rows), summary]) {
     writeEntry(dir, { ...entry, originProject: 'proj' }, { actor: 'cli' });
@@ -78,18 +81,17 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 
 const added = (side: Side): Omit<AuditEvent, 'id' | 'ts'>[] =>
   side.audit.slice(baseline.audit.length).map(({ id: _id, ts: _ts, ...row }) => row);
-const rejection = (over: Partial<Rejection> & Pick<Rejection, 'textOf'>, tenantId = TENANT_A): Rejection => ({
+const rejection = (over: Partial<Rejection>, tenantId = TENANT_A): Rejection => ({
   tenantId,
   actor: ACTOR,
   reason: 'wrong',
-  inReach: () => true,
-  successorOf: () => undefined,
+  ownScope: null,
   ...over,
 });
 const byText =
   (text: string, tenantId = TENANT_A): Call =>
   (g) =>
-    g.apply(rejection({ textOf: () => text }, tenantId));
+    g.apply(rejection({ value: text }, tenantId));
 const readBack =
   (tenantId: string, ...ids: string[]): Call =>
   async (_g, store) =>
@@ -126,7 +128,7 @@ describe('Rejections.apply', () => {
   it('removes every same-digest row in the tenant, leaves the other tenant, and writes one reject_value row', async () => {
     const { note, copy, noteB } = seeded;
     const side = await conforms([
-      (g) => g.apply(rejection({ memoryId: note.id, textOf: (source) => source?.content ?? '' })),
+      (g) => g.apply(rejection({ memoryId: note.id })),
       readBack(TENANT_A, note.id, copy.id),
       readBack(TENANT_B, noteB.id),
     ]);
@@ -153,43 +155,55 @@ describe('Rejections.apply', () => {
     ]);
   });
 
-  it('replaces a merged row holding the text with the successor its policy names', async () => {
+  it('replaces a merged row holding the text with the successor built from its other texts', async () => {
     const { merged } = seeded;
-    const successor = {
-      ...createMemory('badges are reissued in july', { tenantId: TENANT_A }),
-      originProject: 'proj',
-    };
-    const side = await conforms([
-      (g) =>
-        g.apply(
-          rejection({
-            textOf: () => 'the office moves in june',
-            successorOf: (row) => (row.id === merged.id ? successor : undefined),
-          }),
-        ),
-      readBack(TENANT_A, merged.id, successor.id),
+    const sides = await onBothStores(fixture, 'rejections', inMemoryRejectionsStore, [
+      async (g, store) => {
+        const applied = await g.apply(rejection({ value: 'the office moves in june' }));
+        const rows = await store.entriesByIds([merged.id, ...applied.successorIds], TENANT_A);
+        // A successor gets a fresh id as a new merge does, so the two sides compare it by its text.
+        return rows.map((r) => ({
+          id: r.id === merged.id ? r.id : 'successor',
+          tenantId: r.tenantId,
+          kind: r.kind,
+          content: r.content,
+          summaryDirty: r.summaryDirty,
+        }));
+      },
     ]);
-    expect(value<AppliedRejection>(side, 0)).toMatchObject({ removedIds: [merged.id], successorIds: [successor.id] });
-    expect(value<Row[]>(side, 1).map((r) => r.id)).toEqual([successor.id]);
+    expect(sides.other.outcomes).toEqual(sides.sqlite.outcomes);
+    expect(sides.other.audit.map((r) => r.op)).toEqual(sides.sqlite.audit.map((r) => r.op));
+    const rows = value<Row[]>(sides.sqlite, 0);
+    expect(rows.map((r) => r.id)).toEqual(['successor']);
+    expect(rows[0]?.content).toContain('badges are reissued in july');
+    expect(rows[0]?.content).not.toContain('the office moves in june');
   });
 
-  it('writes nothing when textOf refuses, and leaves a row its policy puts out of reach', async () => {
-    const { note } = seeded;
+  it("writes nothing for a rejection naming no text, and leaves another person's personal row", async () => {
+    const { own } = seeded;
     const side = await conforms([
-      (g) =>
-        g.apply(
-          rejection({
-            textOf: () => {
-              throw new Error('refused');
-            },
-          }),
-        ),
-      (g) => g.apply(rejection({ textOf: () => note.content, inReach: () => false })),
-      readBack(TENANT_A, note.id),
+      (g) => g.apply(rejection({})),
+      (g) => g.apply(rejection({ value: own.content })),
+      readBack(TENANT_A, own.id),
+      (g) => g.apply(rejection({ value: own.content, ownScope: ALICE })),
+      readBack(TENANT_A, own.id),
     ]);
-    expect(side.outcomes[0]).toEqual({ error: 'Error: refused' });
+    expect(side.outcomes[0]).toMatchObject({ error: expect.stringContaining('reject requires either a memory id') });
     expect(value<AppliedRejection>(side, 1).removedIds).toEqual([]);
-    expect(value<Row[]>(side, 2).map((r) => r.id)).toEqual([note.id]);
+    expect(value<Row[]>(side, 2).map((r) => r.id)).toEqual([own.id]);
+    expect(value<AppliedRejection>(side, 3).removedIds).toEqual([own.id]);
+    expect(value<Row[]>(side, 4)).toEqual([]);
+  });
+
+  it('refuses a personal row and a row of another tenant named by id, before any write', async () => {
+    const { own, noteB } = seeded;
+    const side = await conforms([
+      (g) => g.apply(rejection({ memoryId: own.id })),
+      (g) => g.apply(rejection({ memoryId: noteB.id })),
+    ]);
+    expect(side.outcomes[0]).toMatchObject({ error: expect.stringContaining("Personal memories can't be rejected") });
+    expect(side.outcomes[1]).toMatchObject({ error: `Error: memory not found: ${noteB.id}` });
+    expect(added(side)).toEqual([]);
   });
 });
 
@@ -218,14 +232,14 @@ describe('Rejections.list, lift and refusedAmong', () => {
   });
 
   it('refuses the tombstoned text for a new id in its tenant only, and passes the row that already holds it', async () => {
-    const { note } = seeded;
+    const { own } = seeded;
     const side = await conforms([
-      (g) => g.apply(rejection({ textOf: () => SHARED, inReach: () => false })),
+      (g) => g.apply(rejection({ value: own.content })),
       (g) =>
         g.refusedAmong([
-          { tenantId: TENANT_A, entryId: 'mem_new', content: 'The launch date is march THIRD' },
-          { tenantId: TENANT_A, entryId: note.id, content: SHARED },
-          { tenantId: TENANT_B, entryId: 'mem_new', content: SHARED },
+          { tenantId: TENANT_A, entryId: 'mem_new', content: 'My parking spot is LEVEL three' },
+          { tenantId: TENANT_A, entryId: own.id, content: own.content },
+          { tenantId: TENANT_B, entryId: 'mem_new', content: own.content },
         ]),
     ]);
     expect(value<boolean[]>(side, 1)).toEqual([true, false, false]);
