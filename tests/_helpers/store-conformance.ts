@@ -9,6 +9,7 @@ import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index
 import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
+import { holdUntilTestEnds } from './held-stores.js';
 import { initTestStore } from './store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
@@ -127,6 +128,7 @@ export async function onBothStores<G extends RequiredGroup, R>(
     const roots = { sqlite: join(home, 'sqlite'), other: join(home, 'other') };
     cpSync(fixture.dir, roots.sqlite, { recursive: true });
     cpSync(fixture.dir, roots.other, { recursive: true });
+    holdUntilTestEnds(roots.sqlite);
     const sqlite = await runSide(
       { store: sqliteStore(roots.sqlite), auditRows: () => auditRowsAt(roots.sqlite) },
       group,

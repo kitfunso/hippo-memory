@@ -21,6 +21,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import type { JsonObject } from '../../src/store/port/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { releaseHeldStores } from '../_helpers/held-stores.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -89,6 +90,8 @@ function seed(): Seeded {
   mkdirSync(cwd, { recursive: true });
   const hippoRoot = join(cwd, '.hippo');
   initTestStore(hippoRoot);
+  // The bundle lists the store files a last close leaves, so this store is not held open.
+  releaseHeldStores(hippoRoot);
 
   const memoryCanary = `canary-memory-${randomUUID()}`;
   writeEntry(hippoRoot, createMemory(memoryCanary));
