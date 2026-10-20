@@ -13,8 +13,8 @@ import { placeholders } from '../util/sql.js';
 
 /** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means
  * user-global (empty name).
- * Name: `.hippo-project.json`, else the normalized `origin`, else the folder name. Must not import shared.ts /
- * store.ts / api/index.ts (cycle). */
+ * Name: `.hippo-project.json`, else the normalized `origin`, else the folder name. Must not import shared.ts,
+ * store.ts or api/index.ts, since each would close an import cycle. */
 
 /** The project a working directory belongs to. */
 export interface ProjectIdentity {

@@ -268,8 +268,8 @@ function batchWriteAndDeleteOn(
       out.fts.rows.filter((row) => !removed.has(row.id)),
       [...out.fts.staleIds, ...out.removedIds],
     );
-    // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the dirty flag commits atomically with the
-    // writes + deletes.
+    // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the dirty flag commits atomically with the writes
+    // and deletes.
     for (const parentId of out.dirty.parents) {
       markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID, 'batch');
     }

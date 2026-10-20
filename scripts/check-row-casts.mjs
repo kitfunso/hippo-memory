@@ -101,21 +101,25 @@ export function selectNames(sql) {
 }
 
 /** Reads the SQL text of TypeScript expressions as far as constants, builders and string methods allow. */
-function sqlReader(checker) {
-  const symbolOf = (node) => {
-    const symbol = checker.getSymbolAtLocation(node);
-    return symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
-  };
+class SqlReader {
+  constructor(checker) {
+    this.checker = checker;
+  }
+
+  symbolOf(node) {
+    const symbol = this.checker.getSymbolAtLocation(node);
+    return symbol && symbol.flags & ts.SymbolFlags.Alias ? this.checker.getAliasedSymbol(symbol) : symbol;
+  }
 
   /** The initializer of a `const`, or of a `let` that is only ever appended to, which reads as a prefix. */
-  function boundValue(id) {
-    const decl = symbolOf(id)?.valueDeclaration;
+  boundValue(id) {
+    const decl = this.symbolOf(id)?.valueDeclaration;
     if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return undefined;
     const flags = ts.getCombinedNodeFlags(decl);
     if (flags & ts.NodeFlags.Const) return { init: unwrap(decl.initializer), prefix: false };
     if (!(flags & ts.NodeFlags.Let)) return undefined;
     let reassigned = false;
-    const symbol = symbolOf(decl.name);
+    const symbol = this.symbolOf(decl.name);
     const walk = (n) => {
       if (
         ts.isBinaryExpression(n) &&
@@ -123,7 +127,7 @@ function sqlReader(checker) {
         n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
         n.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
         ts.isIdentifier(n.left) &&
-        symbolOf(n.left) === symbol
+        this.symbolOf(n.left) === symbol
       ) {
         reassigned = true;
       }
@@ -134,10 +138,10 @@ function sqlReader(checker) {
   }
 
   /** The called function and the one expression it returns, when it has exactly one `return`. */
-  function called(call) {
+  called(call) {
     if (!ts.isIdentifier(call.expression)) return undefined;
-    const decl = symbolOf(call.expression)?.valueDeclaration;
-    const fn = decl && ts.isVariableDeclaration(decl) ? boundValue(decl.name)?.init : decl;
+    const decl = this.symbolOf(call.expression)?.valueDeclaration;
+    const fn = decl && ts.isVariableDeclaration(decl) ? this.boundValue(decl.name)?.init : decl;
     if (!fn || !(ts.isFunctionDeclaration(fn) || ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || !fn.body) {
       return undefined;
     }
@@ -150,31 +154,32 @@ function sqlReader(checker) {
     ts.forEachChild(fn.body, walk);
     return returns.length === 1 && returns[0].expression ? { fn, body: unwrap(returns[0].expression) } : undefined;
   }
-  const returned = (call) => called(call)?.body;
 
   /** The node an expression stands for: a constant's initializer or a builder's returned expression. */
-  function source(expr, depth) {
+  source(expr, depth) {
     const node = unwrap(expr);
     if (depth > MAX_DEPTH) return undefined;
     if (ts.isIdentifier(node)) {
-      const bound = boundValue(node);
-      return bound && !bound.prefix ? source(bound.init, depth + 1) : node;
+      const bound = this.boundValue(node);
+      return bound && !bound.prefix ? this.source(bound.init, depth + 1) : node;
     }
     if (ts.isCallExpression(node)) {
-      const body = returned(node);
-      return body ? source(body, depth + 1) : node;
+      const body = this.called(node)?.body;
+      return body ? this.source(body, depth + 1) : node;
     }
     return node;
   }
 
   /** The strings of a constant array, through spreads and `.map` over a one-parameter arrow, or undefined. */
-  function strings(expr, env, depth) {
-    const node = source(expr, depth);
+  strings(expr, env, depth) {
+    const node = this.source(expr, depth);
     if (!node) return undefined;
     if (ts.isArrayLiteralExpression(node)) {
       const out = [];
       for (const el of node.elements) {
-        const part = ts.isSpreadElement(el) ? strings(el.expression, env, depth + 1) : [text(el, env, depth + 1)];
+        const part = ts.isSpreadElement(el)
+          ? this.strings(el.expression, env, depth + 1)
+          : [this.text(el, env, depth + 1)];
         if (!part || part.some((p) => p.includes(UNKNOWN))) return undefined;
         out.push(...part);
       }
@@ -182,82 +187,85 @@ function sqlReader(checker) {
     }
     const call = ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) ? node : undefined;
     if (call?.expression.name.text === 'split' && call.arguments.length === 1) {
-      const whole = text(call.expression.expression, env, depth + 1);
-      const sep = text(call.arguments[0], env, depth + 1);
+      const whole = this.text(call.expression.expression, env, depth + 1);
+      const sep = this.text(call.arguments[0], env, depth + 1);
       return whole.includes(UNKNOWN) || sep.includes(UNKNOWN) ? undefined : whole.split(sep);
     }
     const fn = call?.expression.name.text === 'map' ? unwrap(call.arguments[0] ?? call) : undefined;
     if (!fn || !ts.isArrowFunction(fn) || fn.parameters.length !== 1 || ts.isBlock(fn.body)) return undefined;
     const param = fn.parameters[0].name.getText();
-    const base = strings(call.expression.expression, env, depth + 1);
-    return base?.map((value) => text(fn.body, new Map([...env, [param, value]]), depth + 1));
+    const base = this.strings(call.expression.expression, env, depth + 1);
+    return base?.map((value) => this.text(fn.body, new Map([...env, [param, value]]), depth + 1));
   }
 
   /** The SQL text an expression spells, with UNKNOWN for each part known only at run time. */
-  function text(expr, env = new Map(), depth = 0) {
+  text(expr, env = new Map(), depth = 0) {
     const node = unwrap(expr);
     if (depth > MAX_DEPTH) return UNKNOWN;
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
     if (ts.isTemplateExpression(node)) {
       return (
-        node.head.text + node.templateSpans.map((s) => text(s.expression, env, depth + 1) + s.literal.text).join('')
+        node.head.text +
+        node.templateSpans.map((s) => this.text(s.expression, env, depth + 1) + s.literal.text).join('')
       );
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-      return text(node.left, env, depth + 1) + text(node.right, env, depth + 1);
+      return this.text(node.left, env, depth + 1) + this.text(node.right, env, depth + 1);
     }
     if (ts.isIdentifier(node)) {
       if (env.has(node.text)) return env.get(node.text);
-      const bound = boundValue(node);
+      const bound = this.boundValue(node);
       if (!bound) return UNKNOWN;
-      return text(bound.init, env, depth + 1) + (bound.prefix ? UNKNOWN : '');
+      return this.text(bound.init, env, depth + 1) + (bound.prefix ? UNKNOWN : '');
     }
     if (ts.isPropertyAccessExpression(node)) {
-      const obj = source(node.expression, depth + 1);
+      const obj = this.source(node.expression, depth + 1);
       const prop =
         obj && ts.isObjectLiteralExpression(obj)
           ? obj.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === node.name.text)
           : undefined;
-      return prop ? text(prop.initializer, env, depth + 1) : UNKNOWN;
+      return prop ? this.text(prop.initializer, env, depth + 1) : UNKNOWN;
     }
-    if (ts.isCallExpression(node)) {
-      if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'join') {
-        const parts = strings(node.expression.expression, env, depth + 1);
-        const sep = node.arguments.length === 0 ? ',' : text(node.arguments[0], env, depth + 1);
-        return parts && !sep.includes(UNKNOWN) ? parts.join(sep) : UNKNOWN;
-      }
-      const target = called(node);
-      if (!target) return UNKNOWN;
-      // Each parameter reads as its argument's text, so a builder called with literals spells its whole result.
-      const args = target.fn.parameters.map((p, i) => [
-        p.name.getText(),
-        node.arguments[i] ? text(node.arguments[i], env, depth + 1) : UNKNOWN,
-      ]);
-      return text(target.body, new Map(args), depth + 1);
+    return ts.isCallExpression(node) ? this.callText(node, env, depth) : UNKNOWN;
+  }
+
+  /** The text of a `.join` over constant strings, or of a builder called with arguments in view. */
+  callText(node, env, depth) {
+    if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'join') {
+      const parts = this.strings(node.expression.expression, env, depth + 1);
+      const sep = node.arguments.length === 0 ? ',' : this.text(node.arguments[0], env, depth + 1);
+      return parts && !sep.includes(UNKNOWN) ? parts.join(sep) : UNKNOWN;
     }
-    return UNKNOWN;
+    const target = this.called(node);
+    if (!target) return UNKNOWN;
+    // Each parameter reads as its argument's text, so a builder called with literals spells its whole result.
+    const args = target.fn.parameters.map((p, i) => [
+      p.name.getText(),
+      node.arguments[i] ? this.text(node.arguments[i], env, depth + 1) : UNKNOWN,
+    ]);
+    return this.text(target.body, new Map(args), depth + 1);
   }
 
   /** The column names the SQL answers; a choice between two statements answers only the names both share. */
-  function names(expr, depth = 0) {
-    const node = source(expr, depth);
+  names(expr, depth = 0) {
+    const node = this.source(expr, depth);
     if (!node) return undefined;
     if (ts.isConditionalExpression(node)) {
-      const a = names(node.whenTrue, depth + 1);
-      const b = names(node.whenFalse, depth + 1);
+      const a = this.names(node.whenTrue, depth + 1);
+      const b = this.names(node.whenFalse, depth + 1);
       if (!a || !b) return undefined;
       if (a.includes('*')) return b;
       return b.includes('*') ? a : a.filter((n) => b.includes(n));
     }
-    return selectNames(text(node, new Map(), depth));
+    return selectNames(this.text(node, new Map(), depth));
   }
 
   /** The SQL a read runs: `db.prepare(sql)`, `cachedStatement(db, sql)`, or a `const` holding either. */
-  function statementSql(receiver) {
+  statementSql(receiver) {
     const node = unwrap(receiver);
     if (ts.isIdentifier(node)) {
-      const bound = boundValue(node);
-      return bound && !bound.prefix ? statementSql(bound.init) : undefined;
+      const bound = this.boundValue(node);
+      return bound && !bound.prefix ? this.statementSql(bound.init) : undefined;
     }
     if (!ts.isCallExpression(node)) return undefined;
     const callee = node.expression;
@@ -265,8 +273,6 @@ function sqlReader(checker) {
     if (ts.isIdentifier(callee) && callee.text === 'cachedStatement') return node.arguments[1];
     return undefined;
   }
-
-  return { symbolOf, names, statementSql };
 }
 
 // Library generics whose first argument is the row the keys come from.
@@ -323,7 +329,7 @@ function rowCastProblem(checker, sql, cast, read) {
 export function findRowCasts(program, srcDir) {
   const root = srcDir.replace(/\\/g, '/').replace(/\/$/, '');
   const checker = program.getTypeChecker();
-  const sql = sqlReader(checker);
+  const sql = new SqlReader(checker);
   const casts = [];
   for (const sf of program.getSourceFiles()) {
     if (sf.isDeclarationFile || !sf.fileName.startsWith(`${root}/`)) continue;

@@ -142,7 +142,8 @@ function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: n
 function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
   try {
     const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
-    // memories_fts has no tenant_id column; filter via the joined memories row (cheap with idx_memories_tenant_created).
+    // memories_fts has no tenant_id column, so the joined memories row filters by tenant.
+    // idx_memories_tenant_created keeps that join cheap.
     return cachedStatement(
       db,
       `
