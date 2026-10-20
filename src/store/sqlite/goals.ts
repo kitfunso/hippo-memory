@@ -47,11 +47,10 @@ export function rowToGoal(row: GoalRow): Goal {
   };
 }
 
-/** Depth-cap enforcer for pushGoalAt and resumeGoalAt: suspends the oldest `overflow` goals; **caller MUST be inside
- * a `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
+/** Depth-cap enforcer for pushGoalAt and resumeGoalAt: suspends the oldest `overflow` goals; **caller MUST be inside a
+ * `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
 function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
-  // SAFETY: the row comes from the SELECT above, which projects exactly one
-  // column, `c`, as a COUNT(*).
+  // SAFETY: the row comes from the SELECT above, which projects exactly one column, `c`, as a COUNT(*).
   const activeCount = (
     db
       .prepare(`
@@ -128,8 +127,8 @@ function pushGoalAt(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalO
 
 function assertParentInSession(db: DatabaseSyncLike, opts: PushGoalOpts): void {
   if (!opts.parentGoalId) return;
-  // SAFETY: the row comes from the SELECT above, which projects exactly
-  // the tenant_id and session_id columns of goal_stack.
+  // SAFETY: the row comes from the SELECT above, which projects exactly the tenant_id and session_id columns of
+  // goal_stack.
   const parent = db.prepare(`SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`).get(opts.parentGoalId) as
     | { tenant_id: string; session_id: string }
     | undefined;
@@ -276,8 +275,8 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
   const score = opts.outcomeScore ?? null;
 
   withWriteScope(db, 'complete_goal', () => {
-    // SAFETY: the row comes from the SELECT above, which projects exactly
-    // the created_at and status columns of goal_stack.
+    // SAFETY: the row comes from the SELECT above, which projects exactly the created_at and status columns of
+    // goal_stack.
     const goalRow = db.prepare(`SELECT created_at, status FROM goal_stack WHERE id = ?`).get(goalId) as
       | { created_at: string; status: string }
       | undefined;
@@ -299,8 +298,8 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
       else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
 
       if (multiplier !== 1) {
-        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one
-        // adjustment per pair.
+        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment
+        // per pair.
         db.prepare(`
           UPDATE memories
           SET strength = MIN(1.0, MAX(0.0, strength * ?))
@@ -322,8 +321,8 @@ function suspendGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string):
 
 function resumeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
   withWriteScope(db, 'resume_goal', () => {
-    // SAFETY: the row comes from the SELECT above, which projects exactly
-    // the session_id, tenant_id, and status columns of goal_stack.
+    // SAFETY: the row comes from the SELECT above, which projects exactly the session_id, tenant_id, and status columns
+    // of goal_stack.
     const row = db.prepare(`SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`).get(goalId) as
       | { session_id: string; tenant_id: string; status: string }
       | undefined;

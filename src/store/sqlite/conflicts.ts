@@ -156,8 +156,8 @@ export function replaceDetectedConflictsAt(
   syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, changedIds, ALL_TENANTS).values()]);
 }
 
-/** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read
- * before the refresh takes the write lock. */
+/** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read before
+ * the refresh takes the write lock. */
 interface ConflictRefreshReads {
   sameTenant: SameTenant;
   storedRefs: ReadonlyMap<string, string | null>;
@@ -166,8 +166,8 @@ interface ConflictRefreshReads {
 /** The refresh's reads, kept out of the write lock; only rows holding refs, in an open conflict or in `detected` are
  * loaded, not the whole table. */
 function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedConflict[]): ConflictRefreshReads {
-  // Tenant guard: a conflict is meaningful only within one tenant, so cross-tenant pairs are
-  // skipped on insert and on rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
+  // Tenant guard: a conflict is meaningful only within one tenant, so cross-tenant pairs are skipped on insert and on
+  // rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
   // SAFETY: rows' shape matches the three columns named in the SELECT.
@@ -285,8 +285,7 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
 
   const refMap = new Map<string, Set<string>>();
   for (const row of openConflicts) {
-    // Skip cross-tenant pairs so a stale row never
-    // seeds a foreign id into conflicts_with_json.
+    // Skip cross-tenant pairs so a stale row never seeds a foreign id into conflicts_with_json.
     if (!sameTenant(row.memory_a_id, row.memory_b_id)) continue;
     if (!refMap.has(row.memory_a_id)) refMap.set(row.memory_a_id, new Set());
     if (!refMap.has(row.memory_b_id)) refMap.set(row.memory_b_id, new Set());
@@ -310,8 +309,8 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
   return changedIds;
 }
 
-/** Metadata shape of the `conflict_resolve` audit row; rejectedDigest
- * is set only when the loser's value was also tombstoned. */
+/** Metadata shape of the `conflict_resolve` audit row; rejectedDigest is set only when the loser's value was also
+ * tombstoned. */
 interface ConflictResolveMeta {
   conflictId: number;
   keepId: string;
@@ -325,8 +324,9 @@ interface ConflictResolveMeta {
 // A side still in the tenant and still holding the scope the api decided on.
 const SIDE_HOLDS = 'EXISTS (SELECT 1 FROM memories WHERE id = ? AND tenant_id = ? AND scope IS ?)';
 
-/** Marks the conflict resolved while it is open, names this pair and each side holds its scope; false writes
- * nothing. */
+/**
+ * Marks the conflict resolved while it is open, names this pair and each side holds its scope; false writes nothing.
+ */
 function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: ConflictResolution): boolean {
   const { conflictId, keep, loser } = resolution;
   const pair = [keep.id, loser.id, loser.id, keep.id];
@@ -530,8 +530,8 @@ function auditConflictResolve(
     // Every row this call removed, not just loserId, so the duplicate sweep (extraRemovedIds) is audited too.
     removedIds: loserRemoved ? [r.loser.id, ...extraRemovedIds] : [],
   };
-  // Assigned only when present so the serialized audit payload keeps
-  // omitting the key, exactly as the pre-migration object literal did.
+  // Assigned only when present so the serialized audit payload keeps omitting the key, exactly as the pre-migration
+  // object literal did.
   if (rejectedDigest !== undefined) conflictResolveMeta.rejectedDigest = rejectedDigest;
   // Fresh spread literal: ConflictResolveMeta is a closed interface, not assignable to audit()'s Record<string,
   // JsonValue> metadata otherwise.

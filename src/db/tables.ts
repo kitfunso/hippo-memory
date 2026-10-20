@@ -15,8 +15,7 @@ export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnNa
 
 export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
-  // SAFETY: row's shape matches the single `name` column named in the
-  // SELECT above.
+  // SAFETY: row's shape matches the single `name` column named in the SELECT above.
   const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as
     | { name?: string }
     | undefined;
@@ -54,8 +53,9 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
   }
 }
 
-/** Sleep runs a store keeps; stats.json lists exactly these,
- * so a recall's stats rewrite reads a fixed number of rows. */
+/**
+ * Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a fixed number of rows.
+ */
 export const CONSOLIDATION_RUNS_KEPT = 50;
 
 export function pruneConsolidationRuns(db: DatabaseSyncLike, keep = CONSOLIDATION_RUNS_KEPT): void {

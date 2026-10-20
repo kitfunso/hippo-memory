@@ -8,8 +8,8 @@ import { ignoringCodes } from '../util/expected-errors.js';
 
 const _require = createRequire(import.meta.url);
 
-// Importing both loads two onnxruntime-node builds whose finalizers can double-free on exit, so one is picked:
-// the maintained package hippo ships, with Xenova only as a fallback a user installed.
+// Importing both loads two onnxruntime-node builds whose finalizers can double-free on exit, so one is picked: the
+// maintained package hippo ships, with Xenova only as a fallback a user installed.
 const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
 
 export interface TransformersPackage {

@@ -19,8 +19,8 @@ import type { EntryCursor, EntryPage } from '../port/types.js';
 
 const MAX_FRESH_RAW = 200;
 
-// The plus keeps SQLite on the primary key for an id list: with
-// a bare tenant_id it walks every row of the tenant instead.
+// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant
+// instead.
 export const TENANT_IS = '+tenant_id = ?';
 
 /** Read a memory entry by ID; a row in another tenant reads as null. */
@@ -33,8 +33,9 @@ export function readEntryAt(db: DatabaseSyncLike, id: string, tenantId: TenantId
   return row ? rowToEntry(row) : null;
 }
 
-/** Rows by id on the caller's handle, one query per chunk; an
- * id missing or in another tenant is absent from the map. */
+/**
+ * Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the map.
+ */
 export function selectEntriesByIds(
   db: DatabaseSyncLike,
   ids: readonly string[],
@@ -128,8 +129,8 @@ export function loadSessionRawMemoriesAt(db: DatabaseSyncLike, query: SessionRow
 }
 
 /** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller
- * could not load. Mirrors
- * `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only `ownScope`. */
+ * could not load. Mirrors `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only
+ * `ownScope`. */
 export function countSessionRawMemoriesAt(db: DatabaseSyncLike, query: SessionRows<SessionRawCount>): number {
   if (!query.sessionId) return 0;
   const where = sessionRawWhere(query);
@@ -143,10 +144,9 @@ export function countSessionRawMemoriesAt(db: DatabaseSyncLike, query: SessionRo
   return Number(row?.c ?? 0);
 }
 
-/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass
- * `sessionId` or concurrent sessions show up in each other's fresh tail. The
- * tenant-wide shape is discouraged: `api.recall` throws `RecallContractError`
- * for it when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
+/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or concurrent sessions show
+ * up in each other's fresh tail. The tenant-wide shape is discouraged: `api.recall` throws `RecallContractError` for it
+ * when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function loadFreshRawMemoriesAt(
   db: DatabaseSyncLike,
   count: number,
@@ -249,8 +249,8 @@ export function loadEntriesMentioningAt(
   const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
   const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
   const params: string[] = [...likes];
-  // A tag needing JSON escapes or case folding past ASCII is not
-  // found by a substring of tags_json, so every tagged row stays in.
+  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json, so every tagged row
+  // stays in.
   const plainTag = /^[ -~]*$/.test(tag) && !/["\\]/.test(tag);
   if (plainTag) {
     clauses.push(`tags_json LIKE ? ESCAPE '\\'`);
@@ -385,8 +385,8 @@ export interface TenantTextPage {
   readonly next: EntryCursor | null;
 }
 
-/** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs: callers read whole rows
- * only for the ids that match. */
+/** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs: callers read whole rows only
+ * for the ids that match. */
 export function selectTenantTextsPage(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -536,8 +536,8 @@ export function contentsWithTagAt(
 
 /** A tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
 export function rawRowsUnderRefAt(db: DatabaseSyncLike, tenantId: string, refPrefix: string): RawRefRow[] {
-  // SAFETY: query selects exactly the columns of RawRefRow, in the same
-  // names, from the memories table this module owns.
+  // SAFETY: query selects exactly the columns of RawRefRow, in the same names, from the memories table this module
+  // owns.
   const rows = db
     .prepare(
       `SELECT id, artifact_ref, tags_json, scope FROM memories
@@ -646,8 +646,8 @@ export function selectRowsHoldingOutsideSourcePrefixAt(
   }>;
 }
 
-/** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced,
- * in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
+/** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced, in loadAllEntries'
+ * order and in every scope; `exceptSessionId` drops one session's own rows. */
 export function liveContentsBySourceAndTagAt(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -668,8 +668,8 @@ export function liveContentsBySourceAndTagAt(
   return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
 }
 
-/** Every tenant's distilled rows nothing has superseded, in
- * loadAllEntries' order: the rows that can be each other's duplicate. */
+/** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's
+ * duplicate. */
 export function loadCurrentDistilledEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
@@ -716,8 +716,8 @@ export function loadEntriesWithSignalsAt(
   return pageOf(rows.map(rowToEntry), page.limit);
 }
 
-/** A tenant's rows from `origins` that nothing superseded and
- * that are neither raw nor archived, in loadAllEntries' order. */
+/** A tenant's rows from `origins` that nothing superseded and that are neither raw nor archived, in loadAllEntries'
+ * order. */
 export function loadCurrentEntriesFromOriginsAt(
   db: DatabaseSyncLike,
   tenantId: string,

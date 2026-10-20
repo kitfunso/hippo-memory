@@ -19,8 +19,8 @@ import type {
   GitHubPullRequestReviewCommentEvent,
 } from './types.js';
 
-/** Discriminated union of the four event shapes V1 ingests; eventName MUST equal the X-GitHub-Event header,
- *  since computeIdempotencyKey folds it into the dedupe key. */
+/** Discriminated union of the four event shapes V1 ingests; eventName MUST equal the X-GitHub-Event header, since
+ *  computeIdempotencyKey folds it into the dedupe key. */
 export type IngestEvent =
   | { eventName: 'issues'; payload: GitHubIssueEvent }
   | { eventName: 'issue_comment'; payload: GitHubIssueCommentEvent }
@@ -88,8 +88,8 @@ export async function ingestEvent(ctx: Context, input: IngestInput): Promise<Ing
     eventName: input.event.eventName,
   };
 
-  // Fast path: pre-check. Avoids running the transform / opening a write tx
-  // for the common already-seen case (GitHub auto-retries with the same body).
+  // Fast path: pre-check. Avoids running the transform / opening a write tx for the common already-seen case (GitHub
+  // auto-retries with the same body).
   const seen = await events.eventRecord(event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 

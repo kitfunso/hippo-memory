@@ -184,8 +184,8 @@ function resolvePreCompactTranscript(
   logFile: string,
   runtime: HookRuntime,
 ): string | null {
-  // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's
-  // transcript under THIS payload's session_id, so it runs only on a manual invocation (no payload).
+  // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's transcript under THIS
+  // payload's session_id, so it runs only on a manual invocation (no payload).
   let transcriptPath: string | null;
   if (payloadTranscriptPath !== null) {
     if (isReadableFile(payloadTranscriptPath)) {

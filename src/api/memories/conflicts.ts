@@ -121,8 +121,8 @@ function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
   throw new BadRequestError(`keep must be one of the two memories in conflict ${conflict.id}: ${a.id}, ${b.id}`);
 }
 
-/** A rejection is a tenant-wide tombstone, so it may not carry a personal row's value, and its sweep stays within
- * what the caller may touch. */
+/** A rejection is a tenant-wide tombstone, so it may not carry a personal row's value, and its sweep stays within what
+ * the caller may touch. */
 function loserFate(actor: Actor, loser: ConflictSide, opts: ResolveMemoryConflictOptions): LoserFate {
   if (opts.rejectLoser !== true) return { kind: opts.forget === true ? 'remove' : 'weaken' };
   if (isPersonalScope(loser.scope)) {
@@ -134,8 +134,8 @@ function loserFate(actor: Actor, loser: ConflictSide, opts: ResolveMemoryConflic
   return { kind: 'reject', ownScope: personalScopeOf(actor) };
 }
 
-/** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:
- *  its repo or user-global, and no scope it was not asked for. */
+/** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall: its
+ *  repo or user-global, and no scope it was not asked for. */
 export async function conflictListOpen(
   ctx: Context,
   opts: ConflictPageOptions & { project?: CallerProject } = {},

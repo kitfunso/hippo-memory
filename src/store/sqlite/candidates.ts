@@ -50,8 +50,8 @@ interface RecentRowsOptions {
   readonly origins?: RecentOrigins;
 }
 
-// `id DESC` mirrors contextGet's comparator, not loadFreshRawMemories'
-// cross-ingest-stable order: that would change what the hook injects.
+// `id DESC` mirrors contextGet's comparator, not loadFreshRawMemories' cross-ingest-stable order: that would change
+// what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
 
 interface OwnRows {
@@ -59,8 +59,8 @@ interface OwnRows {
   readonly params: ReadonlyArray<string | number>;
 }
 
-// The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the
-// delivery ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
+// The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the delivery
+// ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
 function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
@@ -138,8 +138,8 @@ export function loadAmbientCandidatesAt(
 ): AmbientCandidates {
   const refused: AmbientRefusal[] = [];
   const admit = noting(judge, refused);
-  // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
-  // and include_recent is any non-negative finite number at the HTTP edge.
+  // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one, and include_recent is any non-negative
+  // finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
   // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
   const run: RunSql = (where, params) =>
@@ -157,8 +157,8 @@ export function loadAmbientCandidatesAt(
     for (const e of loadRecentRows(run, drifted, tenantId, { needed, admit, origins })) byId.set(e.id, e);
   }
 
-  // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
-  // is stable, so input order is load-bearing downstream.
+  // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort is stable, so input order is load-bearing
+  // downstream.
   const entries = [...byId.values()].sort((a, b) => {
     const byCreated = a.created.localeCompare(b.created);
     return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
@@ -260,8 +260,8 @@ export function loadContextCandidatesAt(
   ).n;
   // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
   const ranked = matched > cap;
-  // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could
-  // not prove itself, and the scan below ranks the tenant.
+  // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could not
+  // prove itself, and the scan below ranks the tenant.
   const bySubset = ranked && cap > 0 && !isOutcomeSlowAblated() ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
   if (bySubset.length > 0) return bySubset.map(rowToEntry);
   const sql = ranked
@@ -269,8 +269,8 @@ export function loadContextCandidatesAt(
     SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
   ) ORDER BY created ASC, id ASC`
     : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
-  // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries
-  // ids only.
+  // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries ids
+  // only.
   const rows = db.prepare(sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
   return rows.map(rowToEntry);
 }
@@ -315,8 +315,9 @@ export function loadTextsHoldingWordsAt(
   return out;
 }
 
-/** A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before
- * it. */
+/**
+ * A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it.
+ */
 export function newestEntriesAt(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
   // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
@@ -332,8 +333,8 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
 /** How many of a tenant's newest rows schemaFitAt reads; older rows no longer move the fit. */
 const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
-/** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate
- * and texts stream one column, so no row is loaded. */
+/** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate and texts
+ * stream one column, so no row is loaded. */
 export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: string, tags: readonly string[]): number {
   const newest = 'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
   // One read transaction, so the row count and the texts come from the same snapshot.
@@ -348,8 +349,8 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
       rows += group.n;
       for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
     }
-    // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out;
-    // a stored per-tenant tag and token tally is the upgrade.
+    // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out; a stored per-tenant tag and
+    // token tally is the upgrade.
     // SAFETY: the SELECT names exactly the one column read.
     const texts = db.prepare(`SELECT content FROM (${newest})`).iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{
       content: string;
@@ -471,8 +472,9 @@ function tallyStatusRows(
   return { total, byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength: total > 0 ? sums.strength / total : 0 };
 }
 
-/** The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is
- * built. */
+/**
+ * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built.
+ */
 export function statusCountsAt(
   db: DatabaseSyncLike,
   rules: LossAversion,

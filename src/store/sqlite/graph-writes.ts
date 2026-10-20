@@ -52,8 +52,8 @@ export function resolveConsolidatedSource(
   const { memKind, effectiveMemoryId } = checkSourceMemory(db, tenantId, memoryId, sourceObject, label);
   assertSourceObjectUsable(db, tenantId, sourceObject, label);
 
-  // source_kind is the memory's kind when a memory is present, else 'distilled' for an
-  // object-only row (objects are consolidated by construction). All-null is rejected.
+  // source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only row (objects are
+  // consolidated by construction). All-null is rejected.
   if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
   if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
   throw new Error(`${label}: graph row needs a memory or a source object`);
@@ -74,8 +74,7 @@ function checkSourceMemory(
   let memKind: SourceKind | null = null;
   let effectiveMemoryId: string | null = memoryId;
   if (memoryId != null) {
-    // SAFETY: row's shape matches the two columns (kind, tenant_id) named in
-    // the SELECT above.
+    // SAFETY: row's shape matches the two columns (kind, tenant_id) named in the SELECT above.
     const row = cachedStatement(db, `SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
       | { kind: string; tenant_id: string }
       | undefined;
@@ -217,8 +216,7 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
     [opts.fromEntityId, 'from'],
     [opts.toEntityId, 'to'],
   ] as const) {
-    // SAFETY: ent's shape matches the single `tenant_id` column named in
-    // the SELECT above.
+    // SAFETY: ent's shape matches the single `tenant_id` column named in the SELECT above.
     const ent = cachedStatement(db, `SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as
       | { tenant_id: string }
       | undefined;
@@ -229,8 +227,8 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
   }
 }
 
-/** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated
- * memory. The schema trigger checks each endpoint once; only a refused insert reads them, to say which one failed. */
+/** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated memory.
+ * The schema trigger checks each endpoint once; only a refused insert reads them, to say which one failed. */
 export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): Relation {
   assertTenantId('insertRelation', tenantId);
   if (!GRAPH_RELATION_TYPES.has(opts.relType)) {
@@ -289,8 +287,9 @@ function relationSource(
   return { memory_id: resolved.memoryId, source_kind: resolved.sourceKind };
 }
 
-/** The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph
- * row. */
+/**
+ * The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph row.
+ */
 export function objectInForce(db: DatabaseSyncLike, tenantId: string, ref: SourceObjectRef): boolean {
   // `table` comes from the fixed SOURCE_OBJECT_TABLE map, never from input.
   const table = SOURCE_OBJECT_TABLE[ref.type];
@@ -343,8 +342,8 @@ export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: nu
 }
 
 /** Runs one tenant's graph writes in `fn` on `db` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
- * interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a
- * transaction. */
+ * interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a transaction.
+ */
 export function runGraphRebuildTransaction<T>(
   db: DatabaseSyncLike,
   tenantId: string,

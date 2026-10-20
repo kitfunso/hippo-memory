@@ -28,8 +28,8 @@ export interface ImportResult {
    * read sites use `?? 0`.
    */
   rejected?: number;
-  /** K1 vault import: rows archived this run (changed + source-deleted). In a
-   *  dryRun this is the would-be count (a true deletion-sync preview). */
+  /** K1 vault import: rows archived this run (changed + source-deleted). In a dryRun this is the would-be count (a true
+   *  deletion-sync preview). */
   archived?: number;
   /** Entries stored with secret-shaped text redacted; optional for the same published-surface reason as `rejected`. */
   redacted?: number;
@@ -46,13 +46,12 @@ export interface ImportOptions {
   tenantId?: string;
   /**
    * K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key. REQUIRED by importVault
-   * (throws if missing or blank),
-   * because it keys the destructive deletion sync and two vaults sharing a basename would clobber each other.
+   * (throws if missing or blank), because it keys the destructive deletion sync and two vaults sharing a basename would
+   * clobber each other.
    * LIKE-escaped by the loader.
    */
   name?: string;
-  /** K1 vault import only. Memory scope stamped on every imported note. Defaults
-   *  to null (unscoped) when unset. */
+  /** K1 vault import only. Memory scope stamped on every imported note. Defaults to null (unscoped) when unset. */
   scope?: string;
 }
 
@@ -70,8 +69,8 @@ export function importRoot(options: ImportOptions): string {
   return options.global ? getGlobalRoot() : options.hippoRoot;
 }
 
-/** Given an array of raw text chunks, deduplicate against existing memories,
- *  create MemoryEntry objects, write them (unless dry-run), and return a result. */
+/** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them
+ *  (unless dry-run), and return a result. */
 export function importEntries(chunks: string[], source: string, tags: string[], options: TargetedImport): ImportResult {
   const target = openImportTarget(options);
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];

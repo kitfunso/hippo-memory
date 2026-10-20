@@ -117,16 +117,17 @@ function deleteTargetRow(
       tenantId,
     });
   }
-  // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
-  // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
+  // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but markSummaryDirtyInTx is
+  // idempotent, so the next child mutation re-marks the parent if this fails.
   if (row.dag_parent_id) {
     markSummaryDirtyInTx(db, row.dag_parent_id, tenantId, opts?.actor ?? CLI_ACTOR);
   }
   return { tenantId, dagParentId: row.dag_parent_id ?? null };
 }
 
-/** deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits
- * alone. */
+/**
+ * deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits alone.
+ */
 function deleteEntryOn(
   db: DatabaseSyncLike,
   hippoRoot: string,
@@ -210,8 +211,9 @@ export function batchWriteAndDeleteAt(
 
 const failedUnits = new WeakMap<Error, string[]>();
 
-/** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row; the first tag
- * wins. */
+/**
+ * Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row; the first tag wins.
+ */
 function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
   if (!component || failedUnits.has(err)) return;
   const ids = [
@@ -229,8 +231,8 @@ export function failedUnitOf(err: Error | null): string[] | undefined {
 }
 
 /** batchWriteAndDelete on the caller's open store from component `from`, each component whole, closing the transaction
- * at the first component boundary after `holdMs`. Returns the next component's index and the ids that left
- * `memories`. */
+ * at the first component boundary after `holdMs`. Returns the next component's index and the ids that left `memories`.
+ */
 function batchWriteAndDeleteOn(
   db: DatabaseSyncLike,
   hippoRoot: string,
@@ -247,8 +249,8 @@ function batchWriteAndDeleteOn(
     dirty: { parents: new Set(), tenantById: new Map() },
   };
   let next = from;
-  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
-  // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
+  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a concurrent `hippo
+  // reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
   withWriteScope(db, 'flush_chunk', () => {
     const begunAt = now();
     do {
@@ -266,8 +268,8 @@ function batchWriteAndDeleteOn(
       out.fts.rows.filter((row) => !removed.has(row.id)),
       [...out.fts.staleIds, ...out.removedIds],
     );
-    // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
-    // dirty flag commits atomically with the writes + deletes.
+    // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the dirty flag commits atomically with the
+    // writes + deletes.
     for (const parentId of out.dirty.parents) {
       markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID, 'batch');
     }
@@ -300,16 +302,16 @@ function applyComponent(
   snapshot: LoadedRows | undefined,
   out: ChunkLog,
 ): void {
-  // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through here
-  // every cycle, so without it parents would never be marked dirty for decay, merge or garbage-collect.
+  // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through here every cycle, so
+  // without it parents would never be marked dirty for decay, merge or garbage-collect.
   const deletableIds: string[] = [];
   if (component.deletes.length > 0) {
     // A row pinned after the caller decided to delete it survives.
     for (const row of selectAutoDeletableRows(db, component.deletes, out.dirty)) deletableIds.push(row.id);
   }
-  // v39: batch writers bypass writeEntry, so stamp store-derived origins here too (a NULL origin hides new
-  // memories from ambient context). A row queued twice keeps its first place and its last version, the one the merge
-  // compares; refreshes come first, so a later write of the same row replaces its refresh.
+  // v39: batch writers bypass writeEntry, so stamp store-derived origins here too (a NULL origin hides new memories
+  // from ambient context). A row queued twice keeps its first place and its last version, the one the merge compares;
+  // refreshes come first, so a later write of the same row replaces its refresh.
   const ops = new Map<string, MemoryEntry | StrengthRefresh>(component.refreshes.map((r) => [r.id, r]));
   for (const entry of component.writes) ops.set(entry.id, stampOriginProject(hippoRoot, entry));
   applyBatchWrites(db, [...ops.values()], snapshot, out);
@@ -402,8 +404,8 @@ function applyBatchWrites(
   snapshot: LoadedRows | undefined,
   out: ChunkLog,
 ): void {
-  // Probe tombstones per entry on THIS connection inside the transaction: the producer's check ran earlier
-  // on another connection, so a reject committed in between would be re-inserted. Skip, never throw, so the rest lands.
+  // Probe tombstones per entry on THIS connection inside the transaction: the producer's check ran earlier on another
+  // connection, so a reject committed in between would be re-inserted. Skip, never throw, so the rest lands.
   const { written, fts, dirty } = out;
   const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
   for (const op of ops) {
@@ -419,8 +421,8 @@ function applyBatchWrites(
     }
     if (base && !live) continue;
     written.push(row);
-    // Bypass the guard: merges concatenate already-guarded facts, the merge pass checks merged content, and
-    // the probe above closes the race; a mid-batch refusal would abort the whole consolidation.
+    // Bypass the guard: merges concatenate already-guarded facts, the merge pass checks merged content, and the probe
+    // above closes the race; a mid-batch refusal would abort the whole consolidation.
     upsertMemoryRow(db, row);
     // A decay refresh changes no indexed text, and re-indexing it would cost a full index scan per row.
     if (!live || row.content !== live.content || row.tags.join(' ') !== live.tags.join(' ')) {
@@ -445,8 +447,8 @@ interface FtsChanges {
 /** True, after auditing the refusal, when the write would introduce a rejected value. */
 function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
   const entryTenantId = row.tenantId ?? DEFAULT_TENANT_ID;
-  // checkRejectionGuard, not a bare tombstone probe: a tombstone can coexist with a live same-content row,
-  // and skipping every re-persist would starve it of decay/replay updates; only new or changed content is refused.
+  // checkRejectionGuard, not a bare tombstone probe: a tombstone can coexist with a live same-content row, and skipping
+  // every re-persist would starve it of decay/replay updates; only new or changed content is refused.
   try {
     checkRejectionGuard(db, entryTenantId, row.id, row.content);
   } catch (err) {

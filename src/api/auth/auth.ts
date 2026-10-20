@@ -21,8 +21,8 @@ function keyIdOfSubject(subject: string): string | null {
 
 export interface AuthCreateOpts {
   label?: string;
-  /** Defaults to `'member'`, which admin-gated routes such as
-   * `POST /v1/sleep` refuse; an admin key has to be asked for by name. */
+  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for
+   * by name. */
   role?: 'admin' | 'member';
   /** Days until the key expires: above 0 and at most 3650. Defaults to 90. */
   ttlDays?: number;
@@ -40,9 +40,9 @@ export interface AuthCreateResult {
   expiresAt: string | null;
 }
 
-/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or
- * tenant A could mint a key for tenant B. Admin only (ForbiddenError otherwise), and a
- * key never outranks its minter: a resolver admin is tenant-only, so it mints members. */
+/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant
+ * B. Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it
+ * mints members. */
 export async function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
   const keyWrites = ctx.store.keyWrites;
@@ -131,8 +131,8 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
   }
 }
 
-/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the
- * binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's
+ * revokes, the mint and its audit rows commit or fail together. */
 export async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = selfKeyMint(ctx, opts);
@@ -173,8 +173,8 @@ export async function authListRows(ctx: Context, opts: KeyListOptions): Promise<
   return listRows(ctx, ctx.store, opts);
 }
 
-/** Every tenant's keys in the store, live ones only unless
- * `active` is false; the host's own view, so the host admin only. */
+/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own view, so the host admin
+ * only. */
 export async function authListAllTenants(ctx: Context, active: boolean): Promise<ApiKeyListItem[]> {
   requireHostAdmin(ctx, "Listing every tenant's keys");
   const rows = await ctx.store.keyWrites.listApiKeys({ active, tenantId: ALL_TENANTS });
@@ -262,8 +262,8 @@ function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
     : undefined;
 }
 
-/** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,
- * so the local CLI can run revoke and grant in the key's own tenant. */
+/** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants, so the
+ * local CLI can run revoke and grant in the key's own tenant. */
 export async function authKeyTenant(ctx: Context, keyId: string): Promise<string | undefined> {
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('Only the host admin can look up a key across tenants');

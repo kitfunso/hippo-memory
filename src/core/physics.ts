@@ -2,8 +2,7 @@
  * Memory-as-Physics engine: pure math (forces, Velocity Verlet integration, physics-based scoring, cluster
  * amplification), no I/O.
  * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict
- * repulsion and drag act on them,
- * and nearby high-scoring memories amplify each other. */
+ * repulsion and drag act on them, and nearby high-scoring memories amplify each other. */
 
 import { cosineOf } from './cosine.js';
 import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from './ablation.js';
@@ -114,9 +113,8 @@ export function computeMass(
   ablation: StrengthAblation = NO_STRENGTH_ABLATION,
 ): number {
   // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise
-  // leak strengthening into the ablated
-  // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in
-  // physics-state.ts.
+  // leak strengthening into the ablated arm's physics-pool rankings (query gravity ranks by mass). Covers both init and
+  // refresh callers in physics-state.ts.
   const effectiveCount = ablation.recallBoost ? 0 : retrievalCount;
   return Math.max(MIN_MASS, strength * (1 + RETRIEVAL_MASS_GAIN * Math.log2(effectiveCount + 1)));
 }
@@ -150,9 +148,8 @@ export function velocityAlignmentBonus(particle: PhysicsParticle, queryEmbedding
 
 /**
  * Attraction force on particle i from j (consolidation-time): G_M m_i m_j max(0, cosine)^3, directed along (pos_j -
- * pos_i) projected tangent to the unit
- * sphere at pos_i (positions are re-normalized to the sphere after integration). Adds into `out` (a fresh zero vector
- * by default) using `diff` as scratch.
+ * pos_i) projected tangent to the unit sphere at pos_i (positions are re-normalized to the sphere after integration).
+ * Adds into `out` (a fresh zero vector by default) using `diff` as scratch.
  */
 export function attractionForce(
   pi: PhysicsParticle,
@@ -349,8 +346,8 @@ export function physicsScore(
   config: PhysicsConfig,
   /**
    * Cross-ingest-stable tie key per memoryId (typically the memory content, from a caller with entries in scope);
-   * without it ties fall to memoryId,
-   *  which is per-instance only and lets the cluster_top_k amplification set vary across fresh ingests. */
+   * without it ties fall to memoryId, which is per-instance only and lets the cluster_top_k amplification set vary
+   * across fresh ingests. */
   tieKeyOf?: (memoryId: string) => string,
 ): ScoredPhysicsResult[] {
   if (particles.length === 0 || queryEmbedding.length === 0) return [];
@@ -368,8 +365,7 @@ export function physicsScore(
   });
 
   // Base-score order picks the cluster_top_k amplification SET (which mutates scores), so ties must be
-  // cross-ingest-stable
-  // when the caller supplies a content tie key (see comparePhysicsResultsBy in compare.ts).
+  // cross-ingest-stable when the caller supplies a content tie key (see comparePhysicsResultsBy in compare.ts).
   const tie = tieKeyOf ? (r: ScoredPhysicsResult) => tieKeyOf(r.memoryId) : undefined;
   results.sort(comparePhysicsResultsBy((r) => r.baseScore, tie));
 

@@ -34,14 +34,12 @@ const PIDFILE = 'server.pid';
 
 /**
  * How long detectServer waits for the `/health` probe before treating the pidfile as stale; short because it fires only
- * when a pidfile exists with a live
- * pid on loopback. HIPPO_HEALTH_PROBE_MS overrides it. */
+ * when a pidfile exists with a live pid on loopback. HIPPO_HEALTH_PROBE_MS overrides it. */
 const HEALTH_PROBE_TIMEOUT_MS = 300;
 
 /**
  * Hard cap on the /health body detectServer buffers: a real payload is well under 1 KB, so a larger body means the
- * process on the recorded port is not
- * hippo. */
+ * process on the recorded port is not hippo. */
 const HEALTH_BODY_MAX_BYTES = 64 * 1024;
 
 /**
@@ -52,8 +50,7 @@ const PIDFILE_LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
 /**
  * The pidfile names a live process on loopback that did not answer /health in time: most likely a busy server, so a
- * caller must neither
- * bypass it with a second writer nor start another server beside it. */
+ * caller must neither bypass it with a second writer nor start another server beside it. */
 export class ServerUnresponsiveError extends Error {
   constructor(info: ServerInfo, probeMs: number, options?: ErrorOptions) {
     super(
@@ -92,9 +89,8 @@ function isLiveLoopbackTarget(info: ServerInfo): boolean {
   if (!pidIsAlive(info.pid)) return false;
 
   // The pid may have been reused and the recorded url is read from a forgeable file; serve() only binds loopback, so a
-  // url that is not http on a loopback
-  // host and the recorded port is malformed or forged. Reject it before probing, since the probe and any routed request
-  // can carry HIPPO_API_KEY.
+  // url that is not http on a loopback host and the recorded port is malformed or forged. Reject it before probing,
+  // since the probe and any routed request can carry HIPPO_API_KEY.
   const probeUrl = tryParseUrl(info.url);
   if (probeUrl === undefined) return false;
   return (
@@ -107,8 +103,7 @@ function isLiveLoopbackTarget(info: ServerInfo): boolean {
 /** The whole body as text, or null once it passes HEALTH_BODY_MAX_BYTES (the stream is then cancelled). */
 async function readCappedBody(body: ReadableStream<Uint8Array>): Promise<string | null> {
   // Read the body under a hard byte cap: the process on info.url may not be hippo (pid reuse), so its response is
-  // untrusted and never goes unbounded into a
-  // parser.
+  // untrusted and never goes unbounded into a parser.
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let raw = '';
@@ -149,8 +144,7 @@ function reportsStartedAt<T>(body: T, startedAt: string): boolean {
 
 /**
  * True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any definitive mismatch and
- * throws ServerUnresponsiveError on a
- * probe timeout. */
+ * throws ServerUnresponsiveError on a probe timeout. */
 async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promise<boolean> {
   // Refusal, non-200 or a malformed body unlink the pidfile as stale. A timeout proves neither a dead server nor this
   // one, so it keeps the pidfile and throws.
@@ -277,9 +271,9 @@ function startingClaim(path: string): ServerInfo | undefined {
 }
 
 /**
- * Takes the store's one-server lock before serve() binds: the pidfile is created with exclusive create, so of two
- * boots started together exactly one wins. On a clash a live or still-starting server refuses, and a stale pidfile
- * is removed by detectServer and the create retried once. Throws ServerAlreadyRunningError.
+ * Takes the store's one-server lock before serve() binds: the pidfile is created with exclusive create, so of two boots
+ * started together exactly one wins. On a clash a live or still-starting server refuses, and a stale pidfile is removed
+ * by detectServer and the create retried once. Throws ServerAlreadyRunningError.
  */
 export async function claimPidfile(hippoRoot: string, startedAt: string): Promise<void> {
   const path = join(hippoRoot, PIDFILE);
@@ -296,8 +290,8 @@ export async function claimPidfile(hippoRoot: string, startedAt: string): Promis
 
 /**
  * Atomically writes the pidfile (process-scoped temp file, then rename; atomic on POSIX and NTFS). `startedAt` comes
- * from the caller (`serve()`) so the
- * pidfile and GET /health carry the same timestamp, which detectServer's liveness probe compares. */
+ * from the caller (`serve()`) so the pidfile and GET /health carry the same timestamp, which detectServer's liveness
+ * probe compares. */
 export function writePidfile(hippoRoot: string, opts: { port: number; url: string; startedAt: string }): void {
   const path = join(hippoRoot, PIDFILE);
   const tmp = `${path}.tmp.${process.pid}`;

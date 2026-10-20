@@ -49,8 +49,8 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
   );
 }
 
-/** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot, whose tenant is
- * `tenantId`; a 1.x `summary_dirty` is 0|1. */
+/** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot, whose tenant is `tenantId`;
+ * a 1.x `summary_dirty` is 0|1. */
 type StoredSnapshot = Omit<MemoryWire, 'tenant_id' | 'summary_dirty'> & {
   summary_dirty?: boolean | 0 | 1;
 } & ({ tenant_id: string } | { tenantId: string });
@@ -217,8 +217,9 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
   return Number(result.changes ?? 0) > 0;
 }
 
-/** The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not
- * parse. */
+/**
+ * The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not parse.
+ */
 interface DormantText {
   readonly id: string;
   readonly content: string;
@@ -230,8 +231,9 @@ const DORMANT_TEXT_COLUMNS =
   `id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END AS source, ` +
   `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope`;
 
-/** Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match
- * reads. */
+/**
+ * Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match reads.
+ */
 export function dormantTextsPage(
   db: DatabaseSyncLike,
   tenantId: string,

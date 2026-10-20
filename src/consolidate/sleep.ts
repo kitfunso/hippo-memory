@@ -123,8 +123,8 @@ async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefi
   }
 }
 
-// A changed default half-life moves memories still on the old base first,
-// so this pass decays them at the new one (src/consolidate/half-life-migration.ts).
+// A changed default half-life moves memories still on the old base first, so this pass decays them at the new one
+// (src/consolidate/half-life-migration.ts).
 function migrateHalfLives(
   local: LocalFiles,
   to: number,
@@ -170,8 +170,7 @@ async function flushPending(run: SleepRun, budget: WriteBudget): Promise<void> {
 }
 
 // Dormant retention: a dormant memory nobody restored within dormant.retentionDays is deleted for good (0 keeps
-// forever);
-// runs even when dormant.enabled is off, so turning it off still ages out what earlier sleeps kept.
+// forever); runs even when dormant.enabled is off, so turning it off still ages out what earlier sleeps kept.
 async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> {
   const { config, result, dryRun } = run;
   if (!(config.dormant.retentionDays > 0)) return;

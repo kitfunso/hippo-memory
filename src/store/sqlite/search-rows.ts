@@ -86,8 +86,8 @@ function loadSearchRows(
   const rows = selectLikeCandidates(db, terms, p, limit);
   if (rows.length > 0) return rows;
 
-  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an
-  // unbounded fallback would misstate the candidate-pool size.
+  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded fallback would misstate
+  // the candidate-pool size.
   return selectAllCandidates(db, p, limit);
 }
 
@@ -103,8 +103,8 @@ function searchPredicates(
   const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantAnd(tenantId).args;
 
-  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only
-  // guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
+  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only guards against
+  // a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
   // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches between ' AND' and
   // ' WHERE' by caller context.
@@ -135,8 +135,7 @@ function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: n
   const sql =
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
     `${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
-  // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
-  // matches MemoryRow's field set.
+  // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list matches MemoryRow's field set.
   return cachedStatement(db, sql).all(...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
 }
 
@@ -169,8 +168,9 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
   }
 }
 
-/** Newest admitted rows the substring match tests, so a query matching nothing costs the same in a store of any
- * size. */
+/**
+ * Newest admitted rows the substring match tests, so a query matching nothing costs the same in a store of any size.
+ */
 const LIKE_WINDOW_ROWS = 2000;
 
 /** Substring matches in content or tags among the newest admitted rows: the lexical path without FTS5, and the catch

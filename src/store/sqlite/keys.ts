@@ -48,8 +48,8 @@ function createSelfKeyAt(db: DatabaseSyncLike, mint: SelfKeyMint): string[] {
 /** The change and its audit row commit together, so a failed audit write leaves the grants as they were. */
 function changeScopeGrantAt(db: DatabaseSyncLike, { tenantId, keyId, scope, op, actor }: ScopeGrantChange): void {
   withWriteScope(db, 'change_scope_grant', () => {
-    // Under the write lock, not in the api: a revoke landing between a check there and this grant would leave a
-    // grant on a dead key.
+    // Under the write lock, not in the api: a revoke landing between a check there and this grant would leave a grant
+    // on a dead key.
     const row = selectApiKeyOwner(db, keyId);
     if (!row || row.tenantId !== tenantId) {
       throw new NotFoundError(`Unknown key_id: ${keyId}`);

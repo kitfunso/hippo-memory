@@ -99,8 +99,8 @@ function manualRun(runtime: string, event: CaptureEvent): CaptureReceipt {
   return { status: 'received', input };
 }
 
-/** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped
- * it to the same snake_case keys; only an empty stdin counts as a manual run. */
+/** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only
+ * an empty stdin counts as a manual run. */
 export function readClaudeCodePreCompact(
   stdinText: string | undefined,
   timedOut: boolean,
@@ -192,8 +192,8 @@ export function readClaudeCodePostCompact(
   };
 }
 
-/** Reads a Claude Code SessionEnd payload, or a Copilot one after stdin.ts mapped
- * it to the same snake_case keys; only an empty stdin counts as a manual run. */
+/** Reads a Claude Code SessionEnd payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only
+ * an empty stdin counts as a manual run. */
 export function readSessionEnd(
   stdinText: string | undefined,
   timedOut: boolean,

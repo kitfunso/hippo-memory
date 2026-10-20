@@ -23,8 +23,8 @@ export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
   'content_length',
 ];
 
-/** The keep-budget operating point (the only point with measured
- *  evidence): a code constant tied to that evidence, not user-tunable. */
+/** The keep-budget operating point (the only point with measured evidence): a code constant tied to that evidence, not
+ *  user-tunable. */
 const RESCUE_BUDGET = 0.3;
 
 /**
@@ -183,8 +183,7 @@ export interface MvRankInfo {
 
 /**
  * Group non-pinned entries by tenantId, score and rank each group independently, and return rank context for every
- * non-pinned entry;
- * rescueSet and the consolidate audit rows share it so they never compute the ranking differently. */
+ * non-pinned entry; rescueSet and the consolidate audit rows share it so they never compute the ranking differently. */
 export function rankNonPinnedByTenant(
   entries: MemoryEntry[],
   now: Date,
@@ -315,8 +314,8 @@ export function rescueSet(
   const rescued = new Set<string>();
   for (const id of condemnedIds) {
     const info = ranked.get(id);
-    // An explicit finite guard, not just -Infinity sorting last: when a whole tenant
-    // ties at -Infinity, rank alone could place one inside keepN.
+    // An explicit finite guard, not just -Infinity sorting last: when a whole tenant ties at -Infinity, rank alone
+    // could place one inside keepN.
     if (info && info.rank <= info.keepN && Number.isFinite(info.score)) rescued.add(id);
   }
   return rescued;

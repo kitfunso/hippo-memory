@@ -5,8 +5,7 @@ export const v19: Migration = {
   version: 19,
   up: (db) => {
     // Widen slack_dlq with bucketing, retry tracking and the signature/timestamp pair `hippo slack dlq replay`
-    // re-verifies;
-    // ALTER ADD COLUMN with DEFAULT is non-destructive, so legacy rows take the defaults. Idempotent via
+    // re-verifies; ALTER ADD COLUMN with DEFAULT is non-destructive, so legacy rows take the defaults. Idempotent via
     // tableHasColumn().
     if (!tableHasColumn(db, 'slack_dlq', 'team_id')) {
       db.exec(`ALTER TABLE slack_dlq ADD COLUMN team_id TEXT`);

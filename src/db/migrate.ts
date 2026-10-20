@@ -32,8 +32,8 @@ function assertMinBinary(minRequired: string | null | undefined): void {
   }
 }
 
-/** Refuse a store stamped for a newer binary. Fails closed:
- * runMigrations creates meta first, so a failed read is a real error. */
+/** Refuse a store stamped for a newer binary. Fails closed: runMigrations creates meta first, so a failed read is a
+ * real error. */
 export function assertBinaryCompatible(db: DatabaseSyncLike): void {
   assertMinBinary(getMeta(db, 'min_compatible_binary'));
 }
@@ -55,8 +55,8 @@ const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
 const sqlList = (names: readonly string[]): string => names.map((n) => `'${n}'`).join(', ');
 
 const REQUIRED_OBJECTS = sqlList(REQUIRED_SCHEMA_OBJECTS);
-/** The fast path's single probe: versions, the binary minimum, the
- * FTS flag, and counts of the meta defaults and required objects. */
+/** The fast path's single probe: versions, the binary minimum, the FTS flag, and counts of the meta defaults and
+ * required objects. */
 export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT user_version FROM pragma_user_version) AS user_version,
   (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
@@ -85,8 +85,8 @@ export interface OpenFacts {
   readonly hasMemories: boolean;
 }
 
-/** The probe's facts when the store is current and whole, so the open can skip every DDL statement; else null. Runs
- * the binary check either way. */
+/** The probe's facts when the store is current and whole, so the open can skip every DDL statement; else null. Runs the
+ * binary check either way. */
 function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   let probe: SchemaProbe | undefined;
   try {
@@ -115,8 +115,8 @@ const SETTLED_CHECK_SQL = `SELECT
   (SELECT MAX(id) FROM raw_archive) AS archive_top,
   (SELECT 1 FROM memories LIMIT 1) AS has_memories`;
 
-/** For a store this process has proven: one cheap statement returns the open's facts when both schema stamps still
- * name the current schema, else null; it refuses when another binary has since raised the minimum. */
+/** For a store this process has proven: one cheap statement returns the open's facts when both schema stamps still name
+ * the current schema, else null; it refuses when another binary has since raised the minimum. */
 export function settledStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   // SAFETY: the SELECT names exactly these five columns and always returns one row.
   const row = db.prepare(SETTLED_CHECK_SQL).get() as {
@@ -132,8 +132,8 @@ export function settledStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   return current ? { archiveTop: Number(row.archive_top ?? 0), hasMemories: row.has_memories !== null } : null;
 }
 
-/** Brings the store to the current schema; returns the probe's
- * facts when it was current already, null after any repair. */
+/** Brings the store to the current schema; returns the probe's facts when it was current already, null after any
+ * repair. */
 export function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: number): OpenFacts | null {
   const facts = currentStoreFacts(db);
   if (!facts) migrateAndHeal(db, hippoRoot, busyWaitMs);
@@ -172,8 +172,8 @@ function applyMigration(
     () => {
       // A newer binary may have migrated and raised the minimum while we waited for the lock.
       assertBinaryCompatible(db);
-      // Re-read under the write lock: another process may have applied this
-      // migration while we waited, and re-running one is not idempotent.
+      // Re-read under the write lock: another process may have applied this migration while we waited, and re-running
+      // one is not idempotent.
       const applied = getSchemaVersion(db);
       if (applied >= migration.version) return applied;
       migration.up(db, { hippoRoot });
@@ -250,8 +250,8 @@ function writeFtsFlag(db: DatabaseSyncLike, flag: '0' | '1'): void {
   if (getMeta(db, 'fts5_available') !== flag) setMeta(db, 'fts5_available', flag);
 }
 
-/** Row counts of `memories` and its full-text index, which differ
- * once the index drifts; null when either table is missing. */
+/** Row counts of `memories` and its full-text index, which differ once the index drifts; null when either table is
+ * missing. */
 export function ftsRowCounts(db: DatabaseSyncLike): { memories: number; fts: number } | null {
   if (!tableExists(db, 'memories_fts') || !tableExists(db, 'memories')) return null;
   // SAFETY: this get() result's shape matches the single aliased `c` column named in the SELECT.
@@ -263,8 +263,8 @@ export function ftsRowCounts(db: DatabaseSyncLike): { memories: number; fts: num
   return { memories: Number(memories), fts: Number(fts) };
 }
 
-/** Whether the last real count found `memories_fts` level with `memories` and no write since has failed to index a
- * row; a read trusts this instead of counting both tables. */
+/** Whether the last real count found `memories_fts` level with `memories` and no write since has failed to index a row;
+ * a read trusts this instead of counting both tables. */
 export function isFtsInSync(db: DatabaseSyncLike): boolean {
   return getMeta(db, FTS_IN_SYNC_KEY, '0') === '1';
 }
@@ -276,8 +276,8 @@ export function setFtsInSync(db: DatabaseSyncLike, inSync: boolean): void {
   if (getMeta(db, FTS_IN_SYNC_KEY) !== flag) setMeta(db, FTS_IN_SYNC_KEY, flag);
 }
 
-/** Re-syncs `memories_fts` with `memories` when their counts differ and returns whether it did; sleep runs it
- * because a fast open does not. Leaves the in-sync flag true. */
+/** Re-syncs `memories_fts` with `memories` when their counts differ and returns whether it did; sleep runs it because a
+ * fast open does not. Leaves the in-sync flag true. */
 export function repairFtsDrift(db: DatabaseSyncLike): boolean {
   const counts = ftsRowCounts(db);
   if (counts === null) return false;

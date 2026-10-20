@@ -33,8 +33,8 @@ const CREATE_TABLE_AUDIT_LOG_SQL = `
 export const v16: Migration = {
   version: 16,
   up: (db) => {
-    // Stub auth: add tenant_id to all data tables. Single-tenant per deployment for now;
-    // the columns land early so later tables don't have to backfill.
+    // Stub auth: add tenant_id to all data tables. Single-tenant per deployment for now; the columns land early so
+    // later tables don't have to backfill.
     if (!tableHasColumn(db, 'memories', 'tenant_id')) {
       db.exec(`ALTER TABLE memories ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
     }
@@ -50,8 +50,7 @@ export const v16: Migration = {
     if (!tableHasColumn(db, 'memory_conflicts', 'tenant_id')) {
       db.exec(`ALTER TABLE memory_conflicts ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
     }
-    // Composite indexes for recall hot paths. Leading column is tenant_id so
-    // single-tenant lookups are O(log n).
+    // Composite indexes for recall hot paths. Leading column is tenant_id so single-tenant lookups are O(log n).
     db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_tenant_created ON memories(tenant_id, created)`);
     db.exec(
       `CREATE INDEX IF NOT EXISTS idx_working_memory_tenant ` +
@@ -65,8 +64,7 @@ export const v16: Migration = {
         `ON task_snapshots(tenant_id, status, updated_at DESC)`,
     );
     // Stub auth: api_keys (scrypt-hashed; plaintext returned once) and audit_log (append-only mutation trail), both
-    // with tenant_id from day 1
-    // so future multi-tenant enforcement is a config flip, not a re-migration.
+    // with tenant_id from day 1 so future multi-tenant enforcement is a config flip, not a re-migration.
     db.exec(CREATE_TABLE_API_KEYS_SQL);
     db.exec(CREATE_INDEX_IDX_API_KEYS_TENANT_ACTIVE_SQL);
     db.exec(CREATE_TABLE_AUDIT_LOG_SQL);

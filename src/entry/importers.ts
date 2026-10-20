@@ -16,8 +16,8 @@ function targeted(options: ImportOptions): TargetedImport {
   return { ...options, target: { root, files: sqliteStore(root).localFiles } };
 }
 
-/** Given an array of raw text chunks, deduplicate against existing memories,
- *  create MemoryEntry objects, write them (unless dry-run), and return a result. */
+/** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them
+ *  (unless dry-run), and return a result. */
 export function importEntries(chunks: string[], source: string, tags: string[], options: ImportOptions): ImportResult {
   return importInto(chunks, source, tags, targeted(options));
 }

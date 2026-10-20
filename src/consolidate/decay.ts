@@ -25,13 +25,13 @@ export interface DecayOutcome {
 }
 
 // Leaving active memory: a raw receipt stays (the append-only trigger aborts DELETE for the whole batch; stored
-// strength refreshed) but sits out this cycle;
-// others go dormant when config.dormant is on, else are deleted. Only called for rows `retirable` allows.
+// strength refreshed) but sits out this cycle; others go dormant when config.dormant is on, else are deleted. Only
+// called for rows `retirable` allows.
 function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void {
   const { result } = run;
   const why = `(strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})`;
-  // A faded secret is deleted, never kept dormant: keeping it would hold a
-  // credential on disk that the user reasonably expects forgetting removed.
+  // A faded secret is deleted, never kept dormant: keeping it would hold a credential on disk that the user reasonably
+  // expects forgetting removed.
   if (run.config.dormant.enabled && !detectSecret(entry).flagged) {
     result.dormant++;
     result.details.push(`  💤 dormant ${entry.id} ${why}`);
@@ -79,8 +79,8 @@ export function decayPass(run: SleepRun): DecayOutcome {
   return { rescuedIds: new Set(), rescuedEntries: [], rankById: new Map() };
 }
 
-// A non-finite feature (e.g. a malformed `created`) scores -Infinity and can never be
-// rescued, so name those entries in one warning rather than leave it a silent NaN detail.
+// A non-finite feature (e.g. a malformed `created`) scores -Infinity and can never be rescued, so name those entries in
+// one warning rather than leave it a silent NaN detail.
 function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string, MvRankInfo>): void {
   const nonFiniteIds = [...rankById.entries()].filter(([, info]) => !Number.isFinite(info.score)).map(([id]) => id);
   if (nonFiniteIds.length > 0) {

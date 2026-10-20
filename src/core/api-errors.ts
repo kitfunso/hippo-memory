@@ -49,9 +49,8 @@ export class ConflictError extends ApiError {
 
 /**
  * Thrown by the write-path guard (checkRejectionGuard, via upsertEntryRow) when a write would introduce a tombstoned
- * value; carries what the
- * transaction-owner catch blocks (writeEntry, api.supersede) need to write the post-rollback `reject_refusal` audit row
- * via `auditRejectionRefusal`.
+ * value; carries what the transaction-owner catch blocks (writeEntry, api.supersede) need to write the post-rollback
+ * `reject_refusal` audit row via `auditRejectionRefusal`.
  */
 export class RejectedValueError extends BadRequestError {
   readonly digest: string;

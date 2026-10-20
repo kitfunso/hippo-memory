@@ -16,8 +16,8 @@ const MERGE_MIN_CLUSTER = 2; // minimum cluster size to merge
 const MERGE_MAX_SOURCES = 5;
 const MERGE_MAX_CHARS = 2000; // total source text; sources past either cap stay unmerged and keep their half-life
 // Half-life scale for merged source episodics. Demote via half_life_days: calculateStrength() recomputes live strength
-// and never reads the stored field,
-// so a stored-strength write is inert for ranking and overwritten by the next decay pass.
+// and never reads the stored field, so a stored-strength write is inert for ranking and overwritten by the next decay
+// pass.
 const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
 // deriveHalfLife grants its high-fit bonus only above 0.7, so a rollup at 0.7 gets none.
 const MERGED_SCHEMA_FIT = 0.7;
@@ -106,8 +106,8 @@ function partitionMergeCandidates(run: SleepRun): Map<string, MergeBucket> {
 /** Returns how many clusters were skipped because their merged text matches a rejected value. */
 export function mergePass(run: SleepRun): number {
   const used = new Set<string>();
-  // The rejection guard reuses the run's one lazily opened tombstone handle; a dry-run
-  // never reaches batchWriteAndDelete's guard bypass, so it has nothing to protect there.
+  // The rejection guard reuses the run's one lazily opened tombstone handle; a dry-run never reaches
+  // batchWriteAndDelete's guard bypass, so it has nothing to protect there.
   let mergesSkippedRejected = 0;
   for (const bucket of partitionMergeCandidates(run).values()) {
     const { ids, lengths } = bucket;
@@ -146,8 +146,8 @@ function mergeCluster(
   // Create a semantic summary
   const mergedContent = mergeContents(cluster);
 
-  // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below runs
-  // under the partition's tenant, the one every cluster member shares and the row will land in.
+  // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below runs under the
+  // partition's tenant, the one every cluster member shares and the row will land in.
   const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run.config.defaultHalfLifeDays);
 
   if (semantic && mergeRejected(run, semantic, cluster, related, used)) return false;
@@ -208,9 +208,8 @@ function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): void {
 }
 
 // mergeContents is deterministic, so a rollup a human already rejected would regenerate each cycle and
-// batchWriteAndDelete's guard bypass would re-assert it;
-// this producer-side check makes that bypass safe. A hit skips the whole cluster (no demote, no delete) so a later
-// sleep can retry.
+// batchWriteAndDelete's guard bypass would re-assert it; this producer-side check makes that bypass safe. A hit skips
+// the whole cluster (no demote, no delete) so a later sleep can retry.
 function mergeRejected(
   run: SleepRun,
   semantic: MemoryEntry,

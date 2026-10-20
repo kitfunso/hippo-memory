@@ -84,8 +84,8 @@ async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Pr
   }
 
   const failure = captureError(exitCode, stderr, command, tenantId);
-  // A rejection-guard refusal of a failed command's output must not crash the watcher:
-  // skip with the message below and still exit with the wrapped command's real exit code.
+  // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with the message below and
+  // still exit with the wrapped command's real exit code.
   try {
     await api.rememberLocally(cliApiContext(hippoRoot, tenantId), {
       content: failure.content,

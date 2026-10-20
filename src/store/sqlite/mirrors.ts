@@ -192,8 +192,8 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
   writeMirror(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
 }
 
-// Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror
-// is the resurrection channel bootstrapLegacyStore guards against.
+// Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror is the resurrection
+// channel bootstrapLegacyStore guards against.
 const MIRROR_LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 
 export function removeEntryMirrors(hippoRoot: string, id: string): void {
@@ -205,8 +205,8 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
-/** A folder the batch writes into is listed once when this many of its entries sit in other layers and would each
- * probe it: a layer folder can hold every mirror in the store. */
+/** A folder the batch writes into is listed once when this many of its entries sit in other layers and would each probe
+ * it: a layer folder can hold every mirror in the store. */
 const LISTING_MIN_BATCH = 64;
 
 /** The names in each listed layer folder; a layer with no listing is probed file by file. */
@@ -339,8 +339,7 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
 
   const entries: Record<string, IndexEntry> = {};
   for (const row of rows) {
-    // SAFETY: layer is only ever written from the Layer enum by this
-    // module's own INSERT/UPDATE paths.
+    // SAFETY: layer is only ever written from the Layer enum by this module's own INSERT/UPDATE paths.
     const layer = row.layer as Layer;
     entries[row.id] = {
       id: row.id,
@@ -547,8 +546,7 @@ export function syncChangedMirrors(
 
 /** The conflict and stats mirrors, which a full sync and a partial one refresh alike. */
 function syncSideMirrors(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
-  // SAFETY: conflicts' shape matches the eight columns named in the SELECT
-  // above.
+  // SAFETY: conflicts' shape matches the eight columns named in the SELECT above.
   const conflicts = db
     .prepare(
       `

@@ -22,8 +22,8 @@ export interface ServerHandle {
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys);
-   * an add-on revokes them through the exported authRevoke when the IdP deprovisions the minter. */
+  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys); an add-on
+   * revokes them through the exported authRevoke when the IdP deprovisions the minter. */
   role: 'admin' | 'member';
   scopes?: readonly string[];
 }
@@ -68,8 +68,8 @@ export interface ServeOpts {
   /** How long a request may stay unanswered before one warn names it; the request itself is left alone. Defaults to
    * 60000 ms. */
   slowRequestWarnMs?: number;
-  /** Defaults to hippo.db under `hippoRoot`. A store of another
-   * kind runs only the routes ported to it; its caller closes it. */
+  /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller
+   * closes it. */
   store?: HippoStore;
   autoSleep?: false;
   routes?: readonly AddonRoute[];
@@ -79,11 +79,11 @@ export interface ServeOpts {
   /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext
    * HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
   tls?: { cert: string | Buffer; key: string | Buffer };
-  /** Lets a non-loopback bind start without `tls`, for TLS that ends at a
-   * proxy in front; else serve() refuses it. Also HIPPO_ALLOW_CLEARTEXT=1. */
+  /** Lets a non-loopback bind start without `tls`, for TLS that ends at a proxy in front; else serve() refuses it. Also
+   * HIPPO_ALLOW_CLEARTEXT=1. */
   allowCleartext?: boolean;
-  /** Static JSON served to anyone at GET <path>; built once at
-   * boot and never authenticated, so it must hold nothing secret. */
+  /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing
+   * secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
   /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else 20 per second, burst 40); perAddress
    * replaces HIPPO_V1_RPS when set; 'off' disables either; failedAuthPerAddress guards scrypt. */
@@ -134,14 +134,14 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
 
-/** A route's store status: the optional group or local files it needs, a `sqliteOnly`
- * reason, or neither for a route that runs on any store; never both. */
+/** A route's store status: the optional group or local files it needs, a `sqliteOnly` reason, or neither for a route
+ * that runs on any store; never both. */
 type StoreStatus =
   | { storeReady?: OptionalGroup | 'localFiles'; sqliteOnly?: never }
   | { sqliteOnly: string; storeReady?: never };
 
-/** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for
- * a route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
+/** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for a
+ * route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
 export type RouteAuth = 'caller' | 'admin' | 'host-admin-local' | 'webhook-signature' | 'dashboard-session';
 
 export type RouteEndpoint<R> =

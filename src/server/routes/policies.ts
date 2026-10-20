@@ -46,8 +46,8 @@ export function handleListPolicies(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(policyRoutes, rr);
 }
 
-// The as-of query: must precede the /:id GET (literal 'asof' is non-numeric so
-// the /(\d+)/ route would not match it, but order it first for clarity).
+// The as-of query: must precede the /:id GET (literal 'asof' is non-numeric so the /(\d+)/ route would not match it,
+// but order it first for clarity).
 export async function handlePoliciesAsOf(rr: AuthedRouteRequest): Promise<void> {
   const { res, query, ctx } = rr;
   const date = query.get('date');

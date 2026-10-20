@@ -78,8 +78,8 @@ export function writePromotedEntryAt(
   writeEntryAt(db, files, entry, { actor: opts.actor, afterWrite });
 }
 
-/** writeEntry for each of `entries` in one transaction, so all land or none; each
- * keeps its audit row, and mirrors follow the commit. Returns how many were written; an empty list opens no store. */
+/** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its audit row, and mirrors
+ * follow the commit. Returns how many were written; an empty list opens no store. */
 export function writeEntriesTogetherAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -100,8 +100,8 @@ export function writeEntriesTogetherAt(
 }
 
 /** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store rejects its value,
- * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were
- * written. */
+ * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were written.
+ */
 export function writeEntriesSkippingRejectedAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -158,8 +158,8 @@ export function writeEntryAt(
     opts?.afterCommit?.();
     writeEntryMirrors(files.hippoRoot, stamped);
   } catch (error) {
-    // writeEntryDbOnly's write scope has already unwound here, so the refusal audit lands
-    // post-rollback in a fresh implicit transaction; then rethrow so the caller sees it.
+    // writeEntryDbOnly's write scope has already unwound here, so the refusal audit lands post-rollback in a fresh
+    // implicit transaction; then rethrow so the caller sees it.
     if (error instanceof RejectedValueError) {
       auditRejectionRefusal(db, error, opts?.actor ?? CLI_ACTOR);
     }
@@ -175,8 +175,8 @@ export function writeEntryDbOnly(
   entry: MemoryEntry,
   opts?: Pick<WriteEntryInternalOptions, 'actor' | 'afterWrite'>,
 ): void {
-  // Inside a caller's transaction (e.g. supersede's BEGIN IMMEDIATE) the scope is a SAVEPOINT,
-  // so a throw here rolls back only this write and leaves the outer open.
+  // Inside a caller's transaction (e.g. supersede's BEGIN IMMEDIATE) the scope is a SAVEPOINT, so a throw here rolls
+  // back only this write and leaves the outer open.
   withWriteScope(db, 'write_entry', () => {
     upsertEntryRow(db, entry);
     if (opts?.afterWrite) {
@@ -191,8 +191,8 @@ export function writeEntryDbOnly(
 export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
   const tenantId = entry.tenantId;
   audit(db, 'remember', { targetId: entry.id, metadata: rememberAuditMetadata(entry), actor, tenantId });
-  // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
-  // have no parent, so the hot path pays one null check.
+  // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes have no parent, so the hot
+  // path pays one null check.
   if (entry.dagParentId) {
     markSummaryDirtyInTx(db, entry.dagParentId, entry.tenantId, actor);
   }
@@ -440,8 +440,9 @@ function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): v
   if (reach?.tenantId !== target.tenantId || !ownScopeTouches(target.ownScope, reach.scope)) throw notFound(id);
 }
 
-/** hippo.db's upsert would move the row into the writer's tenant, so a store write refuses an id another tenant
- * holds. */
+/**
+ * hippo.db's upsert would move the row into the writer's tenant, so a store write refuses an id another tenant holds.
+ */
 function assertIdInTenant(db: DatabaseSyncLike, entry: MemoryEntry): void {
   const holder = selectMemoryReach(db, entry.id)?.tenantId;
   if (holder !== undefined && holder !== entry.tenantId) {

@@ -388,8 +388,7 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
     // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep
-    // with
-    // `hippo hook install claude-code` and `hippo setup`.
+    // with `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();
   }

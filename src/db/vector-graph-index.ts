@@ -193,8 +193,8 @@ export class VectorGraphs implements VectorIndex {
     return rows;
   }
 
-  // A connection of the build's own: its cursor stays open across turns, and jobs on the thread's connection must
-  // never read through that snapshot.
+  // A connection of the build's own: its cursor stays open across turns, and jobs on the thread's connection must never
+  // read through that snapshot.
   async #readRows(dim: number, afterRowid: number): Promise<{ model: string; staged: StagedRows } | undefined> {
     const db = openHippoDbReadOnly(this.#hippoRoot);
     try {

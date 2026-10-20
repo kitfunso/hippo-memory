@@ -458,8 +458,8 @@ let highestIssuedId = 0;
 
 class SnapshotCacheService implements SnapshotService {
   private cached: CachedSnapshot | null = null;
-  // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a
-  // lower one.
+  // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower
+  // one.
   private lastId = Math.max(Date.now(), highestIssuedId);
   private last: Snapshot | null = null;
 

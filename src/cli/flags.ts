@@ -32,8 +32,8 @@ const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
   ]),
 );
 
-// A flag typed on a verb that does not declare it still has to parse: it takes the kind its
-// declaring verbs agree on, and where they differ it is a plain value.
+// A flag typed on a verb that does not declare it still has to parse: it takes the kind its declaring verbs agree on,
+// and where they differ it is a plain value.
 const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   const shared = new Map<string, FlagKind>();
   for (const kinds of DECLARED.values()) {

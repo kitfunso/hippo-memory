@@ -94,8 +94,8 @@ function contextGate(
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
 ): ContextGate | null {
-  // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
-  // and api.contextGet falls back to global-only.
+  // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit and api.contextGet
+  // falls back to global-only.
   const pinnedOnly = flagIsTrue(flags, 'pinned-only');
   if (!pinnedOnly) {
     requireInit(hippoRoot);
@@ -188,8 +188,8 @@ interface ContextSession {
 }
 
 function resolveContextSession(stdinText: string | undefined): ContextSession {
-  // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then hostSessionId();
-  // absent both, api.contextGet applies the pure freshness bound.
+  // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then hostSessionId(); absent
+  // both, api.contextGet applies the pure freshness bound.
   const payload = readHookPayload(stdinText);
   let payloadSessionId = payload.sessionId;
   const currentSessionId = payloadSessionId ?? hostSessionId();

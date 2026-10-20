@@ -55,8 +55,8 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: St
   ];
   for (const [key, amount] of increments) {
     if (amount === 0) continue;
-    // Both binds are the same string: node:sqlite binds a JS number as REAL,
-    // which would store "1.0" into this TEXT column instead of "1".
+    // Both binds are the same string: node:sqlite binds a JS number as REAL, which would store "1.0" into this TEXT
+    // column instead of "1".
     db.prepare(`
       INSERT INTO meta(key, value) VALUES(?, ?)
       ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(? AS INTEGER)

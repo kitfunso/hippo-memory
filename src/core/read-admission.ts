@@ -1,5 +1,5 @@
-// Which rows an ambient load and a summary drill-down admit, as plain data: a store on a worker thread applies the
-// same rule the caller would, since a function cannot cross a thread.
+// Which rows an ambient load and a summary drill-down admit, as plain data: a store on a worker thread applies the same
+// rule the caller would, since a function cannot cross a thread.
 import { COMPACTION_MEMORY_TAG, type MemoryEntry } from './memory.js';
 import { isWorthSurfacing } from './memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from './project-identity.js';
@@ -9,8 +9,9 @@ import { detectSecret } from '../util/secret-detect.js';
 
 /** The rows an ambient read admits. */
 export interface AmbientAdmission {
-  /** A secret-flagged row passes only inside this project, and another project's row only with
-   * `includeCrossProject`. */
+  /**
+   * A secret-flagged row passes only inside this project, and another project's row only with `includeCrossProject`.
+   */
   readonly currentProject: ProjectRef;
   readonly includeCrossProject: boolean;
   /** Envelope scope asked for by name; absent applies recall's default deny. */
@@ -23,8 +24,9 @@ export interface AmbientAdmission {
   readonly handoffSessionId?: string;
 }
 
-/** Why an ambient load leaves a row out: `admission` refused it, or it passed but is neither pinned nor worth
- * showing. */
+/**
+ * Why an ambient load leaves a row out: `admission` refused it, or it passed but is neither pinned nor worth showing.
+ */
 export type AmbientRefusalReason = 'admission' | 'quality';
 
 /** The rows a summary drill-down reads: recall's scope rule, and with `project` set, no row of another project. */

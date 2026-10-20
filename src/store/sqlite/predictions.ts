@@ -68,8 +68,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
     estimateUnit: row.estimate_unit,
     targetDate: row.target_date,
     actualValue: row.actual_value,
-    // SAFETY: closure_state is DB-constrained to VALID_CLOSURE_STATES; this
-    // module is the only writer and always inserts one of those literals.
+    // SAFETY: closure_state is DB-constrained to VALID_CLOSURE_STATES; this module is the only writer and always
+    // inserts one of those literals.
     closureState: row.closure_state as ClosureState,
     closedAt: row.closed_at,
     closureNote: row.closure_note,
@@ -77,8 +77,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
   };
 }
 
-/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant
- * check included, and its predictions row shares that write scope, so neither lands alone. */
+/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and
+ * its predictions row shares that write scope, so neither lands alone. */
 function writePredictionAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -89,8 +89,8 @@ function writePredictionAt(
   assertTenantId('savePrediction', tenantId);
   const now = new Date().toISOString();
 
-  // Captured for the return value; populated inside afterWrite hook so the
-  // INSERT and the memory write share a SAVEPOINT.
+  // Captured for the return value; populated inside afterWrite hook so the INSERT and the memory write share a
+  // SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
   writeEntryRowAt(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
@@ -208,8 +208,8 @@ function closeOpenPredictionRow(
   stamp: PredictionStamp,
 ): PredictionRow {
   const { now, actor } = stamp;
-  // closure_state='open' in the WHERE stops a retried close from overwriting
-  // actual_value and auditing twice; zero changed rows means not found or already closed.
+  // closure_state='open' in the WHERE stops a retried close from overwriting actual_value and auditing twice; zero
+  // changed rows means not found or already closed.
   const updateResult = db
     .prepare(`
         UPDATE predictions
@@ -352,8 +352,8 @@ export function computePredictionBaserateAt(
   tenantId: string,
   classTag: string,
   actor: string = CLI_ACTOR,
-  /** False skips the predict_baserate audit so that channel only records deliberate
-   *  baserate calls, not every recall the planning-fallacy orchestrator inspects. */
+  /** False skips the predict_baserate audit so that channel only records deliberate baserate calls, not every recall
+   *  the planning-fallacy orchestrator inspects. */
   emitAudit: boolean = true,
 ): PredictionBaserate {
   assertTenantId('computePredictionBaserate', tenantId);
@@ -374,8 +374,8 @@ export function computePredictionBaserateAt(
     .all(tenantId, classTag) as BaserateRow[];
 
   const baserate = predictionBaserateOf(classTag, rows);
-  // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits
-  // its own hint.
+  // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits its
+  // own hint.
   if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
   return baserate;
 }

@@ -84,13 +84,13 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
 export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOptions): string {
   const row = loadRawRow(db, id);
 
-  // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here
-  // rolls back only this archive.
+  // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here rolls back only this
+  // archive.
   return withWriteScope(db, 'archive_raw', () => {
     const archivedAt = moveRowToArchive(db, id, row, opts);
     auditArchive(db, id, row, opts);
-    // Archiving a child under a level-2 summary marks the parent dirty, inside the
-    // SAVEPOINT so the dirty-mark commits atomically with the archive.
+    // Archiving a child under a level-2 summary marks the parent dirty, inside the SAVEPOINT so the dirty-mark commits
+    // atomically with the archive.
     if (row.dag_parent_id) {
       markSummaryDirtyInTx(
         db,

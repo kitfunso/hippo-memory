@@ -115,8 +115,8 @@ function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total
   } else {
     console.log(`Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`);
   }
-  // Show cached counts whenever vectors exist on disk (even when disabled or
-  // the key was removed), so the user still sees what is already indexed.
+  // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed), so the user still
+  // sees what is already indexed.
   const { ids: embeddedIds, dims } = vectorSummary(ctx);
   if (!embAvail && embeddedIds.size === 0) return;
   const orphaned = embeddedIds.size - counts.embedded;

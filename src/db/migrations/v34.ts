@@ -32,8 +32,7 @@ const IDX_SKILLS_MEMORY = `
           ON skills(memory_id) WHERE memory_id IS NOT NULL
         `;
 
-// Cross-tenant safety vs the referenced memory (verbatim mirror of the
-// v32 processes tenant-match triggers).
+// Cross-tenant safety vs the referenced memory (verbatim mirror of the v32 processes tenant-match triggers).
 const TRG_SKILLS_TENANT_MATCH_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_skills_tenant_match_insert
           BEFORE INSERT ON skills
@@ -59,8 +58,7 @@ const TRG_SKILLS_TENANT_MATCH_UPDATE = `
           END
         `;
 
-// Cross-tenant safety vs the successor skill (self-FK; verbatim mirror of
-// the v32 processes supersede trigger).
+// Cross-tenant safety vs the successor skill (self-FK; verbatim mirror of the v32 processes supersede trigger).
 const TRG_SKILLS_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_skills_supersede_tenant_match_update
           BEFORE UPDATE ON skills

@@ -12,8 +12,8 @@ import { DAY_MS } from '../util/time.js';
 import { plural } from '../util/format.js';
 
 // 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no
-// trace (idempotent via source_session_id)
-// is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics.
+// trace (idempotent via source_session_id) is rendered as markdown and persisted as a Layer.Trace memory, which
+// inherits decay, search, replay and physics.
 export function promoteSessionTraces(run: SleepRun): void {
   const { result } = run;
   if (run.dryRun || run.config.autoTraceCapture === false) return;
@@ -91,8 +91,7 @@ function sessionTrace(
     tags: ['auto-promoted'],
     source: 'auto-promote',
     scope: sessionScope.scope,
-    // Same tenant as the traceExistsForSession check above, or a
-    // non-default tenant's trace regenerates every sleep.
+    // Same tenant as the traceExistsForSession check above, or a non-default tenant's trace regenerates every sleep.
     tenantId: consolidationTenant,
     baseHalfLifeDays: run.config.defaultHalfLifeDays,
   });
@@ -110,16 +109,15 @@ function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome
     return null;
   }
 
-  // SAFETY: session event metadata is a free-form Record<string, unknown>
-  // bag; summary is optional and is only trusted once isJsonString below
-  // confirms it is actually a string.
+  // SAFETY: session event metadata is a free-form Record<string, unknown> bag; summary is optional and is only trusted
+  // once isJsonString below confirms it is actually a string.
   const summaryValue = completeEvent.metadata.summary as JsonValue;
   const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
   return { outcome: outcomeRaw, summary };
 }
 
-// traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every
-// sleep; check the tombstone under the entry's own stamped tenantId, never a guessed one.
+// traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every sleep; check the
+// tombstone under the entry's own stamped tenantId, never a guessed one.
 function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
   const traceDigest = rejectionDigest(trace.content);
   const tombstone = run.tombstones.find(trace.tenantId, traceDigest);
@@ -138,14 +136,12 @@ function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): bo
 }
 
 // 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal
-// and idle time,
-// then applying the `markRetrieved` strengthening, so important memories don't fade.
+// and idle time, then applying the `markRetrieved` strengthening, so important memories don't fade.
 export function replayPass(run: SleepRun): void {
   const { survivors, now } = run;
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
   // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences
-  // the whole pass;
-  // persisting unmutated entries anyway would still refresh updated_at and mirrors.
+  // the whole pass; persisting unmutated entries anyway would still refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.size > 0 && !isRecallBoostAblated())) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
   const picked = survivors.get(sampleForReplay(survivors.rows(), replayCount, now, seed));

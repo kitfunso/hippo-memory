@@ -11,8 +11,8 @@ import { resolveConsolidatedSource } from './graph-writes.js';
 function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: string): GraphQueueItem {
   assertTenantId('enqueueExtraction', tenantId);
   const now = new Date().toISOString();
-  // enqueue is memory-keyed (no source object), so a missing memory still throws (correct -
-  // you cannot enqueue a forgotten mirror); memoryId is non-null here by construction.
+  // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you cannot enqueue a
+  // forgotten mirror); memoryId is non-null here by construction.
   const { sourceKind } = resolveConsolidatedSource(db, tenantId, memoryId, null, 'enqueueExtraction');
   const result = db
     .prepare(`
@@ -37,8 +37,8 @@ export function markGraphDirtyAt(db: DatabaseSyncLike, tenantId: string, memoryI
   try {
     enqueueExtraction(db, tenantId, memoryId);
   } catch (err) {
-    // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but
-    // swallowed so the already-committed object write is never rolled back.
+    // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but swallowed so the already-committed
+    // object write is never rolled back.
     log.warn(
       `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${errorMessage(err)}`,
       errorFields(err),
@@ -66,8 +66,7 @@ export function markPendingProcessedUpToAt(db: DatabaseSyncLike, tenantId: strin
  * host-wide, as sleep is cross-tenant. The drain marks only items at or below it processed, so items enqueued DURING
  * the rebuild stay pending (no lost update). */
 export function loadPendingExtractionTenantsAt(db: DatabaseSyncLike): { tenantId: string; maxPendingId: number }[] {
-  // SAFETY: rows' shape matches the two aliased columns (tenant_id, max_id)
-  // named in the SELECT above.
+  // SAFETY: rows' shape matches the two aliased columns (tenant_id, max_id) named in the SELECT above.
   const rows = db
     .prepare(`
     SELECT tenant_id AS tenant_id, MAX(id) AS max_id

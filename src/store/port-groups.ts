@@ -1,5 +1,5 @@
-// The store groups for sessions, cards, goals, conflicts, dormant memories and reports; type-only, apart from
-// port.ts so that file stays under the size gate.
+// The store groups for sessions, cards, goals, conflicts, dormant memories and reports; type-only, apart from port.ts
+// so that file stays under the size gate.
 import type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
@@ -36,8 +36,8 @@ export interface WorkingMemoryPush {
   readonly metadata?: JsonObject;
 }
 
-/** Snapshots, session events, handoffs, working memory and session-owner binding. Every keyed method takes
- * `key: ContinuityKey | null`, since a group cannot gain members once it ships. */
+/** Snapshots, session events, handoffs, working memory and session-owner binding. Every keyed method takes `key:
+ * ContinuityKey | null`, since a group cannot gain members once it ships. */
 export interface Sessions {
   saveSnapshot(tenantId: string, snapshot: SnapshotInput, key: ContinuityKey | null): Promise<TaskSnapshot>;
   loadSnapshot(tenantId: string, key: ContinuityKey | null): Promise<TaskSnapshot | null>;

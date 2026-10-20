@@ -159,8 +159,8 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
-// A reset hours away must fail the run for a later rerun; sleeping
-// through it would hold the process for the whole window.
+// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole
+// window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
@@ -202,8 +202,8 @@ function issueItemToEvent(item: JsonValue, repository: GitHubRepository): Ingest
 
 function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem
-  // validates is an IssueCommentItem; a missing issue_url is handled below.
+  // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem validates is an
+  // IssueCommentItem; a missing issue_url is handled below.
   const c = item as IssueCommentItem;
   const issueNumber = parseTrailingNumber(c.issue_url);
   if (issueNumber === null) return null;
@@ -223,8 +223,8 @@ function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository):
 
 function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem
-  // validates is a PrReviewCommentItem; a missing pull_request_url is handled below.
+  // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem validates is a
+  // PrReviewCommentItem; a missing pull_request_url is handled below.
   const c = item as PrReviewCommentItem;
   const prNumber = parseTrailingNumber(c.pull_request_url);
   if (prNumber === null) return null;

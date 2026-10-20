@@ -7,8 +7,7 @@ import { DEFAULT_LIST_LIMIT, MAX_ID_LEN, MAX_LIST_LIMIT, resolveListLimit } from
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 // Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is
-// the one place the `as T` assertion lives
-// and callers narrow via the `value is T` return.
+// the one place the `as T` assertion lives and callers narrow via the `value is T` return.
 export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string): value is T {
   // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms membership; the `value is T`
   // return type does the narrowing.
@@ -37,8 +36,8 @@ export function parseListLimit(
   return limit;
 }
 
-/** `_authed` is proof the caller passed auth, so a full-size body is read only for
- * an authenticated caller; the key mint reads under its own small cap. */
+/** `_authed` is proof the caller passed auth, so a full-size body is read only for an authenticated caller; the key
+ * mint reads under its own small cap. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
   return parseJsonObjectText(await readBody(req, { deadlineMs: bodyDeadlineMs(envBodyTimeoutMs()) }));
 }

@@ -95,8 +95,8 @@ interface QueuedLesson {
   key: string;
 }
 
-/** Where a batch writes and what it has learned so far: `live` and
- * `keys` follow every write, so a later lesson matches against them. */
+/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so a later lesson matches
+ * against them. */
 interface LessonBatch {
   readonly ctx: Context;
   readonly writes: LessonWrites;
@@ -243,8 +243,8 @@ async function writeLessons(
 
 export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 
-/** `hippo invalidate`: weakens the caller's tenant's memories that
- * reference `target.from`, or only the one `options.onlyId` names. */
+/** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one
+ * `options.onlyId` names. */
 export function memoryInvalidate(
   ctx: LocalContext,
   target: InvalidationTarget,

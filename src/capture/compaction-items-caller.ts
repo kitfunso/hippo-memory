@@ -21,8 +21,9 @@ export interface CallerItemsResult {
   readonly written: number;
 }
 
-/** Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled or deferred
- * here. */
+/**
+ * Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled or deferred here.
+ */
 export async function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsRequest): Promise<CallerItemsResult> {
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);

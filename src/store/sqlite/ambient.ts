@@ -9,8 +9,9 @@ import { placeholders } from '../../util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../util/json.js';
 
-/** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot
- * match. */
+/**
+ * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match.
+ */
 function secretTaggedSql() {
   const tags = [...SECRET_TAGS];
   return {
@@ -41,8 +42,8 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
   return tallies;
 }
 
-/** Whole-store ambient tallies in two aggregate passes, no row loaded. Content-pattern secrets and session-local
- *  rows (own compaction items, a printed handoff's digest) still count: only injection drops them. */
+/** Whole-store ambient tallies in two aggregate passes, no row loaded. Content-pattern secrets and session-local rows
+ *  (own compaction items, a printed handoff's digest) still count: only injection drops them. */
 export function loadAmbientTalliesAt(
   db: DatabaseSyncLike,
   rules: LossAversion,

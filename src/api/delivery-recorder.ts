@@ -59,8 +59,9 @@ export interface DeliveryObserver {
   watchAdmit(admit: (e: MemoryEntry) => boolean): (e: MemoryEntry) => boolean;
   /** A store's ambient load refused the row with this id under the admission it was sent. */
   filtered(id: string): void;
-  /** The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it
-   * instead. */
+  /**
+   * The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it instead.
+   */
   qualityDropped(id: string, isGlobal: boolean): void;
   disabled(): void;
   /** No `pool` means pin or recent by the entry's own flag. */
@@ -114,8 +115,9 @@ export interface DeliveryRecorderInit {
   tenantId: string;
   stdinText?: string;
   envSessionId?: string;
-  /** Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say
-   * claude-code. */
+  /**
+   * Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say claude-code.
+   */
   runtime?: DeliveryRuntime;
   /** Set by hooks that are not prompt or context calls; without it the payload's hook event decides. */
   eventType?: DeliveryEventType;

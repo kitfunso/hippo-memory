@@ -1,8 +1,8 @@
 import { HOUR_MS } from '../util/time.js';
 
 /** Default freshness bound for AMBIENT active-task-snapshot reads: 72h rather than 48h so a Friday-evening orphan still
- * offers continuity on Monday; override via `loadFreshActiveTaskSnapshot`'s `opts.maxAgeMs`; deliberately no env
- * knob. */
+ * offers continuity on Monday; override via `loadFreshActiveTaskSnapshot`'s `opts.maxAgeMs`; deliberately no env knob.
+ */
 export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * HOUR_MS;
 
 /** A usable session id: non-null, non-empty string; named so the owner-match rule in `loadFreshActiveTaskSnapshot`

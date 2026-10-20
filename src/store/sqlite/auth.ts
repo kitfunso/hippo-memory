@@ -41,8 +41,8 @@ export interface CreateApiKeyResult {
 }
 
 export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
-  // Migration v26 (role column) has already run; an older binary ignores expires_at and would honour an expired key,
-  // so the store shuts it out before the first one exists.
+  // Migration v26 (role column) has already run; an older binary ignores expires_at and would honour an expired key, so
+  // the store shuts it out before the first one exists.
   if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
   db.prepare(
     `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role, owner_subject, expires_at) VALUES ` +

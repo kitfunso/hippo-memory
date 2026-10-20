@@ -25,8 +25,8 @@ export async function promote(ctx: Context, id: string): Promise<PromoteResult> 
   if (target === undefined) throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
   assertPromotable(id, entry);
 
-  // The 'promote' row commits with the global copy, so no write
-  // follows the commit and a busy store fails the whole promote.
+  // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole
+  // promote.
   const globalEntry = globalCopyOf(ctx.hippoRoot, entry, sharedStoreOf(ctx));
   await target.store.localFiles.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
@@ -63,8 +63,7 @@ function assertPromotable(id: string, entry: MemoryEntry): void {
     );
   }
 
-  // Secret producer veto: promote is a producer path to the global store
-  // exactly like shareMemory - same hard rule.
+  // Secret producer veto: promote is a producer path to the global store exactly like shareMemory - same hard rule.
   const promoteSecret = detectSecret(entry);
   if (promoteSecret.flagged) {
     throw new BadRequestError(
@@ -81,8 +80,8 @@ export interface SupersedeResult {
   oldId: string;
   newId: string;
 }
-/** What the successor takes instead of the old row's value. Never
- * set from a request body: the CLI fills it from its flags. */
+/** What the successor takes instead of the old row's value. Never set from a request body: the CLI fills it from its
+ * flags. */
 export interface SupersedeOverrides {
   layer?: Layer;
   tags?: string[];
@@ -128,8 +127,8 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
   return old;
 }
 
-/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is
- * deleted. The store writes the one archive_raw audit row, under the caller's subject. */
+/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The store writes the one
+ * archive_raw audit row, under the caller's subject. */
 export interface ArchiveRawOptions {
   /** The connector event this archive answers. The store logs it in the archive's own transaction, so a redelivery
    * finds it logged. */

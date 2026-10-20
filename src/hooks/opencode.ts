@@ -43,8 +43,8 @@ export const HippoPlugin = async ({ $ }) => {
 
 export { HIPPO_OPENCODE_PLUGIN_MARKER };
 
-// OpenCode plugin installer. OpenCode's config has `additionalProperties: false` and no `hooks` key,
-// so a JSON-hook install breaks its launch: write a TS plugin, migrate any old hooks block out.
+// OpenCode plugin installer. OpenCode's config has `additionalProperties: false` and no `hooks` key, so a JSON-hook
+// install breaks its launch: write a TS plugin, migrate any old hooks block out.
 
 export interface OpencodePluginInstallResult {
   installed: boolean;
@@ -88,8 +88,8 @@ function migrateLegacyOpencodeHooksBlock() {
   if (!isJsonObjectLiteral(settings)) return { migrated: false, jsonRepairFailed: false };
 
   const hooks = settings.hooks;
-  // Non-object hooks values (string, array, null) are user content we don't
-  // recognise — leave them alone, return migrated=false.
+  // Non-object hooks values (string, array, null) are user content we don't recognise; leave them alone, return
+  // migrated=false.
   if (!isJsonObjectLiteral(hooks)) {
     return { migrated: false, jsonRepairFailed: false };
   }
@@ -140,8 +140,8 @@ export function installOpencodePlugin(): OpencodePluginInstallResult {
   const pluginPath = resolveOpencodePluginPath();
   const { migrated, jsonRepairFailed } = migrateLegacyOpencodeHooksBlock();
 
-  // Skip the write only if BOTH the marker is present and the content matches; a marker-only match with stale
-  // content is rewritten so plugin-source patches reach existing installs.
+  // Skip the write only if BOTH the marker is present and the content matches; a marker-only match with stale content
+  // is rewritten so plugin-source patches reach existing installs.
   if (fs.existsSync(pluginPath)) {
     const existing = fs.readFileSync(pluginPath, 'utf8');
     if (existing.includes(HIPPO_OPENCODE_PLUGIN_MARKER) && existing === OPENCODE_PLUGIN_SOURCE) {
@@ -162,8 +162,8 @@ export function uninstallOpencodePlugin(): boolean {
       removedFile = true;
     }
   }
-  // Always run the legacy migration on uninstall — the downgrade path (user
-  // removing hippo entirely) must leave opencode launchable.
+  // Always run the legacy migration on uninstall: the downgrade path (user removing hippo entirely) must leave opencode
+  // launchable.
   const { migrated } = migrateLegacyOpencodeHooksBlock();
   return removedFile || migrated;
 }

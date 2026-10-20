@@ -8,8 +8,8 @@ type StreamWriteArgs = [
   cb?: (err?: Error) => void,
 ];
 
-/** Mirrors every stdout and stderr chunk to `logFile` until the returned restore runs; an append failure warns once
- * and never stops the real write. */
+/** Mirrors every stdout and stderr chunk to `logFile` until the returned restore runs; an append failure warns once and
+ * never stops the real write. */
 export function teeStdStreams(logFile: string): () => void {
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   const origStderrWrite = process.stderr.write.bind(process.stderr);

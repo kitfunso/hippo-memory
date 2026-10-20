@@ -65,8 +65,8 @@ export function saveSessionHandoffAt(
   const stamp = key ? continuityStamp(key) : null;
   const now = new Date().toISOString();
 
-  // Scope is stored as given; read-side default-deny in api.recall + cmdRecall
-  // continuity excludes slack:private:* and 'unknown:legacy'.
+  // Scope is stored as given, since reads deny by default.
+  // api.recall and cmdRecall continuity exclude slack:private:* and 'unknown:legacy'.
   const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
 
   const id = Number(result.lastInsertRowid ?? 0);
@@ -264,8 +264,8 @@ function buildSessionEndHandoff(
   handoffEvidence: HandoffEvidence | null,
   outcome: HandoffOutcome | null,
 ): Omit<SessionHandoff, 'updatedAt'> {
-  // A same-task refresh carries forward envelope fields nobody cleared; a scope
-  // mismatch must not leak private metadata into an unscoped envelope.
+  // A same-task refresh carries forward envelope fields nobody cleared; a scope mismatch must not leak private metadata
+  // into an unscoped envelope.
   const carryForward =
     existing != null && existing.taskId === snapshot.task && (existing.scope ?? null) === (snapshot.scope ?? null);
 

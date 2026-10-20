@@ -54,16 +54,15 @@ export interface HybridSearchOptions extends SearchOptions {
   /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
   /** Optional admission predicate applied to the loaded candidates of BOTH stores before ranking, cross-store dedupe
-   * and budgeting,
-   * so an excluded row cannot shadow its admitted duplicate or saturate the budget. Undefined (recall paths never
-   * set it) means no filter. */
+   * and budgeting, so an excluded row cannot shadow its admitted duplicate or saturate the budget. Undefined (recall
+   * paths never set it) means no filter. */
   entryFilter?: (entry: MemoryEntry) => boolean;
   /** Recall scope filter for `searchBothHybrid`: absent is the only unfiltered mode; present uses
    * `loadRecallSearchEntries` plus a JS post-filter.
    * `{}` = default-deny (legacy and `<source>:private:*` excluded); `{ requested: 'X' }` = exact; `{ requested: 'X',
    * additive: true }` = default plus X.
-   *  An object, not `string | null`, because the sibling `scope` option already gives null a different meaning.
-   *  Do not pass `{}` casually from non-recall paths. */
+   * An object, not `string | null`, because the sibling `scope` option already gives null a different meaning.
+   * Do not pass `{}` casually from non-recall paths. */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 

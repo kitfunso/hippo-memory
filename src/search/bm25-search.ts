@@ -28,8 +28,8 @@ export interface SearchOptions {
 
 type Corpus = ReturnType<typeof buildCorpus>;
 
-// Keyed on the caller's array so multihop's two passes share one build;
-// the pool identity check keeps a mutated array honest.
+// Keyed on the caller's array so multihop's two passes share one build; the pool identity check keeps a mutated array
+// honest.
 const corpusCache = new WeakMap<MemoryEntry[], { pool: MemoryEntry[]; corpus: Corpus }>();
 
 function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {

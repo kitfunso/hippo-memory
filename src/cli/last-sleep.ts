@@ -42,8 +42,8 @@ function badSpoolFiles(hippoRoot: string): number {
   }
 }
 
-/** Prints the SessionEnd sleep log on stderr, then clears it. In a hook, stdout carries only `systemMessage`,
- *  because Claude Code shows that to the user and adds any other SessionStart stdout to the model's context. */
+/** Prints the SessionEnd sleep log on stderr, then clears it. In a hook, stdout carries only `systemMessage`, because
+ *  Claude Code shows that to the user and adds any other SessionStart stdout to the model's context. */
 export function cmdLastSleep(
   hippoRoot: string,
   flags: CliFlags,

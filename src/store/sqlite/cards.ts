@@ -152,8 +152,8 @@ function closeLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, ou
   `).run(now, outcome, now, cardId, tenantId);
 }
 
-// The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one
-// runtime authority, so a hand-copied wrong `from` list fails fast here.
+// The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one runtime authority, so a hand-copied wrong
+// `from` list fails fast here.
 interface TransitionCardOptions {
   readonly from: CardStatus[];
   readonly to: CardStatus;
@@ -207,8 +207,8 @@ function createCardAt(db: DatabaseSyncLike, tenantId: string, input: CardCreate)
   let id = '';
 
   withWriteScope(db, 'create_card', () => {
-    // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent
-    // completing between an outside-the-lock read and the INSERT would strand the child.
+    // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent completing between an outside-the-lock
+    // read and the INSERT would strand the child.
     const allParentsDone = everyParentDone(db, tenantId, dependsOn);
 
     id = generateId('card');
@@ -477,8 +477,8 @@ function completeCardAt(
     const now = new Date().toISOString();
     closeLiveRun(db, tenantId, id, outcome, now);
 
-    // Not best-effort (rule 12): promotion runs in this same transaction, so a
-    // card can never be `done` with an un-evaluated child.
+    // Not best-effort (rule 12): promotion runs in this same transaction, so a card can never be `done` with an
+    // un-evaluated child.
     return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
   });
   return promoted === null ? null : { card: loadCardRow(db, tenantId, id)!, promotedChildren: promoted };

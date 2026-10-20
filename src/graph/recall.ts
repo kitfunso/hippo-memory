@@ -15,13 +15,13 @@ import type { Entity } from '../store/port/graph-reads.js';
 import type { HippoStore } from '../store/index.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../core/recall-scope.js';
 
-/** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds
- *  worst-case work and keeps the flag honest). */
+/** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds worst-case work and keeps the
+ *  flag honest). */
 export const MAX_HOPS = 3;
 /** Default per-hop fanout cap (bounds blow-up on a future dense graph). */
 export const DEFAULT_MAX_NEIGHBORS = 25;
-/** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down
- *  1% per hop, so it ranks just below its seed and orders by hop-distance. */
+/** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down 1% per hop, so it ranks just
+ *  below its seed and orders by hop-distance. */
 const HOP_DISCOUNT = 0.01;
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
 type GraphStore = Pick<HippoStore, 'graphReads' | 'entriesByIds'>;
@@ -40,20 +40,20 @@ export interface GraphExpandOpts {
   tenantId: string;
   /** Mirror the recall handler's hard filters when re-loading graph-reached rows. */
   includeSuperseded?: boolean;
-  /** ISO date; bi-temporal as-of filter applied to graph-reached rows, matching cmdRecall:
-   *  visible if valid_from <= asOf and, when superseded, its successor was not yet valid at asOf. */
+  /** ISO date; bi-temporal as-of filter applied to graph-reached rows, matching cmdRecall: visible if valid_from <=
+   *  asOf and, when superseded, its successor was not yet valid at asOf. */
   asOf?: string;
   /** Token budget for the augmented set (defaults to DEFAULT_RECALL_BUDGET, matching recall). */
   budget?: number;
   /** Budget cost per result; defaults to the memory text. */
   cost?: ResultCost;
-  /** The recall --min-results floor: this many top base rows are kept regardless of
-   *  budget, so graph expansion never violates the floor. Defaults to 1. */
+  /** The recall --min-results floor: this many top base rows are kept regardless of budget, so graph expansion never
+   *  violates the floor. Defaults to 1. */
   minResults?: number;
   /**
    * Recall-side scope rule applied to graph-REACHED memories only (base results already passed the caller), mirroring
    * HybridSearchOptions.recallScope.
-   *  Omitted = default-deny (private and quarantine excluded, NULL passes), the fail-closed default for SDK callers.
+   * Omitted = default-deny (private and quarantine excluded, NULL passes), the fail-closed default for SDK callers.
    * { requested, additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact narrowing
    * (passesScopeFilterForRecall).
    */
@@ -167,8 +167,8 @@ interface HitAccumulators {
   readonly hitsByOrigin: Map<string, GraphHit[]>;
 }
 
-/** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`
- *  and `seenContent` so a memory, or a share/promote copy of it, surfaces at most once across stores. */
+/** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds` and `seenContent`
+ *  so a memory, or a share/promote copy of it, surfaces at most once across stores. */
 async function produceHitsForStore(
   store: GraphStore,
   baseResults: SearchResult[],
@@ -223,8 +223,7 @@ function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number, isG
 }
 
 // Reached entities -> source memory ids -> load by id (chunked). A mirror-less entity (memoryId === null) has no memory
-// to surface,
-// so drop its null id before it reaches loadByIdsChunked.
+// to surface, so drop its null id before it reaches loadByIdsChunked.
 async function loadReachedMemories(
   store: GraphStore,
   tenantId: string,
@@ -239,8 +238,8 @@ async function loadReachedMemories(
   return new Map((await loadByIdsChunked(store, tenantId, needLoad)).map((m) => [m.id, m]));
 }
 
-// For the bi-temporal as-of rule on a superseded reached row we need its successor's
-// valid_from. Batch-load the successors referenced by the loaded rows.
+// For the bi-temporal as-of rule on a superseded reached row we need its successor's valid_from. Batch-load the
+// successors referenced by the loaded rows.
 async function loadSuccessorValidFrom(
   store: GraphStore,
   tenantId: string,
@@ -318,15 +317,14 @@ function selectWithinBudget(
   const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
   const minResults = opts.minResults ?? 1;
   // Budget selection is by score, not position, so a high-value graph hit can beat a low-score lexical distractor; the
-  // greedy pack uses `continue`,
-  // so the DISPLAY loop emits a hit only under a kept seed. The top --min-results base rows are never evicted; at least
-  // one result is kept.
+  // greedy pack uses `continue`, so the DISPLAY loop emits a hit only under a kept seed. The top --min-results base
+  // rows are never evicted; at least one result is kept.
   const protectedCount = Math.min(Math.max(minResults, 1), baseResults.length);
   const keep = new Set<SearchResult>(baseResults.slice(0, protectedCount));
   const price = opts.cost ?? ((r: SearchResult) => r.tokens);
   let usedTokens = [...keep].reduce((s, r) => s + price(r), 0);
-  // PLAIN stable score sort on purpose: both input lists are already deterministically
-  // ordered, and a base-vs-graph-hit tie keeps the BASE result first (the concat order).
+  // PLAIN stable score sort on purpose: both input lists are already deterministically ordered, and a base-vs-graph-hit
+  // tie keeps the BASE result first (the concat order).
   for (const r of [...baseResults.slice(protectedCount), ...allHits].sort((a, b) =>
     compareScoresDesc(a.score, b.score),
   )) {
@@ -343,8 +341,8 @@ function mergeKeptHits(
   hitsByOrigin: Map<string, GraphHit[]>,
   keep: Set<SearchResult>,
 ): SearchResult[] {
-  // DISPLAY order: base order preserved (it may be MMR-diversified); each kept new hit
-  // placed directly after the seed it descends from. Hits emit ONLY under a kept seed.
+  // DISPLAY order: base order preserved (it may be MMR-diversified); each kept new hit placed directly after the seed
+  // it descends from. Hits emit ONLY under a kept seed.
   const merged: SearchResult[] = [];
   let emittedHit = false;
   for (const r of baseResults) {

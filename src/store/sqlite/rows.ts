@@ -28,8 +28,8 @@ export interface HippoIndex {
   version: number;
   entries: Record<string, IndexEntry>;
   last_retrieval_ids: string[];
-  /** Id of the most recent recall_traces row written by contextGet/cmdRecall, mirrored from the
-   *  `last_trace_id` meta key like last_retrieval_ids. null when none was written (api.recall never sets it). */
+  /** Id of the most recent recall_traces row written by contextGet/cmdRecall, mirrored from the `last_trace_id` meta
+   *  key like last_retrieval_ids. null when none was written (api.recall never sets it). */
   last_trace_id: string | null;
 }
 
@@ -71,8 +71,7 @@ export interface MemoryRow {
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
-  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside
-  // descendant_count / earliest_at / latest_at.
+  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside descendant_count / earliest_at / latest_at.
   summary_dirty: number | null;
   last_rebuilt_at: string | null;
   rebuild_count: number | null;
@@ -282,8 +281,8 @@ function rowToPlacementFields(row: MemoryRow): PlacementFields {
 
 export function rowToEntry(row: MemoryRow): MemoryEntry {
   const entry: MemoryEntry = { ...rowToRetrievalFields(row), ...rowToPlacementFields(row) };
-  // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column
-  // (non-FTS path) from a present one.
+  // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column (non-FTS path) from a present
+  // one.
   if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {
     entry.bm25Score = Number(row.bm25_score);
   }

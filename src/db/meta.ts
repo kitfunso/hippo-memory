@@ -15,8 +15,7 @@ export function ensureMetaTable(db: DatabaseSyncLike): void {
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {
   if (!tableExists(db, 'meta')) return 0;
-  // SAFETY: row's shape matches the single `value` column named in the
-  // SELECT above.
+  // SAFETY: row's shape matches the single `value` column named in the SELECT above.
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value?: string } | undefined;
   const version = Number(row?.value ?? 0);
   return Number.isFinite(version) ? version : 0;
@@ -42,8 +41,7 @@ export function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
 }
 
 export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): string {
-  // SAFETY: row's shape matches the single `value` column named in the
-  // SELECT above.
+  // SAFETY: row's shape matches the single `value` column named in the SELECT above.
   const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
   return row?.value ?? fallback;
 }

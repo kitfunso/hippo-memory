@@ -127,8 +127,8 @@ export async function handleEmbed(
   { hippoRoot, tenantId, flags }: CommandContext,
   given?: EmbeddingProvider,
 ): Promise<void> {
-  // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local requireInit,
-  // so it heals pre-1.27.0 global stores from a directory with no local .hippo.
+  // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local requireInit, so it heals
+  // pre-1.27.0 global stores from a directory with no local .hippo.
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
 

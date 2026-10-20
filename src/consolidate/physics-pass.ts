@@ -56,8 +56,8 @@ function recallTimes(run: SleepRun, capped: boolean): Map<string, Pick<MemoryEnt
 }
 
 /**
- * Every stored particle id in load order up to the cap; past it, the most recently recalled survivors (memory id
- * breaks ties), then particles with no survivor. */
+ * Every stored particle id in load order up to the cap; past it, the most recently recalled survivors (memory id breaks
+ * ties), then particles with no survivor. */
 export function particlesToSimulate(
   stored: readonly string[],
   entries: ReadonlyMap<string, Pick<MemoryEntry, 'lastRetrieved'>>,

@@ -105,8 +105,8 @@ export interface QueueRow {
 }
 
 export function rowToQueueItem(row: QueueRow): GraphQueueItem {
-  // SAFETY: kind/status are DB CHECK-constrained to exactly the SourceKind/GraphQueueStatus enum values,
-  // so the row's column values match those types.
+  // SAFETY: kind/status are DB CHECK-constrained to exactly the SourceKind/GraphQueueStatus enum values, so the row's
+  // column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -123,11 +123,11 @@ export const QUEUE_COLS = `id, tenant_id, memory_id, kind, status, enqueued_at, 
 export interface InsertEntityOptions {
   entityType: EntityType;
   name: string;
-  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
-   *  the entity is anchored only to its source object (mirror forgotten/pruned). */
+  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when the entity is anchored only to
+   *  its source object (mirror forgotten/pruned). */
   memoryId?: string | null;
-  /** The authoritative object this entity descends from. Required when memoryId is
-   *  null; optional alongside a live memory (both paths may be set). */
+  /** The authoritative object this entity descends from. Required when memoryId is null; optional alongside a live
+   *  memory (both paths may be set). */
   sourceObject?: SourceObjectRef;
 }
 
@@ -141,8 +141,8 @@ export interface InsertRelationOptions {
   fromEntityId: number;
   toEntityId: number;
   relType: RelationType;
-  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
-   *  the relation is anchored only to its source object. */
+  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when the relation is anchored only to
+   *  its source object. */
   memoryId?: string | null;
   /** The authoritative object this relation descends from. */
   sourceObject?: SourceObjectRef;

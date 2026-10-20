@@ -70,8 +70,8 @@ async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags)
   const { hippoRoot, tenantId } = ctx;
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
-  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
-  // than silently creating a non-superseding decision.
+  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than silently creating a
+  // non-superseding decision.
   if (flagIsTrue(flags, 'supersedes')) {
     fail('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
   }
@@ -114,8 +114,8 @@ function exitWithDecideUsage(): never {
 }
 
 async function weakenOrWarn(writes: EntryWrites, oldEntry: MemoryEntry, supersedesMemId: string | null): Promise<void> {
-  // Best-effort and last: saveDecision already committed. Failing here would make a retry find no active
-  // decision for the old memory and create a duplicate active successor, so warn instead.
+  // Best-effort and last: saveDecision already committed. Failing here would make a retry find no active decision for
+  // the old memory and create a duplicate active successor, so warn instead.
   try {
     await decisionsModule.weakenSupersededMemory(writes, oldEntry);
   } catch (e) {

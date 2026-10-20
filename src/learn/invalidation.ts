@@ -190,8 +190,8 @@ function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarg
       if (entry.id !== options.onlyId) continue;
     } else if (!referencesPattern(entry, fromTokens, exactTag)) continue;
 
-    // Pinned check runs AFTER matching so pinned would-be targets are
-    // observable in skippedPinned (pattern mode and onlyId mode alike).
+    // Pinned check runs AFTER matching so pinned would-be targets are observable in skippedPinned (pattern mode and
+    // onlyId mode alike).
     if (entry.pinned) {
       result.skippedPinned.push(entry.id);
       continue;
@@ -385,8 +385,8 @@ function isTrackedPath(index: TrackedIndex, candidate: string): boolean {
   return trackedSpelling(index, candidate) !== null;
 }
 
-// Absolute-path relativization and the <repoName>/ strip both need the repo, so they
-// happen here rather than in the pure extractor.
+// Absolute-path relativization and the <repoName>/ strip both need the repo, so they happen here rather than in the
+// pure extractor.
 function resolveTrackedPath(token: string, repoRoot: string, projectName: string, index: TrackedIndex): string | null {
   let candidate = token;
   const isAbsUnix = candidate.startsWith('/');
@@ -583,8 +583,9 @@ function scriptEvidence(
   return hit ? `script-gone: ${hit}` : null;
 }
 
-/** The first churn evidence against one candidate: a changed or deleted file, then a gone symbol, then a gone
- * script. */
+/**
+ * The first churn evidence against one candidate: a changed or deleted file, then a gone symbol, then a gone script.
+ */
 function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): string | null {
   let evidence = pathEvidence(git, refs.paths, new Date(anchor).getTime());
   if (!evidence && refs.symbols.length > 0) evidence = symbolEvidence(git, refs.symbols, anchor);
@@ -646,8 +647,8 @@ function recordChurnEvidence(
   return toTag;
 }
 
-/** The good-outcome times the candidates' anchors need, and the anchor of each: its last confirmation, if that is
- * later than its creation. */
+/** The good-outcome times the candidates' anchors need, and the anchor of each: its last confirmation, if that is later
+ * than its creation. */
 function readChurnAnchors(learning: Learning, tenantId: string, candidates: readonly ChurnCandidate[]) {
   const firstReadAt = Date.now();
   // A confirmation older than the oldest candidate cannot move any anchor, so the read starts there.
@@ -664,8 +665,8 @@ function readChurnAnchors(learning: Learning, tenantId: string, candidates: read
   return { confirmedAt, firstReadAt, anchorOf };
 }
 
-/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
- * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
+/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only
+ * adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export function detectChurnStale(
   learning: Learning,
   repoRoot: string,

@@ -94,8 +94,8 @@ export interface RecordTraceOutcomeInput {
  * returned. Own table so `auditPrune` cannot erase training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
-    // SAFETY: row shape matches the single `tenant_id` column named in the
-    // SELECT above; sqlite returns undefined when no row matches.
+    // SAFETY: row shape matches the single `tenant_id` column named in the SELECT above; sqlite returns undefined when
+    // no row matches.
     const trace = db.prepare(`SELECT tenant_id FROM recall_traces WHERE id = ?`).get(input.traceId) as
       | { tenant_id?: string }
       | undefined;
@@ -104,8 +104,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       return;
     }
 
-    // SAFETY: row shape matches the single `memory_id` column named in the
-    // SELECT above.
+    // SAFETY: row shape matches the single `memory_id` column named in the SELECT above.
     const memberRows = db
       .prepare(`SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`)
       .all(input.traceId) as Array<{ memory_id: string }>;

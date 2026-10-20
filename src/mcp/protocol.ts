@@ -37,8 +37,8 @@ export function callName(req: McpRequest): string {
   return isJsonString(tool) ? `${req.method} ${tool.slice(0, 128)}` : req.method;
 }
 
-/** JSON-RPC reply for a request that threw: typed API errors keep
- * their text; anything else is logged and answered generically. */
+/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered
+ * generically. */
 export function mcpErrorResponse<E>(
   id: McpResponse['id'],
   err: E,
@@ -67,8 +67,8 @@ export interface McpContext {
   hippoRoot: string;
   tenantId: string;
   actor: string;
-  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context,
-   * is admin without one. */
+  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context, is
+   * admin without one. */
   role: 'admin' | 'member';
   /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];

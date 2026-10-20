@@ -1,7 +1,6 @@
 /**
  * Trace-layer helpers. A trace is a `MemoryEntry` with `layer === 'trace'`: ordered agent actions and their outcome,
- * stored as markdown in `content`
- * (`renderTraceContent` formats it). */
+ * stored as markdown in `content` (`renderTraceContent` formats it). */
 
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { errorMessage } from '../util/log.js';

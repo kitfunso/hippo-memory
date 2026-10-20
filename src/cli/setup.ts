@@ -102,8 +102,7 @@ function hookInstall(target: string | undefined): void {
   const hook = HOOKS[target];
   patchAgentFile(hook, target);
 
-  // For Claude Code, also install SessionEnd+SessionStart entries in its
-  // settings file.
+  // For Claude Code, also install SessionEnd+SessionStart entries in its settings file.
   if (target === 'claude-code') {
     printClaudeHookInstall(installJsonHooks(target));
   } else if (target === 'opencode') {
@@ -474,8 +473,8 @@ function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   // returned above.
   const target = tool.name as JsonHookTarget;
   if (dryRun) {
-    // Resolve the real settings path so the filename is right for each tool
-    // (claude-code -> settings.json, opencode -> opencode.json).
+    // Resolve the real settings path so the filename is right for each tool (claude-code -> settings.json, opencode ->
+    // opencode.json).
     const { settings } = resolveJsonHookPaths(target);
     console.log(`[dry-run] would install hooks in ${settings}`);
     return;
@@ -524,8 +523,7 @@ function setupWrapperTool(tool: ToolDetection, dryRun: boolean): void {
 
 function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
   if (tool.name !== 'opencode') {
-    // Other plugin tools (openclaw) have their own installer; the notes
-    // line points the user at it.
+    // Other plugin tools (openclaw) have their own installer; the notes line points the user at it.
     console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
     return;
   }
@@ -549,8 +547,9 @@ function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
 // stall every later workspace.
 const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
 
-/** Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error
- * code. */
+/**
+ * Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error code.
+ */
 function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   if (err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT') {
     return `timed out after ${timeoutMs} ms and was stopped`;

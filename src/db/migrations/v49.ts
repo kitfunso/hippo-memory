@@ -4,8 +4,7 @@ export const v49: Migration = {
   version: 49,
   up: (db) => {
     // Compaction record (src/capture/compaction-record.ts): one row per Claude Code compaction, written before it
-    // (started)
-    // and after it (summarized, done). Not a memory row. Additive only: no min_compatible_binary bump.
+    // (started) and after it (summarized, done). Not a memory row. Additive only: no min_compatible_binary bump.
     db.exec(`
         CREATE TABLE IF NOT EXISTS compactions (
           tenant_id       TEXT NOT NULL DEFAULT 'default',

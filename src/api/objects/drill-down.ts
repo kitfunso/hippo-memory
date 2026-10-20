@@ -68,8 +68,8 @@ export async function drillDown(
   opts: DrillDownOptions = {},
 ): Promise<DrillDownOutcome> {
   const limit = opts.limit ?? DEFAULT_DRILL_DOWN_LIMIT;
-  // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
-  // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
+  // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels prevents pathological deep trees. CLI/HTTP/MCP
+  // reject invalid values.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
   const admit: DescendantAdmission = { ownScope: personalScopeOf(ctx.actor) ?? undefined, project: opts.project };
   const pastLimit = Math.floor(limit) + 1;
@@ -80,11 +80,11 @@ export async function drillDown(
     minSummaryLevel: DAG_LEVEL.topic,
     page: limit >= 0 && Number.isSafeInteger(pastLimit) ? { rows: pastLimit } : undefined,
   });
-  // No unscoped cross-tenant probe: the tenant-scoped miss covers "missing" and "in another tenant" alike,
-  // because telling them apart would leak existence to unauthorised tenants.
+  // No unscoped cross-tenant probe: the tenant-scoped miss covers "missing" and "in another tenant" alike, because
+  // telling them apart would leak existence to unauthorised tenants.
   if (!walked) return { failure: 'not_found' };
-  // A distinguishable "scope_blocked" would tell a no-scope caller "this row
-  // exists, just not for you", the existence leak the HTTP 404 collapse prevents.
+  // A distinguishable "scope_blocked" would tell a no-scope caller "this row exists, just not for you", the existence
+  // leak the HTTP 404 collapse prevents.
   if (!descendantAdmits(walked.summary, admit)) return { failure: 'not_found' };
   if (!isDrillable(walked.summary)) return { failure: 'not_drillable' };
   return drillResult(walked, opts, limit);
@@ -105,8 +105,8 @@ function drillResult(
   const summaryOut: DrillDownSummary = {
     id: summary.id,
     content: summary.content,
-    // v0.30 / E5: the STORED direct-child count; the legacy fallback counts
-    // level-0 children, never the BFS-depth-N total (independent-review MED #4).
+    // v0.30 / E5: the STORED direct-child count; the legacy fallback counts level-0 children, never the BFS-depth-N
+    // total (independent-review MED #4).
     descendantCount: summary.descendantCount ?? sizes[0] ?? 0,
     earliestAt: summary.earliestAt ?? null,
     latestAt: summary.latestAt ?? null,

@@ -1,5 +1,5 @@
-// hippo.db's GraphReads group: one read snapshot around the CLI's graph walks, and the rows a view or a traversal
-// reads on the handle that snapshot runs on.
+// hippo.db's GraphReads group: one read snapshot around the CLI's graph walks, and the rows a view or a traversal reads
+// on the handle that snapshot runs on.
 import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
 import { assertTenantId } from '../../core/tenant-id.js';
@@ -336,8 +336,8 @@ function focusRows(
   return { entities, relations, truncated };
 }
 
-/** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one
- * snapshot that keeps entity ids and relation ids from two different rebuilds apart. */
+/** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one snapshot that keeps entity ids and
+ * relation ids from two different rebuilds apart. */
 function graphViewRows(db: DatabaseSyncLike, tenantId: string, spec: GraphViewSpec): GraphRows {
   const source = { db, tenantId };
   const raw =

@@ -7,11 +7,11 @@ import { runSleep } from './sleep-run.js';
 /** Options for `sleep`, one consolidation cycle on a SQLite store that returns counts; unlike `hippo sleep` it skips
  * the auto-learn step. */
 export interface SleepOpts {
-  /** Report what a sleep would change without applying it; sharing,
-   * the ambient summary and the graph refresh are skipped. */
+  /** Report what a sleep would change without applying it; sharing, the ambient summary and the graph refresh are
+   * skipped. */
   dryRun?: boolean;
-  /** Skip copying high-scoring memories to the global store under `HIPPO_HOME`. Default
-   * false, so every tenant's memories are eligible; multi-tenant callers pass `true`. */
+  /** Skip copying high-scoring memories to the global store under `HIPPO_HOME`. Default false, so every tenant's
+   * memories are eligible; multi-tenant callers pass `true`. */
   noShare?: boolean;
 }
 

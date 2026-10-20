@@ -1,5 +1,5 @@
-// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a
-// handle of its own.
+// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a handle
+// of its own.
 import { ConflictError } from '../../core/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { DAY_MS } from '../../util/time.js';
@@ -61,8 +61,9 @@ export function requestOutcome(
   return row.outcome;
 }
 
-/** A retry that stored what the first try could not rewrites that row, since the request id allows one row per
- * tenant. */
+/**
+ * A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant.
+ */
 function settleFailureOutcome(
   db: DatabaseSyncLike,
   tenantId: string,

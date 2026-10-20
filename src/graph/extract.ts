@@ -1,6 +1,6 @@
-/** Deterministic entity extraction: the graph is a pure function of the consolidated object tables
- *  (decisions, policies, customer_notes, project_briefs). Writes go through the src/store/graph-writes.ts
- *  consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
+/** Deterministic entity extraction: the graph is a pure function of the consolidated object tables (decisions,
+ *  policies, customer_notes, project_briefs). Writes go through the src/store/graph-writes.ts consolidated-source
+ *  guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
 import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
 import type { SourceObjectRef } from '../store/local/graph-rebuild.js';
@@ -24,30 +24,29 @@ import { assertTenantId } from '../core/tenant-id.js';
 import { escapeRegex } from '../util/escape.js';
 import type { LocalStore } from '../store/local/index.js';
 
-/** Per-type load cap (the loaders default to 100); a type over it is truncated and
- *  `ExtractResult.truncated` records that. */
+/** Per-type load cap (the loaders default to 100); a type over it is truncated and `ExtractResult.truncated` records
+ *  that. */
 export const MAX_EXTRACT_PER_TYPE = 10000;
 
-/** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short, generic words; MAX skips prose
- *  (a decision's prose name is never a target, only a source). */
+/** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short, generic words; MAX skips prose (a
+ *  decision's prose name is never a target, only a source). */
 export const MIN_REF_NAME_LEN = 4;
 export const MAX_REF_NAME_LEN = 80;
 /** Per-source cap so one object cannot explode the graph with references edges. */
 export const MAX_REFERENCES_PER_OBJECT = 25;
-/** Regex-size bound: at most this many distinct target names enter the combined
- *  alternation, keeping the scan regex sane on a huge store. */
+/** Regex-size bound: at most this many distinct target names enter the combined alternation, keeping the scan regex
+ *  sane on a huge store. */
 export const MAX_TARGET_NAMES = 5000;
 
 export interface ExtractResult {
   entities: number;
   relations: number;
-  /** Of `relations`, how many are cross-object `references` edges (the rest are
-   *  `supersedes`). Surfaced so the heuristic's output volume is observable. */
+  /** Of `relations`, how many are cross-object `references` edges (the rest are `supersedes`). Surfaced so the
+   *  heuristic's output volume is observable. */
   references: number;
   /** Entity count per extracted type. */
   byType: Record<string, number>;
-  /** Entity types whose active or superseded load hit MAX_EXTRACT_PER_TYPE (the graph
-   *  is under-extracted for those). */
+  /** Entity types whose active or superseded load hit MAX_EXTRACT_PER_TYPE (the graph is under-extracted for those). */
   truncated: string[];
   /** Writes left out because a writer changed their row or object after the diff; set only when above 0. */
   skipped?: number;
@@ -71,8 +70,8 @@ function keyOf(entityType: EntityType, e2Id: number): string {
   return `${entityType}:${e2Id}`;
 }
 
-/** The four object-derived extraction entity types map 1:1 to source_object_type; the other
- *  two EntityType members ('person', 'system') have no object table and stay unmapped. */
+/** The four object-derived extraction entity types map 1:1 to source_object_type; the other two EntityType members
+ *  ('person', 'system') have no object table and stay unmapped. */
 const ENTITY_TYPE_TO_SOURCE_OBJECT = {
   decision: 'decision',
   policy: 'policy',
@@ -82,8 +81,8 @@ const ENTITY_TYPE_TO_SOURCE_OBJECT = {
   system: undefined,
 } satisfies Record<EntityType, SourceObjectType | undefined>;
 
-/** The source-object ref for an extraction row (always set: every extracted row is a
- *  first-class object). Throws on an unmappable entityType (a graph invariant violation). */
+/** The source-object ref for an extraction row (always set: every extracted row is a first-class object). Throws on an
+ *  unmappable entityType (a graph invariant violation). */
 function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
   if (!type) throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
@@ -116,9 +115,9 @@ export interface LoadedType {
   hitCap: boolean;
 }
 
-/** Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows
- *  (not `closed`), one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when
- *  either load is full. */
+/** Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows (not
+ *  `closed`), one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is
+ *  full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
   load: (objects: Objects, tenant: string, opts: SourceLoadOptions) => Promise<T[]>,
@@ -224,8 +223,8 @@ export function deriveGraph(loaded: readonly LoadedType[]): DerivedGraph {
 
 const naturalKeyOf = (e: DerivedEntity): NaturalKey => ({ entityType: e.entityType, sourceObject: e.sourceObject });
 
-// Pass 1: every active or superseded object row becomes an entity anchored to its object, so it survives a
-// forgotten mirror; the mirror memory rides along only while it exists.
+// Pass 1: every active or superseded object row becomes an entity anchored to its object, so it survives a forgotten
+// mirror; the mirror memory rides along only while it exists.
 function deriveEntities(loaded: readonly LoadedType[]): DerivedEntities {
   const pass: DerivedEntities = { byType: {}, truncated: [], allRows: [], byKey: new Map(), created: [] };
   for (const { entityType, rows, hitCap } of loaded) {
@@ -260,8 +259,8 @@ interface SupersedesPass {
   readonly supersededPairs: Set<string>;
 }
 
-// Pass 2: "Y supersedes X" when both were derived (Y may be closed and absent). The edge is anchored to the
-// successor's object and carries its mirror memory only while that lives.
+// Pass 2: "Y supersedes X" when both were derived (Y may be closed and absent). The edge is anchored to the successor's
+// object and carries its mirror memory only while that lives.
 function deriveSupersedes(pass: DerivedEntities): SupersedesPass {
   const relations: DesiredRelation[] = [];
   // Pass 3 skips these pairs: "Adopt X (managed)" containing "Adopt X" is a version, not a cross-reference.
@@ -304,8 +303,8 @@ function referenceTargets(created: readonly DerivedEntity[]): Map<string, Derive
   return byName;
 }
 
-// Pass 3: a `references` edge when one object's text names another entity, matched on word boundaries,
-// self-skipped, deduped and capped per source; the edge is anchored to the source object.
+// Pass 3: a `references` edge when one object's text names another entity, matched on word boundaries, self-skipped,
+// deduped and capped per source; the edge is anchored to the source object.
 function deriveReferences(
   created: readonly DerivedEntity[],
   supersededPairs: ReadonlySet<string>,

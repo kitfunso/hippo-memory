@@ -24,8 +24,8 @@ function untilMs(text: string): number | null {
 
 /**
  * The previous signing secret while its rotation window is open. With no `until` it stays open, as before; at or past
- * `until`, or when `until` is no date, it is closed and one warning says so, so a secret left in the environment
- * stops working on the day the operator named.
+ * `until`, or when `until` is no date, it is closed and one warning says so, so a secret left in the environment stops
+ * working on the day the operator named.
  */
 export function previousSecretInForce(
   previous: string | undefined,

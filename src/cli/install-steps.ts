@@ -42,8 +42,7 @@ export function installCodexMemoryHooks(indent: string): void {
 
 /**
  * The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo
- * can edit and so was
- * left unchanged; true when it printed. */
+ * can edit and so was left unchanged; true when it printed. */
 export function warnClaudeSettingsUnusable(
   result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>,
   indent: string,

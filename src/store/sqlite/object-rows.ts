@@ -210,8 +210,9 @@ interface RowSpec<K extends ObjectKind> {
   readonly closeOp: AuditOp;
   /** The one column a list may filter by equality. */
   readonly filterColumn?: string;
-  /** Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the object's graph
-   * rows. */
+  /**
+   * Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the object's graph rows.
+   */
   readonly graphType?: SourceObjectType;
 }
 

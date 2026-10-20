@@ -1,6 +1,6 @@
 /**
  * GitHub rate-limit header parser: 403 with `X-RateLimit-Remaining: 0` is primary, 429 with `Retry-After` is secondary.
- *  Backfill must pause and resume rather than error. */
+ * Backfill must pause and resume rather than error. */
 
 export interface RateLimitInfo {
   readonly sleepSeconds: number;

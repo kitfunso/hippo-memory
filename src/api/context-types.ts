@@ -44,9 +44,8 @@ export interface ContextOptions {
   currentProject: ProjectRef;
   /**
    * The calling session's id, stamped on this call's recall trace. When it strictly equals the active snapshot's
-   * `session_id` the read is unbounded;
-   * otherwise the snapshot must pass the freshness bound. Absent (undefined/null/'') never matches. Host-resolved, so
-   * this stays host-agnostic.
+   * `session_id` the read is unbounded; otherwise the snapshot must pass the freshness bound. Absent
+   * (undefined/null/'') never matches. Host-resolved, so this stays host-agnostic.
    */
   currentSessionId?: string | null;
   /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
@@ -94,9 +93,8 @@ export interface ContextResult {
   activeSnapshot?: TaskSnapshot | null;
   sessionHandoff?: SessionHandoff | null;
   recentEvents?: SessionEvent[];
-  /** The ambient landscape summary over every live row the read may see in the local and global stores,
-   * not just the rows loaded. Present only when ambient config is on, the caller is not pinned-only, and an entry was
-   * returned.
+  /** The ambient landscape summary over every live row the read may see in the local and global stores, not just the
+   * rows loaded. Present only when ambient config is on, the caller is not pinned-only, and an entry was returned.
    */
   ambientState?: AmbientState;
 }

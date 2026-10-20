@@ -68,8 +68,7 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
       );
     }
   } else {
-    // SAFETY: same PhysicsRow column projection as the branch above, just
-    // without the memory_id filter.
+    // SAFETY: same PhysicsRow column projection as the branch above, just without the memory_id filter.
     rows = db
       .prepare(
         `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation

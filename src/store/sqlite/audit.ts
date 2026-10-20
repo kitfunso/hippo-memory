@@ -76,8 +76,8 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions):
   return rows.map(rowToAuditEvent);
 }
 
-/** Cursor read: events with id > afterId, ascending. Retention prune leaves gaps in the ids,
- * so resume from the last id returned, never from a count. */
+/** Cursor read: events with id > afterId, ascending. Retention prune leaves gaps in the ids, so resume from the last id
+ * returned, never from a count. */
 export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterOpts): AuditEvent[] {
   if (!Number.isInteger(opts.afterId) || opts.afterId < 0) {
     throw new RangeError('afterId must be a non-negative integer');
@@ -101,8 +101,8 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
 
 /** How many of a tenant's audit rows are older than `cutoff`. */
 function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
-  // SAFETY: row comes from `SELECT COUNT(*) AS c`; COUNT(*) always yields exactly one row with a
-  // numeric `c` column (number or bigint depending on the node:sqlite driver's integer handling).
+  // SAFETY: row comes from `SELECT COUNT(*) AS c`; COUNT(*) always yields exactly one row with a numeric `c` column
+  // (number or bigint depending on the node:sqlite driver's integer handling).
   const row = db
     .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
     .get(tenantId, cutoff) as { c: number | bigint };
@@ -148,8 +148,8 @@ function rowToAuditEvent(r: AuditRow): AuditEvent {
     ts: r.ts,
     tenantId: r.tenant_id,
     actor: r.actor,
-    // SAFETY: audit_log.op is only ever written by appendAuditEvent, whose opts.op is
-    // typed AuditOp at the INSERT call site, so every stored value is a valid AuditOp.
+    // SAFETY: audit_log.op is only ever written by appendAuditEvent, whose opts.op is typed AuditOp at the INSERT call
+    // site, so every stored value is a valid AuditOp.
     op: r.op as AuditOp,
     targetId: r.target_id,
     metadata: safeJsonParse(r.metadata_json, r.id),

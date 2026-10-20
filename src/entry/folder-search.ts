@@ -1,6 +1,6 @@
-// The published hybridSearch and physicsSearch: each fills the hippo.db folder default, then calls the domain ranker
-// of the same name, which takes its store from the caller. The eval kit's embedMemory and loadRecallSearchEntries take
-// a folder the same way.
+// The published hybridSearch and physicsSearch: each fills the hippo.db folder default, then calls the domain ranker of
+// the same name, which takes its store from the caller. The eval kit's embedMemory and loadRecallSearchEntries take a
+// folder the same way.
 
 import type { MemoryEntry } from '../core/memory.js';
 import type { SearchResult } from '../core/search-types.js';
@@ -44,8 +44,8 @@ export async function hybridSearch(
 }
 
 /**
- * Scores memories by gravity, momentum and cluster amplification; rows without physics state rank through
- * hybridSearch. Reads hippo.db under `hippoRoot` when no store is passed.
+ * Scores memories by gravity, momentum and cluster amplification; rows without physics state rank through hybridSearch.
+ * Reads hippo.db under `hippoRoot` when no store is passed.
  */
 export async function physicsSearch(
   query: string,

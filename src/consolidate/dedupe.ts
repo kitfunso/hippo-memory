@@ -146,8 +146,8 @@ export function deduplicateStore(
     backing?: ReadonlySet<string>;
   } = {},
 ): DedupResult {
-  // Only current distilled rows compete: raw rows are append-only (the delete
-  // trigger would abort sleep mid-loop) and superseded rows are history.
+  // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort sleep mid-loop) and
+  // superseded rows are history.
   const pages = options.pages ?? [store.currentDistilledEntries()];
   const pairs = scanPairs(pages, options.backing ?? store.objectBackedIds());
   const done = options.dryRun ? pairs : deletePairs(store, pairs, options.actor);

@@ -41,8 +41,7 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   const body = parseJsonObjectText(raw);
   const labelRaw = getString(body, 'label', MAX_ID_LEN);
   // Optional body.role mirrors the --role CLI flag and is validated strictly: anything but 'admin'|'member' is a 400;
-  // authCreate refuses a member caller
-  // with a 403.
+  // authCreate refuses a member caller with a 403.
   const roleRaw = body['role'];
   let role: 'admin' | 'member' | undefined;
   if (roleRaw !== undefined) {
@@ -61,8 +60,7 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
     throw new HttpError(400, 'noExpiry must be true or false');
   }
   // Security: any body `tenantId` is IGNORED; the key is bound to the caller's authenticated tenant, or tenant A could
-  // mint a key for tenant B (see
-  // authCreate).
+  // mint a key for tenant B (see authCreate).
   const result = await authCreate(ctx, {
     label: labelRaw,
     role,
@@ -99,8 +97,8 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
 }
 
 // DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is 403 on any key but
-// its own or, via the resolver, those it
-// minted. Returns 200 with the body rather than 204 so the caller sees revokedAt.
+// its own or, via the resolver, those it minted. Returns 200 with the body rather than 204 so the caller sees
+// revokedAt.
 export async function handleRevokeAuthKey(
   { res, ctx }: AuthedRouteRequest,
   keyMatch: Record<string, string>,

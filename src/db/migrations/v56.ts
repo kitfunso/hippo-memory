@@ -23,9 +23,8 @@ export const v56: Migration = {
           `ON ${table}(tenant_id, status, created_at DESC, id DESC)`,
       );
     }
-    // Source leads so a tenant-only query cannot pick this over idx_memories_tenant_created and change the order of
-    // its unsorted rows;
-    // created and id let a per-source read come back in store order with no sort.
+    // Source leads so a tenant-only query cannot pick this over idx_memories_tenant_created and change the order of its
+    // unsorted rows; created and id let a per-source read come back in store order with no sort.
     db.exec(
       'CREATE INDEX IF NOT EXISTS idx_memories_source_tenant_created ON memories(source, tenant_id, created, id)',
     );

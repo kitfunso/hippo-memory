@@ -1,7 +1,6 @@
 /**
  * Per-key token-bucket rate limiter for inbound /v1/* requests, bounding api-key-id enumeration. Dependency-free; the
- * injectable `now` makes it
- * unit-testable. */
+ * injectable `now` makes it unit-testable. */
 
 export interface RateLimiter {
   /**

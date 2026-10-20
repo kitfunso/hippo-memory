@@ -47,8 +47,8 @@ interface ChildGroup extends DescendantOrigin {
 
 const marks = (ids: readonly string[]): string => placeholders(ids.length);
 
-/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full
- * count in `sizes`. */
+/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full count
+ * in `sizes`. */
 function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {
   const sizes: number[] = [];
   const levels: MemoryEntry[][] = [];

@@ -79,8 +79,8 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
       throw new BadRequestError('savePolicy: policyText is required');
     }
     const at = new Date().toISOString();
-    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on the read side,
-    // because backdating valid_from to midnight would report the policy in force earlier that day.
+    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on the read side, because
+    // backdating valid_from to midnight would report the policy in force earlier that day.
     const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
     return {
       fields: { policyName: opts.policyName, policyText: opts.policyText, validFrom, validTo },
@@ -124,8 +124,8 @@ export function loadPolicies(objects: Objects, tenantId: string, opts: ListPolic
 }
 
 /** The policies in force at `asOfDate` (valid-time, half-open [valid_from, valid_to)); superseded rows still answer
- *  while the successor is not yet effective. `closed` rows are excluded; a date-only asOfDate means the END of that
- *  UTC day (23:59:59.999Z), so a policy created today shows up in "as of today". */
+ *  while the successor is not yet effective. `closed` rows are excluded; a date-only asOfDate means the END of that UTC
+ *  day (23:59:59.999Z), so a policy created today shows up in "as of today". */
 export async function policiesAsOf(
   objects: Objects,
   tenantId: string,

@@ -165,8 +165,8 @@ export function appendSessionEventAt(
   assertTenantId('appendSessionEvent', tenantId);
   const now = new Date().toISOString();
 
-  // Scope is stored as given; default-deny in api.recall + cmdRecall
-  // continuity reads applies to slack:private:* and 'unknown:legacy' rows.
+  // Scope is stored as given, since reads deny by default.
+  // api.recall and cmdRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
   const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
   const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
   writeRecentSessionMirror(hippoRoot, tenantId, recent);
@@ -195,8 +195,7 @@ export function listSessionEventsAt(
   params.push(limit);
 
   const where = `WHERE ${clauses.join(' AND ')}`;
-  // SAFETY: rows' shape matches the nine columns named in the SELECT
-  // above.
+  // SAFETY: rows' shape matches the nine columns named in the SELECT above.
   const rows = db
     .prepare(`
     SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
@@ -218,8 +217,7 @@ export function findPromotableSessionsAt(
   sinceMs: number,
 ): Array<{ session_id: string }> {
   assertTenantId('findPromotableSessions', tenantId);
-  // SAFETY: rows' shape matches the single `session_id` column selected
-  // above.
+  // SAFETY: rows' shape matches the single `session_id` column selected above.
   const rows = db
     .prepare(`
     SELECT DISTINCT session_id FROM session_events
@@ -429,8 +427,8 @@ function wmReadAt(
 ): WorkingMemoryItem[] {
   const where = wmWhere(tenantId, filter);
   const limit = Math.max(1, Math.trunc(filter.limit ?? WM_MAX_ENTRIES));
-  // SAFETY: query selects exactly the columns of WorkingMemoryRow, in the
-  // same names, from the working_memory table this module owns.
+  // SAFETY: query selects exactly the columns of WorkingMemoryRow, in the same names, from the working_memory table
+  // this module owns.
   const rows = db
     .prepare(`
     SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at

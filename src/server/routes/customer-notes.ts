@@ -25,8 +25,7 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOptions>
 };
 
 // Routes: customer notes under /v1/customer-notes (create, list, show, supersede, close), mirroring /v1/project-briefs.
-// The store validates and throws;
-// the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
+// The store validates and throws; the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
 export async function handleCreateCustomerNote(rr: AuthedRouteRequest): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);

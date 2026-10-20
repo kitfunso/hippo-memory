@@ -66,8 +66,8 @@ export interface DagBuildResult {
   candidateClusters: number;
   summariesCreated: number;
   factsLinked: number;
-  /** Clusters skipped because the summary matched a rejected value. Re-parenting writes are
-   *  guard-exempt (same id + content), so only summary-creation refusals count. */
+  /** Clusters skipped because the summary matched a rejected value. Re-parenting writes are guard-exempt (same id +
+   *  content), so only summary-creation refusals count. */
   rejected: number;
 }
 
@@ -95,8 +95,8 @@ interface PartitionHome {
 /** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
 function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-  // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant,
-  // not 'default'.
+  // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant, not
+  // 'default'.
   const summaryEntry = createMemory(summary, {
     layer: Layer.Semantic,
     tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
@@ -107,8 +107,8 @@ function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: 
     baseHalfLifeDays: home.baseHalfLifeDays,
   });
   summaryEntry.originProject = home.originProject;
-  // Cache descendant_count + earliest/latest_at on the summary row so
-  // DAG-aware recall can reason about scope without walking the children.
+  // Cache descendant_count + earliest/latest_at on the summary row so DAG-aware recall can reason about scope without
+  // walking the children.
   summaryEntry.descendantCount = cluster.members.length;
   summaryEntry.earliestAt = memberCreatedAts[0];
   summaryEntry.latestAt = memberCreatedAts[memberCreatedAts.length - 1];
@@ -131,8 +131,8 @@ async function summarizeCluster(
   if (!summary) return;
 
   const summaryEntry = createClusterSummaryEntry(summary, cluster, home);
-  // A refused summary skips only this cluster. writeEntry's guard reads tenantId off the entry
-  // (home.tenantId), so it already checks this tenant's tombstones: no separate check here.
+  // A refused summary skips only this cluster. writeEntry's guard reads tenantId off the entry (home.tenantId), so it
+  // already checks this tenant's tombstones: no separate check here.
   try {
     store.writeEntry(summaryEntry);
   } catch (err) {
@@ -148,8 +148,8 @@ async function summarizeCluster(
   result.factsLinked += store.writeTogether(
     cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id })),
   );
-  // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's
-  // rebuild pass would re-rebuild every new summary at twice the LLM cost.
+  // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's rebuild pass would
+  // re-rebuild every new summary at twice the LLM cost.
   store.clearSummaryDirty(summaryEntry.id, summaryEntry.tenantId, 'buildDag');
 }
 
@@ -240,8 +240,7 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
   } else if (changed) {
     result.rebuilt++;
   }
-  // changed=false (refused also false) → race lost; not failure, not
-  // success, silently skip
+  // changed=false (refused also false) → race lost; not failure, not success, silently skip
 }
 
 /** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
@@ -302,8 +301,8 @@ export async function rebuildDirtySummaries(
     try {
       await rebuildOneSummary({ store, summary, opts, result, preloaded: childrenOf(summary), queuedIds });
     } catch (err) {
-      // One throw doesn't abort the queue; log enough to triage an exotic
-      // failure (SQLite I/O, prepare), since audit() already catches its own.
+      // One throw doesn't abort the queue; log enough to triage an exotic failure (SQLite I/O, prepare), since audit()
+      // already catches its own.
       result.failed++;
       log.error(
         `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${errorMessage(err)}`,
@@ -323,8 +322,8 @@ export interface EntityProfilesBuildResult {
   l2sLinked: number;
   // Lets operators see LLM null / rate-limit / 401 failures (parity with DagRebuildResult.failed).
   failed: number;
-  /** Clusters skipped because the profile matched a rejected value. Kept apart from
-   *  `failed`: a tombstone hit is a deliberate refusal, not an error. */
+  /** Clusters skipped because the profile matched a rejected value. Kept apart from `failed`: a tombstone hit is a
+   *  deliberate refusal, not an error. */
   rejected: number;
 }
 

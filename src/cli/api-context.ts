@@ -29,8 +29,8 @@ import { getReranker, type RerankerFn } from '../rerankers/index.js';
 import { createCallerState, type CallerState } from '../api/callers.js';
 import type { LocalFiles, LocalStore } from '../store/local/index.js';
 
-/** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an
- * unchanged config.json once. */
+/** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
+ * config.json once. */
 export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
 /** A registry reranker with the CLEF transport this process's environment names, for a script that reranks outside a
@@ -92,8 +92,8 @@ function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
   return contextReach(sqliteReach(hippoRoot, store, undefined, cliStore), cliConfig);
 }
 
-// The one place the CLI names its audit actor and builds its store;
-// root is a parameter because some verbs target the global store.
+// The one place the CLI names its audit actor and builds its store; root is a parameter because some verbs target the
+// global store.
 // A command's callers start empty unless its caller holds a set; a CLI write starts no sleep.
 export function cliApiContext(
   hippoRoot: string,

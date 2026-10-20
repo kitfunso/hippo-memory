@@ -15,20 +15,19 @@ const REQUEST_ID_MAX_CHARS = 64;
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
-// Pinned, not `jev-latest`: the eval numbers were measured on this version,
-// and the alias moves whenever the vendor ships a release.
+// Pinned, not `jev-latest`: the eval numbers were measured on this version, and the alias moves whenever the vendor
+// ships a release.
 const DEFAULT_MODEL = 'jev-1.13.0';
 // The pool size the eval numbers were measured at.
 export const JEV_DEFAULT_TOP_K = 40;
 
-// Number.isFinite rejects a string or null without coercing it, which the
-// declared type cannot promise about a third-party payload.
+// Number.isFinite rejects a string or null without coercing it, which the declared type cannot promise about a
+// third-party payload.
 function isProbability(v: JsonValue | undefined): v is number {
   return isJsonNumber(v) && Number.isFinite(v) && v >= 0 && v <= 1;
 }
 
-// A half-scored list ranks worse than the order it would replace, so one bad
-// answer voids the whole response.
+// A half-scored list ranks worse than the order it would replace, so one bad answer voids the whole response.
 function parseScores(body: JsonValue, n: number): number[] | null {
   const answers = isJsonObject(body) ? body.answers : undefined;
   const out: number[] = [];
@@ -111,8 +110,8 @@ export function createJevReranker(localFallback: RerankerFn): RerankerFn {
       scores = await requestScores(query, head);
       outage.answered();
     } catch (err) {
-      // A read path never throws, and never hands back the unranked order
-      // without saying so: warn, then use the free local reranker.
+      // A read path never throws, and never hands back the unranked order without saying so: warn, then use the free
+      // local reranker.
       outage.failed(errorMessage(err));
       return localFallback(query, head, options);
     }

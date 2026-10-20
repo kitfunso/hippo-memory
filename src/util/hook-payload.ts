@@ -28,7 +28,7 @@ export function hookPayloadString(stdinText: string | undefined, field: string):
 /**
  * Whether a hook fired inside a sub-agent, the only payload with `agent_id`
  * (https://code.claude.com/docs/en/hooks#common-input-fields).
- *  Its `session_id` is the parent's, so a sub-agent's blocks and compactions must not count as the parent's. */
+ * Its `session_id` is the parent's, so a sub-agent's blocks and compactions must not count as the parent's. */
 export function isSubagentPayload(stdinText: string | undefined): boolean {
   const agentId = parseHookPayload(stdinText)?.agent_id;
   return isJsonString(agentId) && agentId.trim() !== '';

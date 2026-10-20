@@ -11,8 +11,8 @@ const MAX_WARN_LOGS = 5;
  * Tracked by raw_archive.mirror_cleaned_at: set only on success, so a failed unlink retries next connection. Returns
  * whether all pending rows were cleaned. */
 export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike): boolean {
-  // SAFETY: the SELECT above names exactly one column, memory_id (raw_archive.memory_id
-  // is NOT NULL TEXT), so the row shape matches this assertion.
+  // SAFETY: the SELECT above names exactly one column, memory_id (raw_archive.memory_id is NOT NULL TEXT), so the row
+  // shape matches this assertion.
   const rows = db.prepare(`SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL`).all() as Array<{
     memory_id: string;
   }>;
