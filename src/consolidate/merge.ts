@@ -102,7 +102,6 @@ function partitionMergeCandidates(run: SleepRun): Map<string, MergeBucket> {
   return buckets;
 }
 
-// 3. Merge pass  - episodic entries only
 /** Returns how many clusters were skipped because their merged text matches a rejected value. */
 export function mergePass(run: SleepRun): number {
   const used = new Set<string>();
@@ -143,7 +142,6 @@ function mergeCluster(
   used: Set<string>,
 ): boolean {
   const { result, dryRun } = run;
-  // Create a semantic summary
   const mergedContent = mergeContents(cluster);
 
   // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below runs under the
@@ -152,7 +150,6 @@ function mergeCluster(
 
   if (semantic && mergeRejected(run, semantic, cluster, related, used)) return false;
 
-  // Mark cluster members as used
   for (const e of cluster) used.add(e.id);
   result.merged += cluster.length;
 
@@ -242,8 +239,6 @@ function mergeRejected(
   });
   return true;
 }
-
-// Helpers
 
 function mergeContents(entries: MemoryEntry[]): string {
   // Each distinct text goes in once and in full (the merge demotes every source), one bullet with its lines indented,

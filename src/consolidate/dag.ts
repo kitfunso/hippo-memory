@@ -180,8 +180,6 @@ export async function buildDag(local: DagStore, facts: MemoryEntry[], opts: DagB
   return result;
 }
 
-// rebuildDirtySummaries orchestrator
-
 export interface DagRebuildResult {
   attempted: number; // summaries we tried (<= cap)
   rebuilt: number; // successful regenerations
@@ -313,8 +311,6 @@ export async function rebuildDirtySummaries(
 
   return result;
 }
-
-// L3 entity profile build path
 
 export interface EntityProfilesBuildResult {
   candidateClusters: number;

@@ -92,7 +92,6 @@ async function runAndFlush(run: SleepRun, options: ConsolidateOptions): Promise<
   if (!run.dryRun) logRun(run, decay);
 }
 
-// Load decay options from config + session context
 function sessionDecayOptions(store: Consolidation, config: SleepRun['config']): DecayOptions {
   const sessionCtx = store.sessionDecayContext();
   return {
@@ -185,7 +184,6 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
   }
 }
 
-// 4. Log run
 function logRun(run: SleepRun, decay: DecayOutcome): void {
   const { store, now, result } = run;
   const { survivors } = run;

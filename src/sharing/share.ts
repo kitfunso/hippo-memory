@@ -108,11 +108,9 @@ const AUTO_SHARE_PAGE_ROWS = 500;
 export function transferScore(entry: MemoryEntry): number {
   let score = TRANSFER_WEIGHTS.neutral;
 
-  // Boost for transferable tags
   const transferableCount = entry.tags.filter((t) => TRANSFERABLE_TAGS.has(t)).length;
   score += transferableCount * TRANSFER_WEIGHTS.perTransferableTag;
 
-  // Penalize for project-specific tags
   const specificCount = entry.tags.filter((t) => PROJECT_SPECIFIC_TAGS.has(t)).length;
   score -= specificCount * TRANSFER_WEIGHTS.perProjectTag;
 

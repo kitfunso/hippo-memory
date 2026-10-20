@@ -9,7 +9,6 @@ const STATS_DECIMALS = 4;
 // they are recalled.
 const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
 
-// 2. Physics simulation pass
 export function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_MAX_PARTICLES): void {
   if (run.dryRun) return;
   const { config, result } = run;

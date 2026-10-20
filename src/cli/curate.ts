@@ -227,8 +227,6 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
   console.log(`Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`);
 }
 
-// reject / rejections / unreject
-
 export async function handleReject({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   // Store resolution mirrors `hippo remember`: --global writes to the global store, otherwise the local store
   // (requireInit'd via resolveAuthRoot).

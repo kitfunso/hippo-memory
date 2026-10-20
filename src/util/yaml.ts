@@ -85,17 +85,14 @@ function parseValue(raw: string): YamlValue {
   if (s === 'true') return true;
   if (s === 'false') return false;
 
-  // Array: [a, b, c]
   if (s.startsWith('[') && s.endsWith(']')) {
     const inner = s.slice(1, -1).trim();
     if (inner === '') return [];
     return splitInlineList(inner);
   }
 
-  // Quoted string
   if (s.startsWith('"') && s.endsWith('"')) return parseString(s);
 
-  // Number
   if (/^-?\d+(\.\d+)?$/.test(s)) {
     return parseFloat(s);
   }

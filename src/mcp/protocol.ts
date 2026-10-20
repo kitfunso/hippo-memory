@@ -18,8 +18,6 @@ import type { LocalStore } from '../store/local/index.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
 import type { CallerState } from '../api/callers.js';
 
-// ── Find hippo root ──
-
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are the test seam. */
 export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string | null {
   const local = findHippoStoreDir(cwd, opts);
@@ -28,8 +26,6 @@ export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProject
   const global = getGlobalRoot();
   return fs.existsSync(global) ? global : null;
 }
-
-// ── MCP protocol types ──
 
 /** The method, with the tool's name for a tool call, so a failure or timeout names what ran. */
 export function callName(req: McpRequest): string {

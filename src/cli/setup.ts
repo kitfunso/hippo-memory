@@ -60,8 +60,6 @@ import { escapeRegex } from '../util/escape.js';
 import { fail } from './exit.js';
 import { plural } from '../util/format.js';
 
-// Hook install/uninstall
-
 export function handleHook({ args }: CommandContext): void {
   const subcommand = args[0];
   const target = args[1];

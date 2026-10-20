@@ -61,8 +61,8 @@ function liveStrength(run: SleepRun, entry: MemoryEntry): number {
   return calculateStrength(entry, run.now, run.decayOpts);
 }
 
-// 1. Decay pass. Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits,
-// runs rescueSet per tenant, then commits.
+// Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits, runs rescueSet
+// per tenant, then commits.
 // Rescued entries stay full survivors for this cycle's later passes.
 export function decayPass(run: SleepRun): DecayOutcome {
   if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);

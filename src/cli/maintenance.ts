@@ -104,7 +104,6 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
 }
 
 function printDedupPairs(result: DedupResult, dryRun: boolean): void {
-  // Show detailed pairs
   console.log('');
   const shown = result.pairs.slice(0, MAX_PAIRS_SHOWN);
   for (const pair of shown) {
@@ -120,8 +119,6 @@ function printDedupPairs(result: DedupResult, dryRun: boolean): void {
     console.log(`  ... and ${result.pairs.length - 15} more (run with --dry-run to see all)`);
   }
 }
-
-// Embed command
 
 export async function handleEmbed(
   { hippoRoot, tenantId, flags }: CommandContext,

@@ -88,7 +88,6 @@ export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Pro
   printPhysicsStatus(ctx);
 }
 
-// Embedding status (provider-aware)
 function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
@@ -133,7 +132,6 @@ function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total
 // The all-pairs energy sum is quadratic, so a large particle set skips it.
 const PHYSICS_ENERGY_STATUS_MAX = 2000;
 
-// Physics status
 function printPhysicsStatus(ctx: CliContext): void {
   try {
     const particles = storedParticles(ctx);

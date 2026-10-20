@@ -13,8 +13,6 @@ import { chunked } from '../util/chunked.js';
 import { placeholders } from '../util/sql.js';
 import { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
 
-// Schema migration
-
 /** Create the memory_physics table (migration v8). */
 export function createPhysicsTable(db: DatabaseSyncLike): void {
   db.exec(`
@@ -33,8 +31,6 @@ export function createPhysicsTable(db: DatabaseSyncLike): void {
     ON memory_physics(mass DESC);
   `);
 }
-
-// Load / Save
 
 interface PhysicsRow {
   memory_id: string;

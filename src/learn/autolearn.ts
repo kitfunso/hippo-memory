@@ -46,8 +46,6 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
   const lessons: string[] = [];
   const lines = gitLog.split('\n');
 
-  // Patterns that indicate a lesson to learn from
-  // Covers: fix, revert, bug, error, hotfix, refactor, perf, chore, breaking, deprecate
   const prefixes =
     customPatterns?.join('|') ?? 'fix|revert|bug|error|hotfix|bugfix|refactor|perf|chore|breaking|deprecate';
   const patterns = [
@@ -79,7 +77,6 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
     }
   }
 
-  // Deduplicate exact matches at extraction time
   return [...new Set(lessons)];
 }
 

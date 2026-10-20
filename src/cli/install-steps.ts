@@ -116,7 +116,6 @@ export function setupDailySchedule(
 }
 
 function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): void {
-  // Check if task already exists
   try {
     const existing = run('schtasks', ['/query', '/tn', taskName], SCHEDULER_CALL);
     if (existing.includes(taskName)) {
@@ -163,7 +162,6 @@ function readCrontab(run: RunScheduler): string {
 }
 
 function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): void {
-  // Unix: check crontab for existing entry
   const marker = `# hippo:${taskName}`;
   try {
     const existing = readCrontab(run);

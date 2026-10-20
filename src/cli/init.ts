@@ -55,7 +55,6 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
       }
     }
   }
-  // Check if rootDir itself is a git repo
   if (fs.existsSync(path.join(rootDir, '.git'))) repos.push(rootDir);
   walk(rootDir, 0);
   return repos;
@@ -201,7 +200,6 @@ async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<
 }
 
 export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // Handle --scan mode
   if (flags['scan']) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
     await cmdInitScan(scanDir, tenantId, flags);

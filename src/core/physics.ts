@@ -217,14 +217,11 @@ function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceCont
     if (i === j) continue;
     const pj = particles[j];
 
-    // Attraction (all pairs)
     attractionForce(pi, pj, ctx.config.G_memory, net, diff);
 
-    // Repulsion (conflict pairs only)
     if (conflicts?.has(pj.memoryId)) addInto(net, repulsionForce(pi, pj, ctx.config.K_repulsion));
   }
 
-  // Drag
   addInto(net, dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS));
 
   return net;
@@ -252,7 +249,6 @@ function verletStep(particles: PhysicsParticle[], accelerations: number[][], ctx
     p.position = vecAdd(vecAdd(p.position, velDt), accelDt2);
   }
 
-  // Compute new accelerations
   const diff = vecZero(particles[0].position.length);
   const newAccelerations: number[][] = [];
   for (let i = 0; i < particles.length; i++) newAccelerations.push(computeAcceleration(i, particles, ctx, diff));
@@ -268,7 +264,6 @@ function verletStep(particles: PhysicsParticle[], accelerations: number[][], ctx
     p.position = vecNormalize(p.position);
   }
 
-  // Update accelerations for next step
   for (let i = 0; i < accelerations.length; i++) {
     accelerations[i] = newAccelerations[i];
   }
@@ -285,22 +280,18 @@ export function simulate(particles: PhysicsParticle[], ctx: ForceContext): Simul
     };
   }
 
-  // Initial accelerations
   const diff = vecZero(particles[0].position.length);
   const accelerations: number[][] = particles.map((_, i) => computeAcceleration(i, particles, ctx, diff));
 
-  // Run substeps
   for (let step = 0; step < ctx.config.substeps; step++) {
     verletStep(particles, accelerations, ctx);
   }
 
-  // Update timestamps
   const now = new Date().toISOString();
   for (const p of particles) {
     p.lastSimulation = now;
   }
 
-  // Compute stats
   let sumVelMag = 0;
   let maxVelMag = 0;
   for (const p of particles) {
@@ -352,7 +343,6 @@ export function physicsScore(
 ): ScoredPhysicsResult[] {
   if (particles.length === 0 || queryEmbedding.length === 0) return [];
 
-  // Pass 1: compute base scores
   const results: ScoredPhysicsResult[] = particles.map((p) => {
     const gravity = queryGravityMagnitude(p, queryEmbedding, config.G_query);
     const momentum = config.momentum_weight * velocityAlignmentBonus(p, queryEmbedding);
@@ -369,7 +359,6 @@ export function physicsScore(
   const tie = tieKeyOf ? (r: ScoredPhysicsResult) => tieKeyOf(r.memoryId) : undefined;
   results.sort(comparePhysicsResultsBy((r) => r.baseScore, tie));
 
-  // Pass 2: cluster amplification on top K
   applyClusterAmplification(results, particles, config);
 
   // Re-sort by final score, same tiebreak rule.
@@ -387,7 +376,6 @@ function applyClusterAmplification(
   const topK = Math.min(config.cluster_top_k, results.length);
   if (topK < 2) return;
 
-  // Build a quick lookup from memoryId to particle
   const particleMap = new Map<string, PhysicsParticle>();
   for (const p of particles) particleMap.set(p.memoryId, p);
 
