@@ -1,7 +1,7 @@
 // hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save
 // writes, its insert values and audit keys. A status column carries a CHECK constraint, so a row declares it as the
 // kind's status union.
-import { isJsonString } from '../../base/util/json.js';
+import { isJsonString, type JsonObject } from '../../base/util/json.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import type { SourceObjectType } from '../port/graph-reads.js';
 import type {
@@ -25,7 +25,6 @@ import type {
   SkillStatus,
 } from '../../base/records/object-types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { JsonObject } from '../port/types.js';
 
 interface HeadRow {
   id: number;

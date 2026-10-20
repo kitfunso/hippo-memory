@@ -1,9 +1,9 @@
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter } from '../../base/util/keyset.js';
-import type { JsonValue } from '../../base/util/json.js';
+import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
-import type { AppendAuditOpts, AuditEvent, JsonObject } from '../port/types.js';
+import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 import type { QueryAuditOptions } from '../port/audit-log.js';
 import type { AuditPrune } from '../port/audit-maintenance.js';

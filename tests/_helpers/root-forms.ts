@@ -130,8 +130,8 @@ import type {
   Goal,
   PredictionBaserate,
   ContinuityKey,
-  JsonObject,
 } from '../../src/store/port/types.js';
+import type { JsonObject } from '../../src/base/util/json.js';
 import type { ConnectorEventRecord } from '../../src/store/port/connectors.js';
 import type {
   AmbientLoadResult,

@@ -41,7 +41,7 @@ import type {
 } from '../port.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../base/util/sql.js';
-import type { JsonObject } from '../port/types.js';
+import type { JsonObject } from '../../base/util/json.js';
 
 /** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every
  * kind. */

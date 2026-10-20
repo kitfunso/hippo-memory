@@ -8,7 +8,8 @@ import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from '
 import type { TaskSnapshot, SessionEvent, SessionEventInput, WorkingMemoryItem } from '../port/sessions.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
-import type { ContinuityKey, JsonObject } from '../port/types.js';
+import type { ContinuityKey } from '../port/types.js';
+import type { JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
   loadHandoffByIdAt,

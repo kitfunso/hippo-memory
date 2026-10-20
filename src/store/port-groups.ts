@@ -20,7 +20,8 @@ import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
 import type { TokenSummary } from './port/token-ledger.js';
 import type { WorkingMemoryItem } from './port/sessions.js';
 import type { DormantRevival } from '../base/memory/dormant-revival.js';
-import type { Goal, ContinuityKey, EntryCursor, EntryPage, JsonObject } from './port/types.js';
+import type { Goal, ContinuityKey, EntryCursor, EntryPage } from './port/types.js';
+import type { JsonObject } from '../base/util/json.js';
 
 export interface WorkingMemoryFilter {
   readonly scope?: string;

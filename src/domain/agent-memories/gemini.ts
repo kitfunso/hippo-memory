@@ -8,9 +8,8 @@ import { gitLayout } from './git.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
-import { type JsonValue, isJsonObjectLiteral, parseJson } from '../../base/util/json.js';
+import { type JsonValue, isJsonObjectLiteral, parseJson, type JsonObject } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
-import type { JsonObject } from '../../store/port/types.js';
 
 const SECTION = 'gemini added memories';
 

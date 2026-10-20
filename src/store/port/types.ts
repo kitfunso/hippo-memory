@@ -118,9 +118,6 @@ export interface AuditEvent {
   metadata: JsonObject;
 }
 
-// Defined beside JsonValue so the base layer (base/session's capture contract) shares it without importing the store.
-export type { JsonObject };
-
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject'>;
 
 /** One project name, or every name a project's rows carry. */

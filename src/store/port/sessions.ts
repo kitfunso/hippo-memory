@@ -1,6 +1,5 @@
 // The session, snapshot and handoff shapes the Sessions group takes and returns.
-import type { JsonValue } from '../../base/util/json.js';
-import type { JsonObject } from './types.js';
+import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import type { ContinuityKey } from './types.js';
 

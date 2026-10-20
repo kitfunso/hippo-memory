@@ -1,7 +1,12 @@
 import { envStdinWaitMs } from '../../base/util/env.js';
-import { isJsonString, type JsonValue, isJsonObjectLiteral, tryParseJson } from '../../base/util/json.js';
+import {
+  isJsonString,
+  type JsonValue,
+  isJsonObjectLiteral,
+  tryParseJson,
+  type JsonObject,
+} from '../../base/util/json.js';
 import { errorFields, log } from '../../base/util/log.js';
-import type { JsonObject } from '../../store/port/types.js';
 
 const DEFAULT_STDIN_WAIT_MS = 1000;
 

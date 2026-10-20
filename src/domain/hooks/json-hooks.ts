@@ -26,11 +26,11 @@ import {
   readJsonFile,
   tryReadJsonFile,
   isJsonObjectLiteral,
+  type JsonObject,
 } from '../../base/util/json.js';
 import { escapeRegex } from '../../base/util/escape.js';
 import { writeFileAtomic } from '../../base/util/atomic-write.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import type { JsonObject } from '../../store/port/types.js';
 
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {
