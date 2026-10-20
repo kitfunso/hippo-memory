@@ -30,7 +30,7 @@ describe('extractChurnRefs', () => {
   });
 
   it('normalizes backslashes and strips a leading ./', () => {
-    expect(extractChurnRefs('see ./src\\learn\\churn-git.ts').paths).toEqual(['src/domain/learn/churn-git.ts']);
+    expect(extractChurnRefs('see ./src\\domain\\learn\\churn-git.ts').paths).toEqual(['src/domain/learn/churn-git.ts']);
   });
 
   it('captures an extension whole when a shorter one is its prefix (json/js, tsx/ts)', () => {
