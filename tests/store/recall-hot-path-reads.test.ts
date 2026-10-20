@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -48,7 +48,7 @@ function seed(root: string, entries: readonly MemoryEntry[]): void {
 }
 
 /** Runs `write` on a short-lived handle, for fixtures the store API has no writer for. */
-function onDb(root: string, write: (db: ReturnType<typeof openHippoDb>) => void): void {
+function onDb(root: string, write: (db: DatabaseSyncLike) => void): void {
   const db = openHippoDb(root);
   try {
     write(db);
