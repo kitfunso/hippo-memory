@@ -8,7 +8,7 @@ import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../base/memory/memory.js';
 import type { PhysicsParticle } from '../base/rank/physics.js';
-import { initializeParticle } from '../base/rank/physics.js';
+import { initializeParticle, vecNorm } from '../base/rank/physics.js';
 import { chunked } from '../base/util/chunked.js';
 import { placeholders } from '../base/util/sql.js';
 import { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
@@ -86,6 +86,21 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
   }
 
   return map;
+}
+
+/** How many particles are stored and the sum of their speeds, in loadPhysicsState's order, reading one column. */
+export function physicsSpeedSum(db: DatabaseSyncLike) {
+  let count = 0;
+  let speedSum = 0;
+  // SAFETY: the SELECT names exactly this one column.
+  const rows = db.prepare('SELECT velocity_blob FROM memory_physics ORDER BY rowid').iterate() as Iterable<{
+    velocity_blob: Uint8Array;
+  }>;
+  for (const row of rows) {
+    count++;
+    speedSum += vecNorm(bufferToFloat32(row.velocity_blob));
+  }
+  return { count, speedSum };
 }
 
 /**

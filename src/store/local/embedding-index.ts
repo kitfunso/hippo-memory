@@ -18,7 +18,8 @@ export interface EmbeddingIndex {
   summary(): StoredVectorSummary;
   /** How many memories and vectors the store holds, and how many memories have a vector. */
   coverage(): VectorCoverage;
-  particles(): PhysicsParticle[];
+  /** The particle count and mean speed, and every particle only while at most `fullUpTo` are stored. */
+  particleStats(fullUpTo: number): ParticleStats;
   /** Upserts each row under `model`, one commit per row so a failure keeps those before it; answers how many. */
   saveVectors(rows: Iterable<readonly [string, readonly number[]]>, model: string): number;
   /** A rebuild whose vectors wait apart from the live index until `commit`; the caller closes it. */
@@ -32,6 +33,13 @@ export interface EmbeddingIndex {
   resetParticles(): number;
   /** A first particle for `entry` at `vector`, unless it has one. */
   seedParticle(entry: MemoryEntry, vector: number[]): void;
+}
+
+/** `particles` is null past the caller's limit, so a large store is summed a column at a time, never loaded. */
+export interface ParticleStats {
+  count: number;
+  meanSpeed: number;
+  particles: PhysicsParticle[] | null;
 }
 
 /** Vectors staged by page on a handle of their own, so neither the live index nor the caller holds them all. */

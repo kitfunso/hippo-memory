@@ -6,7 +6,7 @@ import type { EmbeddingIndex, VectorRebuild } from '../local/embedding-index.js'
 import {
   beginVectorRebuildAt,
   embeddingModelRequiresReindex,
-  loadStoredParticlesAt,
+  particleStatsAt,
   pendingVectorIdsAt,
   pruneOrphanVectorsAt,
   resetStoredParticlesAt,
@@ -54,7 +54,7 @@ type VectorRows = Omit<
 
 const vectorRowsAt: Bodies<VectorRows> = {
   summary: storedVectorSummaryAt,
-  particles: loadStoredParticlesAt,
+  particleStats: particleStatsAt,
   saveVectors: upsertVectors,
   pruneOrphans: pruneOrphanVectorsAt,
   pendingIds: pendingVectorIdsAt,

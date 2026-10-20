@@ -336,13 +336,19 @@ interface HeldRowsFilter {
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type HeldTextDbRow = { id: string; content: string; source: string | null; origin_project: string | null };
 
-/** Rows holding a word of `words`; with `phrases`, only the index's hits for them, so rows without one are never read. */
-function heldRows(db: DatabaseSyncLike, filter: HeldRowsFilter, words: readonly string[], phrases?: string[]) {
+/** Rows holding a word of `words`; with `phrases`, only the index's hits for them, so rows without one are never
+ * read. */
+function heldRows(
+  db: DatabaseSyncLike,
+  filter: HeldRowsFilter,
+  words: readonly string[],
+  phrases?: readonly string[],
+): HeldTextDbRow[] {
   const tenant = tenantAnd(filter.tenantId, phrases ? TENANT_IS : 'tenant_id = ?');
   const { project, admit } = filter;
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  // One instr() per word in an OR chain: ID_CHUNK terms stay under SQLite's 1000-level expression depth.
-  const holds = words.map(() => 'instr(content, ?) > 0').join(' OR ');
+  // One JSON list of words, so the text, and the statement cached for it, stay the same at every chunk length.
+  const holds = 'EXISTS (SELECT 1 FROM json_each(?) WHERE instr(content, value) > 0)';
   return cachedStatement(
     db,
     `SELECT id, content, source, origin_project FROM memories WHERE ${phrases ? IN_PHRASE_HITS : '1'}${tenant.sql}` +
@@ -352,7 +358,7 @@ function heldRows(db: DatabaseSyncLike, filter: HeldRowsFilter, words: readonly 
     ...tenant.args,
     ...(project ?? []),
     ...admit.params,
-    ...words,
+    JSON.stringify(words),
   ) as HeldTextDbRow[];
 }
 
@@ -461,19 +467,19 @@ export function strengthTalliesAt(
   atRiskBelow: number,
 ): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
-  const strength = `COALESCE(${strengthSql(now, rules)}, 0)`;
-  // SAFETY: an aggregate with no GROUP BY always answers one row. Not cached: strengthSql writes `now` into the text.
-  const row = db
-    .prepare(
-      `SELECT
+  const bound = strengthSql(now, rules);
+  const strength = `COALESCE(${bound.sql}, 0)`;
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
+  const row = cachedStatement(
+    db,
+    `SELECT
       COUNT(*) AS total,
       COALESCE(SUM(pinned != 0), 0) AS pinned,
       COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE value = 'error')), 0) AS errors,
       COALESCE(SUM(${strength}), 0) AS strengthSum,
       COALESCE(SUM(COALESCE(pinned, 0) = 0 AND ${strength} < ?), 0) AS atRisk
       FROM memories WHERE tenant_id = ?`,
-    )
-    .get(atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
+  ).get(...bound.params, ...bound.params, atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
   return {
     total: Number(row.total),
     pinned: Number(row.pinned),

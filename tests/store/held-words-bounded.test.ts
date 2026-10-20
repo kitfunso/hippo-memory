@@ -70,6 +70,7 @@ describe('loadTextsHoldingWords through the full-text index', () => {
     const { statements } = recordStatements(() => loadTextsHoldingWords(root, 'default', words.slice(0, 2)));
     const held = statements.filter((sql) => sql.includes('instr(content'));
     expect(held).toHaveLength(1);
+    // SAFETY: EXPLAIN QUERY PLAN answers id, parent, notused and detail for each step.
     const plan = withDb(root, (db) => db.prepare(`EXPLAIN QUERY PLAN ${held[0]}`).all() as Array<{ detail: string }>);
     expect(plan.map((p) => p.detail).filter((d) => /^SCAN memories(?!_fts)/.test(d))).toEqual([]);
   });

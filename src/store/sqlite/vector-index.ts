@@ -1,6 +1,7 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
 // write of the three.
-import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { getMeta, setMeta, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { physicsSpeedSum } from '../../db/physics-state.js';
 import type { OnHandle } from './open.js';
 import {
   embeddingIndexIdentity,
@@ -10,6 +11,7 @@ import {
 } from '../../base/embeddings/index-identity.js';
 import { strengthOptionsOf, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
+import type { ParticleStats } from '../local/embedding-index.js';
 import {
   loadPhysicsState,
   resetPhysicsFromSeeds,
@@ -232,8 +234,18 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
 }
 
 /** Every particle stored under `hippoRoot`. */
-export function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
+function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
   return Array.from(loadPhysicsState(db).values());
+}
+
+/** The particle count and mean speed from the velocity column alone, and every particle while at most `fullUpTo` are
+ * stored, on one snapshot. */
+export function particleStatsAt(db: DatabaseSyncLike, fullUpTo: number): ParticleStats {
+  return withReadSnapshot(db, () => {
+    const { count, speedSum } = physicsSpeedSum(db);
+    const particles = count > 0 && count <= fullUpTo ? loadStoredParticlesAt(db) : null;
+    return { count, meanSpeed: count > 0 ? speedSum / count : 0, particles };
+  });
 }
 
 /** The memory id of every stored particle in loadStoredParticlesAt's order, so a caller reads only the particles it

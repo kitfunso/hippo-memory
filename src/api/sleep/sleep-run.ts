@@ -104,17 +104,16 @@ async function runSleepPhases(
 
   // Consolidate's own read predates its writes, so it cannot stand in for these. Dedup, the audit and ambient each page
   // through the store after the phase before them wrote, holding one page at a time.
-  const backing = local.consolidation.objectBackedIds();
   const pages = (): Iterable<MemoryEntry[]> => entryPages(local.consolidation, phases.pageSize);
 
   // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
   const actor = ctx.actor.subject;
-  const dedupResult = phases.deduplicateStore(local.consolidation, { dryRun, actor, pages: pages(), backing });
+  const dedupResult = phases.deduplicateStore(local.consolidation, { dryRun, actor, pages: pages() });
   counts.dedup = dedupResult.removed;
   if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
-  const auditOptions = { dryRun, consolidateResult, dedupResult, result, backing, pages };
+  const auditOptions = { dryRun, consolidateResult, dedupResult, result, pages };
   counts.auditDeleted = await runQualityAudit(ctx, phases, auditOptions);
 
   if (dryRun) return result;
@@ -190,25 +189,21 @@ interface QualityAuditOptions {
   readonly consolidateResult: ConsolidateOutcome;
   readonly dedupResult: DedupOutcome;
   readonly result: SleepResult;
-  readonly backing: ReadonlySet<string>;
   readonly pages: () => Iterable<MemoryEntry[]>;
 }
 
 /** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so pages need no shared state
  * beyond the issues found. */
-async function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): Promise<number> {
-  const { dryRun, consolidateResult, dedupResult, result, backing, pages } = options;
+async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: QualityAuditOptions): Promise<number> {
+  const { dryRun, consolidateResult, dedupResult, result, pages } = options;
   // The pages follow consolidation and dedup, so only a dry run still holds the rows they would remove.
   const wouldGo = dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : [];
   const planned = new Set(wouldGo);
   const issues: AuditIssue[] = [];
   for (const page of pages()) {
-    issues.push(
-      ...phases.auditMemories(
-        page.filter((e) => !planned.has(e.id)),
-        backing,
-      ).issues,
-    );
+    const rows = page.filter((e) => !planned.has(e.id));
+    const backing = ctx.local.consolidation.objectBackedAmong(rows.map((e) => e.id));
+    issues.push(...phases.auditMemories(rows, backing).issues);
   }
   if (issues.length === 0) return 0;
   const errors = issues.filter((i) => i.severity === 'error');

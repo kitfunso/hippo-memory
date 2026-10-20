@@ -5,6 +5,7 @@ import { calculateStrength, confidenceFacets, Layer } from '../../src/index.js';
 import type { HippoStore, LegacyStats, MemoryEntry, StatusCounts } from '../../src/entry/store-kit.js';
 import { inMemoryEntryWritesStore } from './in-memory-entry-writes-store.js';
 import type { StoreSide } from './store-conformance.js';
+import type { CorrectionLink, RawProvenance } from '../../src/store/port/reports.js';
 
 type Counter = 'total_remembered' | 'total_recalled' | 'total_forgotten';
 
@@ -88,12 +89,25 @@ function statusCountsOf(
   };
 }
 
-function correctionRows(rows: readonly MemoryEntry[]): MemoryEntry[] {
-  const successors = new Set(rows.filter(superseded).map((e) => e.supersededBy));
-  const sources = new Set(
-    rows.filter((e) => successors.has(e.id) && e.extractedFrom != null).map((e) => e.extractedFrom),
-  );
-  return rows.filter((e) => superseded(e) || successors.has(e.id) || sources.has(e.id));
+/** The correction-latency join over `rows`, in their order: each superseded row whose successor is among them. */
+export function correctionLinksOf(rows: readonly MemoryEntry[]): CorrectionLink[] {
+  const byId = new Map(rows.map((e) => [e.id, e]));
+  return rows.filter(superseded).flatMap((old) => {
+    const next = byId.get(old.supersededBy!);
+    if (!next) return [];
+    const source = next.extractedFrom ? byId.get(next.extractedFrom) : undefined;
+    return [{ oldId: old.id, newId: next.id, correctedAt: next.created, sourceCreated: source?.created ?? null }];
+  });
+}
+
+/** The raw count and the raw rows missing an owner or an artifact ref, in `rows` order. */
+export function rawProvenanceOf(rows: readonly MemoryEntry[]): RawProvenance {
+  const raw = rows.filter((e) => e.kind === 'raw');
+  const gaps = raw.filter((e) => !e.owner || !e.artifactRef);
+  return {
+    total: raw.length,
+    gaps: gaps.map((e) => ({ id: e.id, owner: e.owner ?? null, artifactRef: e.artifactRef ?? null })),
+  };
 }
 
 export function inMemoryReportsStore(hippoRoot: string): StoreSide {
@@ -109,11 +123,11 @@ export function inMemoryReportsStore(hippoRoot: string): StoreSide {
     async statusCounts(now, atRiskBelow) {
       return statusCountsOf(sorted(), state, now, atRiskBelow);
     },
-    async correctionEntries() {
-      return correctionRows(sorted());
+    async correctionLinks() {
+      return correctionLinksOf(sorted());
     },
-    async rawEntries() {
-      return sorted().filter((e) => e.kind === 'raw');
+    async rawProvenance() {
+      return rawProvenanceOf(sorted());
     },
     async createdSinceLastSleep(tenantId, now) {
       const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();

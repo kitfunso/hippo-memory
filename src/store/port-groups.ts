@@ -2,10 +2,9 @@
 // so that file stays under the size gate.
 import type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
-import type { MemoryEntry } from '../base/memory/memory.js';
 import type { TenantId } from '../base/util/tenant.js';
 import type { CardDetail } from './port/cards.js';
-import type { StatusCounts, StrengthTallies } from './port/reports.js';
+import type { CorrectionLink, RawProvenance, StatusCounts, StrengthTallies } from './port/reports.js';
 import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './port/dormant.js';
 import type { FailureSummary } from './port/failure-log.js';
 import type { CompleteGoalOpts, PushGoalOpts } from './port/goals.js';
@@ -175,10 +174,10 @@ export interface Reports {
   stats(): Promise<LegacyStats>;
   /** What `hippo status` counts over every row of every tenant, superseded ones too: host admin. */
   statusCounts(now: Date, atRiskBelow: number): Promise<StatusCounts>;
-  /** Every superseded row, its successor and that row's extraction source, by created then id: host admin. */
-  correctionEntries(): Promise<MemoryEntry[]>;
-  /** Every kind='raw' row, by created then id: host admin. */
-  rawEntries(): Promise<MemoryEntry[]>;
+  /** Each superseded row with its successor, by the superseded row's created then id: host admin. */
+  correctionLinks(): Promise<CorrectionLink[]>;
+  /** The kind='raw' count and the raw rows missing provenance, by created then id: host admin. */
+  rawProvenance(): Promise<RawProvenance>;
   /** Rows the tenant created since the last sleep of the store, looking back at most a day from `now`. */
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }

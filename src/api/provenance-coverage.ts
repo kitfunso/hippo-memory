@@ -1,4 +1,4 @@
-import { MemoryEntry } from '../base/memory/memory.js';
+import type { RawProvenance } from '../store/port/reports.js';
 
 export interface ProvenanceCoverage {
   rawTotal: number;
@@ -11,16 +11,15 @@ export interface ProvenanceCoverage {
  * Provenance coverage gate: every `kind='raw'` row must carry `owner` and `artifact_ref`; derivative or terminal rows
  * are excluded.
  * Coverage 1.0 on a non-empty raw set is the ship gate. */
-export function buildProvenanceCoverage(entries: MemoryEntry[]): ProvenanceCoverage {
-  const raws = entries.filter((e) => e.kind === 'raw');
+export function buildProvenanceCoverage(raw: RawProvenance): ProvenanceCoverage {
   const gaps: ProvenanceCoverage['gaps'] = [];
-  for (const e of raws) {
+  for (const row of raw.gaps) {
     const missing: ('owner' | 'artifact_ref')[] = [];
-    if (!e.owner) missing.push('owner');
-    if (!e.artifactRef) missing.push('artifact_ref');
-    if (missing.length > 0) gaps.push({ id: e.id, missing });
+    if (!row.owner) missing.push('owner');
+    if (!row.artifactRef) missing.push('artifact_ref');
+    if (missing.length > 0) gaps.push({ id: row.id, missing });
   }
-  const rawWithEnvelope = raws.length - gaps.length;
-  const coverage = raws.length === 0 ? 1 : rawWithEnvelope / raws.length;
-  return { rawTotal: raws.length, rawWithEnvelope, coverage, gaps };
+  const rawWithEnvelope = raw.total - gaps.length;
+  const coverage = raw.total === 0 ? 1 : rawWithEnvelope / raw.total;
+  return { rawTotal: raw.total, rawWithEnvelope, coverage, gaps };
 }

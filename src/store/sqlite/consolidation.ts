@@ -23,6 +23,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type {
   RebuildPatch,
   HalfLifeMove,
+  HalfLifeRow,
   HalfLifeRows,
   TombstoneChecks,
   Consolidation,
@@ -31,8 +32,8 @@ import { appendAuditEvent, recordAuditEventsRowByRowAt } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt, replaceDetectedConflictsAt } from './conflicts.js';
 import {
   iterateEveryTenantEntriesAt,
-  objectMemoryRowsAt,
-  loadCurrentDistilledEntriesAt,
+  iterateRowsWithObjectsAt,
+  loadDuplicateCandidatesAt,
   loadEntriesPageAt,
   loadEntryIdsPageAt,
   selectEntriesByIds,
@@ -42,9 +43,9 @@ import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, type Handles, waitin
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import {
   commitInChunksAt,
-  deleteEntriesOneByOneAt,
+  deleteEntriesInBatchesAt,
   failedUnitOf,
-  memoriesBackingObjectsAt,
+  memoriesBackingAmongAt,
 } from './delete-and-batch.js';
 import { expireDormantBeforeAt } from './dormant.js';
 import { loadPendingExtractionTenantsAt, markPendingProcessedUpToAt } from './graph-queue.js';
@@ -342,11 +343,14 @@ function readRows(db: DatabaseSyncLike, from: number, typedPending: boolean): Ha
   return {
     from,
     typedPending,
-    objectRows: typedPending ? objectMemoryRowsAt(db) : [],
     conflictAudits: typedPending ? conflictResolveAuditsAt(db) : [],
     resolvedConflicts: typedPending ? resolvedConflictsAt(db) : [],
-    rows: iterateEveryTenantEntriesAt(db),
+    rows: typedPending ? iterateRowsWithObjectsAt(db) : withoutObjects(iterateEveryTenantEntriesAt(db)),
   };
+}
+
+function* withoutObjects(entries: Iterable<MemoryEntry>): Generator<HalfLifeRow> {
+  for (const entry of entries) yield { entry, object: null };
 }
 
 /** Writes the move, then one audit event per tenant with each id's old half-life, so the move can be undone. */
@@ -449,8 +453,8 @@ type StoreReads =
   | 'sessionEvents'
   | 'countSleep'
   | 'entriesPage'
-  | 'currentDistilledEntries';
-type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteOneByOne' | 'writeEntry' | 'writeTogether';
+  | 'duplicateCandidates';
+type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteInBatches' | 'writeEntry' | 'writeTogether';
 type Unbound = 'tombstoneChecks' | 'reportAuditFailure' | 'failedUnitOf' | 'commitFlush' | 'expireDormant';
 type BareRows = Exclude<keyof Consolidation, Unbound | StoreReads | StoreWrites | keyof SummaryOps>;
 
@@ -464,19 +468,19 @@ const storeReadsAt: Bodies<Pick<Consolidation, StoreReads>> = {
   sessionEvents: listSessionEventsAt,
   countSleep: incrementSleepCountAt,
   entriesPage: (db, page) => loadEntriesPageAt(db, ALL_TENANTS, page),
-  currentDistilledEntries: loadCurrentDistilledEntriesAt,
+  duplicateCandidates: loadDuplicateCandidatesAt,
 };
 
 const storeWritesAt: FileBodies<Pick<Consolidation, StoreWrites>> = {
   replaceConflicts: replaceDetectedConflictsAt,
   recordRun: appendConsolidationRunAt,
-  deleteOneByOne: deleteEntriesOneByOneAt,
+  deleteInBatches: deleteEntriesInBatchesAt,
   writeEntry: writeEntryAt,
   writeTogether: writeEntriesTogetherAt,
 };
 
 const bareRowsAt: Bodies<Pick<Consolidation, BareRows>> = {
-  objectBackedIds: memoriesBackingObjectsAt,
+  objectBackedAmong: memoriesBackingAmongAt,
   ftsDrift: ftsDriftAt,
   halfLifeBase: recordedHalfLifeBaseAt,
   particleIds: storedParticleIdsAt,
@@ -513,7 +517,8 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
     ...bound(on, summariesAt, openStore),
     entriesByIds: skipEmpty(reads.entriesByIds, () => new Map()),
     particlesByIds: skipEmpty(bare.particlesByIds, () => []),
-    deleteOneByOne: skipEmpty(writes.deleteOneByOne, () => []),
+    deleteInBatches: skipEmpty(writes.deleteInBatches, () => []),
+    objectBackedAmong: skipEmpty(bare.objectBackedAmong, () => new Set<string>()),
     writeTogether: skipEmpty(writes.writeTogether, () => 0),
     commitFlush: skipEmpty(commitFlush, async () => []),
     ...boundAsync<Pick<Consolidation, 'expireDormant'>>(onAsync, { expireDormant: expireDormantBeforeAt }, sleepOpener),

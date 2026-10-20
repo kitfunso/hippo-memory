@@ -11,9 +11,11 @@ export const SLEEP_PAGE_ROWS = 500;
 export class SleepRows {
   /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs an integer. */
   private readonly idPage: number;
+  /** The rows read so far that back a first-class object, asked page by page with the rows. */
+  private readonly backed = new Set<string>();
 
   constructor(
-    private readonly store: Pick<Consolidation, 'entriesByIds' | 'entryIdsPage'>,
+    private readonly store: Pick<Consolidation, 'entriesByIds' | 'entryIdsPage' | 'objectBackedAmong'>,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
   ) {
@@ -25,12 +27,18 @@ export class SleepRows {
     const out: MemoryEntry[] = [];
     for (const page of chunked(ids, this.pageRows)) {
       const byId = this.store.entriesByIds(page);
+      for (const id of this.store.objectBackedAmong([...byId.keys()])) this.backed.add(id);
       for (const id of page) {
         const row = byId.get(id);
         if (row) out.push(this.loaded(row));
       }
     }
     return out;
+  }
+
+  /** Whether a row this run read backs a first-class object; a row it never read, such as a new merge, backs none. */
+  backsObject(id: string): boolean {
+    return this.backed.has(id);
   }
 
   /** Every row of the run, one keyset page of ids and then their rows at a time. */
