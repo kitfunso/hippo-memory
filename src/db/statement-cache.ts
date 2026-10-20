@@ -1,6 +1,6 @@
-import type { DatabaseSyncLike } from '../../db/index.js';
+import type { DatabaseSyncLike } from './index.js';
 
-const STATEMENT_CACHE_MAX = 32;
+const STATEMENT_CACHE_MAX = 512;
 const statementCache = new WeakMap<DatabaseSyncLike, Map<string, ReturnType<DatabaseSyncLike['prepare']>>>();
 
 /** Statements run per request or per row, prepared once per handle; keyed by handle, so a closed handle takes its

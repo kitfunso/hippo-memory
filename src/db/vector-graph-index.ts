@@ -17,6 +17,7 @@ import {
   storedModel,
 } from './vector-graph-rows.js';
 import type { VectorIndex, VectorMatch } from './vector-store.js';
+import { cachedStatement } from './statement-cache.js';
 
 // SHORTCUT: no upper cap; the graph holds about 2.2 KB of heap per 384-dim vector, so cap it or quantize past 500k.
 /** Stored vectors a store holds before its nearest-row reads search a graph. */
@@ -59,16 +60,16 @@ function nextTurn(): Promise<void> {
 
 function dataVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA data_version always answers one row.
-  return (db.prepare('PRAGMA data_version').get() as { data_version: number }).data_version;
+  return (cachedStatement(db, 'PRAGMA data_version').get() as { data_version: number }).data_version;
 }
 
 // max(rowid) is one lookup and bounds the row count from above, so a store far under the threshold is never counted.
 function holdsAtLeast(db: DatabaseSyncLike, threshold: number): boolean {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const top = (db.prepare('SELECT max(rowid) AS n FROM memory_vectors').get() as { n: number | null }).n ?? 0;
+  const top = (cachedStatement(db, 'SELECT max(rowid) AS n FROM memory_vectors').get() as { n: number | null }).n ?? 0;
   if (top < threshold) return false;
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  return (db.prepare('SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n >= threshold;
+  return (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n >= threshold;
 }
 
 /** A thread's graphs of the store under one hippo root. */
@@ -139,7 +140,7 @@ export class VectorGraphs implements VectorIndex {
     slot.dataVersion = version;
     if (++slot.refreshes % RECOUNT_EVERY === 0) {
       // SAFETY: an aggregate with no GROUP BY always answers one row.
-      slot.rows.live = (db.prepare('SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
+      slot.rows.live = (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
     }
     if (staleNodes(slot.rows) <= STALE_SHARE * slot.rows.ids.length) return true;
     // Dropped, so the next read builds a fresh graph without the stale nodes.

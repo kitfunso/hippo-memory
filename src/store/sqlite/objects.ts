@@ -42,6 +42,7 @@ import type {
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../base/util/sql.js';
 import type { JsonObject } from '../../base/util/json.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every
  * kind. */
@@ -112,12 +113,11 @@ function idByMemory<K extends ObjectKind>(
   status: ObjectByKind[K]['status'],
   memoryId: string,
 ): number | null {
-  const row = db
-    .prepare(
-      `SELECT id FROM ${rowSpec(kind).table} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
-        `LIMIT 1`,
-    )
-    .get(memoryId, tenantId, status) as { id: number } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT id FROM ${rowSpec(kind).table} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
+      `LIMIT 1`,
+  ).get(memoryId, tenantId, status) as { id: number } | undefined;
   return row ? row.id : null;
 }
 
@@ -129,9 +129,10 @@ function selectRow<K extends ObjectKind>(
 ): RowByKind[K] | undefined {
   const spec = rowSpec(kind);
   // SAFETY: the SELECT names spec.cols, the columns the kind's row declares.
-  return db.prepare(`SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
-    | RowByKind[K]
-    | undefined;
+  return cachedStatement(db, `SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`).get(
+    id,
+    tenantId,
+  ) as RowByKind[K] | undefined;
 }
 
 function rowById<K extends ObjectKind>(
@@ -163,16 +164,15 @@ function listRows<K extends ObjectKind>(
   }
   const after = keysetAfter('created_at', 'id', query.after);
   // SAFETY: the SELECT names spec.cols, the columns the kind's row declares, whatever the WHERE clause holds.
-  const rows = db
-    .prepare(
-      `
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${spec.cols} FROM ${spec.table}
     WHERE ${clauses.join(' AND ')}${after.sql}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
   `,
-    )
-    .all(...params, ...after.params, query.limit) as RowByKind[K][];
+  ).all(...params, ...after.params, query.limit) as RowByKind[K][];
   return rows.map((row) => spec.rowTo(row));
 }
 
@@ -187,16 +187,16 @@ function closeRow<K extends ObjectKind>(
   const spec = rowSpec(kind);
   return withWriteScopeOr(db, 'close_object', (rollback) => {
     const marks = placeholders(close.from.length);
-    const updated = db
-      .prepare(
-        `UPDATE ${spec.table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN ` +
-          `(${marks})`,
-      )
-      .run(close.at, id, tenantId, ...close.from);
+    const updated = cachedStatement(
+      db,
+      `UPDATE ${spec.table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN ` +
+        `(${marks})`,
+    ).run(close.at, id, tenantId, ...close.from);
     if (updated.changes === 0) {
-      const existing = db
-        .prepare(`SELECT status FROM ${spec.table} WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as { status: string } | undefined;
+      const existing = cachedStatement(db, `SELECT status FROM ${spec.table} WHERE id = ? AND tenant_id = ?`).get(
+        id,
+        tenantId,
+      ) as { status: string } | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
@@ -249,12 +249,11 @@ function successorVersion(
   replaced: number,
 ): { version: number } | ObjectRefusal {
   // SAFETY: the SELECT names status, and version or a 0 AS version for a kind with no versions.
-  const pred = db
-    .prepare(
-      `SELECT status, ${insertSpec(kind).versioned ? 'version' : '0 AS version'} FROM ${rowSpec(kind).table} WHERE ` +
-        `id = ? AND tenant_id = ?`,
-    )
-    .get(replaced, tenantId) as { status: string; version: number } | undefined;
+  const pred = cachedStatement(
+    db,
+    `SELECT status, ${insertSpec(kind).versioned ? 'version' : '0 AS version'} FROM ${rowSpec(kind).table} WHERE ` +
+      `id = ? AND tenant_id = ?`,
+  ).get(replaced, tenantId) as { status: string; version: number } | undefined;
   if (!pred) return { refused: 'missing' };
   if (pred.status !== 'active') return { refused: 'status', status: pred.status };
   return { version: pred.version + 1 };
@@ -268,15 +267,14 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
     cols.push('version', 'change_summary');
     values.push(row.version, row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null));
   }
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
     INSERT INTO ${rowSpec(row.kind).table}(${cols.join(', ')}, status, superseded_by, superseded_at, closed_at,
     created_at)
     VALUES (${placeholders(cols.length)}, 'active', NULL, NULL, NULL, ?)
   `,
-    )
-    .run(...values, row.save.at);
+  ).run(...values, row.save.at);
   return Number(result.lastInsertRowid ?? 0);
 }
 
@@ -290,15 +288,14 @@ function supersedeRow<K extends SavableKind>(
 ): boolean {
   const spec = rowSpec(row.kind);
   const insert = insertSpec(row.kind);
-  const updated = db
-    .prepare(
-      `
+  const updated = cachedStatement(
+    db,
+    `
     UPDATE ${spec.table}
     SET status = 'superseded', superseded_by = ?, superseded_at = ?
     WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
   `,
-    )
-    .run(id, row.save.at, replaced, row.tenantId, id);
+  ).run(id, row.save.at, replaced, row.tenantId, id);
   if (updated.changes === 0) return false;
   const own: JsonObject = insert.versioned
     ? { [spec.idKey]: replaced, superseded_by: id, new_version: row.version }
@@ -422,23 +419,23 @@ function openIncidentRow(
   const held = new Set<string>();
   for (const ids of chunked(linkedMemoryIds)) {
     const marks = placeholders(ids.length);
-    const found = db
-      .prepare(`SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`)
-      .all(tenantId, ...ids) as Array<{ id: string }>;
+    const found = cachedStatement(db, `SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`).all(
+      tenantId,
+      ...ids,
+    ) as Array<{ id: string }>;
     for (const r of found) held.add(r.id);
   }
   const missing = linkedMemoryIds.find((linkId) => !held.has(linkId));
   if (missing !== undefined) return { refused: 'unlinked', memoryId: missing };
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
     INSERT INTO incidents(
       memory_id, tenant_id, incident_text, context,
       status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
     ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
   `,
-    )
-    .run(memoryId, tenantId, incidentText, context ?? null, JSON.stringify(linkedMemoryIds), open.at);
+  ).run(memoryId, tenantId, incidentText, context ?? null, JSON.stringify(linkedMemoryIds), open.at);
   const id = Number(result.lastInsertRowid ?? 0);
   const row = selectRow(db, 'incident', tenantId, id);
   if (!row) return { refused: 'vanished' };
@@ -472,19 +469,19 @@ function resolveRow(
   resolve: IncidentResolve,
 ): Incident | ObjectRefusal {
   return withWriteScopeOr(db, 'resolve_incident', (rollback) => {
-    const updated = db
-      .prepare(
-        `
+    const updated = cachedStatement(
+      db,
+      `
       UPDATE incidents
       SET status = 'resolved', resolution_text = ?, resolved_at = ?
       WHERE id = ? AND tenant_id = ? AND status = 'open'
     `,
-      )
-      .run(resolve.text, resolve.at, id, tenantId);
+    ).run(resolve.text, resolve.at, id, tenantId);
     if (updated.changes === 0) {
-      const existing = db.prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
-        | { status: string }
-        | undefined;
+      const existing = cachedStatement(db, `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`).get(
+        id,
+        tenantId,
+      ) as { status: string } | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
@@ -510,8 +507,9 @@ function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: Policies
   const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';
   const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
   if (name !== undefined) params.push(name);
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
       SELECT p.id, p.memory_id, p.tenant_id, p.policy_name, p.policy_text,
              p.valid_from, p.valid_to, p.version, p.status, p.superseded_by,
              p.superseded_at, p.change_summary, p.closed_at, p.created_at
@@ -523,21 +521,22 @@ function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: Policies
         ${nameClause}
       ORDER BY p.valid_from DESC, p.id DESC
       LIMIT ?
-    `)
-    .all(...params, query.limit) as RowByKind['policy'][];
+    `,
+  ).all(...params, query.limit) as RowByKind['policy'][];
   return rows.map(rowSpec('policy').rowTo);
 }
 
 function activeSkillsByName(db: DatabaseSyncLike, tenantId: string, limit: number): Skill[] {
   // SAFETY: the SELECT names the skill row's own column list.
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
       SELECT ${rowSpec('skill').cols} FROM skills
       WHERE tenant_id = ? AND status = 'active'
       ORDER BY skill_name ASC, id ASC
       LIMIT ?
-    `)
-    .all(tenantId, limit) as RowByKind['skill'][];
+    `,
+  ).all(tenantId, limit) as RowByKind['skill'][];
   return rows.map(rowSpec('skill').rowTo);
 }
 
@@ -547,8 +546,9 @@ type BriefReceiptDbRow = BriefReceipt;
 /** The quotes around the tag stop `path:hip` matching a memory tagged `path:hippo`. */
 function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limit: number): BriefReceipt[] {
   const admit = scopeAdmitSql('');
-  return db
-    .prepare(`
+  return cachedStatement(
+    db,
+    `
       SELECT id, created, source, content FROM memories
       WHERE tenant_id = ?
         AND source != 'project_brief'
@@ -556,6 +556,6 @@ function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limi
         AND ${admit.sql}
       ORDER BY created DESC, id DESC
       LIMIT ?
-    `)
-    .all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceiptDbRow[];
+    `,
+  ).all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceiptDbRow[];
 }

@@ -12,6 +12,7 @@ import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { SessionDecayContext } from '../local/consolidation.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
  * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
@@ -57,10 +58,13 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: St
     if (amount === 0) continue;
     // Both binds are the same string: node:sqlite binds a JS number as REAL, which would store "1.0" into this TEXT
     // column instead of "1".
-    db.prepare(`
+    cachedStatement(
+      db,
+      `
       INSERT INTO meta(key, value) VALUES(?, ?)
       ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(? AS INTEGER)
-    `).run(key, String(amount), String(amount));
+    `,
+    ).run(key, String(amount), String(amount));
   }
 
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
@@ -90,7 +94,7 @@ export function appendConsolidationRunAt(
   files: StoreFiles,
   run: { timestamp: string; decayed: number; merged: number; removed: number },
 ): void {
-  db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`).run(
+  cachedStatement(db, `INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`).run(
     run.timestamp,
     run.decayed,
     run.merged,
@@ -103,29 +107,30 @@ export function appendConsolidationRunAt(
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
 export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, now: Date): number {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
+  const row = cachedStatement(
+    db,
+    `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
        AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
-    )
-    .get(tenantId, dayAgo) as { n: number };
+  ).get(tenantId, dayAgo) as { n: number };
   return row.n;
 }
 
 /** Timestamp of the latest consolidation run, or undefined when there is none. */
 export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
-  const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as
-    | { timestamp?: string }
-    | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`,
+  ).get() as { timestamp?: string } | undefined;
   return row?.timestamp;
 }
 
 /** Load the session decay context; session intervals come from consolidation_runs timestamps. */
 export function loadSessionDecayContextAt(db: DatabaseSyncLike): SessionDecayContext {
   // Get recent consolidation timestamps (last 20)
-  const rows = db
-    .prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`)
-    .all() as Array<{ timestamp: string }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`,
+  ).all() as Array<{ timestamp: string }>;
 
   const sleepCount = Number(getMeta(db, 'sleep_count', '0')) || rows.length;
 

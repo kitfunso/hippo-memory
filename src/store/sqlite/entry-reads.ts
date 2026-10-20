@@ -1,7 +1,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { originInSql } from '../../base/scope/project-identity.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';

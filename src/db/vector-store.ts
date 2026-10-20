@@ -11,6 +11,7 @@ import { errorCode, errorFields, log } from '../base/util/log.js';
 import { chunked } from '../base/util/chunked.js';
 import { placeholders } from '../base/util/sql.js';
 import { tryParseJson } from '../base/util/json.js';
+import { cachedStatement } from './statement-cache.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
@@ -47,7 +48,10 @@ export function upsertVectors(
   rows: Iterable<readonly [string, readonly number[]]>,
   model: string,
 ): number {
-  const stmt = db.prepare('INSERT OR REPLACE INTO memory_vectors (memory_id, model, dim, vector) VALUES (?, ?, ?, ?)');
+  const stmt = cachedStatement(
+    db,
+    'INSERT OR REPLACE INTO memory_vectors (memory_id, model, dim, vector) VALUES (?, ?, ?, ?)',
+  );
   let written = 0;
   for (const [id, vector] of rows) {
     if (vector.length === 0 || !vector.every(Number.isFinite)) continue;
@@ -70,7 +74,10 @@ export function openVectorStaging(db: DatabaseSyncLike): void {
 
 /** Stages `rows` on the handle openVectorStaging ran on, skipping empty or non-finite vectors; answers how many. */
 export function stageVectors(db: DatabaseSyncLike, rows: Iterable<readonly [string, readonly number[]]>): number {
-  const stmt = db.prepare('INSERT OR REPLACE INTO temp.staged_vectors (memory_id, dim, vector) VALUES (?, ?, ?)');
+  const stmt = cachedStatement(
+    db,
+    'INSERT OR REPLACE INTO temp.staged_vectors (memory_id, dim, vector) VALUES (?, ?, ?)',
+  );
   let staged = 0;
   for (const [id, vector] of rows) {
     if (vector.length === 0 || !vector.every(Number.isFinite)) continue;
@@ -84,7 +91,8 @@ export function stageVectors(db: DatabaseSyncLike, rows: Iterable<readonly [stri
 export function replaceVectorsWithStaged(db: DatabaseSyncLike, model: string): void {
   withWriteScope(db, 'replace_all_vectors', () => {
     db.exec('DELETE FROM memory_vectors');
-    db.prepare(
+    cachedStatement(
+      db,
       'INSERT INTO memory_vectors (memory_id, model, dim, vector) ' +
         'SELECT memory_id, ?, dim, vector FROM temp.staged_vectors',
     ).run(model);
@@ -100,20 +108,20 @@ export interface VectorCounts {
 
 export function countVectors(db: DatabaseSyncLike): VectorCounts {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = db
-    .prepare(
-      'SELECT COUNT(*) AS vectors, ' +
-        'COALESCE(SUM(EXISTS (SELECT 1 FROM memories m WHERE m.id = v.memory_id)), 0) AS embedded ' +
-        'FROM memory_vectors v',
-    )
-    .get() as { vectors: number; embedded: number };
+  const row = cachedStatement(
+    db,
+    'SELECT COUNT(*) AS vectors, ' +
+      'COALESCE(SUM(EXISTS (SELECT 1 FROM memories m WHERE m.id = v.memory_id)), 0) AS embedded ' +
+      'FROM memory_vectors v',
+  ).get() as { vectors: number; embedded: number };
   return { vectors: Number(row.vectors), embedded: Number(row.embedded) };
 }
 
 /** Drop vectors whose memory row is gone; returns how many went. */
 export function deleteOrphanVectors(db: DatabaseSyncLike): number {
   return Number(
-    db.prepare('DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)').run().changes ?? 0,
+    cachedStatement(db, 'DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)').run().changes ??
+      0,
   );
 }
 
@@ -138,9 +146,10 @@ function eachStoredVector(
   const unique = [...new Set(ids)];
   for (const chunk of chunked(unique)) {
     read(
-      db
-        .prepare(`SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${placeholders(chunk.length)})`)
-        .all(...chunk) as StoredVectorRow[],
+      cachedStatement(
+        db,
+        `SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${placeholders(chunk.length)})`,
+      ).all(...chunk) as StoredVectorRow[],
     );
   }
 }
@@ -161,20 +170,22 @@ export function loadVectorViews(db: DatabaseSyncLike, ids: readonly string[]): M
 
 export function storedVectorIds(db: DatabaseSyncLike): Set<string> {
   return new Set(
-    (db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map((r) => r.memory_id),
+    (cachedStatement(db, 'SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map(
+      (r) => r.memory_id,
+    ),
   );
 }
 
 /** Float count of the first stored row, from its blob length; the vector is never read. */
 export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
-  const row = db.prepare('SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as
+  const row = cachedStatement(db, 'SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as
     | { bytes: number }
     | undefined;
   return row === undefined ? undefined : Math.floor(row.bytes / 4);
 }
 
 export function hasStoredVectors(db: DatabaseSyncLike): boolean {
-  return db.prepare('SELECT 1 FROM memory_vectors LIMIT 1').get() !== undefined;
+  return cachedStatement(db, 'SELECT 1 FROM memory_vectors LIMIT 1').get() !== undefined;
 }
 
 export interface VectorMatch {
@@ -390,15 +401,18 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
         `the index`,
       { hippoRoot },
     );
-    db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
-      EMBEDDING_MODEL_META_KEY,
-      QUARANTINED_INDEX_IDENTITY,
-    );
+    cachedStatement(
+      db,
+      `INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+    ).run(EMBEDDING_MODEL_META_KEY, QUARANTINED_INDEX_IDENTITY);
     return;
   }
   const model =
-    (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(EMBEDDING_MODEL_META_KEY) as { value?: string } | undefined)
-      ?.value ?? '';
+    (
+      cachedStatement(db, `SELECT value FROM meta WHERE key = ?`).get(EMBEDDING_MODEL_META_KEY) as
+        | { value?: string }
+        | undefined
+    )?.value ?? '';
   const written = withWriteScope(db, 'import_legacy_vectors', () => upsertVectors(db, index, model));
   const backup = `${fp}.imported-${stamp()}`;
   if (moveAside(fp, backup)) {

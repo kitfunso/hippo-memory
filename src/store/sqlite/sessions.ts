@@ -29,6 +29,7 @@ import {
   loadActiveTaskSnapshotAt,
   saveActiveTaskSnapshotAt,
 } from './task-snapshots.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
  * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
@@ -52,18 +53,17 @@ function clearActiveTaskSnapshotAt(
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', hippoRoot, undefined);
   const now = new Date().toISOString();
-  const active = db
-    .prepare(
-      `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
-        `LIMIT 1`,
-    )
-    .get(tenantId) as { id?: number } | undefined;
+  const active = cachedStatement(
+    db,
+    `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
+      `LIMIT 1`,
+  ).get(tenantId) as { id?: number } | undefined;
   if (!active?.id) {
     removeActiveTaskMirror(hippoRoot, tenantId);
     return false;
   }
 
-  db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(
+  cachedStatement(db, `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(
     clearedStatus,
     now,
     active.id,
@@ -87,46 +87,45 @@ function closeTaskSnapshotsForSessionAt(
   // a partial key is a caller bug, so fail loud rather than close nothing
   const owned = key ? continuityWhere(key) : null;
   const now = new Date().toISOString();
-  const result = db
-    .prepare(
-      `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
-        `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
-    )
-    .run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
+  const result = cachedStatement(
+    db,
+    `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
+      `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
+  ).run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
   return Number(result.changes ?? 0);
 }
 
 function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: SessionEventInput, now: string): number {
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
       INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id,
       created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    )
-    .run(
-      event.session_id,
-      event.task ?? null,
-      event.event_type,
-      event.content,
-      event.source ?? 'cli',
-      event.scope ?? null,
-      JSON.stringify(event.metadata ?? {}),
-      tenantId,
-      now,
-    );
+  ).run(
+    event.session_id,
+    event.task ?? null,
+    event.event_type,
+    event.content,
+    event.source ?? 'cli',
+    event.scope ?? null,
+    JSON.stringify(event.metadata ?? {}),
+    tenantId,
+    now,
+  );
   return Number(result.lastInsertRowid ?? 0);
 }
 
 function reloadSessionEvent(db: DatabaseSyncLike, id: number): SessionEvent {
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
       SELECT ${SESSION_EVENT_COLUMNS}
       FROM session_events
       WHERE id = ?
-    `)
-    .get(id) as SessionEventRow | undefined;
+    `,
+  ).get(id) as SessionEventRow | undefined;
 
   if (!row) {
     throw new Error('Failed to reload saved session event');
@@ -140,17 +139,16 @@ function recentSessionEventsOldestFirst(
   sessionId: string,
   limit: number,
 ): SessionEvent[] {
-  const recentRows = db
-    .prepare(
-      `
+  const recentRows = cachedStatement(
+    db,
+    `
       SELECT ${SESSION_EVENT_COLUMNS}
       FROM session_events
       WHERE session_id = ? AND tenant_id = ?
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `,
-    )
-    .all(sessionId, tenantId, limit) as SessionEventRow[];
+  ).all(sessionId, tenantId, limit) as SessionEventRow[];
   return recentRows.map(rowToSessionEvent).reverse();
 }
 
@@ -193,15 +191,16 @@ export function listSessionEventsAt(
   params.push(limit);
 
   const where = `WHERE ${clauses.join(' AND ')}`;
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${SESSION_EVENT_COLUMNS}
     FROM session_events
     ${where}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `)
-    .all(...params) as SessionEventRow[];
+  `,
+  ).all(...params) as SessionEventRow[];
 
   return rows.map(rowToSessionEvent).reverse();
 }
@@ -214,33 +213,36 @@ export function findPromotableSessionsAt(
   sinceMs: number,
 ): Array<{ session_id: string }> {
   assertTenantId('findPromotableSessions', tenantId);
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT DISTINCT session_id FROM session_events
     WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
-  `)
-    .all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
+  `,
+  ).all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
   return rows;
 }
 
 /** Idempotency guard: true if a trace-layer memory with this source_session_id already exists. */
 export function traceExistsForSessionAt(db: DatabaseSyncLike, tenantId: string, session_id: string): boolean {
   assertTenantId('traceExistsForSession', tenantId);
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT 1 FROM memories
     WHERE source_session_id = ? AND layer = 'trace' AND tenant_id = ?
     LIMIT 1
-  `)
-    .get(session_id, tenantId);
+  `,
+  ).get(session_id, tenantId);
   return !!row;
 }
 
 /** The owner a session id is bound to, or null. */
 function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
-  const row = db
-    .prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`)
-    .get(tenantId, sessionId) as { owner_subject: string } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
+  ).get(tenantId, sessionId) as { owner_subject: string } | undefined;
   return row?.owner_subject ?? null;
 }
 
@@ -252,18 +254,17 @@ function insertSessionOwnerAt(
   owner: string,
   createdAt: string,
 ): number {
-  const result = db
-    .prepare(
-      `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
-    )
-    .run(tenantId, sessionId, owner, createdAt);
+  const result = cachedStatement(
+    db,
+    `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
+  ).run(tenantId, sessionId, owner, createdAt);
   return Number(result.changes ?? 0);
 }
 
 // SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred thousand rows.
 /** Drops bindings created before `cutoffIso`. */
 function deleteSessionOwnersBeforeAt(db: DatabaseSyncLike, cutoffIso: string): void {
-  db.prepare(`DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
+  cachedStatement(db, `DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
 }
 
 /** One caller's claim on a session id. */
@@ -348,25 +349,24 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 function wmPushAt(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
   const now = new Date().toISOString();
   return withWriteScope(db, 'wm_push', () => {
-    const result = db
-      .prepare(
-        `
+    const result = cachedStatement(
+      db,
+      `
       INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at,
       updated_at, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-      )
-      .run(
-        item.scope,
-        item.sessionId ?? null,
-        item.taskId ?? null,
-        item.importance ?? 0,
-        item.content,
-        JSON.stringify(item.metadata ?? {}),
-        now,
-        now,
-        tenantId,
-      );
+    ).run(
+      item.scope,
+      item.sessionId ?? null,
+      item.taskId ?? null,
+      item.importance ?? 0,
+      item.content,
+      JSON.stringify(item.metadata ?? {}),
+      now,
+      now,
+      tenantId,
+    );
 
     const id = Number(result.lastInsertRowid ?? 0);
 
@@ -378,16 +378,19 @@ function wmPushAt(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPus
 
 function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string): void {
   // Evict if over capacity for this scope.
-  const countRow = db
-    .prepare(`
+  const countRow = cachedStatement(
+    db,
+    `
     SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
-  `)
-    .get(scope, tenantId) as { cnt: number } | undefined;
+  `,
+  ).get(scope, tenantId) as { cnt: number } | undefined;
 
   const count = Number(countRow?.cnt ?? 0);
   if (count > WM_MAX_ENTRIES) {
     const excess = count - WM_MAX_ENTRIES;
-    db.prepare(`
+    cachedStatement(
+      db,
+      `
       DELETE FROM working_memory
       WHERE id IN (
         SELECT id FROM working_memory
@@ -395,7 +398,8 @@ function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string
         ORDER BY importance ASC, created_at ASC, id ASC
         LIMIT ?
       )
-    `).run(scope, tenantId, excess);
+    `,
+    ).run(scope, tenantId, excess);
   }
 }
 
@@ -422,15 +426,16 @@ function wmReadAt(
 ): WorkingMemoryItem[] {
   const where = wmWhere(tenantId, filter);
   const limit = Math.max(1, Math.trunc(filter.limit ?? WM_MAX_ENTRIES));
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
     FROM working_memory
     ${where.sql}
     ORDER BY importance DESC, created_at DESC, id DESC
     LIMIT ?
-  `)
-    .all(...where.params, limit) as WorkingMemoryRow[];
+  `,
+  ).all(...where.params, limit) as WorkingMemoryRow[];
 
   return rows.map(rowToItem);
 }
@@ -438,7 +443,7 @@ function wmReadAt(
 /** Clear (delete) working memory entries. Returns the count deleted. */
 function wmClearAt(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFilter): number {
   const where = wmWhere(tenantId, filter);
-  const result = db.prepare(`DELETE FROM working_memory ${where.sql}`).run(...where.params);
+  const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(...where.params);
   return Number(result.changes ?? 0);
 }
 

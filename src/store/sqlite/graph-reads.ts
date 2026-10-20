@@ -28,6 +28,7 @@ import type { Sync } from './served.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
@@ -45,12 +46,13 @@ function loadEntitiesByNameAt(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
     ORDER BY id ASC LIMIT ?
-  `)
-    .all(tenantId, name, limit) as EntityRow[];
+  `,
+  ).all(tenantId, name, limit) as EntityRow[];
   return rows.map(rowToEntity);
 }
 
@@ -73,14 +75,15 @@ export function loadEntitiesAt(
     params.push(opts.entityType);
   }
   params.push(limit);
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${ENTITY_COLS} FROM entities
     WHERE ${clauses.join(' AND ')}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `)
-    .all(...params) as EntityRow[];
+  `,
+  ).all(...params) as EntityRow[];
   return rows.map(rowToEntity);
 }
 
@@ -98,14 +101,15 @@ export function loadRelationsAt(
     params.push(opts.fromEntityId);
   }
   params.push(limit);
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${RELATION_COLS} FROM relations
     WHERE ${clauses.join(' AND ')}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `)
-    .all(...params) as RelationRow[];
+  `,
+  ).all(...params) as RelationRow[];
   return rows.map(rowToRelation);
 }
 
@@ -117,12 +121,13 @@ function loadEntitiesByIdsAt(db: DatabaseSyncLike, tenantId: string, ids: readon
   const out: Entity[] = [];
   for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
-    const rows = db
-      .prepare(`
+    const rows = cachedStatement(
+      db,
+      `
       SELECT ${ENTITY_COLS} FROM entities
       WHERE tenant_id = ? AND id IN (${ph})
-    `)
-      .all(tenantId, ...slice) as EntityRow[];
+    `,
+    ).all(tenantId, ...slice) as EntityRow[];
     out.push(...rows.map(rowToEntity));
   }
   return out;
@@ -148,14 +153,15 @@ function loadNeighborRelationsAt(
   const byId = new Map<number, Relation>();
   for (const slice of chunked(entityIds, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
-    const rows = db
-      .prepare(`
+    const rows = cachedStatement(
+      db,
+      `
       SELECT ${RELATION_COLS} FROM relations
       WHERE tenant_id = ? AND (from_entity_id IN (${ph}) OR to_entity_id IN (${ph}))
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `)
-      .all(tenantId, ...slice, ...slice, limit) as RelationRow[];
+    `,
+    ).all(tenantId, ...slice, ...slice, limit) as RelationRow[];
     for (const r of rows) byId.set(r.id, rowToRelation(r));
   }
   return Array.from(byId.values());
@@ -177,14 +183,15 @@ function loadRelationsAmongAt(
     throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
   }
   const ph = placeholders(entityIds.length);
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${RELATION_COLS} FROM relations
     WHERE tenant_id = ? AND from_entity_id IN (${ph}) AND to_entity_id IN (${ph})
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `)
-    .all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
+  `,
+  ).all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
   return rows.map(rowToRelation);
 }
 
@@ -197,13 +204,14 @@ function loadEntitiesByMemoryIdAt(db: DatabaseSyncLike, tenantId: string, memory
   for (const slice of chunked(memoryIds, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
     // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
-    const rows = db
-      .prepare(`
+    const rows = cachedStatement(
+      db,
+      `
       SELECT ${ENTITY_COLS} FROM entities
       WHERE tenant_id = ? AND memory_id IN (${ph})
       ORDER BY id ASC
-    `)
-      .all(tenantId, ...slice) as EntityRow[];
+    `,
+    ).all(tenantId, ...slice) as EntityRow[];
     out.push(...rows.map(rowToEntity));
   }
   return out;
@@ -219,27 +227,25 @@ type StoredRelationDbRow = StoredRelation;
  * lock. */
 export function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
   const kinds = memoryKindsOn(db, memoryIds);
-  const entities = db
-    .prepare(
-      `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities ` +
-        `WHERE tenant_id = ? ORDER BY id`,
-    )
-    .all(tenantId) as StoredEntityDbRow[];
-  const relations = db
-    .prepare(
-      `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, ` +
-        `source_kind, source_object_type, source_object_id ` +
-        `FROM relations WHERE tenant_id = ? ORDER BY id`,
-    )
-    .all(tenantId) as StoredRelationDbRow[];
+  const entities = cachedStatement(
+    db,
+    `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities ` +
+      `WHERE tenant_id = ? ORDER BY id`,
+  ).all(tenantId) as StoredEntityDbRow[];
+  const relations = cachedStatement(
+    db,
+    `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, ` +
+      `source_kind, source_object_type, source_object_id ` +
+      `FROM relations WHERE tenant_id = ? ORDER BY id`,
+  ).all(tenantId) as StoredRelationDbRow[];
   return { kinds, entities, relations };
 }
 
 function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): ReadonlyMap<string, string> {
   if (memoryIds.length === 0) return new Map();
-  const rows = db
-    .prepare(`SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`)
-    .all(JSON.stringify(memoryIds)) as Array<{ id: string; kind: string }>;
+  const rows = cachedStatement(db, `SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`).all(
+    JSON.stringify(memoryIds),
+  ) as Array<{ id: string; kind: string }>;
   return new Map(rows.map((row) => [row.id, row.kind]));
 }
 
@@ -277,9 +283,10 @@ function readableOnly<T extends { memoryId: string | null }>(
   const ids = [...new Set(items.flatMap((i) => (i.memoryId === null ? [] : [i.memoryId])))];
   const readable = new Set<string>();
   for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
-    const rows = db
-      .prepare(`SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(slice.length)})`)
-      .all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;
+    const rows = cachedStatement(
+      db,
+      `SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(slice.length)})`,
+    ).all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;
     for (const r of rows) if (canRead(r.scope)) readable.add(r.id);
   }
   return items.filter((i) => i.memoryId === null || readable.has(i.memoryId));

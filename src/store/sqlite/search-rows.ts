@@ -9,7 +9,7 @@ import { originInSql } from '../../base/scope/project-identity.js';
 import { topVectorMatches, type VectorIndex } from '../../db/vector-store.js';
 import { type MemoryRow, MEMORY_SELECT_COLUMNS, MEMORY_SEARCH_COLUMNS, rowToEntry } from './rows.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { placeholders } from '../../base/util/sql.js';
 import type { OriginFilter } from '../port/types.js';

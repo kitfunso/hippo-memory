@@ -12,6 +12,7 @@ import { initializeParticle } from '../base/rank/physics.js';
 import { chunked } from '../base/util/chunked.js';
 import { placeholders } from '../base/util/sql.js';
 import { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
+import { cachedStatement } from './statement-cache.js';
 
 /** Create the memory_physics table (migration v8). */
 export function createPhysicsTable(db: DatabaseSyncLike): void {
@@ -56,21 +57,19 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
     for (const chunk of chunked(memoryIds)) {
       const marks = placeholders(chunk.length);
       rows.push(
-        ...(db
-          .prepare(
-            `SELECT ${PHYSICS_COLUMNS}
+        ...(cachedStatement(
+          db,
+          `SELECT ${PHYSICS_COLUMNS}
          FROM memory_physics WHERE memory_id IN (${marks})`,
-          )
-          .all(...chunk) as PhysicsRow[]),
+        ).all(...chunk) as PhysicsRow[]),
       );
     }
   } else {
-    rows = db
-      .prepare(
-        `SELECT ${PHYSICS_COLUMNS}
+    rows = cachedStatement(
+      db,
+      `SELECT ${PHYSICS_COLUMNS}
        FROM memory_physics`,
-      )
-      .all() as PhysicsRow[];
+    ).all() as PhysicsRow[];
   }
 
   for (const row of rows) {
@@ -94,7 +93,9 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
 export function savePhysicsState(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
   if (particles.length === 0) return;
 
-  const stmt = db.prepare(`
+  const stmt = cachedStatement(
+    db,
+    `
     INSERT INTO memory_physics (
       memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation, updated_at
     )
@@ -107,7 +108,8 @@ export function savePhysicsState(db: DatabaseSyncLike, particles: PhysicsParticl
       temperature = excluded.temperature,
       last_simulation = excluded.last_simulation,
       updated_at = datetime('now')
-  `);
+  `,
+  );
 
   withWriteScope(db, 'save_particles', () => {
     for (const p of particles) {

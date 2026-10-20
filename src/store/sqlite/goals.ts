@@ -9,6 +9,14 @@ import type { Goals } from '../port-groups.js';
 import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
+import { cachedStatement } from '../../db/statement-cache.js';
+
+const INSERT_GOAL_SQL = `
+  INSERT INTO goal_stack
+    (id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+     success_condition, retrieval_policy_id, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NULL, ?)
+`;
 
 // The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.
 const GOAL_ID_CHARS = 16;
@@ -55,18 +63,21 @@ export function rowToGoal(row: GoalRow): Goal {
 function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const activeCount = (
-    db
-      .prepare(`
+    cachedStatement(
+      db,
+      `
     SELECT COUNT(*) AS c
     FROM goal_stack
     WHERE tenant_id = ? AND session_id = ? AND status = 'active'
-  `)
-      .get(tenantId, sessionId) as { c: number }
+  `,
+    ).get(tenantId, sessionId) as { c: number }
   ).c;
 
   if (activeCount >= MAX_ACTIVE_GOAL_DEPTH) {
     const overflow = activeCount - MAX_ACTIVE_GOAL_DEPTH + 1;
-    db.prepare(`
+    cachedStatement(
+      db,
+      `
       UPDATE goal_stack
       SET status = 'suspended'
       WHERE id IN (
@@ -75,7 +86,8 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
         ORDER BY created_at ASC, rowid ASC
         LIMIT ?
       )
-    `).run(tenantId, sessionId, overflow);
+    `,
+    ).run(tenantId, sessionId, overflow);
   }
 }
 
@@ -92,12 +104,7 @@ function pushGoalAt(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalO
     assertParentInSession(db, opts);
 
     // Parent goal_stack row first (FK target).
-    db.prepare(`
-      INSERT INTO goal_stack
-        (id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
-         success_condition, retrieval_policy_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NULL, ?)
-    `).run(
+    cachedStatement(db, INSERT_GOAL_SQL).run(
       id,
       opts.sessionId,
       opts.tenantId,
@@ -130,9 +137,9 @@ function pushGoalAt(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalO
 
 function assertParentInSession(db: DatabaseSyncLike, opts: PushGoalOpts): void {
   if (!opts.parentGoalId) return;
-  const parent = db.prepare(`SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`).get(opts.parentGoalId) as
-    | { tenant_id: string; session_id: string }
-    | undefined;
+  const parent = cachedStatement(db, `SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`).get(
+    opts.parentGoalId,
+  ) as { tenant_id: string; session_id: string } | undefined;
   if (!parent) {
     throw new Error(`parent goal not found: ${opts.parentGoalId}`);
   }
@@ -148,11 +155,14 @@ function insertRetrievalPolicy(
   policy: NonNullable<PushGoalOpts['policy']>,
 ): string {
   const policyId = generateId('rp', GOAL_ID_CHARS);
-  db.prepare(`
+  cachedStatement(
+    db,
+    `
     INSERT INTO retrieval_policy
       (id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     policyId,
     goalId,
     policy.policyType,
@@ -161,7 +171,7 @@ function insertRetrievalPolicy(
     policy.weightOutcome ?? 1.0,
     policy.errorPriority ?? 1.0,
   );
-  db.prepare(`UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policyId, goalId);
+  cachedStatement(db, `UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policyId, goalId);
   return policyId;
 }
 
@@ -173,26 +183,28 @@ export function activeGoalsWithPoliciesAt(db: DatabaseSyncLike, opts: GetActiveG
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
 function getSessionGoalsAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${GOAL_COLUMNS}
     FROM goal_stack
     WHERE tenant_id = ? AND session_id = ?
     ORDER BY created_at ASC, rowid ASC
-  `)
-    .all(tenantId, sessionId) as GoalRow[];
+  `,
+  ).all(tenantId, sessionId) as GoalRow[];
   return rows.map(rowToGoal);
 }
 
 function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${GOAL_COLUMNS}
     FROM goal_stack
     WHERE tenant_id = ? AND session_id = ? AND status = 'active'
     ORDER BY created_at ASC, rowid ASC
-  `)
-    .all(opts.tenantId, opts.sessionId) as GoalRow[];
+  `,
+  ).all(opts.tenantId, opts.sessionId) as GoalRow[];
   return rows.map(rowToGoal);
 }
 
@@ -203,12 +215,13 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
   const policyIds = [...new Set(active.flatMap((g) => (g.retrievalPolicyId ? [g.retrievalPolicyId] : [])))];
   if (policyIds.length === 0) return policiesByGoalId;
   // SAFETY: MAX_ACTIVE_GOAL_DEPTH bounds the IN list.
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
     FROM retrieval_policy WHERE id IN (${placeholders(policyIds.length)})
-  `)
-    .all(...policyIds) as Array<{
+  `,
+  ).all(...policyIds) as Array<{
     id: string;
     goal_id: string;
     policy_type: RetrievalPolicy['policyType'];
@@ -239,7 +252,9 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
 export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): GoalRecallLogRow[] {
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.memoryId))];
-  const local = db.prepare(`SELECT id FROM memories WHERE id IN (${placeholders(ids.length)})`).all(...ids) as Array<{
+  const local = cachedStatement(db, `SELECT id FROM memories WHERE id IN (${placeholders(ids.length)})`).all(
+    ...ids,
+  ) as Array<{
     id: string;
   }>;
   const localIds = new Set(local.map((r) => r.id));
@@ -250,11 +265,14 @@ export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRec
  * attribution. */
 export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): void {
   if (rows.length === 0) return;
-  const insertLog = db.prepare(`
+  const insertLog = cachedStatement(
+    db,
+    `
     INSERT OR IGNORE INTO goal_recall_log
       (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
     VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  `,
+  );
   for (const row of rows) {
     insertLog.run(row.goalId, row.memoryId, row.tenantId, row.sessionId, row.recalledAt, row.score);
   }
@@ -270,7 +288,7 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
   const score = opts.outcomeScore ?? null;
 
   withWriteScope(db, 'complete_goal', () => {
-    const goalRow = db.prepare(`SELECT created_at, status FROM goal_stack WHERE id = ?`).get(goalId) as
+    const goalRow = cachedStatement(db, `SELECT created_at, status FROM goal_stack WHERE id = ?`).get(goalId) as
       | { created_at: string; status: string }
       | undefined;
     if (!goalRow) return;
@@ -279,11 +297,14 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
       return;
     }
 
-    db.prepare(`
+    cachedStatement(
+      db,
+      `
       UPDATE goal_stack
       SET status = 'completed', completed_at = ?, outcome_score = ?
       WHERE id = ?
-    `).run(completedAt, score, goalId);
+    `,
+    ).run(completedAt, score, goalId);
 
     if (score !== null && !opts.noPropagate) {
       let multiplier = 1;
@@ -293,7 +314,9 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
       if (multiplier !== 1) {
         // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment
         // per pair.
-        db.prepare(`
+        cachedStatement(
+          db,
+          `
           UPDATE memories
           SET strength = MIN(1.0, MAX(0.0, strength * ?))
           WHERE id IN (
@@ -302,26 +325,27 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
               AND recalled_at >= ?
               AND recalled_at <= ?
           )
-        `).run(multiplier, goalId, goalRow.created_at, completedAt);
+        `,
+        ).run(multiplier, goalId, goalRow.created_at, completedAt);
       }
     }
   });
 }
 
 function suspendGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
-  db.prepare(`UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
+  cachedStatement(db, `UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
 }
 
 function resumeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
   withWriteScope(db, 'resume_goal', () => {
-    const row = db.prepare(`SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`).get(goalId) as
+    const row = cachedStatement(db, `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`).get(goalId) as
       | { session_id: string; tenant_id: string; status: string }
       | undefined;
     if (!row || row.status !== 'suspended') return;
 
     enforceDepthCapWithinTx(db, row.tenant_id, row.session_id);
 
-    db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
+    cachedStatement(db, `UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
   });
 }
 

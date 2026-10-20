@@ -18,6 +18,7 @@ import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 interface PagedWalk {
   readonly tenantId: string;
@@ -79,13 +80,12 @@ function keyedLevel(
   const byParent = new Map<string, ChildKey[]>();
   for (const chunk of chunked([...parents])) {
     // SAFETY: the WHERE keeps dag_parent_id a string.
-    const keys = db
-      .prepare(
-        `SELECT id, dag_parent_id, scope, origin_project AS originProject FROM memories ` +
-          `WHERE dag_parent_id IN (${marks(chunk)}) AND ` +
-          `${TENANT_IS} ORDER BY created ASC, id ASC`,
-      )
-      .all(...chunk, walk.tenantId) as ChildKey[];
+    const keys = cachedStatement(
+      db,
+      `SELECT id, dag_parent_id, scope, origin_project AS originProject FROM memories ` +
+        `WHERE dag_parent_id IN (${marks(chunk)}) AND ` +
+        `${TENANT_IS} ORDER BY created ASC, id ASC`,
+    ).all(...chunk, walk.tenantId) as ChildKey[];
     for (const key of keys) {
       const bucket = byParent.get(key.dag_parent_id);
       if (bucket) bucket.push(key);
@@ -117,13 +117,12 @@ function countedLevel(
   const perParent = new Map<string, number>();
   for (const chunk of chunked([...parents])) {
     // SAFETY: the WHERE keeps dag_parent_id a string.
-    const groups = db
-      .prepare(
-        `SELECT dag_parent_id, scope, origin_project AS originProject, COUNT(*) AS n FROM memories ` +
-          `WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? GROUP BY dag_parent_id, scope, ` +
-          `origin_project`,
-      )
-      .all(...chunk, walk.tenantId, walk.summary.id) as ChildGroup[];
+    const groups = cachedStatement(
+      db,
+      `SELECT dag_parent_id, scope, origin_project AS originProject, COUNT(*) AS n FROM memories ` +
+        `WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? GROUP BY dag_parent_id, scope, ` +
+        `origin_project`,
+    ).all(...chunk, walk.tenantId, walk.summary.id) as ChildGroup[];
     for (const group of groups) {
       if (!walk.admit(group)) return null;
       perParent.set(group.dag_parent_id, (perParent.get(group.dag_parent_id) ?? 0) + Number(group.n));
@@ -171,13 +170,12 @@ function childrenInOrder(
 ): MemoryEntry[] {
   const byParent = new Map<string, MemoryEntry[]>();
   for (const chunk of chunked([...parents])) {
-    const rows = db
-      .prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND ` +
-          `id <> ? ` +
-          `ORDER BY created ASC, id ASC LIMIT ?`,
-      )
-      .all(...chunk, walk.tenantId, walk.summary.id, limit) as MemoryRow[];
+    const rows = cachedStatement(
+      db,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND ` +
+        `id <> ? ` +
+        `ORDER BY created ASC, id ASC LIMIT ?`,
+    ).all(...chunk, walk.tenantId, walk.summary.id, limit) as MemoryRow[];
     for (const row of rows) {
       const bucket = byParent.get(row.dag_parent_id ?? '');
       if (bucket) bucket.push(rowToEntry(row));
