@@ -2,18 +2,16 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { isInitialized } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { toWire } from '../../base/memory/memory-wire.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { embedCoverage, memoryEmbedMissing } from '../../api/embeddings.js';
-import { captureError } from '../../domain/learn/autolearn.js';
+import { captureError } from '../../api/repo-learning.js';
+import { DEFAULT_LEARN_DAYS } from '../../base/util/limits.js';
 import { runWatched } from './run-watched.js';
-import { importAtSessionEnd, importForStore } from '../../domain/agent-memories/sync.js';
+import { importAtSessionEnd, importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
-import { detailLines } from '../../domain/agent-memories/report.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
-import { AUTO_SHARE_MIN_SCORE, shareMemory, listPeers, autoShare, transferScore } from '../../domain/sharing/share.js';
-import { syncGlobalToLocal } from '../../domain/sharing/global-sync.js';
+import { detailLines } from '../../api/agent-memory-report.js';
 import { importChatGPT, importClaude, importCursor, importGenericFile } from '../importers/sources.js';
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
@@ -24,7 +22,6 @@ import * as client from './client.js';
 import {
   cliApiContext,
   cliBatch,
-  cliFolder,
   cliInitGlobal,
   cliLocalFiles,
   cliRequest,
@@ -41,16 +38,16 @@ import {
   type CommandContext,
   boolFlag,
   flagIsTrue,
-  isStringFlag,
   nonEmptyStringFlag,
   numberFlag,
   stringFlagOrExit,
   stringListFlag,
+  hasFlag,
+  stringFlag,
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import { ALL_TENANTS } from '../../base/util/tenant.js';
 
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
@@ -69,7 +66,8 @@ function watchedCommand(args: readonly string[]): string[] {
   return [...args];
 }
 
-async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Promise<void> {
+export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
+  const argv = watchedCommand(args);
   const command = argv.join(' ');
   const { exitCode, stderr } = await runWatched(argv);
 
@@ -113,11 +111,11 @@ async function cmdWatch(argv: string[], hippoRoot: string, tenantId: string): Pr
 export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  if (!flags['git']) {
+  if (!boolFlag(flags, 'git')) {
     fail('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
   }
 
-  const days = numberFlag(flags, 'days') ?? 7;
+  const days = numberFlag(flags, 'days') ?? DEFAULT_LEARN_DAYS;
 
   console.log(`Scanning git log for the last ${days} days...`);
 
@@ -181,9 +179,9 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags = stringListFlag(flags, 'tag') ?? [];
 
-  const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
+  const targetRoot = useGlobal ? resolveGlobalRootDir() : hippoRoot;
 
-  if (flags['agents']) return importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
+  if (boolFlag(flags, 'agents')) return importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
 
   if (useGlobal) {
     cliInitGlobal();
@@ -220,19 +218,19 @@ interface PickedImporter {
 
 // Determine which importer to use based on flag
 function pickImporter(args: string[], flags: CliFlags): PickedImporter {
-  if (flags['chatgpt']) {
+  if (boolFlag(flags, 'chatgpt')) {
     return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPT, importerName: 'ChatGPT' };
   }
-  if (flags['claude']) {
+  if (boolFlag(flags, 'claude')) {
     return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaude, importerName: 'Claude' };
   }
-  if (flags['cursor']) {
+  if (boolFlag(flags, 'cursor')) {
     return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursor, importerName: 'Cursor' };
   }
-  if (flags['file']) {
+  if (boolFlag(flags, 'file')) {
     return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFile, importerName: 'File' };
   }
-  if (flags['markdown']) {
+  if (boolFlag(flags, 'markdown')) {
     return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdown, importerName: 'Markdown' };
   }
   // Positional: try to auto-detect from extension
@@ -269,7 +267,7 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
     backfillVectors(cliApiContext(targetRoot, tenantId), useGlobal ? 'hippo embed --global' : 'hippo embed');
   }
 
-  const storeLabel = useGlobal ? `global (${getGlobalRoot()})` : targetRoot;
+  const storeLabel = useGlobal ? `global (${resolveGlobalRootDir()})` : targetRoot;
   printFileImportSummary(result, importerName, filePath, storeLabel, dryRun);
 }
 
@@ -313,7 +311,7 @@ function importAgentMemories(
   // A folder without a store of its own imports as session end would there, so its notes are not hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
-      ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)
+      ? importForStore(useGlobal ? resolveGlobalRootDir() : hippoRoot, opts)
       : importAtSessionEnd(process.cwd(), undefined, opts);
   for (const line of detailLines(report, dryRun)) console.log(line);
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
@@ -348,12 +346,12 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
   if (useGlobal) {
     fail('hippo import --vault does not support --global (raw rows are tenant-local).');
   }
-  if (!isStringFlag(flags['name']) || !flags['name'].trim()) {
+  if (!stringFlag(flags, 'name')?.trim()) {
     // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
     // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
     fail('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
   }
-  if (flags['scope'] !== undefined && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
+  if (hasFlag(flags, 'scope') && !stringFlag(flags, 'scope')?.trim()) {
     // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed
     // private form, since a bare `private` scope is not treated as private by recall and importVault rejects it.
     fail('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
@@ -375,7 +373,7 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: C
   if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }
 
-async function cmdPromote(hippoRoot: string, tenantId: string, id: string): Promise<void> {
+async function promoteMemory(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
   if (!id) {
@@ -386,16 +384,16 @@ async function cmdPromote(hippoRoot: string, tenantId: string, id: string): Prom
   try {
     const result = await api.promote(ctx, id);
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
-    console.log(`   Global store: ${getGlobalRoot()}`);
+    console.log(`   Global store: ${resolveGlobalRootDir()}`);
   } catch (err) {
     fail(`Failed to promote: ${errorMessage(err)}`);
   }
 }
 
-export async function handleSync({ hippoRoot, flags }: CommandContext): Promise<void> {
+export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   if (!isInitialized(globalRoot)) {
     console.log('No global store found. Run `hippo init --global` first.');
     return;
@@ -403,13 +401,9 @@ export async function handleSync({ hippoRoot, flags }: CommandContext): Promise<
 
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = flagIsTrue(flags, 'cross-project');
-  const count = await syncGlobalToLocal(cliFolder(hippoRoot), cliFolder(globalRoot), { includeCrossProject });
+  const count = await api.syncFromGlobal(cliApiContext(hippoRoot, tenantId), { includeCrossProject });
   const skipNote = includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)';
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
-}
-
-export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
-  await cmdWatch(watchedCommand(args), hippoRoot, tenantId);
 }
 
 export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
@@ -426,22 +420,22 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
     }
   });
   if (promoted) return;
-  await cmdPromote(hippoRoot, tenantId, id);
+  await promoteMemory(hippoRoot, tenantId, id);
 }
 
 export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const shareId = args[0];
-  if (shareId === '--auto' || flags['auto']) {
+  if (shareId === '--auto' || boolFlag(flags, 'auto')) {
     requireInit(hippoRoot);
-    const minScore = numberFlag(flags, 'min-score') ?? AUTO_SHARE_MIN_SCORE;
+    const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
     const dryRun = boolFlag(flags, 'dry-run');
-    const results = await autoShare(cliFolder(hippoRoot), cliFolder(getGlobalRoot()), { minScore, dryRun, tenantId });
+    const results = await api.autoShareToGlobal(cliApiContext(hippoRoot, tenantId), { minScore, dryRun });
     if (results.length === 0) {
       console.log('No memories meet the sharing threshold.');
     } else if (dryRun) {
       console.log(`Would share ${results.length} memories:\n`);
       for (const e of results) {
-        const score = transferScore(e);
+        const score = api.transferScore(e);
         console.log(`  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}...`);
       }
     } else {
@@ -454,14 +448,14 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
     const ctx = cliApiContext(hippoRoot, tenantId);
-    const result = await shareMemory(ctx, cliFolder(getGlobalRoot()), shareId, { force, tenantId });
+    const result = await api.shareToGlobal(ctx, shareId, { force });
     if (result) {
       console.log(`Shared [${result.id}] to global store.`);
       console.log(`  Source: ${result.source}`);
     } else {
       const entry = await memoryGet(ctx, shareId);
       if (entry) {
-        const score = transferScore(entry);
+        const score = api.transferScore(entry);
         console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);
         console.log('Use --force to share anyway.');
       } else {
@@ -473,11 +467,10 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
   }
 }
 
-export async function handlePeers({ tenantId, flags }: CommandContext): Promise<void> {
+export async function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
   const allTenants = flagIsTrue(flags, 'all-tenants');
-  const tenantScope = allTenants ? ALL_TENANTS : tenantId;
-  const peers = await listPeers(cliFolder(getGlobalRoot()), tenantScope);
+  const peers = await api.sharePeers(cliApiContext(hippoRoot, tenantId), { allTenants });
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {

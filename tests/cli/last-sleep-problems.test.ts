@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { cmdLastSleep, sleepProblems } from '../../src/surface/cli/last-sleep.js';
+import { handleLastSleep, sleepProblems } from '../../src/surface/cli/last-sleep.js';
 import { initProject, oneLine, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
@@ -71,7 +71,7 @@ describe('sleepProblems', () => {
   });
 });
 
-describe('cmdLastSleep output', () => {
+describe('handleLastSleep output', () => {
   interface Streams {
     stdout: string[];
     errors: string[];
@@ -104,7 +104,7 @@ describe('cmdLastSleep output', () => {
     initTestStore(s.hippoRoot);
     writeLog([...CLEAN, '[hippo] sleep failed: store locked']);
     const streams = capture();
-    cmdLastSleep(s.hippoRoot, { path: logFile });
+    handleLastSleep({ hippoRoot: s.hippoRoot, flags: { path: logFile } });
     expect(streams.stdout).toEqual([]);
     expect(streams.errors).toContain('Hippo: the last sleep failed (store locked). Run hippo doctor for details.');
     expect(fs.existsSync(logFile)).toBe(false);
@@ -115,7 +115,7 @@ describe('cmdLastSleep output', () => {
     initTestStore(s.hippoRoot);
     writeLog([...CLEAN, '[hippo] sleep failed: store locked']);
     const streams = capture();
-    cmdLastSleep(s.hippoRoot, { path: logFile }, 'terminal');
+    handleLastSleep({ hippoRoot: s.hippoRoot, flags: { path: logFile } }, 'terminal');
     expect(streams.stdout).toEqual([]);
     expect(streams.errors.at(-1)).toBe('Hippo: the last sleep failed (store locked). Run hippo doctor for details.');
   });

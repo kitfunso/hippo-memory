@@ -1,11 +1,15 @@
 // Hand-written for the JSON Schema subset the hippo tool definitions use, so the MCP server needs no validator
 // dependency.
 
+import { BadRequestError } from '../../base/errors/api-errors.js';
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 
 const ARG_PREVIEW_CHARS = 40;
 
 export type ToolArgValue = string | number | boolean | null | ToolArgValue[] | { [key: string]: ToolArgValue };
+
+/** A tool call's arguments object. */
+export type ToolArgs = Readonly<Record<string, ToolArgValue>>;
 
 /** One property of a tool's inputSchema. Keywords outside this subset are not supported. */
 export interface ToolPropertySchema {
@@ -88,7 +92,7 @@ function checkProperty(name: string, schema: ToolPropertySchema, raw: ToolArgVal
  */
 export function validateToolArgs(
   schema: ToolInputSchema,
-  args: Readonly<Record<string, ToolArgValue>>,
+  args: ToolArgs,
   checkedDownstream: ReadonlySet<string> = new Set(),
 ): string[] {
   const problems: string[] = [];
@@ -101,4 +105,32 @@ export function validateToolArgs(
     if (problem !== null) problems.push(problem);
   }
   return problems;
+}
+
+// The readers below run after validateToolArgs, so a declared argument already has its schema type; each one caps a
+// string as the HTTP routes do (surface/server/validation.ts), so the same field takes the same length on both.
+
+/** A string argument, or undefined when absent; one over `max` characters is refused with the HTTP route's message. */
+export function optionalStringArg(args: ToolArgs, name: string, max: number): string | undefined {
+  const v = args[name];
+  if (v === undefined || !isArgString(v)) return undefined;
+  if (v.length > max) throw new BadRequestError(`${name} exceeds ${max}-character cap`);
+  return v;
+}
+
+/** A string argument, or '' when absent, capped as optionalStringArg caps it. */
+export function stringArg(args: ToolArgs, name: string, max: number): string {
+  return optionalStringArg(args, name, max) ?? '';
+}
+
+/** A numeric argument as a number; a numeric string counts, as validateToolArgs lets it through. */
+export function numberArg(args: ToolArgs, name: string): number | undefined {
+  const v = args[name];
+  return v === undefined ? undefined : (asNumber(v) ?? undefined);
+}
+
+/** A boolean argument, or `fallback` when absent. */
+export function boolArg(args: ToolArgs, name: string, fallback = false): boolean {
+  const v = args[name];
+  return v !== undefined && isArgBoolean(v) ? v : fallback;
 }

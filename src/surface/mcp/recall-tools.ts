@@ -11,7 +11,8 @@ import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
 import { resolveClientKey } from '../../api/recall/last-recalled.js';
 import { toolRecallText } from './tool-recall.js';
 import { formatMemories, memoriesReserve, snapshotPiece, handoffPiece, trailPiece, contextCost } from './tool-text.js';
-import { isJsonString } from '../../base/util/json.js';
+import { MAX_ID_LEN } from '../../base/util/limits.js';
+import { boolArg, numberArg, stringArg } from './tool-args.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../../api/recall/request.js';
 
 // Named shapes for optional fields each api.* call only wants when the caller supplied them: build `extra`, then spread
@@ -33,22 +34,22 @@ export async function runRecallTool({ ctx, args }: ToolCall): Promise<string> {
   const { opts } = parseRecallRequest(toolParams(args));
   return toolRecallText(mcpApiContext(ctx), {
     opts,
-    budget: Number(args.budget) || undefined,
+    budget: numberArg(args, 'budget') || undefined,
     project: ctx.project,
     clientKey: resolveClientKey(ctx),
   });
 }
 
 export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> {
-  const sessionId = String(args.session_id || '');
+  const sessionId = stringArg(args, 'session_id', MAX_ID_LEN);
   if (!sessionId) return 'No session_id provided.';
-  const budget = Number(args.budget);
-  const freshTailCount = Number(args.fresh_tail_count);
-  const summarizeOlder = args.summarize_older !== false;
-  const explicitScope = isJsonString(args.scope) && args.scope.length > 0 ? args.scope : undefined;
+  const budget = numberArg(args, 'budget');
+  const freshTailCount = numberArg(args, 'fresh_tail_count');
+  const summarizeOlder = boolArg(args, 'summarize_older', true);
+  const explicitScope = stringArg(args, 'scope', MAX_ID_LEN) || undefined;
   const assembleExtra: AssembleExtraOptions = {};
-  if (Number.isFinite(budget) && budget > 0) assembleExtra.budget = budget;
-  if (Number.isFinite(freshTailCount) && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
+  if (budget !== undefined && budget > 0) assembleExtra.budget = budget;
+  if (freshTailCount !== undefined && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
   const r = await apiAssemble(mcpApiContext(ctx), sessionId, {
     summarizeOlder,
@@ -60,15 +61,15 @@ export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> 
 }
 
 export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
-  const summaryId = String(args.summary_id || '');
+  const summaryId = stringArg(args, 'summary_id', MAX_ID_LEN);
   if (!summaryId) return 'No summary_id provided.';
-  const limit = Number(args.limit);
-  const budget = Number(args.budget);
+  const limit = numberArg(args, 'limit');
+  const budget = numberArg(args, 'budget');
   // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the cap.
-  const depth = args.depth === undefined ? undefined : Number(args.depth);
+  const depth = numberArg(args, 'depth');
   const drillExtra: DrillDownExtraOptions = {};
-  if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
-  if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
+  if (limit !== undefined && limit > 0) drillExtra.limit = limit;
+  if (budget !== undefined && budget > 0) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
   const opts = { ...drillExtra, project: ctx?.project, cost: drillCost };
   const r = await apiDrillDown(mcpApiContext(ctx), summaryId, opts);

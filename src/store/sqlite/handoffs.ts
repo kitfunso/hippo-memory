@@ -68,7 +68,7 @@ export function saveSessionHandoffAt(
   const now = new Date().toISOString();
 
   // Scope is stored as given, since reads deny by default.
-  // api.recall and cmdRecall continuity exclude slack:private:* and 'unknown:legacy'.
+  // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.
   const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
 
   const id = Number(result.lastInsertRowid ?? 0);

@@ -2,7 +2,8 @@
 import { OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { HttpError } from '../../../base/util/http-util.js';
-import { MAX_SHORT_FIELD_LEN, getString, requiredString } from '../validation.js';
+import { getString, requiredString } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import { type JsonValue, isJsonString } from '../../../base/util/json.js';
 import type { VersionedRouteConfig } from './object-routes.js';
 

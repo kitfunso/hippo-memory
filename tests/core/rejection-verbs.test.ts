@@ -378,9 +378,9 @@ describe('resolveConflict rejection wiring', () => {
   });
 });
 
-describe('cmdSupersede write-order contract', () => {
+describe('supersedeMemory write-order contract', () => {
   it('a refused successor write leaves the old row without a dangling superseded_by pointer', async () => {
-    // Replicates cmdSupersede's REORDERED two-write flow (cli.ts): the
+    // Replicates supersedeMemory's REORDERED two-write flow (cli.ts): the
     // successor is written FIRST so the rejection guard fires before any
     // mutation of the old row. The old ordering committed
     // old.superseded_by = newEntry.id before the guarded write, leaving a

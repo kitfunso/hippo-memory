@@ -15,8 +15,8 @@ const EXEMPT_DIR = `db${sep}migrations${sep}`;
 // Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
 const DOC_LINES = new Set([
   'api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */',
-  "store/sqlite/handoffs.ts: // api.recall and cmdRecall continuity exclude slack:private:* and 'unknown:legacy'.",
-  "store/sqlite/sessions.ts: // api.recall and cmdRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.",
+  "store/sqlite/handoffs.ts: // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.",
+  "store/sqlite/sessions.ts: // api.recall and printRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.",
   'store/sqlite/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies',
   "store/sqlite/search-rows.ts: * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot",
 ]);
@@ -59,7 +59,7 @@ describe('scope SQL guard', () => {
     expect(
       hitsIn(
         `store${sep}sqlite${sep}handoffs.ts`,
-        "  // api.recall and cmdRecall continuity exclude slack:private:* and 'unknown:legacy'.",
+        "  // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.",
       ),
     ).toEqual([]);
     expect(hitsIn(`store${sep}sqlite${sep}handoffs.ts`, "  // continuity excludes 'unknown:legacy' too.")).toHaveLength(

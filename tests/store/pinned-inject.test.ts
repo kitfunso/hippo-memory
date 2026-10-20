@@ -39,7 +39,7 @@ async function hippoIn(cwd: string, globalDir: string, args: string[]): Promise<
 
 function runHippo(args: string[]): Promise<string> {
   // Point HIPPO_HOME at a separate dir so the global store doesn't leak into
-  // the test (cmdContext merges local + global). The local store lives at
+  // the test (printContext merges local + global). The local store lives at
   // `${tmpDir}/.hippo` (resolved via getHippoRoot(cwd)).
   return hippoIn(tmpDir, path.join(tmpDir, 'global'), args);
 }

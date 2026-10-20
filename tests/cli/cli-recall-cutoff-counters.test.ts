@@ -92,7 +92,7 @@ function recallText(env: TestEnv, query: string, limit: number): Promise<string>
   return hippo(env.cwd, env.globalRoot, 'recall', query, '--why', '--limit', String(limit));
 }
 
-describe('cmdRecall candidate accounting closes', () => {
+describe('printRecall candidate accounting closes', () => {
   let env: TestEnv;
 
   afterEach(() => {

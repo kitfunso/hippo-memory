@@ -1,7 +1,6 @@
 // The recall an agent's tool prints: the ranked list cut to the caller's token budget, with the hints and the Cutoff
 // block that describe that list. The shown ids are kept for the caller's next outcome.
 
-import { fitBudget } from '../../domain/search/finalize.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { estimateTokens, shrinkToFit, tokenPurse } from '../../base/util/token-text.js';
@@ -18,6 +17,7 @@ import {
   type RingBuffer,
 } from '../../api/recall/finish.js';
 import { retrieveRanking } from '../../api/recall/recall.js';
+import { fitRecallRows } from '../../api/recall/rows.js';
 import {
   availabilityPool,
   cutoffClauses,
@@ -98,7 +98,7 @@ function fitToolRecall(
   limits: { room: number; budget: number },
   render: (cut: SearchResult[]) => RenderedRecall,
 ): RenderedRecall {
-  const fitted = fitBudget(ranked, Math.max(0, limits.room), 1, memoryCost);
+  const fitted = fitRecallRows(ranked, Math.max(0, limits.room), 1, memoryCost);
   return shrinkToFit(
     fitted.length,
     1,

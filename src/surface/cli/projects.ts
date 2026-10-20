@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import * as api from '../../api/index.js';
 import { cliApiContext, type CliContext } from './api-context.js';
-import { type CliFlags, flagIsTrue, type CommandContext } from './flag-values.js';
+import { type CliFlags, flagIsTrue, type CommandContext, boolFlag } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -53,7 +53,7 @@ function count(n: number, one: string, many = `${one}s`): string {
 function projectsList(ctx: CliContext, flags: CliFlags): void {
   const root = ctx.hippoRoot;
   const projects = api.projectNameList(ctx);
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ store: root, projects }, null, 2));
     return;
   }
@@ -71,7 +71,7 @@ function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): void {
   const apply = flagIsTrue(flags, 'apply');
   const [from, into] = [args[1] ?? '', args[2] ?? ''];
   const r = api.projectNameMerge(ctx, { from, into, dryRun: !apply });
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(r, null, 2));
     return;
   }
@@ -98,7 +98,7 @@ function projectsRepair(ctx: CliContext, flags: CliFlags): void {
   const root = ctx.hippoRoot;
   const apply = flagIsTrue(flags, 'apply');
   const r = api.projectNameRepair(ctx, { dryRun: !apply });
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(r, null, 2));
     return;
   }

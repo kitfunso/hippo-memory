@@ -162,7 +162,7 @@ export function appendSessionEventAt(
   const now = new Date().toISOString();
 
   // Scope is stored as given, since reads deny by default.
-  // api.recall and cmdRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
+  // api.recall and printRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
   const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
   const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
   writeRecentSessionMirror(hippoRoot, tenantId, recent);

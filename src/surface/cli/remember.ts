@@ -17,12 +17,11 @@ import {
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { isInitialized } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { renderTraceContent, parseSteps } from '../../domain/consolidate/trace.js';
-import { extractPathTags } from '../../domain/search/path-context.js';
+import { parseSteps, traceRecord } from '../../api/memories/trace.js';
+import { extractPathTags } from '../../api/memories/remember-local.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
 import * as client from './client.js';
 import { cliApiContext, cliConfig, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
@@ -38,6 +37,8 @@ import {
   stringFlag,
   stringFlagOrExit,
   stringListFlag,
+  hasFlag,
+  repeatedFlag,
 } from './flag-values.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -54,8 +55,8 @@ interface RememberTags {
 
 // Shared by the direct write and the routed request so both store the same tags.
 function rememberTags(flags: CliFlags, cwd: string): RememberTags {
-  const requested: string[] = Array.isArray(flags['tag']) ? [...flags['tag']] : [];
-  if (flags['error']) requested.push('error');
+  const requested = [...repeatedFlag(flags, 'tag')];
+  if (boolFlag(flags, 'error')) requested.push('error');
   const all = [...requested];
   for (const pt of extractPathTags(cwd)) {
     if (!all.includes(pt)) all.push(pt);
@@ -71,9 +72,9 @@ function rememberTags(flags: CliFlags, cwd: string): RememberTags {
 
 function rememberConfidence(flags: CliFlags): ConfidenceLevel {
   let confidence: ConfidenceLevel = 'verified';
-  if (flags['observed']) confidence = 'observed';
-  if (flags['inferred']) confidence = 'inferred';
-  if (flags['verified']) confidence = 'verified';
+  if (boolFlag(flags, 'observed')) confidence = 'observed';
+  if (boolFlag(flags, 'inferred')) confidence = 'inferred';
+  if (boolFlag(flags, 'verified')) confidence = 'verified';
   return confidence;
 }
 
@@ -115,9 +116,9 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   return { kind, owner, artifactRef, scope };
 }
 
-async function cmdRemember(hippoRoot: string, tenantId: string, text: string, flags: CliFlags): Promise<void> {
+async function writeMemory(hippoRoot: string, tenantId: string, text: string, flags: CliFlags): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
-  const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
+  const targetRoot = useGlobal ? resolveGlobalRootDir() : hippoRoot;
 
   if (useGlobal) {
     cliInitGlobal();
@@ -202,7 +203,7 @@ function parseLayerFlag(flags: CliFlags): Layer | undefined {
   return layer;
 }
 
-async function cmdSupersede(
+async function supersedeMemory(
   hippoRoot: string,
   tenantId: string,
   oldId: string,
@@ -243,7 +244,7 @@ function traceTags(flags: CliFlags): string[] {
   return stringListFlag(flags, 'tag') ?? [];
 }
 
-async function cmdTraceRecord(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function recordTrace(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   const task = stringFlagOrExit(flags, 'task') ?? '';
@@ -266,34 +267,26 @@ async function cmdTraceRecord(hippoRoot: string, tenantId: string, flags: CliFla
   const sessionId = stringFlagOrExit(flags, 'session') || null;
   const tags = traceTags(flags);
 
-  const content = renderTraceContent({
+  const { id } = await traceRecord(cliApiContext(hippoRoot, tenantId), {
     task,
     steps,
     outcome,
-  });
-
-  const { id } = await api.remember(cliApiContext(hippoRoot, tenantId), {
-    content,
+    sessionId,
     tags,
-    local: {
-      layer: Layer.Trace,
-      source: stringFlagOrExit(flags, 'source') ?? 'cli',
-      traceOutcome: outcome,
-      sourceSessionId: sessionId,
-    },
+    source: stringFlagOrExit(flags, 'source') ?? 'cli',
   });
 
   console.log(`Recorded trace ${id} (outcome=${outcome}, ${steps.length} steps)`);
 }
 
-async function cmdTrace(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
+async function printTrace(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
 
   // Look in local store first, then global.
   let entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
   let sourceLabel: 'local' | 'global' = 'local';
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   if (!entry && isInitialized(globalRoot)) {
     entry = await memoryGet(cliApiContext(globalRoot, tenantId), id);
     sourceLabel = 'global';
@@ -457,16 +450,16 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
   // the direct path. The salience gate is not in richFlag and the route does not apply it, so a routed remember stores
   // what a direct one would skip.
   const richFlag =
-    flags['pin'] ||
-    flags['global'] ||
-    flags['extract'] ||
-    flags['force'] ||
-    flags['observed'] ||
-    flags['inferred'] ||
-    flags['verified'] ||
-    flags['layer'] !== undefined;
+    boolFlag(flags, 'pin') ||
+    boolFlag(flags, 'global') ||
+    boolFlag(flags, 'extract') ||
+    boolFlag(flags, 'force') ||
+    boolFlag(flags, 'observed') ||
+    boolFlag(flags, 'inferred') ||
+    boolFlag(flags, 'verified') ||
+    hasFlag(flags, 'layer');
   if (!richFlag && (await rememberViaThinClient(hippoRoot, text, flags))) return;
-  await cmdRemember(hippoRoot, tenantId, text, flags);
+  await writeMemory(hippoRoot, tenantId, text, flags);
 }
 
 async function rememberViaThinClient(hippoRoot: string, text: string, flags: CliFlags): Promise<boolean> {
@@ -501,17 +494,17 @@ export async function handleSupersede({ hippoRoot, tenantId, args, flags }: Comm
   if (!oldId || !newContent) {
     fail('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
   }
-  await cmdSupersede(hippoRoot, tenantId, oldId, newContent, flags);
+  await supersedeMemory(hippoRoot, tenantId, oldId, newContent, flags);
 }
 
 export async function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
-    await cmdTraceRecord(hippoRoot, tenantId, flags);
+    await recordTrace(hippoRoot, tenantId, flags);
     return;
   }
   if (!sub) {
     fail('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
   }
-  await cmdTrace(hippoRoot, tenantId, sub, flags);
+  await printTrace(hippoRoot, tenantId, sub, flags);
 }
