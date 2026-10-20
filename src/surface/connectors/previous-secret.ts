@@ -6,16 +6,23 @@ import { log } from '../../base/util/log.js';
 export interface PreviousSecretVars {
   readonly secret: string;
   readonly until: string;
+  /** Fixed once-only log keys, one pair per connector variable. */
+  readonly closedKey: string;
+  readonly openKey: string;
 }
 
 export const SLACK_PREVIOUS: PreviousSecretVars = {
   secret: 'SLACK_SIGNING_SECRET_PREVIOUS',
   until: 'SLACK_SIGNING_SECRET_PREVIOUS_UNTIL',
+  closedKey: 'SLACK_SIGNING_SECRET_PREVIOUS-closed',
+  openKey: 'SLACK_SIGNING_SECRET_PREVIOUS-open',
 };
 
 export const GITHUB_PREVIOUS: PreviousSecretVars = {
   secret: 'GITHUB_WEBHOOK_SECRET_PREVIOUS',
   until: 'GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL',
+  closedKey: 'GITHUB_WEBHOOK_SECRET_PREVIOUS-closed',
+  openKey: 'GITHUB_WEBHOOK_SECRET_PREVIOUS-open',
 };
 
 const DATE_OR_ISO = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
@@ -44,7 +51,7 @@ export function previousSecretInForce(
   const end = untilMs(until);
   if (end !== null && nowMs < end) return previous;
   log.once(
-    `${vars.secret}-closed`,
+    vars.closedKey,
     'warn',
     end === null
       ? `${vars.until} is not an ISO date, so ${vars.secret} is refused`
@@ -61,7 +68,7 @@ export function warnIfOpenEnded(
 ): void {
   if (!previous || (until !== undefined && until !== '')) return;
   log.once(
-    `${vars.secret}-open`,
+    vars.openKey,
     'warn',
     `${vars.secret} is set with no ${vars.until}, so it is accepted until it is removed; set ${vars.until} to the ` +
       'ISO date the rotation ends',
