@@ -124,13 +124,16 @@ function vectorRow(entry: MemoryEntry, model: string, vector: number[]): VectorR
   };
 }
 
+// A backfill and a rebuild need each row once, not time order, so they walk ids on the primary key.
+const byId = (a: MemoryEntry, b: MemoryEntry): number => (a.id < b.id ? -1 : 1);
+
 function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsParticle {
   return { ...initializeParticle(entry, vector, {}, new Date(at)), position: vector.map(Math.fround) };
 }
 
-/** The state a rebuild under `providerId` must leave: every row in store order, each with a particle dated FAKE_NOW. */
+/** The state a rebuild under `providerId` must leave: every row in id order, each with a particle dated FAKE_NOW. */
 function rebuiltState(root: string, providerId: string, vectorOf: (entry: MemoryEntry) => number[]): IndexState {
-  const entries = loadEveryTenantEntries(root);
+  const entries = loadEveryTenantEntries(root).sort(byId);
   const model = embeddingIndexIdentity(providerId);
   return {
     vectors: entries.map((e) => vectorRow(e, model, vectorOf(e))),
@@ -187,12 +190,12 @@ afterEach(() => {
 });
 
 describe('embedAll backfill on hippo.db', () => {
-  it('embeds exactly the 120 rows with no vector, 64 at a time in store order, and leaves the other 180 vectors alone', async () => {
+  it('embeds exactly the 120 rows with no vector, 64 at a time in id order, and leaves the other 180 vectors alone', async () => {
     const root = copyOf(partly);
     const before = indexOn(root);
     const entries = loadEveryTenantEntries(root);
     const embedded = new Set(before.vectors.map((v) => v.memory_id));
-    const pending = entries.filter((e) => !embedded.has(e.id));
+    const pending = entries.filter((e) => !embedded.has(e.id)).sort(byId);
     expect([entries.length, before.vectors.length, pending.length]).toEqual([ROWS, 180, 120]);
     expect(new Set(pending.map((e) => e.tenantId))).toEqual(new Set(TENANTS));
 
