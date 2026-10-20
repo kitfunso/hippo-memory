@@ -4,9 +4,8 @@
 import { envApiKey, envRequireServer } from '../../base/util/env.js';
 import { execFileSync } from 'child_process';
 import { isSharedStore } from '../../base/config/config.js';
-import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/invalidation.js';
-import { resolveProjectIdentity, isInitialized } from '../../base/scope/project-identity.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { type ChurnStaleResult, detectChurnStale } from '../../api/repo-learning.js';
+import { resolveProjectIdentity, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
@@ -16,7 +15,7 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { printError } from './output.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
-import type { CliFlags } from './flag-values.js';
+import { type CliFlags, boolFlag } from './flag-values.js';
 
 export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
@@ -40,7 +39,7 @@ export async function runChurnStaleForRepo(
     windowsHide: true,
   }).trim();
   const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
   const results: { root: string; result: ChurnStaleResult }[] = [];
   for (const root of roots) {
@@ -165,9 +164,9 @@ export async function learnFromRepo(
 }
 
 export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
-  if (flags['global']) {
+  if (boolFlag(flags, 'global')) {
     cliInitGlobal();
-    return getGlobalRoot();
+    return resolveGlobalRootDir();
   }
   requireInit(hippoRoot);
   return hippoRoot;

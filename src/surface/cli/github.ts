@@ -18,7 +18,7 @@ import {
   isGitHubPullRequestReviewCommentEvent,
 } from '../connectors/github/types.js';
 import type { JsonValue } from '../../base/util/json.js';
-import { isStringFlag, type CliFlags, type CommandContext } from './flag-values.js';
+import { type CliFlags, type CommandContext, stringFlag } from './flag-values.js';
 import { runDlqReplay } from './dlq-replay.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit } from './exit.js';
@@ -52,15 +52,16 @@ export function printGitHubBackfillUsage(): void {
 }
 
 /** `--max` as a whole positive count; undefined (no cap) when absent or not one. */
-function maxPerStreamFlag(maxRaw: CliFlags[string] | undefined): number | undefined {
-  if (!isStringFlag(maxRaw)) return undefined;
+function maxPerStreamFlag(flags: CliFlags): number | undefined {
+  const maxRaw = stringFlag(flags, 'max');
+  if (maxRaw === undefined) return undefined;
   const parsed = Number(maxRaw);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
 }
 
-async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
-  const repo = flags['repo'];
-  if (!isStringFlag(repo) || !repo.includes('/')) {
+async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+  const repo = stringFlag(flags, 'repo');
+  if (repo === undefined || !repo.includes('/')) {
     printGitHubBackfillUsage();
     throw new CliExit(2);
   }
@@ -69,9 +70,8 @@ async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Cli
     console.error('GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.');
     throw new CliExit(2);
   }
-  const maxPerStream = maxPerStreamFlag(flags['max']);
-  const sinceFlag = flags['since'];
-  const sinceIso = isStringFlag(sinceFlag) ? sinceFlag : undefined;
+  const maxPerStream = maxPerStreamFlag(flags);
+  const sinceIso = stringFlag(flags, 'since');
 
   const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
   try {
@@ -89,7 +89,7 @@ async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Cli
   }
 }
 
-export async function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
+export async function listGitHubDlq(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
   const items = await listDlq(githubDlq, cliStore(hippoRoot), { tenantId });
   if (items.length === 0) {
     console.log('no entries');
@@ -155,7 +155,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
   return { memoryId: r.memoryId };
 };
 
-export async function cmdGitHubDlqReplay(
+export async function replayGitHubDlq(
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -176,15 +176,15 @@ export async function cmdGitHubDlqReplay(
 export async function handleGitHub({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
-    await cmdGitHubBackfill(hippoRoot, tenantId, flags);
+    await backfillGitHub(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    await cmdGitHubDlqList(hippoRoot, tenantId, flags);
+    await listGitHubDlq(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    await cmdGitHubDlqReplay(hippoRoot, tenantId, args.slice(2), flags);
+    await replayGitHubDlq(hippoRoot, tenantId, args.slice(2), flags);
     return;
   }
   console.error('Usage: hippo github <backfill|dlq list|dlq replay <id> [--force]> [...]');

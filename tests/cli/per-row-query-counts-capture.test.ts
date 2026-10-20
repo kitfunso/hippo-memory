@@ -23,7 +23,7 @@ import {
 
 useQueryCountRoots();
 
-describe('cmdRemember', () => {
+describe('writeMemory', () => {
   async function remember(root: string, text: string) {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {

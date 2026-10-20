@@ -2,7 +2,7 @@
  * LC1 wiring tests (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
  *
  * Covers the three wired recall paths: api.recall, api.contextGet, CLI
- * cmdRecall — one trace row per recall, pinnedOnly writes nothing, the
+ * printRecall — one trace row per recall, pinnedOnly writes nothing, the
  * v1.11.5 no-side-effects contract (api.recall must NOT write last_trace_id),
  * the F1 atomic last_trace_id/last_retrieval_ids lockstep (via loadLastRecall,
  * since readLastTraceId was deleted), F2 (suppressRecallTrace), and F5
@@ -316,7 +316,7 @@ describe('api.contextGet - trace wiring', () => {
   });
 });
 
-describe('CLI cmdRecall — trace wiring', () => {
+describe('CLI printRecall — trace wiring', () => {
   let hippoRoot: string;
 
   beforeEach(() => {

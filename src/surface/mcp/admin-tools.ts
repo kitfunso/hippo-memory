@@ -1,13 +1,14 @@
 // Store health and admin tool handlers: base rates, status, conflicts, resolve, share and peers.
 
 import { evalNow } from '../../base/memory/ablation.js';
-import { shareMemory, listPeers } from '../../domain/sharing/share.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListAll, conflictListOpen, conflictResolve } from '../../api/memories/conflicts.js';
 import { memoryStatusGet, memoryGetTouchable } from '../../api/memories/memories.js';
 import { mcpApiContext, type LocalToolCall, type ToolCall } from './protocol.js';
-import { isJsonString } from '../../base/util/json.js';
+import { sharePeers, shareToGlobal } from '../../api/sharing.js';
+import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
+import { boolArg, numberArg, optionalStringArg, stringArg } from './tool-args.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
 
@@ -17,7 +18,7 @@ const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.
 
 export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
-  const classTag = String(args.class_tag || '').trim();
+  const classTag = stringArg(args, 'class_tag', MAX_ID_LEN).trim();
   if (!classTag) {
     return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
   }
@@ -66,12 +67,12 @@ export async function runConflictsTool(call: ToolCall): Promise<string> {
 }
 
 export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
-  const conflictId = Number(args.conflict_id);
-  const keepId = String(args.keep || '');
-  const forget = Boolean(args.forget);
-  const rejectLoser = Boolean(args.rejectLoser);
-  const reason = isJsonString(args.reason) ? args.reason : undefined;
-  if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
+  const conflictId = numberArg(args, 'conflict_id');
+  const keepId = stringArg(args, 'keep', MAX_ID_LEN);
+  const forget = boolArg(args, 'forget');
+  const rejectLoser = boolArg(args, 'rejectLoser');
+  const reason = optionalStringArg(args, 'reason', MAX_SHORT_FIELD_LEN);
+  if (conflictId === undefined || !keepId) return 'Required: conflict_id and keep.';
   let loserId: string;
   try {
     const apiCtx = mcpApiContext(ctx);
@@ -86,22 +87,22 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({ args, ctx, tenantId, store, globalTarget }: LocalToolCall): Promise<string> {
-  const shareId = String(args.id || '');
+export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise<string> {
+  const shareId = stringArg(args, 'id', MAX_ID_LEN);
   if (!shareId) return 'Required: id (memory ID to share).';
-  const force = Boolean(args.force);
-  // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
-  await memoryGetTouchable(mcpApiContext(ctx), shareId);
-  // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to
-  // the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
-  const shared = await shareMemory({ store }, globalTarget, shareId, { force, tenantId });
+  const force = boolArg(args, 'force');
+  const apiCtx = mcpApiContext(ctx);
+  // Checked before the share, whose personal-row refusal would tell another person the id exists.
+  await memoryGetTouchable(apiCtx, shareId);
+  // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to the global store.
+  const shared = await shareToGlobal({ ...apiCtx, store }, shareId, { force });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
 }
 
-export async function runPeersTool({ tenantId, globalTarget }: LocalToolCall): Promise<string> {
+export async function runPeersTool({ ctx }: LocalToolCall): Promise<string> {
   // Tenant-scope peer discovery to the caller, as hippo_share does.
-  const peers = await listPeers(globalTarget, tenantId);
+  const peers = await sharePeers(mcpApiContext(ctx));
   if (peers.length === 0) return 'No peers found.';
   return peers
     .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)

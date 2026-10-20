@@ -28,6 +28,7 @@ describe('recall --why rerankTrace', () => {
   const tenantId = 'default';
   const sessionId = 'sess-a7-cli';
   let heroId: string;
+  let peerId: string;
   const WHY_ARGS = [
     'recall',
     'auth',
@@ -56,6 +57,7 @@ describe('recall --why rerankTrace', () => {
       tenantId,
     });
     writeEntry(localRoot, peer);
+    peerId = peer.id;
 
     // hero: qualifies for value (outcomes set), utility (always), goal-boost
     // (goal-tagged + active goal), retrieval-count-downweight (low count), and
@@ -118,5 +120,15 @@ describe('recall --why rerankTrace', () => {
     for (let i = 1; i < trace.length; i++) {
       expect(trace[i].scoreBefore).toBe(trace[i - 1].scoreAfter);
     }
+  });
+
+  it('a bare --salience-threshold reads as 1, so only the never-recalled peer is downweighted', async () => {
+    const out = await hippo(home, 'recall', 'auth', '--why', '--json', '--salience-threshold');
+    // SAFETY: the same `recall --json --why` shape the test above reads.
+    const parsed = JSON.parse(out) as { results: Array<{ id: string; rerankTrace?: Array<{ stage: string }> }> };
+    const stages = (id: string): string[] =>
+      (parsed.results.find((r) => r.id === id)?.rerankTrace ?? []).map((s) => s.stage);
+    expect(stages(peerId)).toContain('retrieval-count-downweight');
+    expect(stages(heroId)).not.toContain('retrieval-count-downweight');
   });
 });

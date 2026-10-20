@@ -2,15 +2,14 @@
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import * as path from 'path';
-import { unrejectValue, listRejectionsForTenant } from '../../domain/trust/reject-flow.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { isGitRepo } from '../../api/repo-learning.js';
 import { processGit } from '../../base/util/git-runner.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import * as client from './client.js';
-import { cliConfig, cliApiContext, cliStore } from './api-context.js';
+import { cliConfig, cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -22,6 +21,7 @@ import {
   parsePositiveId,
   stringFlag,
   stringFlagOrExit,
+  hasFlag,
 } from './flag-values.js';
 import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
@@ -29,7 +29,6 @@ import { errorMessage } from '../../base/util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
 const REJECTED_DIGEST_LIST_CHARS = 16;
@@ -65,10 +64,10 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
   console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${plural(updated, 'memory', 'memories')}`);
 }
 
-// Shared between the forget dispatch and cmdForget so the message can't drift.
+// Shared between the forget dispatch and forgetMemory so the message can't drift.
 const ARCHIVE_REASON_REQUIRED = 'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
 
-async function cmdForget(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
+async function forgetMemory(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -144,7 +143,7 @@ export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandCon
   const status = stringFlagOrExit(flags, 'status') ?? 'open';
   const ctx = cliApiContext(hippoRoot, tenantId);
   const conflicts = await api.conflictListAll((page) => api.conflictList(ctx, status, { everyTenant: true }, page));
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ conflicts }, null, 2));
     return;
   }
@@ -285,9 +284,9 @@ function printRejected(result: Awaited<ReturnType<typeof api.rejectOnHost>>, rea
 
 export async function handleRejections({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const rows = await listRejectionsForTenant(cliStore(root), tenantId);
+  const rows = await api.listRejections(cliApiContext(root, tenantId));
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ rejections: rows }, null, 2));
     return;
   }
@@ -316,7 +315,7 @@ export async function handleUnreject({ hippoRoot, tenantId, args, flags }: Comma
     fail('Usage: hippo unreject <digest-or-prefix>');
   }
 
-  const outcome = await unrejectValue(cliStore(root), tenantId, digestOrPrefix, CLI_ACTOR);
+  const outcome = await api.liftRejection(cliApiContext(root, tenantId), digestOrPrefix);
   if (outcome.status === 'not_found') {
     fail(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
   }
@@ -346,13 +345,13 @@ export async function handleDormant({ hippoRoot, tenantId, args, flags }: Comman
   }
 
   const queryArgs = sub === 'list' ? args.slice(1) : args;
-  const limit = parseCountFlag(flags['limit']);
+  const limit = parseCountFlag(flags, 'limit');
   const rows = await api.dormantList(ctx, {
     query: queryArgs.join(' '),
     limit: limit > 0 ? limit : undefined,
   });
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ dormant: rows }, null, 2));
     return;
   }
@@ -423,10 +422,10 @@ export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: Com
     return;
   }
 
-  const status = flags['all'] ? 'all' : 'pending';
+  const status = boolFlag(flags, 'all') ? 'all' : 'pending';
   const rows = await api.quarantineList(ctx, { status });
 
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ quarantine: rows }, null, 2));
     return;
   }
@@ -501,7 +500,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
     }
   });
   if (routed) return;
-  await cmdForget(hippoRoot, tenantId, id, flags);
+  await forgetMemory(hippoRoot, tenantId, id, flags);
 }
 
 async function invalidateChurn(
@@ -510,7 +509,7 @@ async function invalidateChurn(
   args: string[],
   flags: CommandContext['flags'],
 ): Promise<void> {
-  if (args[0] || flags['id'] !== undefined) {
+  if (args[0] || hasFlag(flags, 'id')) {
     printError('Usage: hippo invalidate --churn [--dry-run]');
     fail('--churn takes no pattern or --id.');
   }

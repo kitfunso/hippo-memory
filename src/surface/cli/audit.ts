@@ -8,7 +8,7 @@ import { parseOlderThanFlag } from './audit-prune.js';
 import { cliApiContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, parseListLimit, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
@@ -46,7 +46,7 @@ function readAuditLimit(flags: CliFlags): number {
   return limit;
 }
 
-async function cmdAuditList(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function listAuditEvents(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const asJson = boolFlag(flags, 'json');
 
@@ -81,7 +81,7 @@ async function cmdAuditList(hippoRoot: string, tenantId: string, flags: CliFlags
   }
 }
 
-async function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliFlags): Promise<void> {
+async function pruneAuditLog(hippoRoot: string, ctxTenantId: string, flags: CliFlags): Promise<void> {
   const olderThanRaw = stringFlag(flags, 'older-than') ?? '';
   if (!olderThanRaw) {
     fail('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -111,26 +111,26 @@ async function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliF
   }
 }
 
-async function cmdAuditLog(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function printAuditLog(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const sub = args[0];
   if (sub === 'list') {
-    await cmdAuditList(hippoRoot, tenantId, flags);
+    await listAuditEvents(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'prune') {
-    await cmdAuditPrune(hippoRoot, tenantId, flags);
+    await pruneAuditLog(hippoRoot, tenantId, flags);
     return;
   }
   fail(`Unknown audit subcommand: ${sub}. Expected: list | prune.`);
 }
 
 async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
-  const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
+  const apply = flagIsTrue(flags, 'apply') && !flagIsTrue(flags, 'dry-run');
   const result = await api.memoryQualityRepair(
-    cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId),
+    cliApiContext(boolFlag(flags, 'global') ? resolveGlobalRootDir() : hippoRoot, tenantId),
     apply,
   );
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(result));
     return;
   }
@@ -147,7 +147,7 @@ async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags)
       `  Blocked: ${blocker}. Repair never upgrades a store; ` + 'any other hippo command does, then run repair again.',
     );
   }
-  const restore = `hippo dormant restore <id>${flags['global'] ? ' --global' : ''}`;
+  const restore = `hippo dormant restore <id>${boolFlag(flags, 'global') ? ' --global' : ''}`;
   if (result.backup) {
     console.log(
       `Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: ${restore}.`,
@@ -189,7 +189,7 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
   // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep the memory-quality
   // auditor.
   if (args[0] === 'list' || args[0] === 'prune') {
-    await cmdAuditLog(hippoRoot, tenantId, args, flags);
+    await printAuditLog(hippoRoot, tenantId, args, flags);
     return;
   }
   requireInit(hippoRoot);

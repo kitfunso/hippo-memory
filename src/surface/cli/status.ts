@@ -18,7 +18,7 @@ import { runDoctor, formatDoctor, type DoctorStore } from '../../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../../support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import {
@@ -36,7 +36,7 @@ import { cliConfig, cliApiContext, cliStore, type CliContext } from './api-conte
 const diagnosticsAt = (hippoRoot: string): DoctorStore => cliStore(hippoRoot);
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
-import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
+import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue, boolFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { isJsonObject } from '../../base/util/json.js';
@@ -154,7 +154,7 @@ export function physicsEnergyText(stats: Pick<ParticleStats, 'count' | 'particle
   return `energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)})`;
 }
 
-async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Promise<void> {
+async function inspectMemory(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -206,9 +206,9 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
 export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
-  const days = parseCountFlag(flags['days']);
+  const days = parseCountFlag(flags, 'days');
   const summary = await api.tokenSummary(ctx, { days: days > 0 ? days : undefined });
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(summary, null, 2));
     return;
   }
@@ -251,12 +251,12 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
 export async function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // The store the capture-error hook writes to; a report never creates one.
-  const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
+  const root = boolFlag(flags, 'global') ? resolveGlobalRootDir() : hookStoreRoot(hippoRoot);
   requireInit(root);
   const ctx = cliApiContext(root, tenantId);
-  const days = parseCountFlag(flags['days']);
+  const days = parseCountFlag(flags, 'days');
   const summary = await api.failureSummary(ctx, { days: days > 0 ? days : undefined });
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(summary, null, 2));
     return;
   }
@@ -292,7 +292,7 @@ export async function handleFailures({ hippoRoot, tenantId, flags }: CommandCont
 export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const report = await correctionLatencyReport(cliApiContext(hippoRoot, tenantId));
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(report, null, 2));
   } else if (report.count === 0) {
     console.log('No supersessions found. Correction latency is undefined.');
@@ -320,7 +320,7 @@ export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: Co
 export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const coverage = await provenanceCoverageReport(cliApiContext(hippoRoot, tenantId));
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(coverage, null, 2));
   } else if (coverage.rawTotal === 0) {
     console.log('No kind=raw memories present. Coverage gate trivially satisfied.');
@@ -336,14 +336,14 @@ export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandCo
       }
     }
   }
-  if (flags['strict'] && coverage.coverage < 1) {
+  if (boolFlag(flags, 'strict') && coverage.coverage < 1) {
     throw new CliExit(1);
   }
 }
 
 export async function handleDoctor({ tenantId, flags }: CommandContext): Promise<void> {
   const report = await runDoctor({ version: readPackageVersion(), tenantId, diagnosticsAt });
-  console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
+  console.log(boolFlag(flags, 'json') ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
 }
 
@@ -395,5 +395,5 @@ export async function handleInspect({ hippoRoot, tenantId, args }: CommandContex
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  await cmdInspect(hippoRoot, tenantId, id);
+  await inspectMemory(hippoRoot, tenantId, id);
 }

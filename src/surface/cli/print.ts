@@ -4,8 +4,8 @@ import { confidenceLabel } from '../../base/memory/memory.js';
 import type { TaskSnapshot, SessionEvent } from '../../store/port/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
-import { explainMatch } from '../../domain/search/explain.js';
-import { type ImportReport, summaryLine } from '../../domain/agent-memories/report.js';
+import { explainMatch } from '../../api/recall/explain.js';
+import { type ImportReport, summaryLine } from '../../api/agent-memory-report.js';
 import { snapshotText, sessionTrailText, handoffText } from '../../api/context-render.js';
 import { printError } from './output.js';
 

@@ -43,9 +43,10 @@ import {
   engineFlags,
   boolFlag,
   flagIsTrue,
-  isStringFlag,
   numberFlag,
   stringFlagOrExit,
+  hasFlag,
+  stringFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { continuityTexts, recallEntryText, recallHeading } from './print.js';
@@ -109,8 +110,8 @@ function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
 }
 
 function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
-  const nameRaw = flags['reranker'];
-  if (nameRaw !== undefined && !isStringFlag(nameRaw)) return { fail: failLater('--reranker requires a value.') };
+  const nameRaw = stringFlag(flags, 'reranker');
+  if (hasFlag(flags, 'reranker') && nameRaw === undefined) return { fail: failLater('--reranker requires a value.') };
   const name = nameRaw?.trim() ?? '';
   let picked: CliRecallRerankerPick | null;
   try {
@@ -132,18 +133,19 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
 }
 
 function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
-  const raw = flags['salience-threshold'];
+  // A bare --salience-threshold has always read as 1, since Number(true) is 1.
+  const raw = flagIsTrue(flags, 'salience-threshold') ? '1' : stringFlag(flags, 'salience-threshold');
   if (raw === undefined) return {};
   const threshold = Number(raw);
   if (!Number.isFinite(threshold) || threshold <= 0) {
-    return { fail: failLater(`Invalid --salience-threshold: "${String(raw)}". Must be a positive number.`) };
+    return { fail: failLater(`Invalid --salience-threshold: "${raw}". Must be a positive number.`) };
   }
   return { value: threshold };
 }
 
 function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
-  const raw = flags[name];
-  if (raw !== undefined && !isStringFlag(raw)) {
+  const raw = stringFlag(flags, name);
+  if (hasFlag(flags, name) && raw === undefined) {
     return { fail: failLater(`--${name} requires a value. Must be one of: ${valid.join(', ')}.`) };
   }
   const value = raw?.trim() ?? '';
@@ -187,7 +189,7 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
 
 /** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieveWithCliCore` ranks and
  * records, then the block prints. */
-async function cmdRecall(
+async function printRecall(
   hippoRoot: string,
   tenantId: string,
   query: string,
@@ -224,8 +226,8 @@ async function cmdRecall(
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
 function parseRecallOptions(ctx: api.Context, flags: CliFlags) {
-  const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
-  const limit = parseLimitFlag(flags['limit']);
+  const budget = parseBudgetFlag(flags, DEFAULT_RECALL_BUDGET);
+  const limit = parseLimitFlag(flags, 'limit');
   const asJson = boolFlag(flags, 'json');
   const showWhy = boolFlag(flags, 'why');
   const includeSuperseded = boolFlag(flags, 'include-superseded');
@@ -563,5 +565,5 @@ export async function handleRecall({ hippoRoot, tenantId, args, flags, callers }
   if (!query) {
     fail('Please provide a search query.');
   }
-  await cmdRecall(hookStoreRoot(hippoRoot), tenantId, query, flags, callers);
+  await printRecall(hookStoreRoot(hippoRoot), tenantId, query, flags, callers);
 }

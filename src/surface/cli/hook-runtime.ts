@@ -8,14 +8,13 @@ import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { cliLedgerReach, cliSyncOptions } from './api-context.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../../base/util/hook-payload.js';
-import { importAtSessionEnd } from '../../domain/agent-memories/sync.js';
+import { importAtSessionEnd } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
-import { summaryLine } from '../../domain/agent-memories/report.js';
-import { getHippoRoot, isInitialized } from '../../base/scope/project-identity.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { summaryLine } from '../../api/agent-memory-report.js';
+import { getHippoRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import type { CliFlags } from './flag-values.js';
+import { type CliFlags, stringFlag } from './flag-values.js';
 
 /**
  * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one stage failing does
@@ -41,8 +40,9 @@ export async function logSessionEndImport(
 }
 
 /**
- * Best-effort log line for the cmdSessionEndWorker snapshot-close step: cmdSleep/cmdCapture restore their console tee
- * before this runs, so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file directly. */
+ * Best-effort log line for the handleSessionEndWorker snapshot-close step: handleSleep/cmdCapture restore their
+ * console tee before this runs, so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file
+ * directly. */
 export function appendSessionEndCloseLog(
   logFile: string | null,
   message: string,
@@ -108,7 +108,7 @@ export async function resetHookInjection(
  * Pre-compact and compact-resume must agree, or a snapshot is looked for in the other store. */
 export function hookStoreRoot(hippoRoot: string): string {
   if (isInitialized(hippoRoot)) return hippoRoot;
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   return isInitialized(globalRoot) ? globalRoot : hippoRoot;
 }
 
@@ -117,7 +117,9 @@ export function hookStoreRoot(hippoRoot: string): string {
  * payload.
  */
 export function hookRuntime(flags: CliFlags): HookRuntime {
-  return flags['runtime'] === 'copilot' || flags['format'] === 'copilot' ? 'copilot' : 'claude-code';
+  return stringFlag(flags, 'runtime') === 'copilot' || stringFlag(flags, 'format') === 'copilot'
+    ? 'copilot'
+    : 'claude-code';
 }
 
 /**

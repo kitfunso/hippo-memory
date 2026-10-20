@@ -4,7 +4,8 @@ import { OBJECT_CAPS, skillsExport } from '../../../api/objects/object-kinds.js'
 import { objectCreate } from '../../../api/objects/objects.js';
 import { sendJson } from '../../../base/util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, getString, requiredString, type RequiredStringRule } from '../validation.js';
+import { getString, requiredString, type RequiredStringRule } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { VersionedRouteConfig } from './object-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: OBJECT_CAPS.skillInstructions, plural: true };

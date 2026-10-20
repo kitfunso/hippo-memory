@@ -3,7 +3,7 @@
  * (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
  *
  * Covers: recall -> outcome -> recall_trace_outcomes row (E2E, via the CLI's
- * cmdRecall + handleOutcome last-retrieval flow); outcome with no prior trace
+ * printRecall + handleOutcome last-retrieval flow); outcome with no prior trace
  * -> no row, no error; an explicit `traceId` on the store's lastRecall group; and
  * the storage-overhead smoke bound (success criterion 3).
  *
@@ -52,7 +52,7 @@ function tmpHome() {
 }
 
 describe('outcome linkage E2E (CLI recall -> outcome)', () => {
-  it('a cmdRecall-style flow followed by `hippo outcome --good` writes a recall_trace_outcomes row referencing the recall trace', async () => {
+  it('a printRecall-style flow followed by `hippo outcome --good` writes a recall_trace_outcomes row referencing the recall trace', async () => {
     const hippoRoot = makeRoot('cli-outcome-linkage', { init: false });
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     try {

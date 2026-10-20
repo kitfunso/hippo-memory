@@ -1,14 +1,14 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
 import { envAnthropicApiKey } from '../../base/util/env.js';
-import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
+import { dedupeStore, type DedupResult } from '../../api/sleep/upkeep.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../base/embeddings/provider.js';
 import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
 import { memoryCountAll } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliStore, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
+import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext, hasFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
@@ -61,7 +61,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
   requireInit(hippoRoot);
 
   const dryRun = boolFlag(flags, 'dry-run');
-  if (flags['threshold'] !== undefined) {
+  if (hasFlag(flags, 'threshold')) {
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
@@ -70,7 +70,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );
 
-  const result = await deduplicateStore(cliStore(hippoRoot), { dryRun });
+  const result = await dedupeStore(cliStore(hippoRoot), dryRun);
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
@@ -80,8 +80,6 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
   printDedupGroups(result, dryRun);
   printDedupPairs(result, dryRun);
 }
-
-type DedupResult = Awaited<ReturnType<typeof deduplicateStore>>;
 
 function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   // Group by reason
@@ -131,12 +129,12 @@ export async function handleEmbed(
 
   // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an
   // earlier embed); the provider-availability gate is deferred to the embed path.
-  if (flags['reset-physics']) {
+  if (boolFlag(flags, 'reset-physics')) {
     await resetPhysics(ctx);
     return;
   }
 
-  if (flags['status']) {
+  if (boolFlag(flags, 'status')) {
     await printEmbedStatus(ctx);
     return;
   }

@@ -3,7 +3,8 @@ import { policiesInForce } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, MAX_DATE_LEN, getString, requiredString } from '../validation.js';
+import { getString, requiredString } from '../validation.js';
+import { MAX_DATE_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { VersionedRouteConfig } from './object-routes.js';
 
 // The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before

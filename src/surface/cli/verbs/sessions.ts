@@ -1,5 +1,6 @@
 // Continuity, transfer, capture and agent-hook verbs, in `hippo help` order.
 
+import { DEFAULT_LEARN_DAYS } from '../../../base/util/limits.js';
 import { boolFlag } from '../flag-values.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
@@ -176,7 +177,7 @@ export const SESSION_VERBS = {
       `
   learn                    Learn lessons from repository history
     --git                  Scan recent git commits for lessons
-    --days <n>             Scan this many days back (default: 7)
+    --days <n>             Scan this many days back (default: ${DEFAULT_LEARN_DAYS})
     --repos <paths>        Comma-separated repo paths to scan`,
     ],
   }),

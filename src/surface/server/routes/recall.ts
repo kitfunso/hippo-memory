@@ -141,7 +141,7 @@ function contextReader(ctx: Context, hippoRoot: string, query: URLSearchParams):
 
 // GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server; tenant-scoped via the
 // Bearer.
-// Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one
+// Pinned-only and '*' fallback skip the recall audit emit (as printContext does); a real-query hybrid search emits one
 // 'recall' row.
 export async function handleGetContext({ req, res, ctx, query, opts }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));

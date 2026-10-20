@@ -109,8 +109,8 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
     expect(readEntry(home, u.id)!.supersededBy).toBe(supersedeResult.newId);
     expect(readEntry(home, supersedeResult.newId)!.content).toBe('unrelated baseline, revised');
 
-    // cmdSupersede-style 2-write flow (cli.ts's cmdSupersede pattern,
-    // replicated inline — cmdSupersede itself is not exported): mutate
+    // supersedeMemory-style 2-write flow (cli.ts's supersedeMemory pattern,
+    // replicated inline — supersedeMemory itself is not exported): mutate
     // old.superseded_by then writeEntry both rows.
     const v = createMemory('second unrelated baseline', { layer: Layer.Episodic });
     writeEntry(home, v);

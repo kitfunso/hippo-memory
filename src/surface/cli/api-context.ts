@@ -5,8 +5,9 @@ import type { SyncOptions } from '../../domain/agent-memories/sync.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import { configReader, type ConfigReader } from '../../base/config/config.js';
-import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { consolidateStore } from '../../api/sleep/upkeep.js';
+import { rerankerWithClef } from '../../api/recall/rows.js';
+import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../store/index.js';
@@ -23,7 +24,7 @@ import {
 } from '../../store/sqlite/index.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
-import { getReranker, type RerankerFn } from '../../domain/rerankers/index.js';
+import type { RerankerFn } from '../../domain/rerankers/index.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
@@ -33,9 +34,7 @@ export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 /** A registry reranker with the CLEF transport this process's environment names, for a script that reranks outside a
  * recall. */
 export function cliReranker(name: string | null | undefined): RerankerFn | null {
-  const fn = getReranker(name);
-  if (fn === null) return null;
-  return (query, results, options) => fn(query, results, { ...options, clef: options?.clef ?? envClefSettings() });
+  return rerankerWithClef(name, envClefSettings());
 }
 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/surface/mcp never imports it. */
@@ -55,7 +54,7 @@ export function cliImportFiles(hippoRoot: string): ImportFiles {
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
 export function cliInitGlobal(): void {
-  cliImportFiles(getGlobalRoot()).ensure();
+  cliImportFiles(resolveGlobalRootDir()).ensure();
 }
 
 /** One handle per store at the hook's lock wait; a store still busy after it skips the hook's work and answers
@@ -132,7 +131,7 @@ export function cliStdioHost(): McpHost {
     if (callers === undefined) {
       const run = (): Promise<void> =>
         runDetachedSqliteRequest(() =>
-          runConsolidation(cliStore(root), { config: cliConfig(root), tenantId: hostTenantId }),
+          consolidateStore(cliStore(root), { config: cliConfig(root), tenantId: hostTenantId }),
         ).then(() => {});
       callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
       byRoot.set(root, callers);

@@ -3,7 +3,7 @@
 import type { ToolInputSchema } from './tool-args.js';
 import { DEFAULT_RECALL_BUDGET } from '../../base/rank/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../../api/assemble.js';
-import { MAX_ID_LEN, MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import { DEFAULT_LEARN_DAYS, MAX_ID_LEN, MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
 
@@ -275,7 +275,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        days: { type: 'number', description: 'Days to scan back (default: 7)' },
+        days: { type: 'number', description: `Days to scan back (default: ${DEFAULT_LEARN_DAYS})` },
       },
     },
   },
