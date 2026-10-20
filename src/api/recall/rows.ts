@@ -11,7 +11,7 @@ import { explainMatch } from '../../search/explain.js';
 import { fitBudget } from '../../search/finalize.js';
 import type { ContinuityBlock } from '../../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../core/recall-scope.js';
-import type { Context, ContextWith, LocalContext } from '../types.js';
+import type { Context, LocalContext } from '../types.js';
 import type { LocalFiles } from '../../store/local/index.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../graph/recall.js';

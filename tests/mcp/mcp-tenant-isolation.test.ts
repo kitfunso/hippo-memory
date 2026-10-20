@@ -8,6 +8,7 @@ import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/m
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import type { HippoStore } from '../../src/store/index.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 
@@ -485,6 +486,7 @@ describe('mcp tenant + client-key isolation', () => {
   // The whole ctx is not omitted: with no hippoRoot, findHippoRoot() walks up to the developer's real store and the test would write into it.
   // Leaving only actor unset reaches the same `??` fallback.
   it('MCP context with actor omitted falls back to "mcp" in audit_log (ctx?.actor ?? "mcp" pin)', async () => {
+    const store: HippoStore = sqliteStore(home);
     const res = await handleMcpRequest(
       {
         jsonrpc: '2.0',
@@ -500,7 +502,7 @@ describe('mcp tenant + client-key isolation', () => {
         hippoRoot: home,
         tenantId: 'alpha',
         clientKey: 'http:no-actor:addr',
-        store: sqliteStore(home),
+        store,
         config: loadConfig(home),
         callers,
       } as McpContext,

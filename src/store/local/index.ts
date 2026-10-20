@@ -46,7 +46,7 @@ export interface StoreReach {
   readonly shared: boolean; // a store serving many people, so the operator's global store stays out
   readonly global?: { readonly root: string; readonly store: HippoStore }; // set only when readable
   readonly isHippoDb?: boolean; // the primary store has local files, whose folder `hippo embed` and sleep reach
-  readonly globalTarget?: FolderStore; // where share, promote and sync write; set on a local store, maybe not created yet
+  readonly globalTarget?: FolderStore; // where share, promote and sync write; on a local store, perhaps not created
 }
 
 /** The operator's global stores a server opens beside its own, closed with it. */

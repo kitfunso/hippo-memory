@@ -598,15 +598,14 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('portFunctionParams fails on one function parameter, with no baseline to raise', () => {
+  it('portFunctionParams fails on one function parameter, and --update cannot pin it', () => {
     const files = { 'src/store/port.ts': 'export interface Group { visit(each: () => void): void }\n' };
     withFixture(files, {}, ({ run, baseline }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/store/port.ts:1 Group.visit(each)');
-      expect(run('--update').status).toBe(0);
+      expect(r.stderr).toContain('src/store/port.ts:1 Group.visit(each): data only -> takes a function');
+      expect(run('--update').status).toBe(1);
       expect(baseline()).not.toHaveProperty('portFunctionParams');
-      expect(run().status).toBe(1);
     });
   });
 

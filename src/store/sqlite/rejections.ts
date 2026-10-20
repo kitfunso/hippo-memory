@@ -20,13 +20,7 @@ import type { StoreFiles, OnHandle } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import { deleteRejectedValue, insertRejectedValue, listRejectedValues, checkRejectionGuard } from './rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../core/rejection-digest.js';
-import type {
-  AppliedRejection,
-  LiftedRejection,
-  Rejection,
-  RejectionCheck,
-  Rejections,
-} from '../port/rejections.js';
+import type { AppliedRejection, LiftedRejection, Rejection, RejectionCheck, Rejections } from '../port/rejections.js';
 import { mergedSuccessor } from '../../core/merged-row.js';
 import { rejectedText, rejectionReaches } from '../../core/rejection-text.js';
 import { RejectedValueError } from '../../core/api-errors.js';

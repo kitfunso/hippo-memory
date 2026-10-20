@@ -1,6 +1,6 @@
 // A rejection over a tenant larger than one page: the same removals as one whole scan, and a write that lands while
 // the rows are walked cannot bring the value back.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -9,24 +9,14 @@ import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/do
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
 import { rejectionDigest } from '../../src/core/rejection-digest.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
+import type { OnHandle } from '../../src/store/sqlite/open.js';
+import { sqliteRejections } from '../../src/store/sqlite/rejections.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-
-// The walk's page read, so a test can write while the rows are walked with no lock held.
-const walk = vi.hoisted(() => ({ onPage: undefined as (() => void) | undefined }));
-vi.mock('../../src/store/sqlite/entry-reads.js', async (importOriginal) => {
-  const reads = await importOriginal<typeof import('../../src/store/sqlite/entry-reads.js')>();
-  return {
-    ...reads,
-    selectTenantTextsPage: (...args: Parameters<typeof reads.selectTenantTextsPage>) => {
-      walk.onPage?.();
-      return reads.selectTenantTextsPage(...args);
-    },
-  };
-});
 
 const ROWS = 1100;
 const VALUE = 'The deploy window is Friday afternoon';
@@ -37,9 +27,28 @@ let root: string;
 beforeEach(() => {
   root = makeRoot('rejection-pages');
 });
-afterEach(() => {
-  walk.onPage = undefined;
-});
+
+// The walk's page read: a write that lands as it is first prepared lands while the rows are walked with no lock held.
+const WALK_PAGE = 'SELECT id, content, source, scope, created FROM memories ';
+
+/** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares its first page read. */
+function rejectionsWalking(onWalk: () => void) {
+  const { on } = handlesOf(root);
+  let fired = false;
+  const pausing = (db: DatabaseSyncLike): DatabaseSyncLike => ({
+    exec: (sql) => db.exec(sql),
+    prepare: (sql) => {
+      if (!fired && sql.startsWith(WALK_PAGE)) {
+        fired = true;
+        onWalk();
+      }
+      return db.prepare(sql);
+    },
+    close: () => db.close(),
+  });
+  const walking: OnHandle = (fn, open) => on((db, files) => fn(pausing(db), files), open);
+  return sqliteRejections(walking);
+}
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
@@ -140,8 +149,7 @@ describe('rejections.apply across pages', () => {
     const ids = seed();
     const late = { holder: createMemory(VALUE, { tags: [] }), other: createMemory('a lesson written mid-walk') };
     let refused: unknown;
-    walk.onPage = () => {
-      walk.onPage = undefined;
+    const applied = rejectionsWalking(() => {
       // No wait for a lock: a write scope held across the walk would fail this write with SQLITE_BUSY.
       withDb((db) => {
         db.exec('PRAGMA busy_timeout = 0');
@@ -152,8 +160,7 @@ describe('rejections.apply across pages', () => {
           refused = error;
         }
       });
-    };
-    const applied = sqliteSyncStore(root).rejections.apply(rejection());
+    }).apply(rejection());
 
     expect(refused).toBeInstanceOf(RejectedValueError);
     expect(readEntry(root, late.holder.id)).toBeNull();

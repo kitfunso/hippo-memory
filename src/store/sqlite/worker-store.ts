@@ -8,13 +8,7 @@ import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from 
 import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../core/memory.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
-import {
-  type OpPlaces,
-  type OpRoute,
-  type WorkerBase,
-  type WorkerGroup,
-  WORKER_OPS,
-} from './worker-ops.js';
+import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
 import type { GlobalStores, LocalFiles, LocalStore } from '../local/index.js';
 
 const offLoopStores = new WeakSet<HippoStore>();

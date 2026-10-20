@@ -2,6 +2,7 @@
 import { randomBytes, scryptSync } from 'node:crypto';
 import { type McpRequest } from '../../src/mcp/server.js';
 import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../../src/entry/store-kit.js';
+import { withoutLocalFiles } from '../_helpers/port-only-store.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
 
 /** A V1_ROWS key as a request line, each :param slot filled with 1. */
@@ -14,12 +15,12 @@ export function localFileRoutes(): string[] {
   );
 }
 
-/** hippo.db's groups, each fenced by serve() for a 'stub' store so a handler reaching one answers 501, without the optional four. */
+/** hippo.db's groups, each fenced by serve() for a 'stub' store so a handler reaching one answers 501, without the
+ * optional three or the local files. */
 export function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
   return {
-    ...sqliteStore(root),
+    ...withoutLocalFiles(sqliteStore(root)),
     kind: 'stub',
-    localFiles: undefined,
     vectorViews: undefined,
     readiness: undefined,
     lastRecall: undefined,

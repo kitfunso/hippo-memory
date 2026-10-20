@@ -5,7 +5,7 @@ import { adminActor } from '../api/index.js';
 import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../api/dashboard/detail.js';
 import { buildMemoryPage, buildOverview, buildProjectDetail, buildSearch } from '../api/dashboard/queries.js';
 import { createSnapshotService } from '../api/dashboard/snapshot.js';
-import type { ContextWith, LocalContext } from '../api/types.js';
+import type { LocalContext } from '../api/types.js';
 import { configReader } from '../core/config.js';
 import { isStoreBusy } from '../store/port.js';
 import { sqliteStore } from '../store/sqlite/store.js';

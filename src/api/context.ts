@@ -82,7 +82,7 @@ interface RecentRequest {
   origins: RecentOrigins | undefined;
 }
 
-/** A store's base search and context reads; a store without the group throws StoreNotPortedError. */
+/** A store's base search and context reads, both required on the port. */
 function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: store.contextReads };
 }

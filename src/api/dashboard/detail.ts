@@ -1,7 +1,7 @@
 // The dashboard drawer's detail of one memory, read through the api and stamped with the snapshot the client holds.
 import type { MemoryEntry } from '../../core/memory.js';
 import { memoryGet } from '../memories/memories.js';
-import type { ContextWith, LocalContext } from '../types.js';
+import type { LocalContext } from '../types.js';
 import { buildMemoryDetail } from './queries.js';
 import { isLiveMemory, type SnapshotService } from './snapshot.js';
 import type { MemoryDetail } from './types.js';

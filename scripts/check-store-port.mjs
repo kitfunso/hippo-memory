@@ -662,6 +662,7 @@ function rises(base, cur) {
   // A key the baseline has never held is a first write, not a rise; once written it ratchets like the rest.
   const firstWrite = (k) => base !== null && base[k] === undefined;
   for (const k of NUMBERS) if (!firstWrite(k) && cur[k] > (base?.[k] ?? 0)) rose.push([k, base?.[k] ?? 0, cur[k]]);
+  for (const site of cur.sites.portFunctionParams) rose.push([site, 'data only', 'takes a function, send it as data']);
   for (const key of BY_FILE_KEYS) {
     if (firstWrite(key)) continue;
     const was = base?.[key] ?? {};
@@ -763,13 +764,6 @@ if (rose.length > 0) {
     'Reach the database through the store port instead of opening it, branching on the store, or adding a twin.',
   );
   console.error('`node scripts/check-store-port.mjs --list` shows every count.');
-  process.exit(1);
-}
-const functionParams = current.sites.portFunctionParams;
-if (functionParams.length > 0) {
-  console.error('Port methods that take a function, which no store worker can receive:');
-  for (const site of functionParams) console.error(`  ${site}`);
-  console.error('Send the rule as data and apply it inside the store.');
   process.exit(1);
 }
 const folderForms = folderFormsAboveAdapter();

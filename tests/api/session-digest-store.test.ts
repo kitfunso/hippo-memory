@@ -15,7 +15,7 @@ import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/core/session-d
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
@@ -56,9 +56,9 @@ function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {
 }
 
 /** The line recordSessionDigest logs for one run: what it wrote, or why it skipped. */
-function write(key: string, s: SessionScan): string {
+async function write(key: string, s: SessionScan): Promise<string> {
   const log: string[] = [];
-  recordSessionDigest(hippoRoot, sqliteSyncStore(hippoRoot), s, {
+  await recordSessionDigest(hippoRoot, sqliteStore(hippoRoot), s, {
     key,
     tenantId: 'default',
     config: loadConfig(hippoRoot),
@@ -71,8 +71,8 @@ const LEFT_NOTHING = 'digest: skip: nothing left after the filters';
 const digests = (): MemoryEntry[] => loadAllEntries(hippoRoot, 'default').filter(isSessionDigestRow);
 
 describe('writing the digest row', () => {
-  it('writes one observed Episodic row tagged session-digest, keyed on the session', () => {
-    expect(write('s1', scan(REPLY))).toBe('digest: wrote 1 sentence(s), 1 file(s) for s1');
+  it('writes one observed Episodic row tagged session-digest, keyed on the session', async () => {
+    expect(await write('s1', scan(REPLY))).toBe('digest: wrote 1 sentence(s), 1 file(s) for s1');
     const [row] = digests();
     expect(row).toMatchObject({
       id: sessionDigestId('default', 's1'),
@@ -85,9 +85,9 @@ describe('writing the digest row', () => {
     });
   });
 
-  it('replaces the row on a second run for the same session', () => {
-    write('s1', scan(REPLY));
-    write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'));
+  it('replaces the row on a second run for the same session', async () => {
+    await write('s1', scan(REPLY));
+    await write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'));
     expect(digests().map((d) => d.content)).toEqual([
       'Pinned `retry()` to three attempts because the queue backs up.\nChanged: src/upload.ts',
     ]);
@@ -100,44 +100,44 @@ describe('writing the digest row', () => {
     ['the transcript names no working directory', () => scan(REPLY, { cwd: null })],
     ['the session ran outside this repo', () => scan(REPLY, { cwd: tmp })],
     ['nothing left after the filters', () => scan('This fixes it.', { edits: [] })],
-  ])('skips with %s', (reason, make) => {
-    expect(write('s1', make())).toBe(`digest: skip: ${reason}`);
+  ])('skips with %s', async (reason, make) => {
+    expect(await write('s1', make())).toBe(`digest: skip: ${reason}`);
     expect(digests()).toEqual([]);
   });
 
   it('skips a digest whose text was rejected', async () => {
-    write('s1', scan(REPLY));
+    await write('s1', scan(REPLY));
     await reject(apiCtx(hippoRoot, 'default', adminActor('test')), {
       memoryId: sessionDigestId('default', 's1'),
       reason: 'not useful',
     });
-    expect(write('s1', scan(REPLY))).toBe('digest: skip: it matches a rejected value');
+    expect(await write('s1', scan(REPLY))).toBe('digest: skip: it matches a rejected value');
     expect(digests()).toEqual([]);
   });
 
   it('a reject blocks that text only, so a re-run with a new reply writes the row again', async () => {
-    write('s1', scan(REPLY));
+    await write('s1', scan(REPLY));
     await reject(apiCtx(hippoRoot, 'default', adminActor('test')), {
       memoryId: sessionDigestId('default', 's1'),
       reason: 'not useful',
     });
-    expect(write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'))).toMatch(WROTE);
+    expect(await write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'))).toMatch(WROTE);
     expect(digests()).toHaveLength(1);
   });
 });
 
 describe('text hippo injected is not stored again', () => {
-  it('drops a sentence restating another session digest, but not its own earlier one', () => {
-    write('s1', scan(REPLY, { edits: [] }));
-    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toBe(LEFT_NOTHING);
-    expect(write('s1', scan(REPLY, { edits: [] }))).toMatch(WROTE);
+  it('drops a sentence restating another session digest, but not its own earlier one', async () => {
+    await write('s1', scan(REPLY, { edits: [] }));
+    expect(await write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toBe(LEFT_NOTHING);
+    expect(await write('s1', scan(REPLY, { edits: [] }))).toMatch(WROTE);
   });
 
-  it('drops a restated digest older than the five newest, since prompt recall can inject it', () => {
+  it('drops a restated digest older than the five newest, since prompt recall can inject it', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
-      write('old', scan(REPLY, { edits: [] }));
+      await write('old', scan(REPLY, { edits: [] }));
       const later = [
         'Raised the health probe timeout to ninety seconds because cold starts are slow.',
         'Moved invoice rendering into a worker because the request thread blocked.',
@@ -145,39 +145,39 @@ describe('text hippo injected is not stored again', () => {
         'Capped thumbnail width at 640 pixels because mobile memory ran out.',
         'Renamed the billing cron to nightly because two jobs collided.',
       ];
-      later.forEach((text, i) => {
+      for (const [i, text] of later.entries()) {
         vi.setSystemTime(new Date(Date.UTC(2026, 8, 2 + i)));
-        write(`n${i}`, scan(text, { edits: [] }));
-      });
+        await write(`n${i}`, scan(text, { edits: [] }));
+      }
       expect(digests()).toHaveLength(6);
-      expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toBe(LEFT_NOTHING);
+      expect(await write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toBe(LEFT_NOTHING);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('keeps a sentence restating a digest that has been superseded, since no read injects that row', () => {
-    write('s1', scan(REPLY, { edits: [] }));
+  it('keeps a sentence restating a digest that has been superseded, since no read injects that row', async () => {
+    await write('s1', scan(REPLY, { edits: [] }));
     const [old] = digests();
     writeEntry(hippoRoot, { ...old, supersededBy: 'mem_successor' });
-    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toMatch(WROTE);
+    expect(await write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toMatch(WROTE);
   });
 
-  it('drops a sentence restating the ambient handoff of another session, but not its own', () => {
+  it('drops a sentence restating the ambient handoff of another session, but not its own', async () => {
     saveSessionHandoff(hippoRoot, 'default', {
       version: 1,
       sessionId: 'other',
       summary: 'Moved the lock into the pool so two writers stop racing on the index.',
     });
     const restated = 'Moved the lock into the pool so two writers stop racing, in `pool.ts`.';
-    expect(write('s2', scan(restated, { edits: [] }))).toBe(LEFT_NOTHING);
-    expect(write('other', scan(restated, { edits: [] }))).toMatch(WROTE);
+    expect(await write('s2', scan(restated, { edits: [] }))).toBe(LEFT_NOTHING);
+    expect(await write('other', scan(restated, { edits: [] }))).toMatch(WROTE);
   });
 });
 
 describe('sharing', () => {
-  it('autoShare never copies a digest, even with no score bar', () => {
-    write('s1', scan(REPLY));
+  it('autoShare never copies a digest, even with no score bar', async () => {
+    await write('s1', scan(REPLY));
     writeEntry(
       hippoRoot,
       createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }),
@@ -190,12 +190,12 @@ describe('sharing', () => {
     expect(stats.neverAutoShareSkipped).toBe(1);
   });
 
-  it('a fact extracted from a digest inherits the tag but is not itself a digest', () => {
-    write('s1', scan(REPLY));
+  it('a fact extracted from a digest inherits the tag but is not itself a digest', async () => {
+    await write('s1', scan(REPLY));
     const [digest] = digests();
     expect(neverAutoShareTags([digest])).toEqual([SESSION_DIGEST_TAG]);
     const [fact] = storeExtractedFacts(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+      sqliteStore(hippoRoot).localFiles.learning,
       digest,
       [
         {

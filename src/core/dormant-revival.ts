@@ -13,7 +13,8 @@ export function reviveDormant(
   now: Date,
   revival: DormantRevival,
 ): MemoryEntry {
-  // createMemory fills fields a snapshot predates; its placeholder only meets the minimum length, so a short row restores.
+  // createMemory fills fields a snapshot predates; its placeholder only meets the minimum length, so a short row
+  // restores.
   const revived: MemoryEntry = {
     ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: revival.halfLifeDays }),
     ...dormant.entry,

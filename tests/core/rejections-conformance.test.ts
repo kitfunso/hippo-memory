@@ -179,7 +179,7 @@ describe('Rejections.apply', () => {
     expect(rows[0]?.content).not.toContain('the office moves in june');
   });
 
-  it('writes nothing for a rejection naming no text, and leaves another person\'s personal row', async () => {
+  it("writes nothing for a rejection naming no text, and leaves another person's personal row", async () => {
     const { own } = seeded;
     const side = await conforms([
       (g) => g.apply(rejection({})),

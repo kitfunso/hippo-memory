@@ -1,7 +1,7 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
-import type { HippoStore, StoreGroups } from '../../store/port.js';
+import type { HippoStore } from '../../store/port.js';
 import type { ConflictPair, DashboardText } from '../../store/local/dashboard-reads.js';
 import {
   BANDS,

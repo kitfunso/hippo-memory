@@ -1,0 +1,3 @@
+### Breaking
+
+- **`hippo-memory/store-kit` drops `localFiles` from `StoreGroups` and from `OptionalGroup`, so every port method answers a Promise and takes only data.** hippo.db's local files now sit beside the port on `sqliteStore` alone, and the synchronous `Sync<T>` form of a group is private to hippo.db. `sleep` and `consolidate` on the package root take only a store with those files, so a plain `HippoStore` fails to compile where it used to throw `StoreNotPortedError` at run time. `Rejection` and `DormantRestoreRequest` now carry data (`value`, `ownScope`, `revival`) in place of the functions the store called. `docs/UPGRADING-3.0.md` has the rows.

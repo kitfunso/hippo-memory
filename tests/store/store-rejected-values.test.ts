@@ -98,9 +98,7 @@ describe('rejections.lift', () => {
   it('deletes the one match and writes an unreject_value row naming its digest, reason and source memory', () => {
     const entry = createMemory('lifted later', { tags: [] });
     writeEntry(root, entry);
-    const { digest } = rejections().apply(
-      rejection('default', { memoryId: entry.id, reason: 'stale' }),
-    );
+    const { digest } = rejections().apply(rejection('default', { memoryId: entry.id, reason: 'stale' }));
 
     expect(rejections().lift('default', digest.slice(0, 12), 'lifter')).toEqual({
       status: 'ok',

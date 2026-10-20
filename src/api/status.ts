@@ -5,7 +5,7 @@ import type { LegacyStats } from '../store/port/reports.js';
 import type { StatusCounts } from '../store/port/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
-import { requireHostAdmin, type Context, type ContextWith, type LocalContext } from './types.js';
+import { requireHostAdmin, type Context, type LocalContext } from './types.js';
 import type { StoredVectorSummary } from '../store/local/embedding-index.js';
 
 export interface StoreStatus {

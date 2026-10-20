@@ -27,7 +27,16 @@ import {
 import { claimDeliveryAt, releaseDeliveryAt } from './connectors/replay.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import type { ArtifactArchive, ConnectorEvent, ConnectorEventRecord, ConnectorEvents, DeadLetterConnector, DeadLetterRows, DeletionLookup, DeletionTarget } from '../port.js';
+import type {
+  ArtifactArchive,
+  ConnectorEvent,
+  ConnectorEventRecord,
+  ConnectorEvents,
+  DeadLetterConnector,
+  DeadLetterRows,
+  DeletionLookup,
+  DeletionTarget,
+} from '../port.js';
 import type { Sync } from './served.js';
 
 function eventRecordAt(db: DatabaseSyncLike, event: ConnectorEvent): ConnectorEventRecord {

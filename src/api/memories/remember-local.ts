@@ -9,13 +9,12 @@ import { embedMemory, folderIndex, type EmbedOutcome } from '../../search/embed-
 import { errorMessage, log } from '../../util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
-import type { Context, ContextWith, LocalContext } from '../types.js';
+import type { Context, LocalContext } from '../types.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 // The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
 // tenant, and a window past this reads more than a duplicate check needs.
 const MAX_SALIENCE_ROWS = 500;
-
 
 /** One write by a caller in this process, every field already parsed and checked by it. */
 export interface LocalRememberInput {

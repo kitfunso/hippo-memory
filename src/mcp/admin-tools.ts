@@ -86,7 +86,14 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({ args, ctx, hippoRoot, tenantId, store, globalTarget }: LocalToolCall): Promise<string> {
+export async function runShareTool({
+  args,
+  ctx,
+  hippoRoot,
+  tenantId,
+  store,
+  globalTarget,
+}: LocalToolCall): Promise<string> {
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);

@@ -1,7 +1,7 @@
 // The Sessions, Cards, Goals, Conflicts, Dormant and Reports groups answer alike as sqliteX (sync) and served (async), on a real store.
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { sqliteSyncStore, sqliteStore } from '../../src/store/sqlite/store.js';
@@ -142,7 +142,12 @@ describe('dormant group', () => {
     expect(sync.list(T, null, {}).map((m) => m.id)).toEqual([row.id]);
     expect(await served.holds(T, null, row.id)).toBe(true);
     expect(await served.holds('other', null, row.id)).toBe(false);
-    const outcome = await served.restore(T, { id: row.id, actor: 'me', inReach: () => true, revive: (s) => s.entry });
+    const outcome = await served.restore(T, {
+      id: row.id,
+      actor: 'me',
+      ownScope: null,
+      revival: { halfLifeDays: DEFAULT_HALF_LIFE_DAYS, strength: strengthOptionsOf(undefined) },
+    });
     expect(outcome.status).toBe('restored');
     expect(await served.list(T, null, {})).toEqual([]);
   });

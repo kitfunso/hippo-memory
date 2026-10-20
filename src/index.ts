@@ -69,8 +69,8 @@ export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
 export async function sleep(ctx: LocalContext, opts?: SleepOpts): Promise<SleepResult> {
   return sleepStore(ctx, opts);
 }
-/** Run a full consolidation pass on `store`, or on the hippo.db under a folder. With no `options.config`, a folder reads
- * its config.json and a store the defaults. */
+/** Run a full consolidation pass on `store`, or on the hippo.db under a folder. With no `options.config`, a folder
+ * reads its config.json and a store the defaults. */
 export async function consolidate(
   target: string | LocalStore,
   options: ConsolidateOptions = {},

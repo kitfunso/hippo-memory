@@ -27,7 +27,7 @@ import { canReadScope, personalScopeOf } from '../../core/recall-scope.js';
 import { duplicateKey, heldTextKeys, longestWord, storedTextKeys } from '../../util/same-text.js';
 import type { LessonWrites } from '../../store/port.js';
 import { memoryPages } from '../memories/memories.js';
-import type { Context, ContextWith, LocalContext } from '../types.js';
+import type { Context, LocalContext } from '../types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {

@@ -19,7 +19,7 @@ import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
-import type { Objects, StoreWith } from '../store/port.js';
+import type { Objects } from '../store/port.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { escapeRegex } from '../util/escape.js';
 import type { LocalStore } from '../store/local/index.js';
