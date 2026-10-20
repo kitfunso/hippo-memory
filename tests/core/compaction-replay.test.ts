@@ -567,7 +567,8 @@ describe('hippo sleep finishes what the hook could not', () => {
   });
 });
 
-describe('the daily runner finishes the global store', () => {
+// The hook waits out its lock waits on the held global store before it spools, so the case runs for seconds by design.
+describe('the daily runner finishes the global store', { timeout: 30_000 }, () => {
   it('imports what a hook in a folder with no store of its own spooled into the global store', async () => {
     initTestStore(s.globalRoot);
     const db = openHippoDb(s.globalRoot);
