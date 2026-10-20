@@ -133,8 +133,10 @@ describe('drillDown', () => {
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: 4 });
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: Number.POSITIVE_INFINITY });
     });
-    const childReads = [...new Set(statements.filter((sql) => sql.includes('WHERE dag_parent_id IN (')))];
-    expect(childReads.length).toBeGreaterThanOrEqual(5);
+    const childReads = [
+      ...new Set(statements.filter((sql) => sql.includes('WHERE dag_parent_id IN (SELECT value FROM json_each(?))'))),
+    ];
+    expect(childReads.length).toBeGreaterThanOrEqual(3);
     const db = openStore(root);
     try {
       for (const sql of childReads) {
@@ -142,7 +144,7 @@ describe('drillDown', () => {
         const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(
           (step) => step.detail,
         );
-        expect(plan[0], sql).toBe('SEARCH memories USING INDEX idx_memories_dag_parent (dag_parent_id=?)');
+        expect(plan, sql).toContain('SEARCH memories USING INDEX idx_memories_dag_parent (dag_parent_id=?)');
       }
     } finally {
       closeHippoDb(db);

@@ -11,6 +11,7 @@ import {
 } from '../../db/index.js';
 import { withReadSnapshot } from '../../db/busy.js';
 import { pragmaDataVersion } from '../../db/meta.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { tableExists } from '../../db/tables.js';
 import type { Layer, LossAversion } from '../../base/memory/memory.js';
 import {
@@ -316,10 +317,11 @@ function searchAt(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, ne
   return rows.map((row) => ({ origin: row.origin, live: Number(row.live), hits: Number(row.hits) }));
 }
 
-/** Whether `id` has a stored vector; false on a store that has never held one. */
+/** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held reader, so its
+ * statement is prepared once. */
 function hasVectorAt(db: DatabaseSyncLike, id: string): boolean {
   if (!tableExists(db, 'memory_vectors')) return false;
-  return db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
+  return cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
 }
 
 /** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the

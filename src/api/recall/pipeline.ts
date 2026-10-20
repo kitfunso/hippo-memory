@@ -217,8 +217,12 @@ async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOptions): Prom
     includeSuperseded: loadSuperseded,
     ownScope: undefined,
   } as const;
-  let local = await ctx.store.searchRecallEntries(opts.query, load);
-  let global = ctx.global ? await ctx.global.store.searchRecallEntries(opts.query, load) : [];
+  // The two stores are independent, so their reads overlap; Promise.all keeps the local-then-global order.
+  const reads = await Promise.all([
+    ctx.store.searchRecallEntries(opts.query, load),
+    ctx.global ? ctx.global.store.searchRecallEntries(opts.query, load) : Promise.resolve([]),
+  ]);
+  let [local, global] = reads;
   // SQL-excluded rows are pre-candidate, so the total is taken before the JS filters, which normally drop nothing.
   const total = local.length + global.length;
   const passes = (e: MemoryEntry): boolean => passesCliRecallScopeFilter(e.scope ?? null, requested);

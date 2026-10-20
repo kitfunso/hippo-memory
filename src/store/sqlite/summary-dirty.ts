@@ -5,6 +5,7 @@ import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { DAG_LEVEL } from '../../base/memory/memory.js';
 import type { AppendAuditOpts } from '../port/types.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 const MARK_DIRTY_WHERE = `tenant_id = ?
        AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
@@ -25,15 +26,16 @@ export function summaryDirtyAuditRow(
 /** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is
  * audited. */
 export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, tenantId: string, actor: string): void {
-  const result = db
-    .prepare(`
+  const result = cachedStatement(
+    db,
+    `
     UPDATE memories
        SET summary_dirty = 1
      WHERE id = ?
        AND ${MARK_DIRTY_WHERE}
     RETURNING dag_level
-  `)
-    .get(summaryId, tenantId) as { dag_level: number } | undefined;
+  `,
+  ).get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (!result) return;
   try {
     appendAuditEvent(db, summaryDirtyAuditRow(summaryId, tenantId, actor, result.dag_level));
@@ -51,14 +53,15 @@ export function markSummariesDirtyInTx(
   tenantId: string,
 ): Map<string, number> {
   if (summaryIds.length === 0) return new Map();
-  const flipped = db
-    .prepare(`
+  const flipped = cachedStatement(
+    db,
+    `
     UPDATE memories
        SET summary_dirty = 1
      WHERE id IN (SELECT value FROM json_each(?))
        AND ${MARK_DIRTY_WHERE}
     RETURNING id, dag_level
-  `)
-    .all(JSON.stringify(summaryIds), tenantId) as Array<{ id: string; dag_level: number }>;
+  `,
+  ).all(JSON.stringify(summaryIds), tenantId) as Array<{ id: string; dag_level: number }>;
   return new Map(flipped.map((row) => [row.id, row.dag_level]));
 }

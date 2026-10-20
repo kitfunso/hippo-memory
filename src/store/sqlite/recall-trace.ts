@@ -14,6 +14,7 @@ import { blockHash } from '../../base/util/token-text.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../base/util/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { RecallTraceInput } from '../port/recall-writes.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
  * embeds goal tag text) and would leak user content into `rerank_json`; an allowlist, so any future free-form field is
@@ -29,6 +30,12 @@ function sanitizeRerankSteps(
   }));
 }
 
+const INSERT_TRACE_SQL = `
+  INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count,
+  explain_mode)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
 // Six binds a row; 100 rows is 600, under the 999 floor of SQLite's bound-parameter limit.
 const RESULT_ROWS_PER_INSERT = 100;
 
@@ -39,11 +46,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
     const queryHash = blockHash(input.query);
     const ts = new Date().toISOString();
     return withWriteScope(db, 'write_recall_trace', () => {
-      const insertTrace = db.prepare(`
-        INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count,
-        explain_mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+      const insertTrace = cachedStatement(db, INSERT_TRACE_SQL);
       const traceResult = insertTrace.run(
         ts,
         input.tenantId,
@@ -66,10 +69,13 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
           r.score,
           r.rerankSteps && r.rerankSteps.length > 0 ? JSON.stringify(sanitizeRerankSteps(r.rerankSteps)) : null,
         ]);
-        db.prepare(`
+        cachedStatement(
+          db,
+          `
           INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score, rerank_json)
           VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}
-        `).run(...binds);
+        `,
+        ).run(...binds);
       }
 
       return traceId;
@@ -94,7 +100,7 @@ export interface RecordTraceOutcomeInput {
  * returned. Own table so `auditPrune` cannot erase training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
-    const trace = db.prepare(`SELECT tenant_id FROM recall_traces WHERE id = ?`).get(input.traceId) as
+    const trace = cachedStatement(db, `SELECT tenant_id FROM recall_traces WHERE id = ?`).get(input.traceId) as
       | { tenant_id?: string }
       | undefined;
     if (!trace || trace.tenant_id !== input.tenantId) {
@@ -102,9 +108,9 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       return;
     }
 
-    const memberRows = db
-      .prepare(`SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`)
-      .all(input.traceId) as Array<{ memory_id: string }>;
+    const memberRows = cachedStatement(db, `SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`).all(
+      input.traceId,
+    ) as Array<{ memory_id: string }>;
     const members = new Set(memberRows.map((r) => r.memory_id));
     const credited = input.memoryIds.filter((id) => members.has(id));
     if (credited.length === 0) {
@@ -112,10 +118,13 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       return;
     }
 
-    db.prepare(`
+    cachedStatement(
+      db,
+      `
       INSERT INTO recall_trace_outcomes (trace_id, ts, tenant_id, outcome, memory_ids_json)
       VALUES (?, ?, ?, ?, ?)
-    `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
+    `,
+    ).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
     log.error(`recall trace outcome write failed: ${errorMessage(error)}`, errorFields(error));
   }
@@ -171,13 +180,14 @@ const DELIVERY_EVENT_COLUMNS = [
 ] as const;
 
 function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT id, ts FROM delivery_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
     ORDER BY id
-  `)
-    .all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
+  `,
+  ).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
   const at = Date.parse(input.ts);
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
 }
@@ -185,13 +195,14 @@ function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
 function findDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
   if (input.toolUseId === undefined || input.toolUseId === null) return null;
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT id FROM delivery_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND tool_use_id = ? AND turn_seq IS NOT NULL
     ORDER BY id LIMIT 1
-  `)
-    .get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as { id: number } | undefined;
+  `,
+  ).get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as { id: number } | undefined;
   return row?.id ?? null;
 }
 
@@ -200,26 +211,26 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
   // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
   if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
-    const row = db
-      .prepare(`
+    const row = cachedStatement(
+      db,
+      `
       SELECT id FROM delivery_events
       WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND host_turn_id = ? AND turn_seq IS NOT NULL
       ORDER BY id LIMIT 1
-    `)
-      .get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as { id: number } | undefined;
+    `,
+    ).get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as { id: number } | undefined;
     return row?.id ?? null;
   }
   if (input.promptHash === null) return null;
-  const rows = db
-    .prepare(
-      `
+  const rows = cachedStatement(
+    db,
+    `
     SELECT id, ts FROM delivery_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND prompt_hash = ? AND host_turn_id IS NULL AND turn_seq
     IS NOT NULL
     ORDER BY id
   `,
-    )
-    .all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{ id: number; ts: string }>;
+  ).all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{ id: number; ts: string }>;
   const at = Date.parse(input.ts);
   // Absolute difference: two hook processes can commit out of ts order.
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
@@ -227,12 +238,13 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
 
 function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT MAX(turn_seq) AS m FROM delivery_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
-  `)
-    .get(input.tenantId, input.sessionId, input.eventType) as { m: number | null };
+  `,
+  ).get(input.tenantId, input.sessionId, input.eventType) as { m: number | null };
   return (row.m ?? 0) + 1;
 }
 
@@ -297,6 +309,7 @@ function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: 
   const width = DELIVERY_CANDIDATE_COLUMNS.length;
   const columns = DELIVERY_CANDIDATE_COLUMNS.join(', ');
   for (const chunk of chunked(input.candidates, rowsPerStatement(width))) {
+    // Prepared per call: the last chunk's row count differs, so a cached text per count would crowd out hot ones.
     db.prepare(`INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`).run(
       ...chunk.flatMap((c) => [
         eventId,
@@ -339,7 +352,7 @@ export function deliveryPruneSchedule(): DeliveryPruneSchedule {
 function pruneDeliveryEvents(db: DatabaseSyncLike, eventTs: string, nowMs: number): void {
   const pruneFrom = Math.min(Date.parse(eventTs), nowMs);
   const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
-  db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
+  cachedStatement(db, `DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
 }
 
 /** One event plus its candidates in one write transaction, then a prune when `prune` is due; fail-soft. The caller must
@@ -359,12 +372,13 @@ function writeDeliveryEvent(
       const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
       const values = deliveryEventValues(input, turnSeq, duplicateOf);
       const id = Number(
-        db
-          .prepare(`
+        cachedStatement(
+          db,
+          `
         INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})
         VALUES (${placeholders(DELIVERY_EVENT_COLUMNS.length)})
-      `)
-          .run(...values).lastInsertRowid,
+      `,
+        ).run(...values).lastInsertRowid,
       );
       insertDeliveryCandidates(db, id, input);
       if (pruning) pruneDeliveryEvents(db, input.ts, now);
@@ -406,7 +420,7 @@ export function writeDeliveryEventOnHandle(
   input: DeliveryEventInput,
   prune: DeliveryPruneSchedule = deliveryPruneSchedule(),
 ): number | null {
-  const prior = Math.trunc(Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout));
+  const prior = Math.trunc(Number((cachedStatement(db, 'PRAGMA busy_timeout').get() as { timeout: number }).timeout));
   db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
   try {
     return writeDeliveryEvent(db, input, prune);

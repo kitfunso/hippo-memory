@@ -6,18 +6,21 @@ import type { ConnectorEventRecord } from '../../port.js';
 import { eventMemoryAt, eventRecordAt, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type { SlackTeamRoute, SlackDlqInsert, SlackDlqItem as DlqItem, SlackWorkspace } from '../../port/connectors.js';
+import { cachedStatement } from '../../../db/statement-cache.js';
 
 // Backfill cursors
 
 export function slackCursorAt(db: DatabaseSyncLike, tenantId: string, channelId: string): string | null {
-  const row = db
-    .prepare(`SELECT latest_ts FROM slack_cursors WHERE tenant_id=? AND channel_id=?`)
-    .get(tenantId, channelId) as { latest_ts?: string } | undefined;
+  const row = cachedStatement(db, `SELECT latest_ts FROM slack_cursors WHERE tenant_id=? AND channel_id=?`).get(
+    tenantId,
+    channelId,
+  ) as { latest_ts?: string } | undefined;
   return row?.latest_ts ?? null;
 }
 
 export function saveSlackCursorAt(db: DatabaseSyncLike, tenantId: string, channelId: string, latestTs: string): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)
        ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = excluded.latest_ts, updated_at =
        excluded.updated_at`,
@@ -50,9 +53,10 @@ export function slackEventRecordAt(db: DatabaseSyncLike, eventId: string): Conne
 /** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row
  * with the same ref. */
 export function rawMemoryIdForArtifactAt(db: DatabaseSyncLike, artifactRef: string, tenantId: string): string | null {
-  const row = db
-    .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
-    .get(artifactRef, tenantId) as { id?: string } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`,
+  ).get(artifactRef, tenantId) as { id?: string } | undefined;
   return row?.id ?? null;
 }
 
@@ -71,20 +75,21 @@ export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
 ]);
 
 export function slackTeamRouteAt(db: DatabaseSyncLike, teamId: string): SlackTeamRoute {
-  const row = db.prepare(`SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`).get(teamId) as
+  const row = cachedStatement(db, `SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`).get(teamId) as
     | { tenant_id?: string }
     | undefined;
   if (row?.tenant_id) return { tenantId: row.tenant_id };
 
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const total = (db.prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`).get() as { c: number | bigint }).c;
+  const total = (cachedStatement(db, `SELECT COUNT(*) AS c FROM slack_workspaces`).get() as { c: number | bigint }).c;
   return { tenantId: null, workspaceCount: Number(total) };
 }
 
 /** Upserts on team_id: operators move a workspace between tenants without a delete first. */
 export function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, tenantId: string): SlackWorkspace {
   const addedAt = new Date().toISOString();
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO slack_workspaces (team_id, tenant_id, added_at)
      VALUES (?, ?, ?)
      ON CONFLICT(team_id) DO UPDATE SET
@@ -96,7 +101,10 @@ export function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, ten
 
 export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
   // SAFETY: team_id, tenant_id and added_at are NOT NULL TEXT in slack_workspaces.
-  const rows = db.prepare(`SELECT team_id, tenant_id, added_at FROM slack_workspaces ORDER BY team_id`).all() as Array<{
+  const rows = cachedStatement(
+    db,
+    `SELECT team_id, tenant_id, added_at FROM slack_workspaces ORDER BY team_id`,
+  ).all() as Array<{
     team_id: string;
     tenant_id: string;
     added_at: string;
@@ -110,6 +118,6 @@ export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
 
 /** True when a row was deleted, so the caller can report not-found without a second lookup. */
 export function removeSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string): boolean {
-  const result = db.prepare(`DELETE FROM slack_workspaces WHERE team_id = ?`).run(teamId);
+  const result = cachedStatement(db, `DELETE FROM slack_workspaces WHERE team_id = ?`).run(teamId);
   return Number(result.changes) > 0;
 }

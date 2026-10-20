@@ -12,6 +12,7 @@ import {
   type VectorMatchQuery,
   type VectorRow,
 } from './vector-store.js';
+import { cachedStatement } from './statement-cache.js';
 
 // A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has the bench.
 const GRAPH_M = 16;
@@ -144,7 +145,11 @@ export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number):
   if (storedModel(db) !== g.model) return { kind: 'lost' };
   const afterRowid = intactRowid(db, g);
   if (afterRowid === undefined) return { kind: 'lost' };
-  const rows = db.prepare(`${ROWS_ABOVE_SQL} LIMIT ?`).all(afterRowid, g.graph.dim, inlineRows + 1) as StoredRow[];
+  const rows = cachedStatement(db, `${ROWS_ABOVE_SQL} LIMIT ?`).all(
+    afterRowid,
+    g.graph.dim,
+    inlineRows + 1,
+  ) as StoredRow[];
   if (rows.length > inlineRows) return { kind: 'behind', afterRowid };
   g.lastRowid = afterRowid;
   for (const row of rows) {
@@ -162,7 +167,7 @@ function admittedRows(
 ): VectorRow[] {
   if (ids.length === 0) return [];
   // SAFETY: node:sqlite returns BLOBs as Uint8Array.
-  const rows = db.prepare(admittedVectorsSql(where, ids.length)).all(...ids, dim, ...params) as Array<{
+  const rows = cachedStatement(db, admittedVectorsSql(where, ids.length)).all(...ids, dim, ...params) as Array<{
     id: string;
     vector: Uint8Array;
   }>;

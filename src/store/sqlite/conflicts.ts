@@ -13,7 +13,7 @@ import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { keysetPage, type KeysetClause } from '../../base/util/keyset.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import type { DetectedConflict } from '../local/consolidation.js';
 import type {
   ConflictListQuery,

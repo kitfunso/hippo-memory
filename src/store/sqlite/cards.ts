@@ -20,6 +20,7 @@ import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 // SAFETY: every read cast to this row selects CARD_COLUMNS; scripts/check-row-casts.mjs proves it.
 // The status column only ever holds a CardStatus value.
@@ -62,9 +63,10 @@ function rowToCard(row: CardRow): Card {
 }
 
 function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
-  const row = db.prepare(`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
-    | CardRow
-    | undefined;
+  const row = cachedStatement(db, `SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(
+    id,
+    tenantId,
+  ) as CardRow | undefined;
   return row ? rowToCard(row) : null;
 }
 
@@ -112,14 +114,13 @@ function insertCardComment(
   body: string,
 ): CardComment {
   const now = new Date().toISOString();
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
     INSERT INTO card_comments (card_id, author, body, created_at, tenant_id)
     SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cards WHERE id = ? AND tenant_id = ?)
   `,
-    )
-    .run(cardId, author, body, now, tenantId, cardId, tenantId);
+  ).run(cardId, author, body, now, tenantId, cardId, tenantId);
   if (Number(result.changes ?? 0) === 0) {
     throw new Error(`unknown card id: ${cardId}`);
   }
@@ -139,9 +140,10 @@ function assertRunId(runId: number): void {
 
 // A second run that has not ended means a corrupt store; throw rather than guess which run the caller means.
 function isLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, runId: number): boolean {
-  const rows = db
-    .prepare(`SELECT id FROM card_runs WHERE tenant_id = ? AND card = ? AND ended IS NULL`)
-    .all(tenantId, cardId) as Array<{ id: number }>;
+  const rows = cachedStatement(db, `SELECT id FROM card_runs WHERE tenant_id = ? AND card = ? AND ended IS NULL`).all(
+    tenantId,
+    cardId,
+  ) as Array<{ id: number }>;
   if (rows.length > 1) {
     throw new Error(`card ${cardId} has ${rows.length} runs that have not ended`);
   }
@@ -149,10 +151,13 @@ function isLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, runId
 }
 
 function closeLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, outcome: string, now: string): void {
-  db.prepare(`
+  cachedStatement(
+    db,
+    `
     UPDATE card_runs SET ended = ?, outcome = ?, updated_at = ?
     WHERE card = ? AND tenant_id = ? AND ended IS NULL
-  `).run(now, outcome, now, cardId, tenantId);
+  `,
+  ).run(now, outcome, now, cardId, tenantId);
 }
 
 // The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one runtime authority, so a hand-copied wrong
@@ -188,11 +193,11 @@ function transitionCards(
   const sql = `
     UPDATE cards SET status = ?, updated_at = ?, lease_until = ?, heartbeat_at =
     ?${extra?.setSql ? `, ${extra.setSql}` : ''}
-    WHERE id IN (${placeholders(cardIds.length)}) AND tenant_id = ? AND status IN
+    WHERE id IN (SELECT value FROM json_each(?)) AND tenant_id = ? AND status IN
     (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
   `;
-  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), ...cardIds, tenantId, ...from];
-  const result = db.prepare(sql).run(...params);
+  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), JSON.stringify(cardIds), tenantId, ...from];
+  const result = cachedStatement(db, sql).run(...params);
   return Number(result.changes ?? 0);
 }
 
@@ -218,7 +223,8 @@ function createCardAt(db: DatabaseSyncLike, tenantId: string, input: CardCreate)
     const now = new Date().toISOString();
     const status: CardStatus = dependsOn.length === 0 || allParentsDone ? 'ready' : 'backlog';
 
-    db.prepare(
+    cachedStatement(
+      db,
       `
       INSERT INTO cards (id, title, status, repo, contract, budget, created_at, updated_at, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -234,9 +240,12 @@ function createCardAt(db: DatabaseSyncLike, tenantId: string, input: CardCreate)
       now,
       tenantId,
     );
-    const insertDep = db.prepare(`
+    const insertDep = cachedStatement(
+      db,
+      `
       INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, ?, ?, ?)
-    `);
+    `,
+    );
     for (const parentId of dependsOn) insertDep.run(parentId, id, tenantId, now);
   });
   return loadCardRow(db, tenantId, id)!;
@@ -246,10 +255,10 @@ function createCardAt(db: DatabaseSyncLike, tenantId: string, input: CardCreate)
  * write scope. */
 function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: readonly string[]): boolean {
   if (dependsOn.length === 0) return true;
-  const marks = placeholders(dependsOn.length);
-  const rows = db
-    .prepare(`SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${marks})`)
-    .all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+  ).all(tenantId, JSON.stringify(dependsOn)) as Array<{ id: string; status: string }>;
   const found = new Map(rows.map((r) => [r.id, r.status]));
   // Pre-check before any write: a typo'd --depends-on can never commit a card row.
   for (const parentId of dependsOn) {
@@ -275,22 +284,23 @@ function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { status?: Ca
     conditions.push('status = ?');
     params.push(opts.status);
   }
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
-  `)
-    .all(...params) as CardRow[];
+  `,
+  ).all(...params) as CardRow[];
   return rows.map(rowToCard);
 }
 
 function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
   const parents = (
-    db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{
+    cachedStatement(db, `SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{
       parent: string;
     }>
   ).map((r) => r.parent);
   const children = (
-    db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{
+    cachedStatement(db, `SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{
       child: string;
     }>
   ).map((r) => r.child);
@@ -298,32 +308,35 @@ function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
 }
 
 function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT id, card, runtime, session_id, started, ended, outcome
     FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC, id DESC
-  `)
-    .all(tenantId, id) as CardRunRow[];
+  `,
+  ).all(tenantId, id) as CardRunRow[];
   return rows.map(rowToCardRun);
 }
 
 function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT id, card_id, author, body, created_at
     FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC
-  `)
-    .all(tenantId, id) as CardCommentRow[];
+  `,
+  ).all(tenantId, id) as CardCommentRow[];
   return rows.map(rowToCardComment);
 }
 
 function loadLatestHandoffForCardAt(db: DatabaseSyncLike, tenantId: string, cardId: string): SessionHandoff | null {
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT ${HANDOFF_COLUMNS} FROM session_handoffs
     WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
-  `)
-    .get(tenantId, cardId) as SessionHandoffDbRow | undefined;
+  `,
+  ).get(tenantId, cardId) as SessionHandoffDbRow | undefined;
   return row ? rowToSessionHandoff(row) : null;
 }
 
@@ -354,14 +367,13 @@ function claimCardAt(
       return rollback(null);
     }
     const now = new Date().toISOString();
-    const insert = db
-      .prepare(
-        `
+    const insert = cachedStatement(
+      db,
+      `
     INSERT INTO card_runs (card, runtime, session_id, started, created_at, updated_at, tenant_id)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `,
-      )
-      .run(id, runtime, sessionId ?? null, now, now, now, tenantId);
+    ).run(id, runtime, sessionId ?? null, now, now, now, tenantId);
     return Number(insert.lastInsertRowid ?? 0);
   });
   return runId === null ? null : { ...loadCardRow(db, tenantId, id)!, runId };
@@ -382,7 +394,7 @@ function heartbeatCardAt(db: DatabaseSyncLike, tenantId: string, id: string, run
       return rollback(false);
     }
     const now = new Date().toISOString();
-    db.prepare(`UPDATE cards SET lease_until = ?, heartbeat_at = ? WHERE id = ? AND tenant_id = ?`).run(
+    cachedStatement(db, `UPDATE cards SET lease_until = ?, heartbeat_at = ? WHERE id = ? AND tenant_id = ?`).run(
       leaseUntilFrom(now),
       now,
       id,
@@ -485,9 +497,9 @@ function completeCardAt(
 function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parentId: string): string[] {
   // The child's status and its open parents are result columns, not joins, so the rows keep the order of a plain read
   // of the parent's children.
-  const children = db
-    .prepare(
-      `
+  const children = cachedStatement(
+    db,
+    `
     SELECT d.child AS child,
       (SELECT c.status FROM cards c WHERE c.tenant_id = ? AND c.id = d.child) AS status,
       (SELECT COUNT(*) FROM card_deps p WHERE p.tenant_id = ? AND p.child = d.child
@@ -495,8 +507,7 @@ function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parent
         open_parents
     FROM card_deps d WHERE d.tenant_id = ? AND d.parent = ?
   `,
-    )
-    .all(tenantId, tenantId, tenantId, tenantId, parentId) as Array<{
+  ).all(tenantId, tenantId, tenantId, tenantId, parentId) as Array<{
     child: string;
     status: string | null;
     open_parents: number;
@@ -515,13 +526,14 @@ function reclaimExpiredCardsAt(db: DatabaseSyncLike, tenantId: string): string[]
     // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
     const now = new Date().toISOString();
     const ids = (
-      db
-        .prepare(`
+      cachedStatement(
+        db,
+        `
       SELECT id FROM cards
       WHERE tenant_id = ? AND status = 'running' AND (lease_until IS NULL OR lease_until < ?)
       ORDER BY id
-    `)
-        .all(tenantId, now) as Array<{ id: string }>
+    `,
+      ).all(tenantId, now) as Array<{ id: string }>
     ).map((r) => r.id);
     for (const id of ids) {
       transitionCard(db, tenantId, id, {

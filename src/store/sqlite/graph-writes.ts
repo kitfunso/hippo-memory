@@ -4,7 +4,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import {
   GRAPH_ENTITY_TYPES,
   GRAPH_RELATION_TYPES,
@@ -358,16 +358,14 @@ export function removeGraphEntitiesForObjectAt(
   try {
     assertTenantId('removeGraphEntitiesForObject', tenantId);
     withWriteScope(db, 'remove_graph_entities', () => {
-      db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`).run(
-        tenantId,
-        sourceObjectType,
-        sourceObjectId,
-      );
-      db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`).run(
-        tenantId,
-        sourceObjectType,
-        sourceObjectId,
-      );
+      cachedStatement(
+        db,
+        `DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`,
+      ).run(tenantId, sourceObjectType, sourceObjectId);
+      cachedStatement(
+        db,
+        `DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`,
+      ).run(tenantId, sourceObjectType, sourceObjectId);
     });
   } catch (err) {
     log.warn(

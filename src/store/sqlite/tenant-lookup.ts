@@ -2,12 +2,14 @@
 
 import { type DatabaseSyncLike } from '../../db/index.js';
 import type { ApiKeyOwner } from '../port/types.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** The owner row of `keyId`, or undefined when no such key exists. */
 export function selectApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOwner | undefined {
-  const row = db
-    .prepare(`SELECT tenant_id, revoked_at, role, owner_subject FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as
+  const row = cachedStatement(
+    db,
+    `SELECT tenant_id, revoked_at, role, owner_subject FROM api_keys WHERE key_id = ?`,
+  ).get(keyId) as
     | { tenant_id: string; revoked_at: string | null; role: string; owner_subject: string | null }
     | undefined;
   return row && { tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, ownerSubject: row.owner_subject };
@@ -18,7 +20,7 @@ export function selectMemoryReach(
   db: DatabaseSyncLike,
   id: string,
 ): { tenantId: string; scope: string | null } | undefined {
-  const row = db.prepare(`SELECT tenant_id, scope FROM memories WHERE id = ?`).get(id) as
+  const row = cachedStatement(db, `SELECT tenant_id, scope FROM memories WHERE id = ?`).get(id) as
     | { tenant_id: string; scope: string | null }
     | undefined;
   return row && { tenantId: row.tenant_id, scope: row.scope };
