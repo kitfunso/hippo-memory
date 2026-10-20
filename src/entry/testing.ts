@@ -5,7 +5,6 @@ import {
   loadAllEntries,
   upsertEntryRow,
   writeEntry,
-  type openHippoDb,
   type WriteEntryOptions,
 } from '../store/sqlite/fixtures.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
@@ -47,7 +46,7 @@ export function writeEntryWire(hippoRoot: string, entry: MemoryWire, opts?: Writ
   writeEntry(hippoRoot, fromWire(entry), opts);
 }
 
-export function upsertEntryRowWire(db: ReturnType<typeof openHippoDb>, entry: MemoryWire): void {
+export function upsertEntryRowWire(db: Parameters<typeof upsertEntryRow>[0], entry: MemoryWire): void {
   upsertEntryRow(db, fromWire(entry));
 }
 
