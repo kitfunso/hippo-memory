@@ -15,7 +15,7 @@ import {
   entryAfterOutcome,
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
-import { readerReaches } from '../../src/base/scope/recall-scope.js';
+import { readerReaches, targetReader } from '../../src/base/scope/recall-scope.js';
 import { writeEntriesTogetherAt, writeEntryDbOnly, writeEntryMirrorsIn } from '../../src/store/sqlite/entry-writes.js';
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
@@ -47,7 +47,7 @@ function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeW
       const out: MemoryEntry[] = [];
       for (const id of outcome.ids) {
         const entry = live.get(id);
-        if (!entry || !readerReaches(outcome, entry.scope)) continue;
+        if (!entry || !readerReaches(targetReader(outcome), entry.scope)) continue;
         const updated = entryAfterOutcome(entry, outcome.good);
         writeEntryDbOnly(db, updated, { actor: outcome.actor });
         live.set(id, updated);

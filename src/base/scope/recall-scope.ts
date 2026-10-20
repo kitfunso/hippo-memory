@@ -186,6 +186,11 @@ export function readerReaches(reader: ScopeReader, scope: string | null): boolea
   return scope !== null && (reader.grants ?? []).includes(scope);
 }
 
+/** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed on restricted rows. */
+export function targetReader(target: Omit<ScopeReader, 'role'> & { readonly role?: ScopeReader['role'] }): ScopeReader {
+  return { ...target, role: target.role ?? 'member' };
+}
+
 /** The read rule recall, the graph and every by-id write share, on a request's actor. */
 export function canReadScope(actor: ScopeActor, scope: string | null): boolean {
   return readerReaches(scopeReaderOf(actor), scope);

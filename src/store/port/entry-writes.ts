@@ -8,7 +8,9 @@ export interface EntryWrite {
 
 /** Who acts on which of a tenant's rows: a row `readerReaches` refuses the caller is out of reach, as recall would not
  * show it. */
-export interface EntryTarget extends ScopeReader {
+export interface EntryTarget extends Omit<ScopeReader, 'role'> {
+  /** Absent reads as a member key with no grants (see `targetReader`). */
+  readonly role?: ScopeReader['role'];
   readonly tenantId: string;
   readonly actor: string;
 }

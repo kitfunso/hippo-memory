@@ -31,7 +31,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../local/agent-import.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
-import { readerReaches } from '../../base/scope/recall-scope.js';
+import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite } from '../port.js';
 import type { Sync } from './served.js';
@@ -437,7 +437,7 @@ function notFound(id: string): NotFoundError {
 /** Another tenant's row, or one the caller could not read, answers as missing, so a caller learns nothing about it. */
 function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): void {
   const reach = selectMemoryReach(db, id);
-  if (reach?.tenantId !== target.tenantId || !readerReaches(target, reach.scope)) throw notFound(id);
+  if (reach?.tenantId !== target.tenantId || !readerReaches(targetReader(target), reach.scope)) throw notFound(id);
 }
 
 /**
@@ -485,7 +485,7 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite, rules: Loss
     const applied: MemoryEntry[] = [];
     for (const id of outcome.ids) {
       const entry = latest.get(id) ?? read.get(id);
-      if (!entry || !readerReaches(outcome, entry.scope)) continue;
+      if (!entry || !readerReaches(targetReader(outcome), entry.scope)) continue;
       const updated = entryAfterOutcome(entry, outcome.good, rules);
       latest.set(id, updated);
       applied.push(updated);

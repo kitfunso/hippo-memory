@@ -6,6 +6,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '../../src/server.
 import {
   entryAfterOutcome,
   readerReaches,
+  targetReader,
   rejectionDigest,
   RejectedValueError,
   type AppendAuditOpts,
@@ -111,7 +112,7 @@ export function markParentDirty(tx: Tx, parentId: string, tenantId: string, acto
 
 function inReach(tx: Tx, target: EntryTarget, id: string): MemoryEntry {
   const row = tx.rows.get(id);
-  if (!row || row.tenantId !== target.tenantId || !readerReaches(target, row.scope)) {
+  if (!row || row.tenantId !== target.tenantId || !readerReaches(targetReader(target), row.scope)) {
     throw new NotFoundError(`memory not found: ${id}`);
   }
   return row;
@@ -241,7 +242,7 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
         const applied: string[] = [];
         for (const id of ids) {
           const row = tx.rows.get(id);
-          if (!row || row.tenantId !== tenantId || !readerReaches(outcome, row.scope)) continue;
+          if (!row || row.tenantId !== tenantId || !readerReaches(targetReader(outcome), row.scope)) continue;
           put(tx, entryAfterOutcome(row, good), actor);
           tx.audit.push({ tenantId, actor, op: 'outcome', targetId: id, metadata: { good } });
           applied.push(id);

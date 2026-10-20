@@ -101,6 +101,7 @@ const STORE_KIT_VALUES = [
   'sqliteStore',
   'StoreBusyError',
   'tallyAmbientEntries',
+  'targetReader',
 ];
 const STORE_KIT_TYPES = [
   'ActiveGoals',
