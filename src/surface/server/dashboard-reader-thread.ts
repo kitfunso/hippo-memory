@@ -8,7 +8,7 @@ import { createSnapshotService } from '../../api/dashboard/snapshot.js';
 import type { LocalContext } from '../../api/types.js';
 import { configReader } from '../../base/config/config.js';
 import { isStoreBusy } from '../../store/port.js';
-import { sqliteStore } from '../../store/sqlite/store.js';
+import { sqliteStore } from '../../store/sqlite/index.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';

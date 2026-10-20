@@ -25,11 +25,7 @@
   },
   "dbReach": {
     "layer": "db",
-    "from": [
-      "api",
-      "surface/mcp",
-      "surface/server"
-    ],
+    "through": "store",
     "allowed": {}
   }
 }

@@ -2,6 +2,7 @@
 import {
   countTableRows,
   ftsRowCounts,
+  getCurrentSchemaVersion,
   getMeta,
   getSchemaVersion,
   type DatabaseSyncLike,
@@ -38,6 +39,7 @@ function attempt<T>(read: () => T): Attempt<T> {
 function storeHealthAt(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth {
   return {
     schemaVersion: getSchemaVersion(db),
+    binarySchemaVersion: getCurrentSchemaVersion(),
     memories: countTableRows(db, 'memories'),
     dormant: countTableRows(db, 'dormant_memories'),
     fts: attempt(() => ftsRowCounts(db)),

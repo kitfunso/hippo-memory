@@ -50,7 +50,8 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('contextGet with no query', () => {
+// Each case seeds 2300 rows in a real store, and a runner's disk sets how long that takes.
+describe('contextGet with no query', { timeout: 30_000 }, () => {
   it('reads a page far under the 2000-row cap and returns the strongest rows', async () => {
     const ids = seed();
     const { result, reads } = await recordStatementsAsync(() =>

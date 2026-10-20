@@ -16,6 +16,10 @@ node:sqlite is synchronous, and the store port is async so another store can do 
 
 A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a handle, or is one of the row-shape, SQL-text and adapter files named in `DB_DEFINITION_FILES` in `scripts/check-store-port.mjs`. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The same script pins `storeFilesWithoutSqlList`, the files still under `src/store` that run no SQL, so a new pure helper filed there fails CI.
 
+### The SQLite adapter's door
+
+Only the composition roots in `SQLITE_ROOTS` (`scripts/check-layers.mjs`) import `src/store/sqlite`, and only through its doors in `SQLITE_DOORS`. `src/store/sqlite/index.ts` hands a root `sqliteStore`, `sqliteReach`, the three request scopes, `tenantOfApiKey` and `sqliteServerRuntime`. That runtime is everything a server serves hippo.db with: the worker store and its executor, the connection held beside it, the global stores, the off-loop fence and the worker counts `/health` reports. Its `close()` closes the held connection last, so that close is SQLite's last. `serve()` and `hippo dashboard` both build one, so neither names the executor or the holder. `src/store/sqlite/fixtures.ts` is the second door, opened only by the `./testing` entry, for the eval kit's seams. A root that imports any other module under `src/store/sqlite` fails CI. The db layer sits behind the same door: `dbReach` in `layers.json` fails any file outside `src/db` and `src/store` that imports `src/db`, so the door re-exports the few db names a root publishes, and an importer gets its batch scope from the root that built its store.
+
 ## Test-only exports
 
 A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any of them, with no baseline; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. A test asserts through the path src uses, the helper moves to `tests/_helpers`, or the export gets a production caller.

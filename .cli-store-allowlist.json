@@ -6,7 +6,7 @@
   },
   {
     "file": "surface/cli/api-context.ts",
-    "target": "store/sqlite/store.ts",
-    "why": "the CLI composition root builds the SQLite store each api call runs on"
+    "target": "store/sqlite/index.ts",
+    "why": "the CLI composition root builds the SQLite store each api call runs on, through the adapter's door"
   }
 ]

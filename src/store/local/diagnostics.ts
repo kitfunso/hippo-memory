@@ -2,6 +2,7 @@
 // never creates, migrates or locks the store it inspects.
 import type { ProjectTagReads } from './project-tags.js';
 import type { JsonObject } from '../../base/util/json.js';
+import { IncompatibleBinaryError } from '../../db/index.js';
 
 export interface Diagnostics {
   /** Throws when the store cannot be opened or its schema version read. */
@@ -39,6 +40,8 @@ export interface HealthCutoffs {
 
 export interface StoreHealth {
   readonly schemaVersion: number;
+  /** The schema this binary reads and writes; a store above it needs a newer hippo. */
+  readonly binarySchemaVersion: number;
   /** Null when the table is missing or unreadable. */
   readonly memories: number | null;
   readonly dormant: number | null;
@@ -49,6 +52,11 @@ export interface StoreHealth {
   /** Undefined inside a read that worked means the store never slept. */
   readonly lastSleep: Attempt<string | undefined>;
   readonly compactions: Attempt<CompactionCounts>;
+}
+
+/** Whether health() refused the store because its schema is newer than this binary reads. */
+export function needsNewerHippo<E>(err: E): boolean {
+  return err instanceof IncompatibleBinaryError;
 }
 
 export interface StoreInventory {

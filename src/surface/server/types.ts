@@ -7,7 +7,7 @@ import type { HippoStore, OptionalGroup } from '../../store/index.js';
 import type { ConfigReader } from '../../base/config/config.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
-import type { GlobalStores, StoreNeed, StoreReach } from '../../store/local/index.js';
+import type { StoreNeed, StoreReach } from '../../store/local/index.js';
 
 export interface ServerHandle {
   port: number;
@@ -104,8 +104,6 @@ export interface ServerCounts {
 
 export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
-  /** The operator's global stores a request reaches beside `store`, closed when the server stops. */
-  globalStores: GlobalStores;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   reachOf: (shared: boolean) => StoreReach;
   /** This server's own config reader: each request reads config.json through it. */

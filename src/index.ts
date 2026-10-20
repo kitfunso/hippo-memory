@@ -8,7 +8,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from './base/memory/memory.js';
-import { sqliteStore } from './store/sqlite/store.js';
+import { sqliteStore, withSharedStoreHandles } from './store/sqlite/index.js';
 import type { LocalStore } from './store/local/index.js';
 import { runConsolidation, type ConsolidateOptions } from './domain/consolidate/sleep.js';
 import { loadConfig } from './base/config/config.js';
@@ -16,7 +16,6 @@ import { DEFAULT_TENANT_ID } from './base/util/tenant.js';
 import type { ConsolidationResult } from './domain/consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
 import type { LocalContext } from './api/types.js';
-import { withSharedStoreHandles } from './db/index.js';
 export {
   MemoryEntry,
   Layer,
