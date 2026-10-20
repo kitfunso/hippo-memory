@@ -1,3 +1,4 @@
+import { cachedStatement } from './statement-cache.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { errorCode, log, errorFields } from '../base/util/log.js';
 
@@ -14,7 +15,7 @@ export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnNa
 
 export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
-  const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as
+  const row = cachedStatement(db, `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as
     | { name?: string }
     | undefined;
   return !!row?.name;

@@ -26,6 +26,7 @@ import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
 import { serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../base/util/atomic-write.js';
 import type { StoreFiles } from './open.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 const SCORE_DECIMALS = 3;
 
@@ -322,12 +323,11 @@ export function purgeMirrorBestEffortIn(files: StoreFiles, id: string, isRaw: bo
 
 /** Derive the current `HippoIndex` from SQLite. Exported for the longmemeval benchmark. */
 export function buildIndexFromDb(db: DatabaseSyncLike): HippoIndex {
-  const rows = db
-    .prepare(
-      `SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ` +
-        `ASC`,
-    )
-    .all() as Array<{
+  const rows = cachedStatement(
+    db,
+    `SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ` +
+      `ASC`,
+  ).all() as Array<{
     id: string;
     created: string;
     last_retrieved: string;
@@ -360,9 +360,10 @@ export function buildIndexFromDb(db: DatabaseSyncLike): HippoIndex {
 export function readLastRecall(db: DatabaseSyncLike): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
   // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent saveIndex and return a
   // mismatched pair.
-  const lockstepRows = db
-    .prepare(`SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`)
-    .all() as Array<{ key: string; value: string }>;
+  const lockstepRows = cachedStatement(
+    db,
+    `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
+  ).all() as Array<{ key: string; value: string }>;
   const lockstep = new Map(lockstepRows.map((r) => [r.key, r.value]));
   return {
     last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]', {
@@ -375,13 +376,14 @@ export function readLastRecall(db: DatabaseSyncLike): Pick<HippoIndex, 'last_ret
 }
 
 export function buildStatsFromDb(db: DatabaseSyncLike): LegacyStats {
-  const runs = db
-    .prepare(`
+  const runs = cachedStatement(
+    db,
+    `
     SELECT timestamp, decayed, merged, removed FROM (
       SELECT id, timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT ?
     ) ORDER BY timestamp ASC, id ASC
-  `)
-    .all(CONSOLIDATION_RUNS_KEPT) as ConsolidationRunRow[];
+  `,
+  ).all(CONSOLIDATION_RUNS_KEPT) as ConsolidationRunRow[];
 
   return {
     total_remembered: Number(getMeta(db, 'total_remembered', '0')),
@@ -512,7 +514,8 @@ const MIRROR_PAGE_ROWS = 500;
 /** Pages through every row by rowid: each file is independent of the others, so row order does not reach the output,
  * and rowid keeps each page a seek (no index covers `created, id`). */
 function* pagedMemoryRows(db: DatabaseSyncLike): Generator<MemoryEntry> {
-  const page = db.prepare(
+  const page = cachedStatement(
+    db,
     `SELECT rowid AS page_rowid, ${MEMORY_SELECT_COLUMNS} FROM memories WHERE rowid > ? ORDER BY rowid LIMIT ?`,
   );
   let after = 0;
@@ -537,16 +540,15 @@ export function syncChangedMirrors(hippoRoot: string, db: DatabaseSyncLike, chan
 
 /** The conflict and stats mirrors, which a full sync and a partial one refresh alike. */
 function syncSideMirrors(hippoRoot: string, db: DatabaseSyncLike): void {
-  const conflicts = db
-    .prepare(
-      `
+  const conflicts = cachedStatement(
+    db,
+    `
     SELECT ${MEMORY_CONFLICT_COLUMNS}
     FROM memory_conflicts
     WHERE status = 'open'
     ORDER BY updated_at DESC, id DESC
   `,
-    )
-    .all() as MemoryConflictRow[];
+  ).all() as MemoryConflictRow[];
   mirrorBestEffort('conflict mirrors', () => writeConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)));
 
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));

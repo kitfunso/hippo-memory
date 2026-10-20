@@ -12,6 +12,7 @@ import type {
   StoredCursors,
   HwmColumn,
 } from '../../port/connectors.js';
+import { cachedStatement } from '../../../db/statement-cache.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {
@@ -70,9 +71,10 @@ export function archiveDeletedArtifactAt(db: DatabaseSyncLike, del: ArtifactDele
   if (githubEventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
   const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
 
-  const rows = db
-    .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
-    .all(del.artifactRef, del.tenantId) as Array<{ id: string }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`,
+  ).all(del.artifactRef, del.tenantId) as Array<{ id: string }>;
   const memoryIds = rows.map((r) => r.id);
 
   if (memoryIds.length === 0) {
@@ -109,33 +111,37 @@ export function githubRoutingAt(
   args: { installationId?: string | null; repoFullName?: string | null },
 ): GitHubRouting {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const instCount = (db.prepare(`SELECT COUNT(*) AS c FROM github_installations`).get() as { c: number | bigint }).c;
+  const instCount = (
+    cachedStatement(db, `SELECT COUNT(*) AS c FROM github_installations`).get() as { c: number | bigint }
+  ).c;
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const repoCount = (db.prepare(`SELECT COUNT(*) AS c FROM github_repositories`).get() as { c: number | bigint }).c;
+  const repoCount = (
+    cachedStatement(db, `SELECT COUNT(*) AS c FROM github_repositories`).get() as { c: number | bigint }
+  ).c;
   const counts = { installations: Number(instCount), repositories: Number(repoCount) };
 
   if (args.installationId) {
-    const row = db
-      .prepare(`SELECT tenant_id FROM github_installations WHERE installation_id = ?`)
-      .get(args.installationId) as { tenant_id?: string } | undefined;
+    const row = cachedStatement(db, `SELECT tenant_id FROM github_installations WHERE installation_id = ?`).get(
+      args.installationId,
+    ) as { tenant_id?: string } | undefined;
     return { ...counts, tenant: row?.tenant_id ?? null };
   }
   if ((counts.installations === 0 && counts.repositories === 0) || !args.repoFullName) {
     return { ...counts, tenant: null };
   }
-  const row = db
-    .prepare(`SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`)
-    .get(args.repoFullName) as { tenant_id?: string } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
+  ).get(args.repoFullName) as { tenant_id?: string } | undefined;
   return { ...counts, tenant: row?.tenant_id ?? null };
 }
 
 export function githubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string): StoredCursors {
-  const row = db
-    .prepare(
-      `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
+  const row = cachedStatement(
+    db,
+    `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
        FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
-    )
-    .get(tenantId, repo) as
+  ).get(tenantId, repo) as
     | {
         issues_hwm?: string | null;
         issue_comments_hwm?: string | null;
@@ -156,7 +162,8 @@ export function saveGitHubHwmAt(
   column: HwmColumn,
   value: string,
 ): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(tenant_id, repo_full_name)
@@ -166,7 +173,8 @@ export function saveGitHubHwmAt(
 
 /** Sets all three HWMs to `since` for a first run; COALESCE keeps any HWM a stream has already saved. */
 export function seedGitHubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string, since: string): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, ` +
       `pr_review_comments_hwm, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)

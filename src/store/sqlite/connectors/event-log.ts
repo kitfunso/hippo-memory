@@ -3,6 +3,7 @@
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../base/util/sql.js';
 import type { ConnectorEventRecord } from '../../port/connectors.js';
+import { cachedStatement } from '../../../db/statement-cache.js';
 
 /** Which log table a connector writes and the column its dedupe key lives in. */
 export interface EventLogSpec {
@@ -11,11 +12,11 @@ export interface EventLogSpec {
 }
 
 export function eventSeenAt(db: DatabaseSyncLike, log: EventLogSpec, key: string): boolean {
-  return !!db.prepare(`SELECT 1 FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key);
+  return !!cachedStatement(db, `SELECT 1 FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key);
 }
 
 export function eventMemoryAt(db: DatabaseSyncLike, log: EventLogSpec, key: string): string | null {
-  const row = db.prepare(`SELECT memory_id FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key) as
+  const row = cachedStatement(db, `SELECT memory_id FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key) as
     | { memory_id: string | null }
     | undefined;
   return row?.memory_id ?? null;
@@ -32,9 +33,10 @@ export function markEventSeenAt(
 ): boolean {
   const names = [log.keyColumn, ...extra.map(([name]) => name), 'ingested_at', 'memory_id'];
   const values = [key, ...extra.map(([, value]) => value), new Date().toISOString(), memoryId];
-  const inserted = db
-    .prepare(`INSERT OR IGNORE INTO ${log.table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`)
-    .run(...values);
+  const inserted = cachedStatement(
+    db,
+    `INSERT OR IGNORE INTO ${log.table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`,
+  ).run(...values);
   return Number(inserted.changes ?? 0) !== 0;
 }
 
