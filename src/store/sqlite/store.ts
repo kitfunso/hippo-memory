@@ -22,7 +22,6 @@ import { sqliteCaptures } from './captures.js';
 import { sqliteCompactionHooks } from './compaction-hooks.js';
 import { sqliteCards } from './cards.js';
 import { sqliteConflicts } from './conflicts.js';
-import { sqliteDashboardReads } from './dashboard-reads.js';
 import { sqliteDormant } from './dormant.js';
 import { sqliteRefusedAmong, sqliteRejections } from './rejections.js';
 import { sqliteFailureLog } from './failure-log.js';
@@ -121,13 +120,11 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     graphRebuild: sqliteGraphRebuild(on),
     embeddingIndex: sqliteEmbeddingIndex(handles),
     ledger: sqliteLedger(on),
-    dashboard: sqliteDashboardReads(handles),
     rejections: sqliteRefusedAmong(on),
   };
 }
 
-/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles; the one
- * held connection is the dashboard's reader, which close releases. */
+/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles. */
 export function sqliteSyncStore(
   hippoRoot: string,
   rules: LossAversion = {},
@@ -169,7 +166,6 @@ export function sqliteSyncStore(
     failureLog: sqliteFailureLog(on),
     compactions: sqliteCompactions(on),
     close() {
-      localFiles.dashboard.close();
       flushHeldMirrors(hippoRoot);
     },
   };

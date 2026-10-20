@@ -90,6 +90,8 @@ describe('write scope rollback failure', () => {
       },
       prepare: (sql) => db.prepare(sql),
       close: () => db.close(),
+      function: (name, options, fn) => db.function(name, options, fn),
+      aggregate: (name, options) => db.aggregate(name, options),
       get isTransaction() {
         return db.isTransaction;
       },

@@ -1,23 +1,24 @@
-// The snapshot cache: when a read reuses it, when an outside commit, a dashboard write, the TTL or ?fresh=1 rebuilds it, and how it counts vectors.
+// The snapshot id: when a read keeps it, when an outside commit, a dashboard write, the TTL or ?fresh=1 moves it, and how
+// reads count vectors.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer } from '../src/base/memory/memory.js';
 import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
-import type { SnapshotService } from '../src/api/dashboard/snapshot.js';
-import { buildOverview } from '../src/api/dashboard/queries.js';
+import { buildOverview } from '../src/api/dashboard/overview.js';
 import {
   NOW,
   call,
+  dashboardOf,
   embed,
   get,
   makeStore,
   parse,
   postJson,
   seed,
-  snapshotsOf,
   startDashboard,
+  type DashboardView,
   type RunningDashboard,
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
@@ -28,123 +29,131 @@ const TTL_MS = 5 * 60_000;
 
 let store: TmpStore;
 let clock: number;
-let service: SnapshotService;
+let view: DashboardView;
 
 beforeEach(() => {
   store = makeStore('hippo-dash-cache');
   clock = NOW;
-  service = snapshotsOf(
+  view = dashboardOf(
     store.hippoRoot,
     () => clock,
     () => clock,
   );
 });
 
-afterEach(() => {
-  service.close();
+afterEach(async () => {
+  await view.reads.close();
   store.cleanup();
 });
 
-describe('snapshot reuse and rebuild', () => {
-  it('reuses the snapshot when nothing was written', () => {
+/** The overview one dashboard read serves, stamped by the clock of `on`. */
+async function overview(fresh = false, on: DashboardView = view): Promise<Overview> {
+  return buildOverview(on.reads, await on.clock.at('default', fresh));
+}
+
+describe('snapshot id', () => {
+  it('keeps the id when nothing was written', async () => {
     seed(store.hippoRoot, 'first');
-    const first = service.get('default');
+    const first = await overview();
     clock += COALESCE_MS + 1;
 
-    expect(service.get('default').id).toBe(first.id);
+    expect((await overview()).snapshotId).toBe(first.snapshotId);
   });
 
-  it('seeds snapshot ids from the wall clock, not the injected clock, so they rise across restarts', () => {
+  it('seeds snapshot ids from the wall clock, not the injected clock, so they rise across restarts', async () => {
     const wallBefore = Date.now();
     seed(store.hippoRoot, 'first');
 
-    const fresh = snapshotsOf(store.hippoRoot, () => clock);
+    const fresh = dashboardOf(store.hippoRoot, () => clock);
     try {
-      expect(fresh.get('default').id).toBeGreaterThan(wallBefore);
+      expect((await overview(false, fresh)).snapshotId).toBeGreaterThan(wallBefore);
     } finally {
-      fresh.close();
+      await fresh.reads.close();
     }
   });
 
-  it('shows an outside write after the coalescing window, and at once with fresh', () => {
+  it('reads an outside write at once, and moves the id after the coalescing window or with fresh', async () => {
     seed(store.hippoRoot, 'first');
-    const first = service.get('default');
+    const first = await overview();
     seed(store.hippoRoot, 'second');
 
     clock += COALESCE_MS - 1;
-    expect(service.get('default').id).toBe(first.id);
+    const inside = await overview();
+    expect(inside.snapshotId).toBe(first.snapshotId);
+    expect(inside.total).toBe(2);
 
     clock += 2;
-    const later = service.get('default');
-    expect(later.id).toBeGreaterThan(first.id);
-    expect(later.facts).toHaveLength(2);
+    const later = await overview();
+    expect(later.snapshotId).toBeGreaterThan(first.snapshotId);
+    expect(later.total).toBe(2);
 
     seed(store.hippoRoot, 'third');
-    const forced = service.get('default', true);
-    expect(forced.id).toBeGreaterThan(later.id);
-    expect(forced.facts).toHaveLength(3);
+    const forced = await overview(true);
+    expect(forced.snapshotId).toBeGreaterThan(later.snapshotId);
+    expect(forced.total).toBe(3);
   });
 
-  it('ages the cache on its own clock, so a frozen eval clock still shows an outside write', () => {
+  it('ages the id on its own clock, so a frozen eval clock still moves it after an outside write', async () => {
     let wall = NOW;
-    const frozen = snapshotsOf(
+    const frozen = dashboardOf(
       store.hippoRoot,
       () => NOW,
       () => wall,
     );
     try {
       seed(store.hippoRoot, 'first');
-      const first = frozen.get('default');
+      const first = await overview(false, frozen);
       seed(store.hippoRoot, 'second');
       wall += COALESCE_MS + 1;
 
-      const later = frozen.get('default');
-      expect(later.id).toBeGreaterThan(first.id);
-      expect(later.facts).toHaveLength(2);
+      const later = await overview(false, frozen);
+      expect(later.snapshotId).toBeGreaterThan(first.snapshotId);
+      expect(later.total).toBe(2);
     } finally {
-      frozen.close();
+      await frozen.reads.close();
     }
   });
 
-  it('rebuilds after the TTL even with no write', () => {
+  it('moves the id after the TTL even with no write', async () => {
     seed(store.hippoRoot, 'first');
-    const first = service.get('default');
+    const first = await overview();
 
     clock += TTL_MS + 1;
 
-    expect(service.get('default').id).toBeGreaterThan(first.id);
+    expect((await overview()).snapshotId).toBeGreaterThan(first.snapshotId);
   });
 
-  it('rebuilds on the next read after invalidate', () => {
+  it('moves the id on the next read after invalidate', async () => {
     seed(store.hippoRoot, 'first');
-    const first = service.get('default');
+    const first = await overview();
 
-    service.invalidate();
+    view.clock.invalidate();
 
-    expect(service.get('default').id).toBeGreaterThan(first.id);
+    expect((await overview()).snapshotId).toBeGreaterThan(first.snapshotId);
   });
 
-  it('serves an empty snapshot while hippo.db is missing, then picks the database up', () => {
+  it('answers empty while hippo.db is missing, creates none, then picks the database up', async () => {
     const emptyRoot = join(store.home, 'fresh', '.hippo');
     mkdirSync(emptyRoot, { recursive: true });
-    const early = snapshotsOf(
+    const early = dashboardOf(
       emptyRoot,
       () => clock,
       () => clock,
     );
     try {
-      expect(early.get('default').facts).toHaveLength(0);
+      expect((await overview(false, early)).total).toBe(0);
+      expect(existsSync(join(emptyRoot, 'hippo.db'))).toBe(false);
       seed(emptyRoot, 'now there is a row');
       clock += COALESCE_MS + 1;
-      expect(early.get('default').facts).toHaveLength(1);
+      expect((await overview(false, early)).total).toBe(1);
     } finally {
-      early.close();
+      await early.reads.close();
     }
   });
 });
 
 describe('live population', () => {
-  it('drops superseded, archived and quarantined rows and reports them in excluded', () => {
+  it('drops superseded, archived and quarantined rows and reports them in excluded', async () => {
     seed(store.hippoRoot, 'live one');
     seed(store.hippoRoot, 'live two', { layer: Layer.Trace });
     const successor = seed(store.hippoRoot, 'the replacement');
@@ -154,50 +163,50 @@ describe('live population', () => {
     // Quarantine wins over superseded, so this row is counted once, as quarantined.
     seed(store.hippoRoot, 'both', { kind: 'superseded', supersededBy: successor.id, scope: quarantineScopeFor('x') });
 
-    const overview = buildOverview(service.get('default'));
+    const read = await overview();
 
-    expect(overview.total).toBe(3);
-    expect(overview.excluded).toEqual({ superseded: 1, archived: 1, quarantined: 2 });
+    expect(read.total).toBe(3);
+    expect(read.excluded).toEqual({ superseded: 1, archived: 1, quarantined: 2 });
   });
 });
 
 describe('vector coverage', () => {
-  it('imports a legacy embeddings.json on the build and counts it in that same build', () => {
+  it('imports a legacy embeddings.json on the read and counts it in that same read', async () => {
     const row = seed(store.hippoRoot, 'a row');
     writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [row.id]: [0.1, 0.2] }));
 
-    const snap = service.get('default');
+    const read = await overview();
 
-    expect(snap.embeddingCoverage).toBe(1);
+    expect(read.embeddingCoverage).toBe(1);
     expect(existsSync(join(store.hippoRoot, 'embeddings.json'))).toBe(false);
   });
 
-  it('counts no coverage for a corrupt legacy file and still builds the snapshot', () => {
+  it('counts no coverage for a corrupt legacy file and still answers the read', async () => {
     seed(store.hippoRoot, 'a row');
     writeFileSync(join(store.hippoRoot, 'embeddings.json'), '{not json');
 
-    const snap = service.get('default');
+    const read = await overview();
 
-    expect(snap.facts).toHaveLength(1);
-    expect(snap.embeddingCoverage).toBe(0);
+    expect(read.total).toBe(1);
+    expect(read.embeddingCoverage).toBe(0);
     expect(existsSync(join(store.hippoRoot, 'embeddings.json'))).toBe(false);
     expect(readdirSync(store.hippoRoot).some((f) => f.startsWith('embeddings.json.corrupt-'))).toBe(true);
   });
 
-  it('shows a vector write once the coalescing window has passed, not before', () => {
+  it('counts a vector write at once, and moves the id once the coalescing window has passed', async () => {
     const row = seed(store.hippoRoot, 'a row');
-    const first = service.get('default');
+    const first = await overview();
     expect(first.embeddingCoverage).toBe(0);
 
     embed(store.hippoRoot, [row.id]);
     clock += COALESCE_MS - 1;
-    const inside = service.get('default');
-    expect(inside.id).toBe(first.id);
-    expect(inside.embeddingCoverage).toBe(0);
+    const inside = await overview();
+    expect(inside.snapshotId).toBe(first.snapshotId);
+    expect(inside.embeddingCoverage).toBe(1);
 
     clock += 2;
-    const after = service.get('default');
-    expect(after.id).toBeGreaterThan(first.id);
+    const after = await overview();
+    expect(after.snapshotId).toBeGreaterThan(first.snapshotId);
     expect(after.embeddingCoverage).toBe(1);
   });
 });
@@ -240,7 +249,7 @@ describe('through the server', () => {
     expect(parse<Overview>(await get(dash.port, '/api/overview')).snapshotId).toBe(first.snapshotId);
   });
 
-  it('takes the detail embedded flag from the snapshot, so a new vector shows after the window', async () => {
+  it('reads the detail embedded flag at each read, so a new vector shows inside the window', async () => {
     const target = seed(store.hippoRoot, 'embed me');
     await get(dash.port, '/api/overview?fresh=1');
     embed(store.hippoRoot, [target.id]);
@@ -249,7 +258,7 @@ describe('through the server', () => {
     clock += COALESCE_MS + 1;
     const after = parse<MemoryDetail>(await get(dash.port, `/api/memory/${target.id}`));
 
-    expect(inside.embedded).toBe(false);
+    expect(inside.embedded).toBe(true);
     expect(after.embedded).toBe(true);
   });
 

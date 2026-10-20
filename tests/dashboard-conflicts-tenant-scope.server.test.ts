@@ -10,8 +10,8 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import {
   get,
   makeStore,
+  dashboardOf,
   parse,
-  snapshotsOf,
   startDashboard,
   type RunningDashboard,
   type TmpStore,
@@ -68,22 +68,18 @@ describe('dashboard conflicts are tenant-scoped', () => {
     expect((await get(dash.port, `/api/memory/${b1.id}`)).status).toBe(404);
   });
 
-  it('passes the running tenant to every conflict load, so later filters are not the only guard', async () => {
+  it("passes the running tenant to a memory's conflict load, so later filters are not the only guard", async () => {
     const { a1 } = seedTwoTenants();
-    const load = vi.spyOn(conflicts, 'conflictPageAt');
     const loadOwn = vi.spyOn(conflicts, 'openConflictsNamingAt');
-    // Served, these loads run on the reader thread, which no spy reaches, so the same api calls run here.
-    const snapshots = snapshotsOf(tmp.hippoRoot, () => Date.now());
+    // Served, this load runs on the reader thread, which no spy reaches, so the same api call runs here.
+    const view = dashboardOf(tmp.hippoRoot, () => Date.now());
     try {
-      snapshots.get('tenant_a');
       const ctx = apiCtx(tmp.hippoRoot, 'tenant_a', adminActor('dashboard'));
-      await dashboardMemoryDetail(ctx, snapshots, a1.id, { fresh: false, nowMs: Date.now() });
+      await dashboardMemoryDetail(ctx, view, a1.id, { fresh: false, nowMs: Date.now() });
     } finally {
-      snapshots.close();
+      await view.reads.close();
     }
 
-    expect(load).toHaveBeenCalled();
-    expect(load.mock.calls.every(([, query]) => query.tenantId === 'tenant_a')).toBe(true);
     expect(loadOwn).toHaveBeenCalled();
     expect(loadOwn.mock.calls.every(([, tenantId]) => tenantId === 'tenant_a')).toBe(true);
   });

@@ -13,7 +13,7 @@ export interface DashboardRouteRequest {
   readonly session: DashboardSession;
   /** The api Context the cards and the writes run as: the CLI's tenant, audited as the dashboard. */
   readonly ctx: Context;
-  /** The snapshot reads, answered off the server thread. */
+  /** The dashboard reads, answered off the server thread. */
   readonly reader: DashboardReader;
   readonly bodyDeadlineMs: number;
   /** The built React app's folder, or null when it is not built. */

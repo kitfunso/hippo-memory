@@ -1,6 +1,8 @@
-// The SQLite adapter's door: a composition root takes hippo.db's store, reach, request scopes and server runtime from
-// these names alone, so the modules behind them and src/db change without a root noticing (scripts/check-layers.mjs).
+// The SQLite adapter's door: a composition root takes hippo.db's store, reach, dashboard reads, request scopes and
+// server runtime from these names alone, so the modules behind them and src/db change without a root noticing
+// (scripts/check-layers.mjs).
 export { sqliteReach, sqliteStore } from './store.js';
+export { sqliteDashboardReads } from './dashboard-reads.js';
 export { runDetachedSqliteRequest, runSqliteBatch, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
 export { sqliteServerRuntime, type ServerRuntimeOptions, type SqliteServerRuntime } from './server-runtime.js';
 export { tenantOfApiKey, type ResolveOptions } from './tenant.js';
