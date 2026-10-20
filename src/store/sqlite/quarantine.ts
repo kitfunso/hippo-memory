@@ -20,6 +20,7 @@ import type { OnHandle, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
 import { writeEntryMirrorsIn } from './entry-writes.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
@@ -52,9 +53,10 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
 }
 
 function getQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string): QuarantineRow | null {
-  const row = db
-    .prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`)
-    .get(tenantId, memoryId) as QuarantineDbRow | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`,
+  ).get(tenantId, memoryId) as QuarantineDbRow | undefined;
   return row ? fromDbRow(row) : null;
 }
 
@@ -76,15 +78,15 @@ function listQuarantineRows(
   const order = 'ORDER BY quarantined_at DESC, memory_id DESC LIMIT ?';
   const rows =
     status === 'all'
-      ? (db
-          .prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ?${after.sql} ${order}`)
-          .all(tenantId, ...after.params, limit) as QuarantineDbRow[])
-      : (db
-          .prepare(
-            `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ?${live}${after.sql} ` +
-              `${order}`,
-          )
-          .all(tenantId, status, ...after.params, limit) as QuarantineDbRow[]);
+      ? (cachedStatement(
+          db,
+          `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ?${after.sql} ${order}`,
+        ).all(tenantId, ...after.params, limit) as QuarantineDbRow[])
+      : (cachedStatement(
+          db,
+          `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ?${live}${after.sql} ` +
+            `${order}`,
+        ).all(tenantId, status, ...after.params, limit) as QuarantineDbRow[]);
   return rows.map(fromDbRow);
 }
 
@@ -98,7 +100,8 @@ interface RecordQuarantineOptions {
 
 /** Insert the quarantine row + its audit event; caller runs this inside the memory's own write transaction. */
 export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOptions): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO memory_quarantine (tenant_id, memory_id, original_scope, reason, status, quarantined_at)
      VALUES (?, ?, ?, ?, 'pending', ?)`,
   ).run(opts.tenantId, opts.memoryId, opts.originalScope, opts.reason, new Date().toISOString());
@@ -112,14 +115,16 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
 }
 
 function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `UPDATE memory_quarantine SET status = 'approved', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
       `memory_id = ?`,
   ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
 }
 
 function rejectQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `UPDATE memory_quarantine SET status = 'rejected', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
       `memory_id = ?`,
   ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
@@ -154,9 +159,10 @@ function approveQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id: string
     const row = pendingOrRefusal(db, tenantId, id);
     if ('outcome' in row) return rollback(row);
     const quarantineScope = quarantineScopeFor(row.originalScope);
-    const updated = db
-      .prepare(`UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`)
-      .run(row.originalScope, id, tenantId, quarantineScope);
+    const updated = cachedStatement(
+      db,
+      `UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`,
+    ).run(row.originalScope, id, tenantId, quarantineScope);
     if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
     approveQuarantineRow(db, tenantId, id, actor);
     appendAuditEvent(db, {

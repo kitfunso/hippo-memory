@@ -1,13 +1,12 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { chunked, ID_CHUNK } from '../../base/util/chunked.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
-import { placeholders } from '../../base/util/sql.js';
 import { duplicateKey, longestWord } from '../../base/util/same-text.js';
 import { tenantAnd } from './tenant.js';
 import {
@@ -54,11 +53,10 @@ export function selectEntriesByIds(
   const byId = new Map<string, MemoryEntry>();
   const tenant = tenantAnd(tenantId, TENANT_IS);
   for (const chunk of chunked([...new Set(ids)])) {
-    const marks = placeholders(chunk.length);
     const rows = cachedStatement(
       db,
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks})${tenant.sql}`,
-    ).all(...chunk, ...tenant.args) as MemoryRow[];
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))${tenant.sql}`,
+    ).all(JSON.stringify(chunk), ...tenant.args) as MemoryRow[];
     for (const row of rows) byId.set(row.id, rowToEntry(row));
   }
   return byId;
@@ -73,12 +71,11 @@ export function selectChildrenByParent(
   const byParent = new Map<string, MemoryEntry[]>();
   const tenant = tenantAnd(tenantId, TENANT_IS);
   for (const chunk of chunked([...new Set(parentIds)])) {
-    const marks = placeholders(chunk.length);
     const rows = cachedStatement(
       db,
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-        `WHERE dag_parent_id IN (${marks})${tenant.sql} ORDER BY created ASC, id ASC`,
-    ).all(...chunk, ...tenant.args) as MemoryRow[];
+        `WHERE dag_parent_id IN (SELECT value FROM json_each(?))${tenant.sql} ORDER BY created ASC, id ASC`,
+    ).all(JSON.stringify(chunk), ...tenant.args) as MemoryRow[];
     for (const row of rows) {
       const entry = rowToEntry(row);
       const parentId = entry.dagParentId ?? '';
@@ -98,9 +95,9 @@ export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[],
   // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
   const rows = cachedStatement(
     db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(capped.length)})${tenant.sql} ` +
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))${tenant.sql} ` +
       `ORDER BY created ASC, content ASC, id ASC`,
-  ).all(...capped, ...tenant.args) as MemoryRow[];
+  ).all(JSON.stringify(capped), ...tenant.args) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -511,8 +508,8 @@ export function selectTextKeysHoldingAt(
 export function selectTakenIdsAt(db: DatabaseSyncLike, ids: readonly string[]): string[] {
   const taken: string[] = [];
   for (const chunk of chunked([...new Set(ids)])) {
-    const rows = cachedStatement(db, `SELECT id FROM memories WHERE id IN (${placeholders(chunk.length)})`).all(
-      ...chunk,
+    const rows = cachedStatement(db, `SELECT id FROM memories WHERE id IN (SELECT value FROM json_each(?))`).all(
+      JSON.stringify(chunk),
     ) as Array<{ id: string }>;
     for (const row of rows) taken.push(row.id);
   }

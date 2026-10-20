@@ -7,7 +7,7 @@ import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../base/memory/
 import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../base/memory/memory.js';
 import { placeholders } from '../../base/util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../base/util/json.js';
 
 /**
@@ -29,12 +29,13 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
   // One row of [tag, count] pairs in first-seen order: an array, since an object would reorder integer-like keys. The
   // aggregate ORDER BY needs SQLite 3.44; Node 22.5 and later bundle 3.46.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = db
-    .prepare(`WITH kept AS (SELECT rowid AS r, tags_json FROM memories WHERE ${scope})
+  const row = cachedStatement(
+    db,
+    `WITH kept AS (SELECT rowid AS r, tags_json FROM memories WHERE ${scope})
     SELECT json_group_array(json_array(tag, n) ORDER BY first_r, first_key) AS pairs FROM (
       SELECT CAST(j.value AS TEXT) AS tag, COUNT(*) AS n, MIN(r) AS first_r, MIN(j.key) AS first_key
-      FROM kept, json_each(${jsonList('kept.tags_json')}) AS j GROUP BY tag)`)
-    .get(...params) as { pairs: string | null };
+      FROM kept, json_each(${jsonList('kept.tags_json')}) AS j GROUP BY tag)`,
+  ).get(...params) as { pairs: string | null };
   const pairs = parseJson(row.pairs ?? '[]');
   const tallies = new Map<string, number>();
   for (const pair of Array.isArray(pairs) ? pairs : []) {

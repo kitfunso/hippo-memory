@@ -25,6 +25,7 @@ import type {
 import type { OnHandle } from './open.js';
 import { projectTagReads } from './project-tags.js';
 import { bound, type Bodies } from './bound.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 function attempt<T>(read: () => T): Attempt<T> {
   try {
@@ -63,15 +64,14 @@ function storeInventoryAt(db: DatabaseSyncLike): StoreInventory {
 /** Compaction records in all, those with a summary whose memories never got saved, and those still without a summary;
  * each cutoff is an ISO time. */
 function compactionCountsAt(db: DatabaseSyncLike, stuckBefore: string, transcriptFloor: string): CompactionCounts {
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) AS total,
+  const row = cachedStatement(
+    db,
+    `SELECT COUNT(*) AS total,
               COUNT(CASE WHEN status = 'summarised' AND summarised_at < ? THEN 1 END) AS summarised,
               COUNT(CASE WHEN status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL
               THEN 1 END) AS started
        FROM compactions`,
-    )
-    .get(stuckBefore, stuckBefore, transcriptFloor) as
+  ).get(stuckBefore, stuckBefore, transcriptFloor) as
     | { total: number; summarised: number; started: number }
     | undefined;
   return {
@@ -83,14 +83,13 @@ function compactionCountsAt(db: DatabaseSyncLike, stuckBefore: string, transcrip
 
 /** Memory blocks injected since `sinceIso`, the tokens they sent and the tokens later model calls re-read. */
 function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
-  const row = db
-    .prepare(
-      `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
+  const row = cachedStatement(
+    db,
+    `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
               COALESCE(SUM(CASE WHEN event = 'inject' THEN tokens END), 0) AS t,
               COALESCE(SUM(CASE WHEN event = 'reread' THEN tokens END), 0) AS r
        FROM token_ledger WHERE ts >= ?`,
-    )
-    .get(sinceIso) as { n: number; t: number; r: number } | undefined;
+  ).get(sinceIso) as { n: number; t: number; r: number } | undefined;
   return { injected: Number(row?.n ?? 0), tokensSent: Number(row?.t ?? 0), tokensReread: Number(row?.r ?? 0) };
 }
 

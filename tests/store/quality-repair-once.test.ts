@@ -76,7 +76,7 @@ describe('repairQualityOnce', () => {
     expect(countMatching(statements, tenantPage)).toBe(1);
     expect(statements).toContain('BEGIN IMMEDIATE');
     expect(countMatching(locked, tenantPage)).toBe(0);
-    expect(countMatching(locked, /FROM memories WHERE id IN \(\?\)/)).toBeGreaterThan(0);
+    expect(countMatching(locked, /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)/)).toBeGreaterThan(0);
   });
 
   it('marks a clean store done without a backup', () => {

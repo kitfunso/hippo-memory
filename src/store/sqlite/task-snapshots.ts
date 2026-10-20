@@ -11,6 +11,7 @@ import type { TaskSnapshot, SnapshotInput } from '../port/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import type { ContinuityKey } from '../port/types.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 interface ContinuityFilter {
   readonly sql: string;
@@ -52,27 +53,26 @@ function insertSnapshot(
   now: string,
   stamp: ContinuityStamp | null,
 ): number {
-  const result = db
-    .prepare(
-      `
+  const result = cachedStatement(
+    db,
+    `
     INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at,
     updated_at, owner_subject, origin_project)
     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
   `,
-    )
-    .run(
-      redactSecretsStrict(snapshot.task),
-      redactSecretsStrict(snapshot.summary),
-      redactSecretsStrict(snapshot.next_step),
-      snapshot.source ?? 'cli',
-      snapshot.session_id ?? null,
-      snapshot.scope ?? null,
-      tenantId,
-      now,
-      now,
-      stamp?.owner ?? null,
-      stamp?.origin ?? null,
-    );
+  ).run(
+    redactSecretsStrict(snapshot.task),
+    redactSecretsStrict(snapshot.summary),
+    redactSecretsStrict(snapshot.next_step),
+    snapshot.source ?? 'cli',
+    snapshot.session_id ?? null,
+    snapshot.scope ?? null,
+    tenantId,
+    now,
+    now,
+    stamp?.owner ?? null,
+    stamp?.origin ?? null,
+  );
   return Number(result.lastInsertRowid ?? 0);
 }
 
@@ -89,7 +89,8 @@ export function saveActiveTaskSnapshotAt(
   const owned = key ? continuityWhere(key) : null;
   const now = new Date().toISOString();
   const id = withWriteScope(db, 'save_active_task', () => {
-    db.prepare(
+    cachedStatement(
+      db,
       `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
         `?${owned ? ` AND ${owned.sql}` : ''}`,
     ).run(now, tenantId, ...(owned?.params ?? []));
@@ -99,13 +100,14 @@ export function saveActiveTaskSnapshotAt(
     return inserted;
   });
 
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT ${TASK_SNAPSHOT_COLUMNS}
     FROM task_snapshots
     WHERE id = ?
-  `)
-    .get(id) as TaskSnapshotRow | undefined;
+  `,
+  ).get(id) as TaskSnapshotRow | undefined;
 
   if (!row) {
     throw new Error('Failed to reload saved active task snapshot');
@@ -125,15 +127,16 @@ export function loadActiveTaskSnapshotAt(
 ): TaskSnapshot | null {
   assertTenantId('loadActiveTaskSnapshot', tenantId);
   const owned = key ? continuityWhere(key) : null;
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT ${TASK_SNAPSHOT_COLUMNS}
     FROM task_snapshots
     WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}
     ORDER BY updated_at DESC, id DESC
     LIMIT 1
-  `)
-    .get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
+  `,
+  ).get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
 
   if (!row) {
     if (!key) removeActiveTaskMirror(hippoRoot, tenantId);

@@ -20,6 +20,7 @@ import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 import { deleteDormantRow, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
 import type { DormantSnapshot } from '../port/types.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`;
  * `retentionDays` bounds how long one is kept). Content stays in `dormant_memories` (schema v44) and the `memories` row
@@ -34,12 +35,12 @@ interface DormantKey {
 
 function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
   const sql = `SELECT tenant_id AS tenantId, id FROM dormant_memories WHERE dormant_at < ?`;
-  return db.prepare(sql).all(cutoffIso) as DormantKey[];
+  return cachedStatement(db, sql).all(cutoffIso) as DormantKey[];
 }
 
 function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
   const sql = `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ? AND dormant_at < ?`;
-  return Number(db.prepare(sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
+  return Number(cachedStatement(db, sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
 }
 
 /** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between; returns how many went. */

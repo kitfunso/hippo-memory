@@ -12,7 +12,7 @@ import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
 import { type DatabaseSyncLike, isFtsAvailable, isFtsInSync, withReadSnapshot } from '../../db/index.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { originInSql } from '../../base/scope/project-identity.js';

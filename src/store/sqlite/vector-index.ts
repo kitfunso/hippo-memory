@@ -39,7 +39,7 @@ import {
 } from '../../db/vector-store.js';
 import { countAllEntriesAt, loadEntryIdsByIdAt, selectEntriesByIds } from './entry-reads.js';
 import { afterIdAnd, idPageOf } from './keyset.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import type {

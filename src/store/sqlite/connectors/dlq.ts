@@ -3,6 +3,7 @@
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../base/util/sql.js';
+import { cachedStatement } from '../../../db/statement-cache.js';
 
 export type DlqTable = 'slack_dlq' | 'github_dlq';
 
@@ -34,9 +35,10 @@ function insertDlqRow(
   const names = [...columns.map(([name]) => name), 'received_at'];
   assertColumns(names);
   const values = [...columns.map(([, value]) => value), new Date().toISOString()];
-  const result = db
-    .prepare(`INSERT INTO ${table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`)
-    .run(...values);
+  const result = cachedStatement(
+    db,
+    `INSERT INTO ${table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`,
+  ).run(...values);
   return Number(result.lastInsertRowid);
 }
 
@@ -50,28 +52,29 @@ function listDlqRows(
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
   // SAFETY: the caller's selectColumns names exactly the fields its rowToItem reads.
-  return db
-    .prepare(
-      `SELECT ${selectColumns}
+  return cachedStatement(
+    db,
+    `SELECT ${selectColumns}
          FROM ${table}
         WHERE tenant_id = ?
         ORDER BY received_at ASC, id ASC
         LIMIT ?`,
-    )
-    .all(tenantId, limit) as DlqRawRow[];
+  ).all(tenantId, limit) as DlqRawRow[];
 }
 
 function getDlqRow(db: DatabaseSyncLike, table: DlqTable, selectColumns: string, id: number): DlqRawRow | null {
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
   // SAFETY: the caller's selectColumns names exactly the fields its rowToItem reads.
-  const row = db.prepare(`SELECT ${selectColumns} FROM ${table} WHERE id = ?`).get(id) as DlqRawRow | undefined;
+  const row = cachedStatement(db, `SELECT ${selectColumns} FROM ${table} WHERE id = ?`).get(id) as
+    | DlqRawRow
+    | undefined;
   return row ?? null;
 }
 
 function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, id: number): void {
   assertTable(table);
-  db.prepare(`UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`).run(
+  cachedStatement(db, `UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`).run(
     new Date().toISOString(),
     id,
   );

@@ -18,7 +18,6 @@ import { syncFtsRow, ftsDriftAt } from './entry-row.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
-import { placeholders } from '../../base/util/sql.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type {
   RebuildPatch,
@@ -63,6 +62,7 @@ import {
   type FileBodies,
 } from './bound.js';
 import type { AppendAuditOpts } from '../port/types.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/domain/consolidate/dag.ts, because it needs module-private
 // MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
@@ -72,8 +72,9 @@ import type { AppendAuditOpts } from '../port/types.js';
  * SQL-level filter, since in-memory `survivors` lacks L2s created by phase 1.7. Entries carry tenantId so per-cluster
  * writes stay tenant-scoped. */
 function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${MEMORY_SELECT_COLUMNS}
       FROM memories
      WHERE dag_level = ${DAG_LEVEL.topic}
@@ -81,8 +82,8 @@ function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
        AND kind != 'archived'
        AND superseded_by IS NULL
      ORDER BY created ASC, id ASC
-  `)
-    .all() as MemoryRow[];
+  `,
+  ).all() as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -90,16 +91,17 @@ function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
  * when omitted) so HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later
  * writes stay tenant-scoped. */
 function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit?: number): MemoryEntry[] {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${MEMORY_SELECT_COLUMNS}
       FROM memories
      WHERE summary_dirty = 1
        AND kind != 'archived'
      ORDER BY latest_at DESC NULLS LAST, id ASC
      LIMIT ?
-  `)
-    .all(limit ?? -1) as MemoryRow[];
+  `,
+  ).all(limit ?? -1) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -107,8 +109,9 @@ function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit?: number): MemoryEn
  * defence in depth. */
 function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string, tenantId: string): MemoryEntry[] {
   assertTenantId('loadChildrenOfSummary', tenantId);
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${MEMORY_SELECT_COLUMNS}
       FROM memories
      WHERE dag_parent_id = ?
@@ -116,8 +119,8 @@ function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string, tenant
        AND kind != 'archived'
        AND superseded_by IS NULL
      ORDER BY created ASC, id ASC
-  `)
-    .all(summaryId, tenantId) as MemoryRow[];
+  `,
+  ).all(summaryId, tenantId) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -137,17 +140,18 @@ function childrenOfSummariesAt(
   const out = new Map<string, MemoryEntry[]>();
   for (const [tenantId, ids] of byTenant) {
     for (const slice of chunked(ids)) {
-      const rows = db
-        .prepare(`
+      const rows = cachedStatement(
+        db,
+        `
         SELECT ${MEMORY_SELECT_COLUMNS}
           FROM memories
-         WHERE dag_parent_id IN (${placeholders(slice.length)})
+         WHERE dag_parent_id IN (SELECT value FROM json_each(?))
            AND tenant_id = ?
            AND kind != 'archived'
            AND superseded_by IS NULL
          ORDER BY created ASC, id ASC
-      `)
-        .all(...slice, tenantId) as MemoryRow[];
+      `,
+      ).all(JSON.stringify(slice), tenantId) as MemoryRow[];
       for (const entry of rows.map(rowToEntry)) {
         const key = childrenKey(tenantId, entry.dagParentId ?? '');
         const list = out.get(key);
@@ -211,20 +215,22 @@ function applyRebuildInSavepoint(db: DatabaseSyncLike, summary: MemoryEntry, pat
   const applyContentWrite = patch.bumpRebuildCount && !tombstone;
 
   const result = applyContentWrite
-    ? db
-        .prepare(REBUILD_CONTENT_SQL)
-        .run(
-          patch.content,
-          patch.descendantCount,
-          patch.earliestAt,
-          patch.latestAt,
-          nowIso,
-          summary.id,
-          summary.tenantId,
-        )
-    : db
-        .prepare(REBUILD_METADATA_SQL)
-        .run(patch.descendantCount, patch.earliestAt, patch.latestAt, summary.id, summary.tenantId);
+    ? cachedStatement(db, REBUILD_CONTENT_SQL).run(
+        patch.content,
+        patch.descendantCount,
+        patch.earliestAt,
+        patch.latestAt,
+        nowIso,
+        summary.id,
+        summary.tenantId,
+      )
+    : cachedStatement(db, REBUILD_METADATA_SQL).run(
+        patch.descendantCount,
+        patch.earliestAt,
+        patch.latestAt,
+        summary.id,
+        summary.tenantId,
+      );
 
   // `changed` means THIS call's UPDATE hit a row, so a refusal still settles the cycle (false would retry the doomed
   // rebuild forever); `refused` lets the caller count it as refused rather than rebuilt.
@@ -306,8 +312,9 @@ function clearSummaryDirtyAfterBuildAt(
 ): void {
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
   // RETURNING dag_level reads the actual level so audit metadata stays accurate without an extra SELECT.
-  const result = db
-    .prepare(`
+  const result = cachedStatement(
+    db,
+    `
     UPDATE memories
        SET summary_dirty = 0
      WHERE id = ?
@@ -316,8 +323,8 @@ function clearSummaryDirtyAfterBuildAt(
        AND summary_dirty = 1
        AND kind != 'archived'
     RETURNING dag_level
-  `)
-    .get(summaryId, tenantId) as { dag_level: number } | undefined;
+  `,
+  ).get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (result) {
     // source tells buildDag-clean (L2) from buildEntityProfiles-clean (L3) and any future build path.
     audit(db, 'summary_marked_clean', {

@@ -1,7 +1,7 @@
 // hippo.db's Reports group: the tenant reports, listings and usage reports the status verbs print.
 import type { LossAversion } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { summarizeTokenUse } from './token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
 import type { CorrectionLink, RawProvenance, StrengthTallies } from '../port/reports.js';
