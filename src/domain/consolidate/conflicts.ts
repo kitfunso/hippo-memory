@@ -2,6 +2,8 @@ import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../../
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../../base/scope/recall-scope.js';
+import { CONFLICT_STOPWORDS } from '../../base/util/stopwords.js';
+import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { DECAY_THRESHOLD } from './decay.js';
 import type { DetectedConflict } from '../../store/local/consolidation.js';
 
@@ -15,109 +17,6 @@ const CONFLICT_MIN_RARE_SHARED = 2;
 // Polarity is detected on the first N words only. A stray "not" in the middle of a long memory shouldn't flip the whole
 // thing negative.
 const POLARITY_WINDOW_WORDS = 40;
-
-const CONFLICT_STOPWORDS = new Set([
-  'the',
-  'a',
-  'an',
-  'is',
-  'was',
-  'are',
-  'were',
-  'be',
-  'been',
-  'being',
-  'to',
-  'of',
-  'in',
-  'for',
-  'on',
-  'with',
-  'at',
-  'by',
-  'from',
-  'it',
-  'this',
-  'that',
-  'and',
-  'or',
-  'but',
-  'so',
-  'if',
-  'as',
-  'we',
-  'i',
-  'you',
-  'they',
-  'he',
-  'she',
-  'my',
-  'our',
-  'your',
-  'its',
-  'his',
-  'her',
-  'their',
-  'up',
-  'out',
-  'just',
-  'also',
-  'then',
-  'than',
-  'some',
-  'all',
-  'any',
-  'each',
-  'very',
-  'too',
-  'do',
-  'did',
-  'does',
-  'has',
-  'had',
-  'have',
-  'will',
-  'would',
-  'could',
-  'should',
-  'may',
-  'might',
-  'can',
-  'shall',
-  'when',
-  'where',
-  'what',
-  'which',
-  'who',
-  'how',
-  'why',
-  'there',
-  'here',
-  'about',
-  'into',
-  'over',
-  'after',
-  'before',
-  'between',
-  'through',
-  'during',
-  'against',
-  'within',
-  'without',
-  'toward',
-  'upon',
-  'more',
-  'most',
-  'less',
-  'least',
-  'other',
-  'such',
-  'same',
-  'new',
-  'old',
-  'one',
-  'two',
-]);
 
 /** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
 type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]>;
@@ -277,22 +176,7 @@ function describeConflict(a: ConflictProfile, b: ConflictProfile): { reason: str
 }
 
 function distinctiveTokens(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter((t) => t.length > 2 && !CONFLICT_STOPWORDS.has(t)),
-  );
-}
-
-export function jaccardSets(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 1;
-  if (a.size === 0 || b.size === 0) return 0;
-  let inter = 0;
-  for (const t of a) if (b.has(t)) inter++;
-  const union = a.size + b.size - inter;
-  return union === 0 ? 0 : inter / union;
+  return new Set(tokenize(text).filter((t) => t.length > 2 && !CONFLICT_STOPWORDS.has(t)));
 }
 
 function openingWindow(text: string): string {

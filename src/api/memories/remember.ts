@@ -16,6 +16,7 @@ import { assertCallerProject } from '../../base/scope/project-identity.js';
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import {
   assertClientScope,
+  PERSONAL_OWNER_MAX,
   canReadScope,
   personalScopeOf,
   ScopeForbiddenError,
@@ -94,8 +95,7 @@ function rememberScope(ctx: Context, opts: RememberOptions): string | null {
   const own = personalScopeOf(ctx.actor);
   if (own === null) {
     throw new BadRequestError(
-      'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot ' +
-        'hold them',
+      `personal memories need a key its owner minted, or a sign-in; owner ids over ${PERSONAL_OWNER_MAX} characters or with control characters cannot hold them`,
     );
   }
   return own;
