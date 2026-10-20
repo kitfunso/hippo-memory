@@ -13,6 +13,7 @@ import { bound, type Bodies } from './bound.js';
 // The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.
 const GOAL_ID_CHARS = 16;
 
+// SAFETY: every read cast to this row selects GOAL_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface GoalRow {
   id: string;
   session_id: string;
@@ -27,6 +28,8 @@ export interface GoalRow {
   completed_at: string | null;
   outcome_score: number | null;
 }
+export const GOAL_COLUMNS = `id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+           success_condition, retrieval_policy_id, created_at, completed_at, outcome_score`;
 
 const MAX_ACTIVE_GOAL_DEPTH = 3;
 
@@ -47,11 +50,10 @@ export function rowToGoal(row: GoalRow): Goal {
   };
 }
 
-/** Depth-cap enforcer for pushGoalAt and resumeGoalAt: suspends the oldest `overflow` goals; **caller MUST be inside
- * a `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
+/** Depth-cap enforcer for pushGoalAt and resumeGoalAt: suspends the oldest `overflow` goals; **caller MUST be inside a
+ * `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
 function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
-  // SAFETY: the row comes from the SELECT above, which projects exactly one
-  // column, `c`, as a COUNT(*).
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const activeCount = (
     db
       .prepare(`
@@ -128,8 +130,6 @@ function pushGoalAt(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalO
 
 function assertParentInSession(db: DatabaseSyncLike, opts: PushGoalOpts): void {
   if (!opts.parentGoalId) return;
-  // SAFETY: the row comes from the SELECT above, which projects exactly
-  // the tenant_id and session_id columns of goal_stack.
   const parent = db.prepare(`SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`).get(opts.parentGoalId) as
     | { tenant_id: string; session_id: string }
     | undefined;
@@ -173,11 +173,9 @@ export function activeGoalsWithPoliciesAt(db: DatabaseSyncLike, opts: GetActiveG
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
 function getSessionGoalsAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
-  // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
   const rows = db
     .prepare(`
-    SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
-           success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+    SELECT ${GOAL_COLUMNS}
     FROM goal_stack
     WHERE tenant_id = ? AND session_id = ?
     ORDER BY created_at ASC, rowid ASC
@@ -187,12 +185,9 @@ function getSessionGoalsAt(db: DatabaseSyncLike, tenantId: string, sessionId: st
 }
 
 function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
-  // SAFETY: rows come from the SELECT above, which projects exactly
-  // GoalRow's columns (in the same order goal_stack defines them).
   const rows = db
     .prepare(`
-    SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
-           success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+    SELECT ${GOAL_COLUMNS}
     FROM goal_stack
     WHERE tenant_id = ? AND session_id = ? AND status = 'active'
     ORDER BY created_at ASC, rowid ASC
@@ -207,7 +202,7 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   const policyIds = [...new Set(active.flatMap((g) => (g.retrievalPolicyId ? [g.retrievalPolicyId] : [])))];
   if (policyIds.length === 0) return policiesByGoalId;
-  // SAFETY: the SELECT projects exactly these seven retrieval_policy columns; MAX_ACTIVE_GOAL_DEPTH bounds the IN list.
+  // SAFETY: MAX_ACTIVE_GOAL_DEPTH bounds the IN list.
   const rows = db
     .prepare(`
     SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
@@ -244,7 +239,6 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
 export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): GoalRecallLogRow[] {
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.memoryId))];
-  // SAFETY: the SELECT projects exactly one column, `id`, from memories.
   const local = db.prepare(`SELECT id FROM memories WHERE id IN (${placeholders(ids.length)})`).all(...ids) as Array<{
     id: string;
   }>;
@@ -276,8 +270,6 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
   const score = opts.outcomeScore ?? null;
 
   withWriteScope(db, 'complete_goal', () => {
-    // SAFETY: the row comes from the SELECT above, which projects exactly
-    // the created_at and status columns of goal_stack.
     const goalRow = db.prepare(`SELECT created_at, status FROM goal_stack WHERE id = ?`).get(goalId) as
       | { created_at: string; status: string }
       | undefined;
@@ -299,8 +291,8 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
       else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
 
       if (multiplier !== 1) {
-        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one
-        // adjustment per pair.
+        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment
+        // per pair.
         db.prepare(`
           UPDATE memories
           SET strength = MIN(1.0, MAX(0.0, strength * ?))
@@ -322,8 +314,6 @@ function suspendGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string):
 
 function resumeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
   withWriteScope(db, 'resume_goal', () => {
-    // SAFETY: the row comes from the SELECT above, which projects exactly
-    // the session_id, tenant_id, and status columns of goal_stack.
     const row = db.prepare(`SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`).get(goalId) as
       | { session_id: string; tenant_id: string; status: string }
       | undefined;

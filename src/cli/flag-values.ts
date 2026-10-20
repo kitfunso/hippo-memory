@@ -191,8 +191,8 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   };
 }
 
-// parseArgs turns a value-less flag into `true`; refuse rather than silently
-// stringifying it (String(true) === 'true'), mirroring handleHandoff's guard.
+// parseArgs turns a value-less flag into `true`; refuse rather than silently stringifying it (String(true) === 'true'),
+// mirroring handleHandoff's guard.
 export function stringFlagOrExit(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;

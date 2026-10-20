@@ -20,8 +20,9 @@ export interface VectorReads {
   physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
 }
 
-/** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical
- * load. */
+/**
+ * Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load.
+ */
 export interface VectorCandidateSpec {
   tenantId: TenantId;
   scope?: RecallScopeFilter;

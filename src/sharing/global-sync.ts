@@ -19,7 +19,7 @@ import type { FolderStore } from '../store/local/index.js';
 /**
  * Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and
  * share copy under a new ID). The caller's request scope keeps it to one open per store.
- *  Returns the count of newly copied entries. */
+ * Returns the count of newly copied entries. */
 export function syncGlobalToLocal(
   into: ConfiguredFolder,
   global: FolderStore,
@@ -105,8 +105,8 @@ function finishSyncDown(into: ConfiguredFolder, count: number, rejected: number)
     );
   }
 
-  // Batch producer: one embedAll() on the destination rather than an
-  // embedMemory() per copied row (same batching invariant as autoShare).
+  // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row (same batching
+  // invariant as autoShare).
   if (count > 0) {
     void embedAll(folderIndex(into)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }

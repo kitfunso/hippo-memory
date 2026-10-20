@@ -60,8 +60,8 @@ export interface SearchResult {
 export type ResultCost = (r: SearchResult) => number;
 
 export interface ScoreBreakdown {
-  /** `hybrid`: BM25 plus a cached doc vector; `hybrid-no-vec`: the query was embedded but this doc has no vector
-   *  (run `hippo embed`); `bm25-only`: no usable embeddings; `physics`: scored by the physics engine. */
+  /** `hybrid`: BM25 plus a cached doc vector; `hybrid-no-vec`: the query was embedded but this doc has no vector (run
+   *  `hippo embed`); `bm25-only`: no usable embeddings; `physics`: scored by the physics engine. */
   mode: 'hybrid' | 'hybrid-no-vec' | 'bm25-only' | 'physics';
   /** BM25 score after normalization by max-in-corpus (0..1). */
   normBm25: number;

@@ -1,5 +1,5 @@
-// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill),
-// each driven by a descriptor.
+// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill), each driven by a
+// descriptor.
 
 import { extractPathTags } from '../search/path-context.js';
 import { errorMessage } from '../util/log.js';
@@ -120,8 +120,8 @@ async function supersedeVersion<O extends VersionedRow, S extends string, B>(
   if (body === undefined) {
     fail(`hippo ${kind.names.cmd} supersede requires ${kind.bodyRequired} for the new version.`);
   }
-  // The lookup only gives a missing id its not-found line; the save's own preflight is the
-  // authoritative active-state check.
+  // The lookup only gives a missing id its not-found line; the save's own preflight is the authoritative active-state
+  // check.
   const existing = foundOrExit(await kind.loadById(id), kind.names.noun, id);
   const created = await saveVersion(kind, kind.keyOf(existing), body, {
     id,

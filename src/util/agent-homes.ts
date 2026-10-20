@@ -43,8 +43,8 @@ export function codexHomeDir(home: string = homeDir(), env: Env = processEnv()):
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
-/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else
- * ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
+/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude
+ * under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
 export function claudeConfigDir(home: string = os.homedir(), env: Env = processEnv()): string {
   return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
 }

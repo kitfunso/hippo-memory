@@ -157,11 +157,11 @@ async function refineOneEntry(
   opts: RefineOptions,
   result: RefineResult,
 ): Promise<void> {
-  // Best-effort: walk parents_json (schema v9) to fetch originals. When
-  // parents aren't recorded we still refine using just the merged content.
+  // Best-effort: walk parents_json (schema v9) to fetch originals. When parents aren't recorded we still refine using
+  // just the merged content.
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
-  // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped,
-  // so refine still works from the merged content alone.
+  // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped, so refine still works from the merged
+  // content alone.
   const chunks = await Promise.all(chunked(parentIds).map((chunk) => memoryListByIds(ctx, chunk, reach)));
   const found = new Map(chunks.flat().map((p) => [p.id, p]));
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);

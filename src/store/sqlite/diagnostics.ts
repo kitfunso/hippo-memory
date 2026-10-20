@@ -61,7 +61,6 @@ function storeInventoryAt(db: DatabaseSyncLike): StoreInventory {
 /** Compaction records in all, those with a summary whose memories never got saved, and those still without a summary;
  * each cutoff is an ISO time. */
 function compactionCountsAt(db: DatabaseSyncLike, stuckBefore: string, transcriptFloor: string): CompactionCounts {
-  // SAFETY: COUNT aggregate row.
   const row = db
     .prepare(
       `SELECT COUNT(*) AS total,
@@ -82,7 +81,6 @@ function compactionCountsAt(db: DatabaseSyncLike, stuckBefore: string, transcrip
 
 /** Memory blocks injected since `sinceIso`, the tokens they sent and the tokens later model calls re-read. */
 function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
-  // SAFETY: COUNT/SUM aggregate row.
   const row = db
     .prepare(
       `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,

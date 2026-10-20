@@ -26,8 +26,8 @@ export const v25: Migration = {
          WHERE dag_level >= 2
            AND descendant_count = 0
       `);
-    // Backfill earliest_at / latest_at from child created timestamps for
-    // existing summaries. Children of a level-2 summary are level-1 facts.
+    // Backfill earliest_at / latest_at from child created timestamps for existing summaries. Children of a level-2
+    // summary are level-1 facts.
     db.exec(`
         UPDATE memories
            SET earliest_at = (

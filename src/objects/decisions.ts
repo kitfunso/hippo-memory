@@ -1,8 +1,7 @@
 /**
- * Decision object: the `decisions` table is the source of truth, so an
- * in-force decision stays `active` despite memory decay. The memory
- * mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall only;
- * saveDecision commits both in one `objects` transaction.
+ * Decision object: the `decisions` table is the source of truth, so an in-force decision stays `active` despite memory
+ * decay. The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall only; saveDecision commits both in
+ * one `objects` transaction.
  */
 
 import { BadRequestError } from '../core/api-errors.js';
@@ -28,11 +27,10 @@ export const VALID_DECISION_STATES: ReadonlySet<DecisionStatus> = new Set<Decisi
 export interface SaveDecisionOptions {
   decisionText: string;
   context?: string;
-  /** Table id of an ACTIVE decision this one supersedes; the CLI resolves a `--supersedes <memory-id>`
-   *  via resolveActiveDecisionIdByMemory, HTTP/SDK pass the table id. */
+  /** Table id of an ACTIVE decision this one supersedes; the CLI resolves a `--supersedes <memory-id>` via
+   *  resolveActiveDecisionIdByMemory, HTTP/SDK pass the table id. */
   supersedesDecisionId?: number;
-  /** Extra memory tags merged after ['decision'] (the CLI passes path-context
-   *  tags; HTTP/SDK pass none). */
+  /** Extra memory tags merged after ['decision'] (the CLI passes path-context tags; HTTP/SDK pass none). */
   extraTags?: string[];
 }
 

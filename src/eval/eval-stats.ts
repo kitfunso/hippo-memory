@@ -74,8 +74,7 @@ export function uncachedEquivalentInput(usage: Usage, ratios: CacheRatios = DEFA
   return usage.inputTokens + usage.cacheWriteTokens * ratios.write + usage.cacheReadTokens * ratios.read;
 }
 
-/** Mulberry32: a small seeded PRNG returning floats in [0, 1). Same seed,
- *  same stream, on every platform. */
+/** Mulberry32: a small seeded PRNG returning floats in [0, 1). Same seed, same stream, on every platform. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -198,7 +197,7 @@ function costPerResolved(outcomes: ArmOutcome[]): number {
 /**
  * Cost per resolved task in two arms on the same tasks, with a paired bootstrap (`control[i]` and `treatment[i]` must
  * be the same task).
- *  Resamples in which an arm resolves nothing are dropped; `iterations` reports how many were kept. */
+ * Resamples in which an arm resolves nothing are dropped; `iterations` reports how many were kept. */
 export function costPerResolvedDelta(
   control: ArmOutcome[],
   treatment: ArmOutcome[],

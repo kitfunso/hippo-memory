@@ -41,9 +41,9 @@ function markingRuns(stmt: Statement, check: () => void): Statement {
       check();
       return stmt.run(...params);
     },
-    get: <T>(...params: unknown[]): T => {
+    get: (...params) => {
       check();
-      return stmt.get<T>(...params);
+      return stmt.get(...params);
     },
     all: (...params) => {
       check();

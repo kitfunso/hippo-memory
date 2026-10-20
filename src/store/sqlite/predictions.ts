@@ -41,6 +41,7 @@ interface ListPredictionsOptions {
   after?: KeysetPosition;
 }
 
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface PredictionRow {
   id: number;
   memory_id: string | null;
@@ -68,8 +69,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
     estimateUnit: row.estimate_unit,
     targetDate: row.target_date,
     actualValue: row.actual_value,
-    // SAFETY: closure_state is DB-constrained to VALID_CLOSURE_STATES; this
-    // module is the only writer and always inserts one of those literals.
+    // SAFETY: closure_state is DB-constrained to VALID_CLOSURE_STATES; this module is the only writer and always
+    // inserts one of those literals.
     closureState: row.closure_state as ClosureState,
     closedAt: row.closed_at,
     closureNote: row.closure_note,
@@ -77,8 +78,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
   };
 }
 
-/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant
- * check included, and its predictions row shares that write scope, so neither lands alone. */
+/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and
+ * its predictions row shares that write scope, so neither lands alone. */
 function writePredictionAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -89,8 +90,8 @@ function writePredictionAt(
   assertTenantId('savePrediction', tenantId);
   const now = new Date().toISOString();
 
-  // Captured for the return value; populated inside afterWrite hook so the
-  // INSERT and the memory write share a SAVEPOINT.
+  // Captured for the return value; populated inside afterWrite hook so the INSERT and the memory write share a
+  // SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
   writeEntryRowAt(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
@@ -139,7 +140,6 @@ function insertPredictionRow(
     );
 
   const predictionId = Number(result.lastInsertRowid ?? 0);
-  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(`
         SELECT ${SELECT_COLUMNS}
@@ -208,8 +208,8 @@ function closeOpenPredictionRow(
   stamp: PredictionStamp,
 ): PredictionRow {
   const { now, actor } = stamp;
-  // closure_state='open' in the WHERE stops a retried close from overwriting
-  // actual_value and auditing twice; zero changed rows means not found or already closed.
+  // closure_state='open' in the WHERE stops a retried close from overwriting actual_value and auditing twice; zero
+  // changed rows means not found or already closed.
   const updateResult = db
     .prepare(`
         UPDATE predictions
@@ -220,7 +220,6 @@ function closeOpenPredictionRow(
 
   if (updateResult.changes === 0) throwCloseMiss(db, tenantId, id);
 
-  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(`
         SELECT ${SELECT_COLUMNS}
@@ -248,7 +247,6 @@ function closeOpenPredictionRow(
 
 function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): never {
   // Distinguish 'not found' from 'already closed' so callers (CLI, HTTP) surface the right error.
-  // SAFETY: row shape matches the single `closure_state` column named in the SELECT above.
   const existing = db
     .prepare(`
           SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
@@ -265,7 +263,6 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
 
 function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
   assertTenantId('loadPredictionById', tenantId);
-  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(`
     SELECT ${SELECT_COLUMNS}
@@ -292,7 +289,6 @@ function loadPredictionsByClassAt(
           `${opts.closureState}`,
       );
     }
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}
@@ -303,7 +299,6 @@ function loadPredictionsByClassAt(
     `)
       .all(tenantId, classTag, opts.closureState, ...after.params, limit) as PredictionRow[];
   } else {
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}
@@ -325,7 +320,6 @@ function loadAllPredictionsAt(
 ): Prediction[] {
   assertTenantId('loadAllPredictions', tenantId);
   const after = keysetAfter('created_at', 'id', opts.after);
-  // SAFETY: rows' shape matches the columns named in the SELECT.
   const rows = db
     .prepare(`
     SELECT ${SELECT_COLUMNS}
@@ -339,6 +333,7 @@ function loadAllPredictionsAt(
 }
 
 /** One closed prediction as the baserate reads it: both values set. */
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface BaserateRow {
   estimate_value: number;
   actual_value: number;
@@ -352,14 +347,13 @@ export function computePredictionBaserateAt(
   tenantId: string,
   classTag: string,
   actor: string = CLI_ACTOR,
-  /** False skips the predict_baserate audit so that channel only records deliberate
-   *  baserate calls, not every recall the planning-fallacy orchestrator inspects. */
+  /** False skips the predict_baserate audit so that channel only records deliberate baserate calls, not every recall
+   *  the planning-fallacy orchestrator inspects. */
   emitAudit: boolean = true,
 ): PredictionBaserate {
   assertTenantId('computePredictionBaserate', tenantId);
   if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
   // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
-  // SAFETY: rows' shape matches the two columns named in the SELECT above.
   const rows = db
     .prepare(`
     SELECT estimate_value, actual_value
@@ -374,8 +368,8 @@ export function computePredictionBaserateAt(
     .all(tenantId, classTag) as BaserateRow[];
 
   const baserate = predictionBaserateOf(classTag, rows);
-  // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits
-  // its own hint.
+  // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits its
+  // own hint.
   if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
   return baserate;
 }
@@ -461,7 +455,6 @@ function loadOpenPredictionsAt(
   const after = keysetAfter('created_at', 'id', opts.after);
   let rows: PredictionRow[];
   if (opts.classTag) {
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}
@@ -472,7 +465,6 @@ function loadOpenPredictionsAt(
     `)
       .all(tenantId, opts.classTag, ...after.params, limit) as PredictionRow[];
   } else {
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}

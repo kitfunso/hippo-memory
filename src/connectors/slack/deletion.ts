@@ -20,8 +20,8 @@ export interface DeletionResult {
 export async function handleMessageDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
   const events = ctx.store.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
-  // The tenant in the lookup is load-bearing: without it a deletion event from
-  // tenant A could archive tenant B's raw row sharing the same artifact_ref.
+  // The tenant in the lookup is load-bearing: without it a deletion event from tenant A could archive tenant B's raw
+  // row sharing the same artifact_ref.
   const target = await events.deletionTarget({
     event,
     artifactRef: `slack://${input.teamId}/${input.channelId}/${input.deletedTs}`,

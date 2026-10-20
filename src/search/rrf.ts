@@ -1,10 +1,8 @@
 /**
  * Reciprocal Rank Fusion (Cormack, Clarke and Buettcher 2009): fuses N ranked lists by summing weighted 1/(k + rank)
- * per candidate. K is the standard 60,
- * the value hybridSearch already uses; do NOT tune it without a cross-corpus eval. Generic over the id type
- * (hybridSearch uses number, the LongMemEval
- * benchmark string). Behaviour MUST stay byte-identical to the inline hybridSearch code it replaced;
- * tests/search/rrf.test.ts is the contract.
+ * per candidate. K is the standard 60, the value hybridSearch already uses; do NOT tune it without a cross-corpus eval.
+ * Generic over the id type (hybridSearch uses number, the LongMemEval benchmark string). Behaviour MUST stay
+ * byte-identical to the inline hybridSearch code it replaced; tests/search/rrf.test.ts is the contract.
  */
 
 export const RRF_K = 60;
@@ -14,15 +12,14 @@ export interface RrfFuseOptions {
   k?: number;
   /**
    * Rank assigned to candidates absent from a list; default `max(rankedLists.map(l => l.length)) + 1`, the convention
-   * hybridSearch used (`entries.length +
-   * 1`). */
+   * hybridSearch used (`entries.length + 1`). */
   absentRank?: number;
 }
 
 /**
  * Fuses N ranked lists (each in descending-score order; index 0 is rank 1) into a Map of candidate id -> RRF score;
- * sort by value descending for the fused
- * order. `weights` has one entry per list and is summed without normalization; `options` overrides k and absentRank. */
+ * sort by value descending for the fused order. `weights` has one entry per list and is summed without normalization;
+ * `options` overrides k and absentRank. */
 export function rrfFuse<T>(
   rankedLists: ReadonlyArray<ReadonlyArray<T>>,
   weights: ReadonlyArray<number>,

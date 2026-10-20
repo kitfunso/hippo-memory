@@ -9,8 +9,9 @@ import { placeholders } from '../../util/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../util/json.js';
 
-/** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot
- * match. */
+/**
+ * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match.
+ */
 function secretTaggedSql() {
   const tags = [...SECRET_TAGS];
   return {
@@ -26,7 +27,7 @@ function secretTaggedSql() {
 function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string | number)[]): Map<string, number> {
   // One row of [tag, count] pairs in first-seen order: an array, since an object would reorder integer-like keys. The
   // aggregate ORDER BY needs SQLite 3.44; Node 22.5 and later bundle 3.46.
-  // SAFETY: one row whose only column is that JSON text.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = db
     .prepare(`WITH kept AS (SELECT rowid AS r, tags_json FROM memories WHERE ${scope})
     SELECT json_group_array(json_array(tag, n) ORDER BY first_r, first_key) AS pairs FROM (
@@ -41,8 +42,8 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
   return tallies;
 }
 
-/** Whole-store ambient tallies in two aggregate passes, no row loaded. Content-pattern secrets and session-local
- *  rows (own compaction items, a printed handoff's digest) still count: only injection drops them. */
+/** Whole-store ambient tallies in two aggregate passes, no row loaded. Content-pattern secrets and session-local rows
+ *  (own compaction items, a printed handoff's digest) still count: only injection drops them. */
 export function loadAmbientTalliesAt(
   db: DatabaseSyncLike,
   rules: LossAversion,
@@ -55,8 +56,8 @@ export function loadAmbientTalliesAt(
   const scope = `${where.join(' AND ')}
       AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`;
   const scopeParams = [...params, ...filter.currentProject, ...secret.params];
-  // SAFETY: one aggregate row whose columns are the aliases named below. A row is an error when one of its tags is
-  // `error`, `critical` or starts with `error:`, as isErrorTagged says.
+  // A row is an error when one of its tags is `error`, `critical` or starts with `error:`, as isErrorTagged says.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = db
     .prepare(`SELECT
     COUNT(*) AS total,

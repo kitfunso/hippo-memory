@@ -6,8 +6,8 @@ export interface Compactions {
   start(tenantId: string, start: CompactionStart): Promise<string>;
   /** Marks the record as having its snapshot saved; an id the tenant does not hold changes nothing. */
   markSnapshotSaved(tenantId: string, recordId: string): Promise<void>;
-  /** The items under the request's record, all in one transaction, so two sessions never both write one text; a
-   * request id another session holds rejects with ConflictError. */
+  /** The items under the request's record, all in one transaction, so two sessions never both write one text; a request
+   * id another session holds rejects with ConflictError. */
   saveCallerItems(tenantId: string, req: CallerItems): Promise<CallerItemsSaved>;
 }
 

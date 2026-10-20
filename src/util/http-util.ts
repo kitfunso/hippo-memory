@@ -3,14 +3,14 @@ import { tryParseUrl } from './net.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
 
-// node:http header values are `string | string[] | undefined` (never a bare
-// unknown), so this gets its own predicate rather than reusing isJsonString.
+// node:http header values are `string | string[] | undefined` (never a bare unknown), so this gets its own predicate
+// rather than reusing isJsonString.
 export function isHeaderString(value: string | string[] | undefined): value is string {
   return typeof value === 'string';
 }
 
-// 1 MB body cap. The CLI never sends payloads near this; anything bigger is
-// almost certainly a misconfigured client or a deliberate memory-blowup attempt.
+// 1 MB body cap. The CLI never sends payloads near this; anything bigger is almost certainly a misconfigured client or
+// a deliberate memory-blowup attempt.
 export const MAX_BODY_BYTES = 1024 * 1024;
 
 function sizeLabel(bytes: number): string {

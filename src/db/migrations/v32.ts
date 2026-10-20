@@ -32,8 +32,8 @@ const IDX_PROCESSES_MEMORY = `
           ON processes(memory_id) WHERE memory_id IS NOT NULL
         `;
 
-// Cross-tenant safety vs the referenced memory (verbatim mirror of the
-// v31 incidents / v30 decisions tenant-match triggers).
+// Cross-tenant safety vs the referenced memory (verbatim mirror of the v31 incidents / v30 decisions tenant-match
+// triggers).
 const TRG_PROCESSES_TENANT_MATCH_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_processes_tenant_match_insert
           BEFORE INSERT ON processes
@@ -60,8 +60,7 @@ const TRG_PROCESSES_TENANT_MATCH_UPDATE = `
         `;
 
 // Cross-tenant safety vs the successor process (self-FK; mirrors the v30 supersede trigger): superseded_by is set only
-// via the supersede UPDATE
-// and the successor, already present in the same transaction, must share the tenant.
+// via the supersede UPDATE and the successor, already present in the same transaction, must share the tenant.
 const TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_processes_supersede_tenant_match_update
           BEFORE UPDATE ON processes

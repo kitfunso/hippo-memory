@@ -15,8 +15,6 @@ export function ensureMetaTable(db: DatabaseSyncLike): void {
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {
   if (!tableExists(db, 'meta')) return 0;
-  // SAFETY: row's shape matches the single `value` column named in the
-  // SELECT above.
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value?: string } | undefined;
   const version = Number(row?.value ?? 0);
   return Number.isFinite(version) ? version : 0;
@@ -24,13 +22,13 @@ export function getSchemaVersion(db: DatabaseSyncLike): number {
 
 /** SQLite's own `user_version` stamp, which can differ from the `meta` schema_version row. */
 export function pragmaUserVersion(db: DatabaseSyncLike): number {
-  // SAFETY: PRAGMA user_version returns one row with one integer column.
+  // SAFETY: PRAGMA user_version always answers one row.
   return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
 }
 
 /** The connection's commit counter: it moves when another connection commits. */
 export function pragmaDataVersion(db: DatabaseSyncLike): number {
-  // SAFETY: PRAGMA data_version returns one row with that single integer column.
+  // SAFETY: PRAGMA data_version always answers one row.
   return (db.prepare('PRAGMA data_version').get() as { data_version: number }).data_version;
 }
 
@@ -42,8 +40,6 @@ export function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
 }
 
 export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): string {
-  // SAFETY: row's shape matches the single `value` column named in the
-  // SELECT above.
   const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
   return row?.value ?? fallback;
 }

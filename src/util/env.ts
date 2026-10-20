@@ -279,8 +279,8 @@ export function envBodyTimeoutMs(): number | undefined {
 export function envSleepTimeoutMs(): number | undefined {
   return positiveInt('HIPPO_SLEEP_TIMEOUT_MS');
 }
-/** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP
- * request before its timeout error; 0 for no deadline; util/request-scope.ts holds the default. */
+/** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP request before its timeout
+ * error; 0 for no deadline; util/request-scope.ts holds the default. */
 export function envRequestDeadlineMs(): number | undefined {
   return nonNegativeInt('HIPPO_REQUEST_DEADLINE_MS');
 }

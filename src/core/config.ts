@@ -46,10 +46,10 @@ export interface HippoConfig {
     hybridWeight: number;
     /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in
      * API embedder needing the provider's
-     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/embeddings/provider.ts. */
+     * API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/embeddings/provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
-    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost
-     *  may use http). Ignored by the local provider. */
+    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the local
+     *  provider. */
     apiBaseUrl?: string;
     /** Batch size for API embedding requests. Default 64. */
     batchSize?: number;
@@ -59,17 +59,16 @@ export interface HippoConfig {
   };
   gitLearnPatterns: string[];
   physics: PhysicsConfig;
-  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when
-   *  embeddings are available — needs doc-to-doc similarity. */
+  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when embeddings are available: needs doc-to-doc
+   *  similarity. */
   mmr: {
     enabled: boolean;
-    /** 1.0 = pure relevance (current behavior). 0.0 = pure diversity. 0.7 is
-     *  a typical balance. */
+    /** 1.0 = pure relevance (current behavior). 0.0 = pure diversity. 0.7 is a typical balance. */
     lambda: number;
   };
   search: {
-    /** Multiplier applied to local-store scores when merged with global
-     *  results (searchBothHybrid). 1.0 = no bias, 1.2 = 20% local priority. */
+    /** Multiplier applied to local-store scores when merged with global results (searchBothHybrid). 1.0 = no bias,
+     *  1.2 = 20% local priority. */
     localBump: number;
   };
   /** Replay settings — biologically-inspired rehearsal during consolidation. */
@@ -81,8 +80,8 @@ export interface HippoConfig {
   autoTraceCapture: boolean;
   /** Only promote sessions whose session_complete event is within N days. */
   autoTraceWindowDays: number;
-  /** Mid-session pinned-rule re-injection through the UserPromptSubmit hook: pinned memories are re-injected each
-   * turn within the token budget. */
+  /** Mid-session pinned-rule re-injection through the UserPromptSubmit hook: pinned memories are re-injected each turn
+   * within the token budget. */
   pinnedInject: {
     enabled: boolean;
     budget: number;
@@ -90,11 +89,10 @@ export interface HippoConfig {
      *  Default true. Needs a session id from the hook payload. */
     skipUnchanged: boolean;
     /** Resend an unchanged block after this many consecutive skips, so long sessions still see pinned rules near the
-     * latest turn (default 10; 0 never
-     * resends). */
+     * latest turn (default 10; 0 never resends). */
     refreshTurns: number;
-    /** Gate the hook's backfill on the prompt's own content instead of the five
-     *  newest memories. Default true: the same overlap for fewer tokens. */
+    /** Gate the hook's backfill on the prompt's own content instead of the five newest memories. Default true: the same
+     *  overlap for fewer tokens. */
     promptRecall: boolean;
     /** Overlap metric for the prompt-recall gate. Default 'jaccard' (tuned). */
     promptRecallMetric: PromptRecallMetric;
@@ -108,9 +106,8 @@ export interface HippoConfig {
     promptRecallCandidates: number;
   };
   /** Memory scope isolation (default true): ambient context (`hippo context`, the hook, /v1/context, MCP hippo_context)
-   * excludes OTHER projects' memories;
-   * explicit recall is unaffected. False disables the ORIGIN PARTITION only: the secret veto is unconditional, and
-   * no flag re-includes secret-flagged rows. */
+   * excludes OTHER projects' memories; explicit recall is unaffected. False disables the ORIGIN PARTITION only: the
+   * secret veto is unconditional, and no flag re-includes secret-flagged rows. */
   contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';
@@ -136,17 +133,16 @@ export interface HippoConfig {
     enabled: boolean;
   };
   /** Dormant memories (src/store/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the
-   * threshold there instead of deleting it
-   * (`hippo dormant restore|forget <id>`); a faded memory the secret detector flags is always deleted. `{"enabled":
-   * false}` restores delete-on-fade. */
+   * threshold there instead of deleting it (`hippo dormant restore|forget <id>`); a faded memory the secret detector
+   * flags is always deleted. `{"enabled": false}` restores delete-on-fade. */
   dormant: {
     enabled: boolean;
     /** Days a dormant memory is kept before sleep deletes it for good.
      *  Default 180. 0 keeps dormant memories forever. */
     retentionDays: number;
   };
-  /** Tags a memory `churn-stale` when its named file/symbol/script
-   *  changed since storage. Default OFF until a measurement justifies the flip. */
+  /** Tags a memory `churn-stale` when its named file/symbol/script changed since storage. Default OFF until a
+   *  measurement justifies the flip. */
   churnStaleness: {
     enabled: boolean;
   };
@@ -164,13 +160,13 @@ export interface HippoConfig {
   pilot: {
     holdoutRateBp: number;
   };
-  /** How a folder's project is named. `remote: false` drops the origin-remote rule, leaving
-   *  `.hippo-project.json` then the folder name. Read from the global store's config only, so every store agrees. */
+  /** How a folder's project is named. `remote: false` drops the origin-remote rule, leaving `.hippo-project.json` then
+   *  the folder name. Read from the global store's config only, so every store agrees. */
   projectIdentity: {
     remote: boolean;
   };
-  /** The store serves many people, so a write that names no project is stamped NULL, never this folder's project,
-   *  and a context read must name the caller's project. Default false. Read it through isSharedStore. */
+  /** The store serves many people, so a write that names no project is stamped NULL, never this folder's project, and a
+   *  context read must name the caller's project. Default false. Read it through isSharedStore. */
   sharedStore: boolean;
   /** What the composition root read from the environment for this command or request; config.json never sets it. */
   runtime?: RuntimeSettings;
@@ -584,9 +580,9 @@ function sharedStoreKey(hippoRoot: string): string {
   return process.platform === 'win32' ? real.toLowerCase() : real;
 }
 
-/** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
- * so a broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay
- * loadConfig's. */
+/** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process, so a
+ * broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay loadConfig's.
+ */
 export function isSharedStore(hippoRoot: string): boolean {
   const key = sharedStoreKey(hippoRoot);
   if (sharedStoreRoots.has(key)) return true;

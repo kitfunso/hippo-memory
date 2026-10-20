@@ -119,7 +119,7 @@ function eachOpenConflictPage(db: DatabaseSyncLike, tenantId: string, visit: Das
 }
 
 function excludedAt(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
-  // SAFETY: the SELECT names exactly these two fields, and `why` is one of the three CASE arms or NULL.
+  // SAFETY: `why` is one of the three CASE arms or NULL.
   const counts = db
     .prepare(
       `SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +

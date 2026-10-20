@@ -60,8 +60,7 @@ async function buildPipeline(importModule: ImportModule): Promise<CrossEncoderFn
     });
     const { logits } = await model(inputs);
     const score = 1 / (1 + Math.exp(-Number(logits.data[0])));
-    // NaN would make the sort comparator a no-op; throwing hands this
-    // candidate to the per-candidate fallback instead.
+    // NaN would make the sort comparator a no-op; throwing hands this candidate to the per-candidate fallback instead.
     if (!Number.isFinite(score)) throw new Error('cross-encoder returned a non-finite score');
     return score;
   };
@@ -104,8 +103,8 @@ async function scoreHead(
     }),
   );
 
-  // Plain stable sort on purpose: tied scores MUST fall back to the prior
-  // relevance order, never an arbitrary content order.
+  // Plain stable sort on purpose: tied scores MUST fall back to the prior relevance order, never an arbitrary content
+  // order.
   scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return { results: scored, succeeded };

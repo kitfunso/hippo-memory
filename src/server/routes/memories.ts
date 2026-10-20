@@ -154,8 +154,8 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
 }
 
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
-// hippoRoot, cross-tenant by design, so the
-// row's host-admin-local gate is the trust boundary. Body {dry_run?, no_share?}; returns SleepResult JSON.
+// hippoRoot, cross-tenant by design, so the row's host-admin-local gate is the trust boundary. Body {dry_run?,
+// no_share?}; returns SleepResult JSON.
 export async function handleSleep({ req, res, ctx, opts }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const dryRunRaw = body['dry_run'];

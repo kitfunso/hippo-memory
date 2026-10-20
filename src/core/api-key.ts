@@ -129,8 +129,8 @@ interface KeyRowFacts {
   readonly ownerSubject?: string | null;
 }
 
-/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing
- * field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
+/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing field (a store that
+ * predates expiry) or a stamp that does not parse, so both fail closed. */
 export function keyExpiryMs(expiresAt: string | null | undefined): number {
   if (expiresAt === null) return Infinity;
   if (expiresAt === undefined) return -Infinity;

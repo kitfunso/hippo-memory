@@ -39,8 +39,7 @@ const IDX_POLICIES_ASOF = `
           ON policies(tenant_id, valid_from)
         `;
 
-// Cross-tenant safety vs the referenced memory (verbatim mirror of the
-// v32 processes tenant-match triggers).
+// Cross-tenant safety vs the referenced memory (verbatim mirror of the v32 processes tenant-match triggers).
 const TRG_POLICIES_TENANT_MATCH_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_policies_tenant_match_insert
           BEFORE INSERT ON policies
@@ -66,8 +65,7 @@ const TRG_POLICIES_TENANT_MATCH_UPDATE = `
           END
         `;
 
-// Cross-tenant safety vs the successor policy (self-FK; verbatim mirror of
-// the v32 processes supersede trigger).
+// Cross-tenant safety vs the successor policy (self-FK; verbatim mirror of the v32 processes supersede trigger).
 const TRG_POLICIES_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_policies_supersede_tenant_match_update
           BEFORE UPDATE ON policies

@@ -14,6 +14,7 @@ import type { DormantMove } from '../local/consolidation.js';
 import type { DormantMemory, ListDormantOpts } from '../port/dormant.js';
 import type { DormantSnapshot } from '../port/types.js';
 
+// SAFETY: every read cast to this row selects DORMANT_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface DormantRow {
   tenant_id: string;
   id: string;
@@ -23,6 +24,7 @@ interface DormantRow {
   strength: number;
   dormant_at: string;
 }
+const DORMANT_COLUMNS = 'tenant_id, id, content, entry_json, reason, strength, dormant_at';
 
 const DEFAULT_DORMANT_LIMIT = 20;
 
@@ -49,8 +51,8 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
   );
 }
 
-/** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot, whose tenant is
- * `tenantId`; a 1.x `summary_dirty` is 0|1. */
+/** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot, whose tenant is `tenantId`;
+ * a 1.x `summary_dirty` is 0|1. */
 type StoredSnapshot = Omit<MemoryWire, 'tenant_id' | 'summary_dirty'> & {
   summary_dirty?: boolean | 0 | 1;
 } & ({ tenant_id: string } | { tenantId: string });
@@ -125,10 +127,9 @@ export function listDormantRows(
       ? Math.floor(opts.limit)
       : DEFAULT_DORMANT_LIMIT;
   const termClauses = terms.map(() => ` AND content LIKE ? ESCAPE '\\'`).join('');
-  // SAFETY: rows' shape matches the seven columns named in the SELECT.
   const rows = db
     .prepare(
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+      `SELECT ${DORMANT_COLUMNS}
        FROM ${DORMANT_WITH_SCOPE}
       WHERE tenant_id = ? AND ${admit.sql}${termClauses}
       ORDER BY dormant_at DESC, id ASC
@@ -140,10 +141,9 @@ export function listDormantRows(
 
 /** A tenant's stored dormant snapshot, or null when it has none with that id (another tenant's id reads as absent). */
 export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: string): DormantSnapshot | null {
-  // SAFETY: row's shape matches the seven columns named in the SELECT.
   const row = db
     .prepare(
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+      `SELECT ${DORMANT_COLUMNS}
        FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
     )
     .get(tenantId, id) as DormantRow | undefined;
@@ -156,10 +156,9 @@ export function dormantSnapshotsBySourcePrefix(
   tenantId: string,
   prefix: string,
 ): DormantSnapshot[] {
-  // SAFETY: rows' shape matches the seven columns named in the SELECT.
   const rows = db
     .prepare(
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+      `SELECT ${DORMANT_COLUMNS}
        FROM dormant_memories
       WHERE tenant_id = ?
         AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END LIKE ? ESCAPE '\\'`,
@@ -170,10 +169,9 @@ export function dormantSnapshotsBySourcePrefix(
 
 /** Readable snapshots of a tenant whose entry carries project name `origin`. */
 export function dormantSnapshotsFromOrigin(db: DatabaseSyncLike, tenantId: string, origin: string): DormantSnapshot[] {
-  // SAFETY: rows' shape matches the seven columns named in the SELECT.
   const rows = cachedStatement(
     db,
-    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+    `SELECT ${DORMANT_COLUMNS}
        FROM dormant_memories
       WHERE tenant_id = ?
         AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.origin_project') END = ?`,
@@ -217,8 +215,10 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
   return Number(result.changes ?? 0) > 0;
 }
 
-/** The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not
- * parse. */
+/**
+ * The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not parse.
+ */
+// SAFETY: every read cast to this row selects DORMANT_TEXT_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface DormantText {
   readonly id: string;
   readonly content: string;
@@ -230,14 +230,14 @@ const DORMANT_TEXT_COLUMNS =
   `id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END AS source, ` +
   `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope`;
 
-/** Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match
- * reads. */
+/**
+ * Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match reads.
+ */
 export function dormantTextsPage(
   db: DatabaseSyncLike,
   tenantId: string,
   page: { readonly limit: number; readonly afterId: string },
 ): DormantText[] {
-  // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
   return cachedStatement(
     db,
     `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id > ? ORDER BY id LIMIT ?`,
@@ -252,7 +252,6 @@ export function dormantTextsByIds(
 ): Map<string, DormantText> {
   const byId = new Map<string, DormantText>();
   for (const chunk of chunked([...new Set(ids)])) {
-    // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
     const rows = cachedStatement(
       db,
       `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories ` +
@@ -271,10 +270,9 @@ export function dormantSnapshotsByIds(
 ): Map<string, DormantSnapshot> {
   const byId = new Map<string, DormantSnapshot>();
   for (const chunk of chunked([...new Set(ids)])) {
-    // SAFETY: rows' shape matches the seven columns named in the SELECT.
     const rows = cachedStatement(
       db,
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+      `SELECT ${DORMANT_COLUMNS}
          FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
     ).all(tenantId, ...chunk) as DormantRow[];
     for (const row of rows) {

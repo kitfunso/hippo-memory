@@ -11,8 +11,7 @@ const RECENT_ASSISTANT_TURNS = 10;
 
 /**
  * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain user messages and the
- * final assistant text chunk,
- *  without thinking, tool_use and tool_result noise. Exported for tests. */
+ * final assistant text chunk, without thinking, tool_use and tool_result noise. Exported for tests. */
 
 /** Leading markers of the command lines Claude Code writes with type 'user'. */
 const CLAUDE_CODE_COMMAND_PREFIXES = ['<local-command-', '<command-name>', '<command-message>', '<command-args>'];
@@ -50,8 +49,7 @@ const NON_HUMAN_BLOCK_PREFIXES = ['<ide_', '[Request interrupted by user'];
 
 /**
  * The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own
- * open-file, selection
- * and interrupt blocks. */
+ * open-file, selection and interrupt blocks. */
 export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): string {
   const content = message.content;
   let text = '';

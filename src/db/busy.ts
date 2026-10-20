@@ -6,8 +6,7 @@ import type { DatabaseSyncLike } from './sqlite.js';
 export const DEFAULT_BUSY_WAIT_MS = 5000;
 
 // busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA journal_mode` and for
-// a write
-// that upgrades a deferred read snapshot, so both need an explicit wait.
+// a write that upgrades a deferred read snapshot, so both need an explicit wait.
 export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = DEFAULT_BUSY_WAIT_MS): void {
   const deadline = Date.now() + timeoutMs;
   const idle = new Int32Array(new SharedArrayBuffer(4));
@@ -126,8 +125,7 @@ class RolledBack<V> {
 
 /**
  * `withWriteScope` for a write that can refuse: a callback that returns `rollback(value)` gets the scope's writes
- * undone
- *  and `value` back, with no throw. Any other return commits. */
+ * undone and `value` back, with no throw. Any other return commits. */
 export function withWriteScopeOr<T, R>(
   db: DatabaseSyncLike,
   name: string,

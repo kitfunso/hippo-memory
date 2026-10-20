@@ -82,9 +82,8 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
 
 /**
  * The goal-stack boost over goals already read, touching no store; a caller skips it under an explicit goal tag. Its
- * log covers the top
- * `limit` rows and keeps those whose memory is global, since only the store can tell them apart; {@link
- * localGoalRecallRows} drops those before the write.
+ * log covers the top `limit` rows and keeps those whose memory is global, since only the store can tell them apart;
+ * {@link localGoalRecallRows} drops those before the write.
  */
 export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   results: R[],
@@ -107,8 +106,8 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
       const matches = tags.filter((t) => goalsByTag.has(t));
       if (matches.length === 0) return r;
       const multiplier = goalBoostMultiplier(r.entry, tags, matches, goalsByTag, policiesByGoalId);
-      // Recall-trace side-channel: record the goal-boost step BEFORE the
-      // score is mutated, keyed by entry id; a pure read of r.score.
+      // Recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by entry id; a pure
+      // read of r.score.
       if (trace) {
         trace.set(r.entry.id, {
           stage: 'goal-boost',
@@ -123,9 +122,9 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
       // so the value still satisfies R.
       return { ...r, score: r.score * multiplier } as R;
     })
-    // Deliberately a PLAIN stable score sort with no compareEntryIdentity tail:
-    // re-sorting an already deterministic ranking inherits its determinism via stability,
-    // and ties keep the prior (meaningful) rank instead of reordering by content.
+    // Deliberately a PLAIN stable score sort with no compareEntryIdentity tail: re-sorting an already deterministic
+    // ranking inherits its determinism via stability, and ties keep the prior (meaningful) rank instead of reordering
+    // by content.
     .sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };

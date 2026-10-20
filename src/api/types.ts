@@ -10,7 +10,8 @@ import type { LocalStore, StoreReach } from '../store/local/index.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
- * Role checks happen at the request boundary (e.g. /v1/sleep), except in authCreate and authRevoke (ForbiddenError). */
+ *  Role checks happen at the request boundary (e.g. /v1/sleep), except in authCreate and authRevoke (ForbiddenError).
+ */
 export interface Actor {
   /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
   subject: string;
@@ -19,8 +20,8 @@ export interface Actor {
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
   viaAuthResolver?: true;
-  /** The host's operator (CLI, stdio MCP, keyless loopback set to
-   * admin, host-tenant admin key): may act beyond its tenant. */
+  /** The host's operator (CLI, stdio MCP, keyless loopback set to admin, host-tenant admin key): may act beyond its
+   * tenant. */
   hostAdmin?: true;
   owner?: string; // the person behind the key; task state keys on it
 }
@@ -48,8 +49,8 @@ export interface Context {
   reach?: ContextReach;
   /** The store's config, loaded by the composition root once per command or request. */
   readonly config: HippoConfig;
-  /** The root's per-caller state: recall rings, each client's last shown ids, and how a write starts a sleep. Absent,
-   * a recall keeps no session history and a write starts no sleep. */
+  /** The root's per-caller state: recall rings, each client's last shown ids, and how a write starts a sleep. Absent, a
+   * recall keeps no session history and a write starts no sleep. */
   readonly callers?: CallerState;
 }
 

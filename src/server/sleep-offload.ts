@@ -10,8 +10,8 @@ import { HttpError } from '../util/http-util.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
-/** What the child needs to rebuild the request's context (the store handle itself cannot cross a process boundary),
- * or the store an auto-sleep consolidates. */
+/** What the child needs to rebuild the request's context (the store handle itself cannot cross a process boundary), or
+ * the store an auto-sleep consolidates. */
 export type SleepJob =
   | {
       readonly kind: 'sleep';
@@ -62,8 +62,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
     let reply: SleepReply<R> | undefined;
     let timedOut = false;
     let malformed = false;
-    // SIGKILL because the child is inside synchronous SQLite work
-    // and cannot run a handler; the OS drops its write lock.
+    // SIGKILL because the child is inside synchronous SQLite work and cannot run a handler; the OS drops its write
+    // lock.
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGKILL');
@@ -76,8 +76,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
       clearTimeout(timer);
       reject(err);
     });
-    // 'close' and not 'exit': it waits for the channel to drain, so
-    // the reply is in hand and the child's store handles are gone.
+    // 'close' and not 'exit': it waits for the channel to drain, so the reply is in hand and the child's store handles
+    // are gone.
     child.once('close', (code, signal) => {
       clearTimeout(timer);
       if (timedOut) {
@@ -96,8 +96,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
   });
 }
 
-// One running and one waiting: each further sleep would only hold
-// a request open behind work the waiting one already covers.
+// One running and one waiting: each further sleep would only hold a request open behind work the waiting one already
+// covers.
 const MAX_SLEEPS_IN_LINE = 2;
 const SLEEP_RETRY_AFTER_SEC = 30;
 

@@ -22,11 +22,10 @@ export const VALID_INCIDENT_STATES: ReadonlySet<IncidentStatus> = new Set<Incide
 export interface SaveIncidentOptions {
   incidentText: string;
   context?: string;
-  /** Memory ids (linked receipts) that are this incident's evidence. Each must
-   *  exist in the same tenant; cross-tenant/nonexistent ids are rejected. */
+  /** Memory ids (linked receipts) that are this incident's evidence. Each must exist in the same tenant;
+   *  cross-tenant/nonexistent ids are rejected. */
   linkedMemoryIds?: string[];
-  /** Extra memory tags merged after ['incident'] (the CLI passes path-context
-   *  tags; HTTP/SDK pass none). */
+  /** Extra memory tags merged after ['incident'] (the CLI passes path-context tags; HTTP/SDK pass none). */
   extraTags?: string[];
 }
 
@@ -109,8 +108,8 @@ function resolved(tenantId: string, id: number, written: Incident | ObjectRefusa
   );
 }
 
-/** Moves an open incident to resolved and keeps it on record;
- * a missing incident and one that is not open are told apart. */
+/** Moves an open incident to resolved and keeps it on record; a missing incident and one that is not open are told
+ * apart. */
 export async function resolveOpenIncident(
   objects: Objects,
   tenantId: string,

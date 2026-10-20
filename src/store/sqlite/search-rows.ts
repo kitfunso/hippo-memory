@@ -86,8 +86,8 @@ function loadSearchRows(
   const rows = selectLikeCandidates(db, terms, p, limit);
   if (rows.length > 0) return rows;
 
-  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an
-  // unbounded fallback would misstate the candidate-pool size.
+  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded fallback would misstate
+  // the candidate-pool size.
   return selectAllCandidates(db, p, limit);
 }
 
@@ -103,8 +103,8 @@ function searchPredicates(
   const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantAnd(tenantId).args;
 
-  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only
-  // guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
+  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only guards against
+  // a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
   // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches between ' AND' and
   // ' WHERE' by caller context.
@@ -135,8 +135,6 @@ function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: n
   const sql =
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
     `${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
-  // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
-  // matches MemoryRow's field set.
   return cachedStatement(db, sql).all(...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
 }
 
@@ -144,9 +142,8 @@ function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: n
 function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
   try {
     const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
-    // memories_fts has no tenant_id column; filter via the joined memories row (cheap with
-    // idx_memories_tenant_created). SAFETY: MEMORY_SEARCH_COLUMNS aliases every column like MEMORY_SELECT_COLUMNS (plus
-    // bm25_score), matching MemoryRow.
+    // memories_fts has no tenant_id column, so the joined memories row filters by tenant.
+    // idx_memories_tenant_created keeps that join cheap.
     return cachedStatement(
       db,
       `
@@ -169,8 +166,9 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
   }
 }
 
-/** Newest admitted rows the substring match tests, so a query matching nothing costs the same in a store of any
- * size. */
+/**
+ * Newest admitted rows the substring match tests, so a query matching nothing costs the same in a store of any size.
+ */
 const LIKE_WINDOW_ROWS = 2000;
 
 /** Substring matches in content or tags among the newest admitted rows: the lexical path without FTS5, and the catch
@@ -187,7 +185,7 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
 
   // SHORTCUT: no index serves a substring, so a match older than the window is missed; an FTS5 trigram index is the
-  // upgrade. SAFETY: the outer query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  // upgrade.
   return cachedStatement(
     db,
     `
@@ -255,7 +253,6 @@ export async function loadVectorCandidateEntriesAt(
     index,
   });
   if (matches.length === 0) return [];
-  // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(matches.length)})`,
@@ -276,7 +273,6 @@ export function pickRarestFtsQuery(
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
-  // SAFETY: rows' shape matches the two columns named in the SELECT.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,

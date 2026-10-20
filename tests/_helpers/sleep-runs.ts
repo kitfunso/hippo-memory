@@ -4,7 +4,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 export function sleepRuns(hippoRoot: string): number {
   const db = openHippoDb(hippoRoot);
   try {
-    return db.prepare('SELECT COUNT(*) AS n FROM consolidation_runs').get<{ n: number }>().n;
+    return (db.prepare('SELECT COUNT(*) AS n FROM consolidation_runs').get() as { n: number }).n;
   } finally {
     closeHippoDb(db);
   }

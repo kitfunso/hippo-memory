@@ -60,8 +60,8 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
  * [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark otherwise lands
  * after the parent is gone.
  */
-// SHORTCUT: a removed parent and all its changed children commit as one component, so
-// one hold can pass holdMs by a family's size; split by child if a family grows large.
+// SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can pass holdMs by a
+// family's size; split by child if a family grows large.
 export function familyUnits(
   { refreshes, writes, deletes, dormant }: PendingOps,
   loadedParent: (id: string) => string | undefined,

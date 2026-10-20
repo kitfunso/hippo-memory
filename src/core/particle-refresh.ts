@@ -5,8 +5,8 @@ import { computeCharge, computeMass, computeTemperature, type PhysicsParticle } 
 import { DAY_MS } from '../util/time.js';
 
 /**
- * Refresh mass, charge and temperature for existing particles
- * from current memory attributes (called during consolidation).
+ * Refresh mass, charge and temperature for existing particles from current memory attributes (called during
+ * consolidation).
  */
 export function refreshParticleProperties(
   particles: PhysicsParticle[],

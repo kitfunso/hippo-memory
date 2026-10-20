@@ -456,8 +456,6 @@ export async function handleCurrent({ hippoRoot, tenantId, args, flags }: Comman
   fail('Usage: hippo current <show>');
 }
 
-// Working Memory
-
 export async function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 

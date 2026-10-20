@@ -7,6 +7,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import { RejectedValueError } from '../../core/api-errors.js';
 import type { RejectedValueRow } from '../port/rejections.js';
 
+// SAFETY: every read cast to this row selects REJECTED_VALUE_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface RawRejectedValueRow {
   tenant_id: string;
   digest: string;
@@ -16,6 +17,8 @@ interface RawRejectedValueRow {
   source_memory_id: string | null;
   normalized_chars: number | null;
 }
+const REJECTED_VALUE_COLUMNS =
+  'tenant_id, digest, reason, rejected_by, rejected_at, source_memory_id, normalized_chars';
 
 function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
   return {
@@ -32,10 +35,9 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
 /** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case cost; a miss ends the
  * guard. */
 export function findRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): RejectedValueRow | null {
-  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(
-      `SELECT tenant_id, digest, reason, rejected_by, rejected_at, source_memory_id, normalized_chars
+      `SELECT ${REJECTED_VALUE_COLUMNS}
        FROM rejected_values WHERE tenant_id = ? AND digest = ?`,
     )
     .get(tenantId, digest) as RawRejectedValueRow | undefined;
@@ -85,10 +87,9 @@ export function deleteRejectedValue(db: DatabaseSyncLike, tenantId: string, dige
 
 /** List tombstones for a tenant, newest first: the `rejections` verb. */
 export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): RejectedValueRow[] {
-  // SAFETY: rows' shape matches the columns named in the SELECT above.
   const rows = db
     .prepare(
-      `SELECT tenant_id, digest, reason, rejected_by, rejected_at, source_memory_id, normalized_chars
+      `SELECT ${REJECTED_VALUE_COLUMNS}
        FROM rejected_values WHERE tenant_id = ? ORDER BY rejected_at DESC, digest ASC`,
     )
     .all(tenantId) as RawRejectedValueRow[];
@@ -104,8 +105,7 @@ export function checkRejectionGuard(db: DatabaseSyncLike, tenantId: string, entr
   if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
 
   // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is read as a
-  // tenantId-only upsert introduces content there. SAFETY: storedRow's shape matches the two columns named in the
-  // SELECT above.
+  // tenantId-only upsert introduces content there.
   const storedRow = db.prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
     | { content: string; tenant_id: string }
     | undefined;

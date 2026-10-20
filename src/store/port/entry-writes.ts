@@ -5,8 +5,8 @@ export interface EntryWrite {
   readonly actor: string;
 }
 
-/** Who acts on which of a tenant's rows; `ownScope` is the caller's
- * personal scope, so every other personal row is out of reach. */
+/** Who acts on which of a tenant's rows; `ownScope` is the caller's personal scope, so every other personal row is out
+ * of reach. */
 export interface EntryTarget {
   readonly tenantId: string;
   readonly actor: string;
@@ -44,8 +44,8 @@ export interface EntryWrites {
    * tenant tombstoned rejects with RejectedValueError; one reject_refusal row follows the rollback, best effort. */
   writeEntry(write: EntryWrite): Promise<void>;
   /** Per id in order, a row of the tenant within reach gets `entryAfterOutcome` (rewrite as writeEntry does) and one
-   * outcome row ({good}); other ids skipped. Each read holds the row's lock to commit, so a
-   * concurrent supersede is not undone. Resolves to the ids applied, repeats kept. */
+   * outcome row ({good}); other ids skipped. Each read holds the row's lock to commit, so a concurrent supersede is not
+   * undone. Resolves to the ids applied, repeats kept. */
   applyOutcome(outcome: OutcomeWrite): Promise<string[]>;
   /** Rewrites the row as writeEntry does plus one pin row ({pinned}); out of reach rejects as forget does. */
   setPinned(pin: PinWrite): Promise<MemoryEntry>;

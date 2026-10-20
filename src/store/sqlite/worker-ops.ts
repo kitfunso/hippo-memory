@@ -295,8 +295,8 @@ export interface Job {
   readonly walPages: number;
 }
 
-/** Both kinds carry the audit rows the job failed to write,
- * since the count `/health` reports lives on the server thread. */
+/** Both kinds carry the audit rows the job failed to write, since the count `/health` reports lives on the server
+ * thread. */
 export type Reply =
   | { readonly id: number; readonly ok: true; readonly value: unknown; readonly auditFailures: number }
   | { readonly id: number; readonly ok: false; readonly error: WireError; readonly auditFailures: number };

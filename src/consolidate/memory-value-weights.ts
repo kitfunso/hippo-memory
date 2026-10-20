@@ -17,6 +17,6 @@ export const MEMORY_VALUE_WEIGHTS: Readonly<Record<string, number>> = Object.fre
   content_length: -0.6154742645858876,
 });
 
-/** sha256 of benchmarks/memory-value/weights-learned.json at freeze time
- *  (weights-learned.meta.json's `weightsFileSha256`). */
+/** sha256 of benchmarks/memory-value/weights-learned.json at freeze time (weights-learned.meta.json's
+ *  `weightsFileSha256`). */
 export const SOURCE_ARTIFACT_SHA256 = '1e747abed0df771fc9c354da8562771b336c4042faf0266f565bba1b5a8c5a40';

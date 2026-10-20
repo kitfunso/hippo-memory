@@ -154,8 +154,7 @@ export async function handleMcpStream(
     'cache-control': 'no-cache',
     connection: 'keep-alive',
   });
-  // Initial ping so smoke tests can confirm the stream is live without
-  // waiting for the first keepalive interval.
+  // Initial ping so smoke tests can confirm the stream is live without waiting for the first keepalive interval.
   res.write(': ping\n\n');
 
   // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and closes with
@@ -204,8 +203,8 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
         log.warn('heartbeat tick failed', errorFields(err));
       });
   }, heartbeatMs);
-  // Don't keep the event loop alive just for this timer — the server's
-  // listener already does that, and tests want the process to exit cleanly.
+  // Don't keep the event loop alive just for this timer; the server's listener already does that, and tests want the
+  // process to exit cleanly.
   if (ping.unref instanceof Function) ping.unref();
   // res 'close' covers an early socket drop that req 'close' can miss.
   res.on('close', () => {

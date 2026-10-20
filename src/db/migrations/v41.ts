@@ -5,8 +5,8 @@ export const v41: Migration = {
   up: (db) => {
     // Rejected-value tombstone: upsertEntryRow refuses writes matching a row's digest. No raw content stored (may be
     // secret); no FK: it outlives its row.
-    // No min_compatible_binary bump, a deliberate tradeoff: an old binary writes without the guard until upgraded
-    // (see MEMORY_ENVELOPE.md).
+    // No min_compatible_binary bump, a deliberate tradeoff: an old binary writes without the guard until upgraded (see
+    // MEMORY_ENVELOPE.md).
     db.exec(`
         CREATE TABLE IF NOT EXISTS rejected_values (
           tenant_id  TEXT NOT NULL,

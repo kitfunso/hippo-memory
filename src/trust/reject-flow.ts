@@ -33,8 +33,8 @@ function assertRejectOpts(opts: RejectFlowOptions): void {
     throw new Error('reject requires either a memory id or --value.');
   }
   if (opts.memoryId !== undefined && opts.value !== undefined) {
-    // Enforced here, not only in the CLI parser, so a direct api caller passing both
-    // is refused instead of silently getting the memoryId path with `value` ignored.
+    // Enforced here, not only in the CLI parser, so a direct api caller passing both is refused instead of silently
+    // getting the memoryId path with `value` ignored.
     throw new Error('reject accepts either a memory id or --value, not both.');
   }
   if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {

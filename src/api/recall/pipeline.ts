@@ -1,5 +1,5 @@
-// Ranking core shared by `hippo recall` and `hippo explain`: load, search, expand, re-rank and filter, with no
-// writes and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
+// Ranking core shared by `hippo recall` and `hippo explain`: load, search, expand, re-rank and filter, with no writes
+// and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
 
 import { evalNow } from '../../core/ablation.js';
 import { oneCopyPerMemory } from '../context-select.js';
@@ -49,8 +49,8 @@ export interface RankSource {
 
 /** Stores rankRecall reads and where it sends operator notes. */
 export interface RankRecallCtx extends RankSource {
-  /** A second store searched beside `store`; leave undefined when there is none. Passing `store` itself reads it
-   * twice but walks its graph once. */
+  /** A second store searched beside `store`; leave undefined when there is none. Passing `store` itself reads it twice
+   * but walks its graph once. */
   global?: RankSource;
   tenantId: string;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
@@ -120,8 +120,8 @@ export interface RankRecallOptions {
   salienceThreshold?: number;
   outcome?: string;
   layer?: string;
-  /** The caller rejected a flag this stage reads; ranking stops before it so the notes and goal-log rows
-   *  produced up to there match the CLI's error path. */
+  /** The caller rejected a flag this stage reads; ranking stops before it so the notes and goal-log rows produced up to
+   *  there match the CLI's error path. */
   haltBefore?: RankStage;
 }
 
@@ -159,9 +159,8 @@ interface RankState {
 
 /**
  * Ranks memories for a query as `hippo recall` does, through the `limit` slice. Reads stores, embeddings and physics
- * state; writes and prints nothing
- * (notes go to `ctx.note`). The caller supplies the cost function and reranker in `opts` and persists the returned
- * goal-log rows.
+ * state; writes and prints nothing (notes go to `ctx.note`). The caller supplies the cost function and reranker in
+ * `opts` and persists the returned goal-log rows.
  */
 export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): Promise<RankRecallResult> {
   const pool = await loadRecallPool(ctx, opts);

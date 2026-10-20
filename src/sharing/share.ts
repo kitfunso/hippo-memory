@@ -64,8 +64,8 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
   return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
 }
 
-/** Tags whose rows sleep keeps as written: never merged, never
- * sent to LLM extraction. Conflict detection keeps its own list. */
+/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its own
+ * list. */
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   'extracted',
   'session-digest',
@@ -108,11 +108,9 @@ const AUTO_SHARE_PAGE_ROWS = 500;
 export function transferScore(entry: MemoryEntry): number {
   let score = TRANSFER_WEIGHTS.neutral;
 
-  // Boost for transferable tags
   const transferableCount = entry.tags.filter((t) => TRANSFERABLE_TAGS.has(t)).length;
   score += transferableCount * TRANSFER_WEIGHTS.perTransferableTag;
 
-  // Penalize for project-specific tags
   const specificCount = entry.tags.filter((t) => PROJECT_SPECIFIC_TAGS.has(t)).length;
   score -= specificCount * TRANSFER_WEIGHTS.perProjectTag;
 
@@ -162,16 +160,16 @@ export async function shareMemory(
   return globalEntry;
 }
 
-/** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the
- * row may not be shared. */
+/** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the row
+ * may not be shared. */
 function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): MemoryEntry | null {
   assertShareable(entry, entry.id);
 
   const score = transferScore(entry);
   if (score < SHARE_MIN_SCORE && !force) return null;
 
-  // The label keeps the folder name for a user-global row; a NULL
-  // row gets `shared::`, which originFromSource reads as no project.
+  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as
+  // no project.
   const fallbackName = path.basename(path.resolve(localRoot, '..'));
   const originName = entry.originProject ?? fallbackOrigin(localRoot);
   const label = originName === '' ? fallbackName : (originName ?? '');

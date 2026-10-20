@@ -13,8 +13,9 @@ interface FetchGate {
   readonly open: () => void;
 }
 
-/** The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of its tensor it
- * reads. */
+/**
+ * The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of its tensor it reads.
+ */
 interface EmbeddingPipeline {
   (input: string, options: { pooling: 'cls' | 'mean'; normalize: boolean }): Promise<{ data: ArrayLike<number> }>;
 }
@@ -41,8 +42,8 @@ interface TransformersModule {
 
 export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 
-/** BGE was trained with CLS pooling; everything else gets mean, the sentence-transformers default, since CLS
- * degrades mean-trained models. */
+/** BGE was trained with CLS pooling; everything else gets mean, the sentence-transformers default, since CLS degrades
+ * mean-trained models. */
 export function poolingFor(model: string): 'cls' | 'mean' {
   return /\bbge\b/i.test(model) ? 'cls' : 'mean';
 }
@@ -216,8 +217,8 @@ export function resolveEmbeddingModel(embeddings: EmbeddingsConfig, explicitMode
   return DEFAULT_EMBEDDING_MODEL;
 }
 
-/** Embeds `text` with the local model, or returns `[]` when Transformers.js is missing or fails; `role` adds
- * e5-style prefixes. */
+/** Embeds `text` with the local model, or returns `[]` when Transformers.js is missing or fails; `role` adds e5-style
+ * prefixes. */
 export function getEmbedding(text: string, model = DEFAULT_EMBEDDING_MODEL, role?: EmbeddingRole): Promise<number[]> {
   return sharedLocalEmbedder.embed(text, model, role);
 }

@@ -21,8 +21,8 @@ export interface LocalRememberInput {
   readonly content: string;
   /** Every tag the row stores; the salience gate reads these. */
   readonly tags: readonly string[];
-  /** The tags schema fit is scored on, for a caller that added
-   * path and scope tags of its own to `tags`; without it, `tags`. */
+  /** The tags schema fit is scored on, for a caller that added path and scope tags of its own to `tags`; without it,
+   * `tags`. */
   readonly fitTags?: readonly string[];
   readonly kind?: MemoryKind;
   readonly scope?: string;
@@ -56,8 +56,8 @@ export type LocalRememberOutcome =
     }
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
-/** The gate's verdict on one write, or null where it does not
- * judge: the store has it off, or the write is pinned or forced. */
+/** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned or
+ * forced. */
 async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise<SalienceResult | null> {
   const { salience } = ctx.config;
   if (!salience.enabled || input.pinned || input.force) return null;
@@ -73,16 +73,17 @@ async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise
   });
 }
 
-/** The row `remember` just wrote, as the store holds it: the
- * report, the embedding and the extraction all work on that. */
+/**
+ * The row `remember` just wrote, as the store holds it: the report, the embedding and the extraction all work on that.
+ */
 async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
   const entry = await memoryGet(ctx, id);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
 }
 
-/** Best-effort and slow (a model load or a network call), so the
- * caller is not held for it; a row left out of the index is logged. */
+/** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index
+ * is logged. */
 function indexInBackground(ctx: LocalContext, entry: MemoryEntry): Promise<EmbedOutcome> {
   const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store, config: ctx.config });
   return embedMemory(target, entry).then((outcome) => {

@@ -20,6 +20,19 @@ function isConstAssertion(node: TypeAssertion): boolean {
   );
 }
 
+const statementReads = new Set(["get", "all", "iterate"]);
+
+/** A cast of `x.get(...)`, `x.all(...)` or `x.iterate(...)`: scripts/check-row-casts.mjs proves those in src/. */
+function isStatementRead(node: TypeAssertion): boolean {
+  const read = node.expression;
+  return (
+    read.type === "CallExpression" &&
+    read.callee.type === "MemberExpression" &&
+    read.callee.property.type === "Identifier" &&
+    statementReads.has(read.callee.property.name)
+  );
+}
+
 function hasSafetyComment(sourceCode: SourceCode, node: TypeAssertion): boolean {
   let current: ESTree.Node = node;
   while (true) {
@@ -47,10 +60,22 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
       missingSafetyComment:
         "This type assertion has no `SAFETY:` justification. State the checked invariant immediately before the assertion or its containing statement.",
     },
+    schema: [
+      {
+        type: "object",
+        properties: { allowStatementReads: { type: "boolean" } },
+        additionalProperties: false,
+      },
+    ],
+    defaultOptions: [{ allowStatementReads: false }],
   },
   createOnce(context) {
     const checkAssertion = (node: TypeAssertion) => {
-      if (isConstAssertion(node) || hasSafetyComment(context.sourceCode, node)) return;
+      const option = context.options?.[0];
+      const allowStatementReads =
+        typeof option === "object" && option !== null && !Array.isArray(option) && option.allowStatementReads === true;
+      if (isConstAssertion(node) || (allowStatementReads && isStatementRead(node))) return;
+      if (hasSafetyComment(context.sourceCode, node)) return;
       context.report({ node, messageId: "missingSafetyComment" });
     };
 

@@ -13,8 +13,8 @@ export type { DlqBucket, DlqItem };
 
 type GitHubOwnColumns = Pick<GitHubDlqInsert, 'eventName' | 'deliveryId' | 'installationId' | 'repoFullName'>;
 
-/** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row
- * without re-reading the payload. */
+/** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row without
+ * re-reading the payload. */
 export const githubDlq: ConnectorDlq<'github', GitHubOwnColumns, DlqBucket> = {
   connector: 'github',
   letter: (row) => ({ connector: 'github', ...row }),

@@ -20,7 +20,6 @@ import type { Sync } from './served.js';
  * correction-latency report reads. */
 function correctionEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
   const superseded = `superseded_by IS NOT NULL AND superseded_by != ''`;
-  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
@@ -38,7 +37,6 @@ function correctionEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
 
 /** The kind='raw' rows in loadAllEntries' order: all a provenance-coverage report reads. */
 function rawEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
-  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ORDER BY created ASC, id ASC`)
     .all() as MemoryRow[];

@@ -55,11 +55,11 @@ export interface SummaryDescendants {
 
 /** The reads behind session assembly and summary drill-down. None writes an audit row. */
 export interface DagReads {
-  /** The newest `cap` rows by created then id, returned oldest first (created, then id,
-   * ascending) as `loadSessionRawMemories` does; an empty session id reads nothing. */
+  /** The newest `cap` rows by created then id, returned oldest first (created, then id, ascending) as
+   * `loadSessionRawMemories` does; an empty session id reads nothing. */
   sessionRawEntries(query: SessionRawWindow): Promise<MemoryEntry[]>;
-  /** How many rows the session holds with no cap, under the scope rule `passesScopeFilterForRecall`
-   * applies, so the count never tells of a row the caller could not read. */
+  /** How many rows the session holds with no cap, under the scope rule `passesScopeFilterForRecall` applies, so the
+   * count never tells of a row the caller could not read. */
   sessionRawCount(query: SessionRawCount): Promise<number>;
   /** The tenant's row `id` and up to `walk.depth` levels under it, read in one call so no write of this process lands
    * between levels; null if no such row. Each level lists the children of the one above, parent by parent, children by

@@ -82,8 +82,8 @@ export const v24: Migration = {
     // Composite PK so one repo can be visible to several tenants; the collision is on the (repo, tenant) pair.
     db.exec(CREATE_TABLE_GITHUB_REPOSITORIES_SQL);
 
-    // Rollback-safety guard: an older binary lacks the *:private:* default-deny and would leak
-    // github:private:* rows; the startup guard refuses a DB whose min_compatible_binary is newer.
+    // Rollback-safety guard: an older binary lacks the *:private:* default-deny and would leak github:private:* rows;
+    // the startup guard refuses a DB whose min_compatible_binary is newer.
     db.prepare(
       `INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ` +
         `ON CONFLICT(key) DO UPDATE SET value=excluded.value`,

@@ -87,8 +87,8 @@ function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: store.contextReads };
 }
 
-/** What one store's ambient read is asked for. `recent`, `admission`, `recall`
- * and `onRefused` apply to the pinned-only branch alone. */
+/** What one store's ambient read is asked for. `recent`, `admission`, `recall` and `onRefused` apply to the pinned-only
+ * branch alone. */
 interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
@@ -133,8 +133,8 @@ async function loadAmbientEntries(
     origins: recent.origins,
   });
   if (onRefused) for (const refusal of loaded.refused) onRefused(refusal);
-  // Pins and recent rows reach core only through the store's own
-  // call to admit, so core applies it again with the tenant.
+  // Pins and recent rows reach core only through the store's own call to admit, so core applies it again with the
+  // tenant.
   const entries = loaded.entries.filter((e) => ownTenant(e) && recheck(e));
   return loaded.recall ? { entries, recall: loaded.recall.filter(ownTenant) } : { entries };
 }
@@ -183,8 +183,8 @@ export async function contextGet(ctx: Context, opts: ContextOptions): Promise<Co
     return { entries: [], tokens: 0 };
   }
 
-  // pinnedOnly is the UserPromptSubmit hot path — read-only so pinned
-  // memories don't inflate retrieval_count or extend half_life every turn.
+  // pinnedOnly is the UserPromptSubmit hot path: read-only so pinned memories don't inflate retrieval_count or extend
+  // half_life every turn.
   const recorded = plan.pinnedOnly
     ? { items, ambientState: undefined }
     : await recordRetrieval(ctx, opts, plan, items, sections.activeSnapshot);
@@ -209,8 +209,9 @@ function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boo
 
 const isolationWarned = new Set<string>();
 
-/** A laptop config copied onto a team store must not open every
- * member's rows to every prompt, so the flag loses there. */
+/**
+ * A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses there.
+ */
 function warnIsolationIgnored(hippoRoot: string): void {
   if (isolationWarned.has(hippoRoot)) return;
   isolationWarned.add(hippoRoot);
@@ -264,8 +265,8 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
   const { hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts);
   const query = (opts.q ?? '').trim() || NO_QUERY;
 
-  // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
-  // excluded unless the caller asks for them (crossProject) or isolation is disabled.
+  // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are excluded unless
+  // the caller asks for them (crossProject) or isolation is disabled.
   const config = ctx.config;
   const isolationEnabled = config.contextProjectIsolation !== false;
   const currentProject = opts.currentProject;
@@ -359,8 +360,8 @@ const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] 
 async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: ContextPlan): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store, reads } = plan.local;
-  // On a shared store task state is one person's, keyed by owner
-  // and project so it follows them into their next session.
+  // On a shared store task state is one person's, keyed by owner and project so it follows them into their next
+  // session.
   const key: ContinuityKey | null = plan.sharedStore
     ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
     : null;
@@ -377,8 +378,8 @@ async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: Contex
   };
 }
 
-// Sections print ahead of the memories, so they are paid first;
-// one that does not fit is dropped, as an oversize entry is.
+// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry
+// is.
 async function loadTaskSections(
   ctx: Context,
   opts: ContextOptions,
@@ -428,8 +429,9 @@ function ambientAdmission(
   return { rule, admit, bothStoresAdmit };
 }
 
-/** Origins the recent backfill may read past its first window;
- * on a shared store, only the caller's own project rows. */
+/**
+ * Origins the recent backfill may read past its first window; on a shared store, only the caller's own project rows.
+ */
 function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
   if (plan.sharedStore) return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
   return plan.originProject && { names: plan.originProject, userGlobal: true };
@@ -530,8 +532,8 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   selected = heldDropped;
   const tokens = selected.reduce((sum, r) => sum + r.tokens, 0);
 
-  // Every returned entry carries its origin and how it relates to
-  // the active project, so renderers can mark cross-project rows.
+  // Every returned entry carries its origin and how it relates to the active project, so renderers can mark
+  // cross-project rows.
   selected = selected.map((r) => ({
     ...r,
     origin: r.entry.originProject ?? null,
@@ -597,8 +599,8 @@ async function recordRetrieval(
   plan.obs?.traced(traceId);
   await store.bumpRecallStats(selected.length);
 
-  // Replace selectedItems entries with markRetrieved-updated copies so
-  // the returned ContextResult reflects post-recall state.
+  // Replace selectedItems entries with markRetrieved-updated copies so the returned ContextResult reflects post-recall
+  // state.
   const items = selected.map((s) => ({
     ...s,
     entry: updatedEntries.find((u) => u.id === s.entry.id) ?? s.entry,

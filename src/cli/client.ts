@@ -36,8 +36,7 @@ function isStoreBusy(res: Response): boolean {
 
 /**
  * Replaying is safe because each routed write commits in one transaction and anything after it is best-effort, so a
- * busy 503 means
- * nothing landed; a sleep is safe too, as a re-run finishes a partial one. */
+ * busy 503 means nothing landed; a sleep is safe too, as a re-run finishes a partial one. */
 function sendWrite(url: string, init: RequestInit): Promise<Response> {
   return fetchWithRetry(url, init, {
     timeoutMs: SERVER_TIMEOUT_MS,
@@ -66,8 +65,8 @@ export class HttpResponseError extends Error {
   }
 }
 
-/** Throw an Error carrying the server's message verbatim, so cli.ts handlers can match the same substrings
- * ("not found", "already superseded") as on the direct path. */
+/** Throw an Error carrying the server's message verbatim, so cli.ts handlers can match the same substrings ("not
+ * found", "already superseded") as on the direct path. */
 async function throwForStatus(res: Response): Promise<never> {
   let message = `${res.status} ${res.statusText}`;
   try {
@@ -175,8 +174,7 @@ export async function archiveRaw(
 
 /**
  * 'never-sent': connection never opened, safe to replay locally. 'delivery-unknown': the request was on the wire and
- * may have
- * committed, so never replay a write. 'none': not a transport failure. */
+ * may have committed, so never replay a write. 'none': not a transport failure. */
 export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
 
 /**
@@ -194,8 +192,8 @@ export function classifyTransportFailure(err: Error): TransportFailure {
   // The server answered, so the transport worked, whatever the message says.
   if (err instanceof HttpResponseError) return 'none';
   const code = transportCode(err);
-  // Connect-phase failures: no request bytes ever left the client, so a stale
-  // pidfile can be healed and the call replayed on the direct path.
+  // Connect-phase failures: no request bytes ever left the client, so a stale pidfile can be healed and the call
+  // replayed on the direct path.
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'never-sent';
   // The socket died mid-exchange.
   if (code === 'ECONNRESET' || code === 'ECONNABORTED' || code === 'EPIPE' || code === 'UND_ERR_SOCKET') {

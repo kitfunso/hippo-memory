@@ -36,8 +36,7 @@ export interface PhysicsConfig {
 
 export const DEFAULT_PHYSICS_CONFIG: Readonly<PhysicsConfig> = {
   // Off by default: the paired ablation (benchmarks/physics-ablation/) found physics worse than classic hybrid on every
-  // metric, CI excluding zero
-  // (MRR 0.68 vs 0.84, R@5 74% vs 84%). Opt in with physics.enabled 'auto' or true.
+  // metric, CI excluding zero (MRR 0.68 vs 0.84, R@5 74% vs 84%). Opt in with physics.enabled 'auto' or true.
   enabled: false,
   G_query: 2.0,
   G_memory: 0.01,

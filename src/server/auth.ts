@@ -18,8 +18,8 @@ import { isLoopbackAddress } from '../util/net.js';
 /** Kept under its old name because src/server.ts publishes it. */
 export const isLoopback = isLoopbackAddress;
 
-// A proxy on this host (nginx, Caddy, cloudflared) connects
-// from loopback, so these headers mean the caller is not local.
+// A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not
+// local.
 const PROXY_HEADERS = [
   'forwarded',
   'x-forwarded-for',
@@ -35,8 +35,9 @@ function proxyHeaderOf(req: IncomingMessage): string | undefined {
   return PROXY_HEADERS.find((name) => req.headers[name] !== undefined);
 }
 
-/** A page in a browser on this machine: another site's request,
- * or a hostile name resolved to loopback (DNS rebinding). */
+/**
+ * A page in a browser on this machine: another site's request, or a hostile name resolved to loopback (DNS rebinding).
+ */
 export function isForeignPage(req: IncomingMessage): boolean {
   const host = req.headers.host;
   return (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req);
@@ -48,8 +49,8 @@ export function isLocalCaller(req: IncomingMessage): boolean {
   return isLoopbackAddress(req.socket.remoteAddress) && proxyHeaderOf(req) === undefined && !isForeignPage(req);
 }
 
-// The throwing twin of isLocalCaller, for the no-key fallback:
-// each refusal has its own status, and a proxied one is logged.
+// The throwing twin of isLocalCaller, for the no-key fallback: each refusal has its own status, and a proxied one is
+// logged.
 function assertLocalCaller(req: IncomingMessage): void {
   if (!isLoopbackAddress(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
   const proxyHeader = proxyHeaderOf(req);
@@ -72,8 +73,8 @@ const KEY_REQUIRED_MESSAGE =
   '"Authorization: Bearer <key>" (the hippo CLI reads HIPPO_API_KEY), or start the server with ' +
   'HIPPO_ALLOW_KEYLESS_LOCAL=1 to let requests from this machine in without a key.';
 
-/** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): { kind: 'absent' },
- * { kind: 'malformed' } (set but not 'Bearer <token>'), or { kind: 'bearer', token } for a non-empty token. */
+/** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): { kind: 'absent' }, { kind:
+ * 'malformed' } (set but not 'Bearer <token>'), or { kind: 'bearer', token } for a non-empty token. */
 type AuthHeader = { kind: 'absent' } | { kind: 'malformed' } | { kind: 'bearer'; token: string };
 
 export function readAuthHeader(req: IncomingMessage): AuthHeader {
@@ -195,8 +196,8 @@ interface BearerIdentity extends ResolvedBearer {
 
 const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 
-/** Runs only before scrypt, so junk, unknown, revoked and expired
- * tokens and a proven key's re-check never spend a colleague's budget. */
+/** Runs only before scrypt, so junk, unknown, revoked and expired tokens and a proven key's re-check never spend a
+ * colleague's budget. */
 function chargeScryptRun(req: IncomingMessage, opts: AuthOptions): void {
   const limiter = opts.failedAuthLimiter;
   // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
@@ -300,8 +301,8 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: ContextOp
   return ctx;
 }
 
-/** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and
- * must re-check right before it acts. */
+/** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and must
+ * re-check right before it acts. */
 export async function recheckContextWithAuth(req: IncomingMessage, opts: ContextOptions): Promise<Context> {
   return contextFor(await checkAuth(req, opts), opts);
 }

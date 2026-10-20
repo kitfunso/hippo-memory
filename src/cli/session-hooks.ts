@@ -90,8 +90,8 @@ async function cmdCompactResume(
 ): Promise<void> {
   let rec: DeliveryRecorder | null = null;
   try {
-    // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
-    // silently create a store in a project that never ran `hippo init`, and this hook fires globally.
+    // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would silently
+    // create a store in a project that never ran `hippo init`, and this hook fires globally.
     if (!isInitialized(hippoRoot)) {
       throw new CliExit(0);
     }
@@ -467,8 +467,9 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
   }
 }
 
-/** Resolves true once the detached worker is running, false when the spawn fails, whether it throws or reports
- * later. */
+/**
+ * Resolves true once the detached worker is running, false when the spawn fails, whether it throws or reports later.
+ */
 function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> {
   return new Promise((resolve) => {
     const failed = (reason: string): void => {
@@ -636,8 +637,8 @@ export async function handlePostCompact({ hippoRoot, tenantId, flags }: CommandC
 }
 
 export async function handleCaptureError({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // PostToolUseFailure hook: every path exits 0, and nothing is created
-  // when no store exists (the hook fires in every directory).
+  // PostToolUseFailure hook: every path exits 0, and nothing is created when no store exists (the hook fires in every
+  // directory).
   const { text } = await readHookStdin();
   try {
     const root = hookStoreRoot(payloadCwdRoot(hippoRoot, text, hookRuntime(flags)));
@@ -698,8 +699,8 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     );
   }
 
-  // Bounded, and only when last-session has no explicit path: the
-  // --stdin source keeps its own blocking read in src/capture/ by design.
+  // Bounded, and only when last-session has no explicit path: the --stdin source keeps its own blocking read in
+  // src/capture/ by design.
   const bounded =
     captureSource === 'last-session' && !transcriptPath ? await readHookStdin() : { text: undefined, timedOut: false };
 

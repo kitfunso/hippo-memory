@@ -72,8 +72,8 @@ async function cmdForget(hippoRoot: string, tenantId: string, id: string, flags:
 
   const ctx = cliApiContext(hippoRoot, tenantId);
 
-  // Raw memories (connector ingestion) are append-only: a BEFORE-DELETE trigger aborts any delete,
-  // so rawArchive is the sanctioned removal path and records ctx.actor as the archiver.
+  // Raw memories (connector ingestion) are append-only: a BEFORE-DELETE trigger aborts any delete, so rawArchive is the
+  // sanctioned removal path and records ctx.actor as the archiver.
   if (flagIsTrue(flags, 'archive')) {
     await archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
     return;
@@ -102,12 +102,11 @@ async function archiveForgottenRaw(ctx: api.Context, id: string, reason: string 
 
 async function reportForgetFailure(ctx: api.Context, id: string, cause: unknown): Promise<void> {
   if (cause instanceof RawAppendOnlyError) {
-    // The delete was refused by the append-only trigger — this is a raw
-    // memory, not a missing one. Point the user at the archive path.
+    // The delete was refused by the append-only trigger: this is a raw memory, not a missing one. Point the user at the
+    // archive path.
     printError(rawForgetRefusal(id));
   } else if (await api.isDormant(ctx, id)) {
-    // Sleep moved it to the dormant store: it is not in active memory, so
-    // point at the command that owns it.
+    // Sleep moved it to the dormant store: it is not in active memory, so point at the command that owns it.
     printError(
       `${id} is dormant, not in active memory. Delete it for good: hippo dormant forget ${id} ` +
         `(or bring it back: hippo dormant restore ${id})`,
@@ -228,11 +227,9 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
   console.log(`Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`);
 }
 
-// reject / rejections / unreject
-
 export async function handleReject({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
-  // Store resolution mirrors `hippo remember`: --global writes to the
-  // global store, otherwise the local store (requireInit'd via resolveAuthRoot).
+  // Store resolution mirrors `hippo remember`: --global writes to the global store, otherwise the local store
+  // (requireInit'd via resolveAuthRoot).
   const root = resolveAuthRoot(hippoRoot, flags);
 
   // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable identity.
@@ -335,8 +332,8 @@ export async function handleUnreject({ hippoRoot, tenantId, args, flags }: Comma
   );
 }
 
-/** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps instead of deleting
- * (on by default; `"dormant": { "enabled": false }` in .hippo/config.json deletes instead). */
+/** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps instead of deleting (on by
+ * default; `"dormant": { "enabled": false }` in .hippo/config.json deletes instead). */
 export async function handleDormant({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
@@ -413,8 +410,8 @@ function printDormantRows(rows: Awaited<ReturnType<typeof api.dormantList>>, has
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
 }
 
-/** `hippo quarantine [list] [--all] [--json] [--global]`,
- * `quarantine approve <id>`, `quarantine reject <id>` (poisoning defence). */
+/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>`
+ * (poisoning defence). */
 export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
@@ -474,8 +471,8 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
-  // both branches the same way the direct path does.
+  // Archive has its own HTTP route (POST /v1/memories/:id/archive); route both branches the same way the direct path
+  // does.
   const archive = flagIsTrue(flags, 'archive');
   const reason = stringFlag(flags, 'reason') ?? null;
   if (archive && !reason) {
@@ -495,8 +492,8 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
         console.log(`Forgot ${id}`);
       }
     } catch (err) {
-      // A server that died after the health probe is the caller's transport
-      // fallback to handle, not an error to report to the user.
+      // A server that died after the health probe is the caller's transport fallback to handle, not an error to report
+      // to the user.
       if (err instanceof Error && client.classifyTransportFailure(err) !== 'none') throw err;
       const msg = errorMessage(err);
       fail(archive ? `Could not archive ${id}: ${msg}` : msg);
@@ -546,8 +543,8 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
   if (flagIsTrue(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
   const target = args[0];
   if (flagIsTrue(flags, 'id')) {
-    // Value-less --id must never silently fall through to pattern mode
-    // (pattern mode writes broadly; an ignored --id reverses user intent).
+    // Value-less --id must never silently fall through to pattern mode (pattern mode writes broadly; an ignored --id
+    // reverses user intent).
     fail('--id requires a memory id');
   }
   const onlyId = stringFlag(flags, 'id');

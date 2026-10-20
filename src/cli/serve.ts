@@ -35,10 +35,9 @@ export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandCon
 }
 
 export async function handleMcp(): Promise<void> {
-  // Start MCP server over stdio. Dynamic import keeps main CLI lean; the
-  // dispatcher itself is transport-agnostic, so we explicitly attach the
-  // stdio loop here. (HTTP/SSE transport is wired in src/server.ts and
-  // imports the same module without triggering stdin handlers.)
+  // Start MCP server over stdio. Dynamic import keeps main CLI lean; the dispatcher itself is transport-agnostic, so we
+  // explicitly attach the stdio loop here. (HTTP/SSE transport is wired in src/server.ts and imports the same module
+  // without triggering stdin handlers.)
   const mod = await import('../mcp/server.js');
   mod.startStdioLoop(cliStdioHost());
   // Server runs until stdin closes, so we never reach here
@@ -65,8 +64,9 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   }
 }
 
-/** Said at every start, so the key rule is a choice an operator sees, and an upgrade that changed it explains
- * itself. */
+/**
+ * Said at every start, so the key rule is a choice an operator sees, and an upgrade that changed it explains itself.
+ */
 function keyRuleLine(): string {
   if (envRequireAuth()) return 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)';
   if (envAllowKeylessLocal()) {

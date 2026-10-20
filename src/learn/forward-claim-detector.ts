@@ -31,11 +31,10 @@ const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   /\bETA\s*(?:is|:)?\s*\d+/i,
   /\b(?:by|before)\s+next\s+(?:week|month|sprint|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
   // Standalone tilde duration ('~3 days for migration'): the lookbehind asserts start-of-string or whitespace because
-  // `\b` before `~` needs a word char
-  // and /\b~/ would only match 'foo~3 days', silently missing the real cases.
+  // `\b` before `~` needs a word char and /\b~/ would only match 'foo~3 days', silently missing the real cases.
   /(?<=^|\s)~\s*\d+\s*(?:day|week|month|hour)s?\b/i,
-  // Should + verb + duration tail. Same tightening as the leading 'will
-  // take' rule: 'should ship by EOD' must include a quantifier.
+  // Should + verb + duration tail. Same tightening as the leading 'will take' rule: 'should ship by EOD' must include a
+  // quantifier.
   new RegExp(
     String.raw`\bshould\s+(?:be|ship|finish|complete|land)\s+(?:by|in|within)\s+(?:(?:about|around)\s+)?(?:next\s+)?` +
       String.raw`(?:${DURATION_TAIL}|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b`,
@@ -150,7 +149,7 @@ export interface ForwardClaimMatch {
 /**
  * Detect whether a recall query carries a forward-prediction phrase; returns the first-match phrase plus
  * class-resolution tokens, else null.
- *  Token extraction runs only on a match, so non-forward queries pay nothing beyond the regex gate. */
+ * Token extraction runs only on a match, so non-forward queries pay nothing beyond the regex gate. */
 export function detectForwardClaim(queryText: string): ForwardClaimMatch | null {
   if (!queryText) return null;
   for (const pat of FORWARD_CLAIM_PATTERNS) {

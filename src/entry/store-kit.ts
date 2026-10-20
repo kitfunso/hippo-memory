@@ -31,8 +31,7 @@ export type { FailureEvent, FailureOutcome } from '../store/port/failure-log.js'
 export type { RejectedValueRow } from '../store/port/rejections.js';
 
 // The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types, hippo.db's rule
-// helpers),
-// so a store built on it applies hippo.db's rules with the same code.
+// helpers), so a store built on it applies hippo.db's rules with the same code.
 
 // An add-on serves from another database by passing serve() its own HippoStore.
 export { sqliteStore } from '../store/sqlite/store.js';
@@ -133,8 +132,7 @@ export { StoreBusyError } from '../store/port.js';
 // A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it from a missed tenant.
 export { ALL_TENANTS, type TenantId } from '../util/tenant.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its
-// rule,
-// so both stores keep the same bytes and return the same ids in the same order.
+// rule, so both stores keep the same bytes and return the same ids in the same order.
 export {
   decodeVector,
   EMBEDDING_MODEL_META_KEY,

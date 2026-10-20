@@ -1,5 +1,5 @@
-/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped
- * connection where a replay is safe. */
+/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection
+ * where a replay is safe. */
 
 import { MINUTE_MS } from './time.js';
 import { errorCode, errorFields, log } from './log.js';
@@ -10,8 +10,8 @@ export interface RetryPolicy {
   timeoutMs: number;
   /** Total attempts including the first. */
   attempts?: number;
-  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts whose wait would
-   * reach it. */
+  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts whose wait would reach
+   * it. */
   totalMs?: number;
   baseDelayMs?: number;
   /** A Retry-After longer than this hands the response back, so a caller with its own long pause keeps it. */
@@ -40,8 +40,8 @@ export function llmTimeoutMs(configured?: number): number {
   return configured ?? DEFAULT_LLM_TIMEOUT_MS;
 }
 
-/** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures
- * would hold a sleep for 3x the timeout. */
+/** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures would
+ * hold a sleep for 3x the timeout. */
 export function llmTotalMs(timeoutMs: number = llmTimeoutMs()): number {
   return 2 * timeoutMs + DEFAULT_MAX_DELAY_MS;
 }
@@ -120,8 +120,8 @@ const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> =>
     cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
   });
 
-/** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its
- * reason, so no further attempt starts. */
+/** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its reason,
+ * so no further attempt starts. */
 async function backoffWait(
   ms: number,
   sleep: Sleep | undefined,
@@ -141,8 +141,8 @@ async function backoffWait(
   }
 }
 
-/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429, 5xx and (see
- * `retryTransport`) transport faults; the last response or error comes back as is. */
+/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429, 5xx and (see `retryTransport`) transport
+ * faults; the last response or error comes back as is. */
 export async function fetchWithRetry(url: string | URL, init: RequestInit, policy: RetryPolicy): Promise<Response> {
   const fetchFn = policy.fetchFn ?? fetch;
   const attempts = Math.max(1, policy.attempts ?? DEFAULT_ATTEMPTS);

@@ -3,9 +3,9 @@
 import { personalScopeOf } from '../../core/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
 
-/** An id outside ctx.tenantId, or in someone else's personal scope, is skipped,
- *  so a stale id never fails the call. `appliedIds` holds only the ids applied:
- *  a caller that answers across tenants returns it, never the ids it was sent. */
+/** An id outside ctx.tenantId, or in someone else's personal scope, is skipped, so a stale id never fails the call.
+ *  `appliedIds` holds only the ids applied: a caller that answers across tenants returns it, never the ids it was sent.
+ */
 export interface OutcomeResult {
   applied: number;
   appliedIds: string[];

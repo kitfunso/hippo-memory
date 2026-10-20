@@ -42,9 +42,9 @@ function copyLog(hippoRoot: string): CopiedLog {
       .prepare(`SELECT id, ts, tenant_id AS tenantId, session_id AS sessionId, request_id AS requestId, outcome
       FROM failure_log ORDER BY id`)
       .all() as LoggedFailure[];
-    const seq = db
-      .prepare(`SELECT seq FROM sqlite_sequence WHERE name = 'failure_log'`)
-      .get<{ seq: number } | undefined>();
+    const seq = db.prepare(`SELECT seq FROM sqlite_sequence WHERE name = 'failure_log'`).get() as
+      | { seq: number }
+      | undefined;
     return { rows: rows.map((r) => ({ ...r })), lastId: Number(seq?.seq ?? 0) };
   } finally {
     closeHippoDb(db);

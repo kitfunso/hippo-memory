@@ -6,7 +6,7 @@ import { originInSql } from '../../core/project-identity.js';
 import { assertTenantId } from '../../core/tenant-id.js';
 import { redactSecretsStrict } from '../../util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../../util/version.js';
-import { type TaskSnapshotRow, rowToTaskSnapshot } from './rows.js';
+import { TASK_SNAPSHOT_COLUMNS, type TaskSnapshotRow, rowToTaskSnapshot } from './rows.js';
 import type { TaskSnapshot, SnapshotInput } from '../port/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './mirrors.js';
 import type { StoreFiles } from './open.js';
@@ -99,10 +99,9 @@ export function saveActiveTaskSnapshotAt(
     return inserted;
   });
 
-  // SAFETY: row's shape matches the ten columns named in the SELECT above.
   const row = db
     .prepare(`
-    SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
+    SELECT ${TASK_SNAPSHOT_COLUMNS}
     FROM task_snapshots
     WHERE id = ?
   `)
@@ -126,10 +125,9 @@ export function loadActiveTaskSnapshotAt(
 ): TaskSnapshot | null {
   assertTenantId('loadActiveTaskSnapshot', tenantId);
   const owned = key ? continuityWhere(key) : null;
-  // SAFETY: row's shape matches the ten columns named in the SELECT above.
   const row = db
     .prepare(`
-    SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
+    SELECT ${TASK_SNAPSHOT_COLUMNS}
     FROM task_snapshots
     WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}
     ORDER BY updated_at DESC, id DESC

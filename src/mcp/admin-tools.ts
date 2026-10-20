@@ -77,8 +77,8 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
     const apiCtx = mcpApiContext(ctx);
     ({ loserId } = await conflictResolve(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
-    // A missing, unreachable or settled conflict answers alike, so
-    // the reply says nothing of a pair the caller cannot touch.
+    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot
+    // touch.
     if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
     throw err;
   }
@@ -99,8 +99,8 @@ export async function runShareTool({
   const force = Boolean(args.force);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
   await memoryGetTouchable(mcpApiContext(ctx), shareId);
-  // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's
-  // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
+  // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to
+  // the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const local = { root: hippoRoot, store };
   const shared = await shareMemory(local, globalTarget, shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';

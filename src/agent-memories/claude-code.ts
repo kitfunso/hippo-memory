@@ -77,8 +77,8 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
   };
 }
 
-/** The project a session folder's notes belong to: the one Claude named the folder
- * for, the session's start folder, else cwd or a parent; null when none matches. */
+/** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder,
+ * else cwd or a parent; null when none matches. */
 export function transcriptNotesProject(
   transcriptPath: string,
   cwd: string | null,
