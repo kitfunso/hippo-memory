@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { memoryCountAll } from '../../src/api/memories/memories.js';
@@ -110,7 +110,7 @@ describe('rebuildDirtySummaries', () => {
     try {
       db.prepare('UPDATE memories SET summary_dirty = 1 WHERE dag_level = 2').run();
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
     return root;
   }

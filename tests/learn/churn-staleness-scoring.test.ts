@@ -7,7 +7,7 @@ import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src
 import { search } from '../../src/domain/search/bm25-search.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { churnStaleFactor } from '../../src/domain/search/boosts.js';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -140,7 +140,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       try {
         savePhysicsState(db, [particle(plain.id), particle(stale.id)]);
       } finally {
-        db.close();
+        closeHippoDb(db);
       }
       const results = await physicsSearch('flywheel torque', [stale, plain], {
         hippoRoot,
@@ -178,7 +178,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
           },
         ]);
       } finally {
-        db.close();
+        closeHippoDb(db);
       }
       const results = await physicsSearch('flywheel torque', [stale, plain], {
         hippoRoot,

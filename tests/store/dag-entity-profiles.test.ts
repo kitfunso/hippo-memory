@@ -11,7 +11,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { buildEntityProfiles, rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../../src/api/index.js';
@@ -75,7 +75,7 @@ function forceMarkDirty(hippoRoot: string, summaryId: string): void {
   try {
     db.prepare(`UPDATE memories SET summary_dirty = 1 WHERE id = ?`).run(summaryId);
   } finally {
-    db.close();
+    closeHippoDb(db);
   }
 }
 
@@ -146,7 +146,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       }>;
       expect(linkedRows.length).toBe(3);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -188,7 +188,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       };
       expect(row.dag_parent_id).toBe(existing.id);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -227,7 +227,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       expect(meta.source).toBe('buildEntityProfiles-clean');
       expect(meta.dag_level).toBe(3); // H1 fold: read actual level, NOT hardcoded 2
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -236,7 +236,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, l3);
     const db1 = openHippoDb(hippoRoot);
     db1.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(l3.id);
-    db1.close();
+    closeHippoDb(db1);
 
     // Write a NEW L2 with dag_parent_id pointing to the L3 -> E2 hook fires.
     const newL2 = makeL2Summary('new alice topic', 'alice', l3.id);
@@ -261,7 +261,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       const meta = JSON.parse(auditRows[0].metadata_json);
       expect(meta.dag_level).toBe(3); // H1 fold: actual level
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -330,7 +330,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       expect(meta.dag_level).toBe(3);
       expect(meta.source).toBe('E3-rebuild');
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
     // Label derivation: prompt contains the speaker:alice tag's value 'alice'
     expect(capturedPrompt).toContain('alice');
@@ -425,7 +425,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
         `).run(l1.id, l1.content, l2a.id, l1.created, l1.created, l1.created);
       }
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
 
     const r = await drillDown(defaultCtx(hippoRoot, 'default'), l3.id, { depth: 2 });
@@ -491,7 +491,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       expect(tenants.has('tenant-b')).toBe(true);
       expect(tenants.has('default')).toBe(false); // would indicate cross-tenant conflation
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
