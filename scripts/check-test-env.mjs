@@ -249,7 +249,8 @@ function report(dir, hits, misnamed) {
     console.error(`\nTests whose name puts them in the wrong vitest project in ${dir}/:`);
     for (const m of misnamed) console.error(`  ${m.file} ${RENAME[m.want]}`);
     console.error(
-      '\nThe unit project gives a test 5 s; one that waits on another process or thread needs the 30 s project.\n',
+      '\nThe unit project gives a test 5 s; one that waits on another process or thread needs the 30 s project.' +
+        "\nRename the test's __snapshots__/<name>.snap with it, or CI finds no snapshot.\n",
     );
   }
 }
