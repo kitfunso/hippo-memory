@@ -137,7 +137,8 @@ async function supersedeVersion<K extends VersionedKindName, B>(
   }
   const existing = foundOrExit(await objectGet(ctx, kind.kind, id), kind.names.noun, id);
   const from = { id, changeSummary: nonEmptyStringFlag(flags, 'change') };
-  // The lookup stays outside refusalExits so a store error reaches runCli; the save's own check is the active-state one.
+  // The lookup stays outside refusalExits so a store error reaches runCli;
+  // the save's own check is the active-state one.
   const created = await refusalExits(() =>
     objectCreate(ctx, kind.kind, kind.write(kind.keyOf(existing), body, from), shellFolder()),
   );
