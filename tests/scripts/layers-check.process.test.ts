@@ -44,6 +44,8 @@ const DB_FILES = {
   'src/a.ts': '',
   'src/b.ts': '',
   'src/db/x.ts': 'export const open = 1;\nexport const scope = 2;\nexport type Handle = 3;\n',
+  'src/store/keep.ts': '',
+  'src/api/keep.ts': '',
 };
 const SCOPE_ONLY = { 'api/y.ts': { names: ['scope'], why: 'the request scope stays in db' } };
 const SQLITE_MAP = {
