@@ -273,7 +273,7 @@ export function pickRarestFtsQuery(
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
-  // One cached shape per term count: an IN list over a virtual table keeps its term lookups only with one mark per term.
+  // One cached shape per term count: an IN list over a virtual table needs one mark per term to keep its lookups.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,
