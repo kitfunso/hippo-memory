@@ -21,7 +21,6 @@ type ConnectionClass = new (path: string | URL | Buffer, options?: ConnectionOpt
 
 interface Held {
   readonly db: Connection;
-  /** The path the store was opened by, and its long, unlinked form: a test may remove it by either. */
   readonly names: readonly string[];
 }
 
@@ -36,8 +35,19 @@ const neverHeld = (globalThis.hippoNeverHeld ??= new Set<string>());
 // SAFETY: node:sqlite's DatabaseSync has this shape at runtime, as src/db/sqlite.ts states; no types ship for it here.
 const sqlite = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: ConnectionClass };
 
+/** `path` as given and as the disk names it: src opens a store by its realpath, while a test may name its folder by an
+ *  8.3 short form on Windows or by a symlink such as macOS's /var. */
+function forms(path: string): string[] {
+  const at = resolve(path);
+  return existsSync(at) ? [...new Set([at, realpathSync.native(at)])] : [at];
+}
+
 function under(file: string, at: string): boolean {
   return file === at || file.startsWith(at + sep) || at.startsWith(`${file}-`);
+}
+
+function anyUnder(names: readonly string[], ats: readonly string[]): boolean {
+  return names.some((file) => ats.some((at) => under(file, at)));
 }
 
 /** A connection that holds the WAL store `file`, or undefined while SQLite will not read it or it is not in WAL mode
@@ -61,9 +71,11 @@ function holder(file: string): Connection | undefined {
 
 function hold(file: string): void {
   // An open of a missing file would create it.
-  if (held.has(file) || !existsSync(file) || [...neverHeld].some((at) => under(file, at))) return;
+  if (held.has(file) || !existsSync(file)) return;
+  const names = forms(file);
+  if (anyUnder(names, [...neverHeld])) return;
   const db = holder(file);
-  if (db) held.set(file, { db, names: [...new Set([file, realpathSync.native(file)])] });
+  if (db) held.set(file, { db, names });
 }
 
 /** Makes every hippo.db connection hold its store as it closes; tests/_held-stores-setup.ts calls it once per worker,
@@ -88,9 +100,11 @@ export function holdStoresOnClose(): void {
 
 /** Closes the held stores at or under `path`, or whose -wal or -shm file it is; every one without it. */
 export function releaseHeldStores(path?: string): void {
-  const at = path === undefined ? undefined : resolve(path);
+  // Every file a test or src removes or writes comes through here, so one with nothing held looks nothing up.
+  if (held.size === 0) return;
+  const ats = path === undefined ? undefined : forms(path);
   for (const [file, { db, names }] of held) {
-    if (at !== undefined && !names.some((name) => under(name, at))) continue;
+    if (ats !== undefined && !anyUnder(names, ats)) continue;
     db.close();
     held.delete(file);
   }
@@ -100,5 +114,5 @@ export function releaseHeldStores(path?: string): void {
  *  let go now and never held again. */
 export function neverHold(path: string): void {
   releaseHeldStores(path);
-  neverHeld.add(resolve(path));
+  for (const at of forms(path)) neverHeld.add(at);
 }
