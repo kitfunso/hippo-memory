@@ -21,16 +21,17 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import {
   saveProjectBrief,
-  closeProjectBrief,
-  loadProjectBriefById,
   loadProjectBriefs,
   briefFromReceipts,
   refreshedBrief,
+  PROJECT_BRIEF,
 } from '../../src/domain/objects/project-briefs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { closeObject, objectById } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 
 // The module's own summary and headline caps, pinned here so a change to either shows up as a test edit.
 const MAX_BRIEF_SUMMARY_LEN = 8192;
@@ -147,7 +148,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       summary: 'x2',
       supersedesBriefId: b.id,
     });
-    await closeProjectBrief(objectsAt(home), 'default', c.id);
+    await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', c.id, CLI_ACTOR);
     expect((await activeBrief(home, 'default', 'alpha'))!.id).toBe(a.id);
     expect(await activeBrief(home, 'default', 'gamma')).toBeNull(); // closed
     expect((await loadProjectBriefs(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
@@ -316,7 +317,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     );
     expect(v2.version).toBe(2);
     expect(v2.changeSummary).toBe('auto-refresh from 2 receipt(s)');
-    expect((await loadProjectBriefById(objectsAt(home), 'default', v1.id))!.status).toBe('superseded');
+    expect((await objectById(objectsAt(home), PROJECT_BRIEF, 'default', v1.id))!.status).toBe('superseded');
     expect((await activeBrief(home, 'default', 'hippo'))!.id).toBe(v2.id);
     const db2 = openHippoDb(home);
     try {
@@ -361,7 +362,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     );
     expect(b.version).toBe(1);
     expect(b.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
-    expect((await loadProjectBriefById(objectsAt(home), 'default', b.id))!.summary.length).toBeLessThanOrEqual(
+    expect((await objectById(objectsAt(home), PROJECT_BRIEF, 'default', b.id))!.summary.length).toBeLessThanOrEqual(
       MAX_BRIEF_SUMMARY_LEN,
     );
   });

@@ -6,13 +6,9 @@
  * Structural step-diffing is a deferred read-side feature; the version chain is the changelog. */
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { Objects } from '../../store/port.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
-import type { Process, ProcessStatus } from '../../base/records/object-types.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import type { ProcessStatus } from '../../base/records/object-types.js';
 
 export type { Process, ProcessStatus } from '../../base/records/object-types.js';
 
@@ -36,13 +32,6 @@ export interface SaveProcessOptions {
   supersedesProcessId?: number;
   /** Extra memory tags merged after ['process']. */
   extraTags?: string[];
-}
-
-export interface ListProcessesOptions {
-  status?: ProcessStatus;
-  limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
-  after?: KeysetPosition;
 }
 
 /** Validate and trim the steps body; throws on a non-array, a non-string or empty element, or a cap breach. */
@@ -104,35 +93,3 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOptions> = {
     };
   },
 };
-
-/** Create a process, or a new version superseding an existing one, in the `objects` store group's one transaction. The
- * supersede CAS (WHERE status='active' AND id
- * != <new id>) throws on changes===0 so a duplicate supersede aborts the write.
- */
-export function saveProcess(
-  objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveProcessOptions,
-  actor: string = CLI_ACTOR,
-): Promise<Process> {
-  return saveObject(objects, PROCESS, { baseHalfLifeDays, tenantId, actor }, opts);
-}
-
-/** Close (retire) an active process with no successor; a superseded row cannot be closed. */
-export function closeProcess(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-  actor: string = CLI_ACTOR,
-): Promise<Process> {
-  return closeObject(objects, PROCESS, tenantId, id, actor);
-}
-
-export function loadProcessById(objects: Objects, tenantId: string, id: number): Promise<Process | null> {
-  return objectById(objects, PROCESS, tenantId, id);
-}
-
-export function loadProcesses(objects: Objects, tenantId: string, opts: ListProcessesOptions = {}): Promise<Process[]> {
-  return listObjects(objects, PROCESS, tenantId, opts);
-}

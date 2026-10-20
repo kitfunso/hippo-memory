@@ -46,7 +46,7 @@ export async function buildGraphModel(
 }
 
 /** The reply model of the rows a store read: an edge with an endpoint outside the node set is dropped. */
-export function graphModelOf({ entities, relations, truncated }: GraphRows): GraphModel {
+function graphModelOf({ entities, relations, truncated }: GraphRows): GraphModel {
   const nodeIds = new Set(entities.map((e) => e.id));
   const nodes: GraphNode[] = entities.map((e) => ({
     id: e.id,

@@ -7,7 +7,7 @@ import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
+import { listObjects, saveObject } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 import type { Objects, PoliciesInForceQuery } from '../../store/port.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -103,20 +103,6 @@ export function savePolicy(
   actor: string = CLI_ACTOR,
 ): Promise<Policy> {
   return saveObject(objects, POLICY, { baseHalfLifeDays, tenantId, actor }, opts);
-}
-
-/** Close (retire) an active policy with no successor; CAS on status='active', a superseded row is terminal. */
-export function closePolicy(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-  actor: string = CLI_ACTOR,
-): Promise<Policy> {
-  return closeObject(objects, POLICY, tenantId, id, actor);
-}
-
-export function loadPolicyById(objects: Objects, tenantId: string, id: number): Promise<Policy | null> {
-  return objectById(objects, POLICY, tenantId, id);
 }
 
 export function loadPolicies(objects: Objects, tenantId: string, opts: ListPoliciesOptions = {}): Promise<Policy[]> {
