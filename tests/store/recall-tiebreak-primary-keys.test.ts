@@ -140,8 +140,8 @@ describe('api.ts:833 DAG substitution ordering', () => {
 // ---------------------------------------------------------------------------
 
 describe('cli.ts:1167 --evc-adaptive ordering', () => {
-  // cli.ts:1167's `onTopic.sort(...)` is a local closure inside `cmdRecall`
-  // (not exported — cmdRecall is CLI-internal), and a CLI-process spawn
+  // cli.ts:1167's `onTopic.sort(...)` is a local closure inside `printRecall`
+  // (not exported — printRecall is CLI-internal), and a CLI-process spawn
   // (execFileSync against bin/hippo.js) would run the COMPILED dist/cli.js,
   // which this session must not rebuild (shared node_modules junction; the
   // orchestrator builds after all executors land — see episode brief). So

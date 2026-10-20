@@ -1,5 +1,5 @@
 // Pins `hippo eval` stdout, stderr and exit code across corpus, compare, bootstrap and suite modes, in process,
-// so a split of cmdEval that changes a byte or an exit path fails here. Timings and timestamps are masked.
+// so a split of evaluateCorpus that changes a byte or an exit path fails here. Timings and timestamps are masked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

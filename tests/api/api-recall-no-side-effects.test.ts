@@ -1,13 +1,13 @@
 /**
  * Runtime test for v1.11.5: lock the api.recall last_retrieval_ids divergence
- * from cmdRecall.
+ * from printRecall.
  *
  * Contract:
  *   - api.recall(ctx, opts) is a READ — it does NOT mutate
  *     index.last_retrieval_ids.
  *   - api.contextGet(ctx, opts) DOES write last_retrieval_ids (used by
  *     the SDK's outcome-after-context workflow).
- *   - The CLI cmdRecall (cli.ts:1282 region) also writes last_retrieval_ids
+ *   - The CLI printRecall (cli.ts:1282 region) also writes last_retrieval_ids
  *     because the CLI is interactive — user is about to run
  *     `hippo outcome --good`. This divergence is documented in api.recall's
  *     JSDoc and python/README.md Limitations.
@@ -50,7 +50,7 @@ function tmpHome() {
   };
 }
 
-describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effect)', () => {
+describe('api.recall divergence from printRecall (no last_retrieval_ids side-effect)', () => {
   it('api.recall does NOT write last_retrieval_ids; api.contextGet DOES', async () => {
     const { home, restore } = tmpHome();
     try {

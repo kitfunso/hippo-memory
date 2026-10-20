@@ -92,7 +92,7 @@ function keyRuleLine(): string {
 
 export async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const portRaw = flags['port'] ?? envPort() ?? DEFAULT_SERVER_PORT;
+  const portRaw = stringFlag(flags, 'port') ?? envPort() ?? DEFAULT_SERVER_PORT;
   const port = Number(portRaw);
   if (!Number.isFinite(port) || port < 0) {
     fail(`Invalid --port: ${String(portRaw)}`);

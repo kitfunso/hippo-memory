@@ -196,7 +196,7 @@ export interface RecallResult {
    * test fakes built before the field still compile; always present on values returned by `api.recall`. */
   windowSize?: number;
   /** WYSIATI cutoff transparency: what was excluded from `results[]` and why, always populated by `api.recall`,
-   * `cmdRecall` and the MCP `hippo_recall` handler. Counters are per-pipeline reports of that pipeline's own filter
+   * `printRecall` and the MCP `hippo_recall` handler. Counters are per-pipeline reports of that pipeline's own filter
    * sites, not normalized across pipelines. Optional for test fakes. */
   suppressionSummary?: RecallSuppressionSummary;
   /** Planning-fallacy hint: base-rate stats when the query carries a forward-prediction phrase and the closest
@@ -208,7 +208,7 @@ export interface RecallResult {
    *  Mutually exclusive with `planningFallacyHint`; pipeline-invariant. Disabled by `HIPPO_AUTODEBIAS=off`. */
   planningFallacyWatching?: PlanningFallacyWatching;
   /** Anchoring hint from api.recall's own compute against `opts.recallHistory` (query_repeat or memory_dominance); each
-   * pipeline computes its OWN hint. Null on CLI-routed calls, since cmdRecall does not thread its ring through
+   * pipeline computes its OWN hint. Null on CLI-routed calls, since printRecall does not thread its ring through
    * `opts.recallHistory`. Disabled by `HIPPO_ANCHORING=off`. */
   anchoringHint?: AnchoringHint;
 
@@ -226,16 +226,16 @@ export interface RecallSuppressionSummary {
    *  (api.recall: after `loadRecallSearchEntries`). */
   totalCandidates: number;
   /** Candidates dropped by any non-budget filter site, pre- or post-rank; the final limit slice is counted in
-   * droppedByBudget instead. Each pipeline counts its own filters (cmdRecall: --as-of, superseded, --filter-conflicts,
+   * droppedByBudget instead. Each pipeline counts its own filters (CLI recall: --as-of, superseded, --filter-conflicts,
    * --outcome, --layer; MCP: scope filter before search). */
   droppedPreRank: number;
   /** Candidates loaded but cut by the final `limit` slice after scoring (api.recall: `entries.length -
    * baseSlice.length`; other pipelines count pre- minus post-slice). */
   droppedByBudget: number;
   /** DAG-L2 summaries substituted back in to mitigate overflow (api.recall: after the `summarizeOverflow` block;
-   * cmdRecall: 0; MCP: rows from apiResult.tailOrSummary). */
+   * printRecall: 0; MCP: rows from apiResult.tailOrSummary). */
   summarySubstitutionsAdded: number;
-  /** Fresh-tail `kind='raw'` rows prepended (api.recall: `freshRanked.length` when `freshTailCount > 0`; cmdRecall: 0;
+  /** Fresh-tail `kind='raw'` rows prepended (api.recall: `freshRanked.length` when `freshTailCount > 0`; CLI recall: 0;
    * MCP: rows from apiResult.tailOrSummary). */
   freshTailAdded: number;
   /** Memories suppressed by interference: incremented by 1 PER PIPELINE when its own memory_dominance verdict fires

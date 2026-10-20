@@ -5,8 +5,10 @@ import * as path from 'node:path';
 import {
   boolFlag,
   flagIsTrue,
+  hasFlag,
   intFlagInRange,
   numberFlag,
+  parseBudgetFlag,
   parseCountFlag,
   parseLimitFlag,
   parsePositiveId,
@@ -40,9 +42,9 @@ describe('flag readers', () => {
   });
 
   it('integer flags refuse a value that is not all digits', () => {
-    expect([parseLimitFlag('12'), parseCountFlag('12')]).toEqual([12, 12]);
+    expect([parseLimitFlag({ x: '12' }, 'x'), parseCountFlag({ x: '12' }, 'x')]).toEqual([12, 12]);
     for (const bad of ['12abc', ' 12']) {
-      expect([parseLimitFlag(bad), parseCountFlag(bad)]).toEqual([Infinity, 0]);
+      expect([parseLimitFlag({ x: bad }, 'x'), parseCountFlag({ x: bad }, 'x')]).toEqual([Infinity, 0]);
     }
   });
 
@@ -52,6 +54,15 @@ describe('flag readers', () => {
 
   it('flagIsTrue accepts only a bare switch', () => {
     expect(cases.map(([, f]) => flagIsTrue(f, 'x'))).toEqual([false, true, false, false, false]);
+  });
+
+  it('hasFlag is presence, so an empty value counts', () => {
+    expect(cases.map(([, f]) => hasFlag(f, 'x'))).toEqual([false, true, true, true, true]);
+  });
+
+  it('parseBudgetFlag falls back only when --budget is absent', () => {
+    expect(parseBudgetFlag({}, undefined)).toBeUndefined();
+    expect(parseBudgetFlag({ budget: '0' }, 1500)).toBe(0);
   });
 });
 
@@ -129,5 +140,17 @@ describe('inline flag reads', () => {
   it('src/surface/cli has no typeof-string ternary or string cast on a flag', () => {
     const hits = files.filter((f) => INLINE.test(fs.readFileSync(f, 'utf8'))).map((f) => path.relative('.', f));
     expect(hits).toEqual([]);
+  });
+
+  // Files other lanes own still read flags inline; each entry must keep a read, so the list only shrinks.
+  const OTHER_LANES = ['incidents.ts', 'playbooks.ts', 'predictions.ts'];
+  const RAW_READ = /(?<![\w.'"/])flags(?:\[|\.(?!js\b)[A-Za-z])/;
+  const cliFiles = files.filter((f) => f.includes(`${path.sep}surface${path.sep}cli${path.sep}`));
+
+  it('src/surface/cli reads each flag through a flag-values reader', () => {
+    const raw = cliFiles.filter(
+      (f) => path.basename(f) !== 'flag-values.ts' && RAW_READ.test(fs.readFileSync(f, 'utf8')),
+    );
+    expect(raw.map((f) => path.basename(f)).sort()).toEqual(OTHER_LANES);
   });
 });

@@ -2,8 +2,14 @@
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOptions } from '../../api/index.js';
 import { envBodyTimeoutMs } from '../../base/util/env.js';
-import { bodyDeadlineMs, HttpError, MAX_BODY_BYTES, readBody } from '../../base/util/http-util.js';
-import { DEFAULT_LIST_LIMIT, MAX_ID_LEN, MAX_LIST_LIMIT, resolveListLimit } from '../../base/util/limits.js';
+import { bodyDeadlineMs, HttpError, readBody } from '../../base/util/http-util.js';
+import {
+  DEFAULT_LIST_LIMIT,
+  MAX_ARRAY_ITEMS,
+  MAX_ID_LEN,
+  MAX_LIST_LIMIT,
+  resolveListLimit,
+} from '../../base/util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
 // Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is
@@ -13,18 +19,6 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
   // return type does the narrowing.
   return set.has(value as T);
 }
-
-// Cap for short free-text HTTP fields (names, text, context, change summaries) on the object routes.
-export const MAX_SHORT_FIELD_LEN = 4096;
-
-// A content-like field can be as long as the body that carries it.
-export const MAX_CONTENT_LEN = MAX_BODY_BYTES;
-
-// ISO dates and similar short stamps.
-export const MAX_DATE_LEN = 64;
-
-// Most entries a string-array field takes (tags, aliases).
-export const MAX_ARRAY_ITEMS = 100;
 
 export function parseListLimit(
   limitRaw: string | null,

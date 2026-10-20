@@ -2,9 +2,9 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { isGitRepo } from '../../api/repo-learning.js';
 import { processGit } from '../../base/util/git-runner.js';
-import { importForStore } from '../../domain/agent-memories/sync.js';
+import { importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import * as api from '../../api/index.js';
@@ -20,7 +20,7 @@ import { printError } from './output.js';
 import { plural } from '../../base/util/format.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
-export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+export async function handleSleep({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the SessionStart hook can
   // re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
@@ -36,7 +36,7 @@ export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFl
   }
 
   try {
-    await cmdSleepCore(hippoRoot, tenantId, flags);
+    await runSleep(hippoRoot, tenantId, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
     if (logFile) printError(`[hippo] sleep failed: ${errorMessage(err)}`);
@@ -44,10 +44,6 @@ export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFl
   } finally {
     if (restoreStdout) restoreStdout();
   }
-}
-
-export function handleSleep({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  return cmdSleep(hippoRoot, tenantId, flags);
 }
 
 function renderSleepResult(result: api.SleepResult): void {
@@ -74,9 +70,9 @@ function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
 
 async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
-  // Stays in cli.ts; api.sleep covers Phase 2-6 only.
-  const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
-  if (learn && flags['dry-run']) {
+  // The CLI runs it here because api.sleep covers Phase 2-6 only.
+  const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
+  if (learn && boolFlag(flags, 'dry-run')) {
     console.log(
       "Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` " +
         'previews those).',
@@ -100,13 +96,13 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
   }
 }
 
-async function cmdSleepCore(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function runSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   await learnBeforeSleep(hippoRoot, tenantId, flags);
 
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
-  if (!flags['dry-run']) {
+  if (!boolFlag(flags, 'dry-run')) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
     const finished = replayCompactions({ root: hippoRoot, files: cliLocalFiles(hippoRoot), tenantId }, warn);
     if (finished > 0) {

@@ -1,18 +1,17 @@
 // The entity graph verbs: rebuild it from the consolidated objects, print it, or write it out as a diagram.
 
 import * as fs from 'fs';
-import { extractGraph } from '../../domain/graph/extract.js';
-import { buildGraphModel, DEFAULT_VIEW_LIMIT } from '../../domain/graph/view.js';
+import { DEFAULT_VIEW_LIMIT, graphExtract, graphViewOnHost } from '../../api/objects/graph.js';
 import { renderGraphHtml, renderGraphCanvas } from './graph-page.js';
 import { printError } from './output.js';
-import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fail } from './exit.js';
 import { cliApiContext } from './api-context.js';
 import { openInBrowser } from './open-browser.js';
 
-async function graphExtract(hippoRoot: string, tenantId: string): Promise<void> {
-  const result = await extractGraph(cliApiContext(hippoRoot, tenantId).store, tenantId);
+async function extractAndReport(hippoRoot: string, tenantId: string): Promise<void> {
+  const result = await graphExtract(cliApiContext(hippoRoot, tenantId));
   const byType = Object.entries(result.byType)
     .map(([t, n]) => `${t} ${n}`)
     .join(', ');
@@ -33,9 +32,8 @@ async function graphShow(
   entity: string | undefined,
   flags: CliFlags,
 ): Promise<void> {
-  const { graphReads } = cliApiContext(hippoRoot, tenantId).store;
-  const model = await buildGraphModel(graphReads, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
-  if (flags['json']) {
+  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), { entity, limit: DEFAULT_VIEW_LIMIT });
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(model, null, 2));
     return;
   }
@@ -75,21 +73,20 @@ async function graphView(
   if (format !== 'html' && format !== 'canvas') {
     fail("graph view: --format must be 'html' or 'canvas'");
   }
-  const { graphReads } = cliApiContext(hippoRoot, tenantId).store;
-  const model = await buildGraphModel(graphReads, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
+  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), { entity, limit: DEFAULT_VIEW_LIMIT });
   const content = format === 'canvas' ? renderGraphCanvas(model) : renderGraphHtml(model);
   const defaultOut = format === 'canvas' ? 'hippo-graph.canvas' : 'hippo-graph.html';
   const out = stringFlag(flags, 'out') ?? defaultOut;
   fs.writeFileSync(out, content, 'utf8');
   const truncated = model.truncated ? ' (truncated)' : '';
   console.log(`Wrote ${model.nodes.length} entities + ${model.edges.length} relations to ${out}${truncated}`);
-  if (flags['open'] && format === 'html') openInBrowser(out);
+  if (boolFlag(flags, 'open') && format === 'html') openInBrowser(out);
 }
 
 export async function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  if (subcommand === 'extract') return graphExtract(hippoRoot, tenantId);
+  if (subcommand === 'extract') return extractAndReport(hippoRoot, tenantId);
   const entity = stringFlag(flags, 'entity');
   if (subcommand === 'show') return graphShow(hippoRoot, tenantId, entity, flags);
   if (subcommand === 'view') return graphView(hippoRoot, tenantId, entity, flags);

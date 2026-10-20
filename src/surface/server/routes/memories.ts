@@ -10,14 +10,11 @@ import {
   getString,
   getStringArray,
   isSetMember,
-  MAX_ARRAY_ITEMS,
-  MAX_CONTENT_LEN,
-  MAX_SHORT_FIELD_LEN,
   parseJsonBody,
   parseListLimit,
   validateIdSegment,
 } from '../validation.js';
-import { MAX_ID_LEN } from '../../../base/util/limits.js';
+import { MAX_ARRAY_ITEMS, MAX_CONTENT_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../../base/util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);

@@ -456,7 +456,7 @@ function continuityTokensOf(c: ContinuityBlock): number {
 }
 
 // A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect
-// call; CLI paths pass no history (cmdRecall computes its own hint), so the hint stays absent there.
+// call; CLI paths pass no history (printRecall computes its own hint), so the hint stays absent there.
 function detectRecallAnchoring({ config }: Context, opts: RecallOptions, topMemoryId: string | null): AnchoringOutcome {
   const history = opts.hints?.recallHistory;
   if (!biasHintEnabled(config, 'anchoring') || !history) return { anchoringHint: null, suppressedByInterference: 0 };

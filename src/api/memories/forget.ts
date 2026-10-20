@@ -1,7 +1,14 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
-import { rejectValue, unrejectValue, type RejectFlowResult } from '../../domain/trust/reject-flow.js';
+import {
+  listRejectionsForTenant,
+  rejectValue,
+  unrejectValue,
+  type RejectFlowResult,
+  type UnrejectOutcome,
+} from '../../domain/trust/reject-flow.js';
+import type { RejectedValueRow } from '../../store/port/rejections.js';
 import { requireHostAdmin, type Context } from '../types.js';
 import { memoryGet } from './memories.js';
 import { canReadScope, personalScopeOf, scopeReaderOf } from '../../base/scope/recall-scope.js';
@@ -74,10 +81,21 @@ function applyReject(ctx: Context, opts: RejectOptions): Promise<RejectFlowResul
   });
 }
 
+/** Lifts the tombstone a digest or unambiguous prefix names, as the caller; a blank one, no match or several come back
+ * as the outcome, so a caller can list the candidates. */
+export function liftRejection(ctx: Context, digestOrPrefix: string): Promise<UnrejectOutcome> {
+  return unrejectValue(ctx.store, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
+}
+
+/** Every tombstone of the caller's tenant. */
+export function listRejections(ctx: Context): Promise<RejectedValueRow[]> {
+  return listRejectionsForTenant(ctx.store, ctx.tenantId);
+}
+
 /** Deletes a tombstone by exact digest or unambiguous prefix, restoring writability (the only v1 escape hatch); throws
  * on blank, no match or several. */
 export async function unreject(ctx: Context, digestOrPrefix: string) {
-  const outcome = await unrejectValue(ctx.store, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
+  const outcome = await liftRejection(ctx, digestOrPrefix);
   if (outcome.status === 'not_found') {
     throw new NotFoundError(`no rejected value matches: ${digestOrPrefix}`);
   }

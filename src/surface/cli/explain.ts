@@ -4,7 +4,7 @@ import { envActiveScope } from '../../base/util/env.js';
 import { confidenceFacets } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import * as api from '../../api/index.js';
 import { cliRecallOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
 import { cliConfig, cliApiContext, cliSecondStore, cliStore } from './api-context.js';
@@ -49,15 +49,15 @@ interface InspectedSlot {
   rank?: RankRecallResult;
 }
 
-async function cmdExplain(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
+async function explainQuery(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
-  const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
-  const limit = parseLimitFlag(flags['limit']);
+  const budget = parseBudgetFlag(flags, DEFAULT_RECALL_BUDGET);
+  const limit = parseLimitFlag(flags, 'limit');
   const asJson = boolFlag(flags, 'json');
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   const ctx = cliApiContext(hippoRoot, tenantId);
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
@@ -221,5 +221,5 @@ export async function handleExplain({ hippoRoot, tenantId, args, flags }: Comman
   if (!query) {
     fail('Please provide a search query.');
   }
-  await cmdExplain(hippoRoot, tenantId, query, flags);
+  await explainQuery(hippoRoot, tenantId, query, flags);
 }

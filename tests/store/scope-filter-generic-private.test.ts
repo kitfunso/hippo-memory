@@ -10,7 +10,7 @@
  * Coverage:
  * - api.recall (the load-bearing filter)
  * - api.recall continuity block (snapshots, handoffs, events)
- * - CLI cmdRecall continuity (mirror in cli.ts)
+ * - CLI printRecall continuity (mirror in cli.ts)
  * - MCP hippo_recall + hippo_context filters
  * - HTTP /v1/memories (transitively via api.recall)
  *

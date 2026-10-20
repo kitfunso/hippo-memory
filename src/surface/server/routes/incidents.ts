@@ -3,7 +3,8 @@
 import { incidentOpen, incidentResolve } from '../../../api/objects/object-kinds.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, parseJsonBody, getString, requiredString } from '../validation.js';
+import { parseJsonBody, getString, requiredString } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import { type JsonValue, isJsonString } from '../../../base/util/json.js';
 import type { ObjectRouteConfig } from './object-routes.js';
 

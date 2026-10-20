@@ -30,7 +30,7 @@ function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   if (notes.length > 0) printError(`hippo auth create: ${notes.join('; ')}.`);
 }
 
-async function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: CliFlags): Promise<void> {
+async function createApiKey(hippoRoot: string, defaultTenantId: string, flags: CliFlags): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = stringFlag(flags, 'tenant');
   const labelFlag = stringFlag(flags, 'label');
@@ -84,7 +84,7 @@ function formatKeyRow(item: ApiKeyListItem): string {
   return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
-async function cmdAuthList(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function listApiKeys(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const includeRevoked = boolFlag(flags, 'all');
   const asJson = boolFlag(flags, 'json');
@@ -117,7 +117,7 @@ async function keyContext(root: string, tenantId: string, keyId: string): Promis
   return { ...hostCtx, tenantId: keyTenant };
 }
 
-async function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string, flags: CliFlags): Promise<void> {
+async function revokeApiKey(hippoRoot: string, tenantId: string, keyId: string, flags: CliFlags): Promise<void> {
   const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   let revokedAt: string;
   try {
@@ -125,7 +125,7 @@ async function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string,
   } catch (err) {
     fail(`Error: ${errorMessage(err)}`);
   }
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ keyId, revokedAt }));
     return;
   }
@@ -143,7 +143,7 @@ interface AuthScopeGrantOptions {
 
 /** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks
  * live in one place. */
-async function cmdAuthScopeGrant(options: AuthScopeGrantOptions): Promise<void> {
+async function changeKeyScope(options: AuthScopeGrantOptions): Promise<void> {
   const { hippoRoot, tenantId, keyId, scope, grant, flags } = options;
   const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   try {
@@ -152,7 +152,7 @@ async function cmdAuthScopeGrant(options: AuthScopeGrantOptions): Promise<void> 
   } catch (err) {
     fail(`Error: ${errorMessage(err)}`);
   }
-  if (flags['json']) {
+  if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ keyId, scope, granted: grant }));
     return;
   }
@@ -167,17 +167,17 @@ export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandCo
   const subArgs = args.slice(1);
   switch (sub) {
     case 'create':
-      await cmdAuthCreate(hippoRoot, tenantId, flags);
+      await createApiKey(hippoRoot, tenantId, flags);
       return;
     case 'list':
-      await cmdAuthList(hippoRoot, tenantId, flags);
+      await listApiKeys(hippoRoot, tenantId, flags);
       return;
     case 'revoke': {
       const keyId = subArgs[0];
       if (!keyId) {
         fail('Usage: hippo auth revoke <key_id>');
       }
-      await cmdAuthRevoke(hippoRoot, tenantId, keyId, flags);
+      await revokeApiKey(hippoRoot, tenantId, keyId, flags);
       return;
     }
     case 'grant':
@@ -186,7 +186,7 @@ export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandCo
       if (!keyId || !scope) {
         fail(`Usage: hippo auth ${sub} <key_id> <scope>`);
       }
-      await cmdAuthScopeGrant({ hippoRoot, tenantId, keyId, scope, grant: sub === 'grant', flags });
+      await changeKeyScope({ hippoRoot, tenantId, keyId, scope, grant: sub === 'grant', flags });
       return;
     }
     default:

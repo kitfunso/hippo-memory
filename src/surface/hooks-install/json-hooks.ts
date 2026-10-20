@@ -15,6 +15,11 @@ import {
 } from '../../domain/hooks/json-hooks.js';
 import type { JsonHookTarget } from '../../domain/hooks/shared.js';
 
+// What a caller of the installer names beside it: the paths it installs to, the Copilot events it adds, the log the
+// SessionStart hook reads and the reminder Codex needs before it runs a new hook.
+export { copilotHookEvents, resolveJsonHookPaths } from '../../domain/hooks/json-hooks.js';
+export { CODEX_TRUST_LINE, defaultSleepLogPath } from '../../domain/hooks/shared.js';
+
 /** Swaps the file in with one rename, so a crash mid-write cannot leave a truncated settings.json that Claude Code
  * cannot parse. */
 export function writeSettingsFile(file: string, settings: JsonValue): void {

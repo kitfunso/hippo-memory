@@ -7,6 +7,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -123,6 +124,14 @@ describe('MCP tool argument validation', () => {
     const r = await call('hippo_remember', { text: 'kept out', pin: 'yes' });
     expect(r.isError).toBe(true);
     expect(r.text).toContain('pin must be a boolean');
+    expect(loadAllEntries(home, 'default')).toHaveLength(0);
+  });
+
+  it('refuses a string past the HTTP route cap, so a too-long tag writes nothing', async () => {
+    // The transport answers a thrown BadRequestError with its text, as it does for the api's own refusals.
+    await expect(call('hippo_remember', { text: 'kept out', tag: 'x'.repeat(MAX_ID_LEN + 1) })).rejects.toThrow(
+      `tag exceeds ${MAX_ID_LEN}-character cap`,
+    );
     expect(loadAllEntries(home, 'default')).toHaveLength(0);
   });
 

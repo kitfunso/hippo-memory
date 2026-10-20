@@ -3,7 +3,7 @@
  *
  * Runs `hippo trace <id>` under different HIPPO_TENANT values and asserts
  * cross-tenant memories are not found. Covers both the local-store read
- * (cmdTrace at cli.ts:1799) and the cross-store global path (cli.ts:1803 + the
+ * (printTrace at cli.ts:1799) and the cross-store global path (cli.ts:1803 + the
  * parent walk at cli.ts:1829). The cross-store case is the deliberate
  * behaviour change documented in the plan's Risks section: a memory promoted
  * to global under tenant_a returns "not found" when traced under
@@ -60,7 +60,7 @@ describe('CLI tenant-scoping', () => {
     vi.unstubAllEnvs();
   });
 
-  it('cmdTrace local store: HIPPO_TENANT=tenant_b hides a tenant_a memory', async () => {
+  it('printTrace local store: HIPPO_TENANT=tenant_b hides a tenant_a memory', async () => {
     const a = createMemory('A content (local)', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tenantId: 'tenant_a',
@@ -85,7 +85,7 @@ describe('CLI tenant-scoping', () => {
     expect(bTrace.out).toMatch(/B content/);
   });
 
-  it('cmdTrace global store: HIPPO_TENANT=tenant_b hides a tenant_a-promoted global memory', async () => {
+  it('printTrace global store: HIPPO_TENANT=tenant_b hides a tenant_a-promoted global memory', async () => {
     // Seed a g_* memory directly into the isolated global store with
     // tenant_id=tenant_a — simulates an entry promoted by another tenant.
     const db = openHippoDb(globalRoot);

@@ -1,4 +1,4 @@
-// cmdSessionEndWorker used to call cmdSleep without awaiting it inside its
+// handleSessionEndWorker used to call handleSleep without awaiting it inside its
 // try/catch, so a sleep rejection became an unhandled promise rejection
 // that could crash the process before capture/close ran.
 import { describe, it, expect, afterEach } from 'vitest';
@@ -24,7 +24,7 @@ afterEach(() => {
   }
 });
 
-describe('__session-end-worker awaits cmdSleep before finishing', () => {
+describe('__session-end-worker awaits handleSleep before finishing', () => {
   it('a sleep failure is caught (not an unhandled rejection) and the close step still runs after it', async () => {
     dir = mkdtempSync(join(tmpdir(), 'hippo-worker-await-sleep-'));
     const env = withScratchEnv(dir);
@@ -33,7 +33,7 @@ describe('__session-end-worker awaits cmdSleep before finishing', () => {
     const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: dir, env });
     expect(init.status).toBe(0);
 
-    // Corrupt hippo.db so cmdSleepCore's DB open throws synchronously and
+    // Corrupt hippo.db so runSleep's DB open throws synchronously and
     // fast — deterministic, and independent of any lock-timing behavior.
     writeFileSync(join(dir, 'hippo.db'), 'not a sqlite database, deliberately corrupted for this test');
 

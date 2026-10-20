@@ -34,13 +34,14 @@ import {
   type CommandContext,
   flagIsTrue,
   stringFlagOrExit,
+  boolFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { continuityTexts } from './print.js';
 import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, inPilotHoldout } from './hook-runtime.js';
 
-async function cmdContext(
+async function printContext(
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -112,7 +113,7 @@ async function contextGate(
     return null;
   }
 
-  const budget = parseBudgetFlag(flags['budget'], DEFAULT_CONTEXT_BUDGET);
+  const budget = parseBudgetFlag(flags, DEFAULT_CONTEXT_BUDGET);
   if (budget <= 0) {
     rec?.disabled();
     return null;
@@ -168,7 +169,7 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
 
 function contextQuery(args: string[], flags: CliFlags): string {
   const query = args.join(' ').trim();
-  return !query && flags['auto'] ? autoDetectContext(processGit) : query;
+  return !query && boolFlag(flags, 'auto') ? autoDetectContext(processGit) : query;
 }
 
 async function renderContextView(view: ContextView, format: string, query: string): Promise<void> {
@@ -221,10 +222,10 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
   return {
     q: input.query,
     budget: input.budget,
-    limit: parseLimitFlag(flags['limit']),
+    limit: parseLimitFlag(flags, 'limit'),
     pinnedOnly: input.pinnedOnly,
     scope: ctxActiveScope ?? undefined,
-    includeRecent: parseCountFlag(flags['include-recent']),
+    includeRecent: parseCountFlag(flags, 'include-recent'),
     crossProject,
     currentProject: resolveProjectIdentity(process.cwd()),
     currentSessionId: input.session.currentSessionId,
@@ -318,5 +319,5 @@ export async function handleContext({ hippoRoot, tenantId, args, flags }: Comman
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
-  await cliHookRequest(() => cmdContext(hookStoreRoot(root), tenantId, args, flags, stdinText));
+  await cliHookRequest(() => printContext(hookStoreRoot(root), tenantId, args, flags, stdinText));
 }

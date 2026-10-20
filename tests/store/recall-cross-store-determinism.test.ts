@@ -80,7 +80,7 @@ const QUERY = 'signalword';
 const TS_OFFSET_MS = [0, 1000, 1000, 1000, 1000, 2000];
 
 /** Ingest CONTENTS in identical order into `root`, tagged with `pathTag`
- *  (mimics cmdRemember's auto path-tag, per the plan's T3 instruction) and
+ *  (mimics writeMemory's auto path-tag, per the plan's T3 instruction) and
  *  pinned to fixed offsets from NOW so both stores are byte-identical in
  *  every score input, independent of real wall-clock timing. */
 function ingestFixture(root: string, pathTag: string): void {

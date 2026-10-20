@@ -450,7 +450,7 @@ describe('cli thin-client mode', () => {
       server = await startServer(workspace);
 
       // raw-archive.ts throws "is not raw" for a non-raw kind; the routed
-      // catch must wrap it the same way cmdForget's direct catch does.
+      // catch must wrap it the same way forgetMemory's direct catch does.
       const run = runCli(workspace, 'forget', 'mem_notraw', '--archive', '--reason', 'non-raw archive test');
       expect(run.stdout + run.stderr).toMatch(/Could not archive mem_notraw: /);
       expect(run.stdout + run.stderr).toMatch(/is not raw/);

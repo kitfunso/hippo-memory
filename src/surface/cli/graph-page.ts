@@ -1,6 +1,6 @@
 // The graph page and JSON Canvas renderers: presentation of the plain GraphModel the domain computes.
 
-import { layoutGraph, LAYOUT_H, LAYOUT_W, type GraphModel } from '../../domain/graph/view.js';
+import { layoutGraph, LAYOUT_H, LAYOUT_W, type GraphModel } from '../../api/objects/graph.js';
 import { GRAPH_CLIENT_SCRIPT } from './graph-page-client.js';
 
 const NODE_LABEL_MAX_CHARS = 22;

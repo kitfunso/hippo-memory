@@ -1,5 +1,5 @@
 /** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results` and
- * `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and CLI cmdRecall: the (query, shown,
+ * `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and printRecall: the (query, shown,
  * outcome) triple the learned components train on. All writes are fail-soft: a failed trace write is logged to stderr
  * and swallowed, never breaking the surrounding call. */
 

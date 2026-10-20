@@ -150,7 +150,7 @@ describe('hippo trace <id>', () => {
     };
     writeEntry(hippoDir, entry);
 
-    // SAFETY: cmdTrace --json prints these numeric fields (src/cli.ts cmdTrace).
+    // SAFETY: printTrace --json prints these numeric fields (src/cli.ts printTrace).
     const json = JSON.parse(await runHippo(['trace', entry.id, '--json'])) as {
       half_life_days: number;
       reward_factor: number;

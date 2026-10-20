@@ -2,7 +2,7 @@
 
 import * as path from 'path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { memoryQualityRepairOnce } from '../../api/auth/audit.js';
 import { cliApiContext } from './api-context.js';
 
@@ -16,7 +16,7 @@ export async function repairQualityOnceAt(root: string, tenantId: string): Promi
       return;
     }
     // A sleep run from a folder with no project store can resolve to the global store too.
-    const scope = path.resolve(root) === path.resolve(getGlobalRoot()) ? ' --global' : '';
+    const scope = path.resolve(root) === path.resolve(resolveGlobalRootDir()) ? ' --global' : '';
     const moved = result.appliedIds.length;
     if (moved > 0) {
       console.log(

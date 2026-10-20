@@ -4,8 +4,13 @@ import { MINUTE_MS } from '../../base/util/time.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
-import { copilotHookEvents, resolveJsonHookPaths } from '../../domain/hooks/json-hooks.js';
-import { checkUninstallable, installJsonHooks, uninstallJsonHooks } from '../hooks-install/json-hooks.js';
+import {
+  checkUninstallable,
+  copilotHookEvents,
+  installJsonHooks,
+  resolveJsonHookPaths,
+  uninstallJsonHooks,
+} from '../hooks-install/json-hooks.js';
 import type { JsonHookTarget, ToolDetection } from '../../domain/hooks/shared.js';
 import { detectInstalledTools } from '../hooks-install/detect.js';
 import {
@@ -14,30 +19,37 @@ import {
   detectRealCodexPath,
   uninstallCodexWrapper,
 } from '../hooks-install/codex-wrapper.js';
-import { resolveOpencodePluginPath } from '../../domain/hooks/opencode.js';
-import { installOpencodePlugin, uninstallOpencodePlugin } from '../hooks-install/opencode.js';
 import {
-  type CopilotInstallResult,
-  type CopilotUninstallResult,
-  type InstructionsInstallStatus,
-  type InstructionsRemoveStatus,
-  type McpFailure,
-  type McpHost,
-  type McpMergeStatus,
-  type McpRemoveStatus,
-  type VscodeInstallResult,
-  type VscodeInstructionsInstallStatus,
-  type VscodeInstructionsRemoveStatus,
+  installOpencodePlugin,
+  resolveOpencodePluginPath,
+  uninstallOpencodePlugin,
+} from '../hooks-install/opencode.js';
+import type {
+  CopilotInstallResult,
+  CopilotUninstallResult,
+  InstructionsInstallStatus,
+  InstructionsRemoveStatus,
+  McpFailure,
+  McpHost,
+  McpMergeStatus,
+  McpRemoveStatus,
+  VscodeInstallResult,
+  VscodeInstructionsInstallStatus,
+  VscodeInstructionsRemoveStatus,
+} from '../../domain/hooks/copilot.js';
+import {
   COPILOT_CLI_MCP,
   VSCODE_MCP,
   copilotMcpSnippet,
+  copilotPaths,
+  installCopilot,
+  isCopilotCliPresent,
   isMcpFailure,
-} from '../../domain/hooks/copilot.js';
-import { copilotPaths, installCopilot, isCopilotCliPresent, uninstallCopilot } from '../hooks-install/copilot.js';
-import { isInitialized } from '../../base/scope/project-identity.js';
-import { importUserMemories } from '../../domain/agent-memories/sync.js';
+  uninstallCopilot,
+} from '../hooks-install/copilot.js';
+import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
 import { cliLocalFiles, cliSyncOptions } from './api-context.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactions } from '../capture/compaction-record.js';
@@ -49,7 +61,15 @@ import { boolFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../../domain/hooks/hook-blocks.js';
+import {
+  appendHookBlock,
+  hookBlock,
+  HOOK_MARKERS,
+  HOOKS,
+  hippoBlock,
+  withoutHookBlock,
+  type HookSpec,
+} from '../hooks-install/instructions.js';
 import { escapeRegex } from '../../base/util/escape.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
@@ -63,8 +83,6 @@ export function handleHook({ args }: CommandContext): void {
 
   fail('Usage: hippo hook <install|uninstall|list> [target]');
 }
-
-type HookSpec = (typeof HOOKS)[string];
 
 // Cursor has no init row, so the AGENTS.md block is usually another agent's, and Cursor reads that one as it is.
 function othersBlock(target: string, text: string): boolean {
@@ -115,7 +133,7 @@ function hookInstall(target: string | undefined): void {
 function patchAgentFile(hook: HookSpec, target: string): void {
   const filepath = path.resolve(process.cwd(), hook.file);
 
-  const block = `${HOOK_MARKERS.start}\n${hook.content}\n${HOOK_MARKERS.end}`;
+  const block = hookBlock(hook);
 
   if (fs.existsSync(filepath)) {
     const existing = fs.readFileSync(filepath, 'utf8');
@@ -128,8 +146,7 @@ function patchAgentFile(hook: HookSpec, target: string): void {
       writeFileAtomic(filepath, updated);
       console.log(`Updated Hippo hook in ${hook.file}`);
     } else {
-      const sep = existing.endsWith('\n') ? '\n' : '\n\n';
-      writeFileAtomic(filepath, existing + sep + block + '\n');
+      appendHookBlock(filepath, existing, hook);
       console.log(`Installed Hippo hook in ${hook.file} (appended)`);
     }
   } else {
@@ -420,14 +437,14 @@ export function handleSetup({ tenantId, flags }: CommandContext): void {
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
 
   console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
   console.log('');
 
   setupDetectedTools(tools, forceAll, dryRun);
 
-  if (!flags['no-schedule']) {
+  if (!boolFlag(flags, 'no-schedule')) {
     console.log('');
     if (dryRun) {
       console.log(`[dry-run] would install the machine-level daily runner around ${globalRoot}`);
@@ -436,7 +453,7 @@ export function handleSetup({ tenantId, flags }: CommandContext): void {
     }
   }
 
-  if (!flags['no-learn']) {
+  if (!boolFlag(flags, 'no-learn')) {
     console.log('');
     const imported = importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine(), { dryRun }));
     printAgentImport(imported, dryRun ? '[dry-run] ' : '');
@@ -550,7 +567,7 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
 }
 
 export async function handleDailyRunner({ tenantId }: CommandContext): Promise<void> {
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);

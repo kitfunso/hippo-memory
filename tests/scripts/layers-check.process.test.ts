@@ -33,6 +33,12 @@ const CLI_MAP = {
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
 const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
+const SURFACE_MAP = {
+  order: ['low', 'high'],
+  folders: { sub: 'high', surface: 'high', domain: 'low' },
+  rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+};
+const SURFACE_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/domain/d.ts': 'export const d = 1;\nexport type D = 1;\n' };
 type DbAllowed = Record<string, { names: string[]; why: string }>;
 const dbMap = (allowed: DbAllowed) => ({
   order: ['low', 'db', 'store', 'high'],
@@ -254,6 +260,47 @@ const rows: Row[] = [
     output: [
       'src/surface/cli/v.ts -> src/store/s.ts gives no reason',
       'src/surface/cli/w.ts -> src/store/s.ts matches no import',
+    ],
+  },
+  {
+    name: 'a CLI or MCP runtime import of src/domain fails with file:line',
+    files: {
+      ...SURFACE_BASE,
+      'src/surface/cli/v.ts': "export const v = 1;\nimport { d } from '../../domain/d.js';\n",
+      'src/surface/mcp/t.ts': "import { d } from '../../domain/d.js';\nexport const t = d;\n",
+    },
+    map: SURFACE_MAP,
+    status: 1,
+    output: [
+      'src/surface/cli/v.ts:2 imports src/domain/d.ts at runtime',
+      'src/surface/mcp/t.ts:1 imports src/domain/d.ts at runtime',
+    ],
+  },
+  {
+    name: 'a CLI type-only import of src/domain, and a listed pending file, pass',
+    files: {
+      ...SURFACE_BASE,
+      'src/surface/cli/v.ts': "import type { D } from '../../domain/d.js';\nexport type V = D;\n",
+      'src/surface/mcp/t.ts': "import { d } from '../../domain/d.js';\nexport const t = d;\n",
+      '.surface-domain-pending.json': JSON.stringify({ why: 'another lane', files: ['surface/mcp/t.ts'] }),
+    },
+    map: SURFACE_MAP,
+    status: 0,
+    output: ['Layer order OK'],
+  },
+  {
+    name: 'a pending list with no reason, or a file with no domain import left, fails',
+    files: {
+      ...SURFACE_BASE,
+      'src/surface/mcp/t.ts': "import { d } from '../../domain/d.js';\nexport const t = d;\n",
+      'src/surface/cli/v.ts': 'export const v = 1;\n',
+      '.surface-domain-pending.json': JSON.stringify({ why: ' ', files: ['surface/mcp/t.ts', 'surface/cli/v.ts'] }),
+    },
+    map: SURFACE_MAP,
+    status: 1,
+    output: [
+      '.surface-domain-pending.json gives no reason',
+      'src/surface/cli/v.ts no longer imports src/domain at runtime',
     ],
   },
   {

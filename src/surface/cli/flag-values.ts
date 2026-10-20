@@ -19,19 +19,23 @@ function parseWholeNumber(raw: string): number {
   return /^\d+$/.test(raw) ? Number(raw) : NaN;
 }
 
-export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
+export function parseLimitFlag(flags: CliFlags, name: string): number {
+  const value = flags[name];
   if (!value) return Infinity;
   const parsed = parseWholeNumber(String(value));
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : Infinity;
 }
 
-export function parseCountFlag(value: string | boolean | string[] | undefined): number {
+export function parseCountFlag(flags: CliFlags, name: string): number {
+  const value = flags[name];
   if (!value || value === true || Array.isArray(value)) return 0;
   const parsed = parseWholeNumber(String(value));
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 0;
 }
 
-export function parseBudgetFlag(value: string | boolean | string[] | undefined, fallback: number): number {
+/** --budget as a non-negative integer, or `fallback` when absent; a bare or junk value exits. */
+export function parseBudgetFlag<F extends number | undefined>(flags: CliFlags, fallback: F): number | F {
+  const value = flags['budget'];
   if (value === undefined) return fallback;
   // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (!isStringFlag(value)) {
@@ -157,6 +161,11 @@ export function boolFlag(flags: CliFlags, name: string): boolean {
 // Only a bare switch counts; `--x value` is false.
 export function flagIsTrue(flags: CliFlags, name: string): boolean {
   return flags[name] === true;
+}
+
+// Typed at all, bare or with a value.
+export function hasFlag(flags: CliFlags, name: string): boolean {
+  return flags[name] !== undefined;
 }
 
 /** What the command table hands each verb's run(). */
