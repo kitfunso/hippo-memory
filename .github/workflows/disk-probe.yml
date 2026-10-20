@@ -1,0 +1,23 @@
+name: disk-probe
+on: push
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Environment
+        continue-on-error: true
+        run: |
+          node -e "console.log('tmpdir', require('os').tmpdir(), 'RUNNER_TEMP', process.env.RUNNER_TEMP, 'cpus', require('os').cpus().length)"
+          Get-PSDrive C,D | Format-Table -AutoSize | Out-String
+          Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled,OnAccessProtectionEnabled | Format-List | Out-String
+      - name: Probe TEMP (C:)
+        run: node --no-warnings disk-probe.mjs $env:TEMP 10000
+      - name: Probe RUNNER_TEMP (D:)
+        run: node --no-warnings disk-probe.mjs $env:RUNNER_TEMP 10000
