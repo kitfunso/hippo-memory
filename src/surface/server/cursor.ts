@@ -1,7 +1,7 @@
 // Opaque cursors for the /v1 list routes: base64url JSON of the last returned row's sort key and id.
 import type { ServerResponse } from 'node:http';
 import { HttpError } from '../../base/util/http-util.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
+import { keysetPage, type KeysetPosition } from '../../base/util/keyset.js';
 import { type JsonValue, isJsonString, isJsonNumber } from '../../base/util/json.js';
 
 type CursorPart = 'string' | 'integer';
@@ -61,9 +61,8 @@ export interface Page<T> {
  * Drops the one-row lookahead the query fetched past `limit` and names the next page's cursor, null on the last page.
  */
 export function pageOf<T>(rows: readonly T[], limit: number, positionOf: (row: T) => KeysetPosition): Page<T> {
-  if (rows.length <= limit) return { items: [...rows], nextCursor: null };
-  const items = rows.slice(0, limit);
-  return { items, nextCursor: encodeCursor(positionOf(items[items.length - 1]!)) };
+  const page = keysetPage(rows, limit, positionOf);
+  return { items: page.rows, nextCursor: page.next === null ? null : encodeCursor(page.next) };
 }
 
 /**

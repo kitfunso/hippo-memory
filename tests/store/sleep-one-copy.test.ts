@@ -12,7 +12,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 /** loadAllEntries' statement with no tenant: every full row of the store. */
-const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`;
+// An every-tenant page reads each tenant on its own index; these stores hold one tenant.
+const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE 1 AND tenant_id = ? ORDER BY created ASC, id ASC`;
 
 const roots: string[] = [];
 
