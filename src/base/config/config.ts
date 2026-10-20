@@ -202,8 +202,8 @@ export interface ClefSettings {
   readonly endpoint?: string;
   /** HIPPO_CLEF_ENDPOINT_TOKEN, sent only to `endpoint`. */
   readonly endpointToken?: string;
-  /** HIPPO_CLEF_TIMEOUT_MS as written; the reranker parses it strictly. */
-  readonly timeoutMs?: string;
+  /** HIPPO_CLEF_TIMEOUT_MS as a whole number above zero; "15s" and "1e3" read as unset. */
+  readonly timeoutMs?: number;
   /** CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, trimmed; empty when unset. */
   readonly cloudflareAccountId: string;
   readonly cloudflareApiToken: string;

@@ -9,6 +9,7 @@ import {
   closeHippoDb,
   getHippoDbPath,
   openHippoDb,
+  type DatabaseSyncLike,
   withSharedStoreHandles,
   HOOK_DB_WAIT_MS,
 } from '../../src/db/index.js';
@@ -98,7 +99,7 @@ describe('context hook while another process holds the store write lock', () => 
 });
 
 describe('lock wait per command kind', () => {
-  const busyTimeout = (db: ReturnType<typeof openHippoDb>): number =>
+  const busyTimeout = (db: DatabaseSyncLike): number =>
     Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
   it('a hook scope opens with the short hook wait', async () => {
