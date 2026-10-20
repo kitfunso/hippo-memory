@@ -33,6 +33,10 @@ import type { HippoStore } from '../../src/entry/store-kit.js';
 import type { LocalStore } from '../../src/store/local/index.js';
 import type { LossAversion } from '../../src/core/memory.js';
 
+// Declared, not callback parameters: typeOnly takes a callback with none, so a parameter would be the error.
+declare const plainStore: HippoStore;
+declare const plainCtx: Context;
+
 describe('hippo-memory entry types', () => {
   it('createMemory takes content then optional partial options and returns a MemoryEntry', () => {
     expectTypeOf(createMemory).parameter(0).toEqualTypeOf<string>();
@@ -79,9 +83,9 @@ describe('hippo-memory entry types', () => {
     // @ts-expect-error sleep needs a Context, not a root path
     typeOnly(() => sleep('/tmp/root'));
     // @ts-expect-error a store with no local files has nothing for a sleep pass to work on
-    typeOnly((store: HippoStore) => consolidate(store));
+    typeOnly(() => consolidate(plainStore));
     // @ts-expect-error the same for a Context whose store has no local files
-    typeOnly((ctx: Context) => sleep(ctx));
+    typeOnly(() => sleep(plainCtx));
   });
 });
 
