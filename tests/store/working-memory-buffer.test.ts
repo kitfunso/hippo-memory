@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   openHippoDb,
   closeHippoDb,
@@ -117,24 +117,20 @@ describe('bounded buffer eviction', () => {
     expect(highItem!.importance).toBe(0.9);
   });
 
-  it('breaks eviction ties by oldest created_at', async () => {
-    // All same importance — oldest should be evicted
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < WM_MAX_ENTRIES; i++) {
-        wmPush(tmpDir, {
-          scope: 'tie-break',
-          content: `entry-${i}`,
-          importance: 0.5,
-        });
-      }
-    });
-
-    // Push one more with same importance — should evict entry-0 (oldest)
-    wmPush(tmpDir, {
-      scope: 'tie-break',
-      content: 'newest',
-      importance: 0.5,
-    });
+  it('evicts the oldest of equal entries, even when all share one created_at', async () => {
+    // A frozen clock gives every push the same created_at, the tie a fast loop hits by chance.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T00:00:00.000Z'));
+    try {
+      await withSharedStoreHandles(() => {
+        for (let i = 0; i < WM_MAX_ENTRIES; i++) {
+          wmPush(tmpDir, { scope: 'tie-break', content: `entry-${i}`, importance: 0.5 });
+        }
+      });
+      wmPush(tmpDir, { scope: 'tie-break', content: 'newest', importance: 0.5 });
+    } finally {
+      vi.useRealTimers();
+    }
 
     const items = wmRead(tmpDir, { scope: 'tie-break', limit: 100 });
     expect(items).toHaveLength(WM_MAX_ENTRIES);

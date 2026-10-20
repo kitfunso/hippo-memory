@@ -350,7 +350,7 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 }
 
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
- * oldest created_at). Returns the new row ID. */
+ * the oldest, by created_at then id). Returns the new row ID. */
 function wmPushAt(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
   const now = new Date().toISOString();
   return withWriteScope(db, 'wm_push', () => {
@@ -399,7 +399,7 @@ function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string
       WHERE id IN (
         SELECT id FROM working_memory
         WHERE scope = ? AND tenant_id = ?
-        ORDER BY importance ASC, created_at ASC
+        ORDER BY importance ASC, created_at ASC, id ASC
         LIMIT ?
       )
     `).run(scope, tenantId, excess);
@@ -436,7 +436,7 @@ function wmReadAt(
     SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
     FROM working_memory
     ${where.sql}
-    ORDER BY importance DESC, created_at DESC
+    ORDER BY importance DESC, created_at DESC, id DESC
     LIMIT ?
   `)
     .all(...where.params, limit) as WorkingMemoryRow[];
