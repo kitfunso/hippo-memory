@@ -16,6 +16,7 @@ import type { PredictionBaserate } from '../port/types.js';
 import type { Prediction, PredictionListQuery, SavePredictionOptions } from '../port/predictions.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
  * the memory row only mirrors the claim. Every helper requires tenantId; `trg_predictions_tenant_match_*` triggers
@@ -119,33 +120,35 @@ function insertPredictionRow(
   stamp: PredictionStamp,
 ): PredictionRow {
   const { now, actor } = stamp;
-  const result = db
-    .prepare(`
+  const result = cachedStatement(
+    db,
+    `
         INSERT INTO predictions(
           memory_id, tenant_id, class_tag, claim_text,
           estimate_value, estimate_unit, target_date,
           actual_value, closure_state, closed_at, closure_note, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, NULL, ?)
-      `)
-    .run(
-      memoryId,
-      tenantId,
-      opts.classTag,
-      opts.claimText,
-      opts.estimateValue ?? null,
-      opts.estimateUnit ?? null,
-      opts.targetDate ?? null,
-      null, // actual_value — null until close
-      now,
-    );
+      `,
+  ).run(
+    memoryId,
+    tenantId,
+    opts.classTag,
+    opts.claimText,
+    opts.estimateValue ?? null,
+    opts.estimateUnit ?? null,
+    opts.targetDate ?? null,
+    null, // actual_value — null until close
+    now,
+  );
 
   const predictionId = Number(result.lastInsertRowid ?? 0);
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
         SELECT ${SELECT_COLUMNS}
         FROM predictions WHERE id = ?
-      `)
-    .get(predictionId) as PredictionRow | undefined;
+      `,
+  ).get(predictionId) as PredictionRow | undefined;
 
   if (!row) {
     throw new Error('Failed to reload saved prediction row');
@@ -210,22 +213,24 @@ function closeOpenPredictionRow(
   const { now, actor } = stamp;
   // closure_state='open' in the WHERE stops a retried close from overwriting actual_value and auditing twice; zero
   // changed rows means not found or already closed.
-  const updateResult = db
-    .prepare(`
+  const updateResult = cachedStatement(
+    db,
+    `
         UPDATE predictions
         SET actual_value = ?, closure_state = ?, closed_at = ?, closure_note = ?
         WHERE id = ? AND tenant_id = ? AND closure_state = 'open'
-      `)
-    .run(opts.actualValue ?? null, opts.closureState, now, opts.closureNote ?? null, id, tenantId);
+      `,
+  ).run(opts.actualValue ?? null, opts.closureState, now, opts.closureNote ?? null, id, tenantId);
 
   if (updateResult.changes === 0) throwCloseMiss(db, tenantId, id);
 
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
         SELECT ${SELECT_COLUMNS}
         FROM predictions WHERE id = ? AND tenant_id = ?
-      `)
-    .get(id, tenantId) as PredictionRow | undefined;
+      `,
+  ).get(id, tenantId) as PredictionRow | undefined;
 
   if (!row) {
     throw new NotFoundError(`closePrediction: prediction ${id} not found after UPDATE`);
@@ -247,11 +252,12 @@ function closeOpenPredictionRow(
 
 function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): never {
   // Distinguish 'not found' from 'already closed' so callers (CLI, HTTP) surface the right error.
-  const existing = db
-    .prepare(`
+  const existing = cachedStatement(
+    db,
+    `
           SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
-        `)
-    .get(id, tenantId) as { closure_state: string } | undefined;
+        `,
+  ).get(id, tenantId) as { closure_state: string } | undefined;
   if (!existing) {
     throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
   }
@@ -263,12 +269,13 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
 
 function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
   assertTenantId('loadPredictionById', tenantId);
-  const row = db
-    .prepare(`
+  const row = cachedStatement(
+    db,
+    `
     SELECT ${SELECT_COLUMNS}
     FROM predictions WHERE id = ? AND tenant_id = ?
-  `)
-    .get(id, tenantId) as PredictionRow | undefined;
+  `,
+  ).get(id, tenantId) as PredictionRow | undefined;
   return row ? rowToPrediction(row) : null;
 }
 
@@ -289,25 +296,27 @@ function loadPredictionsByClassAt(
           `${opts.closureState}`,
       );
     }
-    rows = db
-      .prepare(`
+    rows = cachedStatement(
+      db,
+      `
       SELECT ${SELECT_COLUMNS}
       FROM predictions
       WHERE tenant_id = ? AND class_tag = ? AND closure_state = ?${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `)
-      .all(tenantId, classTag, opts.closureState, ...after.params, limit) as PredictionRow[];
+    `,
+    ).all(tenantId, classTag, opts.closureState, ...after.params, limit) as PredictionRow[];
   } else {
-    rows = db
-      .prepare(`
+    rows = cachedStatement(
+      db,
+      `
       SELECT ${SELECT_COLUMNS}
       FROM predictions
       WHERE tenant_id = ? AND class_tag = ?${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `)
-      .all(tenantId, classTag, ...after.params, limit) as PredictionRow[];
+    `,
+    ).all(tenantId, classTag, ...after.params, limit) as PredictionRow[];
   }
   return rows.map(rowToPrediction);
 }
@@ -320,15 +329,16 @@ function loadAllPredictionsAt(
 ): Prediction[] {
   assertTenantId('loadAllPredictions', tenantId);
   const after = keysetAfter('created_at', 'id', opts.after);
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT ${SELECT_COLUMNS}
     FROM predictions
     WHERE tenant_id = ?${after.sql}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `)
-    .all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
+  `,
+  ).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
   return rows.map(rowToPrediction);
 }
 
@@ -354,8 +364,9 @@ export function computePredictionBaserateAt(
   assertTenantId('computePredictionBaserate', tenantId);
   if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
   // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT estimate_value, actual_value
     FROM predictions
     WHERE tenant_id = ?
@@ -364,8 +375,8 @@ export function computePredictionBaserateAt(
       AND estimate_value IS NOT NULL
       AND actual_value IS NOT NULL
     ORDER BY id
-  `)
-    .all(tenantId, classTag) as BaserateRow[];
+  `,
+  ).all(tenantId, classTag) as BaserateRow[];
 
   const baserate = predictionBaserateOf(classTag, rows);
   // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits its
@@ -455,25 +466,27 @@ function loadOpenPredictionsAt(
   const after = keysetAfter('created_at', 'id', opts.after);
   let rows: PredictionRow[];
   if (opts.classTag) {
-    rows = db
-      .prepare(`
+    rows = cachedStatement(
+      db,
+      `
       SELECT ${SELECT_COLUMNS}
       FROM predictions
       WHERE tenant_id = ? AND class_tag = ? AND closure_state = 'open'${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `)
-      .all(tenantId, opts.classTag, ...after.params, limit) as PredictionRow[];
+    `,
+    ).all(tenantId, opts.classTag, ...after.params, limit) as PredictionRow[];
   } else {
-    rows = db
-      .prepare(`
+    rows = cachedStatement(
+      db,
+      `
       SELECT ${SELECT_COLUMNS}
       FROM predictions
       WHERE tenant_id = ? AND closure_state = 'open'${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `)
-      .all(tenantId, ...after.params, limit) as PredictionRow[];
+    `,
+    ).all(tenantId, ...after.params, limit) as PredictionRow[];
   }
   return rows.map(rowToPrediction);
 }

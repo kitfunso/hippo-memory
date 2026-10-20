@@ -42,6 +42,7 @@ import { updateStatsUnlessBusyAt } from './index-and-stats.js';
 import { openStore } from './handles.js';
 import { boundWithFiles } from './bound.js';
 import { selectMemoryReach } from './tenant-lookup.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 export interface WriteEntryOptions {
   actor?: string;
@@ -251,7 +252,8 @@ export function strengthenRetrievedOn(
   // One UPDATE ... FROM per chunk of rows instead of one statement per row.
   for (const chunk of chunked(updated, RETRIEVAL_UPDATE_CHUNK)) {
     const values = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
-    db.prepare(
+    cachedStatement(
+      db,
       `WITH v(id, rc, lr, hl, st) AS (VALUES ${values})
        UPDATE memories SET retrieval_count = v.rc, last_retrieved = v.lr, half_life_days = v.hl, strength = v.st
        FROM v WHERE memories.id = v.id`,
@@ -263,31 +265,31 @@ export function strengthenRetrievedOn(
 
 /** Rewrites a live row's tags and its full-text row on the caller's transaction, with no audit row. */
 export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void {
-  db.prepare(`UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`).run(
-    JSON.stringify(entry.tags),
-    entry.id,
-    entry.tenantId,
-  );
+  cachedStatement(
+    db,
+    `UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+  ).run(JSON.stringify(entry.tags), entry.id, entry.tenantId);
   syncFtsRow(db, entry);
 }
 
 /** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's dormant move does, and
  * marks its summary parent dirty. */
 export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
-  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenantId);
+  cachedStatement(db, 'DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenantId);
   deleteFtsRow(db, entry.id);
   if (entry.dagParentId) markSummaryDirtyInTx(db, entry.dagParentId, entry.tenantId, actor);
 }
 
 /** One half-life per memory id, on the caller's transaction. */
 export function setHalfLivesAt(db: DatabaseSyncLike, rows: readonly { id: string; halfLifeDays: number }[]): void {
-  const update = db.prepare('UPDATE memories SET half_life_days = ? WHERE id = ?');
+  const update = cachedStatement(db, 'UPDATE memories SET half_life_days = ? WHERE id = ?');
   for (const r of rows) update.run(r.halfLifeDays, r.id);
 }
 
 /** Moves every row of `from` in a tenant to project `into`. */
 export function restampOriginProjectAt(db: DatabaseSyncLike, tenantId: string, from: string, into: string): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`,
   ).run(into, tenantId, from);
 }
@@ -298,7 +300,8 @@ export function stampOriginProjectsAt(
   tenantId: string,
   rows: readonly { id: string; origin: string }[],
 ): void {
-  const stamp = db.prepare(
+  const stamp = cachedStatement(
+    db,
     `UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`,
   );
   for (const { id, origin } of rows) stamp.run(origin, tenantId, id);
@@ -312,9 +315,10 @@ export function renameEntrySourceAt(
   from: string,
   to: string,
 ): number {
-  const moved = db
-    .prepare(`UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`)
-    .run(to, id, tenantId, from);
+  const moved = cachedStatement(
+    db,
+    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
+  ).run(to, id, tenantId, from);
   return Number(moved.changes ?? 0);
 }
 
@@ -326,20 +330,20 @@ export function renameEntrySourceAndOriginAt(
   options: RenameSourceOptions,
 ): number {
   const { from, to, origin } = options;
-  const done = db
-    .prepare(
-      `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
-        `AND source = ?`,
-    )
-    .run(to, origin, id, tenantId, from);
+  const done = cachedStatement(
+    db,
+    `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
+      `AND source = ?`,
+  ).run(to, origin, id, tenantId, from);
   return Number(done.changes ?? 0);
 }
 
 /** Marks `id` superseded by `newId`; false when another writer superseded it first. */
 export function supersedeEntryAt(db: DatabaseSyncLike, tenantId: string, id: string, newId: string): boolean {
-  const result = db
-    .prepare(`UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`)
-    .run(newId, id, tenantId);
+  const result = cachedStatement(
+    db,
+    `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`,
+  ).run(newId, id, tenantId);
   return Number(result.changes ?? 0) !== 0;
 }
 
@@ -559,12 +563,11 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
     withWriteScope(db, 'supersede', () => {
       assertInReach(db, write, oldId);
       // No row means another writer got there first.
-      const won = db
-        .prepare(
-          'UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING ' +
-            'dag_parent_id',
-        )
-        .get(successor.id, oldId, tenantId) as { dag_parent_id: string | null } | undefined;
+      const won = cachedStatement(
+        db,
+        'UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING ' +
+          'dag_parent_id',
+      ).get(successor.id, oldId, tenantId) as { dag_parent_id: string | null } | undefined;
       if (!won) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
       // After the CAS, so a lost race marks no parent for rebuild.
       if (won.dag_parent_id) markSummaryDirtyInTx(db, won.dag_parent_id, tenantId, actor);
@@ -589,7 +592,10 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: strin
     return;
   }
   try {
-    db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(new Date().toISOString(), id);
+    cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+      new Date().toISOString(),
+      id,
+    );
   } catch (err) {
     if (!isSqliteBusy(err)) throw err;
     log.warnThenDebug(

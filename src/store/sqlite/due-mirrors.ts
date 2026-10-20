@@ -14,7 +14,7 @@ import { oncePerStore } from '../../db/connect.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { deferMirrorWrite, mirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 const DUE = 'mirror_due:';
 // The first key past every DUE key, as ';' follows ':'.

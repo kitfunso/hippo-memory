@@ -2,7 +2,7 @@
 // still refuses a captured request. Every claim sweeps the expired rows first, as a server can run for months.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { DeliveryClaim } from '../../port/connectors.js';
-import { cachedStatement } from '../statement-cache.js';
+import { cachedStatement } from '../../../db/statement-cache.js';
 
 const HOLD = 'delivery_hold:';
 // The first key past every hold key, as ';' follows ':'.

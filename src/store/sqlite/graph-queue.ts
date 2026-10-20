@@ -5,6 +5,7 @@ import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing / cross-tenant memory (the DB
  * trigger is the backstop). */
@@ -14,14 +15,15 @@ function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: str
   // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you cannot enqueue a
   // forgotten mirror); memoryId is non-null here by construction.
   const { sourceKind } = resolveConsolidatedSource(db, tenantId, memoryId, null, 'enqueueExtraction');
-  const result = db
-    .prepare(`
+  const result = cachedStatement(
+    db,
+    `
     INSERT INTO graph_extraction_queue(tenant_id, memory_id, kind, status, enqueued_at, processed_at)
     VALUES (?, ?, ?, 'pending', ?, NULL)
-  `)
-    .run(tenantId, memoryId, sourceKind, now);
+  `,
+  ).run(tenantId, memoryId, sourceKind, now);
   const id = Number(result.lastInsertRowid ?? 0);
-  const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as
+  const row = cachedStatement(db, `SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as
     | QueueRow
     | undefined;
   if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
@@ -51,13 +53,14 @@ export function markGraphDirtyAt(db: DatabaseSyncLike, tenantId: string, memoryI
 export function markPendingProcessedUpToAt(db: DatabaseSyncLike, tenantId: string, maxId: number): number {
   assertTenantId('markPendingProcessedUpTo', tenantId);
   const now = new Date().toISOString();
-  const res = db
-    .prepare(`
+  const res = cachedStatement(
+    db,
+    `
     UPDATE graph_extraction_queue
     SET status = 'processed', processed_at = ?
     WHERE tenant_id = ? AND status = 'pending' AND id <= ?
-  `)
-    .run(now, tenantId, maxId);
+  `,
+  ).run(now, tenantId, maxId);
   return Number(res.changes ?? 0);
 }
 
@@ -65,13 +68,14 @@ export function markPendingProcessedUpToAt(db: DatabaseSyncLike, tenantId: strin
  * host-wide, as sleep is cross-tenant. The drain marks only items at or below it processed, so items enqueued DURING
  * the rebuild stay pending (no lost update). */
 export function loadPendingExtractionTenantsAt(db: DatabaseSyncLike): { tenantId: string; maxPendingId: number }[] {
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT tenant_id AS tenant_id, MAX(id) AS max_id
     FROM graph_extraction_queue
     WHERE status = 'pending'
     GROUP BY tenant_id
-  `)
-    .all() as { tenant_id: string; max_id: number }[];
+  `,
+  ).all() as { tenant_id: string; max_id: number }[];
   return rows.map((r) => ({ tenantId: r.tenant_id, maxPendingId: Number(r.max_id) }));
 }

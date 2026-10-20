@@ -20,6 +20,7 @@ import { pragmaDataVersion } from '../../db/meta.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 const PAGE_ROWS = 1000;
 // One past the list's 240-character cut, so the cut and its truncated flag come out as they would on the whole text.
@@ -102,7 +103,7 @@ function eachLivePage<R extends { created: string; id: string }>(
     const keyset = after ? ' AND (created, id) > (?, ?)' : '';
     const params = after ? [tenantId, after.created, after.id, PAGE_ROWS] : [tenantId, PAGE_ROWS];
     // SAFETY: each caller's columns are exactly the fields of its row type R.
-    const page = db.prepare(`${select}${keyset} ORDER BY created ASC, id ASC LIMIT ?`).all(...params) as R[];
+    const page = cachedStatement(db, `${select}${keyset} ORDER BY created ASC, id ASC LIMIT ?`).all(...params) as R[];
     if (page.length > 0) visit(page);
     if (page.length < PAGE_ROWS) return;
     after = page[page.length - 1];
@@ -120,14 +121,13 @@ function eachOpenConflictPage(db: DatabaseSyncLike, tenantId: string, visit: Das
 
 function excludedAt(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
   // SAFETY: `why` is one of the three CASE arms or NULL.
-  const counts = db
-    .prepare(
-      `SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
-        `WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' ` +
-        `WHEN ${KIND} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
-        `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
-    )
-    .all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
+  const counts = cachedStatement(
+    db,
+    `SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
+      `WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' ` +
+      `WHEN ${KIND} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
+      `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
+  ).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
   const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0 };
   for (const { why, n } of counts) if (why !== null) excluded[why] = Number(n);
   return excluded;
@@ -151,7 +151,7 @@ function scanTextAt(db: DatabaseSyncLike, tenantId: string, visit: (page: Dashbo
 /** Whether `id` has a stored vector; false on a store that has never held one. */
 function hasVectorAt(db: DatabaseSyncLike, id: string): boolean {
   if (!tableExists(db, 'memory_vectors')) return false;
-  return db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
+  return cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
 }
 
 /** Scans run on a fresh writable open, which runs any pending migration and legacy embeddings.json import first; the

@@ -10,6 +10,7 @@ import { failuresPerSession, type SessionFailures } from '../../base/records/fai
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import type { Sync } from './served.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
 function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
@@ -17,26 +18,25 @@ function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   const now = new Date(event.now ?? Date.now()).toISOString();
   // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
   const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();
-  db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
-  const inserted = db
-    .prepare(
-      `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, ` +
-        `owner_subject, origin_project, request_id)
+  cachedStatement(db, `DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
+  const inserted = cachedStatement(
+    db,
+    `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, ` +
+      `owner_subject, origin_project, request_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      now,
-      event.tenantId,
-      event.sessionId?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
-      event.tool?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
-      event.outcome,
-      event.rule ?? null,
-      event.sigHash ?? null,
-      event.detailHash ?? null,
-      event.ownerSubject ?? null,
-      event.originProject ?? null,
-      event.requestId ?? null,
-    );
+  ).run(
+    now,
+    event.tenantId,
+    event.sessionId?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
+    event.tool?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
+    event.outcome,
+    event.rule ?? null,
+    event.sigHash ?? null,
+    event.detailHash ?? null,
+    event.ownerSubject ?? null,
+    event.originProject ?? null,
+    event.requestId ?? null,
+  );
   return Number(inserted.lastInsertRowid);
 }
 
@@ -48,9 +48,10 @@ export function requestOutcome(
   requestId: string,
   sessionId: string,
 ): FailureOutcome | null {
-  const row = db
-    .prepare(`SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
-    .get(tenantId, requestId) as { outcome: FailureOutcome; session_id: string | null } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`,
+  ).get(tenantId, requestId) as { outcome: FailureOutcome; session_id: string | null } | undefined;
   if (row === undefined) return null;
   // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
   if (row.session_id !== sessionId.slice(0, MAX_HOOK_FIELD_LEN)) {
@@ -68,7 +69,7 @@ function settleFailureOutcome(
   requestId: string,
   outcome: FailureOutcome,
 ): void {
-  db.prepare(`UPDATE failure_log SET outcome = ? WHERE tenant_id = ? AND request_id = ?`).run(
+  cachedStatement(db, `UPDATE failure_log SET outcome = ? WHERE tenant_id = ? AND request_id = ?`).run(
     outcome,
     tenantId,
     requestId,
@@ -77,21 +78,20 @@ function settleFailureOutcome(
 
 /** The tenant's rated failures per session since `sinceIso`, under the rule in base/records/failure-repeats.ts. */
 function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
-  const rows = db
-    .prepare(
-      `SELECT ts, session_id, sig_hash FROM failure_log
+  const rows = cachedStatement(
+    db,
+    `SELECT ts, session_id, sig_hash FROM failure_log
      WHERE tenant_id = ? AND session_id IS NOT NULL AND sig_hash IS NOT NULL
        AND outcome IN ('stored', 'duplicate', 'store-failed')
      ORDER BY id`,
-    )
-    .all(tenantId) as Array<{ ts: string; session_id: string; sig_hash: string }>;
+  ).all(tenantId) as Array<{ ts: string; session_id: string; sig_hash: string }>;
   const rated = rows.map((r) => ({ ts: r.ts, sessionId: r.session_id, sigHash: r.sig_hash }));
   return failuresPerSession(rated, sinceIso);
 }
 
 /** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
 export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): number {
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as
+  const row = cachedStatement(db, `SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as
     | { n: number }
     | undefined;
   return Number(row?.n ?? 0);
@@ -99,9 +99,10 @@ export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): numb
 
 /** Sum the failure log for one tenant since `sinceIso`. */
 export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceIso: string): FailureSummary {
-  const rows = db
-    .prepare(`SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`)
-    .all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`,
+  ).all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;
   const counts = new Map(rows.map((r) => [r.outcome, Number(r.n)] as const));
   const outcomes = {
     stored: counts.get('stored') ?? 0,
