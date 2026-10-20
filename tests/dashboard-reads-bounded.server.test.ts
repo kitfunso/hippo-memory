@@ -50,10 +50,10 @@ function growAlphaTo(root: string, copies: number): void {
     const columns = (db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>).map((c) => c.name);
     const picked = columns.map((c) => (c === 'id' ? `memories.id || '~' || k.n` : c)).join(', ');
     db.prepare(
-      `WITH RECURSIVE k(n) AS (SELECT (SELECT COUNT(*) FROM memories WHERE origin_project = 'alpha') / ?1 ` +
-        `UNION ALL SELECT n + 1 FROM k WHERE n + 1 < ?2) INSERT INTO memories (${columns.join(', ')}) ` +
+      `WITH RECURSIVE k(n) AS (SELECT (SELECT COUNT(*) FROM memories WHERE origin_project = 'alpha') / :base ` +
+        `UNION ALL SELECT n + 1 FROM k WHERE n + 1 < :copies) INSERT INTO memories (${columns.join(', ')}) ` +
         `SELECT ${picked} FROM memories, k WHERE origin_project = 'alpha' AND instr(memories.id, '~') = 0`,
-    ).run(BASE_ROWS, copies);
+    ).run({ base: BASE_ROWS, copies });
   } finally {
     closeHippoDb(db);
   }
