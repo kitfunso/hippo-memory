@@ -11,8 +11,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 const ROWS = 2300;
 const DAY_MS = 86_400_000;
-// Each case seeds 2300 rows in a real store, and a runner's disk sets how long that takes.
-const SEED_MS = 30_000;
 /** The statement that returns the candidate rows: the decay-key subset, or the ranked scan beneath it. */
 const CANDIDATE_READ = /WITH top AS MATERIALIZED|ORDER BY pinned DESC/;
 let root: string;
@@ -52,7 +50,8 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('contextGet with no query', () => {
+// Each case seeds 2300 rows in a real store, and a runner's disk sets how long that takes.
+describe('contextGet with no query', { timeout: 30_000 }, () => {
   it('reads a page far under the 2000-row cap and returns the strongest rows', async () => {
     const ids = seed();
     const { result, reads } = await recordStatementsAsync(() =>
@@ -64,7 +63,7 @@ describe('contextGet with no query', () => {
     const returned = result.entries.map((e) => e.entry.id);
     expect(returned.length).toBeGreaterThan(5);
     expect(returned).toEqual(ids.slice(0, returned.length));
-  }, SEED_MS);
+  });
 
   it('pages a larger budget deeper, up to the cap', async () => {
     seed();
@@ -75,5 +74,5 @@ describe('contextGet with no query', () => {
 
     expect(peakRowsRead(large.reads, CANDIDATE_READ)).toBeGreaterThan(peakRowsRead(small.reads, CANDIDATE_READ));
     expect(peakRowsRead(large.reads, CANDIDATE_READ)).toBeLessThanOrEqual(2000);
-  }, SEED_MS);
+  });
 });
