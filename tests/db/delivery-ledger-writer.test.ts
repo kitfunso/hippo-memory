@@ -438,7 +438,7 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     const own = openHippoDb(root, { busyWaitMs: 1234 });
     try {
       expect(writeDeliveryEventOnHandle(own, event())).not.toBeNull();
-      expect(own.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout).toBe(1234);
+      expect((own.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout).toBe(1234);
     } finally {
       closeHippoDb(own);
     }

@@ -28,11 +28,13 @@ export interface HippoIndex {
   version: number;
   entries: Record<string, IndexEntry>;
   last_retrieval_ids: string[];
-  /** Id of the most recent recall_traces row written by contextGet/cmdRecall, mirrored from the
-   *  `last_trace_id` meta key like last_retrieval_ids. null when none was written (api.recall never sets it). */
+  /** Id of the most recent recall_traces row written by contextGet/cmdRecall, mirrored from the `last_trace_id` meta
+   *  key like last_retrieval_ids. null when none was written (api.recall never sets it). */
   last_trace_id: string | null;
 }
 
+// SAFETY: every read cast to this row selects MEMORY_SELECT_COLUMNS or MEMORY_SEARCH_COLUMNS.
+// scripts/check-row-casts.mjs proves it.
 export interface MemoryRow {
   id: string;
   created: string;
@@ -71,8 +73,7 @@ export interface MemoryRow {
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
-  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside
-  // descendant_count / earliest_at / latest_at.
+  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside descendant_count / earliest_at / latest_at.
   summary_dirty: number | null;
   last_rebuilt_at: string | null;
   rebuild_count: number | null;
@@ -82,6 +83,7 @@ export interface MemoryRow {
   bm25_score?: number;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface ConsolidationRunRow {
   timestamp: string;
   decayed: number;
@@ -89,6 +91,7 @@ export interface ConsolidationRunRow {
   removed: number;
 }
 
+// SAFETY: every read cast to this row selects TASK_SNAPSHOT_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface TaskSnapshotRow {
   id: number;
   task: string;
@@ -101,7 +104,10 @@ export interface TaskSnapshotRow {
   created_at: string;
   updated_at: string;
 }
+export const TASK_SNAPSHOT_COLUMNS =
+  'id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at';
 
+// SAFETY: every read cast to this row selects MEMORY_CONFLICT_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface MemoryConflictRow {
   id: number;
   memory_a_id: string;
@@ -112,7 +118,9 @@ export interface MemoryConflictRow {
   detected_at: string;
   updated_at: string;
 }
+export const MEMORY_CONFLICT_COLUMNS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
 
+// SAFETY: every read cast to this row selects SESSION_EVENT_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface SessionEventRow {
   id: number;
   session_id: string;
@@ -124,6 +132,8 @@ export interface SessionEventRow {
   metadata_json: string;
   created_at: string;
 }
+export const SESSION_EVENT_COLUMNS =
+  'id, session_id, task, event_type, content, source, scope, metadata_json, created_at';
 
 export const INDEX_VERSION = 3;
 const MEMORY_COLUMN_NAMES = [
@@ -282,8 +292,8 @@ function rowToPlacementFields(row: MemoryRow): PlacementFields {
 
 export function rowToEntry(row: MemoryRow): MemoryEntry {
   const entry: MemoryEntry = { ...rowToRetrievalFields(row), ...rowToPlacementFields(row) };
-  // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column
-  // (non-FTS path) from a present one.
+  // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column (non-FTS path) from a present
+  // one.
   if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {
     entry.bm25Score = Number(row.bm25_score);
   }

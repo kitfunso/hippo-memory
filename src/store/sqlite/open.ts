@@ -75,8 +75,8 @@ export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
 export function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
   // Existence, not COUNT(*): a count walks every row on each write's open.
   if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return false;
-  // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the
-  // import on every open and duplicate consolidation_runs; this meta flag settles it.
+  // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the import on every open
+  // and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
 
   const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
@@ -98,12 +98,12 @@ function importLegacyEntries(
   legacyEntries: MemoryEntry[],
   caller: string,
 ): void {
-  // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit()
-  // inline, because nothing rolls back on a per-row skip.
+  // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit() inline, because nothing
+  // rolls back on a per-row skip.
   let rejectedCount = 0;
   for (const entry of legacyEntries) {
-    // v39: legacy markdown carries no origin_project; stamp from the store
-    // location so bootstrapped rows stay visible to ambient context.
+    // v39: legacy markdown carries no origin_project; stamp from the store location so bootstrapped rows stay visible
+    // to ambient context.
     const stamped = stampOriginProjectForImport(hippoRoot, entry);
     try {
       upsertEntryRow(db, stamped);
@@ -129,8 +129,8 @@ function importLegacyEntries(
 function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
   const legacyIndex = loadLegacyIndexFile(hippoRoot);
   setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
-  // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit
-  // string rather than trusting a hand-edited or corrupt index.json.
+  // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit string rather than trusting a
+  // hand-edited or corrupt index.json.
   const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
   setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 

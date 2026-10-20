@@ -15,7 +15,6 @@ export function eventSeenAt(db: DatabaseSyncLike, log: EventLogSpec, key: string
 }
 
 export function eventMemoryAt(db: DatabaseSyncLike, log: EventLogSpec, key: string): string | null {
-  // SAFETY: the SELECT projects only `memory_id`, a nullable column; .get() returns undefined when no row matches.
   const row = db.prepare(`SELECT memory_id FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key) as
     | { memory_id: string | null }
     | undefined;

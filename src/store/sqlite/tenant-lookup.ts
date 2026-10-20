@@ -5,7 +5,6 @@ import type { ApiKeyOwner } from '../port/types.js';
 
 /** The owner row of `keyId`, or undefined when no such key exists. */
 export function selectApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOwner | undefined {
-  // SAFETY: row's shape matches the four columns named in the SELECT.
   const row = db
     .prepare(`SELECT tenant_id, revoked_at, role, owner_subject FROM api_keys WHERE key_id = ?`)
     .get(keyId) as
@@ -19,7 +18,6 @@ export function selectMemoryReach(
   db: DatabaseSyncLike,
   id: string,
 ): { tenantId: string; scope: string | null } | undefined {
-  // SAFETY: row's shape matches the tenant_id and scope columns named in the SELECT.
   const row = db.prepare(`SELECT tenant_id, scope FROM memories WHERE id = ?`).get(id) as
     | { tenant_id: string; scope: string | null }
     | undefined;

@@ -8,8 +8,7 @@ import type { Context } from '../types.js';
 
 /**
  * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is
- * on. Newest first;
- * `opts.query` keeps rows containing every term (case-insensitive). */
+ * on. Newest first; `opts.query` keeps rows containing every term (case-insensitive). */
 export function dormantList(ctx: Context, opts: ListDormantOpts = {}): Promise<DormantMemory[]> {
   return ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), opts);
 }

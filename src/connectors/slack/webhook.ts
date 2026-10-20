@@ -135,8 +135,8 @@ async function parkAndAck(
 }
 
 function teamIdInRawBody(rawBody: string): string | null {
-  // Cheap regex extracts team_id from a (possibly malformed) raw body so the
-  // DLQ row carries it for triage even when JSON.parse fails.
+  // Cheap regex extracts team_id from a (possibly malformed) raw body so the DLQ row carries it for triage even when
+  // JSON.parse fails.
   const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
   return m ? m[1] : null;
 }
@@ -207,8 +207,8 @@ const hostFallback = (): SlackFallback => ({
 });
 
 async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
-  // Attribute the parse failure to the originating workspace via the regex-extracted
-  // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
+  // Attribute the parse failure to the originating workspace via the regex-extracted team_id; a null or unknown team
+  // writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
     teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw, hostFallback()) : null;
   await parkAndAck(d, {

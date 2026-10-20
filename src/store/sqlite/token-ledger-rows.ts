@@ -27,6 +27,7 @@ export function pruneTokenRowsBefore(db: DatabaseSyncLike, cutoffIso: string): v
   db.prepare(`DELETE FROM token_ledger WHERE ts < ?`).run(cutoffIso);
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface LedgerAnchor {
   id: number;
   event: string;
@@ -40,7 +41,6 @@ export function latestInjectOrReset(
   sessionId: string,
   surface: string,
 ): LedgerAnchor | undefined {
-  // SAFETY: the SELECT names exactly these three columns.
   return db
     .prepare(
       `SELECT id, event, block_hash FROM token_ledger
@@ -57,7 +57,6 @@ export function countSkipsAfter(
   surface: string,
   afterId: number,
 ): { n: number } | undefined {
-  // SAFETY: the SELECT names exactly this one aggregate column.
   return db
     .prepare(
       `SELECT COUNT(*) AS n FROM token_ledger
@@ -66,6 +65,7 @@ export function countSkipsAfter(
     .get(tenantId, sessionId, surface, afterId) as { n: number } | undefined;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface SurfaceTotalsRow {
   surface: string;
   injected: number;
@@ -77,7 +77,6 @@ export interface SurfaceTotalsRow {
 }
 
 export function surfaceTotals(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SurfaceTotalsRow[] {
-  // SAFETY: the SELECT names exactly these columns, all aggregates or TEXT.
   return db
     .prepare(
       `SELECT surface,
@@ -94,6 +93,7 @@ export function surfaceTotals(db: DatabaseSyncLike, tenantId: string, sinceIso: 
     .all(tenantId, sinceIso) as SurfaceTotalsRow[];
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface SessionTotalsRow {
   sessions: number;
   hook_sessions: number;
@@ -108,7 +108,6 @@ export function sessionTotals(
   sinceIso: string,
   rereadSurfaces: readonly TokenSurface[],
 ): SessionTotalsRow | undefined {
-  // SAFETY: the SELECT names exactly these four aggregate columns.
   return db
     .prepare(
       `SELECT COUNT(DISTINCT session_id) AS sessions,
@@ -122,6 +121,7 @@ export function sessionTotals(
     .get(...rereadSurfaces, tenantId, sinceIso) as SessionTotalsRow | undefined;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface SessionTokenRow {
   session_id: string;
   sent: number;
@@ -130,7 +130,6 @@ export interface SessionTokenRow {
 }
 
 export function sessionTokenRows(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokenRow[] {
-  // SAFETY: the SELECT names exactly these columns, all aggregates or TEXT.
   return db
     .prepare(
       `SELECT session_id,
@@ -144,6 +143,7 @@ export function sessionTokenRows(db: DatabaseSyncLike, tenantId: string, sinceIs
     .all(tenantId, sinceIso) as SessionTokenRow[];
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface InjectedBlockRow {
   ts: string;
   surface: TokenSurface;
@@ -156,7 +156,6 @@ export function injectedBlocks(
   sessionId: string,
   surfaces: readonly TokenSurface[],
 ): InjectedBlockRow[] {
-  // SAFETY: the SELECT names exactly these three columns.
   return db
     .prepare(
       `SELECT ts, surface, tokens FROM token_ledger
@@ -179,7 +178,6 @@ export function firstPilotArmHash(
   tenantId: TenantId,
 ): { block_hash: string | null } | undefined {
   const tenant = tenantAnd(tenantId);
-  // SAFETY: the SELECT names exactly this one column.
   return db
     .prepare(
       `SELECT block_hash FROM token_ledger WHERE session_id = ?${tenant.sql}

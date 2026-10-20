@@ -13,8 +13,8 @@ export interface KeyAudit {
    * transaction, then resolves to `at`. A revoked key resolves to its own revoked_at and writes nothing; a key missing
    * from `tenantId` rejects with NotFoundError `Unknown key_id: <keyId>`. */
   revokeApiKey(revoke: KeyRevoke): Promise<string>;
-  /** As `listAuditEventsAfter`: rows above `afterId` in ascending
-   * id order, with its RangeErrors, limit clamp and tenant filter. */
+  /** As `listAuditEventsAfter`: rows above `afterId` in ascending id order, with its RangeErrors, limit clamp and
+   * tenant filter. */
   auditEventsAfter(opts: ListAuditAfterOpts): Promise<AuditEvent[]>;
   /** The highest audit id ever assigned, pruned rows included, 0 before the first; a tail that sees it drop knows the
    * log was restored. */

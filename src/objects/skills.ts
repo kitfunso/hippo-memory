@@ -16,8 +16,8 @@ export type { Skill, SkillStatus } from '../core/object-types.js';
 
 export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>(['active', 'superseded', 'closed']);
 
-/** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a
- *  larger cap than the 4096 short-field convention. */
+/** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a larger cap than the 4096 short-field
+ *  convention. */
 export const MAX_SKILL_NAME_LEN = 256;
 const MAX_SKILL_INSTRUCTIONS_LEN = 8192;
 export const MAX_SKILL_TRIGGER_LEN = 1024;
@@ -45,8 +45,8 @@ export interface ListSkillsOptions {
   after?: KeysetPosition;
 }
 
-/** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the
- *  exported **When:** line. */
+/** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the exported
+ *  **When:** line. */
 function checkTrigger(trigger: string | undefined): string | null {
   if (trigger === undefined || trigger === null || trigger.trim().length === 0) return null;
   if (trigger.length > MAX_SKILL_TRIGGER_LEN) {

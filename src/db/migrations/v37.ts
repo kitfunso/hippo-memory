@@ -47,8 +47,7 @@ const GRAPH_EXTRACTION_QUEUE_TABLE = `
         `;
 
 // entities guard: source_kind must equal the FK'd memory's actual kind (raw or a lying source_kind ABORTs) and tenant
-// must match,
-// on INSERT and on UPDATE (when memory_id/source_kind/tenant_id change).
+// must match, on INSERT and on UPDATE (when memory_id/source_kind/tenant_id change).
 const TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_insert
           BEFORE INSERT ON entities
@@ -78,8 +77,8 @@ const TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE = `
           END
         `;
 
-// relations guard: source_kind must equal the FK'd memory's kind; tenant must
-// match the memory AND both endpoint entities (no cross-tenant edges).
+// relations guard: source_kind must equal the FK'd memory's kind; tenant must match the memory AND both endpoint
+// entities (no cross-tenant edges).
 const TRG_RELATIONS_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_relations_consolidated_only_insert
           BEFORE INSERT ON relations
@@ -119,8 +118,8 @@ const TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE = `
           END
         `;
 
-// graph_extraction_queue guard: kind must equal the FK'd memory's actual kind
-// (so a raw memory ABORTs), and tenant must match. INSERT and UPDATE.
+// graph_extraction_queue guard: kind must equal the FK'd memory's actual kind (so a raw memory ABORTs), and tenant must
+// match. INSERT and UPDATE.
 const TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_graph_queue_consolidated_only_insert
           BEFORE INSERT ON graph_extraction_queue
@@ -168,8 +167,8 @@ const TRG_MEMORIES_GRAPH_REFERENCED_GUARD = `
         `;
 
 // Second reverse guard: the entity UPDATE trigger does not re-validate existing relations, so a cross-tenant entity
-// move would leave a tenant-A relation
-// pointing at a tenant-B entity. Block the tenant move while any relation references the entity.
+// move would leave a tenant-A relation pointing at a tenant-B entity. Block the tenant move while any relation
+// references the entity.
 const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_no_tenant_move_when_referenced
           BEFORE UPDATE ON entities

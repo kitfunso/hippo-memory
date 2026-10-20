@@ -23,6 +23,8 @@ const DUE_END = 'mirror_due;';
 const DUE_PAGE = 64;
 
 /** One row's mark: its meta key and the token of the write that set it. */
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+// meta's key and value are both TEXT NOT NULL.
 interface DueMark {
   readonly key: string;
   readonly value: string;
@@ -85,7 +87,6 @@ function rewriteDueMirrors(db: DatabaseSyncLike, hippoRoot: string): void {
 }
 
 function dueMarks(db: DatabaseSyncLike, after: string): DueMark[] {
-  // SAFETY: the SELECT names exactly meta's key and value, both TEXT NOT NULL.
   return cachedStatement(db, `SELECT key, value FROM meta WHERE key > ? AND key < ? ORDER BY key LIMIT ?`).all(
     after,
     DUE_END,

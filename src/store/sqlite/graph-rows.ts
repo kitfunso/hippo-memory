@@ -22,6 +22,7 @@ export const GRAPH_RELATION_TYPES: ReadonlySet<RelationType> = new Set<RelationT
 
 export type GraphQueueStatus = 'pending' | 'processed' | 'skipped';
 
+// SAFETY: every read cast to this row selects ENTITY_COLS; scripts/check-row-casts.mjs proves it.
 export interface EntityRow {
   id: number;
   tenant_id: string;
@@ -33,6 +34,7 @@ export interface EntityRow {
   source_object_id: number | null;
   created_at: string;
 }
+// SAFETY: every read cast to this row selects RELATION_COLS; scripts/check-row-casts.mjs proves it.
 export interface RelationRow {
   id: number;
   tenant_id: string;
@@ -94,6 +96,7 @@ export interface GraphQueueItem {
   processedAt: string | null;
 }
 
+// SAFETY: every read cast to this row selects QUEUE_COLS; scripts/check-row-casts.mjs proves it.
 export interface QueueRow {
   id: number;
   tenant_id: string;
@@ -105,8 +108,8 @@ export interface QueueRow {
 }
 
 export function rowToQueueItem(row: QueueRow): GraphQueueItem {
-  // SAFETY: kind/status are DB CHECK-constrained to exactly the SourceKind/GraphQueueStatus enum values,
-  // so the row's column values match those types.
+  // SAFETY: kind/status are DB CHECK-constrained to exactly the SourceKind/GraphQueueStatus enum values, so the row's
+  // column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -123,11 +126,11 @@ export const QUEUE_COLS = `id, tenant_id, memory_id, kind, status, enqueued_at, 
 export interface InsertEntityOptions {
   entityType: EntityType;
   name: string;
-  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
-   *  the entity is anchored only to its source object (mirror forgotten/pruned). */
+  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when the entity is anchored only to
+   *  its source object (mirror forgotten/pruned). */
   memoryId?: string | null;
-  /** The authoritative object this entity descends from. Required when memoryId is
-   *  null; optional alongside a live memory (both paths may be set). */
+  /** The authoritative object this entity descends from. Required when memoryId is null; optional alongside a live
+   *  memory (both paths may be set). */
   sourceObject?: SourceObjectRef;
 }
 
@@ -141,8 +144,8 @@ export interface InsertRelationOptions {
   fromEntityId: number;
   toEntityId: number;
   relType: RelationType;
-  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
-   *  the relation is anchored only to its source object. */
+  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when the relation is anchored only to
+   *  its source object. */
   memoryId?: string | null;
   /** The authoritative object this relation descends from. */
   sourceObject?: SourceObjectRef;

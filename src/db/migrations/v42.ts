@@ -4,8 +4,8 @@ import type { Migration } from './types.js';
 export const v42: Migration = {
   version: 42,
   up: (db) => {
-    // Handoff envelope: five nullable columns so the envelope carries evidence and
-    // outcome and readers can filter on them without parsing JSON.
+    // Handoff envelope: five nullable columns so the envelope carries evidence and outcome and readers can filter on
+    // them without parsing JSON.
     if (!tableHasColumn(db, 'session_handoffs', 'constraints_json')) {
       db.exec(`ALTER TABLE session_handoffs ADD COLUMN constraints_json TEXT`);
     }
@@ -14,8 +14,8 @@ export const v42: Migration = {
     }
     if (!tableHasColumn(db, 'session_handoffs', 'outcome')) {
       db.exec(`ALTER TABLE session_handoffs ADD COLUMN outcome TEXT`);
-      // Backfill from session_complete so pre-existing handoffs don't
-      // all read as unfinished and get injected by the new 72h ambient fallback.
+      // Backfill from session_complete so pre-existing handoffs don't all read as unfinished and get injected by the
+      // new 72h ambient fallback.
       db.exec(`
           UPDATE session_handoffs SET outcome = (
             SELECT e.content FROM session_events e

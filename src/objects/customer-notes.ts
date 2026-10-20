@@ -1,6 +1,6 @@
-/** customer_note object: many discrete notes per free-form `customer` column (no entities FK yet), each with its
- *  own supersede chain. The `customer_notes` table is the source of truth; the memory mirror (memory_id NULLABLE,
- *  ON DELETE SET NULL) is for recall. */
+/** customer_note object: many discrete notes per free-form `customer` column (no entities FK yet), each with its own
+ *  supersede chain. The `customer_notes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE
+ *  SET NULL) is for recall. */
 
 import type { KeysetPosition } from '../util/keyset.js';
 import type { Objects } from '../store/port.js';
@@ -14,8 +14,8 @@ export type { CustomerNote, NoteStatus } from '../core/object-types.js';
 
 export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>(['active', 'superseded', 'closed']);
 
-/** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap
- *  than the 4096 short-field convention. */
+/** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap than the 4096 short-field
+ *  convention. */
 export const MAX_CUSTOMER_LEN = 256;
 const MAX_NOTE_LEN = 8192;
 export const MAX_CHANGE_SUMMARY_LEN = 4096;
@@ -40,8 +40,8 @@ export interface ListCustomerNotesOptions {
   after?: KeysetPosition;
 }
 
-/** Recall-surface content for the memory mirror: customer + note. Named (mirrors
- *  buildBriefContent) so the recall surface is deterministic + unit-testable. */
+/** Recall-surface content for the memory mirror: customer + note. Named (mirrors buildBriefContent) so the recall
+ *  surface is deterministic + unit-testable. */
 function buildNoteContent(customer: string, note: string): string {
   return `${customer}\n\n${note}`;
 }

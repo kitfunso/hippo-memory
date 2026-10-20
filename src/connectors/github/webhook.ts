@@ -47,8 +47,8 @@ async function readSignedBody(request: WebhookRequest, secret: string, sigStr: s
 }
 
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
- *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature;
- *  409 on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
+ *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409
+ *  on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
 export async function handleGitHubEventsWebhook(
   request: WebhookRequest,
   store: HippoStore,
@@ -76,8 +76,7 @@ export async function handleGitHubEventsWebhook(
   }
   const rawBody = await readSignedBody(request, secret, sigStr);
 
-  // Signature OK from here on. Everything else is ACK-200; bad envelopes go
-  // to the DLQ and a human can replay later.
+  // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human can replay later.
   const replayKey = deliveryId === null ? null : `${opts.hippoRoot}\n${deliveryId}`;
   if (replayKey !== null && !seenDeliveries.claim(replayKey, Date.now())) {
     throw new HttpError(409, 'duplicate X-GitHub-Delivery');
@@ -158,8 +157,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     repoFullName: body.repository?.full_name ?? null,
   };
 
-  // Tenant resolution. Fail closed on multi-tenant installs with unknown
-  // routing - same policy as Slack.
+  // Tenant resolution. Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
   const resolvedTenant = await resolveTenantForGitHub(d.store, routing, {
     hostTenant: envTenant(),
     allowUnknown: envGitHubAllowUnknownInstallationFallback(),
@@ -194,8 +192,8 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
 
 /** Answers ping and parks every unusable body; returns the envelope only when ingest should go on. */
 async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | null> {
-  // Cheap regex extraction of installation_id / repo for DLQ rows that fail
-  // to JSON.parse - gives operators something to triage.
+  // Cheap regex extraction of installation_id / repo for DLQ rows that fail to JSON.parse - gives operators something
+  // to triage.
   const installationFromRaw = (() => {
     const m = d.rawBody.match(/"installation"\s*:\s*\{[^}]*"id"\s*:\s*(\d+)/);
     return m ? m[1] : null;
@@ -249,8 +247,8 @@ async function dispatchGitHubEvent(
   if (action === null) return false;
 
   if (action.kind === 'manual-review') {
-    // issues.deleted (admin-initiated) is logged, not archived: archiving
-    // could lose the memory if the issue moves between accounts.
+    // issues.deleted (admin-initiated) is logged, not archived: archiving could lose the memory if the issue moves
+    // between accounts.
     await parkAndAck(d, {
       ...routing,
       tenantId: ctx.tenantId,
@@ -258,8 +256,8 @@ async function dispatchGitHubEvent(
       bucket: 'unhandled',
     });
   } else if (action.kind === 'archive-comment') {
-    // The "deleted:" key namespace keeps this from colliding with the ingest key for the
-    // same artifact; a shared key would make hasSeenKey skip the archive.
+    // The "deleted:" key namespace keeps this from colliding with the ingest key for the same artifact; a shared key
+    // would make hasSeenKey skip the archive.
     const idempotencyKey = computeGitHubDeletionKey(action.artifactRef, action.updatedAt);
     const r = await handleGitHubCommentDeleted(ctx, {
       artifactRef: action.artifactRef,
@@ -281,8 +279,8 @@ type DeliveryAction =
   | { kind: 'archive-comment'; eventName: string; artifactRef: string; updatedAt: string | null }
   | { kind: 'manual-review' };
 
-// Dispatch by event header. Type guards cross-check the body shape against
-// the header so a payload of one event type cannot satisfy another's guard.
+// Dispatch by event header. Type guards cross-check the body shape against the header so a payload of one event type
+// cannot satisfy another's guard.
 function deliveryAction(eventName: string | null, body: SignedEnvelope): DeliveryAction | null {
   if (eventName === 'issues' && isGitHubIssueEvent(body, 'issues')) {
     if (body.action === 'deleted') return { kind: 'manual-review' };

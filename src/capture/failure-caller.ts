@@ -1,5 +1,5 @@
-// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and
-// project, and a retried request id gets the first answer.
+// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and project,
+// and a retried request id gets the first answer.
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { storeLesson } from './capture-error.js';
@@ -81,8 +81,7 @@ export async function captureFailureForCaller(ctx: Context, req: CallerFailureRe
   const failure = checkedFailure(req);
   const key = await bindCaller(ctx, req.sessionId, req.project);
   const earlier = await ctx.store.failureLog.requestOutcome(ctx.tenantId, req.requestId, req.sessionId);
-  // A retry after a lost reply gets the first answer and writes
-  // nothing; one whose store failed tries the store again.
+  // A retry after a lost reply gets the first answer and writes nothing; one whose store failed tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
   let logged: FailureOutcome = 'store-failed';
   try {

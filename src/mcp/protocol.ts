@@ -18,8 +18,6 @@ import type { LocalStore } from '../store/local/index.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
 import type { CallerState } from '../api/callers.js';
 
-// ── Find hippo root ──
-
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are the test seam. */
 export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string | null {
   const local = findHippoStoreDir(cwd, opts);
@@ -29,16 +27,14 @@ export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProject
   return fs.existsSync(global) ? global : null;
 }
 
-// ── MCP protocol types ──
-
 /** The method, with the tool's name for a tool call, so a failure or timeout names what ran. */
 export function callName(req: McpRequest): string {
   const tool = req.params?.name;
   return isJsonString(tool) ? `${req.method} ${tool.slice(0, 128)}` : req.method;
 }
 
-/** JSON-RPC reply for a request that threw: typed API errors keep
- * their text; anything else is logged and answered generically. */
+/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered
+ * generically. */
 export function mcpErrorResponse<E>(
   id: McpResponse['id'],
   err: E,
@@ -67,8 +63,8 @@ export interface McpContext {
   hippoRoot: string;
   tenantId: string;
   actor: string;
-  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context,
-   * is admin without one. */
+  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context, is
+   * admin without one. */
   role: 'admin' | 'member';
   /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];

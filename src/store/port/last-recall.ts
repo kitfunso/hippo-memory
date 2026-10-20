@@ -8,8 +8,8 @@ export type LastRecallWrites = RecallWrites & Required<Pick<RecallWrites, 'stren
 export interface LastRecall {
   /** entryWrites.applyOutcome, then a link from recall trace `traceId` to the ids applied; resolves to those ids. */
   applyTracedOutcome(outcome: OutcomeWrite, traceId: number): Promise<string[]>;
-  /** applyTracedOutcome on the ids and trace of the last recall, read
-   * together so an outcome never pairs them with an older trace. */
+  /** applyTracedOutcome on the ids and trace of the last recall, read together so an outcome never pairs them with an
+   * older trace. */
   applyOutcomeToLast(target: EntryTarget, good: boolean): Promise<string[]>;
   /** finishRecall, then the ids this store lacks strengthened under `globalRoot`, then the ids and their trace saved as
    * the last recall in one write; resolves to the trace id, null when none was asked or its write failed. */

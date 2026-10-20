@@ -13,9 +13,9 @@ import type {
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { MemoryEntry } from '../../core/memory.js';
 
-/** Which of a tenant's rows of one kind a list reads: every status when `status` is
- * unset, every value of the kind's one filter column (customer, repo) when `filter`
- * is. Neither is ever empty; a kind with no filter column ignores `filter`. */
+/** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, every value of the kind's
+ * one filter column (customer, repo) when `filter` is. Neither is ever empty; a kind with no filter column ignores
+ * `filter`. */
 export interface ObjectListQuery<K extends ObjectKind = ObjectKind> {
   readonly status?: ObjectByKind[K]['status'];
   readonly filter?: string;
@@ -31,8 +31,8 @@ export interface ObjectClose<K extends ObjectKind = ObjectKind> {
   readonly at: string;
 }
 
-/** One row to save and the memory that mirrors it into recall: core builds the mirror in the
- * tenant the save names with the kind as its `source`, so every store keeps the same row. */
+/** One row to save and the memory that mirrors it into recall: core builds the mirror in the tenant the save names with
+ * the kind as its `source`, so every store keeps the same row. */
 export interface ObjectSave<K extends SavableKind = SavableKind> {
   readonly mirror: MemoryEntry;
   readonly fields: ObjectFields[K];
@@ -55,8 +55,8 @@ export interface IncidentOpen {
   readonly at: string;
 }
 
-/** Why an incident was not opened: `memoryId` is the first linked id, in the order
- * given, that is no memory of the tenant; or the written row could not be read back. */
+/** Why an incident was not opened: `memoryId` is the first linked id, in the order given, that is no memory of the
+ * tenant; or the written row could not be read back. */
 export type IncidentOpenRefusal =
   | { readonly refused: 'unlinked'; readonly memoryId: string }
   | { readonly refused: 'vanished' };
@@ -77,13 +77,13 @@ export interface PoliciesInForceQuery {
   readonly limit: number;
 }
 
-/** The reads and writes behind the typed-object routes. An audit row names the
- * object under the kind's id key (decision_id, incident_id, ...). A row
- * belongs to one tenant: another tenant's id reads as missing in every method. */
+/** The reads and writes behind the typed-object routes. An audit row names the object under the kind's id key
+ * (decision_id, incident_id, ...). A row belongs to one tenant: another tenant's id reads as missing in every method.
+ */
 export interface Objects {
-  /** At most `limit` rows of the kind, newest first: by createdAt compared as text
-   * in byte order, then by id, both descending, so the order is total. `after`
-   * keeps only the rows below its (createdAt, id) pair in that order. No audit row. */
+  /** At most `limit` rows of the kind, newest first: by createdAt compared as text in byte order, then by id, both
+   * descending, so the order is total. `after` keeps only the rows below its (createdAt, id) pair in that order. No
+   * audit row. */
   listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): Promise<ObjectByKind[K][]>;
   /** The tenant's row; null for a missing id or another tenant's. No audit row. */
   objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): Promise<ObjectByKind[K] | null>;

@@ -1,16 +1,16 @@
 // The connector groups of the store port and the rows they read and write.
 import type { EntryWrite, RawArchive } from './entry-writes.js';
 
-/** What a connector delivery reads and writes beside connectorWrites: the event log,
- * tenant routing, the dead-letter queue and the archive of a deleted artifact. */
+/** What a connector delivery reads and writes beside connectorWrites: the event log, tenant routing, the dead-letter
+ * queue and the archive of a deleted artifact. */
 export interface ConnectorEvents {
   /** The log row of the event's key, in its connector's own key space. */
   eventRecord(event: ConnectorEvent): Promise<ConnectorEventRecord>;
   /** Logs an event that stored no memory, so its redelivery finds it. A key logged before keeps its row, the memory id
    * it names included. */
   markEventSeen(event: ConnectorEvent): Promise<void>;
-  /** Both reads on one snapshot: an event logged before answers `seen`, else the raw row the
-   * tenant holds for the artifact. Another tenant's row under the same ref is never returned. */
+  /** Both reads on one snapshot: an event logged before answers `seen`, else the raw row the tenant holds for the
+   * artifact. Another tenant's row under the same ref is never returned. */
   deletionTarget(lookup: DeletionLookup): Promise<DeletionTarget>;
   /** A logged event answers `duplicate` and changes nothing. Else one transaction archives every raw row of the
    * artifact (archive_raw row each, under `actor`) and logs the event naming the first, or no memory if none; one
@@ -192,8 +192,8 @@ export interface SlackWorkspace {
   addedAt: string; // ISO timestamp
 }
 
-/** A connector's writes with the rows that must commit with them: the event log row
- * that turns a redelivery into a no-op, and the quarantine record of flagged content. */
+/** A connector's writes with the rows that must commit with them: the event log row that turns a redelivery into a
+ * no-op, and the quarantine record of flagged content. */
 export interface ConnectorWrites {
   /** entryWrites.writeEntry plus, in its transaction: with `quarantine`, one pending record and quarantine row; with
    * `event`, one log row. All commit or none. A key logged before resolves 'duplicate' and stores nothing (never a

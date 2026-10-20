@@ -45,14 +45,14 @@ export interface RememberOptions {
   event?: ConnectorEvent;
   /** Connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
   untrusted?: boolean;
-  /** The caller's project: its name becomes the row's origin. Without
-   * it the store's fallback applies (NULL on a shared store). */
+  /** The caller's project: its name becomes the row's origin. Without it the store's fallback applies (NULL on a shared
+   * store). */
   project?: { readonly name: string; readonly aliases?: readonly string[] };
   /** Store it in the caller's own personal scope, readable by its owner alone in every project; needs an owner on the
    * actor and no `scope`. */
   personal?: boolean;
-  /** Never set from a request body: a route or tool that copied it
-   * would let a client pin a row or pick its layer and source. */
+  /** Never set from a request body: a route or tool that copied it would let a client pin a row or pick its layer and
+   * source. */
   local?: RememberLocal;
 }
 

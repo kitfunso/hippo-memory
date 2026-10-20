@@ -50,9 +50,8 @@ export const v22: Migration = {
   version: 22,
   up: (db) => {
     // session_events and session_handoffs missed the v16 tenant migration (cross-tenant leak): add tenant_id (NOT
-    // NULL DEFAULT 'default') backfilled from
-    // task_snapshots when unambiguous, plus a scope column. Re-run v4/v5 CREATE IF NOT EXISTS first so a partial-init
-    // store isn't stamped v22 without tables.
+    // NULL DEFAULT 'default') backfilled from task_snapshots when unambiguous, plus a scope column. Re-run v4/v5 CREATE
+    // IF NOT EXISTS first so a partial-init store isn't stamped v22 without tables.
     db.exec(CREATE_TABLE_SESSION_EVENTS_SQL);
     if (!tableHasColumn(db, 'session_events', 'tenant_id')) {
       db.exec(`ALTER TABLE session_events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
@@ -69,8 +68,8 @@ export const v22: Migration = {
 
     // Smart backfill: a row whose session_id maps to exactly one tenant in task_snapshots inherits it; ambiguous or
     // unmapped rows keep 'default'.
-    // The COUNT(DISTINCT) gate is load-bearing: without it a session_id spanning tenants would silently pick
-    // whichever group came first.
+    // The COUNT(DISTINCT) gate is load-bearing: without it a session_id spanning tenants would silently pick whichever
+    // group came first.
     db.exec(BACKFILL_SESSION_EVENTS_TENANT_SQL);
     db.exec(BACKFILL_SESSION_HANDOFFS_TENANT_SQL);
 

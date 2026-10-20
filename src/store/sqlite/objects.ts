@@ -43,8 +43,8 @@ import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-
 import { placeholders } from '../../util/sql.js';
 import type { JsonObject } from '../port/types.js';
 
-/** The group with each answer as its value; spelled out because
- * `Sync<Objects>` would widen each method's kind to every kind. */
+/** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every
+ * kind. */
 interface SyncObjects {
   listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): ObjectByKind[K][];
   objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): ObjectByKind[K] | null;
@@ -117,7 +117,7 @@ function idByMemory<K extends ObjectKind>(
       `SELECT id FROM ${rowSpec(kind).table} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
         `LIMIT 1`,
     )
-    .get<{ id: number } | undefined>(memoryId, tenantId, status);
+    .get(memoryId, tenantId, status) as { id: number } | undefined;
   return row ? row.id : null;
 }
 
@@ -128,9 +128,10 @@ function selectRow<K extends ObjectKind>(
   id: number,
 ): RowByKind[K] | undefined {
   const spec = rowSpec(kind);
-  return db
-    .prepare(`SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`)
-    .get<RowByKind[K] | undefined>(id, tenantId);
+  // SAFETY: the SELECT names spec.cols, the columns the kind's row declares.
+  return db.prepare(`SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
+    | RowByKind[K]
+    | undefined;
 }
 
 function rowById<K extends ObjectKind>(
@@ -195,7 +196,7 @@ function closeRow<K extends ObjectKind>(
     if (updated.changes === 0) {
       const existing = db
         .prepare(`SELECT status FROM ${spec.table} WHERE id = ? AND tenant_id = ?`)
-        .get<{ status: string } | undefined>(id, tenantId);
+        .get(id, tenantId) as { status: string } | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
@@ -224,8 +225,8 @@ function closeAt<K extends ObjectKind>(
   return on((db) => {
     const closed = closeRow(db, tenantId, kind, id, close);
     if (isObjectRefusal(closed) || !graphType) return closed;
-    // Each graph write takes its own write lock, so both wait for the commit. The rows
-    // go at once because the rebuild queue is keyed by a mirror memory that may be gone.
+    // Each graph write takes its own write lock, so both wait for the commit. The rows go at once because the rebuild
+    // queue is keyed by a mirror memory that may be gone.
     removeGraphEntitiesForObjectAt(db, tenantId, graphType, closed.id);
     markGraphDirtyAt(db, tenantId, closed.memoryId);
     return closed;
@@ -247,12 +248,13 @@ function successorVersion(
   kind: SavableKind,
   replaced: number,
 ): { version: number } | ObjectRefusal {
+  // SAFETY: the SELECT names status, and version or a 0 AS version for a kind with no versions.
   const pred = db
     .prepare(
       `SELECT status, ${insertSpec(kind).versioned ? 'version' : '0 AS version'} FROM ${rowSpec(kind).table} WHERE ` +
         `id = ? AND tenant_id = ?`,
     )
-    .get<{ status: string; version: number } | undefined>(replaced, tenantId);
+    .get(replaced, tenantId) as { status: string; version: number } | undefined;
   if (!pred) return { refused: 'missing' };
   if (pred.status !== 'active') return { refused: 'status', status: pred.status };
   return { version: pred.version + 1 };
@@ -278,8 +280,8 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   return Number(result.lastInsertRowid ?? 0);
 }
 
-/** The status guard sits in the UPDATE, so a row another writer
- * retired since the preflight fails the whole save; false says so. */
+/** The status guard sits in the UPDATE, so a row another writer retired since the preflight fails the whole save; false
+ * says so. */
 function supersedeRow<K extends SavableKind>(
   db: DatabaseSyncLike,
   row: NewRow<K>,
@@ -354,8 +356,8 @@ interface MirroredWrite {
   readonly graphTenant?: string;
 }
 
-/** Until the typed migration has run, a mirror goes in on the flat half-life that migration
- * moves; the flag is read under the save's write lock, so the two cannot interleave. */
+/** Until the typed migration has run, a mirror goes in on the flat half-life that migration moves; the flag is read
+ * under the save's write lock, so the two cannot interleave. */
 function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry, rules: LossAversion): MemoryEntry {
   if (getMeta(db, TYPED_HALF_LIFE_META_KEY, '') !== '') return mirror;
   const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
@@ -420,7 +422,6 @@ function openIncidentRow(
   const held = new Set<string>();
   for (const ids of chunked(linkedMemoryIds)) {
     const marks = placeholders(ids.length);
-    // SAFETY: rows' shape matches the one column named in the SELECT.
     const found = db
       .prepare(`SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`)
       .all(tenantId, ...ids) as Array<{ id: string }>;
@@ -481,9 +482,9 @@ function resolveRow(
       )
       .run(resolve.text, resolve.at, id, tenantId);
     if (updated.changes === 0) {
-      const existing = db
-        .prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`)
-        .get<{ status: string } | undefined>(id, tenantId);
+      const existing = db.prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
+        | { status: string }
+        | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
@@ -501,14 +502,14 @@ function resolveRow(
   });
 }
 
-/** The successor is joined in so a superseded version is kept
- * only while the row that replaced it is not yet in force. */
+/**
+ * The successor is joined in so a superseded version is kept only while the row that replaced it is not yet in force.
+ */
 function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: PoliciesInForceQuery): Policy[] {
   const { asOf, name } = query;
   const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';
   const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
   if (name !== undefined) params.push(name);
-  // SAFETY: the SELECT names the policy row's own columns, each under the alias p.
   const rows = db
     .prepare(`
       SELECT p.id, p.memory_id, p.tenant_id, p.policy_name, p.policy_text,
@@ -540,10 +541,12 @@ function activeSkillsByName(db: DatabaseSyncLike, tenantId: string, limit: numbe
   return rows.map(rowSpec('skill').rowTo);
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+type BriefReceiptDbRow = BriefReceipt;
+
 /** The quotes around the tag stop `path:hip` matching a memory tagged `path:hippo`. */
 function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limit: number): BriefReceipt[] {
   const admit = scopeAdmitSql('');
-  // SAFETY: the SELECT names the four columns a receipt holds.
   return db
     .prepare(`
       SELECT id, created, source, content FROM memories
@@ -554,5 +557,5 @@ function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limi
       ORDER BY created DESC, id DESC
       LIMIT ?
     `)
-    .all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceipt[];
+    .all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceiptDbRow[];
 }

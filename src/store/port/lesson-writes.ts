@@ -8,8 +8,8 @@ export interface LessonWrites {
   textsHoldingWords(tenantId: string, words: readonly string[], ownScope: string | null): Promise<HeldText[]>;
   /** Contents of the tenant's team-visible rows tagged `tag`; with `origins`, only those projects' and user-global. */
   contentsWithTag(tenantId: string, tag: string, origins?: readonly string[]): Promise<string[]>;
-  /** Writes each entry in one transaction; a rejected value writes
-   * its refusal row and is skipped. Resolves to the ids written. */
+  /** Writes each entry in one transaction; a rejected value writes its refusal row and is skipped. Resolves to the ids
+   * written. */
   writeSkippingRejected(entries: readonly MemoryEntry[], actor: string): Promise<string[]>;
   /** Rewrites each entry in one transaction, all or none. */
   writeTogether(entries: readonly MemoryEntry[]): Promise<void>;

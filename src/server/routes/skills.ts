@@ -52,8 +52,8 @@ export function handleListSkills(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(skillRoutes, rr);
 }
 
-// The export renderer: must precede the /:id GET (literal 'export' is
-// non-numeric so the /(\d+)/ route would not match it, but order it first).
+// The export renderer: must precede the /:id GET (literal 'export' is non-numeric so the /(\d+)/ route would not match
+// it, but order it first).
 export async function handleExportSkills(rr: AuthedRouteRequest): Promise<void> {
   const { res, ctx } = rr;
   const markdown = await skillsMarkdown(objectsOf(ctx), ctx.tenantId);

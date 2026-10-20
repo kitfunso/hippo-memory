@@ -4,8 +4,7 @@ import { realpathOrResolve } from '../util/real-path.js';
 
 /**
  * Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns the key-value map plus
- * the body,
- *  or an empty `fm` and the original content when no well-formed block is present. */
+ * the body, or an empty `fm` and the original content when no well-formed block is present. */
 interface FrontmatterParseResult {
   fm: Record<string, string>;
   body: string;
@@ -44,8 +43,7 @@ export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
 
 /**
  * Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a comma-separated scalar, or one token into a
- * string[];
- *  quotes and brackets are stripped and empty entries dropped. */
+ * string[]; quotes and brackets are stripped and empty entries dropped. */
 export function frontmatterList(value: string | undefined): string[] {
   if (!value) return [];
   let v = value.trim();
@@ -64,7 +62,7 @@ export function frontmatterList(value: string | undefined): string[] {
 /**
  * Parse `[[wikilinks]]` from body text: `[[target]]` and `[[target|alias]]` both yield `target`; de-duplicated,
  * order-preserving.
- *  Embeds (`![[...]]`) match too, because the leading `!` is outside the capture and a candidate target is harmless. */
+ * Embeds (`![[...]]`) match too, because the leading `!` is outside the capture and a candidate target is harmless. */
 export function parseWikilinks(body: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -98,8 +96,8 @@ export function collectMarkdownFiles(root: string, hippoRoot: string, match: Reg
       if (ent.isSymbolicLink()) continue;
       const abs = path.join(dir, ent.name);
       if (ent.isDirectory()) {
-        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and
-        // the canonicalized store path (covers a HIPPO_HOME outside `.hippo`).
+        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and the canonicalized store path (covers a
+        // HIPPO_HOME outside `.hippo`).
         if (ent.name.startsWith('.')) continue;
         if (realpathOrResolve(abs) === resolvedHippoRoot) continue;
         walk(abs);

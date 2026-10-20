@@ -88,7 +88,6 @@ export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Pro
   printPhysicsStatus(ctx);
 }
 
-// Embedding status (provider-aware)
 function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
@@ -115,8 +114,8 @@ function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total
   } else {
     console.log(`Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`);
   }
-  // Show cached counts whenever vectors exist on disk (even when disabled or
-  // the key was removed), so the user still sees what is already indexed.
+  // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed), so the user still
+  // sees what is already indexed.
   const { ids: embeddedIds, dims } = vectorSummary(ctx);
   if (!embAvail && embeddedIds.size === 0) return;
   const orphaned = embeddedIds.size - counts.embedded;
@@ -133,7 +132,6 @@ function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total
 // The all-pairs energy sum is quadratic, so a large particle set skips it.
 const PHYSICS_ENERGY_STATUS_MAX = 2000;
 
-// Physics status
 function printPhysicsStatus(ctx: CliContext): void {
   try {
     const particles = storedParticles(ctx);

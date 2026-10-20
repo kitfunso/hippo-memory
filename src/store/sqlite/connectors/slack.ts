@@ -10,7 +10,6 @@ import type { SlackTeamRoute, SlackDlqInsert, SlackDlqItem as DlqItem, SlackWork
 // Backfill cursors
 
 export function slackCursorAt(db: DatabaseSyncLike, tenantId: string, channelId: string): string | null {
-  // SAFETY: the SELECT names the single `latest_ts` column; sqlite returns undefined when no row matches.
   const row = db
     .prepare(`SELECT latest_ts FROM slack_cursors WHERE tenant_id=? AND channel_id=?`)
     .get(tenantId, channelId) as { latest_ts?: string } | undefined;
@@ -51,7 +50,6 @@ export function slackEventRecordAt(db: DatabaseSyncLike, eventId: string): Conne
 /** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row
  * with the same ref. */
 export function rawMemoryIdForArtifactAt(db: DatabaseSyncLike, artifactRef: string, tenantId: string): string | null {
-  // SAFETY: the SELECT projects only `id`; .get() returns undefined when no row matches.
   const row = db
     .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
     .get(artifactRef, tenantId) as { id?: string } | undefined;
@@ -73,13 +71,12 @@ export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
 ]);
 
 export function slackTeamRouteAt(db: DatabaseSyncLike, teamId: string): SlackTeamRoute {
-  // SAFETY: the SELECT names only `tenant_id`; .get() returns undefined when no row matches.
   const row = db.prepare(`SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`).get(teamId) as
     | { tenant_id?: string }
     | undefined;
   if (row?.tenant_id) return { tenantId: row.tenant_id };
 
-  // SAFETY: `COUNT(*) AS c` always returns one row shaped { c }, as a number or a bigint.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const total = (db.prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`).get() as { c: number | bigint }).c;
   return { tenantId: null, workspaceCount: Number(total) };
 }
@@ -98,7 +95,7 @@ export function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, ten
 }
 
 export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
-  // SAFETY: the SELECT names team_id, tenant_id and added_at, all NOT NULL text columns of slack_workspaces.
+  // SAFETY: team_id, tenant_id and added_at are NOT NULL TEXT in slack_workspaces.
   const rows = db.prepare(`SELECT team_id, tenant_id, added_at FROM slack_workspaces ORDER BY team_id`).all() as Array<{
     team_id: string;
     tenant_id: string;

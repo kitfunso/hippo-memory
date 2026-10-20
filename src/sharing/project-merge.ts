@@ -186,8 +186,8 @@ function importCopies(store: ProjectTagReads): MemoryEntry[] {
   return copies;
 }
 
-/** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its
- * notes under any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
+/** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its notes under
+ * any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
 function strayImports(store: ProjectTagReads, hippoRoot: string): MemoryEntry[] {
   const copies = importCopies(store);
   if (!isGlobalStoreRoot(hippoRoot)) return copies;
@@ -327,8 +327,8 @@ function planUserGlobalRepair(
   return { toProject, setAside, untraced };
 }
 
-/** Sets aside stray imports, folds the names the resolver now maps elsewhere, then
- * re-tags sleep's user-global merges by their parents; a dry run only plans. */
+/** Sets aside stray imports, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges
+ * by their parents; a dry run only plans. */
 export function repairProjects(store: ProjectTagStore, opts: { dryRun: boolean; globalFolds?: boolean }): RepairResult {
   const { dryRun, globalFolds = true } = opts;
   const { hippoRoot } = store;
@@ -359,8 +359,8 @@ function repairIsEmpty(r: Omit<RepairResult, 'backup'>): boolean {
   return r.copies.length + r.folds.length + r.toProject.length + r.setAside.length === 0;
 }
 
-/** Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay
- * with `hippo projects repair`: their evidence is compaction folders, blind to a same-named repo that never compacted.
+/** Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay with `hippo projects
+ * repair`: their evidence is compaction folders, blind to a same-named repo that never compacted.
  */
 export function repairOnceOnSleep(store: ProjectTagStore): RepairResult | null {
   if (store.repairedOnce()) return null;

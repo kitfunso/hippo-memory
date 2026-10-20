@@ -54,7 +54,6 @@ function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, prob
 }
 
 function archiveTop(db: DatabaseSyncLike): number {
-  // SAFETY: MAX over the integer key returns one row with one column, null for an empty table.
   const row = db.prepare('SELECT MAX(id) AS top FROM raw_archive').get() as { top: number | null } | undefined;
   return Number(row?.top ?? 0);
 }

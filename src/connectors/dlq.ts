@@ -127,8 +127,8 @@ export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends Jso
   readonly reingest: (row: DeadLetterRows[C], envelope: Envelope) => Promise<Reingest>;
 }
 
-/** Re-runs a parked row under today's secret and routing; every
- * attempt past the read is counted once, except a missing signature. */
+/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted once, except a missing
+ * signature. */
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
   steps: ReplaySteps<C, Envelope>,
   store: HippoStore,

@@ -10,11 +10,10 @@ import type { Consolidation } from '../store/local/index.js';
 export interface ConsolidationResult {
   decayed: number;
   removed: number;
-  /** Faded memories moved to the dormant store instead of deleted (config
-   *  `dormant.enabled`; src/store/dormant.ts). Always 0 when that is off. */
+  /** Faded memories moved to the dormant store instead of deleted (config `dormant.enabled`; src/store/dormant.ts).
+   *  Always 0 when that is off. */
   dormant: number;
-  /** Dormant memories deleted for good this sleep because they outlived
-   *  `dormant.retentionDays` without a restore. */
+  /** Dormant memories deleted for good this sleep because they outlived `dormant.retentionDays` without a restore. */
   dormantExpired: number;
   merged: number;
   semanticCreated: number;
@@ -26,8 +25,8 @@ export interface ConsolidationResult {
   extracted: number;
   dagCandidateClusters: number;
   dagSummariesCreated: number;
-  // Failed and zero-child counts are first-class so callers (CLI eval, HTTP /v1/sleep)
-  // see structured data, not a parsed details string.
+  // Failed and zero-child counts are first-class so callers (CLI eval, HTTP /v1/sleep) see structured data, not a
+  // parsed details string.
   summariesRebuilt: number;
   summariesRebuildFailed: number;
   summariesZeroChildSkipped: number;

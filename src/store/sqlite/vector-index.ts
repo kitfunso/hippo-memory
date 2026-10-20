@@ -91,8 +91,9 @@ export function embeddingModelRequiresReindex(on: OnHandle, model: string, index
   return indexNeedsRebuild(resolveIndexedEmbeddingModel(on, index), model);
 }
 
-/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via
- * `loadStoredVectors`. */
+/**
+ * Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`.
+ */
 export function loadEmbeddingIndexAt(db: DatabaseSyncLike): Record<string, number[]> {
   return Object.fromEntries(loadVectors(db));
 }
@@ -145,7 +146,6 @@ export function pendingVectorIdsAt(
 ): EntryIdPage {
   const after = page.after === undefined ? '' : ' AND (created > ? OR (created = ? AND id > ?))';
   const afterArgs = page.after === undefined ? [] : [page.after.created, page.after.created, page.after.id];
-  // SAFETY: the SELECT names exactly the two columns read.
   const rows = db
     .prepare(
       `SELECT id, created FROM memories
@@ -163,7 +163,6 @@ export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfi
   if (!Number.isInteger(query.limit)) throw new RangeError('limit must be an integer');
   const limit = Math.max(1, Math.min(query.limit, MAX_BACKFILL_PAGE));
   const tenant = tenantAnd(query.tenantId);
-  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenant.sql}
@@ -177,7 +176,6 @@ export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfi
 function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string): Set<string> {
   const owned = new Set<string>();
   for (const chunk of chunked([...new Set(ids)])) {
-    // SAFETY: the SELECT names one column, id.
     const rows = db
       .prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(chunk.length)})`)
       .all(tenantId, ...chunk) as { id: string }[];
@@ -241,7 +239,6 @@ export function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
 /** The memory id of every stored particle in loadStoredParticlesAt's order, so a caller reads only the particles it
  * keeps. */
 export function storedParticleIdsAt(db: DatabaseSyncLike): string[] {
-  // SAFETY: the SELECT names exactly the one column read.
   const rows = db.prepare('SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{ memory_id: string }>;
   return rows.map((row) => row.memory_id);
 }

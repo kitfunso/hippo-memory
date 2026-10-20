@@ -145,8 +145,9 @@ export interface SessionDecayContext {
   avgSessionIntervalDays: number;
 }
 
-/** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal
- * rebuild. */
+/**
+ * Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal rebuild.
+ */
 export interface RebuildPatch {
   content: string; // new content for normal rebuild; summary.content for zero-child
   descendantCount: number;
@@ -185,8 +186,9 @@ export interface HalfLifeMove {
   entries: readonly HalfLifeChange[];
 }
 
-/** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed
- * once. */
+/**
+ * Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed once.
+ */
 export interface TombstoneChecks {
   /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
   find(tenantId: string, digest: string): RejectedValueRow | null;

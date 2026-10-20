@@ -70,8 +70,8 @@ export async function handleIncident({ hippoRoot, tenantId, args, flags }: Comma
   if (subcommand === 'resolve') return incidentResolve(objects, tenantId, args, flags);
   if (subcommand === 'close') return incidentClose(objects, tenantId, args);
 
-  // Default subcommand is open (create): accept both `incident open "<text>"` and bare `incident "<text>"`;
-  // for the `open` keyword the text is args[1], otherwise args[0] is the text.
+  // Default subcommand is open (create): accept both `incident open "<text>"` and bare `incident "<text>"`; for the
+  // `open` keyword the text is args[1], otherwise args[0] is the text.
   await incidentCreate(objects, hippoRoot, tenantId, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
 }
 

@@ -8,23 +8,20 @@ import type { Migration } from './types.js';
 export const v39: Migration = {
   version: 39,
   up: (db, ctx) => {
-    // Memory scope isolation. origin_project: '<name>' = owned by that project, '' = user-global,
-    // NULL = legacy/unknown (ambient context treats NULL as deny).
+    // Memory scope isolation. origin_project: '<name>' = owned by that project, '' = user-global, NULL = legacy/unknown
+    // (ambient context treats NULL as deny).
     if (!tableHasColumn(db, 'memories', 'origin_project')) {
       db.exec(`ALTER TABLE memories ADD COLUMN origin_project TEXT`);
     }
     // Backfill from store location only (no path-tag guessing): 'shared:<project>:<ts>' rows take <project> (home-dir
-    // basename maps to '' user-global);
-    // every other row takes this store's origin (`<project>/.hippo` -> '<project>', global store -> ''). Rows stay
+    // basename maps to '' user-global); every other row takes this store's origin (`<project>/.hippo` -> '<project>',
+    // global store -> ''). Rows stay
     // NULL only when no hippoRoot was provided.
     const hippoRoot = ctx?.hippoRoot;
     if (hippoRoot) {
       // Provenance-source evidence first (shared:<project>: / promoted:<localRoot>, parsed by the markdown-import
-      // stamp's helper),
-      // then the store's own location for everything else.
+      // stamp's helper), then the store's own location for everything else.
       const homeName = path.basename(os.homedir()).toLowerCase();
-      // SAFETY: sourcedRows' shape matches the two columns (id, source)
-      // named in the SELECT above.
       const sourcedRows = db
         .prepare(
           `SELECT id, source FROM memories WHERE origin_project IS NULL ` +
@@ -38,8 +35,7 @@ export const v39: Migration = {
         setOrigin.run(origin, row.id);
       }
       // The global root itself is always user-global (''), whatever surrounds it on disk: a HIPPO_HOME inside a
-      // dotfiles git repo
-      // must not stamp the whole corpus with that repo's name.
+      // dotfiles git repo must not stamp the whole corpus with that repo's name.
       const storeOrigin = isGlobalStoreRoot(hippoRoot) ? '' : deriveOriginProject(path.dirname(hippoRoot));
       db.prepare(`UPDATE memories SET origin_project = ? WHERE origin_project IS NULL`).run(storeOrigin);
     }

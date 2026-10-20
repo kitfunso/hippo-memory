@@ -99,7 +99,7 @@ describe('context hook while another process holds the store write lock', () => 
 
 describe('lock wait per command kind', () => {
   const busyTimeout = (db: ReturnType<typeof openHippoDb>): number =>
-    Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout);
+    Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
   it('a hook scope opens with the short hook wait', async () => {
     const wait = await withSharedStoreHandles(

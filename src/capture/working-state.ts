@@ -44,7 +44,7 @@ export function fitWorkingState(state: WorkingState): WorkingState {
 /**
  * Each empty field falls back to `existing`'s, since a tool-heavy tail derives no task; null when all are empty, so
  * blanks never replace a snapshot.
- *  Never across sessions: another session's task saved under this id would pass compact-resume's session check. */
+ * Never across sessions: another session's task saved under this id would pass compact-resume's session check. */
 export function mergeWorkingState(
   derived: WorkingState,
   existing: TaskSnapshot | null,
@@ -64,8 +64,7 @@ export function mergeWorkingState(
 
 /**
  * Keeps the LAST maxChars behind a trim marker, aligned to a nearby line start: the summary runs oldest first, so a
- * head cap would drop
- * the newest working state. */
+ * head cap would drop the newest working state. */
 export function truncateKeepNewest(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   let start = text.length - maxChars;
@@ -125,8 +124,7 @@ function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
 
 /**
  * A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null
- * with a logged
- * reason when nothing is derivable. */
+ * with a logged reason when nothing is derivable. */
 export function transcriptWorkingState(
   transcriptPath: string,
   log: (message: string) => void,
@@ -135,8 +133,8 @@ export function transcriptWorkingState(
   let rawTask = '';
   let rawNextStep = '';
   try {
-    // Compaction fires when a big tool_result lands, so the last human and assistant turns can sit
-    // megabytes back: grow the window a bounded number of times until both turns are in it.
+    // Compaction fires when a big tool_result lands, so the last human and assistant turns can sit megabytes back: grow
+    // the window a bounded number of times until both turns are in it.
     const size = fs.statSync(transcriptPath).size;
     for (const cap of [PRE_COMPACT_TAIL_BYTES, PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
       if (cap > PRE_COMPACT_TAIL_BYTES) {

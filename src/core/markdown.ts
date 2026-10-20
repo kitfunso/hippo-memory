@@ -92,14 +92,14 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
 export function serializeEntry(entry: MemoryEntry): string {
   const wire = toWire(entry);
   const frontmatter = entryFrontmatter(wire);
-  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant
-  // single-tenant case (mirrors the plan's task 7 guidance).
+  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant single-tenant case (mirrors the plan's
+  // task 7 guidance).
   const tenantId = wire.tenant_id ?? DEFAULT_TENANT_ID;
   if (tenantId !== DEFAULT_TENANT_ID) {
     frontmatter['tenant_id'] = tenantId;
   }
-  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip;
-  // only undefined (unstamped) is omitted, so a rebuild stamps nothing it can read.
+  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip; only undefined (unstamped) is
+  // omitted, so a rebuild stamps nothing it can read.
   if (wire.origin_project !== undefined) {
     frontmatter['origin_project'] = wire.origin_project;
   }

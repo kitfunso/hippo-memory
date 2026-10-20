@@ -75,8 +75,9 @@ export interface CompactionRecord {
   status: CompactionStatus;
 }
 
-/** Where the session ran: rows written through the global store or a shared store keep the project the session was
- * in. */
+/**
+ * Where the session ran: rows written through the global store or a shared store keep the project the session was in.
+ */
 function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
   if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot)) {
     return resolveProjectIdentity(path.dirname(hippoRoot));

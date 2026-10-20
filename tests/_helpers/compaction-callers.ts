@@ -66,6 +66,7 @@ export function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface RecordRow {
   origin_project: string;
   status: string;
@@ -73,9 +74,9 @@ interface RecordRow {
 }
 
 export function recordRow(db: DatabaseSyncLike, id: string): RecordRow | undefined {
-  return db
-    .prepare(`SELECT origin_project, status, snapshot_saved FROM compactions WHERE id = ?`)
-    .get<RecordRow | undefined>(id);
+  return db.prepare(`SELECT origin_project, status, snapshot_saved FROM compactions WHERE id = ?`).get(id) as
+    | RecordRow
+    | undefined;
 }
 
 export function seed(content: string, origin: string, tags: string[] = []): void {
@@ -142,7 +143,7 @@ export async function whileLocked<T>(fn: () => T): Promise<T> {
 }
 
 export function count(db: DatabaseSyncLike, table: string, where = '1', ...params: string[]): number {
-  return db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`).get<{ n: number }>(...params).n;
+  return (db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`).get(...params) as { n: number }).n;
 }
 
 export const WRITTEN_TABLES = ['compactions', 'task_snapshots', 'session_handoffs', 'failure_log', 'memories'] as const;
@@ -151,6 +152,7 @@ export function rowCounts(): Record<string, number> {
   return withDb((db) => Object.fromEntries(WRITTEN_TABLES.map((t) => [t, count(db, t)])));
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface SnapshotRow {
   id: number;
   status: string;
@@ -159,9 +161,9 @@ interface SnapshotRow {
 }
 
 export function snapshotRow(db: DatabaseSyncLike, id: number): SnapshotRow | undefined {
-  return db
-    .prepare(`SELECT id, status, owner_subject, origin_project FROM task_snapshots WHERE id = ?`)
-    .get<SnapshotRow | undefined>(id);
+  return db.prepare(`SELECT id, status, owner_subject, origin_project FROM task_snapshots WHERE id = ?`).get(id) as
+    | SnapshotRow
+    | undefined;
 }
 
 interface FailureRow {

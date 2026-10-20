@@ -206,8 +206,8 @@ function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRep
   return { ids: new Set(ids), rows, issues };
 }
 
-/** Moves the plan's set-aside rows under the write lock, judging only those again, so the lock never spans the
- * tenant; a writer refuses these defects, so no new one can appear between the plan and the lock. */
+/** Moves the plan's set-aside rows under the write lock, judging only those again, so the lock never spans the tenant;
+ * a writer refuses these defects, so no new one can appear between the plan and the lock. */
 function applyPlan(
   db: DatabaseSyncLike,
   run: RepairRun,

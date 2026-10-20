@@ -68,8 +68,8 @@ const keepPairSql = (p: KeepPair): SqlFragment => ({
 });
 const KEEP_PAIR_SQL = KEEP_PAIRS.map(keepPairSql);
 
-// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and
-// source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
+// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and source); raw rows leave
+// only through archiveRawMemory. The SQL twin guards the DELETE itself.
 export const AUTO_DELETABLE: SqlFragment = {
   sql: `pinned = 0 AND kind != 'raw'${KEEP_PAIR_SQL.map((k) => ` AND NOT ${k.sql}`).join('')}`,
   params: KEEP_PAIR_SQL.flatMap((k) => k.params),
@@ -85,8 +85,8 @@ export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFrag
   return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };
 }
 
-/** SQL twin of canTouchScope, which is also canReadScope for an admin: every row but
- * another person's personal one. LIKE folds ASCII case as isPersonalScope's /i does. */
+/** SQL twin of canTouchScope, which is also canReadScope for an admin: every row but another person's personal one.
+ * LIKE folds ASCII case as isPersonalScope's /i does. */
 export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
   const notPersonal = `${col}scope IS NULL OR ${col}scope NOT LIKE '${PERSONAL_SCOPE_PREFIX}%'`;
   if (ownScope == null) return { sql: `(${notPersonal})`, params: [] };

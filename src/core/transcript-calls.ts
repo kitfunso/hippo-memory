@@ -14,8 +14,9 @@ interface ModelTagged {
   model?: unknown;
 }
 
-/** Claude Code writes its own API errors and limit notices as assistant lines from this model; no model call made
- * them. */
+/**
+ * Claude Code writes its own API errors and limit notices as assistant lines from this model; no model call made them.
+ */
 export function isSyntheticMessage(message: ModelTagged): boolean {
   return message.model === '<synthetic>';
 }

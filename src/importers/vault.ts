@@ -53,8 +53,8 @@ function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): C
   return {
     hippoRoot,
     tenantId,
-    // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
-    // a bearer-authed request. rawArchive / remember thread this into audit.
+    // Process-local actor; the vault importer is a CLI/SDK ingestion path, not a bearer-authed request. rawArchive /
+    // remember thread this into audit.
     actor: { subject: 'connector:vault', role: 'admin' },
     store,
     config: loadConfig(hippoRoot),
@@ -146,8 +146,8 @@ interface VaultIdentity {
 
 function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   // The vault NAME keys the destructive deletion-sync, so it must be explicit: defaulting to the folder basename made
-  // two vaults
-  // sharing a basename collide on the same `vault:<name>:*` prefix and the sync archived the first one's rows.
+  // two vaults sharing a basename collide on the same `vault:<name>:*` prefix and the sync archived the first one's
+  // rows.
   const vaultName = options.name?.trim();
   if (!vaultName) {
     throw new Error(
@@ -177,8 +177,8 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, VaultRow[]>> {
   // One load serves both per-file idempotency and the deletion diff.
   const rows = await ctx.store.contextReads.rawRowsUnderRef(ctx.tenantId, `vault:${vaultName}:`);
-  // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
-  // later changed or deletion pass must archive them all or older raw vault content stays searchable.
+  // Every live row per artifactRef (more than one only after a concurrent double-insert), because a later changed or
+  // deletion pass must archive them all or older raw vault content stays searchable.
   const existing = new Map<string, VaultRow[]>();
   for (const row of rows) {
     const bucket = existing.get(row.artifact_ref);
@@ -194,8 +194,8 @@ async function importVaultNote(run: VaultImportRun, relpath: string): Promise<vo
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
   run.seen.add(artifactRef);
 
-  // The content hash covers the RAW file bytes (deterministic, no
-  // Date/random) so frontmatter edits are idempotent like body edits.
+  // The content hash covers the RAW file bytes (deterministic, no Date/random) so frontmatter edits are idempotent like
+  // body edits.
   const rawFileContent = readVaultNote(run, relpath);
   if (rawFileContent === null) return;
   const hash = createHash('sha256').update(rawFileContent).digest('hex');
@@ -313,8 +313,8 @@ async function storeVaultNote(
   tags: string[],
   artifactRef: string,
 ): Promise<boolean> {
-  // A dry run writes nothing; it asks the guard remember() uses,
-  // so its `rejected` count matches what a real run would refuse.
+  // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches what a real run would
+  // refuse.
   if (run.dryRun) {
     const [refused] = await run.ctx.store.rejections.refusedAmong([
       { tenantId: run.ctx.tenantId, entryId: echo.id, content: echo.content },
@@ -322,8 +322,8 @@ async function storeVaultNote(
     return !refused;
   }
   try {
-    // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now, so a rerun meets
-    // the same refusal and counts it again.
+    // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now, so a rerun meets the
+    // same refusal and counts it again.
     const result = await remember(run.ctx, {
       content,
       kind: 'raw',

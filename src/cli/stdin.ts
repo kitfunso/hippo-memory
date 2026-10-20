@@ -7,8 +7,7 @@ const DEFAULT_STDIN_WAIT_MS = 1000;
 
 /**
  * `timedOut` means the window closed with stdin still open, so absent `text` is "unknown", not "none", and present
- * `text` may be truncated;
- * treating absence as a manual run is only safe when it is false. */
+ * `text` may be truncated; treating absence as a manual run is only safe when it is false. */
 export interface BoundedStdin {
   text?: string;
   timedOut: boolean;
@@ -20,8 +19,7 @@ function defaultWaitMs(): number {
 
 /**
  * Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default 1000ms, or
- * `HIPPO_STDIN_WAIT_MS`),
- * refreshed on each chunk so a slow real write is not cut off, capped at `waitMs * 10`. */
+ * `HIPPO_STDIN_WAIT_MS`), refreshed on each chunk so a slow real write is not cut off, capped at `waitMs * 10`. */
 export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<BoundedStdin> {
   let stdin: NodeJS.ReadStream;
   try {
@@ -50,8 +48,8 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
       timer.refresh();
     };
     const timer = setTimeout(() => finish(true), waitMs);
-    // The idle timer refreshes per chunk, so a host that dribbles bytes
-    // forever without ending would never resolve without this ceiling.
+    // The idle timer refreshes per chunk, so a host that dribbles bytes forever without ending would never resolve
+    // without this ceiling.
     const hardCap = setTimeout(() => finish(true), waitMs * 10);
     stdin.on('data', onData);
     stdin.once('end', done);

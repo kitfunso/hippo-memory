@@ -56,7 +56,7 @@ async function mcpCall(name: string, args: Record<string, string | number>, bear
 function sleepRuns(): number {
   const db = openHippoDb(home);
   try {
-    return db.prepare('SELECT COUNT(*) AS n FROM consolidation_runs').get<{ n: number }>().n;
+    return (db.prepare('SELECT COUNT(*) AS n FROM consolidation_runs').get() as { n: number }).n;
   } finally {
     closeHippoDb(db);
   }

@@ -85,12 +85,12 @@ export interface MemoryEntry {
   /**
    * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write),
    * denied by ambient context.
-   *  Stamped at write time by stampOriginProject (src/store/entry-row.ts); undefined only before the first write. */
+   * Stamped at write time by stampOriginProject (src/store/entry-row.ts); undefined only before the first write. */
   originProject?: string | null;
   /**
    * Raw FTS5 bm25() from the search path (negative, lower = better); set only for a non-empty query the FTS join
    * answered.
-   *  Not comparable to the JS scorer in src/search/bm25.ts, so read it as rank metadata only. */
+   * Not comparable to the JS scorer in src/search/bm25.ts, so read it as rank metadata only. */
   bm25Score?: number;
 }
 
@@ -108,8 +108,8 @@ export const EMOTIONAL_MULTIPLIERS = {
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 
-// A lower ratio can drop an error-tagged memory under sleep's DECAY_THRESHOLD (src/consolidate/decay.ts),
-// so values below it fall back to 1.0.
+// A lower ratio can drop an error-tagged memory under sleep's DECAY_THRESHOLD (src/consolidate/decay.ts), so values
+// below it fall back to 1.0.
 const LOSS_AVERSION_RATIO_MIN = 0.5;
 
 /** HIPPO_LOSS_AVERSION_RATIO as scoring reads it, which a root hands down: unset, unparseable or below the floor is
@@ -211,7 +211,7 @@ export function strengthOptionsOf(runtime: LossAversion | undefined): StrengthOp
 /**
  * Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]; the basis modes are on
  * DecayOptions.
- *  Pinned memories skip time decay, but being marked wrong still fades them (netWrong). */
+ * Pinned memories skip time decay, but being marked wrong still fades them (netWrong). */
 export function calculateStrength(
   entry: StrengthInputs,
   // evalNow() is the real clock unless HIPPO_FAKE_NOW is set (eval-only); an explicit `now` wins.
@@ -382,11 +382,12 @@ export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): Co
 /**
  * Base half-life in days before deriveHalfLife's multipliers: 365 because 7 lost the current fact far more often and
  * 730 did no better.
- *  `hippo sleep` moves memories still on an older base (src/consolidate/half-life-migration.ts). */
+ * `hippo sleep` moves memories still on an older base (src/consolidate/half-life-migration.ts). */
 export const DEFAULT_HALF_LIFE_DAYS = 365;
 
-/** The flat half-life the decision, incident and other object writers gave their memories before they took the
- * default. */
+/**
+ * The flat half-life the decision, incident and other object writers gave their memories before they took the default.
+ */
 export const LEGACY_TYPED_HALF_LIFE = 90;
 
 export const COMPACTION_MEMORY_TAG = 'compaction-memory';
@@ -394,8 +395,7 @@ export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 
 /**
  * An imported agent memory is kept for good: the agent's note file is its record. It needs both its tool's tag and a
- * source with that tool's prefix,
- *  since merge copies source tags onto rows whose source is 'consolidation'. */
+ * source with that tool's prefix, since merge copies source tags onto rows whose source is 'consolidation'. */
 export interface KeepPair {
   readonly tag: string;
   readonly sourcePrefix: string;
@@ -540,7 +540,7 @@ export function createSuccessor(
 /**
  * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3 is novel and decays
  * faster if unused.
- *  Tags shared with existing memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
+ * Tags shared with existing memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
 export function computeSchemaFit(content: string, tags: string[], existingEntries: MemoryEntry[]): number {
   return schemaFitFrom(content, tags, schemaFitSourceOf(existingEntries));
 }

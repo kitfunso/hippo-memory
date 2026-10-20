@@ -1,6 +1,6 @@
 // A session's end: which store it writes to, when it sleeps, which turns it captures, and the store writes after them
-// (handoff, snapshot close, re-read count); plus the compact-resume read. The hook verbs keep stdin, spawning and
-// the log file.
+// (handoff, snapshot close, re-read count); plus the compact-resume read. The hook verbs keep stdin, spawning and the
+// log file.
 
 import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
@@ -17,8 +17,9 @@ import { isLocalStore, type LocalFiles } from '../store/local/index.js';
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
 export interface SessionClose {
   sessionId: string | null;
-  /** A reply's end, not the session's: the handoff is updated in place and the snapshot stays for the next
-   * compaction. */
+  /**
+   * A reply's end, not the session's: the handoff is updated in place and the snapshot stays for the next compaction.
+   */
   turn: boolean;
   /** The transcript's working state, or null with no readable transcript. */
   workingState: () => Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null;
@@ -220,8 +221,8 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   }
 }
 
-/** Captures the session into `into`; a reply's close takes only the turns after the session's cursor, then moves it,
- * so each reply is extracted once. */
+/** Captures the session into `into`; a reply's close takes only the turns after the session's cursor, then moves it, so
+ * each reply is extracted once. */
 function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
   ctx: Context,
   into: Context,

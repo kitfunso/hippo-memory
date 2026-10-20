@@ -1,6 +1,6 @@
 /** Typed judgment over capture candidates via TypeSafe's Jev (System One).
- *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so
- *  every captured memory currently lands on a flat schema_fit of 0.5. */
+ *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so every captured memory currently lands on a
+ *  flat schema_fit of 0.5. */
 
 import { ConfidenceLevel, EmotionalValence } from '../core/memory.js';
 import { fetchWithRetry } from '../util/http-retry.js';
@@ -132,8 +132,7 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
   return null;
 }
 
-/** `null` on any failure, so a Jev outage degrades capture to today's
- *  behaviour instead of blocking the write. */
+/** `null` on any failure, so a Jev outage degrades capture to today's behaviour instead of blocking the write. */
 async function judge(content: string, opts: JudgeOptions): Promise<Judgment | null> {
   const trimmed = content.trim();
   if (trimmed.length < 3) return null;

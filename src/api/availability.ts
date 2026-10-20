@@ -4,8 +4,8 @@ import { DAY_MS, HOUR_MS } from '../util/time.js';
 // Soft warning only (never filters or reorders) and PURE: no I/O or env reads; the HIPPO_AVAILABILITY gate lives in the
 // callers.
 
-/** A minimal age reference: a memory id plus its ISO-8601 creation timestamp
- *  (MemoryEntry.created, canonical ISO per the src/core/memory.ts invariant). */
+/** A minimal age reference: a memory id plus its ISO-8601 creation timestamp (MemoryEntry.created, canonical ISO per
+ *  the src/core/memory.ts invariant). */
 export interface AgeRef {
   id: string;
   created: string;
@@ -22,8 +22,9 @@ export interface AvailabilityHint {
   topKMedianAgeDays: number;
   /** Median age in days of the matched candidate pool it was drawn from. */
   poolMedianAgeDays: number;
-  /** Count of pool entries older than the top-K median age that were NOT
-   *  returned (older relevant matches passed over). */
+  /**
+   * Count of pool entries older than the top-K median age that were NOT returned (older relevant matches passed over).
+   */
   olderCandidatesPassedOver: number;
   /** Human-readable summary surfaced to the agent. */
   summary: string;

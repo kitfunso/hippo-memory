@@ -16,8 +16,8 @@ export interface SourceObjectRef {
   id: number;
 }
 
-/** What names an object-derived entity across rebuilds; v38 enforces no unique key on it, so the diff keeps
- * one row per key. */
+/** What names an object-derived entity across rebuilds; v38 enforces no unique key on it, so the diff keeps one row per
+ * key. */
 export interface NaturalKey {
   readonly entityType: EntityType;
   readonly sourceObject: SourceObjectRef;

@@ -217,8 +217,7 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   const cmp = compareSummaries(baseline, summary);
 
   if (asJson) {
-    // The main JSON output already emitted; append comparison to stderr so
-    // both can be captured independently.
+    // The main JSON output already emitted; append comparison to stderr so both can be captured independently.
     printError(JSON.stringify({ compare: cmp }, null, 2));
     return;
   }

@@ -26,7 +26,9 @@ afterEach(async () => {
 });
 
 function metaCount(db: DatabaseSyncLike, key: string): number {
-  return Number(db.prepare('SELECT COUNT(*) AS n FROM meta WHERE key = ?').get<{ n: number | bigint }>(key)?.n ?? -1);
+  return Number(
+    (db.prepare('SELECT COUNT(*) AS n FROM meta WHERE key = ?').get(key) as { n: number | bigint })?.n ?? -1,
+  );
 }
 
 function put(db: DatabaseSyncLike, key: string): void {
@@ -133,7 +135,7 @@ describe('withWriteScope busyWaitMs', () => {
     let clock = 1_000_000;
     let waits = 0;
     try {
-      expect(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>()?.timeout).toBe(DEFAULT_BUSY_WAIT_MS);
+      expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number })?.timeout).toBe(DEFAULT_BUSY_WAIT_MS);
       db.exec('PRAGMA busy_timeout = 0');
       await holdWriteLock(1500);
       vi.spyOn(Date, 'now').mockImplementation(() => clock);

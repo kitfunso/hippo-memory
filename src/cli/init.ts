@@ -55,7 +55,6 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
       }
     }
   }
-  // Check if rootDir itself is a git repo
   if (fs.existsSync(path.join(rootDir, '.git'))) repos.push(rootDir);
   walk(rootDir, 0);
   return repos;
@@ -201,7 +200,6 @@ async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<
 }
 
 export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // Handle --scan mode
   if (flags['scan']) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
     await cmdInitScan(scanDir, tenantId, flags);
@@ -388,8 +386,7 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
     // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep
-    // with
-    // `hippo hook install claude-code` and `hippo setup`.
+    // with `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();
   }

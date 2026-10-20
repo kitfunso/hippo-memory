@@ -6,8 +6,8 @@ import { requireHostAdmin, type Context } from '../types.js';
 import { memoryGet } from './memories.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 
-/** Delete a memory by id. Reach is checked inside the delete's write scope, and a
- * row out of reach answers as not found, so a caller learns nothing about it. */
+/** Delete a memory by id. Reach is checked inside the delete's write scope, and a row out of reach answers as not
+ * found, so a caller learns nothing about it. */
 export interface ForgetResult {
   ok: true;
   id: string;
@@ -23,8 +23,8 @@ export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
   return { ok: true, id };
 }
 
-// Reject administration is Context-based and tenant-checked; it shares
-// one transaction flow with `hippo reject` via src/trust/reject-flow.ts.
+// Reject administration is Context-based and tenant-checked; it shares one transaction flow with `hippo reject` via
+// src/trust/reject-flow.ts.
 
 export interface RejectOptions {
   /** By-id form: reject the CURRENT content of an existing memory. */

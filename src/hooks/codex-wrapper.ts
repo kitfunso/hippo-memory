@@ -74,9 +74,8 @@ function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
   const { metadataPath } = resolveCodexWrapperPaths();
   if (!fs.existsSync(metadataPath)) return null;
   try {
-    // This optimistic parse is never trusted directly — every call site reads fields off
-    // the result only after isCodexWrapperMetadataValid has runtime-checked each string
-    // field and the referenced paths.
+    // This optimistic parse is never trusted directly: every call site reads fields off the result only after
+    // isCodexWrapperMetadataValid has runtime-checked each string field and the referenced paths.
     const parsed: CodexWrapperMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
     return parsed;
   } catch (err) {
@@ -220,8 +219,8 @@ function cleanupLegacyCodexPathWrappers(paths: CodexWrapperPaths): void {
   }
 }
 
-/** The Codex launcher `hippo codex-run` may start: only the backup the installer made, never a path the metadata
- * names on its own say. */
+/** The Codex launcher `hippo codex-run` may start: only the backup the installer made, never a path the metadata names
+ * on its own say. */
 export function installedRealCodexPath(): string {
   const { metadataPath } = resolveCodexWrapperPaths();
   if (!fs.existsSync(metadataPath)) {
@@ -407,8 +406,8 @@ export function ensureCodexWrapperInstalled(): EnsureCodexWrapperResult {
 }
 
 /**
- * True if Codex wrapper metadata exists on this machine, i.e. the user opted
- * in to the wrapper at some point (via `hippo hook install codex`).
+ * True if Codex wrapper metadata exists on this machine, i.e. the user opted in to the wrapper at some point (via
+ * `hippo hook install codex`).
  */
 export function isCodexWrapperInstalled(): boolean {
   return readCodexWrapperMetadata() !== null;
@@ -416,11 +415,9 @@ export function isCodexWrapperInstalled(): boolean {
 
 /**
  * Repair-only variant of `ensureCodexWrapperInstalled`: re-ensures the wrapper
- * ONLY when wrapper metadata already exists — that metadata is the user's
- * opt-in record. Never performs a first install. Replacing another vendor's
- * binary must stay behind the explicit `hippo hook install codex` command;
- * doing it from postinstall or routine commands is a consent violation and
- * reads as binary hijacking to security scanners.
+ * ONLY when wrapper metadata already exists; that metadata is the user's opt-in record. Never performs a first install.
+ * Replacing another vendor's binary must stay behind the explicit `hippo hook install codex` command; doing it from
+ * postinstall or routine commands is a consent violation and reads as binary hijacking to security scanners.
  */
 export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHippoCliPath()): EnsureCodexWrapperResult {
   const metadata = readCodexWrapperMetadata();

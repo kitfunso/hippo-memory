@@ -42,8 +42,7 @@ function resolveWindowsCommand(command: string): string | null {
 
 /**
  * Spawns argv[0] with the rest as its arguments and no shell. Node refuses to start a .cmd or .bat without one
- * (CVE-2024-27980),
- *  so on win32 such a shim runs through cmd.exe with every argument quoted for it. */
+ * (CVE-2024-27980), so on win32 such a shim runs through cmd.exe with every argument quoted for it. */
 export function spawnArgv(argv: readonly string[], options: SpawnOptions): ChildProcess {
   const [command, ...args] = argv;
   if (command === undefined || command.length === 0) throw new RangeError('spawnArgv needs a command: argv is empty');

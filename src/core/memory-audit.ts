@@ -113,8 +113,8 @@ export interface RepairProtection {
   readonly objectBacked: boolean;
 }
 
-/** What quality repair keeps whatever the defect: a person's pin, a raw receipt, a trusted imported note, and a row
- * an object names, since the object's link could not be restored. */
+/** What quality repair keeps whatever the defect: a person's pin, a raw receipt, a trusted imported note, and a row an
+ * object names, since the object's link could not be restored. */
 export const PROTECTED_ROWS: RepairProtection = { pinned: true, raw: true, trusted: true, objectBacked: true };
 
 /** Why repair must keep `entry` under `protection`, or undefined to let it go. */

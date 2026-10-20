@@ -1,7 +1,7 @@
 /**
  * Self-contained feature eval suite: a synthetic corpus with known ground truth, per-feature metrics and regression
  * detection against a saved baseline.
- *  Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
+ * Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
 import { search } from '../search/bm25-search.js';

@@ -49,8 +49,8 @@ export type RelationType = 'owns' | 'supersedes' | 'depends-on' | 'blocked-by' |
 /** The consolidated source kinds the graph is permitted to index (never 'raw'). */
 export type SourceKind = 'distilled' | 'superseded';
 
-/** The authoritative first-class object types a graph row may be anchored to (the object
- *  provenance path, alongside the memory path). Maps to source_object_type. */
+/** The authoritative first-class object types a graph row may be anchored to (the object provenance path, alongside the
+ *  memory path). Maps to source_object_type. */
 export type SourceObjectType = 'decision' | 'policy' | 'customer' | 'project';
 
 export interface Entity {
@@ -58,8 +58,8 @@ export interface Entity {
   tenantId: string;
   entityType: EntityType;
   name: string;
-  /** The consolidated source memory this entity came from; null once the mirror is forgotten/pruned,
-   * then provenance is source_object. */
+  /** The consolidated source memory this entity came from; null once the mirror is forgotten/pruned, then provenance is
+   * source_object. */
   memoryId: string | null;
   sourceKind: SourceKind;
   /** The authoritative object this entity is anchored to (object-provenance path).

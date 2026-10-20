@@ -91,15 +91,14 @@ export async function runViaServerIfAvailable(
     if (failure === 'never-sent') {
       failIfServerRequired('the server pidfile was stale (connection refused)');
       log.warn('stale server pidfile detected, falling back to direct mode', errorFields(err));
-      // Clear the pidfile only if it still names the dead server we just
-      // probed — a newer server may have rewritten it (removePidfileIfOwned).
+      // Clear the pidfile only if it still names the dead server we just probed; a newer server may have rewritten it
+      // (removePidfileIfOwned).
       removePidfileIfOwned(hippoRoot, { pid: info.pid, startedAt: info.started_at });
       return false;
     }
     if (failure === 'delivery-unknown') {
       // Every caller is a non-idempotent write, so replaying on the direct path would store a row the server may
-      // already have committed;
-      // leave the pidfile alone: the next command's connect-phase failure heals it.
+      // already have committed; leave the pidfile alone: the next command's connect-phase failure heals it.
       printError(
         `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been ` +
           `applied. ` +

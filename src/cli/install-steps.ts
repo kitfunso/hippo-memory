@@ -42,8 +42,7 @@ export function installCodexMemoryHooks(indent: string): void {
 
 /**
  * The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo
- * can edit and so was
- * left unchanged; true when it printed. */
+ * can edit and so was left unchanged; true when it printed. */
 export function warnClaudeSettingsUnusable(
   result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>,
   indent: string,
@@ -117,7 +116,6 @@ export function setupDailySchedule(
 }
 
 function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): void {
-  // Check if task already exists
   try {
     const existing = run('schtasks', ['/query', '/tn', taskName], SCHEDULER_CALL);
     if (existing.includes(taskName)) {
@@ -164,7 +162,6 @@ function readCrontab(run: RunScheduler): string {
 }
 
 function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): void {
-  // Unix: check crontab for existing entry
   const marker = `# hippo:${taskName}`;
   try {
     const existing = readCrontab(run);

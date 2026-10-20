@@ -40,8 +40,8 @@ export interface ContextReads {
   /** As `loadContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by
    * created, then id. */
   contextCandidates(tenantId: string, filter: ContextCandidateFilter): Promise<MemoryEntry[]>;
-  /** As `loadAmbientTallies`: one aggregate over the live, unarchived
-   * rows `filter` admits, less other projects' secret-tagged rows. */
+  /** As `loadAmbientTallies`: one aggregate over the live, unarchived rows `filter` admits, less other projects'
+   * secret-tagged rows. */
   ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
   /** The tenant's `limit` newest rows, oldest first. */
   newestEntries(tenantId: string, limit: number): Promise<MemoryEntry[]>;

@@ -72,9 +72,8 @@ export function currentSignal(): AbortSignal | undefined {
   return requestScopes.getStore()?.signal;
 }
 
-/** Runs `fn` with `requestId` on every log line it writes, including the ones from
- * timers and promises it starts. `deadline` reaches every store call made inside, and `signal` every check of
- * `currentSignal`.
+/** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and promises it starts.
+ * `deadline` reaches every store call made inside, and `signal` every check of `currentSignal`.
  */
 export function runWithRequestId<T>(
   requestId: string,

@@ -94,8 +94,6 @@ export interface RecordTraceOutcomeInput {
  * returned. Own table so `auditPrune` cannot erase training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
-    // SAFETY: row shape matches the single `tenant_id` column named in the
-    // SELECT above; sqlite returns undefined when no row matches.
     const trace = db.prepare(`SELECT tenant_id FROM recall_traces WHERE id = ?`).get(input.traceId) as
       | { tenant_id?: string }
       | undefined;
@@ -104,8 +102,6 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       return;
     }
 
-    // SAFETY: row shape matches the single `memory_id` column named in the
-    // SELECT above.
     const memberRows = db
       .prepare(`SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`)
       .all(input.traceId) as Array<{ memory_id: string }>;
@@ -175,7 +171,6 @@ const DELIVERY_EVENT_COLUMNS = [
 ] as const;
 
 function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
-  // SAFETY: rows carry exactly the `id` and `ts` columns selected.
   const rows = db
     .prepare(`
     SELECT id, ts FROM delivery_events
@@ -190,7 +185,6 @@ function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
 function findDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
   if (input.toolUseId === undefined || input.toolUseId === null) return null;
-  // SAFETY: a single `id` column, undefined when no row matches.
   const row = db
     .prepare(`
     SELECT id FROM delivery_events
@@ -206,7 +200,6 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
   // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
   if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
-    // SAFETY: a single `id` column, undefined when no row matches.
     const row = db
       .prepare(`
       SELECT id FROM delivery_events
@@ -217,7 +210,6 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
     return row?.id ?? null;
   }
   if (input.promptHash === null) return null;
-  // SAFETY: rows carry exactly the `id` and `ts` columns selected.
   const rows = db
     .prepare(
       `
@@ -234,7 +226,7 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
 }
 
 function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
-  // SAFETY: a single MAX aggregate aliased `m`, NULL when the session has no turns yet.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = db
     .prepare(`
     SELECT MAX(turn_seq) AS m FROM delivery_events
@@ -414,7 +406,7 @@ export function writeDeliveryEventOnHandle(
   input: DeliveryEventInput,
   prune: DeliveryPruneSchedule = deliveryPruneSchedule(),
 ): number | null {
-  const prior = Math.trunc(Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout));
+  const prior = Math.trunc(Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout));
   db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
   try {
     return writeDeliveryEvent(db, input, prune);

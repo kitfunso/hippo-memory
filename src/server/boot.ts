@@ -78,15 +78,14 @@ import type {
   ServerHandle,
 } from './types.js';
 
-// server.address() returns AddressInfo once a TCP socket is bound; null before
-// listening, a string only for pipe/unix-socket listeners (never used here).
+// server.address() returns AddressInfo once a TCP socket is bound; null before listening, a string only for
+// pipe/unix-socket listeners (never used here).
 function isAddressInfo(a: string | import('node:net').AddressInfo | null): a is import('node:net').AddressInfo {
   return a !== null && typeof a !== 'string';
 }
 
 // Pinned at module load, bumped with package.json on releases; reading package.json synchronously here would couple the
-// daemon to its install path,
-// which tests that mkdtemp a hippoRoot avoid.
+// daemon to its install path, which tests that mkdtemp a hippoRoot avoid.
 const VERSION = PACKAGE_VERSION;
 
 interface HandleRequestOptions {
@@ -103,8 +102,8 @@ async function handleRequest(
   options: HandleRequestOptions,
 ): Promise<void> {
   const { streamSlots, limiter } = options;
-  // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
-  // Node's URL parser collapses them and they slip past the route table.
+  // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before Node's URL parser collapses them and they slip past
+  // the route table.
   rejectEncodedSlash(req.url ?? '/');
 
   const { method, path, query } = parseRequest(req);
@@ -144,9 +143,8 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
 
 function sendHealth(req: IncomingMessage, res: ServerResponse, { startedAt, counts }: HandleRequestOptions): void {
   // A caller on this machine (detectServer's probe reads version and pid) gets the full body; anyone else, even a
-  // proxied caller or a browser page on loopback,
-  // gets liveness only: the version would fingerprint the build and the pid is noise. Platform health checks only need
-  // the 200.
+  // proxied caller or a browser page on loopback, gets liveness only: the version would fingerprint the build and the
+  // pid is noise. Platform health checks only need the 200.
   if (isLocalCaller(req)) {
     sendJson(res, 200, {
       ok: true,
@@ -165,8 +163,8 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, { startedAt, coun
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
- * liveness only, so a probe can tell a store that does not answer from a dead process. */
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe
+ * can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
   const { readiness } = store;
   if (readiness === undefined) {
@@ -422,8 +420,8 @@ export function resolveTenantId(opts: ResolveOptions): string {
 
 /**
  * Boots the HTTP daemon on host:port and writes the pidfile under hippoRoot; refuses a non-loopback host unless
- * HIPPO_REQUIRE_AUTH=1 and
- * either `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without HIPPO_TRUSTED_PROXIES.
+ * HIPPO_REQUIRE_AUTH=1 and either `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
+ * HIPPO_TRUSTED_PROXIES.
  * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
@@ -436,8 +434,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   assertTlsOrCleartextAllowed(host, opts.tls, loopbackHosts, opts.allowCleartext ?? envAllowCleartext());
 
   // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer
-  // can prove a pid-reusing impostor is not
-  // this server.
+  // can prove a pid-reusing impostor is not this server.
   const startedAt = new Date().toISOString();
   await claimPidfile(opts.hippoRoot, startedAt);
   try {

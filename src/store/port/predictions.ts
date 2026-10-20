@@ -3,8 +3,8 @@ import type { ClosureState } from '../../core/prediction.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { PredictionBaserate } from './types.js';
 
-/** A claim to save and the memory row that mirrors it into recall: core builds it with
- * `predictionMirror` in the tenant the save names, so every store keeps the same row. */
+/** A claim to save and the memory row that mirrors it into recall: core builds it with `predictionMirror` in the tenant
+ * the save names, so every store keeps the same row. */
 export interface PredictionSave extends SavePredictionOptions {
   readonly mirror: MemoryEntry;
 }
@@ -15,16 +15,16 @@ export interface PredictionClose {
   readonly closureNote?: string;
 }
 
-/** Which of a tenant's predictions a list reads: every class when `classTag` is unset (it is
- * never empty), every state when `closureState` is, and a closed state only inside a class. */
+/** Which of a tenant's predictions a list reads: every class when `classTag` is unset (it is never empty), every state
+ * when `closureState` is, and a closed state only inside a class. */
 export type PredictionFilter =
   | { readonly classTag?: string; readonly closureState?: 'open' }
   | { readonly classTag: string; readonly closureState: ClosureState };
 
 export type PredictionListQuery = PredictionFilter & { readonly limit: number; readonly after?: KeysetPosition };
 
-/** The reads and writes behind the predictions routes. createdAt and closedAt are the store's
- * own clock at the write, as `toISOString` gives it, since the list orders createdAt as text. */
+/** The reads and writes behind the predictions routes. createdAt and closedAt are the store's own clock at the write,
+ * as `toISOString` gives it, since the list orders createdAt as text. */
 export interface Predictions {
   /** In one transaction: writes `mirror` as `EntryWrites.writeEntry` does, inserts the open row under the next id, and
    * appends one predict_create row ({prediction_id, class_tag, has_estimate, target_date}) ahead of the mirror's
@@ -47,8 +47,7 @@ export interface Predictions {
 
 export interface Prediction {
   id: number;
-  /** Nullable: a memory may be deleted (forget /
-   *  consolidate / archive) without breaking the prediction row. */
+  /** Nullable: a memory may be deleted (forget / consolidate / archive) without breaking the prediction row. */
   memoryId: string | null;
   tenantId: string;
   classTag: string;
