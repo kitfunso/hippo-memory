@@ -29,7 +29,7 @@ export type MemoryKind = (typeof MEMORY_KINDS)[number];
 
 // Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison sorts them
 // chronologically.
-// A markdown rebuild keeps legacy offsets as written, so importers should normalize on write.
+// The row writer stores `created` in that form (isoInstant); only rows written before it may hold another.
 
 // Fields are camelCase in memory; src/base/memory/memory-wire.ts keeps the snake_case keys of every stored and wire
 // format.

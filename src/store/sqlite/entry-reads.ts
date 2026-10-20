@@ -444,11 +444,11 @@ export function selectOriginTalliesAt(db: DatabaseSyncLike, tenantId: string, so
 // Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
 const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
 const PHRASE_WORDS = 32;
-const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
+export const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
 
 /** The index query for `text`'s first words, which a row holding the text word for word holds in a row; null when the
  * phrase might name no token, since an empty phrase matches no row. */
-function holdingPhrase(text: string): string | null {
+export function holdingPhrase(text: string): string | null {
   const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
   return SURE_TOKEN_CHAR.test(opening) ? `content : "${opening.replaceAll('"', '""')}"` : null;
 }
