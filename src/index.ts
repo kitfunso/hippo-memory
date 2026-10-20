@@ -16,6 +16,7 @@ import { DEFAULT_TENANT_ID } from './util/tenant.js';
 import type { ConsolidationResult } from './consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
 import type { LocalContext } from './api/types.js';
+import { withSharedStoreHandles } from './db/index.js';
 export {
   MemoryEntry,
   Layer,
@@ -69,7 +70,9 @@ export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
 export type { LocalContext, LocalStore };
 /** Sleeps the whole store under `ctx`, whose store carries the local files a sleep pass works on. */
 export async function sleep(ctx: LocalContext, opts?: SleepOpts): Promise<SleepResult> {
-  return sleepStore(ctx, opts);
+  // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close SQLite's last, which
+  // checkpoints and deletes the WAL.
+  return withSharedStoreHandles(() => sleepStore(ctx, opts));
 }
 /** Run a full consolidation pass on `store`, or on the hippo.db under a folder. With no `options.config`, a folder
  * reads its config.json and a store the defaults. */
@@ -80,7 +83,8 @@ export async function consolidate(
   const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
-  return runConsolidation(store.localFiles, { ...options, config, tenantId });
+  // One handle per store, for the reason `sleep` gives.
+  return withSharedStoreHandles(() => runConsolidation(store.localFiles, { ...options, config, tenantId }));
 }
 function isFolder(target: string | LocalStore): target is string {
   return typeof target === 'string';
