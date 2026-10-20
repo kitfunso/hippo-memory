@@ -1,5 +1,5 @@
 // Which stores are hippo.db. The mark is an own enumerable symbol, so a caller's copy that spreads sqliteStore and
-// swaps a method stays hippo.db, as it did when the copy carried localFiles.
+// swaps a method stays hippo.db.
 import type { HippoStore } from '../port.js';
 
 /** Kept off the store's type, so the published store shape is unchanged. */
