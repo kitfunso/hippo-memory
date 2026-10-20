@@ -1,7 +1,7 @@
 // A store other than hippo.db for the GraphReads group: it copies entities, relations and each memory's scope and kind out of hippo.db once, then
 // walks them in memory from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
 import { canReadScope } from '../../src/base/scope/recall-scope.js';
@@ -260,7 +260,7 @@ export interface SeededGraph {
   readonly memories: Readonly<Record<'team' | 'held' | 'alice', string>>;
 }
 
-type Db = ReturnType<typeof openHippoDb>;
+type Db = DatabaseSyncLike;
 
 function seeder(db: Db, dir: string) {
   const memory = (tenantId: string, id: string, scope: string | null): string => {

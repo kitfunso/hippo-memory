@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { expect } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from './delivery-events.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
@@ -212,7 +212,7 @@ export function saveSnapshot(p: Project, sessionId: string | null): void {
 }
 
 /** Runs `fn` on a handle to the project's store. */
-export function withDb<T>(p: Project, fn: (db: ReturnType<typeof openHippoDb>) => T): T {
+export function withDb<T>(p: Project, fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(p.hippoRoot);
   try {
     return fn(db);

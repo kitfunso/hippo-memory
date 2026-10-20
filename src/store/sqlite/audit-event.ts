@@ -1,5 +1,5 @@
 import { errorMessage } from '../../base/util/log.js';
-import { openHippoDb } from '../../db/index.js';
+import { type DatabaseSyncLike } from '../../db/index.js';
 import { appendAuditEvent } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -16,7 +16,7 @@ export interface AuditOptions {
 
 /** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth, and a failed audit
  * write shows up as missing rows. */
-export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: AuditOptions): void {
+export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions): void {
   const { targetId, metadata, actor = CLI_ACTOR, tenantId } = options;
   try {
     appendAuditEvent(db, {
@@ -34,11 +34,7 @@ export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: 
 
 /** Refusal audit for the rejected-value guard, written by the transaction owner after rollback so the caller's own
  * rollback cannot claw it back. Best-effort like `audit()`: never throws. */
-export function auditRejectionRefusal(
-  db: ReturnType<typeof openHippoDb>,
-  err: RejectedValueError,
-  actor: string,
-): void {
+export function auditRejectionRefusal(db: DatabaseSyncLike, err: RejectedValueError, actor: string): void {
   audit(db, 'reject_refusal', {
     targetId: err.entryId,
     metadata: { digest: err.digest, reason: err.reason },

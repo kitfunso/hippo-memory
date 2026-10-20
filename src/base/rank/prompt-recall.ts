@@ -1,6 +1,6 @@
 /** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
 import { tokenize } from '../util/tokenize.js';
-import { STOP_WORDS } from '../memory/memory-quality.js';
+import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
 
@@ -18,7 +18,7 @@ const PROMPT_RECALL_MAX_CHARS = 4000;
 export function contentTokens(text: string): Set<string> {
   const out = new Set<string>();
   for (const t of tokenize(text)) {
-    if (t.length > 2 && !STOP_WORDS.has(t)) out.add(t);
+    if (t.length > 2 && !MEMORY_QUALITY_STOPWORDS.has(t)) out.add(t);
   }
   return out;
 }
