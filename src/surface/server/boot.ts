@@ -16,15 +16,11 @@ import type { HippoStore } from '../../store/index.js';
 import { isStoreBusy } from '../../store/port.js';
 import { isLocalStore } from '../../store/local/index.js';
 import {
-  createStoreHolder,
-  offLoopFor,
-  outsideRouteBlock,
-  type StoreHolder,
-} from '../../store/sqlite/held-connection.js';
-import { createSqliteExecutor } from '../../store/sqlite/executor.js';
-import { globalStoresFor, workerSqliteStore } from '../../store/sqlite/worker-store.js';
-import { sqliteReach } from '../../store/sqlite/store.js';
-import { tenantOfApiKey, type ResolveOptions } from '../../store/sqlite/tenant.js';
+  sqliteServerRuntime,
+  tenantOfApiKey,
+  type ResolveOptions,
+  type SqliteServerRuntime,
+} from '../../store/sqlite/index.js';
 import { configReader } from '../../base/config/config.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -42,7 +38,6 @@ import {
   JSON_HEADERS,
   sendJson,
 } from '../../base/util/http-util.js';
-import { workerCounts } from '../../store/sqlite/executor-counts.js';
 import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { answerAtDeadline, isAbandoned, requestDeadlineFor } from './deadline.js';
@@ -98,6 +93,7 @@ interface HandleRequestOptions {
   readonly streamSlots: Map<string, number>;
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
+  readonly workerCounts: SqliteServerRuntime['workerCounts'];
 }
 
 async function handleRequest(
@@ -146,7 +142,11 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
   return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () => handleMcpPost(r.req, r.res, r.opts));
 }
 
-function sendHealth(req: IncomingMessage, res: ServerResponse, { startedAt, counts }: HandleRequestOptions): void {
+function sendHealth(
+  req: IncomingMessage,
+  res: ServerResponse,
+  { startedAt, counts, workerCounts }: HandleRequestOptions,
+): void {
   // A caller on this machine (detectServer's probe reads version and pid) gets the full body; anyone else, even a
   // proxied caller or a browser page on loopback, gets liveness only: the version would fingerprint the build and the
   // pid is noise. Platform health checks only need the 200.
@@ -461,24 +461,29 @@ interface BootPlan {
 
 /** Everything after the pidfile claim; a throw here releases the claim in serve(). */
 async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandle> {
-  const { host, requestedPort, routes, publicJsonBodies, limiters, startedAt } = plan;
+  const { host, requestedPort, limiters, startedAt } = plan;
 
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const served = servedOptsFor(opts, routes, publicJsonBodies, limiters);
-  const holder = createStoreHolder(opts.hippoRoot, served.store);
+  const runtime = sqliteServerRuntime(opts.hippoRoot, {
+    store: opts.store,
+    queueMax: envStoreQueueMax(),
+    lossAversionRatio: envLossAversionRatio(),
+  });
+  const served = servedOptsFor(opts, plan, runtime);
 
   const inflight = new Set<ServerResponse>();
-  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts: served.counts };
-  const server = acceptingServer(served, holder, inflight, options);
+  const { workerCounts } = runtime;
+  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts: served.counts, workerCounts };
+  const server = acceptingServer(served, runtime, inflight, options);
 
   setKeepAliveTimeouts(server);
 
   const { port: actualPort, url } = await listenAndDescribe(server, requestedPort, host, opts.tls);
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
-  holder.hold();
+  runtime.hold();
 
   let stopping = false;
   const stop = async (): Promise<void> => {
@@ -487,10 +492,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
     await stopListening(opts, server, inflight, startedAt);
     // An auto-sleep answers no request, so draining skips it; its child must leave the store before the store closes.
     await served.sleeps.settled();
-    // The store's worker threads close their connections first, so the held one is still SQLite's last.
-    if (!opts.store) await served.store.close();
-    await served.globalStores.close();
-    await holder.release();
+    await runtime.close();
   };
 
   if (opts.handleSignals) exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
@@ -516,14 +518,11 @@ function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeO
 
 function servedOptsFor(
   opts: ServeOpts,
-  routes: NonNullable<ServeOpts['routes']>,
-  publicJsonBodies: ReadonlyMap<string, string>,
-  { callerLimiter, failedAuthLimiter }: BootedLimiters,
+  { routes, publicJsonBodies, limiters }: BootPlan,
+  runtime: SqliteServerRuntime,
 ): ResolvedServeOptions {
-  const executorOpts = { queueMax: envStoreQueueMax(), lossAversionRatio: envLossAversionRatio() };
-  const store =
-    opts.store ?? workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, executorOpts), executorOpts);
-  const globalStores = globalStoresFor(store, executorOpts);
+  const { callerLimiter, failedAuthLimiter } = limiters;
+  const { store } = runtime;
   const sleeps = createSleepQueue();
   const counts: ServerCounts = { handlerDeadlines: 0, autoSleeps: 0 };
   const run = (root: string): Promise<void> => {
@@ -537,13 +536,12 @@ function servedOptsFor(
     routes,
     publicJsonBodies,
     store,
-    globalStores,
-    reachOf: (shared) => sqliteReach(opts.hippoRoot, store, shared, globalStores.open),
+    reachOf: runtime.reachOf,
     configAt: configReader(envRuntimeSettings),
-    offLoop: offLoopFor(store),
+    offLoop: runtime.offLoop,
     callerLimiter,
     failedAuthLimiter,
-    authResolver: outsideRouteBlock(opts.authResolver),
+    authResolver: runtime.outsideRouteBlock(opts.authResolver),
     callers: createCallerState(autoSleep),
     sleeps,
     counts,
@@ -552,15 +550,15 @@ function servedOptsFor(
 
 function acceptingServer(
   served: ResolvedServeOptions,
-  holder: StoreHolder,
+  runtime: SqliteServerRuntime,
   inflight: Set<ServerResponse>,
   options: HandleRequestOptions,
 ): Server {
   return createListener(served.tls, (req, res) => {
-    res.once('finish', holder.afterResponse);
+    res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => holder.runRequest(() => handleRequest(req, res, served, options)), {
+    answerRequest(req, res, () => runtime.runRequest(() => handleRequest(req, res, served, options)), {
       slowWarnMs: served.slowRequestWarnMs,
       counts: options.counts,
     });

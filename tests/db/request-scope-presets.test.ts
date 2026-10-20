@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { currentRequestStores, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS } from '../../src/db/index.js';
-import { runDetachedSqliteRequest, runSqliteRequest } from '../../src/store/sqlite/store.js';
+import { runDetachedSqliteRequest, runSqliteRequest } from '../../src/store/sqlite/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const roots: string[] = [];

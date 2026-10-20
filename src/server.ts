@@ -19,7 +19,7 @@ import {
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
 import { isLocalStore, type LocalStore } from './store/local/index.js';
 import type { LocalContext } from './api/types.js';
-import { sqliteReach } from './store/sqlite/store.js';
+import { sqliteReach } from './store/sqlite/index.js';
 import { loadConfig } from './base/config/config.js';
 
 export { serve } from './surface/server/boot.js';

@@ -261,9 +261,6 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
   };
 }
 
-/** The composition roots reach the request scope through the adapter's one entry. */
-export { runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
-
 /** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
  * `openGlobal` builds the global store, read and written, which a server keeps on threads of its own. */
 export function sqliteReach(

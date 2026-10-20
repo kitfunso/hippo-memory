@@ -34,7 +34,7 @@ export type { RejectedValueRow } from '../store/port/rejections.js';
 // helpers), so a store built on it applies hippo.db's rules with the same code.
 
 // An add-on serves from another database by passing serve() its own HippoStore.
-export { sqliteStore } from '../store/sqlite/store.js';
+export { sqliteStore } from '../store/sqlite/index.js';
 export {
   hasGroup,
   requireGroup,

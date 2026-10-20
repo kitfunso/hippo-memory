@@ -9,7 +9,7 @@ import {
 import * as sources from '../surface/importers/sources.js';
 import { importMarkdown as importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVault as importVaultInto } from '../surface/importers/vault.js';
-import { sqliteStore } from '../store/sqlite/store.js';
+import { sqliteStore } from '../store/sqlite/index.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);

@@ -58,6 +58,8 @@ const SQLITE_BASE = {
   'src/surface/connectors/keep.ts': '',
   'src/surface/mcp/keep.ts': '',
   'src/store/sqlite/store.ts': 'export const storeFor = 1;\nexport type S = 1;\n',
+  'src/store/sqlite/index.ts': "export { storeFor } from './store.js';\n",
+  'src/store/sqlite/fixtures.ts': 'export const seed = 1;\n',
 };
 const PORT_BASE = {
   ...SQLITE_BASE,
@@ -68,6 +70,9 @@ const PORT_BASE = {
   'src/store/local/index.ts': 'export const isLocal = 1;\n',
 };
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
+const DOOR_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/index.js';\n";
+const FIXTURES_IMPORT = "import { seed } from '../store/sqlite/fixtures.js';\nexport const z = seed;\n";
+const ENTRY_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, entry: 'high' } };
 const SURFACE_SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../../store/sqlite/store.js';\n";
 const DASHBOARD_MAP = {
   order: ['low', 'high'],
@@ -266,20 +271,52 @@ const rows: Row[] = [
     ],
   },
   {
-    name: 'a composition root may import the adapter, and a store file is not counted',
+    name: 'a composition root may import the adapter through its door, and a store file is not counted',
     files: {
       ...SQLITE_BASE,
-      'src/entry/testing.ts': SQLITE_IMPORT,
+      'src/entry/testing.ts': DOOR_IMPORT,
       'src/store/port.ts': "import type { S } from './sqlite/store.js';\nexport type P = S;\n",
     },
-    map: { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, entry: 'high' } },
+    map: ENTRY_MAP,
+    status: 0,
+    output: ['Layer order OK'],
+  },
+  {
+    name: 'a composition root that imports a module behind the door fails with file:line, type-only too',
+    files: {
+      ...SQLITE_BASE,
+      'src/entry/importers.ts': SQLITE_IMPORT,
+      'src/entry/testing.ts': "import type { S } from '../store/sqlite/store.js';\nexport type T = S;\n",
+    },
+    map: ENTRY_MAP,
+    status: 1,
+    output: [
+      "src/entry/importers.ts:2 imports src/store/sqlite/store.ts past the adapter's door; import src/store/sqlite/index.ts",
+      'src/entry/testing.ts:1 imports src/store/sqlite/store.ts past the',
+    ],
+  },
+  {
+    name: 'the ./testing root opens the fixtures door, and any other root that does fails',
+    files: {
+      ...SQLITE_BASE,
+      'src/entry/testing.ts': FIXTURES_IMPORT,
+      'src/entry/importers.ts': FIXTURES_IMPORT,
+    },
+    map: ENTRY_MAP,
+    status: 1,
+    output: ["src/entry/importers.ts:1 imports src/store/sqlite/fixtures.ts past the adapter's door"],
+  },
+  {
+    name: 'the ./testing root may import both doors',
+    files: { ...SQLITE_BASE, 'src/entry/testing.ts': `${DOOR_IMPORT}${FIXTURES_IMPORT}` },
+    map: ENTRY_MAP,
     status: 0,
     output: ['Layer order OK'],
   },
   {
     name: 'a root that no longer imports the adapter fails until its entry goes',
     files: { ...SQLITE_BASE, 'src/entry/testing.ts': 'export const t = 1;\n' },
-    map: { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, entry: 'high' } },
+    map: ENTRY_MAP,
     status: 1,
     output: ['root: src/entry/testing.ts no longer imports src/store/sqlite/'],
   },

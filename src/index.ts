@@ -8,7 +8,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from './base/memory/memory.js';
-import { sqliteStore } from './store/sqlite/store.js';
+import { sqliteStore } from './store/sqlite/index.js';
 import type { LocalStore } from './store/local/index.js';
 import { runConsolidation, type ConsolidateOptions } from './domain/consolidate/sleep.js';
 import { loadConfig } from './base/config/config.js';

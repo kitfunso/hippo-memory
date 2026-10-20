@@ -22,7 +22,7 @@ import {
   runSqliteRequest,
   sqliteReach,
   sqliteStore,
-} from '../../store/sqlite/store.js';
+} from '../../store/sqlite/index.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { getReranker, type RerankerFn } from '../../domain/rerankers/index.js';

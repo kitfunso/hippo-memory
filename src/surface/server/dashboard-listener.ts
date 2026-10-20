@@ -6,10 +6,7 @@ import { adminActor } from '../../api/index.js';
 import { configReader } from '../../base/config/config.js';
 import { evalNow } from '../../base/memory/ablation.js';
 import { builtStaticRoot } from '../dashboard/static-file.js';
-import type { HippoStore } from '../../store/port.js';
-import { createSqliteExecutor } from '../../store/sqlite/executor.js';
-import { createStoreHolder, offLoopFor } from '../../store/sqlite/held-connection.js';
-import { workerSqliteStore } from '../../store/sqlite/worker-store.js';
+import { sqliteServerRuntime, type SqliteServerRuntime } from '../../store/sqlite/index.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../../base/util/http-util.js';
@@ -54,7 +51,7 @@ export class DashboardListenError extends Error {
 }
 
 /** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
-function servingFor(opts: DashboardOpts, store: HippoStore): DashboardServing {
+function servingFor(opts: DashboardOpts, { store, offLoop }: SqliteServerRuntime): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const now = opts.now ?? ((): number => evalNow().getTime());
   const configAt = configReader(envRuntimeSettings);
@@ -64,35 +61,32 @@ function servingFor(opts: DashboardOpts, store: HippoStore): DashboardServing {
     context: () => ({ hippoRoot, tenantId, actor: adminActor(DASHBOARD_ACTOR), store, config: configAt(hippoRoot) }),
     bodyDeadlineMs: bodyDeadlineMs(opts.bodyDeadlineMs),
     staticRoot: builtStaticRoot(),
-    offLoop: offLoopFor(store),
+    offLoop,
   };
 }
 
 /** Serves the dashboard on 127.0.0.1 behind the per-start `token`; it never claims the API server's pidfile, so both
  * can serve one store. */
 export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle> {
-  const rules = { lossAversionRatio: envLossAversionRatio() };
-  const store = workerSqliteStore(opts.hippoRoot, createSqliteExecutor(opts.hippoRoot, rules), rules);
-  const holder = createStoreHolder(opts.hippoRoot, store);
-  const serving = servingFor(opts, store);
+  const runtime = sqliteServerRuntime(opts.hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+  const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
   // Its own count: the dashboard serves no /health, so its late handlers never mix into the API server's.
   const counts = { handlerDeadlines: 0 };
   const server = createListener(undefined, (req, res) => {
-    res.once('finish', holder.afterResponse);
+    res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => holder.runRequest(() => answerDashboard(serving, req, res)), {
+    answerRequest(req, res, () => runtime.runRequest(() => answerDashboard(serving, req, res)), {
       slowWarnMs: undefined,
       counts,
     });
   });
   setKeepAliveTimeouts(server);
-  // The reader thread and the store's workers close before the held connection, so its close is SQLite's last.
+  // The reader thread closes before the runtime, which closes its held connection last, so that close is SQLite's last.
   const release = async (): Promise<void> => {
     await serving.reader.close();
-    await store.close();
-    await holder.release();
+    await runtime.close();
   };
   try {
     await listenOn(server, opts.port, DASHBOARD_HOST);
@@ -100,7 +94,7 @@ export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle>
     await release();
     throw err instanceof Error ? new DashboardListenError(opts.port, err) : err;
   }
-  holder.hold();
+  runtime.hold();
   let stopping: Promise<void> | undefined;
   const stop = (): Promise<void> => {
     stopping ??= drainAndClose(server, inflight, DEFAULT_SHUTDOWN_DRAIN_MS).finally(release);

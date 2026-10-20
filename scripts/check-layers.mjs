@@ -6,6 +6,7 @@
 // So does a runtime import from src/surface/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // So does any import, re-export or import() (type-only too) into src/store/sqlite/** from a file outside src/store that
 // SQLITE_ROOTS does not name, and so does naming sqliteSyncStore there: every other file takes its store handed down.
+// A root imports only the adapter's doors in SQLITE_DOORS, so no root names a module behind them.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and the local files beside it (local/**): the api reads the store through those and takes shared rules from src/base.
 // So does any import, runtime or type-only, from src/surface/dashboard/** into src/store, src/db or src/surface/cli: the dashboard reads through src/api, with no baseline.
 // layers.json `dbReach` names the folders and features (surface/mcp) that reach the db layer only through the store, and each import that may stay, with why.
@@ -199,9 +200,9 @@ const SQLITE_DIR = 'store/sqlite/';
 // The composition roots, src-relative, each with why: only these build or publish the SQLite adapter.
 const SQLITE_ROOTS = new Map([
   ['surface/cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
-  ['surface/server/boot.ts', 'the HTTP server builds its store, its global stores and their reach probe here'],
+  ['surface/server/boot.ts', 'the HTTP server builds its server runtime here'],
   ['surface/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
-  ['surface/server/dashboard-listener.ts', '`hippo dashboard` builds its worker store and held connection here'],
+  ['surface/server/dashboard-listener.ts', '`hippo dashboard` builds its server runtime here'],
   ['surface/server/dashboard-reader-thread.ts', 'a thread entry of its own, handed only a folder'],
   ['index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
   ['server.ts', 'the ./server entry builds the store of the folder serve() names'],
@@ -210,6 +211,17 @@ const SQLITE_ROOTS = new Map([
   ['entry/store-kit.ts', 'the ./store-kit entry publishes sqliteStore beside the port'],
   ['entry/testing.ts', 'the ./testing entry publishes the eval kit, which seeds and reads hippo.db'],
 ]);
+// The modules a root may import from src/store/sqlite, each with the roots it opens to: the rest of the adapter can change
+// shape without a root noticing.
+const SQLITE_DOORS = new Map([
+  ['store/sqlite/index.ts', new Set(SQLITE_ROOTS.keys())],
+  ['store/sqlite/fixtures.ts', new Set(['entry/testing.ts'])],
+]);
+const doorsFor = (root) =>
+  [...SQLITE_DOORS]
+    .filter(([, roots]) => roots.has(root))
+    .map(([door]) => `src/${door}`)
+    .join(' or ');
 // The synchronous adapter is the roots' to hand down; every other file awaits the port.
 const SQLITE_SYNC_NAMES = new Set(['sqliteSyncStore', 'SqliteSyncStore']);
 
@@ -246,7 +258,8 @@ function findSyncStoreNames(srcDir) {
   return out;
 }
 
-/** SQLite imports outside the roots, names of the synchronous adapter, then roots that no longer import it. */
+/** SQLite imports outside the roots, root imports past the doors, names of the synchronous adapter, then roots that no
+ * longer import it. */
 function sqliteReachProblems(srcDir) {
   const found = findSqliteReaches(srcDir);
   const importers = new Set(found.map((e) => e.file));
@@ -254,6 +267,11 @@ function sqliteReachProblems(srcDir) {
     ...found
       .filter((e) => !SQLITE_ROOTS.has(e.file))
       .map((e) => `src/${e.file}:${e.line} imports src/${e.target}; take the store from a parameter or the Context`),
+    ...found
+      .filter((e) => SQLITE_ROOTS.has(e.file) && !SQLITE_DOORS.get(e.target)?.has(e.file))
+      .map(
+        (e) => `src/${e.file}:${e.line} imports src/${e.target} past the adapter's door; import ${doorsFor(e.file)}`,
+      ),
     ...findSyncStoreNames(srcDir),
     ...[...SQLITE_ROOTS.keys()]
       .filter((f) => existsSync(join(srcDir, f)) && !importers.has(f))
