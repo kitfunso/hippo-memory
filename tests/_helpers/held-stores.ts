@@ -50,6 +50,15 @@ function anyUnder(names: readonly string[], ats: readonly string[]): boolean {
   return names.some((file) => ats.some((at) => under(file, at)));
 }
 
+/** Whether `at` ends in a name along a held store's path: only such a path can be another form of the store's own,
+ *  so only it is looked up on the disk. */
+function mayName(at: string): boolean {
+  const last = basename(at)
+    .toLowerCase()
+    .replace(/-(wal|shm|journal)$/, '');
+  return [...held.values()].some(({ names }) => names.some((name) => name.toLowerCase().split(sep).includes(last)));
+}
+
 /** A connection that holds the WAL store `file`, or undefined while SQLite will not read it or it is not in WAL mode
  *  yet: a store locked whole or still on a rollback journal is held at a later close instead. */
 function holder(file: string): Connection | undefined {
@@ -100,9 +109,9 @@ export function holdStoresOnClose(): void {
 
 /** Closes the held stores at or under `path`, or whose -wal or -shm file it is; every one without it. */
 export function releaseHeldStores(path?: string): void {
-  // Every file a test or src removes or writes comes through here, so one with nothing held looks nothing up.
+  // Every file a test or src reads, removes or writes comes through here, so this stays off the disk where it can.
   if (held.size === 0) return;
-  const ats = path === undefined ? undefined : forms(path);
+  const ats = path === undefined ? undefined : mayName(path) ? forms(path) : [resolve(path)];
   for (const [file, { db, names }] of held) {
     if (ats !== undefined && !anyUnder(names, ats)) continue;
     db.close();
