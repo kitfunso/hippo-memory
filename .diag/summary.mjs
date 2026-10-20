@@ -7,7 +7,13 @@ const per = new Map();
 for (const f of readdirSync(dir)) {
   for (const line of readFileSync(join(dir, f), 'utf8').split('\n')) {
     if (!line) continue;
-    const { file, s } = JSON.parse(line);
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const { file, s } = parsed;
     const key = file.includes('tests') ? file.slice(file.lastIndexOf('tests')) : file;
     const acc = per.get(key) ?? {};
     for (const [op, { n, ms }] of Object.entries(s)) {

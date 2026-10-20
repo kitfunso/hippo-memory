@@ -302,23 +302,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Diag disk and Defender (throwaway)
-        if: runner.os == 'Windows'
-        run: |
-          Get-MpComputerStatus | Format-List AMRunningMode,AntivirusEnabled,RealTimeProtectionEnabled,OnAccessProtectionEnabled,IoavProtectionEnabled,BehaviorMonitorEnabled
-          "ExclusionPath: $((Get-MpPreference).ExclusionPath -join ';')"
-          "DisableRealtimeMonitoring: $((Get-MpPreference).DisableRealtimeMonitoring)"
-          Get-Volume | Format-Table DriveLetter,FileSystem,DriveType,Size,SizeRemaining
-          Get-PhysicalDisk | Format-Table FriendlyName,MediaType,BusType,Size
-          "TEMP=$env:TEMP RUNNER_TEMP=$env:RUNNER_TEMP NUMBER_OF_PROCESSORS=$env:NUMBER_OF_PROCESSORS"
-          node --no-warnings .diag/bench-io.mjs $env:TEMP 60 "C-temp   "
-          node --no-warnings .diag/bench-io.mjs $env:RUNNER_TEMP 60 "D-runner "
-          New-Item -ItemType Directory -Force C:\diag-excl | Out-Null
-          New-Item -ItemType Directory -Force C:\diag-plain | Out-Null
-          Add-MpPreference -ExclusionPath C:\diag-excl
-          node --no-warnings .diag/bench-io.mjs C:\diag-plain 60 "C-plain  "
-          node --no-warnings .diag/bench-io.mjs C:\diag-excl 60 "C-excl   "
-          node --no-warnings .diag/par.mjs $env:TEMP 4 40
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}
         env:

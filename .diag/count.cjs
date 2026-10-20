@@ -22,7 +22,7 @@ function charge(op, t0) {
 function wrap(obj, name, op = name) {
   const orig = obj[name];
   if (typeof orig !== 'function') return;
-  obj[name] = function (...args) {
+  obj[name] = Object.assign(function (...args) {
     if (depth > 0) return orig.apply(this, args);
     depth++;
     const t0 = now();
@@ -32,7 +32,7 @@ function wrap(obj, name, op = name) {
       depth--;
       charge(op, t0);
     }
-  };
+  }, orig);
 }
 
 for (const n of [
@@ -48,6 +48,15 @@ class Counted extends Base {
     const t0 = now();
     super(...args);
     charge(args[1]?.readOnly ? 'db.openRO' : 'db.open', t0);
+    if (process.env.DIAG_STACKS) {
+      Error.stackTraceLimit = 60;
+      const frames = (new Error().stack ?? '')
+        .split('\n')
+        .filter((l) => /[\\/](src|tests)[\\/]/.test(l) && !/count\.cjs|src[\\/]db[\\/]|handles\.ts|bound\.ts/.test(l))
+        .slice(0, Number(process.env.DIAG_STACKS))
+        .map((l) => l.replace(/^.*?[\\/]((?:src|tests)[\\/][^:)]+:\d+).*$/, '$1').replace(/\\/g, '/'));
+      charge(`open@${frames.join(' < ')}`, now());
+    }
   }
   close() {
     const t0 = now();
@@ -55,6 +64,7 @@ class Counted extends Base {
       return super.close();
     } finally {
       charge('db.close', t0);
+      if (now() - t0 > 0.4) charge('db.close.slow', t0);
     }
   }
   exec(sql) {
@@ -62,7 +72,9 @@ class Counted extends Base {
     try {
       return super.exec(sql);
     } finally {
-      charge(/^\s*(BEGIN|COMMIT|ROLLBACK)/i.test(sql) ? `db.exec.${sql.trim().split(/\s/)[0].toUpperCase()}` : 'db.exec', t0);
+      const op = /^\s*(BEGIN|COMMIT|ROLLBACK)/i.test(sql) ? `db.exec.${sql.trim().split(/\s/)[0].toUpperCase()}` : 'db.exec';
+      charge(op, t0);
+      if (op === 'db.exec.COMMIT' && now() - t0 > 0.4) charge('db.exec.COMMIT.slow', t0);
     }
   }
 }
