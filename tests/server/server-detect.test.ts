@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
@@ -47,6 +47,49 @@ describe('server-detect', () => {
       expect(await detectServer(home)).toBeNull();
       // Stale pidfile should have been deleted.
       expect(existsSync(pidfile)).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps an empty pidfile that a starting server has just created', async () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      writeFileSync(pidfile, '');
+      expect(await detectServer(home)).toBeNull();
+      expect(existsSync(pidfile)).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removes an empty pidfile that has sat unfilled past the claim window', async () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      writeFileSync(pidfile, '');
+      const tenSecondsAgo = new Date(Date.now() - 10_000);
+      utimesSync(pidfile, tenSecondsAgo, tenSecondsAgo);
+      expect(await detectServer(home)).toBeNull();
+      expect(existsSync(pidfile)).toBe(false);
+    } finally {
+      warn.mockRestore();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['a live pid', process.pid, true],
+    ['a dead pid', 99_999_999, false],
+  ])('a port-0 claim with %s is kept only while its claimant lives', async (_name, pid, kept) => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      writeFileSync(pidfile, JSON.stringify({ schema: 1, pid, port: 0, url: '', started_at: 'x' }));
+      expect(await detectServer(home)).toBeNull();
+      expect(existsSync(pidfile)).toBe(kept);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
