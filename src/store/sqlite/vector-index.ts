@@ -35,16 +35,21 @@ import {
   storedVectorIds,
   upsertVectors,
 } from '../../db/vector-store.js';
-import { countAllEntriesAt, loadEntryIdsPageAt, selectEntriesByIds } from './entry-reads.js';
+import { countAllEntriesAt, loadEntryIdsByIdAt, selectEntriesByIds } from './entry-reads.js';
+import { afterIdAnd, idPageOf } from './keyset.js';
+import { cachedStatement } from './statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import { placeholders } from '../../base/util/sql.js';
-import type { StoredVectorSummary, VectorCoverage, VectorRebuild } from '../local/embedding-index.js';
-import type { EntryIdPage } from '../local/consolidation.js';
+import type {
+  IdPage,
+  IdPageRequest,
+  StoredVectorSummary,
+  VectorCoverage,
+  VectorRebuild,
+} from '../local/embedding-index.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { EntryCursor } from '../port/types.js';
 
 const MAX_BACKFILL_PAGE = 500;
 
@@ -139,46 +144,38 @@ export function pruneOrphanVectorsAt(db: DatabaseSyncLike): void {
   deleteOrphanVectors(db);
 }
 
-/** The ids with no vector, oldest first, `page.limit` at a time after `page.after`. */
-export function pendingVectorIdsAt(
-  db: DatabaseSyncLike,
-  page: { readonly limit: number; readonly after?: EntryCursor },
-): EntryIdPage {
-  const after = page.after === undefined ? '' : ' AND (created > ? OR (created = ? AND id > ?))';
-  const afterArgs = page.after === undefined ? [] : [page.after.created, page.after.created, page.after.id];
-  const rows = db
-    .prepare(
-      `SELECT id, created FROM memories
-       WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)${after}
-       ORDER BY created ASC, id ASC LIMIT ?`,
-    )
-    .all(...afterArgs, page.limit + 1) as Array<{ id: string; created: string }>;
-  const kept = rows.slice(0, page.limit);
-  const last = kept[kept.length - 1];
-  const next = rows.length > page.limit && last ? { created: last.created, id: last.id } : null;
-  return { ids: kept.map((r) => r.id), next };
+/** The ids with no vector, in id order, `page.limit` at a time after `page.afterId`: a backfill needs each once. */
+export function pendingVectorIdsAt(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
+  const after = afterIdAnd(page.afterId);
+  const rows = cachedStatement(
+    db,
+    `SELECT id FROM memories
+       WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)${after.sql}
+       ORDER BY id LIMIT ?`,
+  ).all(...after.args, page.limit + 1) as Array<{ id: string }>;
+  return idPageOf(rows, page.limit);
 }
 
 export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
   if (!Number.isInteger(query.limit)) throw new RangeError('limit must be an integer');
   const limit = Math.max(1, Math.min(query.limit, MAX_BACKFILL_PAGE));
   const tenant = tenantAnd(query.tenantId);
-  const rows = db
-    .prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenant.sql}
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenant.sql}
        AND NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id AND v.model = ?)
      ORDER BY id LIMIT ?`,
-    )
-    .all(query.afterId ?? '', ...tenant.args, query.model, limit) as MemoryRow[];
+  ).all(query.afterId ?? '', ...tenant.args, query.model, limit) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
 function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string): Set<string> {
   const owned = new Set<string>();
   for (const chunk of chunked([...new Set(ids)])) {
-    const rows = db
-      .prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(chunk.length)})`)
-      .all(tenantId, ...chunk) as { id: string }[];
+    const rows = cachedStatement(
+      db,
+      `SELECT id FROM memories WHERE +tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(chunk)) as { id: string }[];
     for (const row of rows) owned.add(row.id);
   }
   return owned;
@@ -187,10 +184,11 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
 // savePhysicsState opens its own transaction and overwrites, so the first particle for a memory is inserted here
 // instead.
 function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[]): void {
-  const stmt = db.prepare(`
-    INSERT INTO memory_physics (memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation)
-    VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(memory_id) DO NOTHING
-  `);
+  const stmt = cachedStatement(
+    db,
+    `INSERT INTO memory_physics (memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation)
+    VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(memory_id) DO NOTHING`,
+  );
   for (const { memoryId, particle: p } of rows) {
     if (p) {
       stmt.run(
@@ -239,7 +237,9 @@ export function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
 /** The memory id of every stored particle in loadStoredParticlesAt's order, so a caller reads only the particles it
  * keeps. */
 export function storedParticleIdsAt(db: DatabaseSyncLike): string[] {
-  const rows = db.prepare('SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{ memory_id: string }>;
+  const rows = cachedStatement(db, 'SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{
+    memory_id: string;
+  }>;
   return rows.map((row) => row.memory_id);
 }
 
@@ -256,14 +256,14 @@ export function saveStoredParticlesAt(db: DatabaseSyncLike, particles: PhysicsPa
 }
 
 const PARTICLE_PAGE = 64;
-// Each keyset read sorts every memory, as no index covers (created, id) across tenants, so it fetches many ids at once.
 const RESET_ID_PAGE = 1000;
 
-/** Every memory with a stored vector, paired with it, in created then id order; only one page of each is held. */
+/** Every memory with a stored vector, paired with it, in id order, since a reset seeds each once; only one page of
+ * each is held. */
 function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
-  let after: EntryCursor | undefined;
+  let afterId: string | undefined;
   do {
-    const page = loadEntryIdsPageAt(db, ALL_TENANTS, { limit: RESET_ID_PAGE, after });
+    const page = loadEntryIdsByIdAt(db, { limit: RESET_ID_PAGE, afterId });
     for (const ids of chunked(page.ids, PARTICLE_PAGE)) {
       const vectors = loadVectors(db, ids);
       const rows = selectEntriesByIds(db, [...vectors.keys()], ALL_TENANTS);
@@ -273,8 +273,8 @@ function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
         if (entry && vector) yield [entry, vector];
       }
     }
-    after = page.next ?? undefined;
-  } while (after);
+    afterId = page.next ?? undefined;
+  } while (afterId !== undefined);
 }
 
 /** Replaces every particle with a fresh one per memory that has a stored vector; returns how many. */
