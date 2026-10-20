@@ -17,6 +17,7 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../base/util/version.js';
 import type { ApiKeyRecord } from '../port/types.js';
 import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../port/key-writes.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 function verifyKey(plaintext: string, stored: string): boolean {
   const parsed = storedScrypt(stored);
@@ -44,7 +45,8 @@ export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
   // Migration v26 (role column) has already run; an older binary ignores expires_at and would honour an expired key, so
   // the store shuts it out before the first one exists.
   if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role, owner_subject, expires_at) VALUES ` +
       `(?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(key.keyId, key.keyHash, key.tenantId, key.label, key.createdAt, key.role, key.ownerSubject, key.expiresAt);
@@ -77,9 +79,10 @@ export interface ValidateResult {
 
 /** The api_keys row for `keyId` with its scope grants; null when no row matches. */
 export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRecord | null {
-  const row = db
-    .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as
+  const row = cachedStatement(
+    db,
+    `SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`,
+  ).get(keyId) as
     | {
         key_hash: string;
         tenant_id: string;
@@ -115,12 +118,13 @@ export function validateApiKey(db: DatabaseSyncLike, plaintext: string): Validat
 }
 
 export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = new Date().toISOString()): void {
-  db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`).run(at, keyId);
+  cachedStatement(db, `UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`).run(at, keyId);
 }
 
 /** Grant `keyId` read access to one restricted `scope`. Idempotent. */
 export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)
      ON CONFLICT(key_id, scope) DO NOTHING`,
   ).run(keyId, scope, new Date().toISOString());
@@ -128,14 +132,14 @@ export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): 
 
 /** Revoke `keyId`'s grant on `scope`. Not an error when no such grant exists. */
 export function ungrantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
-  db.prepare(`DELETE FROM api_key_scope_grants WHERE key_id = ? AND scope = ?`).run(keyId, scope);
+  cachedStatement(db, `DELETE FROM api_key_scope_grants WHERE key_id = ? AND scope = ?`).run(keyId, scope);
 }
 
 /** Every restricted scope `keyId` may read. */
 function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
-  const rows = db
-    .prepare(`SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`)
-    .all(keyId) as Array<{ scope: string }>;
+  const rows = cachedStatement(db, `SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`).all(
+    keyId,
+  ) as Array<{ scope: string }>;
   return rows.map((r) => r.scope);
 }
 
@@ -177,7 +181,7 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
   const sql =
     `SELECT id, key_id, tenant_id, label, created_at, revoked_at, role, expires_at, owner_subject FROM api_keys ` +
     `WHERE ${where.join(' AND ')}${after.sql} ORDER BY id DESC${limitSql}`;
-  const rows = db.prepare(sql).all(...params) as Array<{
+  const rows = cachedStatement(db, sql).all(...params) as Array<{
     id: number;
     key_id: string;
     tenant_id: string;
@@ -211,12 +215,11 @@ export function listLiveOwnedKeyIds(
   ownerSubject: string,
   now: number,
 ): string[] {
-  const rows = db
-    .prepare(
-      `SELECT key_id, expires_at FROM api_keys WHERE tenant_id = ? AND owner_subject = ? AND revoked_at IS NULL ` +
-        `ORDER BY id`,
-    )
-    .all(tenantId, ownerSubject) as Array<{ key_id: string; expires_at: string | null }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT key_id, expires_at FROM api_keys WHERE tenant_id = ? AND owner_subject = ? AND revoked_at IS NULL ` +
+      `ORDER BY id`,
+  ).all(tenantId, ownerSubject) as Array<{ key_id: string; expires_at: string | null }>;
   // Expiry is filtered here, not in SQL, so it follows the same Date.parse rule the key check uses.
   return rows.filter((r) => now < keyExpiryMs(r.expires_at)).map((r) => r.key_id);
 }

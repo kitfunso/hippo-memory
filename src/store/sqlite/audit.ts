@@ -9,7 +9,7 @@ import type { QueryAuditOptions } from '../port/audit-log.js';
 import type { AuditPrune } from '../port/audit-maintenance.js';
 import type { ListAuditAfterOpts } from '../port/key-audit.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 // node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a
 // replacer. `JsonValueWithBigInt` keeps `any` out of this boundary and stays assignable as a JSON.stringify replacer.
@@ -66,12 +66,11 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions):
   const after = keysetAfter('ts', 'id', opts.after);
   // One past the cap: GET /v1/audit reads a row ahead to tell whether another page exists.
   const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT + 1));
-  const rows = db
-    .prepare(
-      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC ` +
-        `LIMIT ?`,
-    )
-    .all(...params, ...after.params, limit) as AuditRow[];
+  const rows = cachedStatement(
+    db,
+    `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC ` +
+      `LIMIT ?`,
+  ).all(...params, ...after.params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
 }
 
@@ -91,38 +90,39 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
     params.push(opts.tenantId);
   }
   const limit = Math.max(1, Math.min(opts.limit ?? 1000, MAX_AUDIT_LIMIT));
-  const rows = db
-    .prepare(`SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT ?`)
-    .all(...params, limit) as AuditRow[];
+  const rows = cachedStatement(
+    db,
+    `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT ?`,
+  ).all(...params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
 }
 
 /** How many of a tenant's audit rows are older than `cutoff`. */
 function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = db
-    .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
-    .get(tenantId, cutoff) as { c: number | bigint };
+  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`).get(
+    tenantId,
+    cutoff,
+  ) as { c: number | bigint };
   return Number(row.c);
 }
 
 /** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
 function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
-  const result = db.prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(tenantId, cutoff);
+  const result = cachedStatement(db, `DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(tenantId, cutoff);
   return Number(result.changes ?? 0);
 }
 
 /** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike queryAuditEvents it has
  * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
 export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
-  const rows = db
-    .prepare(
-      `SELECT target_id, MAX(ts) AS ts FROM audit_log
+  const rows = cachedStatement(
+    db,
+    `SELECT target_id, MAX(ts) AS ts FROM audit_log
        WHERE tenant_id = ? AND ts >= ? AND op = 'outcome' AND target_id IS NOT NULL
          AND json_extract(metadata_json, '$.good') = 1
        GROUP BY target_id`,
-    )
-    .all(tenantId, since) as { target_id: string; ts: string }[];
+  ).all(tenantId, since) as { target_id: string; ts: string }[];
   return new Map(rows.map((r) => [r.target_id, r.ts]));
 }
 

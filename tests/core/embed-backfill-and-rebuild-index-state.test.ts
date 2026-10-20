@@ -14,7 +14,12 @@ import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { cliLocalFiles } from '../../src/surface/cli/api-context.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
+import {
+  peakRowsRead,
+  recordStatements,
+  recordStatementsAsync,
+  type StatementLog,
+} from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -295,16 +300,10 @@ describe('a model identity change on hippo.db', () => {
   });
 });
 
-/** The most full memory rows one statement of a run can hand back: the length of its id list, or the whole store when it has none. */
-function peakFullRowsRead(statements: readonly string[], fullReads: number): number {
-  const reads = statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS));
-  expect(reads).toHaveLength(fullReads);
-  return Math.max(
-    ...reads.map((sql) => {
-      const idList = /\bid IN \(([?,\s]+)\)/.exec(sql);
-      return idList ? idList[1].split('?').length - 1 : ROWS;
-    }),
-  );
+/** The most full memory rows one statement of a run can hand back: the rows it returned. */
+function peakFullRowsRead(log: StatementLog<unknown>, fullReads: number): number {
+  expect(log.statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS))).toHaveLength(fullReads);
+  return peakRowsRead(log.reads, MEMORY_SELECT_COLUMNS);
 }
 
 describe('rows held while embedding hippo.db', () => {
@@ -330,7 +329,7 @@ describe('rows held while embedding hippo.db', () => {
     );
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
-    expect(peakFullRowsRead(log.statements, fullReads)).toBe(PAGE);
+    expect(peakFullRowsRead(log, fullReads)).toBe(PAGE);
     expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
   });
 
@@ -344,7 +343,7 @@ describe('rows held while embedding hippo.db', () => {
     expect(particles.map((p) => p.memoryId)).toEqual(embedded);
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
     // Only the embedded rows of each 64-id slice are read, so no slice reads a full page of rows here.
-    expect(peakFullRowsRead(log.statements, 5)).toBeLessThanOrEqual(PAGE);
+    expect(peakFullRowsRead(log, 5)).toBeLessThanOrEqual(PAGE);
     expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
     expect(peakRowsRead(log.reads, VECTOR_READ)).toBeGreaterThan(0);
   });

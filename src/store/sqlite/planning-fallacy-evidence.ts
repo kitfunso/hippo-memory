@@ -2,6 +2,7 @@
 import { computePredictionBaserateAt } from './predictions.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { PlanningFallacyEvidence, ClassResolution } from '../port/types.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Resolve a query-token set to a unique best-matching class_tag for the tenant: lower-cased token overlap, best score
  * >= 1 AND above the 2nd-best. TENANT-GLOBAL by design, not scope-filtered (base rates need the full sample): class_tag
@@ -12,7 +13,9 @@ function resolveClassFromTokens(
   queryTokens: readonly string[],
 ): ClassResolution {
   if (queryTokens.length === 0) return { classTag: null, tiebreak: false };
-  const rows = db.prepare(`SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`).all(tenantId) as Array<{
+  const rows = cachedStatement(db, `SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`).all(
+    tenantId,
+  ) as Array<{
     class_tag: string;
   }>;
 

@@ -7,6 +7,7 @@ import { appendAuditEvent } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 export interface ArchiveOptions {
   reason: string;
@@ -26,11 +27,11 @@ interface ArchivedMemoryRow {
 
 /** Stamps the archived copy of `memoryId` as having its markdown mirror cleaned at `at`. */
 export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: string): void {
-  db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(at, memoryId);
+  cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(at, memoryId);
 }
 
 function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
-  const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as ArchivedMemoryRow | undefined;
+  const row = cachedStatement(db, `SELECT * FROM memories WHERE id = ?`).get(id) as ArchivedMemoryRow | undefined;
   if (!row) throw new NotFoundError(`memory not found: ${id}`);
   if (row.kind !== 'raw') {
     throw new BadRequestError(`memory ${id} is not raw (kind=${String(row.kind)})`);
@@ -49,14 +50,15 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
     kind: row.kind,
     reason: opts.reason,
   });
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
   ).run(id, archivedAt, opts.reason, opts.who, redactedPayload);
   // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
-  db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
-  db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
+  cachedStatement(db, `UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
+  cachedStatement(db, `DELETE FROM memories WHERE id = ?`).run(id);
   // Archived text must be unsearchable at commit, so a failed purge fails (and rolls back) the whole archive.
-  if (isFtsAvailable(db)) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
+  if (isFtsAvailable(db)) cachedStatement(db, `DELETE FROM memories_fts WHERE id = ?`).run(id);
   return archivedAt;
 }
 

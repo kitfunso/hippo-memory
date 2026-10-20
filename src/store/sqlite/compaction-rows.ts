@@ -2,6 +2,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql } from '../../base/scope/project-identity.js';
 import { scopeAdmitSql } from './rule-sql.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -59,7 +60,7 @@ const COLUMNS =
   'items_json, items_written, status';
 
 function selectRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
-  return db.prepare(`SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
+  return cachedStatement(db, `SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
 }
 
 export function compactionRowsByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRow[] {
@@ -112,7 +113,8 @@ export function openTranscriptRows(
 }
 
 export function insertStartedCompaction(db: DatabaseSyncLike, tenantId: string, start: StartedCompactionInput): void {
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
       `started_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -138,13 +140,12 @@ export function markCompactionSummarized(
   const { summary, itemsJson, summarizedAt, requestId } = update;
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
-  const result = db
-    .prepare(
-      `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = ` +
-        `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
+  const result = cachedStatement(
+    db,
+    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = ` +
+      `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
      WHERE tenant_id = ? AND id = ? AND status = 'started'`,
-    )
-    .run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
+  ).run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
   return (result.changes ?? 0) > 0;
 }
 
@@ -158,7 +159,8 @@ export function insertSummarizedCompaction(
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
-  db.prepare(
+  cachedStatement(
+    db,
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
       `started_at, ` +
       `summarised_at, summary, items_json, status${col})\n` +
@@ -180,7 +182,10 @@ export function insertSummarizedCompaction(
 }
 
 export function markSnapshotSavedRow(db: DatabaseSyncLike, tenantId: string, recordId: string): void {
-  db.prepare(`UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(tenantId, recordId);
+  cachedStatement(db, `UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(
+    tenantId,
+    recordId,
+  );
 }
 
 export function compactionProgress(
@@ -188,13 +193,14 @@ export function compactionProgress(
   tenantId: string,
   id: string,
 ): { status: CompactionStatus; items_written: number } | undefined {
-  return db
-    .prepare(`SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`)
-    .get(tenantId, id) as { status: CompactionStatus; items_written: number } | undefined;
+  return cachedStatement(db, `SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`).get(
+    tenantId,
+    id,
+  ) as { status: CompactionStatus; items_written: number } | undefined;
 }
 
 export function markCompactionDone(db: DatabaseSyncLike, tenantId: string, id: string, itemsWritten: number): void {
-  db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(
+  cachedStatement(db, `UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(
     itemsWritten,
     tenantId,
     id,
@@ -203,9 +209,10 @@ export function markCompactionDone(db: DatabaseSyncLike, tenantId: string, id: s
 
 /** Rows changed: 1 when the `started` row was closed, 0 when it had already moved. */
 export function closeStartedWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string): number {
-  const result = db
-    .prepare(`UPDATE compactions SET status = 'no-summary' WHERE tenant_id = ? AND id = ? AND status = 'started'`)
-    .run(tenantId, id);
+  const result = cachedStatement(
+    db,
+    `UPDATE compactions SET status = 'no-summary' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
+  ).run(tenantId, id);
   return Number(result.changes ?? 0);
 }
 
@@ -215,29 +222,31 @@ export function nextCompactionStart(
   sessionId: string,
   after: string,
 ): string | null {
-  const row = db
-    .prepare(`SELECT MIN(started_at) AS at FROM compactions WHERE tenant_id = ? AND session_id = ? AND started_at > ?`)
-    .get(tenantId, sessionId, after) as { at: string | null } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT MIN(started_at) AS at FROM compactions WHERE tenant_id = ? AND session_id = ? AND started_at > ?`,
+  ).get(tenantId, sessionId, after) as { at: string | null } | undefined;
   return row?.at ?? null;
 }
 
 /** Live rows of one tenant and origin set that default recall shows. */
 export function heldMemoryRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): HeldMemoryRow[] {
   const deny = scopeAdmitSql('');
-  return db
-    .prepare(
-      `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND ` +
-        `superseded_by IS NULL AND kind != 'raw'
+  return cachedStatement(
+    db,
+    `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND ` +
+      `superseded_by IS NULL AND kind != 'raw'
        AND ${deny.sql}`,
-    )
-    .all(tenantId, ...origins, ...deny.params) as HeldMemoryRow[];
+  ).all(tenantId, ...origins, ...deny.params) as HeldMemoryRow[];
 }
 
 export function restampCompactionOrigin(db: DatabaseSyncLike, tenantId: string, from: string, into: string): number {
   return Number(
-    db
-      .prepare(`UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`)
-      .run(into, tenantId, from).changes ?? 0,
+    cachedStatement(db, `UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`).run(
+      into,
+      tenantId,
+      from,
+    ).changes ?? 0,
   );
 }
 
@@ -245,24 +254,22 @@ export function compactionTranscripts(
   db: DatabaseSyncLike,
   tenantId: string,
 ): Array<{ transcript: string; cwd: string | null }> {
-  return db
-    .prepare(
-      `SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path ` +
-        `IS NOT NULL`,
-    )
-    .all(tenantId) as Array<{ transcript: string; cwd: string | null }>;
+  return cachedStatement(
+    db,
+    `SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path ` +
+      `IS NOT NULL`,
+  ).all(tenantId) as Array<{ transcript: string; cwd: string | null }>;
 }
 
 export function compactionOriginsWithCwd(
   db: DatabaseSyncLike,
   tenantId: string,
 ): Array<{ origin: string; cwd: string }> {
-  return db
-    .prepare(
-      `SELECT DISTINCT origin_project AS origin, cwd FROM compactions WHERE tenant_id = ? AND origin_project <> '' ` +
-        `AND cwd IS NOT NULL`,
-    )
-    .all(tenantId) as Array<{ origin: string; cwd: string }>;
+  return cachedStatement(
+    db,
+    `SELECT DISTINCT origin_project AS origin, cwd FROM compactions WHERE tenant_id = ? AND origin_project <> '' ` +
+      `AND cwd IS NOT NULL`,
+  ).all(tenantId) as Array<{ origin: string; cwd: string }>;
 }
 
 /** True when `table` holds a row of this tenant under the project name. */
@@ -273,7 +280,9 @@ export function holdsOrigin(
   name: string,
 ): boolean {
   return (
-    db.prepare(`SELECT 1 FROM ${table} WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(tenantId, name) !==
-    undefined
+    cachedStatement(db, `SELECT 1 FROM ${table} WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(
+      tenantId,
+      name,
+    ) !== undefined
   );
 }

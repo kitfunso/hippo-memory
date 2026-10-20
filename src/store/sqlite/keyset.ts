@@ -3,7 +3,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { keysetPage, type KeysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { tenantAnd } from './tenant.js';
 import type { EntryCursor } from '../port/types.js';
 import type { IdPage } from '../local/embedding-index.js';

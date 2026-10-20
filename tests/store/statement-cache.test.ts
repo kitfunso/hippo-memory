@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { cachedStatement } from '../../src/store/sqlite/statement-cache.js';
+import { cachedStatement } from '../../src/db/statement-cache.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: { prototype: { prepare(sql: string): object } } };
 
 // The cache's cap; a test of eviction has to fill it.
-const CAP = 32;
+const CAP = 512;
 const sql = (n: number): string => `SELECT ${n} AS n`;
 
 let db: DatabaseSyncLike;

@@ -7,9 +7,8 @@ import type { JsonValue } from '../../base/util/json.js';
 import type { SqlFragment } from './rule-sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { placeholders } from '../../base/util/sql.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
-import { cachedStatement } from './statement-cache.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import type { DormantMove } from '../local/consolidation.js';
 import type { DormantMemory, ListDormantOpts } from '../port/dormant.js';
 import type { DormantSnapshot } from '../port/types.js';
@@ -31,7 +30,9 @@ const DEFAULT_DORMANT_LIMIT = 20;
 /** Insert (or refresh) the dormant snapshot for `move.entry`; the caller deletes the `memories` row in the same
  * transaction. */
 export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void {
-  db.prepare(`
+  cachedStatement(
+    db,
+    `
     INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tenant_id, id) DO UPDATE SET
@@ -40,7 +41,8 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
       reason = excluded.reason,
       strength = excluded.strength,
       dormant_at = excluded.dormant_at
-  `).run(
+  `,
+  ).run(
     move.entry.tenantId,
     move.entry.id,
     move.entry.content,
@@ -127,26 +129,24 @@ export function listDormantRows(
       ? Math.floor(opts.limit)
       : DEFAULT_DORMANT_LIMIT;
   const termClauses = terms.map(() => ` AND content LIKE ? ESCAPE '\\'`).join('');
-  const rows = db
-    .prepare(
-      `SELECT ${DORMANT_COLUMNS}
+  const rows = cachedStatement(
+    db,
+    `SELECT ${DORMANT_COLUMNS}
        FROM ${DORMANT_WITH_SCOPE}
       WHERE tenant_id = ? AND ${admit.sql}${termClauses}
       ORDER BY dormant_at DESC, id ASC
       LIMIT ?`,
-    )
-    .all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), limit) as DormantRow[];
+  ).all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), limit) as DormantRow[];
   return rows.map(rowToDormantMemory);
 }
 
 /** A tenant's stored dormant snapshot, or null when it has none with that id (another tenant's id reads as absent). */
 export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: string): DormantSnapshot | null {
-  const row = db
-    .prepare(
-      `SELECT ${DORMANT_COLUMNS}
+  const row = cachedStatement(
+    db,
+    `SELECT ${DORMANT_COLUMNS}
        FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
-    )
-    .get(tenantId, id) as DormantRow | undefined;
+  ).get(tenantId, id) as DormantRow | undefined;
   return row ? toSnapshot(row) : null;
 }
 
@@ -156,14 +156,13 @@ export function dormantSnapshotsBySourcePrefix(
   tenantId: string,
   prefix: string,
 ): DormantSnapshot[] {
-  const rows = db
-    .prepare(
-      `SELECT ${DORMANT_COLUMNS}
+  const rows = cachedStatement(
+    db,
+    `SELECT ${DORMANT_COLUMNS}
        FROM dormant_memories
       WHERE tenant_id = ?
         AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END LIKE ? ESCAPE '\\'`,
-    )
-    .all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
+  ).all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
   return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => String(s.entry.source).startsWith(prefix));
 }
 
@@ -186,13 +185,10 @@ function toSnapshot(row: DormantRow): DormantSnapshot | null {
 
 /** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went dormant. */
 export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: string, entry: MemoryEntry): void {
-  db.prepare(`UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`).run(
-    entry.id,
-    entry.content,
-    JSON.stringify(toWire(entry)),
-    tenantId,
-    id,
-  );
+  cachedStatement(
+    db,
+    `UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`,
+  ).run(entry.id, entry.content, JSON.stringify(toWire(entry)), tenantId, id);
 }
 
 /** Whether a tenant has a dormant memory with this id whose scope `admit` passes (snapshot readable or not). */
@@ -203,15 +199,17 @@ export function hasDormantRow(
   admit: SqlFragment = EVERY_SCOPE,
 ): boolean {
   return (
-    db
-      .prepare(`SELECT 1 FROM ${DORMANT_WITH_SCOPE} WHERE tenant_id = ? AND id = ? AND ${admit.sql}`)
-      .get(tenantId, id, ...admit.params) !== undefined
+    cachedStatement(db, `SELECT 1 FROM ${DORMANT_WITH_SCOPE} WHERE tenant_id = ? AND id = ? AND ${admit.sql}`).get(
+      tenantId,
+      id,
+      ...admit.params,
+    ) !== undefined
   );
 }
 
 /** Delete a tenant's dormant memory. Returns false when there was none. */
 export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: string): boolean {
-  const result = db.prepare(`DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ?`).run(tenantId, id);
+  const result = cachedStatement(db, `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ?`).run(tenantId, id);
   return Number(result.changes ?? 0) > 0;
 }
 
@@ -255,8 +253,8 @@ export function dormantTextsByIds(
     const rows = cachedStatement(
       db,
       `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories ` +
-        `WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-    ).all(tenantId, ...chunk) as DormantText[];
+        `WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(chunk)) as DormantText[];
     for (const row of rows) byId.set(row.id, row);
   }
   return byId;
@@ -273,8 +271,8 @@ export function dormantSnapshotsByIds(
     const rows = cachedStatement(
       db,
       `SELECT ${DORMANT_COLUMNS}
-         FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-    ).all(tenantId, ...chunk) as DormantRow[];
+         FROM dormant_memories WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(chunk)) as DormantRow[];
     for (const row of rows) {
       const snapshot = toSnapshot(row);
       if (snapshot) byId.set(row.id, snapshot);
