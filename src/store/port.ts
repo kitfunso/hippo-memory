@@ -1,7 +1,6 @@
-// The async store interface and its groups; type-only apart from
-// the store errors, so an add-on can build a store on it alone.
+// The async store interface and its groups: every method answers a Promise and takes only data, so any backend can
+// serve it from any thread, and hippo.db is one adapter. Type-only apart from the group probes and the store errors.
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
-import type { LocalFiles } from './port/local-files.js';
 import type { SessionAndAdminGroups } from './port-groups.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { TenantId } from '../util/tenant.js';
@@ -125,24 +124,8 @@ export type { GraphViewQuery, GraphRows, GraphReads } from './port/graph-reads.j
 export type { AuditMaintenance } from './port/audit-maintenance.js';
 export type { LessonWrites } from './port/lesson-writes.js';
 
-export type {
-  AgentImport,
-  Captures,
-  CompactionHooks,
-  Consolidation,
-  ContainerTx,
-  EmbeddingIndex,
-  FolderFiles,
-  ImportTarget,
-  Ledger,
-  LocalFiles,
-} from './port/local-files.js';
-
-/** Every group a store sets whole; only the four in OptionalGroup may be left unset. */
+/** Every group a store sets whole; only the three in OptionalGroup may be left unset. */
 export interface StoreGroups extends SessionAndAdminGroups {
-  /** Unset on any store but hippo.db; a request then runs fenced from
-   * hippo.db, and a route or tool that names `localFiles` answers 501. */
-  readonly localFiles: LocalFiles;
   readonly auditMaintenance: AuditMaintenance;
   readonly lessonWrites: LessonWrites;
   readonly vectors: VectorReads;
@@ -173,7 +156,7 @@ export interface StoreGroups extends SessionAndAdminGroups {
 }
 
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
-export type OptionalGroup = 'localFiles' | 'vectorViews' | 'readiness' | 'lastRecall';
+export type OptionalGroup = 'vectorViews' | 'readiness' | 'lastRecall';
 
 export type StoreGroup = 'base' | keyof StoreGroups;
 
@@ -195,22 +178,6 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
 
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
 export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;
-
-/** hippo.db and the folder it sits in, for work that reads both: sharing, sync, embedding and the global store. */
-export interface FolderStore {
-  readonly root: string;
-  readonly store: StoreWith<'localFiles'>;
-}
-
-/** Which stores a call reaches, probed once by a composition root so the api reads this instead of the disk. */
-export interface StoreReach {
-  readonly hasLocal: boolean; // the primary store has a project of its own, or is not hippo.db
-  readonly isGlobal: boolean; // the primary root is the operator's global store
-  readonly shared: boolean; // a store serving many people, so the operator's global store stays out
-  readonly global?: { readonly root: string; readonly store: HippoStore }; // set only when readable
-  readonly isHippoDb?: boolean; // the primary store is hippo.db, whose folder `hippo embed` and sleep reach
-  readonly globalTarget?: FolderStore; // where share, promote and sync write; set on hippo.db, maybe not created yet
-}
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './port/busy.js';
 
@@ -257,16 +224,6 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   /** Releases the store's connections; `serve()` closes only a store it made itself. */
   close(): Promise<void>;
 }
-
-/** `T` with each method answering its value instead of a Promise of it, groups included: the port as a synchronous
- * store has it. */
-export type Sync<T> = T extends (...args: infer A) => Promise<infer R>
-  ? (...args: A) => R
-  : T extends (...args: never) => void
-    ? T
-    : T extends object
-      ? { [K in keyof T]: Sync<T[K]> }
-      : T;
 
 export interface ContinuityBlock {
   activeSnapshot: TaskSnapshot | null;

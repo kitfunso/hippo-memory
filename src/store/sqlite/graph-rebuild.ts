@@ -8,7 +8,7 @@ import type {
   ApplyGraphOpsOptions,
   ApplyGraphOpsResult,
   GraphRebuild,
-} from '../port/graph-rebuild.js';
+} from '../local/graph-rebuild.js';
 import type { StoredGraph } from '../port/graph-reads.js';
 import {
   deleteEntityRow,

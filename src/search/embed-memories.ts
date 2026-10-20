@@ -15,22 +15,15 @@ import {
   indexNeedsRebuild,
   replacesIndex,
 } from '../embeddings/index-identity.js';
-import type {
-  EmbeddingIndex,
-  FolderStore,
-  HippoStore,
-  VectorRowWrite,
-  VectorWrite,
-  VectorWriteResult,
-  VectorWrites,
-} from '../store/port.js';
-import type { EntryCursor } from '../store/port/consolidation.js';
-import type { VectorRebuild } from '../store/port/embedding-index.js';
+import type { HippoStore, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites } from '../store/port.js';
+import type { VectorRebuild } from '../store/local/embedding-index.js';
 import { chunked } from '../util/chunked.js';
 import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { MINUTE_MS } from '../util/time.js';
 import { ALL_TENANTS } from '../util/tenant.js';
+import type { EmbeddingIndex, FolderStore } from '../store/local/index.js';
+import type { EntryCursor } from '../store/port/types.js';
 
 const STORE_PAGE = 64;
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.

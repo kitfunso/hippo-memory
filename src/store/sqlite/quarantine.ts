@@ -11,8 +11,8 @@ import type {
   QuarantineRejection,
   QuarantinedMemory,
   Quarantine,
-  Sync,
 } from '../port.js';
+import type { Sync } from './served.js';
 import type { QuarantineRow, QuarantineStatus } from '../port/quarantine.js';
 import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../core/recall-scope.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';

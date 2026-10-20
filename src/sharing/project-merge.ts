@@ -11,7 +11,7 @@ import { currentMachine } from '../util/agent-homes.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { isGlobalStoreRoot, projectNames, resolveProjectIdentity } from '../core/project-identity.js';
 import { duplicateKey } from '../util/same-text.js';
-import type { ProjectTagReads, ProjectTagStore, ProjectTagWrites } from '../store/port/project-tags.js';
+import type { ProjectTagReads, ProjectTagStore, ProjectTagWrites } from '../store/local/project-tags.js';
 
 export interface ProjectSummary {
   /** '' is user-global, null is unknown; neither can be merged. */

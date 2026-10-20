@@ -42,8 +42,8 @@ import type { LossAversion, MemoryEntry } from '../../core/memory.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../util/pages.js';
 import { setAsideRow } from './set-aside.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import type { AgentImport, ContainerTx, ImportTarget } from '../port/agent-import.js';
-import type { EntryCursor } from '../port/consolidation.js';
+import type { AgentImport, ContainerTx, ImportTarget } from '../local/agent-import.js';
+import type { EntryCursor } from '../port/types.js';
 
 /** The tenant's live rows under `prefix`, one bounded statement per page, read as the caller walks them. */
 function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): Generator<MemoryEntry> {

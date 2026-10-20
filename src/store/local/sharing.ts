@@ -1,8 +1,8 @@
 // The store work of sharing between a project store and the operator's global store, kept apart from port.ts. Plain
 // return values, like the rest of LocalFiles, save sourceTallies, which hippo_peers reads on a served store's worker.
 import type { MemoryEntry } from '../../core/memory.js';
-import type { EntryCursor, EntryPage } from './consolidation.js';
-import type { OriginFilter } from './types.js';
+import type { EntryCursor, EntryPage } from '../port/types.js';
+import type { OriginFilter } from '../port/types.js';
 import type { TenantId } from '../../util/tenant.js';
 
 /** Where a page starts and how many rows it holds at most. */

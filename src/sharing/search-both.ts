@@ -4,7 +4,6 @@ import { compareScoresDesc } from '../core/compare.js';
 import * as fs from 'fs';
 import { MemoryEntry } from '../core/memory.js';
 import type { RuntimeSettings } from '../core/config.js';
-import type { FolderStore } from '../store/port.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter, recallScopeFilter } from '../core/recall-scope.js';
 import { hybridSearch, vectorSourceOf } from '../search/hybrid.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
@@ -15,6 +14,7 @@ import { evalNow } from '../core/ablation.js';
 import { duplicateKey } from '../util/same-text.js';
 import type { TenantId } from '../util/tenant.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
+import type { FolderStore } from '../store/local/index.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 export function logEmbedAllFailure<E>(caller: string, err: E): void {

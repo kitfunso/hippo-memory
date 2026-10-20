@@ -1,7 +1,7 @@
 // hippo.db's token and delivery ledger: synchronous, since a hook books its turn on one connection before it exits.
 import type { PilotArm } from '../../core/pilot-arm.js';
 import type { DeliveryEventInput } from '../../core/delivery.js';
-import type { TokenSurface, TokenUse } from './token-ledger.js';
+import type { TokenSurface, TokenUse } from '../port/token-ledger.js';
 import type { LastSent } from '../../core/skip-unchanged.js';
 import type { ApiCall } from '../../core/transcript-calls.js';
 

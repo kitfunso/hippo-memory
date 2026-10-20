@@ -19,7 +19,7 @@ import type {
   DashboardRow,
   DashboardText,
   ExcludedCounts,
-} from '../../store/port/dashboard-reads.js';
+} from '../../store/local/dashboard-reads.js';
 import type {
   Band,
   ChipCounts,

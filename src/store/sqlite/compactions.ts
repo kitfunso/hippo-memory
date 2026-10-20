@@ -8,9 +8,9 @@ import {
   markSnapshotSaved,
   startCompaction,
 } from './compactions-record.js';
-import type { Log } from '../port/compaction-hooks.js';
+import type { Log } from '../local/compaction-hooks.js';
 import type { CallerItems, CallerItemsSaved, Compactions } from '../port/compactions.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 
 /** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,

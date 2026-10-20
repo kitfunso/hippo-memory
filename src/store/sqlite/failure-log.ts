@@ -8,7 +8,7 @@ import { FAILURE_LOG_RETENTION_DAYS } from '../../core/failure-log-retention.js'
 import { failuresPerSession, type SessionFailures } from '../../core/failure-repeats.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 
 /** Longest session id or tool name kept; the hook payload is not trusted to be short. */
 const MAX_FIELD = 128;

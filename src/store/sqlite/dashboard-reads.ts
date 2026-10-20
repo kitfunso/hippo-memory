@@ -12,7 +12,7 @@ import type {
   DashboardText,
   ExcludedCounts,
   DashboardReads,
-} from '../port/dashboard-reads.js';
+} from '../local/dashboard-reads.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
 import * as fs from 'fs';

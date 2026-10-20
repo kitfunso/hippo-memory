@@ -1,8 +1,8 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../core/memory.js';
-import type { HippoStore, StoreGroups } from '../../store/port.js';
-import type { ConflictPair, DashboardText } from '../../store/port/dashboard-reads.js';
+import type { HippoStore } from '../../store/port.js';
+import type { ConflictPair, DashboardText } from '../../store/local/dashboard-reads.js';
 import {
   BANDS,
   DAY_MS,
@@ -33,6 +33,7 @@ import type {
   ScatterPoints,
   SearchResult,
 } from './types.js';
+import type { LocalStore } from '../../store/local/index.js';
 
 export const SORT_KEYS = ['content', 'layer', 'strength', 'retrievals', 'last', 'age', 'confidence', 'scope'] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
@@ -424,7 +425,7 @@ export function buildSearch(snap: Snapshot, text: string): SearchResult {
 }
 
 /** The store the detail reads: its rows by id, and the dashboard's conflict read. */
-export type DetailStore = Pick<HippoStore, 'entriesByIds'> & Pick<StoreGroups, 'localFiles'>;
+export type DetailStore = Pick<HippoStore, 'entriesByIds'> & Pick<LocalStore, 'localFiles'>;
 
 async function openConflictsOf(
   store: DetailStore,

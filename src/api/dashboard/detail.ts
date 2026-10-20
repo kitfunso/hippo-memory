@@ -1,14 +1,14 @@
 // The dashboard drawer's detail of one memory, read through the api and stamped with the snapshot the client holds.
 import type { MemoryEntry } from '../../core/memory.js';
 import { memoryGet } from '../memories/memories.js';
-import type { ContextWith } from '../types.js';
+import type { LocalContext } from '../types.js';
 import { buildMemoryDetail } from './queries.js';
 import { isLiveMemory, type SnapshotService } from './snapshot.js';
 import type { MemoryDetail } from './types.js';
 
 /** The detail of a live memory of the Context's tenant, or null when the tenant holds no live row with that id. */
 export async function dashboardMemoryDetail(
-  ctx: ContextWith<'localFiles'>,
+  ctx: LocalContext,
   snapshots: SnapshotService,
   id: string,
   at: { readonly fresh: boolean; readonly nowMs: number },
@@ -30,7 +30,7 @@ export interface DashboardWrite {
 /** Drops the snapshot after a committed write, then the detail of the entry it acted on, stamped with the last build so
  * the reply waits on no rebuild; null when the write names no entry. */
 export async function dashboardDetailAfterWrite(
-  ctx: ContextWith<'localFiles'>,
+  ctx: LocalContext,
   snapshots: SnapshotService,
   write: DashboardWrite,
   nowMs: number,

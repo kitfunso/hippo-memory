@@ -49,8 +49,9 @@ import {
   cliApiContext,
   cliHookRequest,
   cliLedgerReach,
+  cliLocalFiles,
+  cliStore,
   cliSyncOptions,
-  cliSyncStore,
   cliConfig,
 } from './api-context.js';
 import {
@@ -76,7 +77,7 @@ import { parseJson } from '../util/json.js';
 import { ignoringCodes } from '../util/expected-errors.js';
 import { CliExit, fail } from './exit.js';
 
-const captureTarget = (root: string): CaptureTarget => ({ root, store: cliSyncStore(root), config: cliConfig(root) });
+const captureTarget = (root: string): CaptureTarget => ({ root, files: cliLocalFiles(root), config: cliConfig(root) });
 
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories
  * (UserPromptSubmit re-injects them). Every path exits 0: a malformed payload or store read failure degrades to empty
@@ -324,7 +325,7 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
     capture: (into, turns, originProject) =>
       captureEndedSession(into.hippoRoot, { tenantId, flags, transcriptPath, turns, originProject }),
     digest: (scan, key, log) =>
-      recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, { key, tenantId, log, config: ctx.config }),
+      recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
     workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
     evidence: () => collectHandoffEvidence(process.cwd(), 'unknown'),
   });
@@ -508,7 +509,7 @@ export async function cmdCodexSessionEndWorker(hippoRoot: string, tenantId: stri
   }
 
   await sleepCodexProjectStore(hippoRoot, tenantId, logFile);
-  captureCodexTranscript(hippoRoot, tenantId, store, flags, logFile);
+  await captureCodexTranscript(hippoRoot, tenantId, store, flags, logFile);
 }
 
 export function handleCodexSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
@@ -529,13 +530,13 @@ async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFi
   }
 }
 
-function captureCodexTranscript(
+async function captureCodexTranscript(
   hippoRoot: string,
   tenantId: string,
   store: string,
   flags: CliFlags,
   logFile: string | null,
-): void {
+): Promise<void> {
   try {
     const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
     const historyPath = stringFlag(flags, 'history-path') ?? path.join(codexHome, 'history.jsonl');
@@ -574,7 +575,7 @@ function captureCodexTranscript(
     // The Codex wrapper passes no session id, so the rollout file names the session.
     const digestKey = path.basename(transcriptPath, '.jsonl');
     const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
-    recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, digestOpts);
+    await recordSessionDigest(hippoRoot, cliStore(hippoRoot), scan, digestOpts);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: transcript scan or digest', err);
   }
@@ -595,7 +596,7 @@ export async function handlePreCompact({ hippoRoot, tenantId, flags }: CommandCo
       envSessionId: hostSessionId(),
     });
     resetHookInjection(root, tenantId, stdinText, null);
-    await cmdPreCompact(storeRoot, cliSyncStore(storeRoot), {
+    await cmdPreCompact(storeRoot, cliStore(storeRoot), {
       tenantId,
       stdinText,
       stdinTimedOut,
@@ -616,7 +617,7 @@ export async function handlePostCompact({ hippoRoot, tenantId, flags }: CommandC
   const logFlag = flags['log-file'];
   const store = hookStoreRoot(hippoRoot);
   const line = await cliHookRequest(() =>
-    cmdPostCompact(store, cliSyncStore(store), {
+    cmdPostCompact(store, cliStore(store), {
       tenantId,
       stdinText: text,
       stdinTimedOut: timedOut,

@@ -1,7 +1,7 @@
 // A group is one object of SQL bodies that take the handle first, bound to the store's handles here once, so no group
 // method forwards to its body by hand.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { Sync } from '../port.js';
+import type { Sync } from './served.js';
 import type { HandleOpener, OnHandle, OnHandleAsync, StoreFiles } from './open.js';
 
 // A void method's body returns nothing too: `void` alone would let a value through to callers the port promised none.

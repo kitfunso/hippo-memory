@@ -1,7 +1,7 @@
 // What `hippo doctor` and `hippo support-bundle` read from hippo.db's own files: synchronous and read-only, so a
 // check never creates, migrates or locks the store it inspects.
 import type { ProjectTagReads } from './project-tags.js';
-import type { JsonObject } from './types.js';
+import type { JsonObject } from '../port/types.js';
 
 export interface Diagnostics {
   /** Throws when the store cannot be opened or its schema version read. */

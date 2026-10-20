@@ -8,8 +8,6 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 export const LIMIT = 6;
-// The port lane is closing the store adapters' long lists; delete this list once it merges.
-export const SKIPPED = ['src/store/sqlite/', 'src/store/port/'];
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -32,11 +30,11 @@ function labelOf(node) {
 }
 
 /** Every `src/file:line name` under `root` with at least `min` positional parameters, signatures and function types
- * included; the skipped folders are not read. */
+ * included. */
 export function findLongLists(root, min = LIMIT) {
   const found = [];
   const files = tsFiles(join(root, 'src')).map((f) => relative(root, f).replaceAll('\\', '/'));
-  for (const file of files.filter((f) => !SKIPPED.some((dir) => f.startsWith(dir)))) {
+  for (const file of files) {
     const text = readFileSync(join(root, file), 'utf8');
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const visit = (node) => {
@@ -67,7 +65,7 @@ function main(args) {
     console.error('Take one options object instead. `--list` shows every declaration with 4 or more.');
     return 1;
   }
-  console.log(`Positional parameters OK: no declaration in src/ takes ${LIMIT} or more (store adapters not counted).`);
+  console.log(`Positional parameters OK: no declaration in src/ takes ${LIMIT} or more.`);
   return 0;
 }
 

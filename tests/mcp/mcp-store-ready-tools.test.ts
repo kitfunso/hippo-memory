@@ -10,6 +10,7 @@ import { TOOLS } from '../../src/mcp/tools.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { withoutLocalFiles } from '../_helpers/port-only-store.js';
 import { predictionMirror } from '../../src/core/prediction.js';
 import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
@@ -29,7 +30,7 @@ afterEach(() => {
 
 // The stub wraps a hippo.db store that nothing blocks, without the local files, so a tool that ran would leave hippo.db behind.
 function storeOfKind(kind: string): HippoStore {
-  return kind === 'sqlite' ? sqliteStore(root) : { ...sqliteStore(root), kind, localFiles: undefined };
+  return kind === 'sqlite' ? sqliteStore(root) : { ...withoutLocalFiles(sqliteStore(root)), kind };
 }
 
 const ctxOn = (kind: string): McpContext => ({

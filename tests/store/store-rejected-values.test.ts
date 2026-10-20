@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
-import type { Rejection, RejectionSource } from '../../src/store/port/rejections.js';
+import type { Rejection } from '../../src/store/port/rejections.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { rejectionDigest } from '../../src/core/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -13,6 +13,8 @@ import type { AuditOp } from '../../src/core/audit-ops.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 
 let root: string;
+// Another person's personal scope, which a rejection with no personal scope of its own leaves alone.
+const ELSEWHERE = 'personal:private:someone-else';
 const rejections = (): ReturnType<typeof sqliteSyncStore>['rejections'] => sqliteSyncStore(root).rejections;
 
 beforeEach(() => {
@@ -33,34 +35,22 @@ function rejection(tenantId: string, over: Partial<Rejection>): Rejection {
     tenantId,
     actor: 'tester',
     reason: 'wrong',
-    textOf: () => 'unused',
-    inReach: () => true,
-    successorOf: () => undefined,
+    ownScope: null,
     ...over,
   };
 }
 
 function rejectText(tenantId: string, text: string): string {
-  return rejections().apply(rejection(tenantId, { textOf: () => text })).digest;
+  return rejections().apply(rejection(tenantId, { value: text })).digest;
 }
 
 describe('rejections.apply', () => {
-  it('hands textOf the row the memory id names, removes that row and writes one reject_value row', () => {
+  it('rejects the text of the row the memory id names, removes that row and writes one reject_value row', () => {
     const entry = createMemory('the build runs on node 18', { tags: [] });
     writeEntry(root, entry);
-    const seen: Array<RejectionSource | undefined> = [];
 
-    const applied = rejections().apply(
-      rejection('default', {
-        memoryId: entry.id,
-        textOf: (source) => {
-          seen.push(source);
-          return source?.content ?? '';
-        },
-      }),
-    );
+    const applied = rejections().apply(rejection('default', { memoryId: entry.id }));
 
-    expect(seen).toEqual([{ content: entry.content, tenant_id: 'default', scope: null }]);
     expect(applied).toMatchObject({
       digest: rejectionDigest(entry.content),
       content: entry.content,
@@ -75,30 +65,32 @@ describe('rejections.apply', () => {
     ]);
   });
 
-  it('writes nothing when textOf refuses, and tells it that no row holds the id', () => {
-    const seen: Array<RejectionSource | undefined> = [];
-    const refuse = (source: RejectionSource | undefined): string => {
-      seen.push(source);
-      throw new Error('refused');
-    };
+  it('writes nothing when the memory id names no row, or a personal one', () => {
+    const own = createMemory('my own reminder', { tags: [], scope: ELSEWHERE });
+    writeEntry(root, own);
 
-    expect(() => rejections().apply(rejection('default', { memoryId: 'mem_absent', textOf: refuse }))).toThrow(
-      'refused',
+    expect(() => rejections().apply(rejection('default', { memoryId: 'mem_absent' }))).toThrow(
+      'memory not found: mem_absent',
+    );
+    expect(() => rejections().apply(rejection('default', { memoryId: own.id }))).toThrow(
+      "Personal memories can't be rejected",
     );
 
-    expect(seen).toEqual([undefined]);
     expect(rejections().list('default')).toEqual([]);
     expect(auditRows('default', 'reject_value')).toEqual([]);
   });
 
-  it('leaves a row holding the text when inReach turns its scope away', () => {
-    const entry = createMemory('kept out of reach', { tags: [] });
+  it("leaves another person's personal row holding the text, and removes the caller's own", () => {
+    const entry = createMemory('kept out of reach', { tags: [], scope: ELSEWHERE });
     writeEntry(root, entry);
 
-    const applied = rejections().apply(rejection('default', { textOf: () => entry.content, inReach: () => false }));
+    const applied = rejections().apply(rejection('default', { value: entry.content }));
 
     expect(applied.removedIds).toEqual([]);
     expect(readEntry(root, entry.id)).not.toBeNull();
+    expect(rejections().apply(rejection('default', { value: entry.content, ownScope: ELSEWHERE })).removedIds).toEqual([
+      entry.id,
+    ]);
   });
 });
 
@@ -106,9 +98,7 @@ describe('rejections.lift', () => {
   it('deletes the one match and writes an unreject_value row naming its digest, reason and source memory', () => {
     const entry = createMemory('lifted later', { tags: [] });
     writeEntry(root, entry);
-    const { digest } = rejections().apply(
-      rejection('default', { memoryId: entry.id, reason: 'stale', textOf: (source) => source?.content ?? '' }),
-    );
+    const { digest } = rejections().apply(rejection('default', { memoryId: entry.id, reason: 'stale' }));
 
     expect(rejections().lift('default', digest.slice(0, 12), 'lifter')).toEqual({
       status: 'ok',
@@ -169,9 +159,9 @@ describe('rejections.refusedAmong', () => {
   });
 
   it('is false for the row that already holds the rejected text and true for a new id bringing it in', async () => {
-    const entry = createMemory('held before the rejection', { tags: [] });
+    const entry = createMemory('held before the rejection', { tags: [], scope: ELSEWHERE });
     writeEntry(root, entry);
-    rejections().apply(rejection('default', { textOf: () => entry.content, inReach: () => false }));
+    rejections().apply(rejection('default', { value: entry.content }));
 
     expect(await refused('default', entry.id, entry.content)).toEqual([false]);
     expect(await refused('default', 'mem_other_id', entry.content)).toEqual([true]);

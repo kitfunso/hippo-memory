@@ -1,12 +1,9 @@
 // The reject, unreject and list flow the CLI verbs and the api functions share: the rules and their wording live here,
 // and the store's rejections group runs each one in one write.
 
-import { BadRequestError } from '../core/api-errors.js';
-import { isPersonalScope } from '../core/recall-scope.js';
-import { mergedSuccessor } from '../core/merged-row.js';
 import type { HippoStore } from '../store/index.js';
 import { normalizeValueForRejection } from '../core/rejection-digest.js';
-import type { AppliedRejection, LiftedRejection, RejectionSource } from '../store/port/rejections.js';
+import type { AppliedRejection, LiftedRejection } from '../store/port/rejections.js';
 import type { RejectedValueRow } from '../store/port/rejections.js';
 
 export interface RejectFlowOptions {
@@ -47,23 +44,6 @@ function assertRejectOpts(opts: RejectFlowOptions): void {
   }
 }
 
-function contentToReject(opts: RejectFlowOptions, row: RejectionSource | undefined): string {
-  if (opts.memoryId === undefined) return opts.value!;
-  if (!row || row.tenant_id !== opts.tenantId) {
-    throw new Error(`memory not found: ${opts.memoryId}`);
-  }
-  // A tombstone is tenant-wide, so one made from personal text would show its reason to everyone.
-  if (isPersonalScope(row.scope)) {
-    throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");
-  }
-  return row.content;
-}
-
-/** Every row but another person's personal one, which is outside the caller's recall and so outside its reject. */
-function inReach(opts: RejectFlowOptions, scope: string | null | undefined): boolean {
-  return !isPersonalScope(scope) || scope === opts.ownScope;
-}
-
 /**
  * `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes every row in reach that
  * holds it.
@@ -75,9 +55,8 @@ export async function rejectValue(store: HippoStore, opts: RejectFlowOptions): P
     actor: opts.actor,
     reason: opts.reason,
     memoryId: opts.memoryId,
-    textOf: (source) => contentToReject(opts, source),
-    inReach: (scope) => inReach(opts, scope),
-    successorOf: mergedSuccessor,
+    value: opts.value,
+    ownScope: opts.ownScope ?? null,
   });
 }
 

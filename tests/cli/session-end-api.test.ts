@@ -57,7 +57,7 @@ function work(over: Partial<Work> = {}): Work {
       steps.push(`capture:${into.hippoRoot === root ? 'own' : 'global'}:${turns?.join(',') ?? 'all'}:${origin ?? '-'}`);
       return true;
     },
-    digest: (scan, key) => {
+    digest: async (scan, key) => {
       steps.push(`digest:${scan === null ? 'none' : scan.turns.length}:${key}`);
     },
     workingState: () => null,

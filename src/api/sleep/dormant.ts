@@ -2,10 +2,9 @@
 
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import type { DormantMemory, ListDormantOpts } from '../../store/port/dormant.js';
-import { createMemory, calculateStrength, strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
-import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
+import { strengthOptionsOf, type MemoryEntry } from '../../core/memory.js';
+import { personalScopeOf } from '../../core/recall-scope.js';
 import type { Context } from '../types.js';
-import type { DormantSnapshot } from '../../store/port/agent-import.js';
 
 /**
  * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is
@@ -25,27 +24,14 @@ export async function dormantRestore(ctx: Context, id: string): Promise<MemoryEn
   const outcome = await ctx.store.dormant.restore(ctx.tenantId, {
     id,
     actor: ctx.actor.subject,
-    inReach: (scope) => canTouchScope(ctx.actor, scope),
-    revive: (snapshot, now) => reviveSnapshot(ctx, snapshot, now),
+    ownScope: personalScopeOf(ctx.actor),
+    revival: { halfLifeDays: ctx.config.defaultHalfLifeDays, strength: strengthOptionsOf(ctx.config.runtime) },
   });
   if (outcome.status === 'missing') throw new NotFoundError(`dormant memory not found: ${id}`);
   if (outcome.status === 'active') {
     throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
   }
   return outcome.entry;
-}
-
-function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): MemoryEntry {
-  // A snapshot can predate a field added later: createMemory supplies defaults, then the snapshot overrides every field
-  // it carries.
-  // The placeholder content only meets createMemory's minimum length, so a legacy row under 3 chars still restores.
-  const revived: MemoryEntry = {
-    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: ctx.config.defaultHalfLifeDays }),
-    ...dormant.entry,
-    lastRetrieved: now.toISOString(),
-  };
-  if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
-  return { ...revived, strength: calculateStrength(revived, now, strengthOptionsOf(ctx.config.runtime)) };
 }
 
 /**

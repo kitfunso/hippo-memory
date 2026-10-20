@@ -3,14 +3,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { mergedSuccessor } from '../../src/core/merged-row.js';
-import { isPersonalScope } from '../../src/core/recall-scope.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
 import { rejectionDigest } from '../../src/core/rejection-digest.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
+import type { OnHandle } from '../../src/store/sqlite/open.js';
+import { sqliteRejections } from '../../src/store/sqlite/rejections.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -26,6 +27,28 @@ let root: string;
 beforeEach(() => {
   root = makeRoot('rejection-pages');
 });
+
+// The walk's page read: a write that lands as it is first prepared lands while the rows are walked with no lock held.
+const WALK_PAGE = 'SELECT id, content, source, scope, created FROM memories ';
+
+/** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares its first page read. */
+function rejectionsWalking(onWalk: () => void) {
+  const { on } = handlesOf(root);
+  let fired = false;
+  const pausing = (db: DatabaseSyncLike): DatabaseSyncLike => ({
+    exec: (sql) => db.exec(sql),
+    prepare: (sql) => {
+      if (!fired && sql.startsWith(WALK_PAGE)) {
+        fired = true;
+        onWalk();
+      }
+      return db.prepare(sql);
+    },
+    close: () => db.close(),
+  });
+  const walking: OnHandle = (fn, open) => on((db, files) => fn(pausing(db), files), open);
+  return sqliteRejections(walking);
+}
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
@@ -86,9 +109,8 @@ function rejection(over: Partial<Rejection> = {}): Rejection {
     tenantId: 'default',
     actor: 'tester',
     reason: 'wrong',
-    textOf: () => VALUE,
-    inReach: (scope) => !isPersonalScope(scope),
-    successorOf: mergedSuccessor,
+    value: VALUE,
+    ownScope: null,
     ...over,
   };
 }
@@ -127,27 +149,18 @@ describe('rejections.apply across pages', () => {
     const ids = seed();
     const late = { holder: createMemory(VALUE, { tags: [] }), other: createMemory('a lesson written mid-walk') };
     let refused: unknown;
-    let walking = false;
-    const applied = sqliteSyncStore(root).rejections.apply(
-      rejection({
-        inReach: (scope) => {
-          if (!walking) {
-            walking = true;
-            // No wait for a lock: a write scope held across the walk would fail this write with SQLITE_BUSY.
-            withDb((db) => {
-              db.exec('PRAGMA busy_timeout = 0');
-              writeEntryDbOnly(db, late.other);
-              try {
-                writeEntryDbOnly(db, late.holder);
-              } catch (error) {
-                refused = error;
-              }
-            });
-          }
-          return !isPersonalScope(scope);
-        },
-      }),
-    );
+    const applied = rejectionsWalking(() => {
+      // No wait for a lock: a write scope held across the walk would fail this write with SQLITE_BUSY.
+      withDb((db) => {
+        db.exec('PRAGMA busy_timeout = 0');
+        writeEntryDbOnly(db, late.other);
+        try {
+          writeEntryDbOnly(db, late.holder);
+        } catch (error) {
+          refused = error;
+        }
+      });
+    }).apply(rejection());
 
     expect(refused).toBeInstanceOf(RejectedValueError);
     expect(readEntry(root, late.holder.id)).toBeNull();

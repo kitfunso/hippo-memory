@@ -11,7 +11,7 @@ import type { HippoIndex } from './rows.js';
 import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { DAY_MS } from '../../util/time.js';
-import type { SessionDecayContext } from '../port/consolidation.js';
+import type { SessionDecayContext } from '../local/consolidation.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
  * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */

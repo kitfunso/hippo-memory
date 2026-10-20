@@ -9,11 +9,11 @@ import {
 import * as sources from '../importers/sources.js';
 import { importMarkdown as importMarkdownInto } from '../importers/markdown.js';
 import { importVault as importVaultInto } from '../importers/vault.js';
-import { sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
-  return { ...options, target: { root, store: sqliteSyncStore(root) } };
+  return { ...options, target: { root, files: sqliteStore(root).localFiles } };
 }
 
 /** Given an array of raw text chunks, deduplicate against existing memories,

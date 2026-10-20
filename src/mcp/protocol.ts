@@ -14,6 +14,8 @@ import { type JsonValue, isJsonString } from '../util/json.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';
+import type { LocalStore } from '../store/local/index.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 import type { CallerState } from '../api/callers.js';
 
 // ── Find hippo root ──
@@ -142,3 +144,11 @@ export interface ToolCall {
 }
 
 export type ToolHandler = (call: ToolCall) => string | Promise<string>;
+
+/** A share or peers call: the store's local files and the global store its reach names, both checked by the gate. */
+export interface LocalToolCall extends ToolCall {
+  store: LocalStore;
+  globalTarget: ConfiguredFolder;
+}
+
+export type LocalToolHandler = (call: LocalToolCall) => string | Promise<string>;
