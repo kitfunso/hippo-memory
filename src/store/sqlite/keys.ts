@@ -10,6 +10,7 @@ import { bound, type Bodies } from './bound.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import type { ScopeGrantChange } from '../port/key-grants.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {
@@ -77,7 +78,7 @@ function revokeKeyAt(db: DatabaseSyncLike, revoke: KeyRevoke): string {
 }
 
 function auditHighIdAt(db: DatabaseSyncLike): number {
-  const row = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'audit_log'").get() as
+  const row = cachedStatement(db, "SELECT seq FROM sqlite_sequence WHERE name = 'audit_log'").get() as
     | { seq: number }
     | undefined;
   return row?.seq ?? 0;
