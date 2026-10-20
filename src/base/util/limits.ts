@@ -2,6 +2,9 @@
 // logs and indexes.
 export const MAX_ID_LEN = 256;
 
+// Longest session id or tool name a hook payload may put in a log row; the payload is not trusted to be short.
+export const MAX_HOOK_FIELD_LEN = 128;
+
 // Page size every list surface (CLI, HTTP, store) falls back to when the caller names none.
 export const DEFAULT_LIST_LIMIT = 100;
 

@@ -120,13 +120,11 @@ async function requestScores(
   query: string,
   head: SearchResult[],
   route: ClefRoute,
-  timeoutRaw: string | undefined,
+  requested: number | undefined,
 ): Promise<ClefScores> {
   const { state, questions } = buildRelevanceRequest(query, head);
-  // Strict parse: parseInt would read "15s" as 15 ms, and Node clamps a delay past 2^31-1 to 1 ms.
-  const requested = Number(timeoutRaw);
-  const timeoutMs =
-    Number.isInteger(requested) && requested > 0 && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
+  // Node clamps a delay past 2^31-1 to 1 ms.
+  const timeoutMs = requested !== undefined && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const headers = new Headers({ 'content-type': 'application/json' });
   if (route.token) headers.set('authorization', `Bearer ${route.token}`);
   const resp = await rerankerPost(route.url, { headers, body: JSON.stringify({ state, model, questions }) }, timeoutMs);

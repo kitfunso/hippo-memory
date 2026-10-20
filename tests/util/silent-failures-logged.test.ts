@@ -16,7 +16,7 @@ import { countTableRows } from '../../src/db/tables.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { renderGraphHtml } from '../../src/domain/graph/view.js';
+import { renderGraphHtml } from '../../src/surface/cli/graph-page.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';

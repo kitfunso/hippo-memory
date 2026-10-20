@@ -73,7 +73,7 @@ export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
 }
 
 /** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any row. */
-export function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
+export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): boolean {
   // Existence, not COUNT(*): a count walks every row on each write's open.
   if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return false;
   // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the import on every open

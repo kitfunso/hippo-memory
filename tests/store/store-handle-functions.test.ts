@@ -1,6 +1,6 @@
 // The store functions capture code calls with a folder and plain values: each opens its own handle on a real store.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -17,7 +17,7 @@ beforeEach(() => {
   root = makeRoot('store-handle');
 });
 
-function read<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {
+function read<T>(fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
     return fn(db);
