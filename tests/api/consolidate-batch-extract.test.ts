@@ -3,7 +3,7 @@ import { consolidate } from '../../src/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -13,7 +13,7 @@ beforeEach(() => {
 
 describe('Batch extraction during consolidation', () => {
   it('reports extractionCandidates for episodic memories without facts', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const ep1 = createMemory('the deploy pipeline uses blue-green strategy on kubernetes', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -33,7 +33,7 @@ describe('Batch extraction during consolidation', () => {
   });
 
   it('skips episodic memories that already have extracted facts', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const ep = createMemory('nginx reverse proxy listens on port 443 with TLS termination', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

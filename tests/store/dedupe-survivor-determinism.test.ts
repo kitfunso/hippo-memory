@@ -72,7 +72,7 @@ function permutationsOf3(): number[][] {
 
 // Duplicate probe pair: the same sentence, B with a double space before "this".
 // Dedup removes only text that matches apart from spacing; a swapped word is a
-// changed value and both copies stay (tests/core/sleep-keeps-both-versions.test.ts).
+// changed value and both copies stay (tests/core/sleep-keeps-both-versions.process.test.ts).
 const CONTENT_A = 'The quarterly finance report shows revenue grew steadily across all four regions this year';
 const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 

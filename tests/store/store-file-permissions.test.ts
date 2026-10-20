@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const mode = (p: string): number => statSync(p).mode & 0o777;
 
@@ -35,7 +35,7 @@ describe.skipIf(process.platform === 'win32')('store files are owner-only on cre
     chmodSync(root, 0o755);
     writeFileSync(join(root, 'hippo.db'), '');
     chmodSync(join(root, 'hippo.db'), 0o644);
-    initStore(root);
+    initTestStore(root);
     expect(mode(root).toString(8)).toBe('755');
     expect(mode(join(root, 'hippo.db')).toString(8)).toBe('644');
   });

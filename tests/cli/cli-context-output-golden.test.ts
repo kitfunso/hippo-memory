@@ -9,7 +9,7 @@ import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let root = '';
 let store = '';
@@ -25,7 +25,7 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_TENANT', '');
   vi.stubEnv('HIPPO_SESSION_ID', '');
   vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
-  initStore(store);
+  initTestStore(store);
   writeEntry(
     store,
     seeded('always run the migration dry run before deploying', 'mem_ctx_pinned', { pinned: true, tags: ['deploy'] }),

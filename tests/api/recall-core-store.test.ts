@@ -19,7 +19,7 @@ import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let home: string;
 let hippoRoot: string;
@@ -62,7 +62,7 @@ beforeEach(() => {
   home = makeRoot('recall-core-store', { init: false });
   hippoRoot = join(home, '.hippo');
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   for (const [i, text] of [
     'deploy pipeline uses blue green rollout',
     'deploy token rotation happens weekly',
@@ -126,7 +126,7 @@ describe('retrieve with the CLI ranking core', () => {
 
   it("writes the second store's recall rows through the store named for that root", async () => {
     const secondRoot = join(home, 'second');
-    initStore(secondRoot);
+    initTestStore(secondRoot);
     writeEntry(secondRoot, {
       ...createMemory('deploy notes kept in the second store'),
       id: 'mem_second_0',

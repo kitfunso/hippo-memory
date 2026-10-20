@@ -10,7 +10,7 @@ import { remember } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';
 
 useVaultImport();
@@ -215,7 +215,7 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
     }
     try {
       if (created) {
-        initStore(hippoAlias);
+        initTestStore(hippoAlias);
         // A mirror-like markdown file living inside the nested store.
         fs.mkdirSync(path.join(realStore, 'episodic'), { recursive: true });
         fs.writeFileSync(

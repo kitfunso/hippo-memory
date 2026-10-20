@@ -6,7 +6,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 let home: string;
 beforeEach(() => {
-  home = makeRoot('key-defaults', { init: false });
+  home = makeRoot('key-defaults');
 });
 
 describe('store createApiKey defaults', () => {

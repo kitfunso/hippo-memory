@@ -11,7 +11,7 @@ import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe("listMemoryConflicts '*' sentinel", () => {
   it("returns only open conflicts when status='open' (legacy behaviour)", () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
     const c = createMemory('gamma', { layer: Layer.Semantic });
@@ -44,7 +44,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
   });
 
   it("returns ALL conflicts (open + resolved) when status='*' (new sentinel)", () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
     const c = createMemory('gamma', { layer: Layer.Semantic });
@@ -65,7 +65,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
   });
 
   it("default param remains 'open' (caller-free regression check)", () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
     writeEntry(tmpDir, a);
@@ -79,7 +79,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
   });
 
   it("returns empty when filtering by 'resolved' and no resolved exist", () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
     writeEntry(tmpDir, a);

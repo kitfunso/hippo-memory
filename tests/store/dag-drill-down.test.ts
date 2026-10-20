@@ -14,7 +14,7 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { drillDown } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -115,9 +115,10 @@ describe('drillDown', () => {
   it('limit option caps children list', async () => {
     const s = makeSummary('topic limit');
     writeEntry(root, s);
-    for (let i = 0; i < 30; i++) {
-      writeEntry(root, makeChild(`detail row ${i}`, s.id));
-    }
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 30 }, (_, i) => makeChild(`detail row ${i}`, s.id)),
+    );
     const r = await drillDown(ctxFor(root), s.id, { limit: 5 });
     expect('failure' in r).toBe(false);
     if ('failure' in r) return;

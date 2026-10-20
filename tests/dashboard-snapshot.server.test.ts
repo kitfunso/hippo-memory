@@ -1,0 +1,230 @@
+// The snapshot groups live memories by origin project and counts bands, layers, conflicts and embeddings over that one population.
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { Layer } from '../src/core/memory.js';
+import { quarantineScopeFor } from '../src/trust/quarantine.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { storedVectorIds } from '../src/db/vector-store.js';
+import { buildOverview } from '../src/api/dashboard/queries.js';
+import {
+  asDashboardRow,
+  embed,
+  isoAgo,
+  makeStore,
+  NOW,
+  seed,
+  snapshotsOf,
+  type TmpStore,
+} from './_helpers/dashboard-fixture.js';
+import { snapshotOfRows } from './_helpers/snapshot-of-rows.js';
+import { countMatching, recordStatements } from './_helpers/count-statements.js';
+import {
+  listMemoryConflicts,
+  replaceDetectedConflicts,
+  resolveConflictKeeping,
+  loadAllEntries,
+} from './_helpers/root-forms.js';
+
+let store: TmpStore;
+
+beforeEach(() => {
+  store = makeStore('hippo-dash-snapshot');
+});
+
+afterEach(() => {
+  store.cleanup();
+});
+
+function snapshot() {
+  const service = snapshotsOf(store.hippoRoot, () => NOW);
+  try {
+    return service.get('default');
+  } finally {
+    service.close();
+  }
+}
+
+// Ten day half-life, just retrieved: strong today, under 0.2 in thirty days.
+const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
+// Hundred day half-life, last used 150 days ago: weak today, still above 0.2 in thirty days.
+const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;
+
+describe('dashboard snapshot', () => {
+  it('groups by origin project, with Global for an empty origin and Unassigned for null', () => {
+    seed(store.hippoRoot, 'alpha one');
+    seed(store.hippoRoot, 'alpha two');
+    seed(store.hippoRoot, 'global one', { originProject: '' });
+    seed(store.hippoRoot, 'unassigned one', { originProject: null });
+
+    const snap = snapshot();
+
+    const live = Object.fromEntries(snap.projects.map((p) => [p.summary.key, p.summary.live]));
+    expect(live).toEqual({ 'p:alpha': 2, global: 1, unassigned: 1 });
+    expect(snap.byKey.get('global')?.summary.kind).toBe('global');
+    expect(snap.byKey.get('unassigned')?.summary.name).toBe('Unassigned');
+  });
+
+  it('puts a pinned memory in the pinned band and judges at risk on projected 30d strength', () => {
+    seed(store.hippoRoot, 'pinned and decaying', { ...AT_RISK, pinned: true });
+    seed(store.hippoRoot, 'decaying fast', AT_RISK);
+    seed(store.hippoRoot, 'slow decay');
+    seed(store.hippoRoot, 'long unused', FADING);
+
+    const alpha = snapshot().byKey.get('p:alpha')!.summary;
+
+    expect(alpha.bands).toEqual({ pinned: 1, strong: 1, fading: 1, atRisk: 1 });
+    expect(alpha.atRisk).toBe(1);
+    expect(alpha.pinned).toBe(1);
+  });
+
+  it('keeps bands and layers summing to live, with a trace memory counted as live', () => {
+    seed(store.hippoRoot, 'episodic one');
+    seed(store.hippoRoot, 'semantic one', { layer: Layer.Semantic });
+    seed(store.hippoRoot, 'trace one', { layer: Layer.Trace });
+    seed(store.hippoRoot, 'buffer one', { layer: Layer.Buffer, ...AT_RISK });
+
+    const alpha = snapshot().byKey.get('p:alpha')!.summary;
+    const sum = (counts: Record<string, number>): number => Object.values(counts).reduce((a, b) => a + b, 0);
+
+    expect(alpha.live).toBe(4);
+    expect(sum(alpha.bands)).toBe(alpha.live);
+    expect(sum(alpha.layers)).toBe(alpha.live);
+    expect(alpha.layers.trace).toBe(1);
+  });
+
+  it('counts only open conflicts whose members are both live', () => {
+    const a1 = seed(store.hippoRoot, 'deploy target is fly');
+    const a2 = seed(store.hippoRoot, 'deploy target is render');
+    const b1 = seed(store.hippoRoot, 'build tool is webpack', { originProject: 'beta' });
+    const q = seed(store.hippoRoot, 'quarantined claim', { scope: quarantineScopeFor(null) });
+    const r1 = seed(store.hippoRoot, 'region is eu');
+    const r2 = seed(store.hippoRoot, 'region is us');
+    replaceDetectedConflicts(store.hippoRoot, [
+      { memory_a_id: a1.id, memory_b_id: a2.id, reason: 'inside alpha', score: 0.9 },
+      { memory_a_id: a1.id, memory_b_id: b1.id, reason: 'across projects', score: 0.8 },
+      { memory_a_id: a2.id, memory_b_id: q.id, reason: 'quarantined member', score: 0.7 },
+      { memory_a_id: r1.id, memory_b_id: r2.id, reason: 'already settled', score: 0.6 },
+    ]);
+    const settled = listMemoryConflicts(store.hippoRoot, 'open', 'default').find(
+      (c) => c.reason === 'already settled',
+    )!;
+    expect(resolveConflictKeeping(store.hippoRoot, 'default', settled.id, r1.id)).toBe(true);
+
+    const snap = snapshot();
+    const overview = buildOverview(snap);
+
+    expect(snap.openConflicts).toBe(2);
+    expect(overview.kpis.find((k) => k.id === 'openConflicts')?.value).toBe(2);
+    // The cross-project conflict counts once in each project it touches; the one inside alpha counts once.
+    expect(snap.byKey.get('p:alpha')?.summary.openConflicts).toBe(2);
+    expect(snap.byKey.get('p:beta')?.summary.openConflicts).toBe(1);
+    expect(snap.facts.find((f) => f.id === q.id)).toBeUndefined();
+  });
+
+  it('counts embedded memories from memory_vectors and reports coverage over live memories', () => {
+    const one = seed(store.hippoRoot, 'embedded one');
+    const two = seed(store.hippoRoot, 'embedded two');
+    seed(store.hippoRoot, 'not embedded');
+    seed(store.hippoRoot, 'also not embedded');
+    const old = seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: one.id });
+    // memory_vectors has no foreign key, so a vector for a superseded or deleted memory must not count.
+    embed(store.hippoRoot, [one.id, two.id, old.id, 'orphan-id']);
+
+    const snap = snapshot();
+
+    expect(snap.byKey.get('p:alpha')?.summary.embedded).toBe(2);
+    expect(snap.embeddingCoverage).toBe(0.5);
+  });
+
+  it('builds the same snapshot from its narrow read as from every whole row of the tenant', () => {
+    const root = store.hippoRoot;
+    const pinned = seed(root, 'pinned with tags', { pinned: true, tags: ['Deploy', 'error'], confidence: 'verified' });
+    const wrong = seed(root, 'marked wrong twice', {
+      outcomeNegative: 2,
+      emotionalValence: 'negative',
+      retrievalCount: 7,
+    });
+    seed(root, 'raw global row', { kind: 'raw', originProject: '', layer: Layer.Buffer, ...AT_RISK });
+    seed(root, 'unassigned and long unused', { originProject: null, ...FADING });
+    // The prefix test is exact, so a scope that differs only in case stays live.
+    seed(root, 'scope that only looks quarantined', { scope: 'Quarantine:private:team', originProject: 'beta' });
+    seed(root, 'x'.repeat(300), { originProject: 'beta', layer: Layer.Semantic });
+    seed(root, 'replaced by the pinned one', { supersededBy: pinned.id });
+    seed(root, 'superseded by kind alone', { kind: 'superseded' });
+    seed(root, 'archived and replaced', { kind: 'archived', supersededBy: wrong.id });
+    seed(root, 'archived', { kind: 'archived' });
+    seed(root, 'quarantined', { scope: quarantineScopeFor('team:eng') });
+    seed(root, 'quarantined and archived', { scope: quarantineScopeFor(null), kind: 'archived' });
+    seed(root, 'another tenant', { tenantId: 'other' });
+    replaceDetectedConflicts(root, [
+      { memory_a_id: pinned.id, memory_b_id: wrong.id, reason: 'inside alpha', score: 0.9 },
+    ]);
+    embed(root, [pinned.id, wrong.id]);
+
+    const snap = snapshot();
+    const db = openHippoDb(root);
+    let embeddedIds: Set<string>;
+    try {
+      embeddedIds = storedVectorIds(db);
+    } finally {
+      closeHippoDb(db);
+    }
+    const fromWholeRows = snapshotOfRows(
+      NOW,
+      loadAllEntries(root, 'default').map((e) => asDashboardRow(e, embeddedIds.has(e.id))),
+      listMemoryConflicts(root, 'open', 'default'),
+    );
+
+    expect(snap.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });
+    expect(snap.facts).toHaveLength(6);
+    // Each build takes the next id, so the two snapshots compare with it set aside.
+    expect(JSON.stringify({ ...snap, id: 0, memo: null, byKey: [...snap.byKey] })).toBe(
+      JSON.stringify({ ...fromWholeRows, id: 0, memo: null, byKey: [...fromWholeRows.byKey] }),
+    );
+    expect(JSON.stringify({ ...buildOverview(snap), snapshotId: 0 })).toBe(
+      JSON.stringify({ ...buildOverview(fromWholeRows), snapshotId: 0 }),
+    );
+  });
+
+  it("reads vectors only for its own tenant's rows, never the whole vector table", () => {
+    const root = store.hippoRoot;
+    const one = seed(root, 'embedded one');
+    seed(root, 'not embedded');
+    embed(root, [one.id]);
+    const rowsRead = (): number => {
+      const service = snapshotsOf(root, () => NOW);
+      try {
+        const log = recordStatements(() => service.get('default'));
+        expect(log.result.embeddingCoverage).toBe(0.5);
+        expect(countMatching(log.statements, /FROM memory_vectors$/)).toBe(0);
+        return log.rowsRead;
+      } finally {
+        service.close();
+      }
+    };
+    const before = rowsRead();
+    const other = seed(root, 'another tenant', { tenantId: 'other' });
+    embed(root, [other.id, ...Array.from({ length: 40 }, (_, i) => `orphan-${i}`)]);
+    expect(rowsRead()).toBe(before);
+  });
+
+  it('answers the detail embedded flag from the vector table before a build, then as of the last build', () => {
+    const root = store.hippoRoot;
+    const live = seed(root, 'embedded live');
+    const plain = seed(root, 'not embedded');
+    const replaced = seed(root, 'embedded but replaced', { supersededBy: live.id });
+    embed(root, [live.id, replaced.id, 'orphan-id']);
+    const ids = [live.id, plain.id, replaced.id];
+    const service = snapshotsOf(root, () => NOW);
+    try {
+      expect([...ids, 'orphan-id'].map((id) => service.isEmbedded(id))).toEqual([true, false, true, true]);
+      service.get('default');
+      embed(root, [plain.id]);
+      expect(ids.map((id) => service.isEmbedded(id))).toEqual([true, false, true]);
+      service.get('default', true);
+      expect(ids.map((id) => service.isEmbedded(id))).toEqual([true, true, true]);
+    } finally {
+      service.close();
+    }
+  });
+});

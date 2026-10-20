@@ -19,7 +19,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, readEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -45,7 +45,7 @@ function layouts(flagged: boolean): readonly Layout[] {
   const b = path.join(teamDir, '.hippo');
   for (const store of [a, b]) {
     fs.mkdirSync(store, { recursive: true });
-    initStore(store);
+    initTestStore(store);
     if (flagged) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
   }
   return [
@@ -137,7 +137,7 @@ describe('shared store origin stamp', () => {
   });
 
   it('hippo sync refuses a flagged store and copies nothing', () => {
-    initStore(getGlobalRoot());
+    initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(true)) {
       expect(() => syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toThrow(BadRequestError);
@@ -146,7 +146,7 @@ describe('shared store origin stamp', () => {
   });
 
   it('hippo sync into an unflagged store copies as before', () => {
-    initStore(getGlobalRoot());
+    initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(false)) {
       expect(syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toBe(1);
@@ -164,7 +164,7 @@ describe('shared store origin stamp', () => {
       } finally {
         closeHippoDb(db);
       }
-      initStore(store);
+      initTestStore(store);
       expect(originOf(store, entry.id)).toBeNull();
     }
   });
@@ -181,7 +181,7 @@ function storeWithFoldableTag(flagged: boolean): TaggedStore {
   const store = path.join(folder, '.hippo');
   fs.mkdirSync(store, { recursive: true });
   fs.writeFileSync(path.join(folder, '.hippo-project.json'), JSON.stringify({ id: 'server-id' }));
-  initStore(store);
+  initTestStore(store);
   if (flagged) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
   const entry = { ...createMemory('the member checkout is also called hippo-team'), originProject: 'hippo-team' };
   writeEntry(store, entry);

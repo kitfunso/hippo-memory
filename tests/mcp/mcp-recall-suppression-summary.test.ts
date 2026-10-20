@@ -31,7 +31,7 @@ import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/m
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -72,16 +72,16 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     // Seed 30 query-matching rows with content padded to force the physics/
     // hybrid budget to drop some, so droppedByBudget > 0 and Cutoff fires.
     // Each row ~100 chars; tight budget = 200 tokens forces ~10 rows max.
-    for (let i = 0; i < 30; i++) {
-      writeEntry(
-        home,
+    writeEntriesTogether(
+      home,
+      Array.from({ length: 30 }, (_, i) =>
         createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
           layer: Layer.Buffer,
           kind: 'raw',
           tenantId: 'default',
         }),
-      );
-    }
+      ),
+    );
     const res = await callTool(
       1,
       'hippo_recall',
@@ -109,16 +109,16 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     // but the MCP pipeline's totalCandidates derives from loadAllEntries
     // which has no per-query LIMIT, so it should reflect the full store size.
     // Tight budget forces droppedByBudget > 0 so Cutoff emits.
-    for (let i = 0; i < 30; i++) {
-      writeEntry(
-        home,
+    writeEntriesTogether(
+      home,
+      Array.from({ length: 30 }, (_, i) =>
         createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
           layer: Layer.Buffer,
           kind: 'raw',
           tenantId: 'default',
         }),
-      );
-    }
+      ),
+    );
     const res = await callTool(
       2,
       'hippo_recall',
@@ -176,16 +176,16 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     // pre-v1.13.3 bottom-placement was the read-failure root cause. This
     // test locks the new top-placement so a future refactor cannot regress
     // the warning back below the result list without breaking the suite.
-    for (let i = 0; i < 30; i++) {
-      writeEntry(
-        home,
+    writeEntriesTogether(
+      home,
+      Array.from({ length: 30 }, (_, i) =>
         createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
           layer: Layer.Buffer,
           kind: 'raw',
           tenantId: 'default',
         }),
-      );
-    }
+      ),
+    );
     const res = await callTool(
       4,
       'hippo_recall',

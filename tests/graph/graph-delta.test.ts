@@ -6,7 +6,7 @@ import { saveDecision } from '../../src/objects/decisions.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { saveCustomerNote } from '../../src/objects/customer-notes.js';
 import { saveProjectBrief } from '../../src/objects/project-briefs.js';
-import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../../src/graph/extract.js';
+import { extractGraph, deriveGraph, loadGraphSources } from '../../src/graph/extract.js';
 import { readGraphDelta, entityKey, type GraphOp } from '../../src/graph/delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, SourceObjectType } from '../../src/store/port/graph-reads.js';
@@ -186,10 +186,7 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
   [
     'more targets than the per-source cap',
     async (h) => {
-      const names = Array.from(
-        { length: MAX_REFERENCES_PER_OBJECT + 5 },
-        (_, i) => `PolicyNum${String(i).padStart(3, '0')}`,
-      );
+      const names = Array.from({ length: 30 }, (_, i) => `PolicyNum${String(i).padStart(3, '0')}`);
       for (const n of names) {
         await savePolicy(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, { policyName: n, policyText: 'x' });
       }

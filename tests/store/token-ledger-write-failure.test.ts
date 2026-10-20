@@ -14,7 +14,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -132,7 +132,7 @@ describe('token ledger write failures', () => {
         { local: { ...folderFiles(store), config: DEFAULT_CONFIG } },
       );
     };
-    initStore(store);
+    initTestStore(store);
     fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');
     for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(store, `hippo.db${suffix}`), { force: true });
     write();

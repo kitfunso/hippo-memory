@@ -9,7 +9,7 @@ import { handleEval } from '../../src/cli/eval.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let root = '';
 let store = '';
@@ -23,7 +23,7 @@ beforeEach(() => {
   store = join(root, 'local');
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');
-  initStore(store);
+  initTestStore(store);
   writeEntry(store, seeded('the deploy pipeline uses blue green rollout for the api', 'mem_eval_deploy'));
   writeEntry(store, seeded('billing service freezes deploys every friday afternoon', 'mem_eval_billing'));
   writeEntry(store, seeded('lunch options near the office include a noodle bar', 'mem_eval_lunch'));

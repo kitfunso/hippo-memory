@@ -18,7 +18,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { FailureOutcome } from '../../src/store/port/failure-log.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 
@@ -333,7 +333,7 @@ describe('hippo failures', () => {
     const bare = makeRoot('failures-bare', { init: false });
     await expect(run(['failures', '--global'], '', bare)).rejects.toThrow();
     expect(existsSync(join(bare, 'global'))).toBe(false);
-    initStore(join(bare, 'global'));
+    initTestStore(join(bare, 'global'));
     await run(['capture-error'], broke('s1'), bare);
     await run(['capture-error'], broke(undefined, 'another thing broke'), bare);
     expect(JSON.parse(await run(['failures', '--json'], '', bare))).toMatchObject({

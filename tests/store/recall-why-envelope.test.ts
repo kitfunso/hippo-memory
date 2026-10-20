@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let home: string;
 
@@ -25,8 +25,8 @@ describe('hippo recall --why exposes envelope', () => {
     home = makeRoot('why', { init: false });
     vi.stubEnv('HIPPO_HOME', home);
     // The local store `init` makes, and the global one `init --global` makes at HIPPO_HOME.
-    initStore(join(home, '.hippo'));
-    initStore(home);
+    initTestStore(join(home, '.hippo'));
+    initTestStore(home);
   });
 
   afterEach(() => {

@@ -13,7 +13,8 @@ import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
-import { initStore, openStore } from '../../src/store/sqlite/handles.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const captureTurns = (turns: readonly SessionTurn[]) => {
   const { users, assistants } = sessionTail(turns);
@@ -164,9 +165,9 @@ describe('automatic quality does not govern manual or trusted import storage', (
   beforeEach(() => {
     scratch = makeRoot('quality-context', { init: false });
     root = join(scratch, 'project', '.hippo');
-    initStore(root);
+    initTestStore(root);
     const global = join(scratch, 'global');
-    initStore(global);
+    initTestStore(global);
     vi.stubEnv('HIPPO_HOME', global);
     ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   });

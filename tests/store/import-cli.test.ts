@@ -7,7 +7,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const savedCwd = process.cwd();
 let cwd: string;
@@ -16,7 +16,7 @@ beforeEach(() => {
   cwd = makeRoot('import-cli', { init: false });
   mkdirSync(join(cwd, 'global-hippo'));
   hippoRoot = join(cwd, '.hippo');
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   vi.stubEnv('HIPPO_HOME', join(cwd, 'global-hippo'));
   vi.stubEnv('HIPPO_TENANT', 'default');
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');

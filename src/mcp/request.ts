@@ -42,7 +42,7 @@ const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
 
 /** Records the memory text a recall or context tool returned; best-effort (a ledger failure never fails the call),
  * other tools are not recorded. */
-export async function recordMcpTokens(toolName: string, output: string, ctx: McpContext): Promise<void> {
+async function recordMcpTokens(toolName: string, output: string, ctx: McpContext): Promise<void> {
   const surface = MCP_TOKEN_SURFACES.get(toolName);
   if (!surface || !output) return;
   await recordTokens(mcpApiContext(ctx), surface, { items: 0, tokens: estimateTokens(output) });

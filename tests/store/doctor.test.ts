@@ -25,7 +25,7 @@ import {
   setMeta,
 } from '../../src/db/index.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -61,7 +61,7 @@ describe('hippo doctor', () => {
   it('passes on a healthy project store and reports hooks, memories and sleep', () => {
     const cwd = tmp('doctor-ok-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     writeEntry(
       join(cwd, '.hippo'),
       createMemory('the staging deploy needs the VPN to reach the health check', {
@@ -109,7 +109,7 @@ describe('hippo doctor', () => {
   it('warns when the failure log table is gone, because the capture-error hook then logs nothing', () => {
     const cwd = tmp('doctor-failures-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     const db = openHippoDb(join(cwd, '.hippo'));
     db.exec('DROP TABLE failure_log');
     closeHippoDb(db);
@@ -124,7 +124,7 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-compactions-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     const now = new Date('2026-09-29T12:00:00.000Z');
     expect(
       runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test', now }).checks.find(
@@ -178,7 +178,7 @@ describe('hippo doctor', () => {
       const cwd = tmp(prefix);
       vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
       const hippoRoot = join(cwd, '.hippo');
-      initStore(hippoRoot);
+      initTestStore(hippoRoot);
       const spoolAt = (name: string, mtime: Date): void => {
         mkdirSync(join(hippoRoot, 'compactions-spool'), { recursive: true });
         const file = join(hippoRoot, 'compactions-spool', name);
@@ -269,7 +269,7 @@ describe('hippo doctor', () => {
   it('flags old Node, missing Claude Code hooks, and accepts the plugin instead of hooks', () => {
     const cwd = tmp('doctor-warn-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     mkdirSync(join(cwd, '.claude'));
     writeFileSync(join(cwd, '.claude', 'settings.json'), '{}');
     const r = runDoctor({
@@ -298,7 +298,7 @@ describe('hippo doctor', () => {
   it('reads the Claude Code settings from CLAUDE_CONFIG_DIR when it is set, not from <home>/.claude', () => {
     const cwd = tmp('doctor-config-dir-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     const config = join(cwd, 'elsewhere');
     mkdirSync(config);
     writeFileSync(join(config, 'settings.json'), '{}');
@@ -313,7 +313,7 @@ describe('hippo doctor', () => {
   it('reads a Claude Code settings.json saved with a byte order mark, which install also reads', () => {
     const cwd = tmp('doctor-bom-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    initStore(join(cwd, '.hippo'));
+    initTestStore(join(cwd, '.hippo'));
     mkdirSync(join(cwd, '.claude'));
     const commands = [
       'hippo context --pinned-only',
@@ -346,7 +346,7 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-readonly-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     const seed = openHippoDb(hippoRoot);
     setMeta(seed, 'schema_version', '45');
     seed.exec('DROP TABLE failure_log');
@@ -385,7 +385,7 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-ro-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     const db = openHippoDbReadOnly(hippoRoot);
     expect(() => db.exec('CREATE TABLE x (y)')).toThrow(/readonly/i);
     closeHippoDb(db);
@@ -395,7 +395,7 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-incompat-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     const seed = openHippoDb(hippoRoot);
     setMeta(seed, 'min_compatible_binary', '99.0.0');
     closeHippoDb(seed);
@@ -429,7 +429,7 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-projects-');
     const global = join(cwd, 'global');
     vi.stubEnv('HIPPO_HOME', global);
-    initStore(global);
+    initTestStore(global);
     const parent = {
       ...createMemory('the proj-b deploy needs the staging VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       originProject: 'proj-b',

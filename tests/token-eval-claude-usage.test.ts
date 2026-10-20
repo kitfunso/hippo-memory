@@ -11,7 +11,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { recordTokenUse } from '../src/store/sqlite/token-ledger.js';
 import { readTranscript, readProjects, readLedger, report } from '../scripts/token-eval/claude-usage.mjs';
 import { makeRoot } from './_helpers/make-root.js';
-import { initStore } from '../src/store/sqlite/handles.js';
+import { initTestStore } from './_helpers/store-template.js';
 
 const dirs: string[] = [];
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
@@ -62,7 +62,7 @@ describe('Claude Code usage reader', () => {
     writeFileSync(join(pdir, 'sess-a', 'subagents', 'agent-1.jsonl'), line({ type: 'assistant', timestamp: '2026-09-23T10:05:00Z', message: { id: 'm2', usage: usage(5_000, 20_000, 300) } }));
     writeFileSync(join(pdir, 'sess-b.jsonl'), line({ type: 'assistant', timestamp: '2026-09-23T11:00:00Z', message: { id: 'm3', usage: usage(1_000, 2_000, 10) } }));
 
-    initStore(hippo);
+    initTestStore(hippo);
     const db = openHippoDb(hippo);
     try {
       recordTokenUse(db, { tenantId: 'default', sessionId: 'sess-a', surface: 'hook', event: 'inject', items: 3, tokens: 150 });

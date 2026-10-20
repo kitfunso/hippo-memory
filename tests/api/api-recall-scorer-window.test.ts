@@ -20,7 +20,7 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -56,7 +56,10 @@ describe('RecallOptions.scorerWindow', () => {
     // query, request scorerWindow: 25, assert total > limit AND
     // total === 25 (the FTS path under SQLite returns exactly LIMIT
     // matching rows when more than LIMIT exist).
-    for (let i = 0; i < 30; i++) writeEntry(root, makeRaw(`zeta ${i}`));
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 30 }, (_, i) => makeRaw(`zeta ${i}`)),
+    );
     const result = await retrieve(ctxFor(root), {
       query: 'zeta',
       window: { limit: 5, scorerWindow: 25 },

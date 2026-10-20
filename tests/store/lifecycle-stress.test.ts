@@ -26,7 +26,7 @@ import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { injectStream } from '../../scripts/lifecycle-stress/inject.mjs';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { writeEntriesTogether, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);
@@ -157,7 +157,10 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
   it('merges near-duplicate clusters and the summary carries each answer token', async (ctx) => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     const { memories, labels } = injectStream({ seed: 42, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
-    for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
+    writeEntriesTogether(
+      root,
+      memories.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
+    );
     for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
     expectVectorsStored(root);
 
@@ -180,7 +183,10 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
   it('answers each queried fact via physicsSearch after consolidate (token present)', async (ctx) => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     const { memories, labels } = injectStream({ seed: 11, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
-    for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
+    writeEntriesTogether(
+      root,
+      memories.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
+    );
     for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
     expectVectorsStored(root);
     await consolidate(root, {});
@@ -208,7 +214,10 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     // the fact members (numFacts*dupesPerFact = 2*2 = 4). No tag filter needed.
     const noise = injectStream({ seed: 99, scaleMemories: 40, numFacts: 2, dupesPerFact: 2 }).memories.slice(2 * 2);
     expect(noise).toHaveLength(40 - 2 * 2);
-    for (const m of noise) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
+    writeEntriesTogether(
+      root,
+      noise.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
+    );
     for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
     expectVectorsStored(root);
     const entries = loadAllEntries(root, 'default');

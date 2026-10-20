@@ -20,7 +20,7 @@ import {
   saveActiveTaskSnapshot,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -120,7 +120,7 @@ describe('CLI end to end', () => {
   it('uses one initialized global store for projectless recall and context', async () => {
     const globalStore = mkdirs('global-store');
     const work = mkdirs('home', 'projectless');
-    initStore(globalStore);
+    initTestStore(globalStore);
     const entry = createMemory('projectless-orbit release staging flag', { pinned: true });
     entry.originProject = '';
     writeEntry(globalStore, entry);

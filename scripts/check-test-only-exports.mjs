@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 // CI test-only export gate. A src/ export that no other src/ file names but a test does exists for the test, unless a file under scripts/ or benchmarks/ imports it or it is a pure function or class its own module calls (scripts/lib/export-purity.mjs).
-// Existing ones sit in .test-only-exports-baseline.json and may go but never grow; package entry files are exempt.
-// Usage: check-test-only-exports.mjs [--list] [--why] [--update]. --why prints the verdict on every candidate; --update rewrites the baseline and refuses to add an entry.
+// Any such export fails, with no baseline; package entry files are exempt.
+// Usage: check-test-only-exports.mjs [--list] [--why]. --why prints the verdict on every candidate.
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createPurityRule } from './lib/export-purity.mjs';
 import { scriptCallers } from './lib/script-callers.mjs';
 import { stripComments } from './lib/source-text.mjs';
 
-const BASELINE = '.test-only-exports-baseline.json';
 const EXPORT_RE = /^export\s+(?:async\s+)?(?:function\*?|const|let|var|class|enum)\s+([A-Za-z_$][\w$]*)/gm;
 const IDENT_RE = /[A-Za-z_$][\w$]*/g;
 const DIST_RE = /dist\/[\w./-]+\.js/g;
@@ -116,32 +115,17 @@ export function seamNameViolations(root = '.') {
   return bad;
 }
 
-function update(baseline, current, added) {
-  if (baseline && added.length > 0) {
-    console.error('Refusing to update: the baseline may only shrink.');
-    for (const e of added) console.error(`  new: ${e}`);
-    return 1;
-  }
-  writeFileSync(BASELINE, JSON.stringify({ count: current.length, exports: current }, null, 2) + '\n');
-  console.log(`Wrote ${BASELINE}: ${current.length} exports.`);
-  return 0;
-}
-
-function check(current, wasSet, added) {
-  if (added.length > 0) {
-    console.error('New production exports that only tests use:');
-    for (const e of added) console.error(`  ${e}`);
-    console.error('Move the helper to tests/_helpers, or give it a production caller.');
+function check(current) {
+  if (current.length > 0) {
+    console.error('Production exports that only tests use:');
+    for (const e of current) console.error(`  ${e}`);
+    console.error(
+      'Assert through the path src uses, move the helper to tests/_helpers, or give it a production caller.',
+    );
     console.error('`node scripts/check-test-only-exports.mjs --why` shows why each one is counted.');
     return 1;
   }
-  const currentSet = new Set(current);
-  if ([...wasSet].some((e) => !currentSet.has(e))) {
-    console.log(
-      'Test-only exports went down; run `node scripts/check-test-only-exports.mjs --update` to lock that in.',
-    );
-  }
-  console.log(`Test-only export ratchet OK: ${current.length} exports, none outside ${BASELINE}.`);
+  console.log('Test-only export check OK: no src export is named only by tests.');
   return 0;
 }
 
@@ -156,10 +140,6 @@ function main(args) {
     return 0;
   }
   const current = rows.filter((r) => r.counted).map((r) => r.key);
-  const baseline = readJson(BASELINE, null);
-  const wasSet = new Set(baseline?.exports ?? []);
-  const added = current.filter((e) => !wasSet.has(e));
-  if (args.includes('--update')) return update(baseline, current, added);
   if (args.includes('--list')) {
     for (const e of current) console.log(e.replace(/:([^:]+)$/, ': $1'));
     return 0;
@@ -170,7 +150,7 @@ function main(args) {
     for (const b of bad) console.error(`  ${b}`);
     return 1;
   }
-  return check(current, wasSet, added);
+  return check(current);
 }
 
 // Guarded so the test can import judgeExports without running the check.

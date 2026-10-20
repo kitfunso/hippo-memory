@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { adminActor, remember, type Actor } from '../../src/api/index.js';
 import { INSTRUCTION_LIKE_TAG } from '../../src/api/instruction-detect.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -23,8 +23,8 @@ beforeEach(() => {
   const global = path.join(tmp, 'global');
   fs.mkdirSync(store, { recursive: true });
   fs.mkdirSync(global, { recursive: true });
-  initStore(store);
-  initStore(global);
+  initTestStore(store);
+  initTestStore(global);
   vi.stubEnv('HIPPO_HOME', global);
 });
 

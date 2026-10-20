@@ -9,7 +9,7 @@ import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -46,7 +46,7 @@ function runHippo(args: string[]): Promise<string> {
 
 describe('hippo context --pinned-only', () => {
   it('returns only pinned entries in plain text', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const pinned = createMemory('NEVER skip the pre-commit hook because it caused three incidents', {
       pinned: true,
       layer: Layer.Episodic,
@@ -64,7 +64,7 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('emits empty string when no pinned entries', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const unpinned = createMemory('only unpinned entries here should produce empty output', { pinned: false });
     writeEntry(hippoDir, unpinned);
 
@@ -73,7 +73,7 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('--format additional-context emits Claude Code hookSpecificOutput JSON', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const pinned = createMemory('NEVER use --no-verify because it bypasses signing', { pinned: true });
     writeEntry(hippoDir, pinned);
 
@@ -86,7 +86,7 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('--format additional-context with no pinned entries emits empty output (no crash)', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const out = await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
     // Empty stdout signals "no injection needed". Claude Code treats empty
     // output as pass-through.
@@ -94,7 +94,7 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('--include-recent surfaces fresh unpinned entries alongside pinned-only context', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const oldPinned = createMemory('PINNED RULE: always verify the hook output', { pinned: true });
     const oldUnpinned = createMemory('old unpinned note should not appear just because it exists', { pinned: false });
     const recentA = createMemory('fresh same-session correction should appear on the next prompt', { pinned: false });
@@ -127,7 +127,7 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('--include-recent works even when no memories are pinned', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const recent = createMemory('fresh unpinned lesson must not be invisible until next session', { pinned: false });
     writeEntry(hippoDir, recent);
 
@@ -148,7 +148,7 @@ describe('hippo context --pinned-only', () => {
   it('is read-only — does NOT bump retrieval_count on pinned memories', async () => {
     // Hook fires every turn; if each call inflated retrieval_count the
     // under-rehearsal score for pinned memories would skew over time.
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const pinned = createMemory('read-only test memory that should not be mutated by a context call', { pinned: true });
     writeEntry(hippoDir, pinned);
 
@@ -168,7 +168,7 @@ describe('hippo context --pinned-only', () => {
   it('emits multiple pinned memories in one injection payload', async () => {
     // End-to-end sanity: Claude Code's UserPromptSubmit response must be a
     // single string containing all rehearsed rules, not an array of blocks.
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const a = createMemory('never commit secrets to git rotate immediately if leaked', { pinned: true });
     const b = createMemory('use safe_sync.py not sync_to_supabase.py directly ever', { pinned: true });
     const c = createMemory('unpinned note that absolutely must not appear in the output', { pinned: false });
@@ -250,7 +250,7 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('respects config.pinnedInject.enabled=false (empty output)', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     const pinned = createMemory('pinned rule that should NOT appear when disabled by config', { pinned: true });
     writeEntry(hippoDir, pinned);
     fs.writeFileSync(path.join(hippoDir, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));

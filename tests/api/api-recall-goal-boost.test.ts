@@ -15,7 +15,7 @@ import { remember, retrieve } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): number {
   const row = db.prepare(sql).get(...params);
@@ -33,7 +33,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
 
   beforeEach(async () => {
     hippoRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hippo-1.7.4-api-'));
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     ctx = apiCtx(hippoRoot, tenantId, { subject: 'test', role: 'admin' });
   });
 

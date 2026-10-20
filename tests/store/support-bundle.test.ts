@@ -20,7 +20,7 @@ import type { JsonValue } from '../../src/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import type { JsonObject } from '../../src/store/port/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -88,7 +88,7 @@ function seed(): Seeded {
   const cwd = join(home, 'proj');
   mkdirSync(cwd, { recursive: true });
   const hippoRoot = join(cwd, '.hippo');
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
 
   const memoryCanary = `canary-memory-${randomUUID()}`;
   writeEntry(hippoRoot, createMemory(memoryCanary));
@@ -234,7 +234,7 @@ describe('buildSupportBundle', () => {
     const aliasHome = join(tmpdir(), basename(s.home));
     const aliasGlobal = join(aliasHome, 'global');
     vi.stubEnv('HIPPO_HOME', aliasGlobal);
-    initStore(aliasGlobal);
+    initTestStore(aliasGlobal);
     const bundle = buildSupportBundle({
       diagnosticsAt,
       tenantId: 'default',

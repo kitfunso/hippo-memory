@@ -11,7 +11,7 @@ import { contextGet } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const TAUGHT =
   'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
@@ -40,9 +40,9 @@ describe('capture pins the rules a person states', () => {
   beforeEach(() => {
     scratch = makeRoot('pin-user-rules', { init: false });
     root = join(scratch, 'project', '.hippo');
-    initStore(root);
+    initTestStore(root);
     const global = join(scratch, 'global');
-    initStore(global);
+    initTestStore(global);
     vi.stubEnv('HIPPO_HOME', global);
     ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   });

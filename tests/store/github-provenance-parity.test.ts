@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestEvent, type IngestEvent } from '../../src/connectors/github/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import type { GitHubIssueEvent, GitHubIssueCommentEvent } from '../../src/connectors/github/types.js';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -64,22 +65,24 @@ describe('GitHub connector — provenance coverage parity', () => {
   it('every ingested GitHub raw row carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = ctxFor(root);
     // 25 issues + 25 comments = 50 raw rows, all distinct artifact_refs.
-    for (let i = 0; i < 25; i++) {
-      const ev = makeIssue(i);
-      await ingestEvent(ctx, {
-        event: ev,
-        rawBody: JSON.stringify(ev.payload),
-        deliveryId: `iss-${i}`,
-      });
-    }
-    for (let i = 0; i < 25; i++) {
-      const ev = makeIssueComment(i);
-      await ingestEvent(ctx, {
-        event: ev,
-        rawBody: JSON.stringify(ev.payload),
-        deliveryId: `com-${i}`,
-      });
-    }
+    await withSharedStoreHandles(async () => {
+      for (let i = 0; i < 25; i++) {
+        const ev = makeIssue(i);
+        await ingestEvent(ctx, {
+          event: ev,
+          rawBody: JSON.stringify(ev.payload),
+          deliveryId: `iss-${i}`,
+        });
+      }
+      for (let i = 0; i < 25; i++) {
+        const ev = makeIssueComment(i);
+        await ingestEvent(ctx, {
+          event: ev,
+          rawBody: JSON.stringify(ev.payload),
+          deliveryId: `com-${i}`,
+        });
+      }
+    });
 
     const entries = loadAllEntries(root, 'default');
     const coverage = buildProvenanceCoverage(entries);

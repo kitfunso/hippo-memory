@@ -16,7 +16,7 @@ import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.j
 import { refreshParticleProperties } from '../../src/core/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../../src/core/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>
@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe('Decay pass', () => {
   it('removes entries below the strength threshold (dormant opted out)', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ dormant: { enabled: false } }), 'utf8');
 
     // Create an entry that's very old (strength will be effectively 0)
@@ -47,7 +47,7 @@ describe('Decay pass', () => {
   });
 
   it('keeps pinned entries regardless of age', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const entry = createMemory7('permanent rule', { pinned: true });
     const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 10).toISOString();
@@ -63,7 +63,7 @@ describe('Decay pass', () => {
   });
 
   it('dry-run does not remove entries', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ dormant: { enabled: false } }), 'utf8');
 
     const entry = createMemory7('ancient memory');
@@ -81,7 +81,7 @@ describe('Decay pass', () => {
   });
 
   it('a dry run reports the same counts and detail lines the real run then produces', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
     const now = new Date('2026-06-01T00:00:00.000Z');
     const at = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
@@ -112,7 +112,7 @@ describe('Decay pass', () => {
   });
 
   it('keeps the stored confidence tier for old non-verified memories through sleep, while resolveConfidence reports stale', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const entry = createMemory7('stale memory candidate', { confidence: 'observed', tags: ['error'] });
     const now = new Date();
@@ -133,7 +133,7 @@ describe('Decay pass', () => {
 
 describe('Replay pass (integration)', () => {
   it('persists incremented retrieval_count and fresh last_retrieved on rehearsed memories', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // 8 distinct memories, no text overlap → merge pass won't fire.
     const memories = [
@@ -173,7 +173,7 @@ describe('Replay pass (integration)', () => {
   });
 
   it('does nothing when config.replay.count is 0', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // Patch config.json to disable replay
     const configPath = path.join(tmpDir, 'config.json');
@@ -194,7 +194,7 @@ describe('Replay pass (integration)', () => {
   });
 
   it('caps sample size when fewer survivors exist than config count', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // Default config count is 5; write only 2 entries.
     const memories = [
@@ -215,7 +215,7 @@ describe('Replay pass (integration)', () => {
 
 describe('Merge pass', () => {
   it('merges highly similar episodic entries into a semantic memory', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // Two very similar episodic entries
     const e1 = createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic });
@@ -235,7 +235,7 @@ describe('Merge pass', () => {
   });
 
   it('does not merge dissimilar entries', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const e1 = createMemory7('Python dict ordering is guaranteed since 3.7', { layer: Layer.Episodic });
     const e2 = createMemory7('Gold model uses TIPS 10y inflation signal', { layer: Layer.Episodic });
@@ -248,7 +248,7 @@ describe('Merge pass', () => {
   });
 
   it('demotes merged source episodics via half_life_days, not the inert stored-strength field', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const e1 = createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic });
     const e2 = createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic });
@@ -280,7 +280,7 @@ describe('Merge pass', () => {
   });
 
   it('half-life demotion floors at 1 day', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const e1 = {
       ...createMemory('cache refresh failure data pipeline error', {
@@ -306,7 +306,7 @@ describe('Merge pass', () => {
   });
 
   it('detects overlapping contradictory memories and records open conflicts', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const a = createMemory7('The feature flag is enabled for production users', {
       layer: Layer.Episodic,
@@ -333,7 +333,7 @@ describe('Merge pass', () => {
   });
 
   it('detects reworded contradictions, not just near-duplicate wording', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const a = createMemory7('API auth must be enabled in prod', {
       layer: Layer.Episodic,
@@ -356,7 +356,7 @@ describe('Merge pass', () => {
   });
 
   it('preserves contradiction detection across multiple polarity patterns', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const pairs = [
       ['Always use Sled for local storage', 'Never use Sled for local storage'],
@@ -381,7 +381,7 @@ describe('Merge pass', () => {
   });
 
   it('does not flag unrelated policy memories just because they share tags and opposite polarity words', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const a = createMemory7('Always create a worktree when working in exemem-workspace', {
       layer: Layer.Episodic,
@@ -402,7 +402,7 @@ describe('Merge pass', () => {
   });
 
   it('does not flag the unrelated wording pairs', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const pairs = [
       ['Always create a worktree when working in exemem-workspace', "Don't touch other agents' worktrees"],
@@ -433,7 +433,7 @@ describe('Merge pass', () => {
   });
 
   it('resolves open conflicts when the contradiction disappears', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     const a = createMemory7('The feature flag is enabled for production users', {
       layer: Layer.Episodic,
@@ -472,7 +472,7 @@ describe('Physics pass', () => {
 
   /** Three memories, two of them in conflict, each with a particle whose mass, charge and temperature are out of date. */
   function seedConflictingParticles(physicsEnabled: boolean) {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     fs.writeFileSync(
       path.join(tmpDir, 'config.json'),
       JSON.stringify({ replay: { count: 0 }, physics: { enabled: physicsEnabled } }),

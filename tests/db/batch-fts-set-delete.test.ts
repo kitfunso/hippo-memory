@@ -7,7 +7,7 @@ import type { MemoryEntry } from '../../src/core/memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { writeEntriesTogether, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
 
 const FTS_WRITE = /(?:INSERT INTO|DELETE FROM) memories_fts\b/;
 const FTS_DELETE = /DELETE FROM memories_fts\b/;
@@ -26,7 +26,7 @@ afterEach(() => {
 
 function seedRows(n: number, label = 'seed'): MemoryEntry[] {
   const rows = Array.from({ length: n }, (_, i) => createMemory(`${label} row ${i} sigma${i} about the deploy`));
-  for (const row of rows) writeEntry(root, row);
+  writeEntriesTogether(root, rows);
   return rows;
 }
 

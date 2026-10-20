@@ -48,7 +48,7 @@ export interface RefineResult {
  * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API
  * call failed.
  */
-export async function refineSemanticMemory(
+async function refineSemanticMemory(
   merged: string,
   sources: MemoryEntry[],
   opts: { apiKey: string; model?: string; fetcher?: typeof fetch },

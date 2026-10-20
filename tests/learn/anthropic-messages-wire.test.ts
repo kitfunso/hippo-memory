@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { extractFacts, type ExtractedFact } from '../../src/learn/extract.js';
 import { generateDagSummary } from '../../src/consolidate/dag-summary.js';
-import { refineSemanticMemory } from '../../src/cli/refine-llm.js';
+import { refineOne } from '../_helpers/refine-one.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -157,12 +157,12 @@ const callers: CallerSpec[] = [
     },
   },
   {
-    name: 'refineSemanticMemory',
+    name: 'refineStore',
     okText: REFINE_TEXT,
     maxTokens: 800,
-    bodySha256: '7e1b2d5180c0c68708791c2961a1830ba8a6d29fd5b6374d501748b5c5bf9b17',
-    contentLength: '809',
-    run: (fetcher) => refineSemanticMemory('merged tea notes', [], { apiKey: KEY, fetcher }),
+    bodySha256: 'bd388f1ab60a8c682988da6afbd3085737acf6b0de52bedb56e008719dc2daa2',
+    contentLength: '851',
+    run: (fetcher) => refineOne('merged tea notes', [], { apiKey: KEY, fetcher }),
     expected: {
       ok: { result: REFINE_TEXT, messages: [], requests: 1 },
       http400: {

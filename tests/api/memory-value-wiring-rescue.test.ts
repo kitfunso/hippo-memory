@@ -7,7 +7,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { rescueSet, validateWeights } from '../../src/consolidate/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/consolidate/memory-value-weights.js';
 import { loadEveryTenantEntries, listMemoryConflicts, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import {
   dir,
   useMemoryValueScratch,
@@ -26,7 +26,7 @@ useMemoryValueScratch();
 describe('(e) rescue semantics', () => {
   // The rank split, rescue lines and rescue audit metadata are pinned in (i) of the scale file, on the real-run store.
   it('a rescue audit row that fails to write is counted and reported, and the other rows still land', async () => {
-    initStore(dir);
+    initTestStore(dir);
     enableMemoryValue(dir);
     const built = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) =>
       condemnedEntry('w'.repeat(len), { tenantId: 'ta' }),
@@ -59,7 +59,7 @@ describe('(e) rescue semantics', () => {
   });
 
   it('rescued entries get the standard survivor bookkeeping refresh (stored strength), confidence tier preserved', async () => {
-    initStore(dir);
+    initTestStore(dir);
     enableMemoryValue(dir);
 
     // 10 condemned entries (>= MIN_RESCUE_GROUP -- review-round F1's
@@ -99,7 +99,7 @@ describe('(e) rescue semantics', () => {
   });
 
   it("rescued entries participate in the same cycle's merge pass", async () => {
-    initStore(dir);
+    initTestStore(dir);
     enableMemoryValue(dir);
 
     // 2 identical-content "twin" episodic entries (textOverlap = 1.0, well
@@ -129,7 +129,7 @@ describe('(e) rescue semantics', () => {
   });
 
   it('rescued entries participate in conflict detection (rescuedIds bypasses the strength filter)', async () => {
-    initStore(dir);
+    initTestStore(dir);
     enableMemoryValue(dir);
 
     // 2 short conflicting-polarity Buffer entries + 8 longer, unrelated
@@ -175,7 +175,7 @@ describe('(e) rescue semantics', () => {
   });
 
   it('tenants smaller than MIN_RESCUE_GROUP never rescue (small-tenant degeneracy floor)', async () => {
-    initStore(dir);
+    initTestStore(dir);
     enableMemoryValue(dir);
 
     // A condemned-only 1-entry tenant: without the floor, ceil(0.3*1) = 1
@@ -201,7 +201,7 @@ describe('(e) rescue semantics', () => {
 // ---------------------------------------------------------------------------
 describe('(f) pinned exemption unchanged', () => {
   it('a pinned, ancient entry survives with the flag on and is never rescued/audited', async () => {
-    initStore(dir);
+    initTestStore(dir);
     enableMemoryValue(dir);
 
     const entry = {
@@ -241,7 +241,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
   });
 
   it('rescueSet propagates the throw at its own top — flag-on + a broken constant never behaves as flag-off', () => {
-    initStore(dir);
+    initTestStore(dir);
     // >= MIN_RESCUE_GROUP non-pinned entries in the tenant (review-round F1)
     // so this exercises the eligible-for-rescue path, even though the
     // assertions below only care about the throw, not the rescue outcome.

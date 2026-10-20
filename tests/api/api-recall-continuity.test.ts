@@ -4,7 +4,7 @@ import { retrieve } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 beforeEach(() => {
@@ -13,7 +13,7 @@ beforeEach(() => {
 
 describe('api.recall continuity flag', () => {
   it('defaults to no continuity block (hot path)', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     writeEntry(tmpDir, createMemory('test memory about widgets', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const result = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), { query: 'widgets' });
@@ -22,7 +22,7 @@ describe('api.recall continuity flag', () => {
   });
 
   it('includes snapshot, handoff, and recent events when includeContinuity=true', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     writeEntry(tmpDir, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship the recall continuity slice',
@@ -58,7 +58,7 @@ describe('api.recall continuity flag', () => {
   });
 
   it('returns continuity block with nulls/empty when no continuity state exists', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     writeEntry(tmpDir, createMemory('lonely memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const result = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
@@ -73,7 +73,7 @@ describe('api.recall continuity flag', () => {
   });
 
   it('does not surface another tenant continuity', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A secret',
       summary: 'A',
@@ -106,7 +106,7 @@ describe('api.recall continuity flag', () => {
 
   // codex P2: do not resurrect a stale handoff when the active snapshot is gone.
   it('does not surface a handoff from a session with no active snapshot', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-completed-yesterday',
@@ -126,7 +126,7 @@ describe('api.recall continuity flag', () => {
   // v1.2: scope column ships on task_snapshots. Default-deny rule must reject
   // private-scope continuity for no-scope callers; explicit-scope match works.
   it('default-deny scope rule excludes private-scope continuity for no-scope callers', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'private task',
       summary: 'private',
@@ -154,7 +154,7 @@ describe('api.recall continuity flag', () => {
   // column even after the writer set it. Without scope on the loaded row,
   // a private handoff would surface to no-scope callers.
   it('loadLatestHandoff returns scope on the row, default-deny rejects private', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Public anchor',
       summary: 'public',
@@ -194,7 +194,7 @@ describe('api.recall continuity flag', () => {
   // The v1.1.0 filter was `opts.scope || isPublic` which let any explicit
   // scope see every continuity row regardless of that row's scope.
   it('explicit scope is exact-match, not allow-all (cross-scope leak guard)', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'C1 task',
       summary: 'C1',
@@ -222,7 +222,7 @@ describe('api.recall continuity flag', () => {
   });
 
   it('reports continuityTokens with Math.ceil(len/4) accounting', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'aaaa',
       summary: 'bbbb',
@@ -240,7 +240,7 @@ describe('api.recall continuity flag', () => {
   });
 
   it('counts outcome, targetRuntime and cardId toward continuityTokens', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'aaaa',
       summary: 'bbbb',

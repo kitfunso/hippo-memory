@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { handleCard } from '../../src/cli/card.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let root = '';
 
@@ -14,7 +14,7 @@ beforeEach(() => {
   root = makeRoot('card-golden', { init: false });
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');
-  initStore(join(root, 'local'));
+  initTestStore(join(root, 'local'));
 });
 
 afterEach(() => {

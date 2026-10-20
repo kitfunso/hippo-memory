@@ -18,7 +18,7 @@ import { isInitialized } from '../../src/core/project-identity.js';
 import { apiCtx } from './api-ctx.js';
 import { loadDormantMemories, loadAllEntries } from './root-forms.js';
 import type { AuditOp } from '../../src/core/audit-ops.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 export interface World {
   readonly dir: string;
@@ -37,7 +37,7 @@ export function openWorld(): World {
   mkdirSync(home);
   const project = join(dir, 'proj');
   const local = join(project, '.hippo');
-  initStore(local);
+  initTestStore(local);
   const world = {
     dir,
     home,

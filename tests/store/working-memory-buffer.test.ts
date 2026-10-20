@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getSchemaVersion,
+  getCurrentSchemaVersion,
+  withSharedStoreHandles,
+} from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { wmPush, wmRead, wmClear } from '../_helpers/root-forms.js';
 
@@ -66,30 +72,34 @@ describe('wmPush', () => {
 });
 
 describe('bounded buffer eviction', () => {
-  it('evicts entries when exceeding WM_MAX_ENTRIES per scope', () => {
+  it('evicts entries when exceeding WM_MAX_ENTRIES per scope', async () => {
     // Push WM_MAX_ENTRIES + 5 entries
-    for (let i = 0; i < WM_MAX_ENTRIES + 5; i++) {
-      wmPush(tmpDir, {
-        scope: 'evict-test',
-        content: `entry ${i}`,
-        importance: 0.5,
-      });
-    }
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < WM_MAX_ENTRIES + 5; i++) {
+        wmPush(tmpDir, {
+          scope: 'evict-test',
+          content: `entry ${i}`,
+          importance: 0.5,
+        });
+      }
+    });
 
     const items = wmRead(tmpDir, { scope: 'evict-test', limit: 100 });
     expect(items).toHaveLength(WM_MAX_ENTRIES);
   });
 
-  it('evicts the lowest-importance entries first', () => {
+  it('evicts the lowest-importance entries first', async () => {
     // Push entries with varying importance
     // Low importance entries that should be evicted
-    for (let i = 0; i < WM_MAX_ENTRIES; i++) {
-      wmPush(tmpDir, {
-        scope: 'priority',
-        content: `low-${i}`,
-        importance: 0.1,
-      });
-    }
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < WM_MAX_ENTRIES; i++) {
+        wmPush(tmpDir, {
+          scope: 'priority',
+          content: `low-${i}`,
+          importance: 0.1,
+        });
+      }
+    });
 
     // Push one high-importance entry — should evict the oldest low-importance one
     wmPush(tmpDir, {
@@ -107,15 +117,17 @@ describe('bounded buffer eviction', () => {
     expect(highItem!.importance).toBe(0.9);
   });
 
-  it('breaks eviction ties by oldest created_at', () => {
+  it('breaks eviction ties by oldest created_at', async () => {
     // All same importance — oldest should be evicted
-    for (let i = 0; i < WM_MAX_ENTRIES; i++) {
-      wmPush(tmpDir, {
-        scope: 'tie-break',
-        content: `entry-${i}`,
-        importance: 0.5,
-      });
-    }
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < WM_MAX_ENTRIES; i++) {
+        wmPush(tmpDir, {
+          scope: 'tie-break',
+          content: `entry-${i}`,
+          importance: 0.5,
+        });
+      }
+    });
 
     // Push one more with same importance — should evict entry-0 (oldest)
     wmPush(tmpDir, {
@@ -132,11 +144,13 @@ describe('bounded buffer eviction', () => {
     expect(contents).toContain('newest');
   });
 
-  it('does not evict across different scopes', () => {
+  it('does not evict across different scopes', async () => {
     // Fill scope A to the max
-    for (let i = 0; i < WM_MAX_ENTRIES; i++) {
-      wmPush(tmpDir, { scope: 'scope-a', content: `a-${i}` });
-    }
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < WM_MAX_ENTRIES; i++) {
+        wmPush(tmpDir, { scope: 'scope-a', content: `a-${i}` });
+      }
+    });
 
     // Push to scope B — should not affect scope A
     wmPush(tmpDir, { scope: 'scope-b', content: 'b-entry' });
@@ -236,11 +250,13 @@ describe('wmClear', () => {
 });
 
 describe('tenant scoping', () => {
-  it("keeps one tenant from reading, clearing or evicting another tenant's rows", () => {
+  it("keeps one tenant from reading, clearing or evicting another tenant's rows", async () => {
     wmPush(tmpDir, { scope: 'shared', content: 'acme note', tenantId: 'acme' });
-    for (let i = 0; i < WM_MAX_ENTRIES + 3; i++) {
-      wmPush(tmpDir, { scope: 'shared', content: `globex ${i}`, tenantId: 'globex' });
-    }
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < WM_MAX_ENTRIES + 3; i++) {
+        wmPush(tmpDir, { scope: 'shared', content: `globex ${i}`, tenantId: 'globex' });
+      }
+    });
 
     expect(wmRead(tmpDir, { tenantId: 'acme' }).map((i) => i.content)).toEqual(['acme note']);
     expect(wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toHaveLength(WM_MAX_ENTRIES);

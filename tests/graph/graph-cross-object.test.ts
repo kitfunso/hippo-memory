@@ -12,7 +12,7 @@ import { saveDecision } from '../../src/objects/decisions.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { saveCustomerNote } from '../../src/objects/customer-notes.js';
 import { saveProjectBrief } from '../../src/objects/project-briefs.js';
-import { extractGraph, MAX_REFERENCES_PER_OBJECT } from '../../src/graph/extract.js';
+import { extractGraph } from '../../src/graph/extract.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
@@ -125,11 +125,8 @@ describe('cross-object references (Pass 3 name-match)', () => {
     expect(refs(home)).toHaveLength(0); // 'shared' maps to 2 entities -> dropped from index
   });
 
-  it('per-source cap: a decision naming many policies is capped at MAX_REFERENCES_PER_OBJECT', async () => {
-    const names = Array.from(
-      { length: MAX_REFERENCES_PER_OBJECT + 5 },
-      (_, i) => `PolicyNum${String(i).padStart(3, '0')}`,
-    );
+  it('per-source cap: a decision naming many policies is capped at 25', async () => {
+    const names = Array.from({ length: 30 }, (_, i) => `PolicyNum${String(i).padStart(3, '0')}`);
     // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
     await withSharedStoreHandles(async () => {
       for (const n of names) {
@@ -140,7 +137,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
       decisionText: `a decision that mentions ${names.join(' and ')}`,
     });
     await extractGraph(sqliteStore(home), T);
-    expect(refs(home).length).toBe(MAX_REFERENCES_PER_OBJECT);
+    expect(refs(home).length).toBe(25); // the per-source cap in src/graph/extract.ts
   });
 
   it('idempotent: re-running extractGraph yields the same references (no duplication)', async () => {

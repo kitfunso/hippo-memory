@@ -18,8 +18,8 @@ import { cliStore } from '../../src/cli/api-context.js';
 import { envRuntimeSettings } from '../../src/util/env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let root = '';
 let store = '';
@@ -31,7 +31,7 @@ beforeEach(() => {
   // An uninitialised global store, so a query reads the local FTS window alone.
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');
-  initStore(store);
+  initTestStore(store);
   ctx = apiCtx(store, 'default', adminActor('test'));
 });
 
@@ -117,7 +117,10 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     ['outcome ablated, loss aversion 1.5', { HIPPO_ABLATE_OUTCOME: '1', HIPPO_LOSS_AVERSION_RATIO: '1.5' }],
   ])('%s', async (_label, env: Record<string, string>) => {
     for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
-    for (let i = 0; i < 60; i++) writeEntry(store, row(i));
+    writeEntriesTogether(
+      store,
+      Array.from({ length: 60 }, (_, i) => row(i)),
+    );
     const db = openHippoDb(store);
     try {
       // A corrupt list must read as empty, as rowToEntry reads it, not fail the aggregate.

@@ -5,7 +5,7 @@ import { renderTraceContent, parseSteps } from '../../src/consolidate/trace.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { listSessionEvents, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -22,7 +22,7 @@ async function runHippo(args: string[]): Promise<string> {
 
 describe('hippo session complete', () => {
   it('writes a session_complete event with outcome + summary', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     await runHippo([
       'session',
       'complete',
@@ -42,7 +42,7 @@ describe('hippo session complete', () => {
   });
 
   it('rejects invalid outcomes', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     await expect(runHippo(['session', 'complete', '--session', 'sess-x', '--outcome', 'not-real'])).rejects.toThrow();
   });
 });
@@ -95,7 +95,7 @@ describe('parseSteps', () => {
 
 describe('hippo trace record', () => {
   it('creates a Trace-layer memory with outcome + steps', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
 
     await runHippo([
       'trace',
@@ -121,7 +121,7 @@ describe('hippo trace record', () => {
   });
 
   it('rejects invalid outcome values', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     await expect(
       runHippo([
         'trace',
@@ -139,7 +139,7 @@ describe('hippo trace record', () => {
 
 describe('hippo trace <id>', () => {
   it('shows the half-life the memory decays on, not one recomputed from a 7-day base', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     // 123 days is no base times a write-time multiplier, like a half-life that recalls stretched.
     const entry = {
       ...createMemory('the release checklist lives in docs/release.md', { baseHalfLifeDays: 365 }),
@@ -161,7 +161,7 @@ describe('hippo trace <id>', () => {
 
 describe('hippo recall --outcome filter', () => {
   it('returns only successful traces when --outcome success is set', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     for (const outcome of ['success', 'failure'] as const) {
       await runHippo([
         'trace',
@@ -190,7 +190,7 @@ describe('hippo recall --outcome filter', () => {
   });
 
   it('does NOT filter non-trace entries by --outcome', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     // Record a failure trace
     await runHippo([
       'trace',

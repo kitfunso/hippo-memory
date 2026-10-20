@@ -25,7 +25,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCli } from '../../src/cli.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const CLEAN = 'clean deploykey fact for everyone';
 const PRIV_SLACK = 'private slack deploykey fact';
@@ -107,7 +107,7 @@ describe('cli recall scope default-deny', () => {
   });
 
   it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', async () => {
-    initStore(globalDir);
+    initTestStore(globalDir);
     writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     writeEntry(
       globalDir,
@@ -126,7 +126,7 @@ describe('cli recall scope default-deny', () => {
   it('hasGlobal path: explicit --scope additively unlocks the requested private scope on the GLOBAL store too', async () => {
     // independent-review-critic round 1 med: the additive unlock was only
     // covered on the local-only path.
-    initStore(globalDir);
+    initTestStore(globalDir);
     writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     writeEntry(
       globalDir,

@@ -7,7 +7,7 @@ import { failureTarget } from '../_helpers/failure-target.js';
 import { failureHash, failureReport, lessonFromFailure } from '../../src/capture/failure-reading.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 interface LogRow {
   tool: string | null;
@@ -24,7 +24,7 @@ beforeEach(() => {
   dir = makeRoot('failure-report', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   root = path.join(dir, '.hippo');
-  initStore(root);
+  initTestStore(root);
 });
 
 afterEach(() => {
