@@ -10,8 +10,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { closeObject } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { saveCustomerNote, closeCustomerNote, loadCustomerNotes } from '../../src/domain/objects/customer-notes.js';
+import { CUSTOMER_NOTE, saveCustomerNote, loadCustomerNotes } from '../../src/domain/objects/customer-notes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -115,7 +117,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       customer: 'Beta',
       note: 'b note',
     });
-    await closeCustomerNote(objectsAt(home), 'default', b1.id);
+    await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', b1.id, CLI_ACTOR);
     const acmeActive = await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Acme', status: 'active' });
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
     expect(acmeActive.length).toBe(2); // MANY-per-customer

@@ -9,6 +9,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 
 interface KindRow {
   readonly cmd: string;
@@ -126,5 +127,18 @@ describe('versioned object CLI verbs', () => {
       stderr: 'saveProcess: step 1 is empty\n',
       status: 1,
     });
+  });
+});
+
+describe('a store error during the supersede lookup', () => {
+  it('reaches runCli: its Error line and exit code 1, not a save refusal', async () => {
+    expect((await hippo('brief', 'new', 'acme/web', '--summary', 'Storefront')).status).toBe(0);
+    const db = openHippoDb(join(root, '.hippo'));
+    db.exec('DROP TABLE project_briefs');
+    closeHippoDb(db);
+    const r = await hippo('brief', 'supersede', '1', '--summary', 'Storefront and admin');
+    expect(r.stdout).toBe('');
+    expect(r.stderr).toMatch(/^Error: .*project_briefs/);
+    expect(r.status).toBe(1);
   });
 });

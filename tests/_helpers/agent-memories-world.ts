@@ -20,6 +20,7 @@ import { loadDormantMemories, loadAllEntries } from './root-forms.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { initTestStore } from './store-template.js';
 import { removeAfterRequest } from './one-request-per-test.js';
+import { REAL_IO } from './real-io.js';
 
 export interface World {
   readonly dir: string;
@@ -45,7 +46,7 @@ export function openWorld(): World {
     project,
     local,
     global: join(dir, 'global'),
-    machine: { home, env: {}, platform: process.platform },
+    machine: { home, env: {}, platform: process.platform, ...REAL_IO },
     savedHippoHome: process.env.HIPPO_HOME,
   };
   process.env.HIPPO_HOME = world.global;

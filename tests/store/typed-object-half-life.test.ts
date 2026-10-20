@@ -7,9 +7,9 @@ import type { HippoConfig } from '../../src/base/config/config.js';
 import { deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
-import { saveProcess } from '../../src/domain/objects/processes.js';
+import { PROCESS } from '../../src/domain/objects/processes.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
-import { saveSkill } from '../../src/domain/objects/skills.js';
+import { SKILL } from '../../src/domain/objects/skills.js';
 import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
@@ -21,6 +21,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
+import { cliSave } from '../_helpers/cli-save-site.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -56,7 +57,7 @@ const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][
   [
     'process',
     async (root) =>
-      await saveProcess(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+      await cliSave(root, 'default', PROCESS, {
         processName: 'Release',
         steps: ['tag', 'publish'],
       }),
@@ -72,7 +73,7 @@ const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][
   [
     'skill',
     async (root) =>
-      await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+      await cliSave(root, 'default', SKILL, {
         skillName: 'Run tests',
         instructions: 'npm test before commit',
       }),

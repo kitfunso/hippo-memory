@@ -41,7 +41,7 @@ function findCalls(): { site: string; text: string }[] {
 
 describe('child-process window hiding', () => {
   it('finds the known call sites, so the scan itself is alive', () => {
-    expect(findCalls().length).toBeGreaterThanOrEqual(20);
+    expect(findCalls().length).toBeGreaterThanOrEqual(17);
   });
 
   it('every call sets windowsHide explicitly', () => {

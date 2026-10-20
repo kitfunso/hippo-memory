@@ -26,6 +26,7 @@ import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-worker-server.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 afterEach(undoAll);
 
@@ -78,7 +79,12 @@ describe.each([
       expect((await auditPrune(ctx, { olderThanDays: 30, dryRun: true })).dryRun).toBe(true);
       expect((await memoryQualityRepair(ctx, false)).total).toBe(1);
 
-      const learned = await learn(ctx, { repoPath: repoWithOneFix(root), days: 7, profile: CLI_LEARN });
+      const learned = await learn(ctx, {
+        repoPath: repoWithOneFix(root),
+        days: 7,
+        profile: CLI_LEARN,
+        git: processGit,
+      });
       expect(learned).toMatchObject({ status: 'scanned', added: 1 });
       expect(loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source)).toHaveLength(1);
     } finally {

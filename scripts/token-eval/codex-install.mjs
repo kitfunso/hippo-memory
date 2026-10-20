@@ -11,7 +11,7 @@ import { WRAPPER_MARK, resolveCodex, writeLauncher } from './codex.mjs';
 
 const WIN = process.platform === 'win32';
 const ENV_KEYS = new Set(['PATH', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA']);
-const WRAPPER_JS = path.join(REPO, 'dist', 'domain', 'hooks', 'codex-wrapper.js');
+const WRAPPER_JS = path.join(REPO, 'dist', 'surface', 'hooks-install', 'codex-wrapper.js');
 // Hippo's own lookup and metadata path, run in the install's env, so the probe cannot drift from what the install will do.
 const PROBE = 'import(process.argv[1]).then((m) => console.log(JSON.stringify({ found: m.detectRealCodexPath(), meta: m.resolveCodexWrapperPaths().metadataPath })))';
 const HOOK_MARKS = { UserPromptSubmit: 'hippo context --pinned-only', SessionStart: 'hippo compact-resume' };

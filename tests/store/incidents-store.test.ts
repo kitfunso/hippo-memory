@@ -8,11 +8,11 @@
  * 3. resolveIncident flips open -> resolved + emits incident_resolve audit
  * 4. resolve CAS: re-resolving an already-resolved row throws not-open
  * 5. resolveIncident requires non-empty resolution text
- * 6. closeIncident flips open -> closed + emits incident_close audit
- * 7. closeIncident also works from resolved (resolved -> closed)
+ * 6. close flips open -> closed + emits incident_close audit
+ * 7. close also works from resolved (resolved -> closed)
  * 8. close guard: not-found vs already-closed
  * 9. ON DELETE SET NULL: forget the memory, incident survives
- * 10. loadIncidents status filter; status 'open' excludes non-open
+ * 10. list status filter; status 'open' excludes non-open
  * 11. linked_memory_ids round-trip + cross-tenant/nonexistent rejection (mandatory)
  */
 
@@ -20,18 +20,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  openIncident,
-  resolveOpenIncident,
-  closeIncident,
-  loadIncidentById,
-  loadIncidents,
-} from '../../src/domain/objects/incidents.js';
+import { openIncident, resolveOpenIncident, INCIDENT } from '../../src/domain/objects/incidents.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 
 oneRequestPerTest();
 
@@ -215,7 +211,7 @@ describe('incidents store (first-class object)', () => {
       /resolutionText is required/,
     );
     // The failed resolve left the incident open.
-    expect((await loadIncidentById(objectsAt(home), 'default', inc.id))!.status).toBe('open');
+    expect((await objectById(objectsAt(home), INCIDENT, 'default', inc.id))!.status).toBe('open');
   });
 
   it('closeIncident flips open -> closed + emits incident_close audit', async () => {
@@ -226,7 +222,7 @@ describe('incidents store (first-class object)', () => {
       { incidentText: 'close from open' },
       'cli',
     );
-    const closed = await closeIncident(objectsAt(home), 'default', inc.id);
+    const closed = await closeObject(objectsAt(home), INCIDENT, 'default', inc.id, CLI_ACTOR);
     expect(closed.status).toBe('closed');
     expect(closed.closedAt).not.toBeNull();
 
@@ -252,7 +248,7 @@ describe('incidents store (first-class object)', () => {
       'cli',
     );
     await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed root cause', 'cli');
-    const closed = await closeIncident(objectsAt(home), 'default', inc.id);
+    const closed = await closeObject(objectsAt(home), INCIDENT, 'default', inc.id, CLI_ACTOR);
     expect(closed.status).toBe('closed');
     // resolution data is preserved through the close.
     expect(closed.resolutionText).toBe('fixed root cause');
@@ -260,7 +256,7 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('close guard: not-found and already-closed error clearly', async () => {
-    await expect(closeIncident(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
+    await expect(closeObject(objectsAt(home), INCIDENT, 'default', 77777, CLI_ACTOR)).rejects.toThrow(/not found/);
 
     const inc = await openIncident(
       objectsAt(home),
@@ -269,8 +265,10 @@ describe('incidents store (first-class object)', () => {
       { incidentText: 'close twice' },
       'cli',
     );
-    await closeIncident(objectsAt(home), 'default', inc.id);
-    await expect(closeIncident(objectsAt(home), 'default', inc.id)).rejects.toThrow(/already closed/);
+    await closeObject(objectsAt(home), INCIDENT, 'default', inc.id, CLI_ACTOR);
+    await expect(closeObject(objectsAt(home), INCIDENT, 'default', inc.id, CLI_ACTOR)).rejects.toThrow(
+      /already closed/,
+    );
   });
 
   it('ON DELETE SET NULL: forgetting the memory orphans the incident', async () => {
@@ -283,12 +281,12 @@ describe('incidents store (first-class object)', () => {
     );
     expect(inc.memoryId).not.toBeNull();
     deleteEntry(home, inc.memoryId!);
-    const reloaded = await loadIncidentById(objectsAt(home), 'default', inc.id);
+    const reloaded = await objectById(objectsAt(home), INCIDENT, 'default', inc.id);
     expect(reloaded).not.toBeNull();
     expect(reloaded!.memoryId).toBeNull();
     expect(reloaded!.status).toBe('open');
     expect(reloaded!.incidentText).toBe('survives memory decay');
-    const open = await loadIncidents(objectsAt(home), 'default', { status: 'open' });
+    const open = await listObjects(objectsAt(home), INCIDENT, 'default', { status: 'open' });
     expect(open.some((x) => x.id === inc.id)).toBe(true);
   });
 
@@ -315,23 +313,23 @@ describe('incidents store (first-class object)', () => {
       'cli',
     );
     await resolveOpenIncident(objectsAt(home), 'default', b.id, 'fixed', 'cli');
-    await closeIncident(objectsAt(home), 'default', c.id);
+    await closeObject(objectsAt(home), INCIDENT, 'default', c.id, CLI_ACTOR);
 
-    const open = await loadIncidents(objectsAt(home), 'default', { status: 'open' });
+    const open = await listObjects(objectsAt(home), INCIDENT, 'default', { status: 'open' });
     expect(open.every((x) => x.status === 'open')).toBe(true);
     expect(open.some((x) => x.id === a.id)).toBe(true);
     expect(open.some((x) => x.id === b.id)).toBe(false);
     expect(open.some((x) => x.id === c.id)).toBe(false);
 
-    const resolved = await loadIncidents(objectsAt(home), 'default', { status: 'resolved' });
+    const resolved = await listObjects(objectsAt(home), INCIDENT, 'default', { status: 'resolved' });
     expect(resolved.length).toBe(1);
     expect(resolved[0].id).toBe(b.id);
 
-    const closed = await loadIncidents(objectsAt(home), 'default', { status: 'closed' });
+    const closed = await listObjects(objectsAt(home), INCIDENT, 'default', { status: 'closed' });
     expect(closed.length).toBe(1);
     expect(closed[0].id).toBe(c.id);
 
-    const all = await loadIncidents(objectsAt(home), 'default');
+    const all = await listObjects(objectsAt(home), INCIDENT, 'default', {});
     expect(all.length).toBe(3);
   });
 
@@ -350,7 +348,7 @@ describe('incidents store (first-class object)', () => {
     );
     expect(inc.linkedMemoryIds).toEqual([receiptA, receiptB]);
     // Round-trips through a fresh load (parsed back from JSON text).
-    const reloaded = await loadIncidentById(objectsAt(home), 'default', inc.id);
+    const reloaded = await objectById(objectsAt(home), INCIDENT, 'default', inc.id);
     expect(reloaded!.linkedMemoryIds).toEqual([receiptA, receiptB]);
 
     // A nonexistent id is rejected, and the whole write rolls back.

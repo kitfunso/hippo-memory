@@ -88,6 +88,8 @@ jobs:
         run: node scripts/check-store-port.mjs
       - name: Layer order
         run: node scripts/check-layers.mjs
+      - name: No fs or child_process import in src/domain or src/api
+        run: node scripts/check-domain-io.mjs
       - name: No test-only exports
         run: node scripts/check-test-only-exports.mjs
       # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.

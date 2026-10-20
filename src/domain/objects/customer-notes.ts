@@ -6,7 +6,7 @@ import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { Objects } from '../../store/port.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
-import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
+import { listObjects, saveObject } from './lifecycle.js';
 import type { CustomerNote, NoteStatus } from '../../base/records/object-types.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 
@@ -17,7 +17,7 @@ export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>(['
 /** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap than the 4096 short-field
  *  convention. */
 export const MAX_CUSTOMER_LEN = 256;
-const MAX_NOTE_LEN = 8192;
+export const MAX_NOTE_LEN = 8192;
 export const MAX_CHANGE_SUMMARY_LEN = 4096;
 
 export interface SaveCustomerNoteOptions {
@@ -88,20 +88,6 @@ export function saveCustomerNote(
   actor: string = CLI_ACTOR,
 ): Promise<CustomerNote> {
   return saveObject(objects, CUSTOMER_NOTE, { baseHalfLifeDays, tenantId, actor }, opts);
-}
-
-/** Close (retire) an active note; CAS on status='active', 0 changes means not-found or not-active. */
-export function closeCustomerNote(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-  actor: string = CLI_ACTOR,
-): Promise<CustomerNote> {
-  return closeObject(objects, CUSTOMER_NOTE, tenantId, id, actor);
-}
-
-export function loadCustomerNoteById(objects: Objects, tenantId: string, id: number): Promise<CustomerNote | null> {
-  return objectById(objects, CUSTOMER_NOTE, tenantId, id);
 }
 
 export function loadCustomerNotes(

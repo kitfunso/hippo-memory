@@ -12,7 +12,9 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { saveDecision, closeDecision } from '../../src/domain/objects/decisions.js';
+import { closeObject } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { DECISION, saveDecision } from '../../src/domain/objects/decisions.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
 import { saveProjectBrief, refreshedBrief } from '../../src/domain/objects/project-briefs.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';
@@ -126,7 +128,7 @@ describe('sleep enqueue-hook', () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'to be closed',
     });
-    await closeDecision(objectsAt(tc.hippoRoot), T, d.id);
+    await closeObject(objectsAt(tc.hippoRoot), DECISION, T, d.id, CLI_ACTOR);
     await saveProjectBrief(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       repo: 'myrepo',
       summary: 'first',

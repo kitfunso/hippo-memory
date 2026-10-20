@@ -2,7 +2,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../../src/domain/hooks/json-hooks.js';
+import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
+import { resolveJsonHookPaths } from '../../src/domain/hooks/json-hooks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 

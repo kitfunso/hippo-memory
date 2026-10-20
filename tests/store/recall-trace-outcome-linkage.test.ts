@@ -23,7 +23,7 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../../src/api/index.js';
-import { personalScopeOf } from '../../src/base/scope/recall-scope.js';
+import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
@@ -142,7 +142,7 @@ describe('lastRecall.applyTracedOutcome explicit traceId (store linkage)', () =>
       }
 
       const ids = recallResult.results.map((r) => r.id);
-      const target = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor) };
+      const target = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ...scopeReaderOf(ctx.actor) };
       await ctx.store.lastRecall.applyTracedOutcome({ ...target, ids, good: true }, traceId);
 
       const db2 = openHippoDb(home);

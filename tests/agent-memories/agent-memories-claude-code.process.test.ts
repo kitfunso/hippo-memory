@@ -11,6 +11,7 @@ import {
 } from '../../src/domain/agent-memories/claude-code.js';
 import type { AdapterContext, Container } from '../../src/domain/agent-memories/types.js';
 import type { JsonObject } from '../../src/base/util/json.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 const made: string[] = [];
 const tmp = () => {
@@ -34,6 +35,7 @@ const ctxOf = (home: string, over: Partial<AdapterContext> = {}): AdapterContext
   home,
   env: {},
   platform: process.platform,
+  ...REAL_IO,
   ...over,
 });
 const note = (body: string, yaml = 'type: feedback') => `---\nname: n\n${yaml}\n---\n${body}\n`;
@@ -285,12 +287,23 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
     const transcriptOf = (dir: string) => path.join(tmp(), 'projects', claudeFolder(dir), 't.jsonl');
 
-    expect(transcriptNotesProject(transcriptOf(launch), repo, { platform: process.platform, env: {} })?.name).toBe('');
     expect(
-      transcriptNotesProject(transcriptOf(repo), path.join(repo, 'src'), { platform: process.platform, env: {} })?.name,
+      transcriptNotesProject(transcriptOf(launch), repo, { platform: process.platform, env: {}, files: REAL_IO.files })
+        ?.name,
+    ).toBe('');
+    expect(
+      transcriptNotesProject(transcriptOf(repo), path.join(repo, 'src'), {
+        platform: process.platform,
+        env: {},
+        files: REAL_IO.files,
+      })?.name,
     ).toBe('repo');
-    expect(transcriptNotesProject(transcriptOf(repo), tmp(), { platform: process.platform, env: {} })).toBeNull();
-    expect(transcriptNotesProject(transcriptOf(repo), null, { platform: process.platform, env: {} })).toBeNull();
+    expect(
+      transcriptNotesProject(transcriptOf(repo), tmp(), { platform: process.platform, env: {}, files: REAL_IO.files }),
+    ).toBeNull();
+    expect(
+      transcriptNotesProject(transcriptOf(repo), null, { platform: process.platform, env: {}, files: REAL_IO.files }),
+    ).toBeNull();
   });
 
   it('reads the start folder from the transcript, which the lossy folder name cannot give back, and decides nothing for a folder gone from disk', () => {
@@ -306,9 +319,15 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const gone = path.join(launch, 'gone');
     const goneTranscript = path.join(tmp(), 'projects', claudeFolderName(gone), 't.jsonl');
 
-    expect(transcriptNotesProject(transcript, dash, { platform: process.platform, env: {} })?.name).toBe('my_repo');
     expect(
-      transcriptNotesProject(goneTranscript, path.join(gone, 'src'), { platform: process.platform, env: {} }),
+      transcriptNotesProject(transcript, dash, { platform: process.platform, env: {}, files: REAL_IO.files })?.name,
+    ).toBe('my_repo');
+    expect(
+      transcriptNotesProject(goneTranscript, path.join(gone, 'src'), {
+        platform: process.platform,
+        env: {},
+        files: REAL_IO.files,
+      }),
     ).toBeNull();
   });
 
@@ -319,8 +338,12 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     writeIn(path.dirname(transcript), 't.jsonl', `${JSON.stringify({ cwd: repo })}\n`);
     const env = { CLAUDE_CONFIG_DIR: tmp(), CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-name' };
 
-    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env })?.name).toBe('repo');
-    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env: {} })).toBeNull();
+    expect(
+      transcriptNotesProject(transcript, tmp(), { platform: process.platform, env, files: REAL_IO.files })?.name,
+    ).toBe('repo');
+    expect(
+      transcriptNotesProject(transcript, tmp(), { platform: process.platform, env: {}, files: REAL_IO.files }),
+    ).toBeNull();
   });
 
   it('lists nothing for a project scope without a project root or name', () => {

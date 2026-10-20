@@ -3,20 +3,22 @@
  * Docs: docs/plans/2026-05-30-e2-skill-object.md
  *
  * Covers what only skills have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
- * 1. saveSkill creates memory + skills row (+ skill_create audit), v1, trigger null when omitted
- * 2. saveSkill with trigger; memory content has name + when + instructions
+ * 1. the skill save creates memory + skills row (+ skill_create audit), v1, trigger null when omitted
+ * 2. the skill save with trigger; memory content has name + when + instructions
  * 3. status filters
  * 4. validation: missing name/instructions; name single-line (newline rejected); caps
  * 5. EXPORT: active-only, name-ASC, trigger omitted when null, '##' in instructions verbatim, empty -> ''
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { closeObject, listObjects } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { saveSkill, closeSkill, loadSkills, skillsMarkdown } from '../../src/domain/objects/skills.js';
+import { SKILL, skillsMarkdown } from '../../src/domain/objects/skills.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { cliSave } from '../_helpers/cli-save-site.js';
 
 oneRequestPerTest();
 
@@ -47,7 +49,7 @@ describe('skills store (executable/exportable first-class object)', () => {
   afterEach(() => removeAfterRequest(home));
 
   it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', async () => {
-    const s = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const s = await cliSave(home, 'default', SKILL, {
       skillName: 'Run tests',
       instructions: 'npm test before commit',
     });
@@ -82,7 +84,7 @@ describe('skills store (executable/exportable first-class object)', () => {
   });
 
   it('saveSkill with trigger; memory content has when + instructions', async () => {
-    const s = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const s = await cliSave(home, 'default', SKILL, {
       skillName: 'Lint',
       instructions: 'run eslint',
       trigger: 'before push',
@@ -98,59 +100,61 @@ describe('skills store (executable/exportable first-class object)', () => {
   });
 
   it('status filters; status active', async () => {
-    const a = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const a = await cliSave(home, 'default', SKILL, {
       skillName: 'a',
       instructions: 'x',
     });
-    const b = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const b = await cliSave(home, 'default', SKILL, {
       skillName: 'b',
       instructions: 'x',
     });
-    const c = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const c = await cliSave(home, 'default', SKILL, {
       skillName: 'c',
       instructions: 'x',
     });
-    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    await cliSave(home, 'default', SKILL, {
       skillName: 'b',
       instructions: 'x2',
       supersedesSkillId: b.id,
     });
-    await closeSkill(objectsAt(home), 'default', c.id);
-    const active = await loadSkills(objectsAt(home), 'default', { status: 'active' });
+    await closeObject(objectsAt(home), SKILL, 'default', c.id, CLI_ACTOR);
+    const active = await listObjects(objectsAt(home), SKILL, 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
-    expect((await loadSkills(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
-    expect((await loadSkills(objectsAt(home), 'default')).length).toBe(4);
+    expect((await listObjects(objectsAt(home), SKILL, 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
+      c.id,
+    ]);
+    expect((await listObjects(objectsAt(home), SKILL, 'default', {})).length).toBe(4);
   });
 
   it('validation: missing name/instructions; single-line name; caps', async () => {
     await expect(
-      saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      cliSave(home, 'default', SKILL, {
         skillName: '   ',
         instructions: 'x',
       }),
     ).rejects.toThrow(/skillName is required/);
     await expect(
-      saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      cliSave(home, 'default', SKILL, {
         skillName: 'n',
         instructions: '  ',
       }),
     ).rejects.toThrow(/instructions are required/);
     await expect(
-      saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      cliSave(home, 'default', SKILL, {
         skillName: 'bad\nname',
         instructions: 'x',
       }),
     ).rejects.toThrow(/single line/);
     await expect(
-      saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      cliSave(home, 'default', SKILL, {
         skillName: 'n',
         instructions: 'x',
         trigger: 'multi\n## line',
       }),
     ).rejects.toThrow(/trigger must be a single line/);
     await expect(
-      saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      cliSave(home, 'default', SKILL, {
         skillName: 'big',
         instructions: 'y'.repeat(8192 + 1),
       }),
@@ -159,32 +163,32 @@ describe('skills store (executable/exportable first-class object)', () => {
 
   it('exportSkills: active-only, name-ASC, trigger omitted when null, markdown verbatim, empty -> ""', async () => {
     expect(await skillsMarkdown(objectsAt(home), 'default')).toBe('');
-    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    await cliSave(home, 'default', SKILL, {
       skillName: 'Bravo',
       instructions: 'do bravo',
     });
-    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    await cliSave(home, 'default', SKILL, {
       skillName: 'Alpha',
       instructions: 'do alpha',
       trigger: 'on start',
     });
     // a closed + a superseded skill must NOT appear in the export
-    const closed = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const closed = await cliSave(home, 'default', SKILL, {
       skillName: 'Zulu',
       instructions: 'old',
     });
-    await closeSkill(objectsAt(home), 'default', closed.id);
-    const sup = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    await closeObject(objectsAt(home), SKILL, 'default', closed.id, CLI_ACTOR);
+    const sup = await cliSave(home, 'default', SKILL, {
       skillName: 'Yankee',
       instructions: 'v1',
     });
-    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    await cliSave(home, 'default', SKILL, {
       skillName: 'Yankee',
       instructions: 'v2',
       supersedesSkillId: sup.id,
     });
     // instructions containing its own markdown heading must render verbatim
-    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    await cliSave(home, 'default', SKILL, {
       skillName: 'Charlie',
       instructions: 'step 1\n## sub-heading\nstep 2',
     });

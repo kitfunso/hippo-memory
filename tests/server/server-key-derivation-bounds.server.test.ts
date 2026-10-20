@@ -1,4 +1,5 @@
-// A bearer key check derives on the thread pool, two at a time, and one address gets five tries at one key id.
+// A bearer key check derives on the thread pool, two at a time, one key id holds at most one of those and two waits,
+// and one address gets five tries at one key id.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
@@ -59,8 +60,8 @@ async function start(extra: Partial<ServeOpts> = {}): Promise<void> {
   stop = handle.stop;
 }
 
-/** The real store, with each key-row read held until `count` requests wait on one and then answered in one turn, so they all reach the bounds before any derivation can end. */
-function arrivingTogether(count: number): HippoStore {
+/** The real store, with each key-row read held until `count` requests wait on one and then answered in one turn, so they all reach the bounds before any derivation can end; `onRelease` runs in that turn. */
+function arrivingTogether(count: number, onRelease: () => void = () => undefined): HippoStore {
   const inner = sqliteStore(root);
   const held: Array<() => void> = [];
   let open = false;
@@ -74,6 +75,7 @@ function arrivingTogether(count: number): HippoStore {
         if (held.length < count) return;
         open = true;
         for (const release of held.splice(0)) release();
+        onRelease();
       });
       return record;
     },
@@ -168,6 +170,28 @@ describe('key derivation bounds', () => {
       Array(3).fill({ status: 429, retryAfter: '1', refusal: { error: 'rate limit exceeded' } }),
     );
     expect({ derived: scryptRuns() - before, mostAtOnce: pool.peak }).toEqual({ derived: 10, mostAtOnce: 2 });
+  });
+
+  it('holds a flood on one key id from many addresses to one derivation and two waiting, so another key still gets a slot', async () => {
+    const target = mint();
+    const colleague = mint();
+    let flooded = (): void => undefined;
+    const queued = new Promise<void>((resolve) => {
+      flooded = resolve;
+    });
+    await start({ store: arrivingTogether(10, () => flooded()) });
+    const before = scryptRuns();
+    // One address per wrong secret, so no address bucket refuses any of them.
+    const flood = Array.from({ length: 10 }, (_, n) => recall(wrongSecret(target, n), `203.0.113.${100 + n}`));
+    await queued;
+    // Unbounded per key id, the flood would hold both slots and all eight waits here, and this first use would get 429.
+    expect(await recall(colleague, '203.0.113.200')).toEqual(OK);
+    const replies = await Promise.all(flood);
+    expect(replies.filter((r) => r.status !== 429)).toEqual(Array(3).fill(UNAUTHORISED));
+    expect(replies.filter((r) => r.status === 429)).toEqual(
+      Array(7).fill({ status: 429, retryAfter: '1', refusal: { error: 'rate limit exceeded' } }),
+    );
+    expect(scryptRuns() - before).toBe(4);
   });
 
   it("derives an unproved key's secret as a thread-pool job, so the event loop is free while it runs", async () => {

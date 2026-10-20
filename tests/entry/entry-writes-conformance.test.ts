@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { reject } from '../../src/api/index.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/memory.js';
-import type { AuditEvent } from '../../src/entry/store-kit.js';
+import type { AuditEvent, ScopeReader } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';
 import {
@@ -127,20 +127,23 @@ const fresh = (content: string, extra: Parameters<typeof createMemory>[1] = {}):
   ...createMemory(content, { tenantId: TENANT_A, ...extra }),
   originProject: 'proj',
 });
-const target = (id: string, ownScope: string | null = null, tenantId = TENANT_A) => ({
+type Reader = Omit<ScopeReader, 'ownScope'>;
+const ADMIN: Reader = { role: 'admin' };
+const target = (id: string, ownScope: string | null = null, tenantId = TENANT_A, reader: Reader = ADMIN) => ({
   tenantId,
   actor: ACTOR,
   ownScope,
+  ...reader,
   id,
 });
 const outcomeOn =
-  (ids: string[], good: boolean, ownScope: string | null = null): Call =>
+  (ids: string[], good: boolean, ownScope: string | null = null, reader: Reader = ADMIN): Call =>
   (g) =>
-    g.applyOutcome({ tenantId: TENANT_A, actor: ACTOR, ownScope, ids, good });
+    g.applyOutcome({ tenantId: TENANT_A, actor: ACTOR, ownScope, ...reader, ids, good });
 const supersede =
-  (oldId: string, successor: MemoryEntry, ownScope: string | null = null): Call =>
+  (oldId: string, successor: MemoryEntry, ownScope: string | null = null, reader: Reader = ADMIN): Call =>
   async (g) => {
-    await g.supersede({ tenantId: TENANT_A, actor: ACTOR, ownScope, oldId, successor });
+    await g.supersede({ tenantId: TENANT_A, actor: ACTOR, ownScope, ...reader, oldId, successor });
   };
 const dirtied = (summary: MemoryEntry) => ({
   tenantId: TENANT_A,
@@ -474,5 +477,50 @@ describe('EntryWrites.forget', () => {
     // SAFETY: the fifth call reads rows back, so it resolved to Row[].
     expect((side.outcomes[4] as { value: Row[] }).value.map((r) => r.id)).toEqual([raw.id]);
     expect(added(side).map((r) => [r.op, r.targetId])).toEqual([['forget', personal.id]]);
+  });
+});
+
+describe('a restricted scope by id', () => {
+  const OPS = 'slack:private:Cops';
+  const secret = fresh('the ops rota sits in the locked channel', { scope: OPS });
+  const secretRaw = fresh('raw ops channel message about the rota', { scope: OPS, kind: 'raw' });
+  const successor = fresh('the ops rota moved to the wiki', { scope: OPS });
+  const seedOps: Call = async (g) => {
+    for (const entry of [secret, secretRaw]) await g.writeEntry({ entry, actor: ACTOR });
+  };
+  const ops = readBack(TENANT_A, secret.id, secretRaw.id, successor.id);
+  /** Every write by id on the restricted rows: outcome, pin, supersede, archive and forget, in that order. */
+  const writesAs = (reader: Reader): Call[] => [
+    outcomeOn([secret.id], true, null, reader),
+    async (g) => project([await g.setPinned({ ...target(secret.id, null, TENANT_A, reader), pinned: true })]),
+    supersede(secret.id, successor, null, reader),
+    (g) => g.archiveRaw({ ...target(secretRaw.id, null, TENANT_A, reader), reason: 'r' }),
+    (g) => g.forget(target(secret.id, null, TENANT_A, reader)),
+  ];
+
+  it('answers a member without the grant as if the rows were missing, and changes nothing', async () => {
+    const side = await conforms([seedOps, ops, ...writesAs({ role: 'member', grants: ['slack:private:Cother'] }), ops]);
+    expect(side.outcomes.slice(2, 7)).toEqual([
+      { value: [] },
+      { error: `NotFoundError: memory not found: ${secret.id}` },
+      { error: `NotFoundError: memory not found: ${secret.id}` },
+      { error: `NotFoundError: memory not found: ${secretRaw.id}` },
+      { error: `NotFoundError: memory not found: ${secret.id}` },
+    ]);
+    expect(side.outcomes[7]).toEqual(side.outcomes[1]);
+    expect(added(side).map((r) => r.op)).toEqual(['remember', 'remember']);
+  });
+
+  const granted: Reader = { role: 'member', grants: [OPS] };
+
+  it.each([
+    ['a member with the grant', granted],
+    ['an admin', ADMIN],
+  ])('lets %s act on them as on any other row', async (_who, reader) => {
+    const side = await conforms([seedOps, ...writesAs(reader), ops]);
+    expect(side.outcomes.slice(1, 6).filter((o) => 'error' in o)).toEqual([]);
+    expect(side.outcomes[1]).toEqual({ value: [secret.id] });
+    // SAFETY: the last call reads rows back, so it resolved to Row[].
+    expect((side.outcomes[6] as { value: Row[] }).value.map((r) => r.id)).toEqual([successor.id]);
   });
 });

@@ -10,6 +10,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
+import { processGit } from '../../src/base/util/git-runner.js';
 
 const OLD_TARGETS = 200;
 /** Rows the confirmed-outcome statement handed to JavaScript in `reads`. */
@@ -106,10 +107,14 @@ describe('detectChurnStale', () => {
     writeEntry(root, entry);
 
     const { result, reads } = recordStatements(() =>
-      detectChurnStale(sqliteSyncStore(root).localFiles.learning, '/no/such/repo', {
-        tenantId: 'default',
-        projectName: 'proj',
-      }),
+      detectChurnStale(
+        sqliteSyncStore(root).localFiles.learning,
+        { root: '/no/such/repo', git: processGit },
+        {
+          tenantId: 'default',
+          projectName: 'proj',
+        },
+      ),
     );
 
     expect(result.checked).toBe(1);

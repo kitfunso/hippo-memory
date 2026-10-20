@@ -3,28 +3,27 @@
  * Docs: docs/plans/2026-05-29-e2-process-object.md
  *
  * Covers what only processes have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
- * 1. saveProcess creates the memory mirror + processes row (+ process_create audit), version 1
+ * 1. the process save creates the memory mirror + processes row (+ process_create audit), version 1
  * 2. memory content: name + numbered steps + description
- * 3. loadProcesses status filter; status 'active' excludes non-active
+ * 3. the process list status filter; status 'active' excludes non-active
  * 4. steps validation: non-array / non-string / empty / count cap / length cap; trim-then-store
  * 5. a damaged steps column reads as no steps and warns once per shape
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
-  saveProcess,
-  closeProcess,
-  loadProcessById,
-  loadProcesses,
+  PROCESS,
   validateProcessSteps,
   MAX_PROCESS_STEPS,
   MAX_PROCESS_STEP_LEN,
 } from '../../src/domain/objects/processes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { cliSave } from '../_helpers/cli-save-site.js';
 
 oneRequestPerTest();
 
@@ -46,7 +45,7 @@ describe('processes store (first-class object)', () => {
   afterEach(() => removeAfterRequest(home));
 
   it('saveProcess creates both memory and processes row + process_create audit, version 1', async () => {
-    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const proc = await cliSave(home, 'default', PROCESS, {
       processName: 'Release',
       steps: ['run tests', 'bump version', 'publish'],
       description: 'the npm release ritual',
@@ -101,7 +100,7 @@ describe('processes store (first-class object)', () => {
   });
 
   it('saveProcess without steps/description: bare name content', async () => {
-    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const proc = await cliSave(home, 'default', PROCESS, {
       processName: 'Empty',
       steps: [],
     });
@@ -119,37 +118,39 @@ describe('processes store (first-class object)', () => {
   });
 
   it('loadProcesses status filter; status active excludes non-active', async () => {
-    const a = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const a = await cliSave(home, 'default', PROCESS, {
       processName: 'active-1',
       steps: ['a'],
     });
-    const b = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const b = await cliSave(home, 'default', PROCESS, {
       processName: 'to-supersede',
       steps: ['b'],
     });
-    const c = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const c = await cliSave(home, 'default', PROCESS, {
       processName: 'to-close',
       steps: ['c'],
     });
-    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    await cliSave(home, 'default', PROCESS, {
       processName: 'to-supersede',
       steps: ['b', 'b2'],
       supersedesProcessId: b.id,
     });
-    await closeProcess(objectsAt(home), 'default', c.id);
+    await closeObject(objectsAt(home), PROCESS, 'default', c.id, CLI_ACTOR);
 
-    const active = await loadProcesses(objectsAt(home), 'default', { status: 'active' });
+    const active = await listObjects(objectsAt(home), PROCESS, 'default', { status: 'active' });
     expect(active.every((x) => x.status === 'active')).toBe(true);
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);
 
-    expect((await loadProcesses(objectsAt(home), 'default', { status: 'superseded' })).map((x) => x.id)).toEqual([
-      b.id,
+    expect((await listObjects(objectsAt(home), PROCESS, 'default', { status: 'superseded' })).map((x) => x.id)).toEqual(
+      [b.id],
+    );
+    expect((await listObjects(objectsAt(home), PROCESS, 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
+      c.id,
     ]);
-    expect((await loadProcesses(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
     // a (active), b (superseded), c (closed), b-v2 (active) = 4 total rows.
-    expect((await loadProcesses(objectsAt(home), 'default')).length).toBe(4);
+    expect((await listObjects(objectsAt(home), PROCESS, 'default', {})).length).toBe(4);
   });
 
   it('steps validation: rejects non-array / non-string / empty / cap breaches; trims-then-stores', async () => {
@@ -161,16 +162,16 @@ describe('processes store (first-class object)', () => {
     // trim-then-store: a padded step is stored trimmed.
     expect(validateProcessSteps(['  spaced  '])).toEqual(['spaced']);
 
-    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const proc = await cliSave(home, 'default', PROCESS, {
       processName: 'Trim',
       steps: ['  lead/trail  '],
     });
     expect(proc.steps).toEqual(['lead/trail']);
-    expect((await loadProcessById(objectsAt(home), 'default', proc.id))!.steps).toEqual(['lead/trail']);
+    expect((await objectById(objectsAt(home), PROCESS, 'default', proc.id))!.steps).toEqual(['lead/trail']);
     // saveProcess rejects bad steps and writes nothing.
     const before = countRows(home, 'processes');
     await expect(
-      saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      cliSave(home, 'default', PROCESS, {
         processName: 'Bad',
         steps: ['', 'x'],
       }),
@@ -179,11 +180,11 @@ describe('processes store (first-class object)', () => {
   });
 
   it('a damaged steps column reads as no steps and warns once per shape', async () => {
-    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const proc = await cliSave(home, 'default', PROCESS, {
       processName: 'Damaged',
       steps: ['a'],
     });
-    const other = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const other = await cliSave(home, 'default', PROCESS, {
       processName: 'WrongShape',
       steps: ['a'],
     });
@@ -198,8 +199,8 @@ describe('processes store (first-class object)', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let logged: string;
     try {
-      expect((await loadProcessById(objectsAt(home), 'default', proc.id))!.steps).toEqual([]);
-      expect((await loadProcessById(objectsAt(home), 'default', other.id))!.steps).toEqual([]);
+      expect((await objectById(objectsAt(home), PROCESS, 'default', proc.id))!.steps).toEqual([]);
+      expect((await objectById(objectsAt(home), PROCESS, 'default', other.id))!.steps).toEqual([]);
       logged = stderr.mock.calls.map((c) => String(c[0])).join('');
     } finally {
       stderr.mockRestore();

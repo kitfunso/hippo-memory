@@ -1,27 +1,34 @@
-// /v1/skills routes.
-import { MAX_SKILL_NAME_LEN, type SaveSkillOptions, SKILL, skillsMarkdown } from '../../../domain/objects/skills.js';
+// /v1/skills routes; "executable" means exportable instruction (no code exec). GET /v1/skills/export renders the active
+// skills as one markdown block for AGENTS.md or CLAUDE.md.
+import { OBJECT_CAPS, skillsExport } from '../../../api/objects/object-kinds.js';
+import { objectCreate } from '../../../api/objects/objects.js';
 import { sendJson } from '../../../base/util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import {
-  MAX_SHORT_FIELD_LEN,
-  parseJsonBody,
-  getString,
-  requiredString,
-  type RequiredStringRule,
-} from '../validation.js';
-import { objectsOf, saveFor } from '../../../api/objects/objects.js';
-import { closeRoute, getRoute, listRoute, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { MAX_SHORT_FIELD_LEN, getString, requiredString, type RequiredStringRule } from '../validation.js';
+import type { VersionedRouteConfig } from './object-routes.js';
 
-const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
+const INSTRUCTIONS: RequiredStringRule = { max: OBJECT_CAPS.skillInstructions, plural: true };
 
-const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOptions> = {
+async function handleExportSkills({ res, ctx }: AuthedRouteRequest): Promise<void> {
+  sendJson(res, 200, { markdown: await skillsExport(ctx) });
+}
+
+export const SKILL_ROUTES: VersionedRouteConfig<'skill'> = {
+  base: '/v1/skills',
+  kind: 'skill',
   noun: 'skill',
   field: 'skill',
   listField: 'skills',
-  object: SKILL,
+  create: (ctx, body) =>
+    objectCreate(ctx, 'skill', {
+      skillName: requiredString(body, 'skillName', { max: OBJECT_CAPS.skillName }),
+      instructions: requiredString(body, 'instructions', INSTRUCTIONS),
+      trigger: getString(body, 'trigger', OBJECT_CAPS.skillTrigger),
+    }),
+  named: [{ method: 'GET', sub: 'export', handler: handleExportSkills }],
   revise: (body) => {
     const instructions = requiredString(body, 'instructions', INSTRUCTIONS);
-    const trigger = getString(body, 'trigger', 1024);
+    const trigger = getString(body, 'trigger', OBJECT_CAPS.skillTrigger);
     const changeSummary = getString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
     return (existing, id) => ({
       skillName: existing.skillName,
@@ -32,42 +39,3 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOptions> = {
     });
   },
 };
-
-// Routes: /v1/skills (create, list, export, show, supersede, close), mirroring /v1/processes; "executable" means
-// exportable instruction (no code exec).
-// GET /v1/skills/export renders ACTIVE skills as a markdown block for AGENTS.md or CLAUDE.md and is ordered before
-// /:id.
-export async function handleCreateSkill(rr: AuthedRouteRequest): Promise<void> {
-  const { ctx } = rr;
-  const body = await parseJsonBody(rr.req, ctx);
-  const skill = await saveFor(ctx, SKILL, {
-    skillName: requiredString(body, 'skillName', { max: MAX_SKILL_NAME_LEN }),
-    instructions: requiredString(body, 'instructions', INSTRUCTIONS),
-    trigger: getString(body, 'trigger', 1024),
-  });
-  sendJson(rr.res, 201, { skill });
-}
-
-export function handleListSkills(rr: AuthedRouteRequest): Promise<void> {
-  return listRoute(skillRoutes, rr);
-}
-
-// The export renderer: must precede the /:id GET (literal 'export' is non-numeric so the /(\d+)/ route would not match
-// it, but order it first).
-export async function handleExportSkills(rr: AuthedRouteRequest): Promise<void> {
-  const { res, ctx } = rr;
-  const markdown = await skillsMarkdown(objectsOf(ctx), ctx.tenantId);
-  sendJson(res, 200, { markdown });
-}
-
-export function handleSupersedeSkill(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return supersedeRoute(skillRoutes, rr, match);
-}
-
-export function handleCloseSkill(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return closeRoute(skillRoutes, rr, match);
-}
-
-export function handleGetSkill(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return getRoute(skillRoutes, rr, match);
-}

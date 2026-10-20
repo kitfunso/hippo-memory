@@ -6,6 +6,7 @@ import { unrejectValue, listRejectionsForTenant } from '../../domain/trust/rejec
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { processGit } from '../../base/util/git-runner.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import * as client from './client.js';
@@ -508,7 +509,7 @@ function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], fl
     printError('Usage: hippo invalidate --churn [--dry-run]');
     fail('--churn takes no pattern or --id.');
   }
-  if (!isGitRepo(process.cwd())) {
+  if (!isGitRepo(processGit, process.cwd())) {
     fail('hippo invalidate --churn must run inside a git repository.');
   }
   const churnDryRun = flagIsTrue(flags, 'dry-run');

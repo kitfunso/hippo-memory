@@ -22,7 +22,7 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { consolidate } from '../../src/index.js';
-import { saveDecision, closeDecision } from '../../src/domain/objects/decisions.js';
+import { saveDecision, DECISION } from '../../src/domain/objects/decisions.js';
 import { openIncident, resolveOpenIncident } from '../../src/domain/objects/incidents.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { supersede, adminActor } from '../../src/api/index.js';
@@ -42,6 +42,8 @@ import {
   loadAllEntries,
 } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { closeObject } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 
 const dirs: string[] = [];
 const local = (root: string) => sqliteSyncStore(root).localFiles.consolidation;
@@ -352,7 +354,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const closed = await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
       decisionText: 'freeze deploys on Fridays',
     });
-    await closeDecision(objectsAt(root), 'default', closed.id);
+    await closeObject(objectsAt(root), DECISION, 'default', closed.id, CLI_ACTOR);
     const incident = await openIncident(
       objectsAt(root),
       loadConfig(root).defaultHalfLifeDays,

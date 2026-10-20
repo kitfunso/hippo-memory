@@ -9,7 +9,7 @@ import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
-import { closeObject, listObjects, objectById, type ObjectSaveSite, saveObject } from './lifecycle.js';
+import { listObjects, type ObjectSaveSite, saveObject } from './lifecycle.js';
 import type { BriefReceipt, BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
 import type { ObjectListQuery, Objects } from '../../store/port.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -21,7 +21,7 @@ export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>
 /** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger cap than the 4096 short-field
  *  convention. */
 export const MAX_REPO_LEN = 256;
-const MAX_BRIEF_SUMMARY_LEN = 8192;
+export const MAX_BRIEF_SUMMARY_LEN = 8192;
 export const MAX_CHANGE_SUMMARY_LEN = 4096;
 /** Bound the receipts gathered per refresh (a refresh reads memories; cap the scan
  *  + the rendered body). Realistic repos have far fewer recent receipts than this. */
@@ -100,20 +100,6 @@ export function saveProjectBrief(
   actor: string = CLI_ACTOR,
 ): Promise<ProjectBrief> {
   return saveObject(objects, PROJECT_BRIEF, { baseHalfLifeDays, tenantId, actor }, opts);
-}
-
-/** Close (retire) an active brief; a superseded row is terminal. */
-export function closeProjectBrief(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-  actor: string = CLI_ACTOR,
-): Promise<ProjectBrief> {
-  return closeObject(objects, PROJECT_BRIEF, tenantId, id, actor);
-}
-
-export function loadProjectBriefById(objects: Objects, tenantId: string, id: number): Promise<ProjectBrief | null> {
-  return objectById(objects, PROJECT_BRIEF, tenantId, id);
 }
 
 export function loadProjectBriefs(

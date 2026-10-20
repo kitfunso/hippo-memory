@@ -15,9 +15,9 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memo
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
   saveDecision,
-  closeDecision,
   loadDecisions,
   resolveActiveDecisionIdByMemory,
+  DECISION,
 } from '../../src/domain/objects/decisions.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
@@ -26,6 +26,8 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { closeObject } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 
 oneRequestPerTest();
 
@@ -166,7 +168,7 @@ describe('decisions store (first-class object)', () => {
     const c = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'to-supersede',
     });
-    await closeDecision(objectsAt(home), 'default', b.id);
+    await closeObject(objectsAt(home), DECISION, 'default', b.id, CLI_ACTOR);
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'successor',
       supersedesDecisionId: c.id,

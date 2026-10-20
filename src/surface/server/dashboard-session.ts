@@ -2,6 +2,7 @@
 // cookie never reaches a /v1 route.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { TLSSocket } from 'node:tls';
 import { HttpError } from '../../base/util/http-util.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { isForeignPage } from './auth.js';
@@ -18,8 +19,7 @@ export type DashboardSession = 'token' | 'cookie';
 const UNAUTHORIZED =
   'Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.';
 
-// A browser that restores its session keeps a cookie with no Max-Age for good; no Secure, since this server speaks
-// plain HTTP on loopback only.
+// A browser that restores its session keeps a cookie with no Max-Age for good.
 const COOKIE_MAX_AGE_S = DAY_MS / 1000;
 
 function sameSecret(given: string | undefined, secret: string): boolean {
@@ -56,9 +56,11 @@ export function passDashboardSession(
   const cookieName = `hippo_dashboard_${port}`;
   const session = sessionValue(access.token, port);
   if (sameSecret(query.get('token') ?? undefined, access.token)) {
+    // A session minted over TLS must never travel over plain HTTP; the plain loopback listener cannot promise Secure.
+    const secure = req.socket instanceof TLSSocket ? '; Secure' : '';
     res.setHeader(
       'Set-Cookie',
-      `${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_S}`,
+      `${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_S}${secure}`,
     );
     return 'token';
   }

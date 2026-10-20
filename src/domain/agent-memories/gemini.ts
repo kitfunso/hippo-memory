@@ -1,8 +1,8 @@
 // Gemini CLI: the "Gemini Added Memories" section of GEMINI.md, and the auto-memory folder that projects.json names.
-import fs from 'node:fs';
 import path from 'node:path';
 import { isStringValue } from '../../base/session/capture-contract.js';
-import { readTextFile, splitFrontmatter } from './files.js';
+import type { AgentFiles } from '../../base/util/agent-files.js';
+import { splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import { textItemKeys } from './keys.js';
@@ -17,7 +17,7 @@ export const geminiAdapter: Adapter = {
   tool: 'gemini',
   list(ctx, scope) {
     const home = path.join(ctx.env.GEMINI_CLI_HOME || ctx.home, '.gemini');
-    if (scope === 'user') return { tool: 'gemini', home, containers: userContainers(home), warnings: [] };
+    if (scope === 'user') return { tool: 'gemini', home, containers: userContainers(ctx.files, home), warnings: [] };
     return projectListing(ctx, home);
   },
 };
@@ -26,10 +26,10 @@ function refused(scope: Scope, file: string, reason: string, textKeyed: boolean)
   return { scope, path: file, readable: false, items: [], skipped: [], warnings: [reason], textKeyed };
 }
 
-function userContainers(home: string): Container[] {
+function userContainers(files: AgentFiles, home: string): Container[] {
   const file = path.join(home, 'GEMINI.md');
-  if (!fs.existsSync(file)) return [];
-  const read = readTextFile(file);
+  if (!files.exists(file)) return [];
+  const read = files.readText(file);
   if (!read.ok) return [refused('user', file, read.reason, true)];
   const kept = splitMarkdownItems(read.text).filter((item) => item.heading.toLowerCase() === SECTION);
   const keys = textItemKeys(kept);
@@ -42,7 +42,8 @@ function projectListing(ctx: AdapterContext, home: string): Listing {
   const containers: Container[] = [];
   if (ctx.projectRoot !== undefined) {
     const slug = projectSlug(ctx, ctx.projectRoot, home, warnings);
-    const container = slug === null ? null : readFolderStore(path.join(home, 'tmp', slug, 'memory'), 'project', NOTES);
+    const container =
+      slug === null ? null : readFolderStore(ctx.files, path.join(home, 'tmp', slug, 'memory'), 'project', NOTES);
     if (container !== null) containers.push(container);
   }
   return { tool: 'gemini', home, containers, warnings };
@@ -50,8 +51,8 @@ function projectListing(ctx: AdapterContext, home: string): Listing {
 
 function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, warnings: string[]): string | null {
   const index = path.join(home, 'projects.json');
-  if (!fs.existsSync(index)) return null;
-  const read = readTextFile(index);
+  if (!ctx.files.exists(index)) return null;
+  const read = ctx.files.readText(index);
   if (!read.ok) {
     warnings.push(read.reason);
     return null;
@@ -64,7 +65,7 @@ function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, war
     return null;
   }
   // The git top level is only asked for when the folder itself has no entry, since it spawns git.
-  const entry = findEntry(projects, projectRoot, ctx.platform) ?? topEntry(projects, projectRoot, ctx.platform);
+  const entry = findEntry(projects, projectRoot, ctx.platform) ?? topEntry(ctx, projects, projectRoot);
   if (entry === undefined) return null;
   const [key, slug] = entry;
   if (isStringValue(slug) && isPlainName(slug)) return slug;
@@ -94,13 +95,9 @@ function findEntry(projects: JsonObject, target: string, platform: NodeJS.Platfo
   return Object.entries(projects).find(([key]) => path.isAbsolute(key) && fold(key, platform) === want);
 }
 
-function topEntry(
-  projects: JsonObject,
-  projectRoot: string,
-  platform: NodeJS.Platform,
-): [string, JsonValue] | undefined {
-  const top = gitLayout(projectRoot)?.top;
-  return top === undefined ? undefined : findEntry(projects, top, platform);
+function topEntry(ctx: AdapterContext, projects: JsonObject, projectRoot: string): [string, JsonValue] | undefined {
+  const top = gitLayout(ctx.git, projectRoot)?.top;
+  return top === undefined ? undefined : findEntry(projects, top, ctx.platform);
 }
 
 const NOTES: FolderRules = {

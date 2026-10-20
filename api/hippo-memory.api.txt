@@ -147,6 +147,7 @@ entry/store-kit.d.ts: RepairProtection re-export
 entry/store-kit.d.ts: Reports re-export
 entry/store-kit.d.ts: RetrievalPolicy re-export
 entry/store-kit.d.ts: SECRET_TAGS re-export
+entry/store-kit.d.ts: ScopeReader re-export
 entry/store-kit.d.ts: SelfKeyMint re-export
 entry/store-kit.d.ts: SessionEndHandoffRequest re-export
 entry/store-kit.d.ts: SessionEvent re-export
@@ -195,12 +196,14 @@ entry/store-kit.d.ts: passesScopeFilterForRecall re-export
 entry/store-kit.d.ts: physicsSearch re-export
 entry/store-kit.d.ts: rankVectorRows re-export
 entry/store-kit.d.ts: rarestFtsQuery re-export
+entry/store-kit.d.ts: readerReaches re-export
 entry/store-kit.d.ts: rejectionDigest re-export
 entry/store-kit.d.ts: repairKeeps re-export
 entry/store-kit.d.ts: replacesIndex re-export
 entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: sqliteStore re-export
 entry/store-kit.d.ts: tallyAmbientEntries re-export
+entry/store-kit.d.ts: targetReader re-export
 entry/testing.d.ts: MemoryWire re-export
 entry/testing.d.ts: WireSearchResult re-export
 entry/testing.d.ts: WireStrengthInputs re-export

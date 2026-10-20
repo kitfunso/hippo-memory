@@ -16,7 +16,7 @@ import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { lessonFromFailure, failureSignature } from '../../src/surface/capture/failure-reading.js';
 import { getHippoRoot } from '../../src/base/scope/project-identity.js';
-import { installJsonHooks } from '../../src/domain/hooks/json-hooks.js';
+import { installJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

@@ -6,7 +6,8 @@ import {
   envTenant,
 } from '../../../base/util/env.js';
 import type { ServerResponse } from 'node:http';
-import { isWellFormedSlackRequest, previousSecretInForce, verifySlackSignature } from './signature.js';
+import { isWellFormedSlackRequest, verifySlackSignature } from './signature.js';
+import { previousSecretInForce, SLACK_PREVIOUS, warnIfOpenEnded } from '../previous-secret.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
@@ -29,6 +30,10 @@ import {
 } from '../../../base/util/http-util.js';
 import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/json.js';
 
+export function warnSlackPreviousSecretOpen(): void {
+  warnIfOpenEnded(SLACK_PREVIOUS, envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
+}
+
 /** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
  * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
  * cannot tell a gated-off route from a missing one. */
@@ -46,7 +51,11 @@ export async function handleSlackEventsWebhook(
     res.end(JSON.stringify({ error: 'not found' }));
     return;
   }
-  const previousSecret = previousSecretInForce(envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
+  const previousSecret = previousSecretInForce(
+    SLACK_PREVIOUS,
+    envSlackSigningSecretPrevious(),
+    envSlackSigningSecretPreviousUntil(),
+  );
   const sig = req.headers['x-slack-signature'];
   const tsHdr = req.headers['x-slack-request-timestamp'];
   const sigStr = isHeaderString(sig) ? sig : null;

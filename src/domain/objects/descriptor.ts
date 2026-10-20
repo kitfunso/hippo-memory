@@ -10,7 +10,7 @@ export interface ObjectDescriptor<K extends ObjectKind> {
   /** The nouns error text uses: "brief 3 not found", "only active briefs". */
   readonly label: string;
   readonly plural: string;
-  /** The exported function names; each one prefixes the errors of its own call. */
+  /** Each call's error-text prefix; HTTP and CLI replies carry it, so it stays fixed whatever the call is named. */
   readonly fn: { readonly get: string; readonly close: string; readonly list: string };
   readonly states: ReadonlySet<ObjectByKind[K]['status']>;
   /** The statuses a close may start from. */
