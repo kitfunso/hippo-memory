@@ -6,14 +6,14 @@ import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
-import { isLiveMemory } from '../../api/dashboard/snapshot.js';
+import { isLiveMemory } from '../../api/dashboard/live.js';
 import type { ForgetResult, ResolveResult } from '../../api/dashboard/types.js';
 
 /** What an action hands the router: a status, a JSON body, and whether the store changed. */
 export interface ActionResult {
   status: number;
   body: unknown;
-  /** True when a write committed, so the router drops the snapshot. */
+  /** True when a write committed, so the router moves the snapshot id. */
   changed: boolean;
   /** The live entry an action acted on, so the router can build the detail after the cache is dropped. */
   entry?: MemoryEntry;

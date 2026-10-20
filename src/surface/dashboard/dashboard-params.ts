@@ -1,7 +1,7 @@
 // One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an unchecked id.
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import { LAYERS, type Chip } from '../../api/dashboard/snapshot.js';
+import { LAYERS, type Chip } from '../../api/dashboard/live.js';
 import { SORT_KEYS, type MemoryQuery } from '../../api/dashboard/queries.js';
 import { isJsonObject, isJsonString, tryParseJson } from '../../base/util/json.js';
 

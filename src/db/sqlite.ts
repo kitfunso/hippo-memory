@@ -1,10 +1,14 @@
 import { createRequire } from 'module';
-import type { SQLOutputValue } from 'node:sqlite';
+import type { AggregateOptions, FunctionOptions, SQLInputValue, SQLOutputValue } from 'node:sqlite';
 
 const require = createRequire(import.meta.url);
 
 /** A row as node:sqlite returns it, before a cast names its columns. */
 type SqlRow = Record<string, SQLOutputValue>;
+
+/** A value SQLite hands a SQL function, and one a SQL function hands back. */
+export type SqlValue = SQLOutputValue;
+export type SqlResult = SQLInputValue;
 
 interface StatementSyncLike {
   run(...params: unknown[]): { lastInsertRowid?: number | bigint; changes?: number };
@@ -17,6 +21,10 @@ export interface DatabaseSyncLike {
   exec(sql: string): void;
   prepare(sql: string): StatementSyncLike;
   close(): void;
+  /** A SQL function on this connection, called once per row that names it. */
+  function(name: string, options: FunctionOptions, fn: (...args: SqlValue[]) => SqlResult): void;
+  /** An aggregate on this connection: `start` per group, `step` per row, `result` once per group. */
+  aggregate<T extends SqlResult>(name: string, options: AggregateOptions<T>): void;
   readonly isOpen?: boolean;
   readonly isTransaction?: boolean;
 }
