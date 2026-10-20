@@ -4,9 +4,8 @@
 
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { ObjectDescriptor } from './descriptor.js';
-import { closeObject, listObjects, objectById, objectMirror } from './lifecycle.js';
+import { objectMirror } from './lifecycle.js';
 import {
   isObjectRefusal,
   type Incident,
@@ -14,7 +13,6 @@ import {
   type ObjectRefusal,
 } from '../../base/records/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, IncidentResolve, Objects } from '../../store/port.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { Incident, IncidentStatus } from '../../base/records/object-types.js';
 
@@ -32,13 +30,6 @@ export interface SaveIncidentOptions {
   linkedMemoryIds?: string[];
   /** Extra memory tags merged after ['incident'] (the CLI passes path-context tags; HTTP/SDK pass none). */
   extraTags?: string[];
-}
-
-export interface ListIncidentsOptions {
-  status?: IncidentStatus;
-  limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
-  after?: KeysetPosition;
 }
 
 // No draft: an incident is opened with linked memories and is never superseded, so it keeps its own save.
@@ -127,26 +118,4 @@ export async function resolveOpenIncident(
     id,
     await objects.resolveIncident(tenantId, id, resolving(tenantId, resolutionText, actor)),
   );
-}
-
-/** Close (retire) an incident from open or resolved; sets closed_at only, the memory mirror is not mutated. */
-export function closeIncident(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-  actor: string = CLI_ACTOR,
-): Promise<Incident> {
-  return closeObject(objects, INCIDENT, tenantId, id, actor);
-}
-
-export function loadIncidentById(objects: Objects, tenantId: string, id: number): Promise<Incident | null> {
-  return objectById(objects, INCIDENT, tenantId, id);
-}
-
-export function loadIncidents(
-  objects: Objects,
-  tenantId: string,
-  opts: ListIncidentsOptions = {},
-): Promise<Incident[]> {
-  return listObjects(objects, INCIDENT, tenantId, opts);
 }

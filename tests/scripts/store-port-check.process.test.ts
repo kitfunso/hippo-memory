@@ -362,6 +362,23 @@ describe('check-store-port.mjs', () => {
     }
   });
 
+  it('reads a spread of built kind rows as needing no hippo.db, unless kind-routes.ts names a status', () => {
+    const table =
+      "const V1_ROUTES = [\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  ...kindRows(PREDICTIONS),\n  ...versionedRoutes(POLICIES),\n];\n";
+    const rows = (builder: string) => ({
+      'src/surface/server/route-table.ts': table,
+      'src/surface/server/routes/kind-routes.ts': builder,
+    });
+    withFixture(rows('export function kindRows(kind) {\n  return [];\n}\n'), null, ({ run }) => {
+      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '1', sqliteOnlyRoutes: '0' });
+    });
+    withFixture(rows("export const row = { storeReady: 'localFiles' };\n"), null, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('kind-routes.ts builds rows that name a storeReady or sqliteOnly');
+    });
+  });
+
   it('fails and names a sqliteOnly route the baseline does not list, and --update will not add it', () => {
     const table =
       "const V1_ROUTES = [\n  { method: 'POST', path: '/x', sqliteOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', sqliteOnly: 'local only', handler: y },\n];\n";

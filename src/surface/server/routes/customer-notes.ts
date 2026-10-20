@@ -1,53 +1,27 @@
-// /v1/customer-notes routes.
-import {
-  CUSTOMER_NOTE,
-  MAX_CHANGE_SUMMARY_LEN,
-  MAX_CUSTOMER_LEN,
-  type SaveCustomerNoteOptions,
-} from '../../../domain/objects/customer-notes.js';
-import { sendJson } from '../../../base/util/http-util.js';
-import type { AuthedRouteRequest } from '../types.js';
-import { parseJsonBody, getString, requiredString } from '../validation.js';
-import { saveFor } from '../../../api/objects/objects.js';
-import { closeRoute, getRoute, listRoute, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+// /v1/customer-notes routes; the store validates and throws, and the boundary maps validation to 400, not-found to 404
+// and not-active to 409.
+import { OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
+import { objectCreate } from '../../../api/objects/objects.js';
+import { getString, requiredString } from '../validation.js';
+import type { VersionedRouteConfig } from './object-routes.js';
 
-const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOptions> = {
+const NOTE = { max: OBJECT_CAPS.note };
+
+export const CUSTOMER_NOTE_ROUTES: VersionedRouteConfig<'customer_note'> = {
+  base: '/v1/customer-notes',
+  kind: 'customer_note',
   noun: 'customer note',
   field: 'note',
   listField: 'notes',
-  object: CUSTOMER_NOTE,
   filterParam: 'customer',
+  create: (ctx, body) =>
+    objectCreate(ctx, 'customer_note', {
+      customer: requiredString(body, 'customer', { max: OBJECT_CAPS.customer }),
+      note: requiredString(body, 'note', NOTE),
+    }),
   revise: (body) => {
-    const note = requiredString(body, 'note', { max: 8192 });
-    const changeSummary = getString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
+    const note = requiredString(body, 'note', NOTE);
+    const changeSummary = getString(body, 'changeSummary', OBJECT_CAPS.noteChange);
     return (existing, id) => ({ customer: existing.customer, note, changeSummary, supersedesNoteId: id });
   },
 };
-
-// Routes: customer notes under /v1/customer-notes (create, list, show, supersede, close), mirroring /v1/project-briefs.
-// The store validates and throws; the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
-export async function handleCreateCustomerNote(rr: AuthedRouteRequest): Promise<void> {
-  const { ctx } = rr;
-  const body = await parseJsonBody(rr.req, ctx);
-  const customerNote = await saveFor(ctx, CUSTOMER_NOTE, {
-    customer: requiredString(body, 'customer', { max: MAX_CUSTOMER_LEN }),
-    note: requiredString(body, 'note', { max: 8192 }),
-  });
-  sendJson(rr.res, 201, { note: customerNote });
-}
-
-export function handleListCustomerNotes(rr: AuthedRouteRequest): Promise<void> {
-  return listRoute(noteRoutes, rr);
-}
-
-export function handleSupersedeCustomerNote(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return supersedeRoute(noteRoutes, rr, match);
-}
-
-export function handleCloseCustomerNote(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return closeRoute(noteRoutes, rr, match);
-}
-
-export function handleGetCustomerNote(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return getRoute(noteRoutes, rr, match);
-}

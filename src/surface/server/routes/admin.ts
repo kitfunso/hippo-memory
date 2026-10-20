@@ -12,7 +12,7 @@ import {
 import { HttpError, readBody, sendJson } from '../../../base/util/http-util.js';
 import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
-import type { AuthedRouteRequest } from '../types.js';
+import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import { getString, isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
 import { isJsonBoolean, isJsonNumber } from '../../../base/util/json.js';
 import { AUDIT_OPS } from '../../../base/records/audit-ops.js';
@@ -99,12 +99,9 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
 // DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is 403 on any key but
 // its own or, via the resolver, those it minted. Returns 200 with the body rather than 204 so the caller sees
 // revokedAt.
-export async function handleRevokeAuthKey(
-  { res, ctx }: AuthedRouteRequest,
-  keyMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(keyMatch.keyId!, 'key id');
-  const result = await authRevoke(ctx, keyMatch.keyId!);
+export async function handleRevokeAuthKey({ res, ctx }: AuthedRouteRequest, { keyId }: RouteParams): Promise<void> {
+  validateIdSegment(keyId, 'key id');
+  const result = await authRevoke(ctx, keyId);
   sendJson(res, 200, result);
   return;
 }
@@ -131,24 +128,18 @@ export async function handleListQuarantine({ res, ctx, query }: AuthedRouteReque
 }
 
 // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
-export async function handleApproveQuarantine(
-  { res, ctx }: AuthedRouteRequest,
-  quarantineApproveMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(quarantineApproveMatch.id!, 'memory id');
-  await quarantineApprove(ctx, quarantineApproveMatch.id!);
-  sendJson(res, 200, { approved: quarantineApproveMatch.id });
+export async function handleApproveQuarantine({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+  validateIdSegment(id, 'memory id');
+  await quarantineApprove(ctx, id);
+  sendJson(res, 200, { approved: id });
   return;
 }
 
 // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
-export async function handleRejectQuarantine(
-  { res, ctx }: AuthedRouteRequest,
-  quarantineRejectMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(quarantineRejectMatch.id!, 'memory id');
-  await quarantineReject(ctx, quarantineRejectMatch.id!);
-  sendJson(res, 200, { rejected: quarantineRejectMatch.id });
+export async function handleRejectQuarantine({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+  validateIdSegment(id, 'memory id');
+  await quarantineReject(ctx, id);
+  sendJson(res, 200, { rejected: id });
   return;
 }
 

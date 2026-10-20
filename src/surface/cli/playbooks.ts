@@ -1,18 +1,12 @@
 // First-class object verbs for processes, policies and skills.
 
-import { cliConfig } from './api-context.js';
-import * as processesModule from '../../domain/objects/processes.js';
-import * as policiesModule from '../../domain/objects/policies.js';
-import * as skillsModule from '../../domain/objects/skills.js';
+import { policiesInForce, skillsExport } from '../../api/objects/object-kinds.js';
+import type { Context } from '../../api/types.js';
+import type { Policy, Process, Skill } from '../../base/records/object-types.js';
 import { nonEmptyStringFlag, repeatedFlag, type CliFlags } from './flag-values.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
-import type { Objects } from '../../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
-
-type Process = processesModule.Process;
-type Policy = policiesModule.Policy;
-type Skill = skillsModule.Skill;
 
 // A value-less --step errors; repeated and single values both come back as a list.
 function collectProcessSteps(flags: CliFlags): string[] {
@@ -35,14 +29,10 @@ interface ProcessBody {
   readonly description: string | undefined;
 }
 
-const processKind = (
-  objects: Objects,
-  hippoRoot: string,
-  tenantId: string,
-): VersionedKind<Process, processesModule.ProcessStatus, ProcessBody> => ({
+const processKind: VersionedKind<'process', ProcessBody> = {
+  kind: 'process',
   names: { cmd: 'process', noun: 'Process', idLabel: 'process' },
   plural: 'processes',
-  states: processesModule.VALID_PROCESS_STATES,
   usage: [
     'Usage: hippo process new "<name>" --step "<text>" [--step ...] [--description "<text>"]',
     '       hippo process list [--status active|superseded|closed|all] [--limit N]',
@@ -60,18 +50,13 @@ const processKind = (
     return { steps, description: nonEmptyStringFlag(flags, 'description') };
   },
   keyOf: (proc) => proc.processName,
-  save: (processName, body, extraTags, from) =>
-    processesModule.saveProcess(objects, cliConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
-      processName,
-      ...body,
-      extraTags,
-      changeSummary: from?.changeSummary,
-      supersedesProcessId: from?.id,
-    }),
+  write: (processName, body, from) => ({
+    processName,
+    ...body,
+    changeSummary: from?.changeSummary,
+    supersedesProcessId: from?.id,
+  }),
   recorded: (proc) => `Process recorded: #${proc.id} (v${proc.version}, ${proc.steps.length} steps)`,
-  list: (opts) => processesModule.loadProcesses(objects, tenantId, opts),
-  loadById: (id) => processesModule.loadProcessById(objects, tenantId, id),
-  close: (id) => processesModule.closeProcess(objects, tenantId, id),
   printRow: printProcessRow,
   printDetail: (proc) => {
     console.log(`  name: ${proc.processName}`);
@@ -83,7 +68,7 @@ const processKind = (
       proc.steps.forEach((s, i) => console.log(`    ${i + 1}. ${s}`));
     }
   },
-});
+};
 
 export const handleProcess = versionedVerbs(processKind);
 
@@ -95,7 +80,7 @@ function printPolicyRow(p: Policy): void {
   if (p.changeSummary) console.log(`    change: ${p.changeSummary}`);
 }
 
-async function policyAsOf(objects: Objects, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function policyAsOf(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
   const dateRaw = args[1];
   if (!dateRaw) {
     fail('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
@@ -103,7 +88,7 @@ async function policyAsOf(objects: Objects, tenantId: string, args: string[], fl
   const name = nonEmptyStringFlag(flags, 'name');
   let results;
   try {
-    results = await policiesModule.policiesAsOf(objects, tenantId, dateRaw, { name });
+    results = await policiesInForce(ctx, dateRaw, { name });
   } catch (e) {
     fail(errorMessage(e));
   }
@@ -121,14 +106,10 @@ interface PolicyBody {
   readonly validTo: string | undefined;
 }
 
-const policyKind = (
-  objects: Objects,
-  hippoRoot: string,
-  tenantId: string,
-): VersionedKind<Policy, policiesModule.PolicyStatus, PolicyBody> => ({
+const policyKind: VersionedKind<'policy', PolicyBody> = {
+  kind: 'policy',
   names: { cmd: 'policy', noun: 'Policy', idLabel: 'policy' },
   plural: 'policies',
-  states: policiesModule.VALID_POLICY_STATES,
   usage: [
     'Usage: hippo policy new "<name>" --text "<rule>" [--from <iso>] [--to <iso>]',
     '       hippo policy list [--status active|superseded|closed|all] [--limit N]',
@@ -146,18 +127,13 @@ const policyKind = (
     return { policyText, validFrom: nonEmptyStringFlag(flags, 'from'), validTo: nonEmptyStringFlag(flags, 'to') };
   },
   keyOf: (p) => p.policyName,
-  save: (policyName, body, extraTags, from) =>
-    policiesModule.savePolicy(objects, cliConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
-      policyName,
-      ...body,
-      extraTags,
-      changeSummary: from?.changeSummary,
-      supersedesPolicyId: from?.id,
-    }),
+  write: (policyName, body, from) => ({
+    policyName,
+    ...body,
+    changeSummary: from?.changeSummary,
+    supersedesPolicyId: from?.id,
+  }),
   recorded: (p) => `Policy recorded: #${p.id} (v${p.version}, effective ${policyRange(p)})`,
-  list: (opts) => policiesModule.loadPolicies(objects, tenantId, opts),
-  loadById: (id) => policiesModule.loadPolicyById(objects, tenantId, id),
-  close: (id) => policiesModule.closePolicy(objects, tenantId, id),
   printRow: printPolicyRow,
   printDetail: (p) => {
     console.log(`  name: ${p.policyName}`);
@@ -167,8 +143,8 @@ const policyKind = (
     console.log(`  valid_from: ${p.validFrom}`);
     console.log(`  valid_to: ${p.validTo ?? '(open-ended)'}`);
   },
-  extra: { sub: 'asof', run: (args, flags) => policyAsOf(objects, tenantId, args, flags) },
-});
+  extra: { sub: 'asof', run: policyAsOf },
+};
 
 export const handlePolicy = versionedVerbs(policyKind);
 
@@ -179,8 +155,8 @@ function printSkillRow(s: Skill): void {
   if (s.changeSummary) console.log(`    change: ${s.changeSummary}`);
 }
 
-async function skillExport(objects: Objects, tenantId: string): Promise<void> {
-  const md = await skillsModule.skillsMarkdown(objects, tenantId);
+async function skillExport(ctx: Context): Promise<void> {
+  const md = await skillsExport(ctx);
   if (!md) {
     console.log('No active skills.');
     return;
@@ -193,14 +169,10 @@ interface SkillBody {
   readonly trigger: string | undefined;
 }
 
-const skillKind = (
-  objects: Objects,
-  hippoRoot: string,
-  tenantId: string,
-): VersionedKind<Skill, skillsModule.SkillStatus, SkillBody> => ({
+const skillKind: VersionedKind<'skill', SkillBody> = {
+  kind: 'skill',
   names: { cmd: 'skill', noun: 'Skill', idLabel: 'skill' },
   plural: 'skills',
-  states: skillsModule.VALID_SKILL_STATES,
   usage: [
     'Usage: hippo skill new "<name>" --instructions "<text>" [--trigger "<when>"]',
     '       hippo skill list [--status active|superseded|closed|all] [--limit N]',
@@ -218,18 +190,13 @@ const skillKind = (
     return { instructions, trigger: nonEmptyStringFlag(flags, 'trigger') };
   },
   keyOf: (s) => s.skillName,
-  save: (skillName, body, extraTags, from) =>
-    skillsModule.saveSkill(objects, cliConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
-      skillName,
-      ...body,
-      extraTags,
-      changeSummary: from?.changeSummary,
-      supersedesSkillId: from?.id,
-    }),
+  write: (skillName, body, from) => ({
+    skillName,
+    ...body,
+    changeSummary: from?.changeSummary,
+    supersedesSkillId: from?.id,
+  }),
   recorded: (s) => `Skill recorded: #${s.id} (v${s.version})`,
-  list: (opts) => skillsModule.loadSkills(objects, tenantId, opts),
-  loadById: (id) => skillsModule.loadSkillById(objects, tenantId, id),
-  close: (id) => skillsModule.closeSkill(objects, tenantId, id),
   printRow: printSkillRow,
   printDetail: (s) => {
     console.log(`  name: ${s.skillName}`);
@@ -238,7 +205,7 @@ const skillKind = (
     if (s.trigger) console.log(`  when: ${s.trigger}`);
     console.log(`  instructions: ${s.instructions}`);
   },
-  extra: { sub: 'export', run: () => skillExport(objects, tenantId) },
-});
+  extra: { sub: 'export', run: skillExport },
+};
 
 export const handleSkill = versionedVerbs(skillKind);

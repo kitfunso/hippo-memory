@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { inspect } from 'node:util';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
-import { saveSkill } from '../../src/domain/objects/skills.js';
+import { SKILL } from '../../src/domain/objects/skills.js';
 import type { StoreGroups } from '../../src/store/index.js';
 import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -15,13 +15,12 @@ import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from '../_helpers/moved-reads-seed.js';
 import { FAKE_NOW, freshStore, SESSION, TENANT } from '../_helpers/recall-golden-seed.js';
 import { cleanups, holdWriteLock, mirrorFiles, onDb, patientStore, undoAll } from '../_helpers/store-worker-server.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { cliSave } from '../_helpers/cli-save-site.js';
 
 type Served = LocalStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
@@ -511,7 +510,7 @@ describe('a read the op table places on a reader thread', () => {
   beforeAll(async () => {
     const root = copy();
     // The shared seed has no skill, and the skill read must find one.
-    await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, {
+    await cliSave(root, TENANT, SKILL, {
       skillName: 'rollback',
       instructions: 'page the owner, then revert',
     });

@@ -1,26 +1,17 @@
 // The customer note verbs: one account's note, versioned by supersession.
 
-import { cliConfig } from './api-context.js';
-import * as customerNotesModule from '../../domain/objects/customer-notes.js';
-import { stringFlag } from './flag-values.js';
-import type { Objects } from '../../store/port.js';
+import type { CustomerNote } from '../../base/records/object-types.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
-
-type CustomerNote = customerNotesModule.CustomerNote;
 
 function printNoteRow(n: CustomerNote): void {
   console.log(`#${n.id} [${n.status}] v${n.version} customer="${n.customer}" memory=${n.memoryId ?? '-'}`);
   if (n.changeSummary) console.log(`    change: ${n.changeSummary}`);
 }
 
-const noteKind = (
-  objects: Objects,
-  hippoRoot: string,
-  tenantId: string,
-): VersionedKind<CustomerNote, customerNotesModule.NoteStatus, string> => ({
+const noteKind: VersionedKind<'customer_note', string> = {
+  kind: 'customer_note',
   names: { cmd: 'note', noun: 'Customer note', idLabel: 'note' },
   plural: 'customer notes',
-  states: customerNotesModule.VALID_NOTE_STATES,
   usage: [
     'Usage: hippo note new "<customer>" --text "<note>"',
     '       hippo note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]',
@@ -32,24 +23,9 @@ const noteKind = (
   bodyRequired: '--text "<note>"',
   body: (flags) => requiredText(flags, 'text'),
   keyOf: (n) => n.customer,
-  save: (customer, note, extraTags, from) => {
-    const { defaultHalfLifeDays } = cliConfig(hippoRoot);
-    return customerNotesModule.saveCustomerNote(objects, defaultHalfLifeDays, tenantId, {
-      customer,
-      note,
-      extraTags,
-      changeSummary: from?.changeSummary,
-      supersedesNoteId: from?.id,
-    });
-  },
+  write: (customer, note, from) => ({ customer, note, changeSummary: from?.changeSummary, supersedesNoteId: from?.id }),
   recorded: (n) => `Customer note recorded: #${n.id} (v${n.version}) for customer "${n.customer}"`,
-  list: (opts, flags) =>
-    customerNotesModule.loadCustomerNotes(objects, tenantId, {
-      ...opts,
-      customer: stringFlag(flags, 'customer')?.trim() || undefined,
-    }),
-  loadById: (id) => customerNotesModule.loadCustomerNoteById(objects, tenantId, id),
-  close: (id) => customerNotesModule.closeCustomerNote(objects, tenantId, id),
+  filterFlag: 'customer',
   printRow: printNoteRow,
   printDetail: (n) => {
     console.log(`  customer: ${n.customer}`);
@@ -57,6 +33,6 @@ const noteKind = (
     console.log(`  version: ${n.version}`);
     console.log(`  note: ${n.note}`);
   },
-});
+};
 
 export const handleCustomerNote = versionedVerbs(noteKind);

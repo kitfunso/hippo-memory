@@ -1,27 +1,20 @@
 // The project brief verbs: one repo's brief, versioned by supersession and refreshable from the repo's receipts.
 
-import { cliConfig } from './api-context.js';
-import * as briefsModule from '../../domain/objects/project-briefs.js';
+import { briefDigest, briefRefresh } from '../../api/objects/object-kinds.js';
+import type { Context } from '../../api/types.js';
+import type { ProjectBrief } from '../../base/records/object-types.js';
 import { errorMessage } from '../../base/util/log.js';
 import { printError } from './output.js';
-import { boolFlag, stringFlag, type CliFlags } from './flag-values.js';
+import { boolFlag, type CliFlags } from './flag-values.js';
 import { fail } from './exit.js';
-import type { Objects } from '../../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
-function printBriefRow(b: briefsModule.ProjectBrief): void {
+function printBriefRow(b: ProjectBrief): void {
   console.log(`#${b.id} [${b.status}] v${b.version} repo="${b.repo}" memory=${b.memoryId ?? '-'}`);
   if (b.changeSummary) console.log(`    change: ${b.changeSummary}`);
 }
 
-async function briefRefresh(
-  objects: Objects,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function refreshBrief(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
   const repoRaw = args[1];
   if (!repoRaw) {
     fail('Usage: hippo brief refresh "<repo>" [--dry-run]');
@@ -29,17 +22,12 @@ async function briefRefresh(
   const dryRun = boolFlag(flags, 'dry-run');
   try {
     if (dryRun) {
-      const { markdown, receiptCount } = await briefsModule.briefFromReceipts(objects, tenantId, repoRaw);
+      const { markdown, receiptCount } = await briefDigest(ctx, repoRaw);
       printError(`(dry-run: assembled from ${receiptCount} receipt(s); brief NOT written)`);
       console.log(markdown);
       return;
     }
-    const { defaultHalfLifeDays: baseHalfLifeDays } = cliConfig(hippoRoot);
-    const created = await briefsModule.refreshedBrief(
-      objects,
-      { baseHalfLifeDays, tenantId, actor: CLI_ACTOR },
-      repoRaw,
-    );
+    const created = await briefRefresh(ctx, repoRaw);
     console.log(`Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`);
     if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
@@ -48,14 +36,10 @@ async function briefRefresh(
   }
 }
 
-const briefKind = (
-  objects: Objects,
-  hippoRoot: string,
-  tenantId: string,
-): VersionedKind<briefsModule.ProjectBrief, briefsModule.BriefStatus, string> => ({
+const briefKind: VersionedKind<'project_brief', string> = {
+  kind: 'project_brief',
   names: { cmd: 'brief', noun: 'Project brief', idLabel: 'brief' },
   plural: 'project briefs',
-  states: briefsModule.VALID_BRIEF_STATES,
   usage: [
     'Usage: hippo brief new "<repo>" --summary "<text>"',
     '       hippo brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]',
@@ -68,22 +52,9 @@ const briefKind = (
   bodyRequired: '--summary "<text>"',
   body: (flags) => requiredText(flags, 'summary'),
   keyOf: (b) => b.repo,
-  save: (repo, summary, extraTags, from) =>
-    briefsModule.saveProjectBrief(objects, cliConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
-      repo,
-      summary,
-      extraTags,
-      changeSummary: from?.changeSummary,
-      supersedesBriefId: from?.id,
-    }),
+  write: (repo, summary, from) => ({ repo, summary, changeSummary: from?.changeSummary, supersedesBriefId: from?.id }),
   recorded: (b) => `Project brief recorded: #${b.id} (v${b.version}) for repo "${b.repo}"`,
-  list: (opts, flags) =>
-    briefsModule.loadProjectBriefs(objects, tenantId, {
-      ...opts,
-      repo: stringFlag(flags, 'repo')?.trim() || undefined,
-    }),
-  loadById: (id) => briefsModule.loadProjectBriefById(objects, tenantId, id),
-  close: (id) => briefsModule.closeProjectBrief(objects, tenantId, id),
+  filterFlag: 'repo',
   printRow: printBriefRow,
   printDetail: (b) => {
     console.log(`  repo: ${b.repo}`);
@@ -91,7 +62,7 @@ const briefKind = (
     console.log(`  version: ${b.version}`);
     console.log(`  summary: ${b.summary}`);
   },
-  extra: { sub: 'refresh', run: (args, flags) => briefRefresh(objects, hippoRoot, tenantId, args, flags) },
-});
+  extra: { sub: 'refresh', run: refreshBrief },
+};
 
 export const handleProjectBrief = versionedVerbs(briefKind);
