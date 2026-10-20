@@ -12,7 +12,6 @@ import { chunked } from '../../base/util/chunked.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { placeholders } from '../../base/util/sql.js';
 import { keysetPage, type KeysetClause } from '../../base/util/keyset.js';
 import { cachedStatement } from './statement-cache.js';
 import type { DetectedConflict } from '../local/consolidation.js';
@@ -186,10 +185,10 @@ function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedCo
     (id) => !tenantById.has(id),
   );
   for (const ids of chunked(given)) {
-    const marks = placeholders(ids.length);
-    const found = cachedStatement(db, `SELECT id, tenant_id FROM memories WHERE id IN (${marks})`).all(
-      ...ids,
-    ) as Array<{
+    const found = cachedStatement(
+      db,
+      `SELECT id, tenant_id FROM memories WHERE id IN (SELECT value FROM json_each(?))`,
+    ).all(JSON.stringify(ids)) as Array<{
       id: string;
       tenant_id: string;
     }>;

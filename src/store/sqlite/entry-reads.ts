@@ -3,7 +3,6 @@ import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../db/ind
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { originInSql } from '../../base/scope/project-identity.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { chunked, ID_CHUNK } from '../../base/util/chunked.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
@@ -18,6 +17,7 @@ import {
   idPageOf,
   type EntryPageRequest,
   type EntryRowsRead,
+  type SqlAnd,
 } from './keyset.js';
 import type { EntryIdPage } from '../local/consolidation.js';
 import type { IdPage, IdPageRequest } from '../local/embedding-index.js';
@@ -104,8 +104,12 @@ export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[],
   return rows.map(rowToEntry);
 }
 
-function originClause(origins: readonly string[] | null | undefined): string {
-  return origins == null ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
+const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';
+
+// One JSON param for the list keeps a cached statement's text the same however many origins a caller names.
+function originAnd(origins: readonly string[] | null | undefined): SqlAnd {
+  if (origins == null) return { sql: '', args: [] };
+  return { sql: ` AND (origin_project = '' OR ${ORIGIN_IN})`, args: [JSON.stringify(origins)] };
 }
 
 /** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
@@ -114,9 +118,10 @@ type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly t
 /** The WHERE both session raw-row reads share: the session's unsuperseded raw rows in the tenant and origins. */
 function sessionRawWhere({ sessionId, tenantId, origins }: SessionRows<SessionRawQuery>): SqlFragment {
   const tenant = tenantAnd(tenantId);
+  const origin = originAnd(origins);
   return {
-    sql: `kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL${tenant.sql}${originClause(origins)}`,
-    params: [sessionId, ...tenant.args, ...(origins ?? [])],
+    sql: `kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL${tenant.sql}${origin.sql}`,
+    params: [sessionId, ...tenant.args, ...origin.args],
   };
 }
 
@@ -172,8 +177,9 @@ export function loadFreshRawMemoriesAt(
     sql += ' AND source_session_id = ?';
     params.push(sessionId);
   }
-  sql += originClause(origins);
-  params.push(...(origins ?? []));
+  const origin = originAnd(origins);
+  sql += origin.sql;
+  params.push(...origin.args);
   // Tie tail makes same-`created` rows deterministic; `content` before `id` because ids are random
   // UUIDs, so an id-only tail would pick which same-created rows make the window per instance.
   sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
@@ -523,14 +529,14 @@ export function contentsWithTagAt(
   tag: string,
   origins?: readonly string[],
 ): string[] {
-  const inProject = origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
+  const inProject = originAnd(origins);
   const admit = scopeAdmitSql('');
   /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
   const rows = cachedStatement(
     db,
     `SELECT content, tags_json FROM memories WHERE tenant_id = ? ` +
-      `AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
-  ).all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{
+      `AND instr(tags_json, ?) > 0${inProject.sql} AND ${admit.sql}`,
+  ).all(tenantId, JSON.stringify(tag), ...inProject.args, ...admit.params) as Array<{
     content: string;
     tags_json: string;
   }>;
@@ -635,12 +641,12 @@ export function selectRowsHoldingOutsideSourcePrefixAt(
 ): Array<{ id: string; content: string; source: string }> {
   const phrase = isFtsAvailable(db) && isFtsInSync(db) ? holdingPhrase(text) : null;
   const where = phrase === null ? 'instr(content, ?) > 0 AND tenant_id = ?' : `${IN_PHRASE_HITS} AND ${TENANT_IS}`;
-  const visible = origins !== null ? ` AND (origin_project = '' OR ${originInSql(origins)})` : '';
+  const visible = originAnd(origins);
   return cachedStatement(
     db,
     `SELECT id, content, source FROM memories WHERE ${where} AND superseded_by IS NULL ` +
-      `AND substr(source, 1, ?) != ?${visible}`,
-  ).all(phrase ?? longestWord(text), tenantId, sourcePrefix.length, sourcePrefix, ...(origins ?? [])) as Array<{
+      `AND substr(source, 1, ?) != ?${visible.sql}`,
+  ).all(phrase ?? longestWord(text), tenantId, sourcePrefix.length, sourcePrefix, ...visible.args) as Array<{
     id: string;
     content: string;
     source: string;
@@ -694,16 +700,16 @@ export function loadEntriesWithSignalsAt(
   const anyOf = [
     'pinned != 0',
     'retrieval_count >= ?',
-    `emotional_valence IN (${placeholders(signals.valences.length)})`,
+    'emotional_valence IN (SELECT value FROM json_each(?))',
     "source LIKE ? ESCAPE '\\'",
     "instr(tags_json, '\\') > 0",
-    ...signals.tags.map(() => 'instr(tags_json, ?) > 0'),
+    'EXISTS (SELECT 1 FROM json_each(?) AS tag WHERE instr(tags_json, tag.value) > 0)',
   ];
   const params = [
     signals.minRetrievals,
-    ...signals.valences,
+    JSON.stringify(signals.valences),
     `${escapeLike(signals.sourcePrefix)}%`,
-    ...signals.tags.map((t) => JSON.stringify(t)),
+    JSON.stringify(signals.tags.map((t) => JSON.stringify(t))),
   ];
   return entriesPage(
     db,
@@ -728,9 +734,9 @@ export function loadCurrentEntriesFromOriginsAt(
   const rows = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
-   WHERE tenant_id = ? AND ${originInSql(origins)} AND COALESCE(superseded_by, '') = ''
+   WHERE tenant_id = ? AND ${ORIGIN_IN} AND COALESCE(superseded_by, '') = ''
      AND COALESCE(kind, 'distilled') NOT IN ('raw', 'archived')
    ORDER BY created ASC, id ASC`,
-  ).all(tenantId, ...origins) as MemoryRow[];
+  ).all(tenantId, JSON.stringify(origins)) as MemoryRow[];
   return rows.map(rowToEntry);
 }

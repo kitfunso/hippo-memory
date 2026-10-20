@@ -40,7 +40,6 @@ import { afterIdAnd, idPageOf } from './keyset.js';
 import { cachedStatement } from './statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import { placeholders } from '../../base/util/sql.js';
 import type {
   IdPage,
   IdPageRequest,
@@ -175,8 +174,8 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   for (const chunk of chunked([...new Set(ids)])) {
     const rows = cachedStatement(
       db,
-      `SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-    ).all(tenantId, ...chunk) as { id: string }[];
+      `SELECT id FROM memories WHERE +tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
+    ).all(tenantId, JSON.stringify(chunk)) as { id: string }[];
     for (const row of rows) owned.add(row.id);
   }
   return owned;
