@@ -1,5 +1,5 @@
-// The dashboard's reads answered from one thread of their own: a snapshot build scans a whole tenant synchronously, so
-// on the server thread it would hold every other request.
+// The dashboard's reads answered from one thread of their own: each runs a synchronous aggregate over a tenant's rows,
+// so on the server thread it would hold every other request.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import type { MemoryEntry } from '../../base/memory/memory.js';
@@ -15,7 +15,7 @@ export interface DashboardReader {
   memories(key: string, query: MemoryQuery, fresh: boolean): Promise<MemoryPage | null>;
   search(text: string, fresh: boolean): Promise<SearchResult>;
   memory(id: string, fresh: boolean): Promise<MemoryDetail | null>;
-  /** After a dashboard write: drops the snapshot when it committed, and answers the detail of `entry` when given. */
+  /** After a dashboard write: moves the snapshot id when it committed, and answers the detail of `entry` when given. */
   written(changed: boolean, entry?: MemoryEntry): Promise<MemoryDetail | null>;
   close(): Promise<void>;
 }
@@ -55,7 +55,7 @@ export interface ReaderInit {
 export interface ReaderClocks {
   /** Dates the strength projections. */
   readonly now: () => number;
-  /** Ages the snapshot cache. */
+  /** Ages the snapshot id. */
   readonly cacheClock: () => number;
 }
 

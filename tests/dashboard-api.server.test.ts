@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Layer, type MemoryEntry } from '../src/base/memory/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { buildOverview, buildProjectDetail } from '../src/api/dashboard/queries.js';
+import { buildOverview, buildProjectDetail } from '../src/api/dashboard/overview.js';
 import type {
   MemoryDetail,
   MemoryPage,
@@ -15,8 +15,8 @@ import type {
 } from '../src/api/dashboard/types.js';
 import {
   NOW,
-  asDashboardRow,
   call,
+  dashboardOf,
   get,
   isoAgo,
   makeStore,
@@ -27,7 +27,7 @@ import {
   type RunningDashboard,
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
-import { snapshotOfRows } from './_helpers/snapshot-of-rows.js';
+import { writeEntriesTogether } from './_helpers/root-forms.js';
 
 const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
 const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;
@@ -54,6 +54,22 @@ afterAll(async () => {
   await dash.close();
   store.cleanup();
 });
+
+/** Builds a read over a store of its own holding only `entries`, so a case needs no server. */
+async function inStoreOf<T>(entries: MemoryEntry[], read: (view: ReturnType<typeof dashboardOf>) => Promise<T>) {
+  const own = makeStore('hippo-dash-api-own');
+  try {
+    writeEntriesTogether(own.hippoRoot, entries);
+    const view = dashboardOf(own.hippoRoot, () => NOW);
+    try {
+      return await read(view);
+    } finally {
+      await view.reads.close();
+    }
+  } finally {
+    own.cleanup();
+  }
+}
 
 const memories = (query = ''): Promise<MemoryPage> =>
   get(dash.port, `/api/projects/${encodeURIComponent('p:alpha')}/memories${query}`).then((r) => {
@@ -98,18 +114,19 @@ describe('overview and project', () => {
     expect((await get(dash.port, '/api/projects/p:alpha/extra/path')).status).toBe(404);
   });
 
-  it('switches a project over 4,000 memories to a density grid', () => {
+  it('switches a project over 4,000 memories to a density grid', async () => {
     const entries = Array.from({ length: 4_001 }, (_, i) => ({
       ...createMemory(`bulk ${i}`, { tags: [] }),
       originProject: 'big',
       created: isoAgo(i % 300),
       lastRetrieved: isoAgo(i % 300),
     }));
-    const rows = entries.map((e) => asDashboardRow(e));
-    const snap = snapshotOfRows(NOW, rows);
+    const detail = await inStoreOf(entries, async ({ reads, clock }) =>
+      buildProjectDetail(reads, await clock.at('default'), 'p:big'),
+    );
 
     // SAFETY: 4,001 members is over the cut-off, so the scatter is the grid shape.
-    const grid = buildProjectDetail(snap, 'p:big')!.scatter as ScatterGrid;
+    const grid = detail!.scatter as ScatterGrid;
     const counted = grid.cells.reduce((sum, layer) => sum + layer.reduce((a, b) => a + b, 0), 0);
 
     expect(grid.mode).toBe('grid');
@@ -119,10 +136,11 @@ describe('overview and project', () => {
 });
 
 describe('KPI series', () => {
-  const seriesOf = (id: 'total' | 'projects', entries: MemoryEntry[]): number[] => {
-    const rows = entries.map((e) => asDashboardRow(e));
-    const snap = snapshotOfRows(NOW, rows);
-    return buildOverview(snap).kpis.find((k) => k.id === id)!.series!;
+  const seriesOf = async (id: 'total' | 'projects', entries: MemoryEntry[]): Promise<number[]> => {
+    const overview = await inStoreOf(entries, async ({ reads, clock }) =>
+      buildOverview(reads, await clock.at('default')),
+    );
+    return overview.kpis.find((k) => k.id === id)!.series!;
   };
   const aged = (days: number, project: string): MemoryEntry => ({
     ...createMemory(`aged ${days}`, { tags: [] }),
@@ -131,8 +149,8 @@ describe('KPI series', () => {
     lastRetrieved: isoAgo(days),
   });
 
-  it('sends 91 cumulative points whose first-to-last difference counts memories created inside the window', () => {
-    const total = seriesOf('total', [aged(89.5, 'a'), aged(95, 'b'), aged(10, 'c'), aged(0.2, 'c')]);
+  it('sends 91 cumulative points whose first-to-last difference counts memories created inside the window', async () => {
+    const total = await seriesOf('total', [aged(89.5, 'a'), aged(95, 'b'), aged(10, 'c'), aged(0.2, 'c')]);
 
     expect(total).toHaveLength(91);
     expect(total[0]).toBe(1);
@@ -142,8 +160,8 @@ describe('KPI series', () => {
     expect(total[90] - total[60]).toBe(2);
   });
 
-  it('counts a project from its first memory, so a project first seen 95 days ago stays in the base', () => {
-    const projects = seriesOf('projects', [aged(89.5, 'new'), aged(95, 'old'), aged(3, 'old')]);
+  it('counts a project from its first memory, so a project first seen 95 days ago stays in the base', async () => {
+    const projects = await seriesOf('projects', [aged(89.5, 'new'), aged(95, 'old'), aged(3, 'old')]);
 
     expect(projects[0]).toBe(1);
     expect(projects[90] - projects[0]).toBe(1);

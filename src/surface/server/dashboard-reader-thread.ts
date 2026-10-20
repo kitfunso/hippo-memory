@@ -1,14 +1,15 @@
 // Entry of the dashboard's reader thread; dashboard-reader.ts starts it and nothing imports it. It owns the snapshot
-// cache and answers each read through the api's dashboard functions.
+// clock and answers each read through the api's dashboard functions.
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { adminActor } from '../../api/index.js';
 import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../../api/dashboard/detail.js';
-import { buildMemoryPage, buildOverview, buildProjectDetail, buildSearch } from '../../api/dashboard/queries.js';
-import { createSnapshotService } from '../../api/dashboard/snapshot.js';
-import type { LocalContext } from '../../api/types.js';
+import { buildOverview, buildProjectDetail } from '../../api/dashboard/overview.js';
+import { buildMemoryPage, buildSearch } from '../../api/dashboard/queries.js';
+import { createSnapshotClock } from '../../api/dashboard/snapshot-clock.js';
+import type { Context } from '../../api/types.js';
 import { configReader } from '../../base/config/config.js';
 import { isStoreBusy } from '../../store/port.js';
-import { sqliteStore } from '../../store/sqlite/index.js';
+import { sqliteDashboardReads, sqliteStore } from '../../store/sqlite/index.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
@@ -16,26 +17,28 @@ import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboa
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
 
-/** The thread is its own root, so it reads the ratio its store and snapshots score strength by. */
+/** The thread is its own root, so it reads the ratio its store and dashboard reads score strength by. */
 function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonly wallMs: number }) {
   const lossAversion = { lossAversionRatio: envLossAversionRatio() };
   const store = sqliteStore(hippoRoot, lossAversion);
-  const snapshots = createSnapshotService(
-    store.localFiles.dashboard,
-    lossAversion,
+  const reads = sqliteDashboardReads(hippoRoot, lossAversion);
+  const stamps = createSnapshotClock(
+    reads,
     () => clock.nowMs,
     () => clock.wallMs,
   );
-  return { store, snapshots };
+  return { store, view: { reads, clock: stamps } };
 }
 
 function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
   const loadConfig = configReader(envRuntimeSettings);
-  // Set from each call, so the snapshot is dated and aged by the clocks the server read when the request came in.
+  // Set from each call, so each read is dated and aged by the clocks the server read when the request came in.
   const clock = { nowMs: 0, wallMs: 0 };
-  const { store, snapshots } = readerStore(hippoRoot, clock);
+  const { store, view } = readerStore(hippoRoot, clock);
+  const { reads } = view;
+  const stamp = (fresh: boolean) => view.clock.at(tenantId, fresh);
   // A fresh Context per call, so a config edit shows on the next request.
-  const context = (): LocalContext => ({
+  const context = (): Context => ({
     hippoRoot,
     tenantId,
     actor: adminActor(DASHBOARD_ACTOR),
@@ -46,19 +49,19 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
     const fresh = 'fresh' in call && call.fresh;
     switch (call.op) {
       case 'overview':
-        return buildOverview(snapshots.get(tenantId, fresh));
+        return buildOverview(reads, await stamp(fresh));
       case 'project':
-        return buildProjectDetail(snapshots.get(tenantId, fresh), call.key);
+        return buildProjectDetail(reads, await stamp(fresh), call.key);
       case 'memories':
-        return buildMemoryPage(snapshots.get(tenantId, fresh), call.key, call.query);
+        return buildMemoryPage(reads, await stamp(fresh), call.key, call.query);
       case 'search':
-        return buildSearch(snapshots.get(tenantId, fresh), call.text);
+        return buildSearch(reads, await stamp(fresh), call.text);
       case 'memory':
-        return dashboardMemoryDetail(context(), snapshots, call.memoryId, { fresh, nowMs: call.nowMs });
+        return dashboardMemoryDetail(context(), view, call.memoryId, { fresh, nowMs: call.nowMs });
       case 'written':
-        return dashboardDetailAfterWrite(context(), snapshots, call, call.nowMs);
+        return dashboardDetailAfterWrite(context(), view, call, call.nowMs);
       case 'close':
-        snapshots.close();
+        await reads.close();
         await store.close();
         return null;
     }

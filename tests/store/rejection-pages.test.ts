@@ -48,6 +48,8 @@ function rejectionsWalking(onWalk: () => void) {
       return db.prepare(sql);
     },
     close: () => db.close(),
+    function: (name, options, fn) => db.function(name, options, fn),
+    aggregate: (name, options) => db.aggregate(name, options),
   });
   const walking: OnHandle = (fn, open) => on((db, files) => fn(pausing(db), files), open);
   return sqliteRejections(walking);
