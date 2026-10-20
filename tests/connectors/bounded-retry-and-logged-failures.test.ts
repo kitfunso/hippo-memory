@@ -13,7 +13,7 @@ import {
   withWriteScope,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { resolveCodexSessionTranscript } from '../../src/domain/hooks/codex-session.js';
+import { resolveCodexSessionTranscript } from '../../src/surface/capture/codex-session.js';
 import { importChatGPT, importClaude } from '../../src/entry/importers.js';
 import { detectServer } from '../../src/surface/server/server-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -90,6 +90,8 @@ describe('write scope rollback failure', () => {
       },
       prepare: (sql) => db.prepare(sql),
       close: () => db.close(),
+      function: (name, options, fn) => db.function(name, options, fn),
+      aggregate: (name, options) => db.aggregate(name, options),
       get isTransaction() {
         return db.isTransaction;
       },

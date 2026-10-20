@@ -221,7 +221,7 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpti
     // the callers who share it.
     keyChecks.admit(keyId, clientLimitKey(req));
     chargeScryptRun(req, opts);
-    return keyChecks.run(derive);
+    return keyChecks.run(keyId, derive);
   });
   if (!key) throw new HttpError(401, 'invalid api key');
   const id: BearerIdentity = {

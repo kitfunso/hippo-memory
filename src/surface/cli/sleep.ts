@@ -3,6 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { processGit } from '../../base/util/git-runner.js';
 import { importForStore } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
 import { replayCompactions } from '../capture/compaction-record.js';
@@ -82,13 +83,13 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
     );
   } else if (learn) {
     const config = cliConfig(hippoRoot);
-    if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
+    if (config.autoLearnOnSleep && isGitRepo(processGit, process.cwd())) {
       const { added } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
     }
 
     // Opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
-    if (config.churnStaleness.enabled && isGitRepo(process.cwd())) {
+    if (config.churnStaleness.enabled && isGitRepo(processGit, process.cwd())) {
       for (const { root, result } of runChurnStaleForRepo(hippoRoot, tenantId, false)) {
         if (result.marked > 0) console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
         if (result.error) printError(`Churn-staleness check failed for ${root}: ${result.error}`);

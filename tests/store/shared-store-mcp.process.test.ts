@@ -13,6 +13,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -113,7 +114,7 @@ describe('MCP writes on a shared store', () => {
   it('learn with the MCP profile stores NULL rows', async () => {
     const store = flaggedStore();
     const ctx = apiCtx(store, 'default', adminActor('shared-store-mcp-test'));
-    const result = await learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN });
+    const result = await learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN, git: processGit });
     expect(result.added).toBe(1);
     const rows = loadAllEntries(store, 'default');
     expect(rows).toHaveLength(1);

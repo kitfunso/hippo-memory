@@ -12,8 +12,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
+import { closeObject } from '../../src/domain/objects/lifecycle.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { saveDecision, closeDecision } from '../../src/domain/objects/decisions.js';
+import { DECISION, saveDecision } from '../../src/domain/objects/decisions.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
@@ -189,7 +191,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'Retire this one',
     });
-    await closeDecision(objectsAt(home), T, gone.id);
+    await closeObject(objectsAt(home), DECISION, T, gone.id, CLI_ACTOR);
 
     await extractGraph(sqliteStore(home), T);
     const ents = entityRows(home);
@@ -462,7 +464,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
     // Close the mirrorless decision. close* cannot enqueue a rebuild (no mirror to key the
     // queue), so it must drop the decision's graph rows DIRECTLY. NO extractGraph after close.
-    await closeDecision(objectsAt(home), T, decision.id);
+    await closeObject(objectsAt(home), DECISION, T, decision.id, CLI_ACTOR);
 
     expect(
       entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id),
@@ -488,7 +490,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(entityRows(home).length).toBe(1); // entity created with a live mirror + object (active)
 
     // Close removes the object's graph rows DIRECTLY (deterministic), so it never lingers.
-    await closeDecision(objectsAt(home), T, decision.id);
+    await closeObject(objectsAt(home), DECISION, T, decision.id, CLI_ACTOR);
     expect(entityRows(home).length).toBe(0); // gone immediately, not lingering until a rebuild
 
     // Forgetting the now-orphaned mirror afterwards must not throw - and with the object-status

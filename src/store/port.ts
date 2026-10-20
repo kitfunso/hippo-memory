@@ -134,6 +134,7 @@ export type {
   EmbeddingIndex,
   IdPage,
   IdPageRequest,
+  ParticleStats,
   StoredVectorSummary,
   VectorCoverage,
   VectorRow,

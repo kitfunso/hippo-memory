@@ -18,7 +18,7 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,
-  memoriesBackingObjects,
+  memoriesBackingAmong,
   writeEntry,
   loadAllEntries,
   readEntry,
@@ -107,8 +107,12 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     const object = await save(root);
     run(root, `UPDATE memories SET content = 'nope' WHERE id = ?`, object.memoryId!);
 
-    const backingSet = memoriesBackingObjects(root);
-    expect(auditMemories(loadAllEntries(root, 'default'), backingSet).issues).toMatchObject([
+    const entries = loadAllEntries(root, 'default');
+    const backingSet = memoriesBackingAmong(
+      root,
+      entries.map((e) => e.id),
+    );
+    expect(auditMemories(entries, backingSet).issues).toMatchObject([
       { memoryId: object.memoryId, severity: 'warning', reason: expect.stringContaining('backs an object') },
     ]);
     const result = await sleep(ctxFor(root), { noShare: true });

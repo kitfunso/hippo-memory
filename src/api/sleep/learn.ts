@@ -4,6 +4,7 @@
 import { ForbiddenError } from '../../base/errors/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../../domain/learn/autolearn.js';
 import type { HippoConfig } from '../../base/config/config.js';
+import type { GitRunner } from '../../base/util/git-runner.js';
 import { embedMemoryDetached } from '../../domain/search/embed-memories.js';
 import {
   extractInvalidationTarget,
@@ -53,6 +54,8 @@ export interface LearnOptions {
   repoPath: string;
   days: number;
   profile: LearnProfile;
+  /** Runs the git reads, since the api layer never starts a process. */
+  git: GitRunner;
   /** Rows read per page of the tenant scan; defaults to TENANT_PAGE_ROWS. */
   pageRows?: number;
 }
@@ -78,8 +81,8 @@ export async function learn(ctx: Context, opts: LearnOptions): Promise<LearnResu
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
-  if (!isGitRepo(opts.repoPath)) return { status: 'not-a-repo', ...none };
-  const gitLog = fetchGitLog(opts.repoPath, opts.days);
+  if (!isGitRepo(opts.git, opts.repoPath)) return { status: 'not-a-repo', ...none };
+  const gitLog = fetchGitLog(opts.git, opts.repoPath, opts.days);
   if (!gitLog.trim()) return { status: 'no-commits', ...none };
   const config = ctx.config;
   const parsed = extractLessons(gitLog, config.gitLearnPatterns);

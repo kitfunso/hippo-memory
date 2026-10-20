@@ -2,7 +2,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { StrengthTallies } from '../../store/port/reports.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
-import { canTouchScope } from '../../base/scope/recall-scope.js';
+import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { HippoStore } from '../../store/port.js';
 import { requireHostAdmin, type Context } from '../types.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
@@ -14,11 +14,10 @@ export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry |
   return entry ?? null;
 }
 
-/** memoryGet, but NotFound when the row is another person's personal one, so the reply does not reveal that the id
- * exists. */
+/** memoryGet, but NotFound when the caller could not read the row, so the reply does not reveal that the id exists. */
 export async function memoryGetTouchable(ctx: Context, id: string): Promise<MemoryEntry | null> {
   const entry = await memoryGet(ctx, id);
-  if (!canTouchScope(ctx.actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${id}`);
+  if (!canReadScope(ctx.actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${id}`);
   return entry;
 }
 

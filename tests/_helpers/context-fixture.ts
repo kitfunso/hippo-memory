@@ -16,6 +16,9 @@ export const PROJECT = 'proj';
 export const OWNER = 'alice';
 export const OWN_SCOPE = `personal:private:${OWNER}`;
 
+/** A zoneless stamp an old importer wrote, which no writer stores now. */
+const DRIFTED = '2026-03-05 10:00:00';
+
 export const ago = (hours: number): string => new Date(Date.parse(CONTEXT_NOW) - hours * 3_600_000).toISOString();
 
 type SeedOptions = Parameters<typeof seeded>[4];
@@ -108,7 +111,7 @@ function memoryRows(): MemoryEntry[] {
     a('rollout lesson with no half life', 'mem_a_flat', 49, { halfLifeDays: 0 }),
     b('globex pinned rule about the deploy window', 'mem_b_pin', 50, {}, { pinned: true }),
     ...Array.from({ length: 5 }, (_, i) => b(`globex note ${i} about the rollout plan`, `mem_b_${i}`, 5 + i)),
-    seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', {
+    seeded('globex drifted row written by an old importer', 'mem_b_drift', DRIFTED, {
       tenantId: TENANT_B,
       originProject: PROJECT,
     }),
@@ -224,9 +227,22 @@ function pinUpdatedAt(dir: string): void {
   }
 }
 
+// The row writer stores toISOString stamps, so the row an old importer wrote is put back by hand.
+function plantLegacyStamp(dir: string): void {
+  const db = openHippoDb(dir);
+  try {
+    db.prepare("UPDATE memories SET created = ?, valid_from = ? WHERE id = 'mem_b_drift'").run(
+      ...Array(2).fill(DRIFTED),
+    );
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /** Adds the context rows to a store folder that seedTwoTenants made. */
 export function seedContextRows(dir: string): void {
   writeEntriesTogether(dir, memoryRows());
+  plantLegacyStamp(dir);
   insertTaskState(dir);
   pinUpdatedAt(dir);
 }

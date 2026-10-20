@@ -16,7 +16,8 @@ export interface EmbeddingIndex {
   summary(): Promise<StoredVectorSummary>;
   /** How many memories and vectors the store holds, and how many memories have a vector. */
   coverage(): Promise<VectorCoverage>;
-  particles(): Promise<PhysicsParticle[]>;
+  /** The particle count and mean speed, and every particle only while at most `fullUpTo` are stored. */
+  particleStats(fullUpTo: number): Promise<ParticleStats>;
   /** Upserts each row under `model`, one commit per row so a failure keeps those before it; answers how many. */
   saveVectors(rows: readonly VectorRow[], model: string): Promise<number>;
   /** Opens a rebuild whose vectors wait apart from the live index; the id names it to the three calls below. */
@@ -31,7 +32,8 @@ export interface EmbeddingIndex {
   pruneOrphans(): Promise<void>;
   /** Up to `page.limit` ids with no vector, in id order after `page.afterId`. */
   pendingIds(page: IdPageRequest): Promise<IdPage>;
-  /** Replaces every particle with a fresh one per memory that has a stored vector; answers how many. */
+  /** Replaces every particle with a fresh one per memory that has a stored vector, reading a page at a time; answers
+   * how many. */
   resetParticles(): Promise<number>;
   /** A first particle for `entry` at `vector`, unless it has one. */
   seedParticle(entry: MemoryEntry, vector: number[]): Promise<void>;
@@ -44,6 +46,13 @@ export interface EmbeddingIndex {
 
 /** One memory's vector. */
 export type VectorRow = readonly [memoryId: string, vector: readonly number[]];
+
+/** `particles` is null past the caller's limit, so a large store is summed a column at a time, never loaded. */
+export interface ParticleStats {
+  count: number;
+  meanSpeed: number;
+  particles: PhysicsParticle[] | null;
+}
 
 /** A page in id order: up to `limit` ids after `afterId`, or from the first id when it is unset. */
 export interface IdPageRequest {

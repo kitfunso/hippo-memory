@@ -10,7 +10,7 @@ import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { EntryWrites, Objects } from '../../store/port.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
+import { listObjects, saveObject } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../../base/records/object-types.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 
@@ -84,20 +84,6 @@ export function weakenSupersededMemory(
   const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
   const halved = Math.max(1, Math.floor(entry.halfLifeDays / 2));
   return writes.writeEntry({ entry: { ...entry, halfLifeDays: halved, confidence: 'stale', tags }, actor });
-}
-
-/** Close (retire) an active decision with no successor; the memory mirror is not mutated. */
-export function closeDecision(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-  actor: string = CLI_ACTOR,
-): Promise<Decision> {
-  return closeObject(objects, DECISION, tenantId, id, actor);
-}
-
-export function loadDecisionById(objects: Objects, tenantId: string, id: number): Promise<Decision | null> {
-  return objectById(objects, DECISION, tenantId, id);
 }
 
 export function loadDecisions(

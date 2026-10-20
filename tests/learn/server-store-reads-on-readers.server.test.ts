@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { inspect } from 'node:util';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
-import { saveSkill } from '../../src/domain/objects/skills.js';
+import { SKILL } from '../../src/domain/objects/skills.js';
 import type { StoreGroups } from '../../src/store/index.js';
 import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -15,13 +15,12 @@ import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from '../_helpers/moved-reads-seed.js';
 import { FAKE_NOW, freshStore, SESSION, TENANT } from '../_helpers/recall-golden-seed.js';
 import { cleanups, holdWriteLock, mirrorFiles, onDb, patientStore, undoAll } from '../_helpers/store-worker-server.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { cliSave } from '../_helpers/cli-save-site.js';
 
 type Served = LocalStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
@@ -147,7 +146,14 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('connectorEvents.slackCursor', (s) => s.connectorEvents.slackCursor(TENANT, 'C-seeded'), '1700000000.000100'),
   read('connectorEvents.githubCursors', (s) => s.connectorEvents.githubCursors(TENANT, REPO), '2026-01-01T00:00:00Z'),
   read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),
-  read('auditMaintenance.objectBackedIds', (s) => s.auditMaintenance.objectBackedIds(), /'sem_/),
+  read(
+    'auditMaintenance.objectBackedAmong',
+    async (s) =>
+      s.auditMaintenance.objectBackedAmong(
+        (await s.reports.entriesPage(TENANT, { limit: 100 })).entries.map((e) => e.id),
+      ),
+    /'sem_/,
+  ),
   read('lessonWrites.textsHoldingWords', (s) => s.lessonWrites.textsHoldingWords(TENANT, ['deploy'], null), PLAIN),
   read(
     'lessonWrites.contentsWithTag',
@@ -186,8 +192,8 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('reports.countEntries', (s) => s.reports.countEntries(), /^[1-9]\d*$/),
   read('reports.stats', (s) => s.reports.stats(), /total_recalled/),
   read('reports.statusCounts', (s) => s.reports.statusCounts(NOW, 0.1), /total/),
-  read('reports.correctionEntries', (s) => s.reports.correctionEntries(), /id: 'mem_/),
-  read('reports.rawEntries', (s) => s.reports.rawEntries(), 'mem_x_raw'),
+  read('reports.correctionLinks', (s) => s.reports.correctionLinks(), /oldId: 'mem_/),
+  read('reports.rawProvenance', (s) => s.reports.rawProvenance(), /total: [1-9]/),
   read('reports.createdSinceLastSleep', (s) => s.reports.createdSinceLastSleep(TENANT, NOW), /^[1-9]\d*$/),
   read('rejections.list', (s) => s.rejections.list(TENANT), "reason: 'wrong'"),
   read(
@@ -207,7 +213,7 @@ const FOLDER_GROUP_READS: readonly Read[] = [
   read('embeddingIndex.entriesByIds', (s) => s.embeddingIndex.entriesByIds(['mem_p_plain', 'mem_missing']), PLAIN),
   read('embeddingIndex.summary', (s) => s.embeddingIndex.summary(), 'mem_p_noise'),
   read('embeddingIndex.coverage', (s) => s.embeddingIndex.coverage(), /memories: [1-9]/),
-  read('embeddingIndex.particles', (s) => s.embeddingIndex.particles(), 'mem_p_noise'),
+  read('embeddingIndex.particleStats', (s) => s.embeddingIndex.particleStats(1_000), 'mem_p_noise'),
   read('embeddingIndex.pendingIds', (s) => s.embeddingIndex.pendingIds({ limit: 50 }), 'mem_p_fill0'),
   read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
   read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
@@ -547,7 +553,7 @@ describe('a read the op table places on a reader thread', () => {
   beforeAll(async () => {
     const root = copy();
     // The shared seed has no skill, and the skill read must find one.
-    await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, {
+    await cliSave(root, TENANT, SKILL, {
       skillName: 'rollback',
       instructions: 'page the owner, then revert',
     });

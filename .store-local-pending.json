@@ -1,6 +1,4 @@
 [
-  { "file": "api/dashboard/queries.ts", "why": "lane g-dash moves the dashboard reads; the second local-port PR drops its LocalStore gate" },
-  { "file": "api/dashboard/snapshot.ts", "why": "lane g-dash moves the dashboard reads to a port group" },
   { "file": "api/objects/projects.ts", "why": "the second local-port PR makes the project tags a port group" },
   { "file": "api/sleep/sleep-run.ts", "why": "the second local-port PR makes sleep and consolidation a port group" },
   { "file": "api/types.ts", "why": "LocalContext goes when the second local-port PR empties LocalFiles" },

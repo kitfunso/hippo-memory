@@ -58,13 +58,13 @@ interface DedupRow {
   readonly retrievalCount: number;
   readonly tags: readonly string[];
   readonly source: string;
+  /** canAutoDelete's answer; whether the row backs an object is asked once, for the losers only. */
   readonly deletable: boolean;
 }
 
-function dedupRow(entry: MemoryEntry, backing: ReadonlySet<string>): DedupRow {
+function dedupRow(entry: MemoryEntry): DedupRow {
   const { id, content, layer, strength, retrievalCount, tags, source } = entry;
-  const deletable = canAutoDelete(entry) && !backing.has(id);
-  return { id, content, layer, strength, retrievalCount, tags, source, deletable };
+  return { id, content, layer, strength, retrievalCount, tags, source, deletable: canAutoDelete(entry) };
 }
 
 /** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then compareEntryIdentity. */
@@ -106,21 +106,25 @@ function addRow(groups: PartitionGroups, key: string, row: DedupRow): void {
   if (beaten.deletable) group.losers.push(beaten);
 }
 
-/** One partition's pairs in a sorted pass's order: groups by their survivor's rank, each group's losers by rank. */
-function partitionPairs(groups: PartitionGroups): DedupPair[] {
+/** One partition's pairs in a sorted pass's order: groups by their survivor's rank, each group's losers by rank; a
+ * loser backing an object stays. */
+function partitionPairs(groups: PartitionGroups, backing: ReadonlySet<string>): DedupPair[] {
   return [...groups.values()]
+    .map((group) => ({ ...group, losers: group.losers.filter((loser) => !backing.has(loser.id)) }))
     .filter((group) => group.losers.length > 0)
     .sort((a, b) => survivorOrder(a.survivor, b.survivor))
     .flatMap((group) => group.losers.sort(survivorOrder).map((loser) => dedupPair(group.survivor, loser)));
 }
 
-/** The rows currentDistilledEntries selects, picked from a whole-store read. */
+/** The rows duplicateCandidates selects, picked from pages of every row. */
 const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.supersededBy;
 
-/** Pairs from rows fed a page at a time; between pages only each group's survivor and losers are held. */
-function scanPairs(pages: Iterable<readonly MemoryEntry[]>, backing: ReadonlySet<string>): DedupPair[] {
-  // Map order is first appearance, so partitions keep the order a whole read gave them.
-  const partitions = new Map<string, PartitionGroups>();
+type Partitions = Map<string, PartitionGroups>;
+
+/** Groups rows fed a page at a time; between pages only each group's survivor and losers are held. Map order is first
+ * appearance, so partitions keep the order the pages gave them. */
+function partitionRows(pages: Iterable<readonly MemoryEntry[]>): Partitions {
+  const partitions: Partitions = new Map();
   for (const page of pages) {
     for (const entry of page) {
       if (!isCurrentDistilled(entry)) continue;
@@ -128,35 +132,47 @@ function scanPairs(pages: Iterable<readonly MemoryEntry[]>, backing: ReadonlySet
       const partition = derivationPartitionKey(entry.tenantId, entry.scope, entry.originProject);
       let groups = partitions.get(partition);
       if (!groups) partitions.set(partition, (groups = new Map()));
-      addRow(groups, duplicateKey(entry.content), dedupRow(entry, backing));
+      addRow(groups, duplicateKey(entry.content), dedupRow(entry));
     }
   }
-  return [...partitions.values()].flatMap(partitionPairs);
+  return partitions;
+}
+
+/** The candidates' partitions in the order a read of every current row first meets them. */
+function candidatePartitions(store: Pick<Consolidation, 'duplicateCandidates'>): Partitions {
+  const { rows, firstSeen } = store.duplicateCandidates();
+  const rank = new Map<string, number>();
+  firstSeen.forEach((seen, i) => {
+    const key = derivationPartitionKey(seen.tenantId, seen.scope, seen.originProject);
+    if (!rank.has(key)) rank.set(key, i);
+  });
+  const at = (key: string): number => rank.get(key) ?? firstSeen.length;
+  return new Map([...partitionRows([rows])].sort(([a], [b]) => at(a) - at(b)));
+}
+
+function scanPairs(store: Pick<Consolidation, 'objectBackedAmong'>, partitions: Partitions): DedupPair[] {
+  const losers = [...partitions.values()].flatMap((groups) => [...groups.values()].flatMap((g) => g.losers));
+  const backing = store.objectBackedAmong(losers.map((loser) => loser.id));
+  return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
 }
 
 /** Remove the weaker copy of same-text (apart from spacing) memories within one tenant, never across (isolation).
- * Strength wins, then retrievals; `threshold` is ignored; `pages` feeds every row in place of one current-row read. */
+ * Strength wins, then retrievals; `threshold` is ignored; `pages` feeds every row in place of the candidates read. */
 export function deduplicateStore(
   store: Consolidation,
-  options: {
-    threshold?: number;
-    dryRun?: boolean;
-    actor?: string;
-    pages?: Iterable<readonly MemoryEntry[]>;
-    backing?: ReadonlySet<string>;
-  } = {},
+  options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: Iterable<readonly MemoryEntry[]> } = {},
 ): DedupResult {
   // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort sleep mid-loop) and
   // superseded rows are history.
-  const pages = options.pages ?? [store.currentDistilledEntries()];
-  const pairs = scanPairs(pages, options.backing ?? store.objectBackedIds());
+  const partitions = options.pages ? partitionRows(options.pages) : candidatePartitions(store);
+  const pairs = scanPairs(store, partitions);
   const done = options.dryRun ? pairs : deletePairs(store, pairs, options.actor);
   return { removed: done.length, pairs: done };
 }
 
-/** The pairs whose loser was deleted; one store handle, one transaction per delete. */
+/** The pairs whose loser was deleted; one store handle, one transaction per batch of deletes. */
 function deletePairs(store: Consolidation, pairs: readonly DedupPair[], actor: string | undefined): DedupPair[] {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
-  const gone = store.deleteOneByOne(targets, { actor, automatic: true });
+  const gone = store.deleteInBatches(targets, { actor, automatic: true });
   return pairs.filter((_, i) => gone[i]);
 }

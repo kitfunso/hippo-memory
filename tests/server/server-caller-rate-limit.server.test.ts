@@ -9,6 +9,7 @@ import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/st
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { clientLimitKey } from '../../src/surface/server/client-ip.js';
+import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { withoutLocalFiles } from '../_helpers/port-only-store.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
@@ -381,7 +382,7 @@ describe('the per-address scrypt bucket', () => {
     expect(scryptRunsSince(before)).toBe(39);
   });
 
-  it('keys an IPv6 address on its /64, so rotating inside one /64 buys no fresh scrypt budget', async () => {
+  it('keys an IPv6 address on its /48, so rotating /64s inside one /48 buys no fresh scrypt budget', async () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     freezeClock();
@@ -389,12 +390,12 @@ describe('the per-address scrypt bucket', () => {
     await start({ perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.1, burst: 2 } });
     const from = (address: string): Promise<Reply> =>
       recall(bearer(wrongSecretOf(key), { 'x-forwarded-for': address }));
-    expect([await from('2001:db8:1:2::a'), await from('2001:db8:1:2:ffff:1:2:3')]).toEqual([
+    expect([await from('2001:db8:1:2::a'), await from('2001:db8:1:3:ffff:1:2:3')]).toEqual([
       UNAUTHORISED,
       UNAUTHORISED,
     ]);
-    expect(await from('2001:0db8:0001:0002::b')).toEqual({ status: 429, retryAfter: '10' });
-    expect(await from('2001:db8:1:3::a')).toEqual(UNAUTHORISED);
+    expect(await from('2001:0db8:0001:00ff::b')).toEqual({ status: 429, retryAfter: '10' });
+    expect(await from('2001:db8:2:2::a')).toEqual(UNAUTHORISED);
   });
 });
 
@@ -406,11 +407,11 @@ function fromSocket(ip: string | undefined): IncomingMessage {
 
 describe('clientLimitKey on a direct peer', () => {
   it.each([
-    ['2001:db8:1:2::a', '2001:db8:1:2::/64'],
-    ['2001:0DB8:0001:0002:aaaa:bbbb:cccc:dddd', '2001:db8:1:2::/64'],
-    ['::1', '0:0:0:0::/64'],
-    ['fe80::1%eth0', 'fe80:0:0:0::/64'],
-    ['64:ff9b::192.0.2.1', '64:ff9b:0:0::/64'],
+    ['2001:db8:1:2::a', '2001:db8:1::/48'],
+    ['2001:0DB8:0001:ffff:aaaa:bbbb:cccc:dddd', '2001:db8:1::/48'],
+    ['::1', '0:0:0::/48'],
+    ['fe80::1%eth0', 'fe80:0:0::/48'],
+    ['64:ff9b::192.0.2.1', '64:ff9b:0::/48'],
     ['::ffff:203.0.113.9', '203.0.113.9'],
     ['203.0.113.9', '203.0.113.9'],
   ])('%s keys as %s', (ip, key) => {
@@ -420,10 +421,19 @@ describe('clientLimitKey on a direct peer', () => {
   it('keys a peer with no address as unknown', () => {
     expect(clientLimitKey(fromSocket(undefined))).toBe('unknown');
   });
+
+  it('gives a client rotating through 1,000 /64s of one /48 one bucket, so it cannot push a throttled client out', () => {
+    const limiter = createRateLimiter({ ratePerSec: 0.001, burst: 1, idleEvictMs: 60_000, maxKeys: 4 });
+    const pass = (ip: string): boolean => limiter.check(clientLimitKey(fromSocket(ip)), 1_000);
+    expect([pass('198.51.100.7'), pass('198.51.100.7')]).toEqual([true, false]);
+    const rotated = Array.from({ length: 1000 }, (_, i) => pass(`2001:db8:1:${i.toString(16)}::1`));
+    expect(rotated.filter(Boolean)).toHaveLength(1);
+    expect(pass('198.51.100.7')).toBe(false);
+  });
 });
 
 describe('the per-address bucket', () => {
-  it('keys an IPv6 address on its /64 and an IPv4-mapped one on its IPv4 address', async () => {
+  it('keys an IPv6 address on its /48 and an IPv4-mapped one on its IPv4 address', async () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     freezeClock();
@@ -433,10 +443,10 @@ describe('the per-address bucket', () => {
     const drained = { status: 429, retryAfter: '10' };
     expect([
       await from('2001:db8:1:2::a'),
-      await from('2001:db8:1:2:ffff:1:2:3'),
-      await from('2001:0db8:0001:0002::b'),
+      await from('2001:db8:1:3:ffff:1:2:3'),
+      await from('2001:0db8:0001:0004::b'),
     ]).toEqual([OK, OK, drained]);
-    expect(await from('2001:db8:1:3::a')).toEqual(OK);
+    expect(await from('2001:db8:2:2::a')).toEqual(OK);
     expect([await from('::ffff:198.51.100.1'), await from('198.51.100.1'), await from('198.51.100.1')]).toEqual([
       OK,
       OK,

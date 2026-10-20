@@ -5,7 +5,7 @@
  * records the base, so it runs once.
  */
 import { deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../base/memory/memory.js';
-import type { HalfLifeChange, HalfLifeRows } from '../../store/local/consolidation.js';
+import type { HalfLifeChange, HalfLifeRows, ObjectLink } from '../../store/local/consolidation.js';
 import type { Consolidation } from '../../store/local/index.js';
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set([
@@ -109,55 +109,42 @@ interface Movable {
   typedBase: boolean;
   base: number | null;
   typed: number | null;
+  object: ObjectLink;
 }
 
 /** The base move and the move of object memories, planned from one pass over the rows. */
 function planMoves(rows: HalfLifeRows, to: number) {
   const { typedPending } = rows;
-  const objects = objectMemoryIds(rows.objectRows);
   const losers = conflictLosers(rows.conflictAudits, rows.resolvedConflicts);
   // A supersede copy can come before its source, so routing waits for the pass to finish.
   const copies = new Set<string>();
   const movable: Movable[] = [];
   let count = 0;
-  for (const e of rows.rows) {
+  for (const { entry: e, object } of rows.rows) {
     count++;
     if (e.supersededBy) copies.add(e.supersededBy);
     const base = baseTarget(e, rows.from, to);
     const typed = typedPending ? typedTarget(e, to) : null;
     if (base === null && typed === null) continue;
     const change = { id: e.id, tenantId: e.tenantId, oldHalfLifeDays: e.halfLifeDays };
-    movable.push({ change, typedBase: onTypedBase(e), base, typed });
+    movable.push({ change, typedBase: onTypedBase(e), base, typed, object });
   }
   // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the
   // source). Shape decides the rest.
-  const objectWritten = (m: Movable) => objects.all.has(m.change.id) || (!copies.has(m.change.id) && m.typedBase);
+  const objectWritten = (m: Movable) => m.object !== null || (!copies.has(m.change.id) && m.typedBase);
   const basePlan: HalfLifeChange[] = [];
   const typedPlan: HalfLifeChange[] = [];
   for (const m of movable) {
     const { id } = m.change;
     if (typedPending && objectWritten(m)) {
-      const exempt = objects.retired.has(id) || losers.has(id);
+      // Retiring an object leaves its memory untouched, so only its table knows.
+      const exempt = m.object === 'retired' || losers.has(id);
       if (m.typed !== null && !exempt) typedPlan.push({ ...m.change, halfLifeDays: m.typed });
     } else if (m.base !== null) {
       basePlan.push({ ...m.change, halfLifeDays: m.base });
     }
   }
   return { basePlan, typedPlan, count };
-}
-
-/**
- * Memories behind every object, and those behind a superseded or closed one. Retiring an object leaves its memory
- * untouched, so only its table knows.
- */
-function objectMemoryIds(objectRows: HalfLifeRows['objectRows']) {
-  const all = new Set<string>();
-  const retired = new Set<string>();
-  for (const r of objectRows) {
-    all.add(r.memory_id);
-    if (r.status === 'superseded' || r.status === 'closed') retired.add(r.memory_id);
-  }
-  return { all, retired };
 }
 
 /** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row

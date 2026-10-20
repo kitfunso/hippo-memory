@@ -3,8 +3,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { resolveCodexSessionTranscript } from '../../domain/hooks/codex-session.js';
-import { installedRealCodexPath, resolveCodexWrapperPaths } from '../../domain/hooks/codex-wrapper.js';
+import { resolveCodexSessionTranscript } from '../capture/codex-session.js';
+import { resolveCodexWrapperPaths } from '../../domain/hooks/codex-wrapper.js';
+import { installedRealCodexPath } from '../hooks-install/codex-wrapper.js';
 import { resolveJsonHookPaths } from '../../domain/hooks/json-hooks.js';
 import { readSessionScan, recordSessionDigest, type SessionScan } from '../capture/session-digest.js';
 import { captureToolFailure } from '../capture/capture-error.js';

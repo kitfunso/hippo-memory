@@ -1,10 +1,12 @@
-// readTextFile hands back a text file's content, or the reason it set aside whatever sits at the path.
+// diskAgentFiles.readText hands back a text file's content, or the reason it set aside whatever sits at the path.
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { readTextFile } from '../../src/domain/agent-memories/files.js';
+import { diskAgentFiles } from '../../src/base/util/agent-files.js';
+
+const readTextFile = (file: string) => diskAgentFiles.readText(file);
 
 const SIZE_CAP = 256 * 1024;
 

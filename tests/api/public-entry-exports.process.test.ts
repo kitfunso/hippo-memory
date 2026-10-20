@@ -270,9 +270,9 @@ describe('published runtime exports', () => {
       normalizeValueForRejection
       ownScopeTouches
       passesScopeFilterForRecall physicsSearch
-      rankVectorRows rarestFtsQuery rejectionDigest repairKeeps replacesIndex requireGroup
+      rankVectorRows rarestFtsQuery readerReaches rejectionDigest repairKeeps replacesIndex requireGroup
       sqliteStore
-      tallyAmbientEntries",
+      tallyAmbientEntries targetReader",
         "./testing": "ambientSecretAdmit ambientSecretAdmitWire
       batchWriteAndDeleteWire buildIndexFromDb
       calculateStrengthWire createMemoryWire

@@ -10,7 +10,9 @@ import {
 import { strengthSql } from './rule-sql.js';
 import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
-import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
+import { type DatabaseSyncLike, isFtsAvailable, isFtsInSync, withReadSnapshot } from '../../db/index.js';
+import { isoInstant } from '../../base/memory/created-stamp.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { originInSql } from '../../base/scope/project-identity.js';
@@ -18,6 +20,7 @@ import { pickRarestFtsQuery, loadRecallEntriesAt } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
+import { holdingPhrase, IN_PHRASE_HITS, TENANT_IS } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { AmbientRefusalReason } from '../../base/scope/read-admission.js';
 import type {
@@ -33,9 +36,8 @@ import type { StatusCounts, StrengthTallies } from '../port/reports.js';
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
 /** idx_memories_pinned (migration v51) serves it. */
 const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created ASC, id ASC`;
+/** A stamp whose text does not sort by time; idx_memories_created_drift (migration v51) holds the live ones. */
 const CREATED_DRIFTED = "(length(created) <> 24 OR created NOT LIKE '%Z')";
-/** idx_memories_created_drift (migration v51) serves it. */
-const AMBIENT_DRIFT_SQL = `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND ${CREATED_DRIFTED} LIMIT 1`;
 
 type RunSql = (where: string, params: Array<string | number>) => MemoryEntry[];
 
@@ -53,15 +55,70 @@ interface RecentRowsOptions {
 // `id DESC` mirrors contextGet's comparator, not loadFreshRawMemories' cross-ingest-stable order: that would change
 // what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
+const AFTER = 'AND created <= ? AND (created < ? OR id < ?) ';
 
 interface OwnRows {
   readonly where: string;
   readonly params: ReadonlyArray<string | number>;
 }
 
+/** Where a row sorts in a recent read: the instant its `created` names, then its id. */
+interface Position {
+  readonly at: string;
+  readonly id: string;
+}
+
+/** Up to `limit` live rows `own` admits, newest first, after `after`. */
+type ReadNewest = (own: OwnRows, limit: number, after?: Position) => MemoryEntry[];
+
+// The text itself when it is toISOString's form, else the instant Date reads (as contextGet sorts it), else oldest.
+function positionOf(e: MemoryEntry): Position {
+  const iso = [...e.created].length === 24 && /z$/i.test(e.created);
+  return { at: iso ? e.created : (isoInstant(e.created) ?? ''), id: e.id };
+}
+
+const newestFirst = (a: Position, b: Position): number =>
+  a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.id === b.id ? 0 : a.id < b.id ? 1 : -1;
+
+const afterParams = (after: Position | undefined): string[] => (after ? [after.at, after.at, after.id] : []);
+
+/** Reads in `created` text order, which is time order while every live row of the tenant holds toISOString text. */
+function readByText(run: RunSql): ReadNewest {
+  return (own, limit, after) =>
+    run(`${own.where} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [...own.params, ...afterParams(after), limit]);
+}
+
+/** Every live drifted row `own` admits, newest first; the drift index holds only these, so it is no tenant scan. */
+function newestDrifted(run: RunSql, own: OwnRows): MemoryEntry[] {
+  return run(`${own.where} AND ${CREATED_DRIFTED}`, [...own.params])
+    .map((entry) => ({ entry, at: positionOf(entry) }))
+    .sort((a, b) => newestFirst(a.at, b.at))
+    .map(({ entry }) => entry);
+}
+
+/** The text-ordered rows merged with the drifted ones by instant: the rows and order a store whose stamps were all
+ * written in toISOString form would read. */
+function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNewest {
+  return (own, limit, after) => {
+    let odd = drifted.get(own.where);
+    if (!odd) drifted.set(own.where, (odd = newestDrifted(run, own)));
+    const text = run(`${own.where} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
+      ...own.params,
+      ...afterParams(after),
+      limit,
+    ]);
+    const older = after ? odd.filter((e) => newestFirst(positionOf(e), after) > 0) : odd;
+    return [...text, ...older]
+      .map((entry) => ({ entry, at: positionOf(entry) }))
+      .sort((a, b) => newestFirst(a.at, b.at))
+      .slice(0, limit)
+      .map(({ entry }) => entry);
+  };
+}
+
 // The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the delivery
 // ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
-function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
+function loadRecentRows(read: ReadNewest, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
   const window = Math.max(needed * 4, 32);
@@ -72,39 +129,30 @@ function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, options
     where: originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED,
     params: [tenantId, ...(origins?.names ?? [])],
   };
-  // Text order is chronological only for standard UTC ISO (memory.ts), so a drifted store is read whole and re-sorted
-  // downstream.
-  if (drifted) return run(`${own.where} ${NEWEST}`, [...own.params]).filter(keep);
-  let read = run(`${AMBIENT_SCOPED} ${NEWEST} LIMIT ?`, [tenantId, window]);
-  let kept = read.filter(keep);
-  if (kept.length >= needed || read.length < window) return kept;
+  let rows = read({ where: AMBIENT_SCOPED, params: [tenantId] }, window);
+  let kept = rows.filter(keep);
+  if (kept.length >= needed || rows.length < window) return kept;
   if (origins) {
-    read = run(`${own.where} ${NEWEST} LIMIT ?`, [...own.params, window]);
-    kept = read.filter(keep);
-    if (kept.length >= needed || read.length < window) return kept;
+    rows = read(own, window);
+    kept = rows.filter(keep);
+    if (kept.length >= needed || rows.length < window) return kept;
   }
-  return [...kept, ...keptPastWindow(run, own, read, needed - kept.length, keep)];
+  return [...kept, ...keptPastWindow(read, own, rows, needed - kept.length, keep)];
 }
 
 // A window of refused rows can hide older ones, so read on in keyset pages, each four times the last, until enough are
 // kept.
 function keptPastWindow(
-  run: RunSql,
+  read: ReadNewest,
   own: OwnRows,
-  read: readonly MemoryEntry[],
+  rows: readonly MemoryEntry[],
   wanted: number,
   keep: (e: MemoryEntry) => boolean,
 ): MemoryEntry[] {
   const out: MemoryEntry[] = [];
-  let last = read[read.length - 1];
-  for (let size = read.length * 4; out.length < wanted; size *= 4) {
-    const page = run(`${own.where} AND created <= ? AND (created < ? OR id < ?) ${NEWEST} LIMIT ?`, [
-      ...own.params,
-      last.created,
-      last.created,
-      last.id,
-      size,
-    ]);
+  let last = rows[rows.length - 1];
+  for (let size = rows.length * 4; out.length < wanted; size *= 4) {
+    const page = read(own, size, positionOf(last));
     out.push(...page.filter(keep));
     if (page.length < size) break;
     last = page[page.length - 1];
@@ -142,9 +190,9 @@ export function loadAmbientCandidatesAt(
   // finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
   const run: RunSql = (where, params) =>
-    (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`).all(...params) as MemoryRow[]).map(
-      rowToEntry,
-    );
+    (
+      cachedStatement(db, `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`).all(...params) as MemoryRow[]
+    ).map(rowToEntry);
 
   const byId = new Map<string, MemoryEntry>();
   for (const e of run(AMBIENT_PINNED_WHERE, [tenantId])) {
@@ -152,8 +200,9 @@ export function loadAmbientCandidatesAt(
   }
 
   if (needed > 0) {
-    const drifted = db.prepare(AMBIENT_DRIFT_SQL).get(tenantId) !== undefined;
-    for (const e of loadRecentRows(run, drifted, tenantId, { needed, admit, origins })) byId.set(e.id, e);
+    const drifted = newestDrifted(run, { where: AMBIENT_SCOPED, params: [tenantId] });
+    const read = drifted.length === 0 ? readByText(run) : readByInstant(run, new Map([[AMBIENT_SCOPED, drifted]]));
+    for (const e of loadRecentRows(read, tenantId, { needed, admit, origins })) byId.set(e.id, e);
   }
 
   // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort is stable, so input order is load-bearing
@@ -235,7 +284,7 @@ function decayKeySubsetSql(whereSql: string): string {
 function decayKeySubsetRows(db: DatabaseSyncLike, rows: ContextRowsWhere, cap: number, now: string): MemoryRow[] {
   const whereSql = rows.where.join(' AND ');
   const bound = [now, ...rows.params, ...rows.params, now, DECAY_KEY_SLACK_DAYS, cap, cap, DECAY_KEY_HALF_LIVES];
-  return db.prepare(decayKeySubsetSql(whereSql)).all(...bound) as MemoryRow[];
+  return cachedStatement(db, decayKeySubsetSql(whereSql)).all(...bound) as MemoryRow[];
 }
 
 /** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
@@ -252,9 +301,10 @@ export function loadContextCandidatesAt(
   // Stops one row past the cap, so a large tenant is not walked to be counted.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const matched = (
-    db
-      .prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`)
-      .get(...params, cap + 1) as { n: number }
+    cachedStatement(db, `SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`).get(
+      ...params,
+      cap + 1,
+    ) as { n: number }
   ).n;
   // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
   const ranked = matched > cap;
@@ -267,7 +317,7 @@ export function loadContextCandidatesAt(
     SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
   ) ORDER BY created ASC, id ASC`
     : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
-  const rows = db.prepare(sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
+  const rows = cachedStatement(db, sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -277,9 +327,45 @@ const TEAM_VISIBLE = scopeAdmitSql('');
 /** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
 export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 
+interface HeldRowsFilter {
+  readonly tenantId: TenantId;
+  readonly project: readonly string[] | undefined;
+  readonly admit: SqlFragment;
+}
+
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+type HeldTextDbRow = { id: string; content: string; source: string | null; origin_project: string | null };
+
+/** Rows holding a word of `words`; with `phrases`, only the index's hits for them, so rows without one are never
+ * read. */
+function heldRows(
+  db: DatabaseSyncLike,
+  filter: HeldRowsFilter,
+  words: readonly string[],
+  phrases?: readonly string[],
+): HeldTextDbRow[] {
+  const tenant = tenantAnd(filter.tenantId, phrases ? TENANT_IS : 'tenant_id = ?');
+  const { project, admit } = filter;
+  const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
+  // One JSON list of words, so the text, and the statement cached for it, stay the same at every chunk length.
+  const holds = 'EXISTS (SELECT 1 FROM json_each(?) WHERE instr(content, value) > 0)';
+  return cachedStatement(
+    db,
+    `SELECT id, content, source, origin_project FROM memories WHERE ${phrases ? IN_PHRASE_HITS : '1'}${tenant.sql}` +
+      `${originWhere} AND ${admit.sql} AND (${holds})`,
+  ).all(
+    ...(phrases ? [phrases.join(' OR ')] : []),
+    ...tenant.args,
+    ...(project ?? []),
+    ...admit.params,
+    JSON.stringify(words),
+  ) as HeldTextDbRow[];
+}
+
 /** Tenant rows holding any of `words` that `admit` passes (default: team-visible); a row equal to a text apart from
  * spacing holds its every word. With `project`, only rows carrying one of those names plus user-global rows, as
- * loadContextCandidates' filter. */
+ * loadContextCandidates' filter. A row holds a word it has whole between spaces as one of the index's phrase hits, so
+ * when the index is in sync it answers for each word it can name. */
 export function loadTextsHoldingWordsAt(
   db: DatabaseSyncLike,
   tenantId: TenantId,
@@ -287,36 +373,34 @@ export function loadTextsHoldingWordsAt(
   project?: readonly string[],
   admit: SqlFragment = TEAM_VISIBLE,
 ): HeldText[] {
-  const unique = [...new Set(words)];
-  const out: HeldText[] = [];
-  const tenant = tenantAnd(tenantId);
-  const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  // One instr() per word in an OR chain: ID_CHUNK terms stay under SQLite's 1000-level expression depth.
-  for (const chunk of chunked(unique)) {
-    const rows = db
-      .prepare(
-        `SELECT content, source, origin_project FROM memories WHERE 1${tenant.sql}${originWhere} AND ` +
-          `${admit.sql} AND (${chunk.map(() => 'instr(content, ?) ' + '> 0').join(' OR ')})`,
-      )
-      .all(...tenant.args, ...(project ?? []), ...admit.params, ...chunk) as Array<{
-      content: string;
-      source: string | null;
-      origin_project: string | null;
-    }>;
-    for (const row of rows) {
-      out.push({ content: row.content, source: row.source ?? 'cli', originProject: row.origin_project });
-    }
+  const filter: HeldRowsFilter = { tenantId, project, admit };
+  const indexed = isFtsAvailable(db) && isFtsInSync(db);
+  const phraseOf = new Map([...new Set(words)].map((w) => [w, indexed ? holdingPhrase(w) : null]));
+  const named = [...phraseOf].filter(([, phrase]) => phrase !== null).map(([w]) => w);
+  const unnamed = [...phraseOf].filter(([, phrase]) => phrase === null).map(([w]) => w);
+  const byId = new Map<string, HeldText>();
+  const keep = (row: HeldTextDbRow) =>
+    byId.set(row.id, { content: row.content, source: row.source ?? 'cli', originProject: row.origin_project });
+  for (const chunk of chunked(named)) {
+    heldRows(
+      db,
+      filter,
+      chunk,
+      chunk.map((w) => phraseOf.get(w)!),
+    ).forEach(keep);
   }
-  return out;
+  for (const chunk of chunked(unnamed)) heldRows(db, filter, chunk).forEach(keep);
+  return [...byId.values()];
 }
 
 /**
  * A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it.
  */
 export function newestEntriesAt(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
-  const rows = db
-    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`)
-    .all(tenantId, limit) as MemoryRow[];
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
+  ).all(tenantId, limit) as MemoryRow[];
   return rows.reverse().map(rowToEntry);
 }
 
@@ -333,9 +417,10 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
   const newest = 'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
   // One read transaction, so the row count and the texts come from the same snapshot.
   return withReadSnapshot(db, () => {
-    const groups = db
-      .prepare(`SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`)
-      .all(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Array<{ tags_json: string | null; n: number }>;
+    const groups = cachedStatement(db, `SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`).all(
+      tenantId,
+      SCHEMA_FIT_WINDOW_ROWS,
+    ) as Array<{ tags_json: string | null; n: number }>;
     let rows = 0;
     const tagCounts = new Map<string, number>();
     for (const group of groups) {
@@ -344,7 +429,10 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
     }
     // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out; a stored per-tenant tag and
     // token tally is the upgrade.
-    const texts = db.prepare(`SELECT content FROM (${newest})`).iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{
+    const texts = cachedStatement(db, `SELECT content FROM (${newest})`).iterate(
+      tenantId,
+      SCHEMA_FIT_WINDOW_ROWS,
+    ) as Iterable<{
       content: string;
     }>;
     return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
@@ -357,13 +445,12 @@ type SourceTallyDbRow = SourceTally;
 /** Row count and newest `created` per source, for peer listings that need no row. */
 export function tallySourcesAt(db: DatabaseSyncLike, tenantId: TenantId): SourceTally[] {
   const tenant = tenantAnd(tenantId);
-  return db
-    .prepare(
-      `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
-        `char(31) || id) AS first
+  return cachedStatement(
+    db,
+    `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
+      `char(31) || id) AS first
      FROM memories WHERE 1${tenant.sql} GROUP BY COALESCE(source, 'cli')`,
-    )
-    .all(...tenant.args) as SourceTallyDbRow[];
+  ).all(...tenant.args) as SourceTallyDbRow[];
 }
 
 // A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
@@ -380,19 +467,19 @@ export function strengthTalliesAt(
   atRiskBelow: number,
 ): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
-  const strength = `COALESCE(${strengthSql(now, rules)}, 0)`;
+  const bound = strengthSql(now, rules);
+  const strength = `COALESCE(${bound.sql}, 0)`;
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = db
-    .prepare(
-      `SELECT
+  const row = cachedStatement(
+    db,
+    `SELECT
       COUNT(*) AS total,
       COALESCE(SUM(pinned != 0), 0) AS pinned,
       COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE value = 'error')), 0) AS errors,
       COALESCE(SUM(${strength}), 0) AS strengthSum,
       COALESCE(SUM(COALESCE(pinned, 0) = 0 AND ${strength} < ?), 0) AS atRisk
       FROM memories WHERE tenant_id = ?`,
-    )
-    .get(atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
+  ).get(...bound.params, ...bound.params, atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
   return {
     total: Number(row.total),
     pinned: Number(row.pinned),
@@ -480,16 +567,18 @@ export function statusCountsAt(
   // One read transaction, so the row tallies and the two counts describe the same store.
   return withReadSnapshot(db, () => {
     // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
-    const rows = db
-      .prepare(`SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`)
-      .iterate() as Iterable<StatusRow>;
+    const rows = cachedStatement(
+      db,
+      `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
+    ).iterate() as Iterable<StatusRow>;
     const tallies = tallyStatusRows(rows, now, atRiskBelow, rules);
     // SAFETY: scalar subqueries with no FROM always answer one row.
-    const counts = db
-      .prepare(`SELECT
+    const counts = cachedStatement(
+      db,
+      `SELECT
       (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
-      (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`)
-      .get() as Record<'openConflicts' | 'embedded', number | bigint>;
+      (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
+    ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
     return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
   });
 }

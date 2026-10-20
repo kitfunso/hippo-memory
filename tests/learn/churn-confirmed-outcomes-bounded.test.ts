@@ -8,6 +8,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 const OLD_TARGETS = 200;
 /** Rows the confirmed-outcome statement handed to JavaScript in `reads`. */
@@ -104,10 +105,14 @@ describe('detectChurnStale', () => {
     writeEntry(root, entry);
 
     const { result, reads } = recordStatements(() =>
-      detectChurnStale(sqliteSyncStore(root).localFiles.learning, '/no/such/repo', {
-        tenantId: 'default',
-        projectName: 'proj',
-      }),
+      detectChurnStale(
+        sqliteSyncStore(root).localFiles.learning,
+        { root: '/no/such/repo', git: processGit },
+        {
+          tenantId: 'default',
+          projectName: 'proj',
+        },
+      ),
     );
 
     expect(result.checked).toBe(1);

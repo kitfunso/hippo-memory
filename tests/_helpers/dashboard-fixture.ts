@@ -11,9 +11,9 @@ import { upsertVectors } from '../../src/db/vector-store.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from './default-half-life-memory.js';
 import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
-import { createSnapshotService, type SnapshotService } from '../../src/api/dashboard/snapshot.js';
-import type { DashboardRow } from '../../src/store/local/dashboard-reads.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { createSnapshotClock, type SnapshotClock } from '../../src/api/dashboard/snapshot-clock.js';
+import type { DashboardReads } from '../../src/store/port/dashboard-reads.js';
+import { sqliteDashboardReads } from '../../src/store/sqlite/dashboard-reads.js';
 import { writeEntry } from './root-forms.js';
 import { initTestStore } from './store-template.js';
 import { envTenant } from '../../src/base/util/env.js';
@@ -82,14 +82,16 @@ export function embed(hippoRoot: string, ids: readonly string[]): void {
   }
 }
 
-/** A snapshot cache over the store under `hippoRoot`, as the dashboard builds it; `close` releases its reader. */
-export function snapshotsOf(hippoRoot: string, now: () => number, cacheClock?: () => number): SnapshotService {
-  return createSnapshotService(sqliteSyncStore(hippoRoot).localFiles.dashboard, {}, now, cacheClock);
+export interface DashboardView {
+  readonly reads: DashboardReads;
+  readonly clock: SnapshotClock;
 }
 
-/** A whole entry as the snapshot's scan hands it over: the full text as the head. */
-export function asDashboardRow(entry: MemoryEntry, embedded = false): DashboardRow {
-  return { ...entry, head: entry.content, embedded };
+/** The dashboard's reads and snapshot clock over the store under `hippoRoot`, as the reader thread builds them;
+ * `reads.close` releases the connection the clock reads its commit signal on. */
+export function dashboardOf(hippoRoot: string, now: () => number, cacheClock?: () => number): DashboardView {
+  const reads = sqliteDashboardReads(hippoRoot);
+  return { reads, clock: createSnapshotClock(reads, now, cacheClock) };
 }
 
 /** The access token every fixture dashboard starts with; `call` sends the session cookie it earns. */

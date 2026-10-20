@@ -181,7 +181,7 @@ function projectOrigins(project: ProjectIdentity): Pick<Pass, 'originProject' | 
 }
 
 function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot'>): AdapterContext {
-  return { home: machine.home, env: machine.env, platform: machine.platform, ...extra };
+  return { ...machine, ...extra };
 }
 
 /**

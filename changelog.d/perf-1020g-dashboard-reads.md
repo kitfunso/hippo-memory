@@ -1,0 +1,3 @@
+### Changed
+
+- **The dashboard reads bounded SQL, not an in-memory copy of the whole tenant.** Its reader thread used to hold every live memory of the tenant and rebuild that copy on each new snapshot id, so heap and rebuild time grew with the store. Counts now come from SQL aggregates, a memory list from one sorted page, and a project with more than 4,000 memories from a fixed grid. Each read hands back the same number of rows on a store five times larger. The JSON is the same. The snapshot id still moves at most every 10 s after an outside write, but a read inside that window now shows the new rows.

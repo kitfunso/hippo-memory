@@ -1,11 +1,10 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
-import { graphEntityOf, graphRows } from '../../../api/objects/graph.js';
+import { graphEntityOf, graphView } from '../../../api/objects/graph.js';
 import { rawArchive, forget, outcome, promote, remember, supersede } from '../../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/memory.js';
-import { graphModelOf } from '../../../domain/graph/view.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import { restClientKey } from '../client-key.js';
-import type { AuthedRouteRequest } from '../types.js';
+import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import {
   getCallerProject,
   getString,
@@ -57,58 +56,45 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
 export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const entity = graphEntityOf(query.get('entity'));
   const limit = parseListLimit(query.get('limit'));
-  const rows = await graphRows(ctx, { entity, limit });
-  sendJson(res, 200, graphModelOf(rows));
+  sendJson(res, 200, await graphView(ctx, { entity, limit }));
   return;
 }
 
 // /v1/memories/:id/* and DELETE /v1/memories/:id
-export async function handleArchiveMemory(
-  { req, res, ctx }: AuthedRouteRequest,
-  archiveMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(archiveMatch.id!, 'memory id');
+export async function handleArchiveMemory({ req, res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+  validateIdSegment(id, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const reason = getString(body, 'reason', MAX_SHORT_FIELD_LEN);
   if (!reason) {
     throw new HttpError(400, 'reason is required');
   }
-  const result = await rawArchive(ctx, archiveMatch.id!, reason);
+  const result = await rawArchive(ctx, id, reason);
   sendJson(res, 200, result);
   return;
 }
 
-export async function handleSupersedeMemory(
-  { req, res, ctx }: AuthedRouteRequest,
-  supersedeMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(supersedeMatch.id!, 'memory id');
+export async function handleSupersedeMemory({ req, res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+  validateIdSegment(id, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content', MAX_CONTENT_LEN);
   if (!content) {
     throw new HttpError(400, 'content is required');
   }
-  const result = await supersede(ctx, supersedeMatch.id!, content);
+  const result = await supersede(ctx, id, content);
   sendJson(res, 200, result);
   return;
 }
 
-export async function handlePromoteMemory(
-  { res, ctx }: AuthedRouteRequest,
-  promoteMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(promoteMatch.id!, 'memory id');
-  const result = await promote(ctx, promoteMatch.id!);
+export async function handlePromoteMemory({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+  validateIdSegment(id, 'memory id');
+  const result = await promote(ctx, id);
   sendJson(res, 200, result);
   return;
 }
 
-export async function handleForgetMemory(
-  { res, ctx }: AuthedRouteRequest,
-  idMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(idMatch.id!, 'memory id');
-  const result = await forget(ctx, idMatch.id!);
+export async function handleForgetMemory({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+  validateIdSegment(id, 'memory id');
+  const result = await forget(ctx, id);
   sendJson(res, 200, result);
   return;
 }

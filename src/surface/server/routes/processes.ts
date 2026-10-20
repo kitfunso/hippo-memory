@@ -1,26 +1,20 @@
-// /v1/processes routes.
-import {
-  MAX_PROCESS_STEP_LEN,
-  MAX_PROCESS_STEPS,
-  PROCESS,
-  type SaveProcessOptions,
-} from '../../../domain/objects/processes.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
-import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, parseJsonBody, getString, requiredString } from '../validation.js';
+// /v1/processes routes: supersede creates a new version that keeps the predecessor's name.
+import { OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
+import { objectCreate } from '../../../api/objects/objects.js';
+import { HttpError } from '../../../base/util/http-util.js';
+import { MAX_SHORT_FIELD_LEN, getString, requiredString } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../../base/util/json.js';
-import { saveFor } from '../../../api/objects/objects.js';
-import { closeRoute, getRoute, listRoute, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import type { VersionedRouteConfig } from './object-routes.js';
 
-// HTTP-boundary validation for an untrusted process `steps` body; saveProcess re-validates and trims, this is the
+// HTTP-boundary validation for an untrusted process `steps` body; the save re-validates and trims, this is the
 // fail-fast 400 gate.
 function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
     throw new HttpError(400, 'steps must be an array of strings');
   }
-  if (raw.length > MAX_PROCESS_STEPS) {
-    throw new HttpError(400, `steps exceeds ${MAX_PROCESS_STEPS}-step cap`);
+  if (raw.length > OBJECT_CAPS.processSteps) {
+    throw new HttpError(400, `steps exceeds ${OBJECT_CAPS.processSteps}-step cap`);
   }
   for (const item of raw) {
     if (!isJsonString(item)) {
@@ -29,19 +23,26 @@ function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
     if (item.trim().length === 0) {
       throw new HttpError(400, 'a step is empty');
     }
-    if (item.length > MAX_PROCESS_STEP_LEN) {
-      throw new HttpError(400, `a step exceeds the ${MAX_PROCESS_STEP_LEN}-character cap`);
+    if (item.length > OBJECT_CAPS.processStep) {
+      throw new HttpError(400, `a step exceeds the ${OBJECT_CAPS.processStep}-character cap`);
     }
   }
   // SAFETY: every item in raw was confirmed to be a string in the loop above.
   return raw as string[];
 }
 
-const processRoutes: VersionedRouteConfig<'process', SaveProcessOptions> = {
+export const PROCESS_ROUTES: VersionedRouteConfig<'process'> = {
+  base: '/v1/processes',
+  kind: 'process',
   noun: 'process',
   field: 'process',
   listField: 'processes',
-  object: PROCESS,
+  create: (ctx, body) =>
+    objectCreate(ctx, 'process', {
+      processName: requiredString(body, 'processName', { max: MAX_SHORT_FIELD_LEN }),
+      steps: validateProcessStepsBody(body['steps']),
+      description: getString(body, 'description', MAX_SHORT_FIELD_LEN),
+    }),
   revise: (body) => {
     const steps = validateProcessStepsBody(body['steps']);
     if (steps.length === 0) {
@@ -58,34 +59,3 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOptions> = {
     });
   },
 };
-
-// Routes: /v1/processes (create, list, show, supersede, close), mirroring /v1/decisions; supersede creates a new
-// version that reuses the predecessor's name.
-// DoS caps: processName/description/changeSummary MAX_SHORT_FIELD_LEN, steps MAX_PROCESS_STEPS x MAX_PROCESS_STEP_LEN
-// (validateProcessStepsBody).
-export async function handleCreateProcess(rr: AuthedRouteRequest): Promise<void> {
-  const { ctx } = rr;
-  const body = await parseJsonBody(rr.req, ctx);
-  const process = await saveFor(ctx, PROCESS, {
-    processName: requiredString(body, 'processName', { max: MAX_SHORT_FIELD_LEN }),
-    steps: validateProcessStepsBody(body['steps']),
-    description: getString(body, 'description', MAX_SHORT_FIELD_LEN),
-  });
-  sendJson(rr.res, 201, { process });
-}
-
-export function handleListProcesses(rr: AuthedRouteRequest): Promise<void> {
-  return listRoute(processRoutes, rr);
-}
-
-export function handleSupersedeProcess(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return supersedeRoute(processRoutes, rr, match);
-}
-
-export function handleCloseProcess(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return closeRoute(processRoutes, rr, match);
-}
-
-export function handleGetProcess(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
-  return getRoute(processRoutes, rr, match);
-}

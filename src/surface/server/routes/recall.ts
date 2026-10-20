@@ -14,7 +14,7 @@ import {
 import { RECALL_RECORDING } from '../../../api/recall/finish.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../../api/recall/request.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
-import type { AuthedRouteRequest } from '../types.js';
+import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import { restClientKey } from '../client-key.js';
 import { sharedStoreOf, type Context } from '../../../api/types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
@@ -47,9 +47,9 @@ export async function handleRecallMemories({ req, res, ctx, query }: AuthedRoute
 // raws, summary substitutions, bio-aware budget fit). Tenant scope from the Bearer; default-deny on private rows.
 export async function handleAssembleSession(
   { res, ctx, query }: AuthedRouteRequest,
-  assembleMatch: Record<string, string>,
+  { id }: RouteParams,
 ): Promise<void> {
-  validateIdSegment(assembleMatch.id!, 'session id');
+  validateIdSegment(id, 'session id');
   const budgetRaw = query.get('budget');
   const budget = budgetRaw === null ? undefined : Number(budgetRaw);
   if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
@@ -71,11 +71,11 @@ export async function handleAssembleSession(
   if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
   if (scope !== undefined) assembleExtra.scope = scope;
-  const result = await assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
+  const result = await assemble(ctx, id, { ...assembleExtra, cost: assembleCost(id) });
   await recordTokens(ctx, 'http_assemble', {
     items: result.items.length,
     tokens: result.tokens,
-    sessionId: assembleMatch.id!,
+    sessionId: id,
   });
   sendJson(res, 200, result);
   return;
@@ -84,11 +84,8 @@ export async function handleAssembleSession(
 // GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a level-2 summary
 // (RecallResultItem.isSummary) to recover the originals. Tenant-scoped via Bearer; default-deny on private scopes for
 // the summary and its children.
-export async function handleDrillRecall(
-  { res, ctx, query }: AuthedRouteRequest,
-  drillMatch: Record<string, string>,
-): Promise<void> {
-  validateIdSegment(drillMatch.id!, 'summary id');
+export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+  validateIdSegment(id, 'summary id');
   const limitRaw = query.get('limit');
   const limit = limitRaw === null ? undefined : Number(limitRaw);
   if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
@@ -116,7 +113,7 @@ export async function handleDrillRecall(
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const result = await drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
+  const result = await drillDown(ctx, id, { ...drillExtra, cost: drillCost });
   if ('failure' in result) {
     // Leaf id maps to 422 (caller-actionable). Other cases stay as 404 to avoid leaking cross-tenant existence or scope
     // grants.

@@ -2,7 +2,7 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { previousSecretInForce } from '../../src/surface/connectors/slack/signature.js';
+import { previousSecretInForce, SLACK_PREVIOUS } from '../../src/surface/connectors/previous-secret.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 
@@ -30,30 +30,30 @@ afterEach(() => {
 
 describe('previousSecretInForce', () => {
   it('keeps the secret with no end date, or before the date, and drops it from the date on', () => {
-    expect(previousSecretInForce(OLD_SECRET, undefined, AT)).toBe(OLD_SECRET);
-    expect(previousSecretInForce(OLD_SECRET, '', AT)).toBe(OLD_SECRET);
-    expect(previousSecretInForce(OLD_SECRET, UNTIL, BEFORE)).toBe(OLD_SECRET);
-    expect(previousSecretInForce(OLD_SECRET, UNTIL, AT)).toBeUndefined();
-    expect(previousSecretInForce(OLD_SECRET, '2026-12-01T09:00:00+09:00', AT)).toBeUndefined();
-    expect(previousSecretInForce(OLD_SECRET, '2026-12-01T09:00:00+09:00', AT - 1)).toBe(OLD_SECRET);
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, undefined, AT)).toBe(OLD_SECRET);
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '', AT)).toBe(OLD_SECRET);
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, UNTIL, BEFORE)).toBe(OLD_SECRET);
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, UNTIL, AT)).toBeUndefined();
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '2026-12-01T09:00:00+09:00', AT)).toBeUndefined();
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '2026-12-01T09:00:00+09:00', AT - 1)).toBe(OLD_SECRET);
   });
 
   it('returns nothing when no previous secret is set, and warns about nothing', () => {
-    expect(previousSecretInForce(undefined, UNTIL, AT)).toBeUndefined();
-    expect(previousSecretInForce('', UNTIL, AT)).toBeUndefined();
+    expect(previousSecretInForce(SLACK_PREVIOUS, undefined, UNTIL, AT)).toBeUndefined();
+    expect(previousSecretInForce(SLACK_PREVIOUS, '', UNTIL, AT)).toBeUndefined();
     expect(warnings()).toEqual([]);
   });
 
   it.each(['soon', '12/01/2026', '2026-02-31', '2026-12-01 00:00', '20261201'])(
     'refuses the secret when the end date is %s, which is no ISO date',
     (until) => {
-      expect(previousSecretInForce(OLD_SECRET, until, BEFORE)).toBeUndefined();
+      expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, until, BEFORE)).toBeUndefined();
       expect(warnings().join('')).toContain('is not an ISO date');
     },
   );
 
   it('warns once however many requests meet the closed window', () => {
-    for (let i = 0; i < 5; i++) previousSecretInForce(OLD_SECRET, UNTIL, AT + i);
+    for (let i = 0; i < 5; i++) previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, UNTIL, AT + i);
     expect(warnings()).toHaveLength(1);
     expect(warnings()[0]).toContain(`expired at ${UNTIL}`);
   });

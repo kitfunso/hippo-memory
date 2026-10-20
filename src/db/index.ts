@@ -1,5 +1,5 @@
 // Public face of the database layer; the code lives in src/db/ and each schema migration in src/db/migrations/.
-export type { DatabaseSyncLike } from './sqlite.js';
+export type { DatabaseSyncLike, SqlResult, SqlValue } from './sqlite.js';
 export { isSqliteBusy } from './busy-code.js';
 export { execWithBusyRetry, withReadSnapshot, withTrialScope, withWriteScope, withWriteScopeOr } from './busy.js';
 export { getSchemaVersion, getMeta, setMeta, isFtsAvailable } from './meta.js';

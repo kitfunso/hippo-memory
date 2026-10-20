@@ -1,3 +1,4 @@
+import type { ScopeReader } from '../../base/scope/recall-scope.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 
 export interface EntryWrite {
@@ -5,12 +6,13 @@ export interface EntryWrite {
   readonly actor: string;
 }
 
-/** Who acts on which of a tenant's rows; `ownScope` is the caller's personal scope, so every other personal row is out
- * of reach. */
-export interface EntryTarget {
+/** Who acts on which of a tenant's rows: a row `readerReaches` refuses the caller is out of reach, as recall would not
+ * show it. */
+export interface EntryTarget extends Omit<ScopeReader, 'role'> {
+  /** Absent reads as a member key with no grants (see `targetReader`). */
+  readonly role?: ScopeReader['role'];
   readonly tenantId: string;
   readonly actor: string;
-  readonly ownScope: string | null;
 }
 
 export interface OutcomeWrite extends EntryTarget {

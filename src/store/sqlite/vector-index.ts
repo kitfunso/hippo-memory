@@ -1,6 +1,7 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
 // write of the three.
-import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { getMeta, setMeta, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { physicsSpeedSum } from '../../db/physics-state.js';
 import type { OnHandle } from './open.js';
 import {
   embeddingIndexIdentity,
@@ -40,7 +41,13 @@ import { afterIdAnd, idPageOf } from './keyset.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import type { IdPage, IdPageRequest, StoredVectorSummary, VectorCoverage } from '../port/embedding-index.js';
+import type {
+  IdPage,
+  IdPageRequest,
+  ParticleStats,
+  StoredVectorSummary,
+  VectorCoverage,
+} from '../port/embedding-index.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -233,8 +240,18 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
 }
 
 /** Every particle stored under `hippoRoot`. */
-export function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
+function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
   return Array.from(loadPhysicsState(db).values());
+}
+
+/** The particle count and mean speed from the velocity column alone, and every particle while at most `fullUpTo` are
+ * stored, on one snapshot. */
+export function particleStatsAt(db: DatabaseSyncLike, fullUpTo: number): ParticleStats {
+  return withReadSnapshot(db, () => {
+    const { count, speedSum } = physicsSpeedSum(db);
+    const particles = count > 0 && count <= fullUpTo ? loadStoredParticlesAt(db) : null;
+    return { count, meanSpeed: count > 0 ? speedSum / count : 0, particles };
+  });
 }
 
 /** The memory id of every stored particle in loadStoredParticlesAt's order, so a caller reads only the particles it

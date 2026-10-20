@@ -40,6 +40,7 @@ import {
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { processGit } from '../../src/base/util/git-runner.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';
@@ -275,7 +276,7 @@ describe('admin read sites', () => {
       git('add', '.');
       git('commit', '-m', 'fix: pool timeout bumped to 30s in src/db/index.ts');
       const ctx = apiCtx(root, T, { ...adminActor('learn-test'), owner: 'alice' });
-      const run = () => learn(ctx, { repoPath: repo, days: 7, profile });
+      const run = () => learn(ctx, { repoPath: repo, days: 7, profile, git: processGit });
       const move = (from: string | null, to: string): void => {
         const row = loadAllEntries(root, T).find((e) => e.source === profile.source && (e.scope ?? null) === from)!;
         writeEntry(root, { ...row, scope: to });

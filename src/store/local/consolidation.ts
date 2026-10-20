@@ -14,8 +14,8 @@ export interface Consolidation {
   entryIdsPage(page: { readonly limit: number; readonly after?: EntryCursor }): EntryIdPage;
   /** The rows for `ids` by id; an id deleted since it was listed is absent. */
   entriesByIds(ids: readonly string[]): Map<string, MemoryEntry>;
-  /** The ids of every memory a typed object row names; sleep never retires one. */
-  objectBackedIds(): Set<string>;
+  /** The ids among `ids` that a typed object row names; sleep never retires one. */
+  objectBackedAmong(ids: readonly string[]): Set<string>;
   /** The full-text index counts when they drift from `memories` (re-synced when `repair`), else null. */
   ftsDrift(repair: boolean): { memories: number; fts: number } | null;
   /** The sleep count and the average interval between recent sleeps. */
@@ -62,10 +62,10 @@ export interface Consolidation {
   reportAuditFailure(op: AuditOp, reason: string): void;
   /** Up to `limit` memories of every tenant after `after`, by created then id, so a pass holds one page at a time. */
   entriesPage(page: { readonly limit: number; readonly after?: EntryCursor }): EntryPage;
-  /** The current distilled memories: no raw row and no superseded one. */
-  currentDistilledEntries(): MemoryEntry[];
-  /** Deletes each target in its own transaction; true where the row went. */
-  deleteOneByOne(
+  /** The current distilled memories that may share a text with another, and the order partitions first appear in. */
+  duplicateCandidates(): DuplicateCandidates;
+  /** Deletes the targets, one transaction per chunk, each with its own forget row; true where the row went. */
+  deleteInBatches(
     targets: readonly { id: string; reason: string }[],
     opts: { actor?: string; automatic?: boolean },
   ): boolean[];
@@ -158,6 +158,24 @@ export interface RebuildPatch {
   actor: string;
 }
 
+/** Current distilled rows (no raw row, no superseded one) whose text, with all spacing taken out, another such row
+ * also has, by created then id; and each (tenant, scope, origin) of every such row in the order it first appears by
+ * created then id, so a dedupe over only these rows orders its partitions as a read of every row does. */
+export interface DuplicateCandidates {
+  rows: MemoryEntry[];
+  firstSeen: Array<{ tenantId: string; scope: string | null; originProject: string | null }>;
+}
+
+/** 'retired' when the memory backs a superseded or closed typed object, 'live' when it backs only others, null when it
+ * backs none. */
+export type ObjectLink = 'retired' | 'live' | null;
+
+/** A row a move is planned from; `object` is read only while the typed move is pending, else null. */
+export interface HalfLifeRow {
+  entry: MemoryEntry;
+  object: ObjectLink;
+}
+
 /** What a move is planned from. The object and conflict rows are read only while the typed move is pending. */
 export interface HalfLifeRows {
   /** The base the store's memories are on. */
@@ -165,8 +183,7 @@ export interface HalfLifeRows {
   /** True until the store has moved its object memories off their old flat half-life. */
   typedPending: boolean;
   /** Every row once, by created then id, through one cursor: the plan keeps only what a move needs. */
-  rows: Iterable<MemoryEntry>;
-  objectRows: Array<{ memory_id: string; status: string }>;
+  rows: Iterable<HalfLifeRow>;
   conflictAudits: Array<{ conflictId: number; loserId: string }>;
   resolvedConflicts: Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
 }

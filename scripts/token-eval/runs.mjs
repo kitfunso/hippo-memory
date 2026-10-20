@@ -15,7 +15,7 @@ export async function loadHippo() {
   if (hippoLib) return hippoLib;
   try {
     const [{ installJsonHooks }, { openHippoDb, closeHippoDb }, { tokensBySession }, { loadAllEntries }, { isInitialized }] = await Promise.all([
-      import('../../dist/domain/hooks/json-hooks.js'), import('../../dist/db/index.js'), import('../../dist/entry/testing.js'), import('../../dist/entry/testing.js'),
+      import('../../dist/surface/hooks-install/json-hooks.js'), import('../../dist/db/index.js'), import('../../dist/entry/testing.js'), import('../../dist/entry/testing.js'),
       import('../../dist/base/scope/project-identity.js'),
     ]);
     hippoLib = { installJsonHooks, openHippoDb, closeHippoDb, tokensBySession, loadAllEntries, isInitialized };

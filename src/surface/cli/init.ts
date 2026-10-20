@@ -4,16 +4,17 @@ import { envSkipAutoIntegrations } from '../../base/util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { installJsonHooks } from '../../domain/hooks/json-hooks.js';
+import { installJsonHooks } from '../hooks-install/json-hooks.js';
 import { writeFileAtomic } from '../../base/util/atomic-write.js';
-import { isCodexPresent } from '../../domain/hooks/shared.js';
-import { isCodexWrapperInstalled } from '../../domain/hooks/codex-wrapper.js';
-import { installOpencodePlugin } from '../../domain/hooks/opencode.js';
+import { isCodexPresent } from '../hooks-install/detect.js';
+import { isCodexWrapperInstalled } from '../hooks-install/codex-wrapper.js';
+import { installOpencodePlugin } from '../hooks-install/opencode.js';
 import { initMemoryStore } from '../../api/store-init.js';
 import { isInitialized } from '../../base/scope/project-identity.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { processGit } from '../../base/util/git-runner.js';
 import { importForStore, importProjectMemories, importUserMemories } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
 import { emptyReport, mergeReports } from '../../domain/agent-memories/report.js';
@@ -88,7 +89,7 @@ async function learnScannedRepo(
   const repoHippo = path.join(repo, '.hippo');
   let added = 0;
   let lowInfo = 0;
-  if (learn && isGitRepo(repo)) {
+  if (learn && isGitRepo(processGit, repo)) {
     const result = await learnFromRepo(repoHippo, tenantId, repo, seedDays, path.basename(repo));
     added = result.added;
     lowInfo = result.lowInfo;
@@ -188,7 +189,7 @@ function initGlobalOnly(tenantId: string, flags: CliFlags): void {
 }
 
 async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<void> {
-  if (!isGitRepo(process.cwd())) return;
+  if (!isGitRepo(processGit, process.cwd())) return;
   const seedDays = 30;
   console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
   const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), seedDays);

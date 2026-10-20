@@ -10,6 +10,7 @@ import {
   type VerifiedApiKey,
 } from '../../base/scope/api-key.js';
 import type { HippoStore } from '../../store/port.js';
+import { Lru } from '../../base/util/lru.js';
 
 const scryptOffLoop: (password: string, salt: Buffer, keylen: number, params: ScryptParams) => Promise<Buffer> =
   promisify(scrypt);
@@ -23,31 +24,25 @@ function secretDigest(plaintext: string): Buffer {
 /** LRU of the tokens that matched a stored key hash, so a repeat skips scrypt. Holds a SHA-256 of the token, never the
  * token, and nothing about the key's state. */
 export class VerifiedKeyCache {
-  // Keyed on the stored hash, so a rotated or re-minted key never meets an old entry; Map order makes the first key the
-  // least recent.
-  private readonly proven = new Map<string, Buffer>();
+  // Keyed on the stored hash, so a rotated or re-minted key never meets an old entry.
+  private readonly proven: Lru<Buffer>;
 
-  constructor(private readonly capacity: number) {}
+  constructor(capacity: number) {
+    this.proven = new Lru(capacity);
+  }
 
   get size(): number {
     return this.proven.size;
   }
 
   has(keyHash: string, plaintext: string): boolean {
-    const digest = this.proven.get(keyHash);
+    const digest = this.proven.peek(keyHash);
     // A wrong secret misses but leaves the entry, so a flood of bad guesses cannot evict a good key.
     if (!digest || !timingSafeEqual(digest, secretDigest(plaintext))) return false;
-    this.proven.delete(keyHash);
-    this.proven.set(keyHash, digest);
-    return true;
+    return this.proven.get(keyHash) !== undefined;
   }
 
   add(keyHash: string, plaintext: string): void {
-    this.proven.delete(keyHash);
-    if (this.proven.size >= this.capacity) {
-      const oldest = this.proven.keys().next();
-      if (!oldest.done) this.proven.delete(oldest.value);
-    }
     this.proven.set(keyHash, secretDigest(plaintext));
   }
 }

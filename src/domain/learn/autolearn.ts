@@ -1,12 +1,11 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { execFileSync, type ChildProcess, type SpawnOptions } from 'child_process';
-import { spawnArgv } from '../../base/util/spawn-argv.js';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../base/memory/memory.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import type { GitRunner } from '../../base/util/git-runner.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 
 const AUTOLEARN_TEXT_CHARS = 500;
@@ -96,98 +95,25 @@ export function partitionLessons(lessons: string[]) {
   return { kept, dropped };
 }
 
-/** The most stderr `runWatched` returns; the terminal still gets all of it. */
-const STDERR_TAIL_BYTES = 64 * 1024;
-
-/** A transfer command that has not exited in this long is hung on a prompt or a dead remote. */
-export const RUN_WATCHED_DEADLINE_MS = 30 * 60_000;
-
-/** The command passed its deadline and was killed. */
-export class RunWatchedTimeoutError extends Error {
-  constructor(
-    readonly deadlineMs: number,
-    readonly stderr: string,
-  ) {
-    super(`the command did not exit within ${deadlineMs} ms and was killed`);
-    this.name = 'RunWatchedTimeoutError';
-  }
-}
-
-/** Run argv[0] with the rest as its arguments and no shell, so `;`, `&` and `$()` reach it literally; stderr streams
- * live.
- * Returns: { exitCode, stderr } with only the last 64 KiB of stderr; rejects with RunWatchedTimeoutError past
- * `deadlineMs`. */
-export function runWatched(
-  argv: readonly string[],
-  deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
-): Promise<{ exitCode: number; stderr: string }> {
-  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
-}
-
-const WATCHED_SPAWN_OPTIONS: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
-
-function watchChild(child: ChildProcess, deadlineMs: number): Promise<{ exitCode: number; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    let tail = Buffer.alloc(0);
-
-    child.stderr?.on('data', (chunk: Buffer) => {
-      tail = Buffer.concat([tail, chunk]);
-      if (tail.length > STDERR_TAIL_BYTES) tail = tail.subarray(tail.length - STDERR_TAIL_BYTES);
-      process.stderr.write(chunk);
-    });
-
-    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one); on Windows a grandchild can
-    // outlive it.
-    // A process-tree kill is the upgrade path.
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL');
-      reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));
-    }, deadlineMs);
-
-    child.on('close', (code: number | null) => {
-      clearTimeout(timer);
-      resolve({ exitCode: code ?? 1, stderr: tail.toString('utf8') });
-    });
-
-    child.on('error', (err: Error) => {
-      clearTimeout(timer);
-      resolve({ exitCode: 1, stderr: err.message });
-    });
-  });
-}
-
 /** Check whether a directory is a git work tree. */
-export function isGitRepo(cwd: string): boolean {
-  try {
-    const raw = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
-      encoding: 'utf8',
-      cwd,
-      timeout: GIT_CALL_TIMEOUT_MS,
-      stdio: ['ignore', 'pipe', 'ignore'],
-      windowsHide: true,
-    });
-    return raw.trim() === 'true';
-  } catch (err) {
-    // Asking git about a folder that is no repo is the probe itself, so a failure is the expected answer.
-    log.debug(`autolearn: not a git repo: ${errorMessage(err)}`, errorFields(err));
-    return false;
-  }
+export function isGitRepo(git: GitRunner, cwd: string): boolean {
+  const probe = git.run(['rev-parse', '--is-inside-work-tree'], {
+    cwd,
+    timeoutMs: GIT_CALL_TIMEOUT_MS,
+    stderr: 'drop',
+  });
+  if (probe.ok) return probe.stdout.trim() === 'true';
+  // Asking git about a folder that is no repo is the probe itself, so a failure is the expected answer.
+  log.debug(`autolearn: not a git repo: ${errorMessage(probe.error)}`, errorFields(probe.error));
+  return false;
 }
 
 /** Fetch recent git log lines (subject lines only).
  *  days: how many days of history to include. */
-export function fetchGitLog(cwd: string, days: number): string {
-  try {
-    const raw = execFileSync('git', ['log', `--since=${days} days ago`, '--pretty=format:%s'], {
-      encoding: 'utf8',
-      cwd,
-      timeout: GIT_CALL_TIMEOUT_MS,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    return raw;
-  } catch (err) {
-    log.warn(`autolearn: git log unavailable: ${errorMessage(err)}`, errorFields(err));
-    return '';
-  }
+export function fetchGitLog(git: GitRunner, cwd: string, days: number): string {
+  const args = ['log', `--since=${days} days ago`, '--pretty=format:%s'];
+  const read = git.run(args, { cwd, timeoutMs: GIT_CALL_TIMEOUT_MS, stderr: 'keep' });
+  if (read.ok) return read.stdout;
+  log.warn(`autolearn: git log unavailable: ${errorMessage(read.error)}`, errorFields(read.error));
+  return '';
 }

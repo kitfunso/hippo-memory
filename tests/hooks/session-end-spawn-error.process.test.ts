@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeRoot } from '../_helpers/make-root.js';
-import { installCodexWrapper } from '../../src/domain/hooks/codex-wrapper.js';
+import { installCodexWrapper } from '../../src/surface/hooks-install/codex-wrapper.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 

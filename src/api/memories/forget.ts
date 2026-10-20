@@ -4,7 +4,7 @@ import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js'
 import { rejectValue, unrejectValue, type RejectFlowResult } from '../../domain/trust/reject-flow.js';
 import { requireHostAdmin, type Context } from '../types.js';
 import { memoryGet } from './memories.js';
-import { canTouchScope, personalScopeOf } from '../../base/scope/recall-scope.js';
+import { canReadScope, personalScopeOf, scopeReaderOf } from '../../base/scope/recall-scope.js';
 
 /** Delete a memory by id. Reach is checked inside the delete's write scope, and a row out of reach answers as not
  * found, so a caller learns nothing about it. */
@@ -17,7 +17,7 @@ export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
   await entryWrites.forget({
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
-    ownScope: personalScopeOf(ctx.actor),
+    ...scopeReaderOf(ctx.actor),
     id,
   });
   return { ok: true, id };
@@ -48,7 +48,7 @@ export async function reject(ctx: Context, opts: RejectOptions): Promise<RejectR
     // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too, but pre-checking
     // keeps the error message consistent.
     const entry = await memoryGet(ctx, opts.memoryId);
-    if (entry === null || !canTouchScope(ctx.actor, entry.scope)) {
+    if (entry === null || !canReadScope(ctx.actor, entry.scope)) {
       throw new NotFoundError(`memory not found: ${opts.memoryId}`);
     }
   }

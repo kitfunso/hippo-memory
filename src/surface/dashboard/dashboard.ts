@@ -26,7 +26,7 @@ function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | nu
   else sendJson(res, 200, body);
 }
 
-/** The Refresh button's flag: rebuild the snapshot now, not when the cache says. */
+/** The Refresh button's flag: take a new snapshot id now, not when the clock says. */
 const freshOf = (r: DashboardRouteRequest): boolean => r.query.get('fresh') === '1';
 
 export async function overviewRoute(r: DashboardRouteRequest): Promise<void> {
@@ -61,7 +61,7 @@ export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promi
 
 type Action = (ctx: Context, body: ActionBody) => Promise<ActionResult>;
 
-// Nothing runs until the content type and the body pass; a committed write then drops the snapshot before the reply.
+// Nothing runs until the content type and the body pass; a committed write then moves the snapshot id before the reply.
 async function runAction(r: DashboardRouteRequest, action: Action): Promise<void> {
   const { req, res } = r;
   if (!JSON_CONTENT_TYPE.test(req.headers['content-type'] ?? '')) {

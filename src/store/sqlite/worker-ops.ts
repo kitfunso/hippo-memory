@@ -150,7 +150,7 @@ export const WORKER_OPS = {
     finishRecall: 'write',
   },
   auditMaintenance: {
-    objectBackedIds: 'read',
+    objectBackedAmong: 'read',
     deleteAutomatically: 'write',
     pruneAuditRows: 'write',
     repairQuality: 'write',
@@ -222,8 +222,8 @@ export const WORKER_OPS = {
     countEntries: 'read',
     stats: 'read',
     statusCounts: 'read',
-    correctionEntries: 'read',
-    rawEntries: 'read',
+    correctionLinks: 'read',
+    rawProvenance: 'read',
     createdSinceLastSleep: 'read',
   },
   rejections: {
@@ -258,7 +258,7 @@ export const WORKER_OPS = {
     entriesByIds: 'read',
     summary: 'read',
     coverage: 'read',
-    particles: 'read',
+    particleStats: 'read',
     saveVectors: 'write',
     beginRebuild: 'write',
     stageRebuild: 'write',

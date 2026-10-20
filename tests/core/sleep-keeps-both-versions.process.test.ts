@@ -38,6 +38,7 @@ import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { REAL_IO } from '../_helpers/real-io.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -697,7 +698,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
           configAt: loadConfig,
           tenantId: 'default',
           agentImport: sqliteAgentImport({}),
-          machine: { home, env: {}, platform: process.platform },
+          machine: { home, env: {}, platform: process.platform, ...REAL_IO },
         }),
       ).imported;
     expect(imported()).toBe(1);

@@ -8,7 +8,7 @@ import {
   type VectorRebuild,
   beginVectorRebuildAt,
   embeddingModelRequiresReindex,
-  loadStoredParticlesAt,
+  particleStatsAt,
   pendingVectorIdsAt,
   pruneOrphanVectorsAt,
   resetStoredParticlesAt,
@@ -53,11 +53,11 @@ type Particles = 'resetParticles' | 'seedParticle';
 
 type Rebuilds = 'beginRebuild' | 'stageRebuild' | 'commitRebuild' | 'closeRebuild';
 
-type VectorRows = Pick<EmbeddingIndex, 'summary' | 'particles' | 'saveVectors' | 'pruneOrphans' | 'pendingIds'>;
+type VectorRows = Pick<EmbeddingIndex, 'summary' | 'particleStats' | 'saveVectors' | 'pruneOrphans' | 'pendingIds'>;
 
 const vectorRowsAt: Bodies<VectorRows> = {
   summary: storedVectorSummaryAt,
-  particles: loadStoredParticlesAt,
+  particleStats: particleStatsAt,
   saveVectors: upsertVectors,
   pruneOrphans: pruneOrphanVectorsAt,
   pendingIds: pendingVectorIdsAt,

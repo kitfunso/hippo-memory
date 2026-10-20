@@ -1,7 +1,7 @@
 // Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import {
-  canTouchScope,
+  canReadScope,
   isPersonalScope,
   passesScopeFilterForRecall,
   personalScopeOf,
@@ -55,9 +55,9 @@ function isLive(member: ConflictMember | null): boolean {
   );
 }
 
-/** Someone else's personal row hides its whole pair. */
+/** A row the caller could not read hides its whole pair. */
 function touchable(actor: Actor, row: ConflictRow): boolean {
-  return [row.a, row.b].every((member) => member !== null && canTouchScope(actor, member.scope));
+  return [row.a, row.b].every((member) => member !== null && canReadScope(actor, member.scope));
 }
 
 function pageLimit(limit: number | undefined): number {
