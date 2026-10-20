@@ -10,9 +10,8 @@ import { readFacts } from './lib/ts-facts.mjs';
 const IO_MODULES = new Set(['fs', 'fs/promises', 'child_process']);
 const IO_LAYERS = ['domain', 'api'];
 
-// Lanes g-local-port and g-graph-view move these files' I/O behind a port; each entry goes when its lane lands.
+// Lane g-local-port moves these files' I/O behind a port; each entry goes when that lane lands.
 export const EXEMPT = new Set([
-  'domain/graph/view.ts',
   'domain/search/embed-memories.ts',
   'domain/sharing/global-sync.ts',
   'domain/sharing/project-merge.ts',
