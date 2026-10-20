@@ -7,6 +7,7 @@ import { evalNow, NO_STRENGTH_ABLATION, strengthAblation, type StrengthAblation 
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
+import { tokenize } from '../util/tokenize.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';
 export const DEFAULT_SCHEMA_FIT = 0.5;
 export const FALLBACK_HALF_LIFE_DAYS = 7;
@@ -574,13 +575,7 @@ const TAG_OVERLAP_SCALE = 2;
 const CONTENT_ENOUGH_MIN_MATCHES = 5;
 
 function significantTokens(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter((t) => t.length > FILLER_TOKEN_MAX_LENGTH),
-  );
+  return new Set(tokenize(text).filter((t) => t.length > FILLER_TOKEN_MAX_LENGTH));
 }
 
 /** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */

@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { Layer } from '../../src/base/memory/memory.js';
@@ -28,7 +28,7 @@ const DAY = 86_400_000;
 const minute = (m: number): number => BASE + m * 60_000;
 const iso = (at: number): string => new Date(at).toISOString();
 
-type Db = ReturnType<typeof openHippoDb>;
+type Db = DatabaseSyncLike;
 interface LedgerRow {
   tenant_id: string;
   session_id: string;

@@ -136,7 +136,8 @@ export const SESSION_EVENT_COLUMNS =
   'id, session_id, task, event_type, content, source, scope, metadata_json, created_at';
 
 export const INDEX_VERSION = 3;
-const MEMORY_COLUMN_NAMES = [
+/** The columns a row write sets, in memoryRowValues' order; the upsert and the batch update share it. */
+export const MEMORY_ROW_COLUMNS = [
   'id',
   'created',
   'last_retrieved',
@@ -173,11 +174,10 @@ const MEMORY_COLUMN_NAMES = [
   'descendant_count',
   'earliest_at',
   'latest_at',
-  'summary_dirty',
-  'last_rebuilt_at',
-  'rebuild_count',
   'dag_level_3_built_at',
 ] as const;
+// Rebuild-queue columns the DAG summary rebuild writes (store/sqlite/consolidation.ts); a row write never sets them.
+const MEMORY_COLUMN_NAMES = [...MEMORY_ROW_COLUMNS, 'summary_dirty', 'last_rebuilt_at', 'rebuild_count'] as const;
 
 // FTS-join columns for loadSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');

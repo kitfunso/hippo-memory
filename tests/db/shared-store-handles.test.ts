@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { openHippoDb, type DatabaseSyncLike, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
@@ -42,7 +42,7 @@ describe('withSharedStoreHandles', () => {
   });
 
   it('closes the shared handles when the scope throws', async () => {
-    let held: ReturnType<typeof openHippoDb> | undefined;
+    let held: DatabaseSyncLike | undefined;
     await expect(
       withSharedStoreHandles(() => {
         held = openHippoDb(root);

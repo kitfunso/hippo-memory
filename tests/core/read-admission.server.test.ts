@@ -12,7 +12,7 @@ import {
 } from '../../src/base/scope/read-admission.js';
 import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js';
 import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadAmbientCandidatesAt } from '../../src/store/sqlite/candidates.js';
 import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
@@ -205,7 +205,7 @@ let rows: MemoryEntry[] = [];
 let inProcess: HippoStore & StoreGroups;
 let onWorkers: HippoStore & StoreGroups;
 
-function onDb<T>(run: (db: ReturnType<typeof openHippoDb>) => T): T {
+function onDb<T>(run: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
     return run(db);

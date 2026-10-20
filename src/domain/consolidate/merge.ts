@@ -1,12 +1,11 @@
 import { MemoryEntry, Layer, calculateStrength, createMemory } from '../../base/memory/memory.js';
-import { tokenize } from '../../base/util/tokenize.js';
+import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import { duplicateKey, mergedText } from '../../base/util/same-text.js';
 import { successorAfterRetirement } from '../../base/memory/merged-row.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
-import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 
