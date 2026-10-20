@@ -383,7 +383,7 @@ describe('the global store fallback', () => {
     fs.mkdirSync(path.join(other, '.git'), { recursive: true });
     const otherRoot = path.join(other, '.hippo');
     initTestStore(otherRoot);
-    expect(syncGlobalToLocal(...sharingStores(otherRoot, s.globalRoot))).toBe(0);
+    expect(await syncGlobalToLocal(...sharingStores(otherRoot, s.globalRoot))).toBe(0);
   });
 
   it('a folder with no project marker gives user-global rows', async () => {

@@ -188,7 +188,6 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
   }
 
   const ctx: Context = {
-    hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:github', role: 'admin' },
     store: d.store,

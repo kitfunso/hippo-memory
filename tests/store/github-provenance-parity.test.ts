@@ -7,6 +7,7 @@
  * dropping the `user:github:<login>` owner stamp and slipping past CI.
  */
 
+import { rawProvenanceOf } from '../_helpers/in-memory-reports-store.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
@@ -85,7 +86,7 @@ describe('GitHub connector — provenance coverage parity', () => {
     });
 
     const entries = loadAllEntries(root, 'default');
-    const coverage = buildProvenanceCoverage(entries);
+    const coverage = buildProvenanceCoverage(rawProvenanceOf(entries));
 
     expect(coverage.rawTotal).toBeGreaterThanOrEqual(50);
     expect(coverage.gaps).toHaveLength(0);

@@ -62,9 +62,9 @@ export function callerProjectFromHeaders(req: IncomingMessage, shared: boolean):
   return { name, legacyName: name, aliases };
 }
 
-function mcpContextFor(ctx: Context, clientKey: string, project?: CallerProject): McpContext {
+function mcpContextFor(ctx: Context, hippoRoot: string, clientKey: string, project?: CallerProject): McpContext {
   const mcpCtx: McpContext = {
-    hippoRoot: ctx.hippoRoot,
+    hippoRoot,
     tenantId: ctx.tenantId,
     // McpContext.actor stays string; extract subject at the boundary.
     actor: ctx.actor.subject,
@@ -105,7 +105,7 @@ export async function handleMcpPost(
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, clientKeyOf(req), project));
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, opts.hippoRoot, clientKeyOf(req), project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }

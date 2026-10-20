@@ -19,7 +19,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns null and writes one warn line with a space after the colon', () => {
+  it('returns null and writes one warn line with a space after the colon', async () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     // A number where a root path belongs, for the context and its store: path.join throws on it, which is the start-up
     // failure under test.
@@ -33,7 +33,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
       config: { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } },
     };
     expect(
-      startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined }),
+      await startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined }),
     ).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
     expect(String(err.mock.calls[0][0])).toMatch(
@@ -48,7 +48,7 @@ describe('startToolFailureRecorder', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('returns null when the ledger store is not the hook store, and a recorder when they are one', () => {
+  it('returns null when the ledger store is not the hook store, and a recorder when they are one', async () => {
     tmp = makeRoot('tf-recorder', { init: false });
     const globalRoot = path.join(tmp, 'global');
     fs.mkdirSync(globalRoot);
@@ -57,7 +57,7 @@ describe('startToolFailureRecorder', () => {
     vi.stubEnv('HIPPO_HOME', globalRoot);
     const noStore = path.join(tmp, 'proj', '.hippo');
     const start = { stdinText: '{}', runtime: 'claude-code' as const, envSessionId: undefined };
-    expect(startToolFailureRecorder(apiCtx(noStore), start)).toBeNull();
-    expect(startToolFailureRecorder(apiCtx(globalRoot), start)).not.toBeNull();
+    expect(await startToolFailureRecorder(apiCtx(noStore), start)).toBeNull();
+    expect(await startToolFailureRecorder(apiCtx(globalRoot), start)).not.toBeNull();
   });
 });

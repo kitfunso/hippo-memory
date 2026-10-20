@@ -11,13 +11,7 @@ const IO_MODULES = new Set(['fs', 'fs/promises', 'child_process']);
 const IO_LAYERS = ['domain', 'api'];
 
 // Lane g-local-port moves these files' I/O behind a port; each entry goes when that lane lands.
-export const EXEMPT = new Set([
-  'domain/search/embed-memories.ts',
-  'domain/sharing/global-sync.ts',
-  'domain/sharing/project-merge.ts',
-  'domain/sharing/search-both.ts',
-  'domain/sharing/share.ts',
-]);
+export const EXEMPT = new Set(['domain/sharing/project-merge.ts']);
 
 /**
  * The 1-based lines and specifiers of every fs or child_process import in a source text, `node:` prefix or not.

@@ -107,12 +107,13 @@ export interface SleepQueue {
    * HIPPO_SLEEP_TIMEOUT_MS). */
   readonly sleep: (ctx: Context, opts: SleepOpts) => Promise<SleepResult>;
   /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
-  readonly consolidate: (hippoRoot: string) => Promise<void>;
+  readonly consolidate: () => Promise<void>;
   /** Resolves once every sleep in line has ended, each by its deadline at the latest; it never rejects. */
   readonly settled: () => Promise<void>;
 }
 
-export function createSleepQueue(): SleepQueue {
+/** The queue of the server on `hippoRoot`, whose child reopens that folder. */
+export function createSleepQueue(hippoRoot: string): SleepQueue {
   let turn: Promise<void> = Promise.resolve();
   let inLine = 0;
   const inTurn = <R>(job: SleepJob): Promise<R> => {
@@ -141,10 +142,10 @@ export function createSleepQueue(): SleepQueue {
     return run;
   };
   return {
-    // The child reopens the served folder; the route ran only because its store is hippo.db.
+    // The route ran only because its store is hippo.db.
     sleep: (ctx, opts) =>
-      inTurn<SleepResult>({ kind: 'sleep', hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts }),
-    consolidate: async (hippoRoot) => {
+      inTurn<SleepResult>({ kind: 'sleep', hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts }),
+    consolidate: async () => {
       await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
     },
     settled: () => turn,

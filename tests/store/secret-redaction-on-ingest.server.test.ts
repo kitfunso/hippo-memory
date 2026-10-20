@@ -182,24 +182,16 @@ describe('connector webhooks', () => {
     await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
     expect(
       (
-        await replayDlqEntry(
-          { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
-          row.id,
-          {
-            signingSecret: SIGNING,
-          },
-        )
+        await replayDlqEntry({ tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) }, row.id, {
+          signingSecret: SIGNING,
+        })
       ).status,
     ).toBe('sig_missing');
     expect(
       (
-        await replayDlqEntry(
-          { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
-          row.id,
-          {
-            force: true,
-          },
-        )
+        await replayDlqEntry({ tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) }, row.id, {
+          force: true,
+        })
       ).ok,
     ).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');

@@ -3,7 +3,8 @@
 import { currentSignal } from '../../base/util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
 import type { HippoStore } from '../../store/index.js';
-import { isLocalStore, storeMeets } from '../../store/local/index.js';
+import { hasGroup } from '../../store/index.js';
+import { storeMeets } from '../../store/local/index.js';
 import type { TokenSurface } from '../../store/port/token-ledger.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -50,14 +51,14 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpContext
 
 // ── Tool execution ──
 
-/** A tool, and whether it needs the store's local files; unset, it runs under any store. */
+/** A tool, and whether it needs a folder store; unset, it runs under any store. */
 type ToolEntry =
   | { readonly needs?: undefined; readonly run: ToolHandler }
-  | { readonly needs: 'localFiles'; readonly run: LocalToolHandler };
+  | { readonly needs: 'folderFiles'; readonly run: LocalToolHandler };
 
-/** A tool that runs only under a store with local files and a global store in its reach. */
+/** A tool that runs only under a folder store with a global store in its reach. */
 function localTool(run: LocalToolHandler): ToolEntry {
-  return { needs: 'localFiles', run };
+  return { needs: 'folderFiles', run };
 }
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
@@ -98,7 +99,7 @@ function toolRun(name: string, ctx: McpContext): ToolRun | undefined {
     return (args) => run({ ...call, args });
   }
   const globalTarget = ctx.reach?.globalTarget;
-  if (!isLocalStore(store) || globalTarget === undefined) return undefined;
+  if (!hasGroup(store, 'folderFiles') || globalTarget === undefined) return undefined;
   const { run } = entry;
   return (args) => run({ ...call, args, store, globalTarget });
 }

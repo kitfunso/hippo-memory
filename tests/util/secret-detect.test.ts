@@ -236,30 +236,30 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
-  it('autoShare silently skips secret rows and still shares clean ones', () => {
+  it('autoShare silently skips secret rows and still shares clean ones', async () => {
     // error tag + pin push transferScore over the 0.6 bar for both rows.
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
-    const shared = autoShare(...sharingStores(projA), { tenantId: ALL_TENANTS, minScore: 0.6 });
+    const shared = await autoShare(...sharingStores(projA), { tenantId: ALL_TENANTS, minScore: 0.6 });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
-  it('autoShare stats counts only shares actually withheld by the secret veto', () => {
+  it('autoShare stats counts only shares actually withheld by the secret veto', async () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     // Below the transfer bar: secret-flagged but never a share candidate, so
     // it must NOT increment the counter.
     writeEntry(projA, createMemory('low transfer secret sk_vendor_cafebabe999888 note'));
     const stats = { secretSkipped: 0 };
-    const shared = autoShare(...sharingStores(projA), { tenantId: ALL_TENANTS, minScore: 0.6, stats });
+    const shared = await autoShare(...sharingStores(projA), { tenantId: ALL_TENANTS, minScore: 0.6, stats });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
     expect(stats.secretSkipped).toBe(1);
   });
 
-  it('autoShare fills stats identically under dryRun', () => {
+  it('autoShare fills stats identically under dryRun', async () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const stats = { secretSkipped: 0 };
-    const candidates = autoShare(...sharingStores(projA), {
+    const candidates = await autoShare(...sharingStores(projA), {
       tenantId: ALL_TENANTS,
       minScore: 0.6,
       dryRun: true,
@@ -290,18 +290,18 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(globalCopy?.source).toMatch(/^shared:proj-a:/);
   });
 
-  it('syncGlobalToLocal skips secrets and other-project rows, preserves origin on copies', () => {
+  it('syncGlobalToLocal skips secrets and other-project rows, preserves origin on copies', async () => {
     writeEntry(globalStore, { ...createMemory(CLEAN_ROW), originProject: '' });
     writeEntry(globalStore, { ...createMemory('project b routing table quirk'), originProject: 'proj-b' });
     writeEntry(globalStore, { ...createMemory(SECRET_ROW), originProject: '' });
 
-    const count = syncGlobalToLocal(...sharingStores(projA, globalStore));
+    const count = await syncGlobalToLocal(...sharingStores(projA, globalStore));
     expect(count).toBe(1);
     const local = loadAllEntries(projA, 'default');
     expect(local.map((e) => e.content)).toEqual([CLEAN_ROW]);
     expect(local[0].originProject).toBe('');
 
-    const withCross = syncGlobalToLocal(...sharingStores(projA, globalStore), { includeCrossProject: true });
+    const withCross = await syncGlobalToLocal(...sharingStores(projA, globalStore), { includeCrossProject: true });
     expect(withCross).toBe(1); // proj-b row now copies; the secret still never does
     expect(loadAllEntries(projA, 'default').map((e) => e.content)).not.toContain(SECRET_ROW);
   });

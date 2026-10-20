@@ -111,7 +111,7 @@ async function buildWindowSite(work: string): Promise<Site> {
   const store = await buildWindowFixture(site.home);
   checkPlacement(store);
   const vectors = await inSandbox(site.home, site.home, async () => {
-    await embedAll(folderIndex({ root: store.root, store: sqliteStore(store.root), config: loadConfig(store.root) }));
+    await embedAll(folderIndex({ store: sqliteStore(store.root), config: loadConfig(store.root) }));
     return Object.keys(loadEmbeddingIndex(store.root)).length;
   });
   if (vectors !== WINDOW_ROW_COUNT) throw new Error(`${vectors} of ${WINDOW_ROW_COUNT} window rows have a vector; a partly embedded fixture is not a result`);

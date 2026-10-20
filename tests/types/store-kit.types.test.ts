@@ -41,8 +41,10 @@ describe('hippo-memory/store-kit entry types', () => {
     typeOnly(() => requireGroup(store, 'base'));
   });
 
-  it('the optional groups are a closed set of three names, and local files are not on the port', () => {
-    expectTypeOf<OptionalGroup>().toEqualTypeOf<'vectorViews' | 'readiness' | 'lastRecall'>();
+  it('the optional groups are a closed set of names, and local files are not on the port', () => {
+    expectTypeOf<OptionalGroup>().toEqualTypeOf<
+      'vectorViews' | 'readiness' | 'lastRecall' | 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing'
+    >();
     expectTypeOf<'localFiles' extends StoreGroup ? true : false>().toEqualTypeOf<false>();
     // @ts-expect-error a store's local files sit beside the port, not in a group
     typeOnly(() => hasGroup(store, 'localFiles'));

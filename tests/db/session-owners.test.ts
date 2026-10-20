@@ -34,7 +34,6 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 
 function ctx(owner: string, tenantId = 'default'): Context {
   return {
-    hippoRoot: home,
     store: sqliteStore(home),
     config: loadConfig(home),
     tenantId,

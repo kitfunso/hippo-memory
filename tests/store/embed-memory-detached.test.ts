@@ -24,7 +24,6 @@ describe('embedMemoryDetached', () => {
     process.on('unhandledRejection', onUnhandled);
     // `store` is read after the provider answers, so a target whose store cannot be reached rejects embedMemory itself.
     const target: EmbedTarget = {
-      hippoRoot: root,
       embeddings: loadConfig(root).embeddings,
       strength: {},
       get store(): HippoStore {

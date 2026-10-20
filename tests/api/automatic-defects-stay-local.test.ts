@@ -32,7 +32,7 @@ beforeEach(() => {
 });
 
 describe('automatic rows with a certain defect stay local', () => {
-  it('auto-share passes over a captured defect but shares the same text a person wrote', () => {
+  it('auto-share passes over a captured defect but shares the same text a person wrote', async () => {
     const captured = createMemory(DEFECT, {
       tags: ['error', 'captured'],
       source: 'capture',
@@ -42,9 +42,9 @@ describe('automatic rows with a certain defect stay local', () => {
     const typed = createMemory(DEFECT, { tags: ['error'], layer: Layer.Episodic });
     for (const entry of [captured, typed]) writeEntry(root, entry);
     expect(transferScore(captured)).toBeGreaterThanOrEqual(0.6);
-    expect(autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, dryRun: true }).map((entry) => entry.id)).toEqual(
-      [typed.id],
-    );
+    expect(
+      (await autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, dryRun: true })).map((entry) => entry.id),
+    ).toEqual([typed.id]);
   });
 
   it('the DAG pass summarises sound extracted facts and leaves a defective one out', async () => {

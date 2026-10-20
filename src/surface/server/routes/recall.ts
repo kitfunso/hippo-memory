@@ -130,8 +130,8 @@ export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest,
  * A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none,
  * contextGet refuses.
  */
-function contextReader(ctx: Context, query: URLSearchParams): ProjectRef {
-  if (!sharedStoreOf(ctx)) return resolveProjectIdentity(dirname(resolve(ctx.hippoRoot)));
+function contextReader(ctx: Context, hippoRoot: string, query: URLSearchParams): ProjectRef {
+  if (!sharedStoreOf(ctx)) return resolveProjectIdentity(dirname(resolve(hippoRoot)));
   const name = query.get('project');
   if (name === null) return '';
   const aliases = query.getAll('alias');
@@ -143,11 +143,11 @@ function contextReader(ctx: Context, query: URLSearchParams): ProjectRef {
 // Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one
 // 'recall' row.
-export async function handleGetContext({ req, res, ctx, query }: AuthedRouteRequest): Promise<void> {
+export async function handleGetContext({ req, res, ctx, query, opts }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const result = await contextGet(ctx, {
     ...parsed,
-    currentProject: contextReader(ctx, query),
+    currentProject: contextReader(ctx, opts.hippoRoot, query),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
   ctx.callers?.lastShown.set(

@@ -4,10 +4,11 @@ import type { Context } from '../../api/index.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup } from '../../store/index.js';
+import type { StoreReach } from '../../store/port.js';
 import type { ConfigReader } from '../../base/config/config.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
-import type { StoreNeed, StoreReach } from '../../store/local/index.js';
+import type { StoreNeed } from '../../store/local/index.js';
 
 export interface ServerHandle {
   port: number;

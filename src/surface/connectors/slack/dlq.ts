@@ -37,7 +37,7 @@ export interface ReplayDlqOptions {
 /** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
  * with the CURRENT secret unless forced. A NULL signature needs --force; replays use today's routing. */
 export async function replayDlqEntry(
-  ctx: Pick<Context, 'hippoRoot' | 'tenantId' | 'store' | 'config'>,
+  ctx: Pick<Context, 'tenantId' | 'store' | 'config'>,
   id: number,
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
@@ -82,7 +82,7 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 }
 
 async function reingest(
-  { hippoRoot, store, config }: Pick<Context, 'hippoRoot' | 'store' | 'config'>,
+  { store, config }: Pick<Context, 'store' | 'config'>,
   envelope: JsonValue & SlackEventEnvelope,
   fallback: SlackFallback,
 ): Promise<Reingest> {
@@ -91,7 +91,7 @@ async function reingest(
   const inner = envelope.event;
   if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
 
-  const replayCtx: Context = { hippoRoot, tenantId, actor: adminActor('connector:slack:replay'), store, config };
+  const replayCtx: Context = { tenantId, actor: adminActor('connector:slack:replay'), store, config };
   if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
     const r = await handleMessageDeleted(replayCtx, {
       teamId: envelope.team_id,

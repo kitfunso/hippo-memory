@@ -17,8 +17,8 @@ export const SHOWN_ROWS = 10;
 // The CLI's default head for a registry reranker.
 const RERANKER_TOP_K = 50;
 
-// The CLI core keeps its shown list as the last recall, which a SQLite store always has.
-type SqliteContext = Context & { readonly store: ReturnType<typeof sqliteStore> };
+// The CLI core keeps its shown list as the last recall, which a SQLite store always has; the folder rides beside it.
+type SqliteContext = Context & { readonly store: ReturnType<typeof sqliteStore>; readonly hippoRoot: string };
 
 export interface Ranked {
   readonly texts: string[];
@@ -90,7 +90,7 @@ async function sqlBm25(ctx: Context, q: EvalQuery): Promise<Ranked> {
 }
 
 /** Arm C: the options the MCP recall tool passes, with the ranked list cut to the shown rows in place of its rendering. */
-async function showRanked(ctx: Context, q: EvalQuery): Promise<Ranked> {
+async function showRanked(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   const mode = loadConfig(ctx.hippoRoot).physics?.enabled !== false ? 'physics' : 'hybrid';
   let shown: SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieveRanking(

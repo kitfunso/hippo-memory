@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { rawProvenanceOf } from '../_helpers/in-memory-reports-store.js';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -98,7 +99,7 @@ describe('POST /v1/connectors/slack/events', () => {
     expect(slackRow!.owner).toBe('user:U1');
     expect(slackRow!.artifactRef).toBe('slack://T1/C1/1700000000.000100');
 
-    const coverage = buildProvenanceCoverage(entries);
+    const coverage = buildProvenanceCoverage(rawProvenanceOf(entries));
     expect(coverage.rawTotal).toBe(1);
     expect(coverage.coverage).toBe(1);
     expect(coverage.gaps).toEqual([]);

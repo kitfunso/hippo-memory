@@ -51,7 +51,6 @@ afterEach(() => {
 });
 
 const ctxFor = (hippoRoot: string, tenantId = 'default'): LocalContext => ({
-  hippoRoot,
   store: sqliteStore(hippoRoot),
   config: loadConfig(hippoRoot),
   tenantId,

@@ -14,7 +14,7 @@ import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
   deleteEntriesAutomaticallyAt,
-  memoriesBackingObjectsAt,
+  memoriesBackingAmongAt,
 } from './delete-and-batch.js';
 import { loadEntriesPageAt, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './entry-reads.js';
 import { ftsRowExists } from './entry-row.js';
@@ -102,7 +102,6 @@ function judge(
 }
 
 function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
-  const backing = memoriesBackingObjectsAt(db);
   const issues: QualityRepairIssue[] = [];
   let total = 0;
   let after: EntryCursor | undefined;
@@ -110,7 +109,17 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
     const page = loadEntriesPageAt(db, run.tenantId, { limit: PLAN_PAGE_ROWS, after });
     const entries = page.entries.filter(isRepairCandidate);
     total += entries.length;
-    issues.push(...judge(db, run, entries, backing));
+    issues.push(
+      ...judge(
+        db,
+        run,
+        entries,
+        memoriesBackingAmongAt(
+          db,
+          entries.map((e) => e.id),
+        ),
+      ),
+    );
     after = page.next ?? undefined;
   } while (after);
   return { total, issues };
@@ -202,7 +211,11 @@ function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRep
   const ids = plan.issues.filter((issue) => issue.disposition === 'set-aside').map((issue) => issue.id);
   const rows = selectEntriesByIds(db, ids, run.tenantId);
   const entries = ids.flatMap((id) => rows.get(id) ?? []).filter(isRepairCandidate);
-  const issues = new Map(judge(db, run, entries, memoriesBackingObjectsAt(db)).map((issue) => [issue.id, issue]));
+  const backing = memoriesBackingAmongAt(
+    db,
+    entries.map((e) => e.id),
+  );
+  const issues = new Map(judge(db, run, entries, backing).map((issue) => [issue.id, issue]));
   return { ids: new Set(ids), rows, issues };
 }
 
@@ -284,8 +297,8 @@ export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMainte
     openStore,
   );
   return {
-    ...bound<Pick<AuditMaintenance, 'objectBackedIds' | 'pruneAuditRows'>>(on, {
-      objectBackedIds: memoriesBackingObjectsAt,
+    ...bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
+      objectBackedAmong: memoriesBackingAmongAt,
       pruneAuditRows: pruneAuditRowsAt,
     }),
     deleteAutomatically: skipEmpty(deleteAutomatically, () => []),

@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../db/index.js';
+import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
@@ -18,11 +18,11 @@ import {
   type EntryRowsRead,
   type SqlAnd,
 } from './keyset.js';
-import type { EntryIdPage } from '../local/consolidation.js';
-import type { IdPage, IdPageRequest } from '../local/embedding-index.js';
+import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '../local/consolidation.js';
+import type { IdPage, IdPageRequest } from '../port/embedding-index.js';
 import type { RawRefRow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../local/project-tags.js';
-import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../local/sharing.js';
+import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
 import type { SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/dag-reads.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 
@@ -466,11 +466,11 @@ export function selectOriginTalliesAt(db: DatabaseSyncLike, tenantId: string, so
 // Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
 const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
 const PHRASE_WORDS = 32;
-const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
+export const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
 
 /** The index query for `text`'s first words, which a row holding the text word for word holds in a row; null when the
  * phrase might name no token, since an empty phrase matches no row. */
-function holdingPhrase(text: string): string | null {
+export function holdingPhrase(text: string): string | null {
   const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
   return SURE_TOKEN_CHAR.test(opening) ? `content : "${opening.replaceAll('"', '""')}"` : null;
 }
@@ -601,7 +601,7 @@ export function entryRejectRowAt(
     | undefined;
 }
 
-/** Memory ids held by each typed-object table, with the status of the object that holds them. */
+/** The typed-object tables whose rows name a backing memory in `memory_id`. */
 const OBJECT_TABLES = [
   'decisions',
   'incidents',
@@ -612,18 +612,24 @@ const OBJECT_TABLES = [
   'customer_notes',
 ] as const;
 
-export function objectMemoryRowsAt(db: DatabaseSyncLike): Array<{ memory_id: string; status: string }> {
-  const out: Array<{ memory_id: string; status: string }> = [];
-  for (const table of OBJECT_TABLES) {
-    // SAFETY: the WHERE drops rows whose memory_id is NULL.
-    out.push(
-      ...(db.prepare(`SELECT memory_id, status FROM ${table} WHERE memory_id IS NOT NULL`).all() as {
-        memory_id: string;
-        status: string;
-      }[]),
-    );
-  }
-  return out;
+const backsObject = (statuses: string): string =>
+  OBJECT_TABLES.map((t) => `EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id${statuses})`).join(' OR ');
+
+// Each table's partial memory_id index answers the EXISTS, so no object table is read whole.
+const OBJECT_LINK_SQL =
+  `CASE WHEN ${backsObject(" AND status IN ('superseded', 'closed')")} THEN 'retired' ` +
+  `WHEN ${backsObject('')} THEN 'live' END`;
+
+// SAFETY: every read cast to this row selects MEMORY_SELECT_COLUMNS and object_link.
+type ObjectLinkedRow = MemoryRow & { object_link: ObjectLink };
+
+/** Every tenant's rows in loadAllEntries' order through one cursor, each with the typed object it backs. */
+export function* iterateRowsWithObjectsAt(db: DatabaseSyncLike): Generator<HalfLifeRow> {
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS}, ${OBJECT_LINK_SQL} AS object_link FROM memories ORDER BY created ASC, id ASC`,
+  ).iterate() as Iterable<ObjectLinkedRow>;
+  for (const row of rows) yield { entry: rowToEntry(row), object: row.object_link };
 }
 
 /** Live rows of a tenant whose source does not start with `sourcePrefix` that may hold `text` word for word, spacing
@@ -672,17 +678,40 @@ export function liveContentsBySourceAndTagAt(
   return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
 }
 
-/** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's
- * duplicate. */
-export function loadCurrentDistilledEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
-  const rows = db
-    .prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
-     WHERE COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''
-     ORDER BY created ASC, id ASC`,
-    )
-    .all() as MemoryRow[];
-  return rows.map(rowToEntry);
+const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
+
+/** Every code point JavaScript's \s matches; tests/store/dedupe-candidates.test.ts pins it to the engine. */
+const JS_SPACE_CODE_POINTS = [
+  0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007,
+  0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
+] as const;
+
+// Texts equal apart from spacing are equal with all of it gone, so a group of these keys holds every duplicate group.
+const SPACELESS_CONTENT = JS_SPACE_CODE_POINTS.reduce((sql, cp) => `replace(${sql}, char(${cp}), '')`, 'content');
+
+/** The current distilled rows that may be another's duplicate, and the partitions in the order they first appear. */
+export function loadDuplicateCandidatesAt(db: DatabaseSyncLike): DuplicateCandidates {
+  // One read transaction, so the partition keys describe the rows read.
+  return withReadSnapshot(db, () => {
+    const rows = cachedStatement(
+      db,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT id FROM (SELECT id, COUNT(*) OVER ` +
+        `(PARTITION BY ${SPACELESS_CONTENT}) AS n FROM memories WHERE ${CURRENT_DISTILLED}) WHERE n > 1) ` +
+        `ORDER BY created ASC, id ASC`,
+    ).all() as MemoryRow[];
+    // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order the rows sort in.
+    const firsts = cachedStatement(
+      db,
+      `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
+        `GROUP BY tenant_id, scope, origin_project ORDER BY MIN(created || char(31) || id)`,
+    ).all() as Array<{ tenant_id: string | null; scope: string | null; origin_project: string | null }>;
+    const firstSeen = firsts.map((f) => ({
+      tenantId: f.tenant_id ?? DEFAULT_TENANT_ID,
+      scope: f.scope,
+      originProject: f.origin_project,
+    }));
+    return { rows: rows.map(rowToEntry), firstSeen };
+  });
 }
 
 /** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers re-check each row. */

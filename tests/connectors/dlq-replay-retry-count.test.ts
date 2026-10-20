@@ -41,13 +41,9 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       slackTimestamp: null,
     });
     const gr = await replayGitHub(apiCtx(root, 'default', { subject: 'cli', role: 'admin' }), g);
-    const sr = await replaySlack(
-      { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
-      s,
-      {
-        force: true,
-      },
-    );
+    const sr = await replaySlack({ tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) }, s, {
+      force: true,
+    });
     expect([gr.retryCount, sr.retryCount]).toEqual([1, 1]);
     expect([githubCount(g), slackCount(s)]).toEqual([1, 1]);
   });
@@ -74,14 +70,10 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
     const gr = await replayGitHub(apiCtx(root, 'default', { subject: 'cli', role: 'admin' }), g, {
       webhookSecret: 'real',
     });
-    const sr = await replaySlack(
-      { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
-      s,
-      {
-        signingSecret: 'real',
-        now: 1700000000,
-      },
-    );
+    const sr = await replaySlack({ tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) }, s, {
+      signingSecret: 'real',
+      now: 1700000000,
+    });
     expect([gr.status, sr.status]).toEqual(['sig_fail', 'sig_fail']);
     expect([githubCount(g), slackCount(s)]).toEqual([1, 1]);
   });

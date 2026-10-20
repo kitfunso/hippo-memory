@@ -193,7 +193,7 @@ describe('syncGlobalToLocal', () => {
     return { localRoot, globalRoot, rows };
   }
 
-  it('copies what it copied before: skips held ids and texts, secrets, agent notes and rejected values', () => {
+  it('copies what it copied before: skips held ids and texts, secrets, agent notes and rejected values', async () => {
     const { localRoot, globalRoot, rows } = stores(3);
     writeEntry(localRoot, rows[0]!);
     const sameText = createMemory('local text the global store also holds');
@@ -222,7 +222,7 @@ describe('syncGlobalToLocal', () => {
     }
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    expect(syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).toBe(3);
+    expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).toBe(3);
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
     const local = new Map(loadEveryTenantEntries(localRoot).map((e) => [e.id, e]));
@@ -239,21 +239,29 @@ describe('syncGlobalToLocal', () => {
     expect(refusals.map((r) => r.targetId).sort()).toEqual([rejected.id, twin.id].sort());
   });
 
-  it('opens each store a fixed number of times and commits every copy in one transaction', () => {
-    const counts = [10, 200].map((n) => {
+  it('opens each store a fixed number of times and commits every copy in one transaction', async () => {
+    const counts = [];
+    for (const n of [10, 200]) {
       const { localRoot, globalRoot } = stores(n);
-      const { result, statements } = recordStatements(() => syncGlobalToLocal(...sharingStores(localRoot, globalRoot)));
+      const { result, statements } = await recordStatementsAsync(() =>
+        syncGlobalToLocal(...sharingStores(localRoot, globalRoot)),
+      );
       expect(result).toBe(n);
-      return { opens: countMatching(statements, STORE_OPEN), begins: countMatching(statements, 'BEGIN IMMEDIATE') };
-    });
+      counts.push({
+        opens: countMatching(statements, STORE_OPEN),
+        begins: countMatching(statements, 'BEGIN IMMEDIATE'),
+      });
+    }
     expect(counts[1]).toEqual(counts[0]);
     expect(counts[0]!.begins).toBe(1);
   });
 
-  it('reads no full row of either store when every global row is already local', () => {
+  it('reads no full row of either store when every global row is already local', async () => {
     const { localRoot, globalRoot } = stores(50);
-    syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
-    const { result, statements } = recordStatements(() => syncGlobalToLocal(...sharingStores(localRoot, globalRoot)));
+    await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const { result, statements } = await recordStatementsAsync(() =>
+      syncGlobalToLocal(...sharingStores(localRoot, globalRoot)),
+    );
     expect(result).toBe(0);
     expect(countMatching(statements, FULL_ROW)).toBe(0);
   });

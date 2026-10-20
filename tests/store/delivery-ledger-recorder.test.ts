@@ -12,7 +12,8 @@ import type { DeliveryEventInput, DeliveryEventType } from '../../src/base/sessi
 import { blockHash } from '../../src/base/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/prompt-hook.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import type { Ledger } from '../../src/store/port.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -53,10 +54,10 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
   ctx = { ...ctx, config: loadConfig(local) };
 }
 
-function recorder(fault?: DeliveryFault): DeliveryRecorder {
+function recorder(fault?: DeliveryFault, ledger: Ledger = sqliteStore(local).ledger): DeliveryRecorder {
   return createDeliveryRecorder({
     fault,
-    ledger: sqliteSyncStore(local).localFiles.ledger,
+    ledger,
     storeHash: 'aaaaaaaaaaaaaaaa',
     writeStore: 'local',
     tenantId: 'default',
@@ -65,12 +66,8 @@ function recorder(fault?: DeliveryFault): DeliveryRecorder {
 }
 
 function eventOf(rec: DeliveryRecorder): DeliveryEventInput {
-  let input: DeliveryEventInput | null = null;
-  rec.flush((i) => {
-    input = i;
-    return 1;
-  });
-  if (input === null) throw new Error('recorder wrote nothing');
+  const input = rec.takeEvent();
+  if (input === null) throw new Error('recorder built nothing');
   return input;
 }
 
@@ -176,9 +173,7 @@ describe('the observer never changes contextGet', () => {
     const without = await contextGet(ctx, baseOpts);
     const rec = recorder('observe');
     expect(await contextGet(ctx, { ...baseOpts, deliveryObserver: rec })).toEqual(without);
-    const write = vi.fn(() => 1);
-    rec.flush(write);
-    expect(write).not.toHaveBeenCalled();
+    expect(rec.takeEvent()).toBeNull();
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: recorder failed: /);
   });
 
@@ -295,7 +290,7 @@ describe('rejection reasons', () => {
 describe('the event type of a recorder', () => {
   it('R1 takes eventType over a UserPromptSubmit payload', () => {
     const rec = createDeliveryRecorder({
-      ledger: sqliteSyncStore(local).localFiles.ledger,
+      ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -308,7 +303,7 @@ describe('the event type of a recorder', () => {
   it('R2 without eventType keeps the payload inference', () => {
     expect(eventOf(recorder()).eventType).toBe('prompt-submit');
     const manual = createDeliveryRecorder({
-      ledger: sqliteSyncStore(local).localFiles.ledger,
+      ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -321,7 +316,7 @@ describe('the event type of a recorder', () => {
 describe('prompt facts on a boundary or context row', () => {
   const withPrompt = (eventType?: DeliveryEventType) =>
     createDeliveryRecorder({
-      ledger: sqliteSyncStore(local).localFiles.ledger,
+      ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -358,7 +353,7 @@ describe('the tool-failure recorder', () => {
   const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>, fault?: DeliveryFault) =>
     createDeliveryRecorder({
       fault,
-      ledger: sqliteSyncStore(local).localFiles.ledger,
+      ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -402,21 +397,20 @@ describe('the tool-failure recorder', () => {
   it('a throw inside logged marks the recorder broken, so it writes nothing', () => {
     const rec = failureRecorder('tool-failure', { tool_use_id: 'toolu_1' }, 'observe');
     rec.logged(7);
-    const write = vi.fn(() => 1);
-    rec.flush(write);
-    expect(write).not.toHaveBeenCalled();
+    expect(rec.takeEvent()).toBeNull();
   });
 });
 
 describe('a recorder fault at the flush boundary', () => {
   it.each<[DeliveryFault]>([['observe'], ['build'], ['flush']])(
     '%s: flushDeliveryRecorder returns, writes nothing and logs one ledger line',
-    (fault) => {
+    async (fault) => {
       const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const rec = recorder(fault);
+      const ledger = sqliteStore(local).ledger;
+      const write = vi.spyOn(ledger, 'writeDeliveryEvent');
+      const rec = recorder(fault, ledger);
       rec.queried('a query');
-      const write = vi.fn(() => 1);
-      expect(() => flushDeliveryRecorder(rec, write)).not.toThrow();
+      await expect(flushDeliveryRecorder(rec)).resolves.toBeUndefined();
       expect(write).not.toHaveBeenCalled();
       const lines = err.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('delivery ledger'));
       expect(lines).toHaveLength(1);

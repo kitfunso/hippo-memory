@@ -58,12 +58,15 @@ export function loadAmbientTalliesAt(
   const scope = `${where.join(' AND ')}
       AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`;
   const scopeParams = [...params, ...filter.currentProject, ...secret.params];
+  const strength = strengthSql(filter.now, rules);
+  const args = [...strength.params, freshAfter, HIGH_SCHEMA_FIT, ...scopeParams];
   // A row is an error when one of its tags is `error`, `critical` or starts with `error:`, as isErrorTagged says.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = db
-    .prepare(`SELECT
+  const row = cachedStatement(
+    db,
+    `SELECT
     COUNT(*) AS total,
-    COALESCE(SUM(${strengthSql(filter.now, rules)}), 0) AS strengthSum,
+    COALESCE(SUM(${strength.sql}), 0) AS strengthSum,
     COALESCE(SUM(julianday(created) > julianday(?)), 0) AS fresh,
     COALESCE(SUM(emotional_valence IN ('negative', 'critical')), 0) AS negative,
     COALESCE(SUM(COALESCE(schema_fit, ${DEFAULT_SCHEMA_FIT}) > ?), 0) AS highSchemaFit,
@@ -75,11 +78,8 @@ export function loadAmbientTalliesAt(
     COALESCE(SUM(COALESCE(extracted_from, '') != ''), 0) AS extracted,
     MAX(0, COALESCE(MAX(COALESCE(dag_level, 0)), 0)) AS maxDagLevel
     FROM memories
-    WHERE ${scope}`)
-    .get(freshAfter, HIGH_SCHEMA_FIT, ...scopeParams) as Record<
-    Exclude<keyof AmbientTallies, 'tagCounts'>,
-    number | bigint
-  >;
+    WHERE ${scope}`,
+  ).get(...args) as Record<Exclude<keyof AmbientTallies, 'tagCounts'>, number | bigint>;
   const tagCounts = countTags(db, scope, scopeParams);
   return {
     total: Number(row.total),

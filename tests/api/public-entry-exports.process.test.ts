@@ -72,7 +72,6 @@ describe('package entry re-exports sleep', () => {
       initTestStore(home);
       const result = await entry.sleep(
         {
-          hippoRoot: home,
           store: sqliteStore(home),
           config: loadConfig(home),
           tenantId: 'default',

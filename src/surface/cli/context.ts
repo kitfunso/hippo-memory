@@ -22,6 +22,7 @@ import {
   flushDeliveryRecorder,
   hasContextData,
   startDeliveryRecorder,
+  takeDelivery,
   sessionStartEnvelope,
   toRenderItems,
 } from '../../api/prompt-hook.js';
@@ -46,7 +47,7 @@ async function cmdContext(
   flags: CliFlags,
   stdinText?: string,
 ): Promise<void> {
-  const rec = startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
+  const rec = await startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
     stdinText,
     runtime: hookRuntime(flags),
     eventType: flagIsTrue(flags, 'pinned-only') ? undefined : 'context',
@@ -54,7 +55,7 @@ async function cmdContext(
   });
   // No try/finally: a render throw keeps its own exit code and writes no event.
   await renderContext({ hippoRoot, tenantId, args, flags, stdinText, rec });
-  flushDeliveryRecorder(rec);
+  await flushDeliveryRecorder(rec);
 }
 
 interface HookPayload {
@@ -88,13 +89,13 @@ interface ContextGate {
 }
 
 /** Null when this call renders nothing: the pilot holdout arm, or a budget of zero. */
-function contextGate(
+async function contextGate(
   hippoRoot: string,
   resolvedTenant: string,
   flags: CliFlags,
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
-): ContextGate | null {
+): Promise<ContextGate | null> {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit and api.contextGet
   // falls back to global-only.
   const pinnedOnly = flagIsTrue(flags, 'pinned-only');
@@ -106,7 +107,7 @@ function contextGate(
   const { currentSessionId, payloadSessionId } = session;
 
   // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
-  if (inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, { write: payloadSessionId !== undefined })) {
+  if (await inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, { write: payloadSessionId !== undefined })) {
     rec?.disabled();
     return null;
   }
@@ -130,7 +131,7 @@ interface RenderContextOptions {
 
 async function renderContext(options: RenderContextOptions): Promise<void> {
   const { hippoRoot, tenantId: resolvedTenant, args, flags, stdinText, rec } = options;
-  const gate = contextGate(hippoRoot, resolvedTenant, flags, stdinText, rec);
+  const gate = await contextGate(hippoRoot, resolvedTenant, flags, stdinText, rec);
   if (gate === null) return;
   const { pinnedOnly, session, budget } = gate;
   const { ledgerSessionId, payloadSessionId } = session;
@@ -162,7 +163,7 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
     reach: ledgerReachOf(ctx),
     envelope,
   };
-  renderContextView(view, format, query);
+  await renderContextView(view, format, query);
 }
 
 function contextQuery(args: string[], flags: CliFlags): string {
@@ -170,14 +171,14 @@ function contextQuery(args: string[], flags: CliFlags): string {
   return !query && flags['auto'] ? autoDetectContext(processGit) : query;
 }
 
-function renderContextView(view: ContextView, format: string, query: string): void {
+async function renderContextView(view: ContextView, format: string, query: string): Promise<void> {
   if (format === 'json') {
-    renderContextJson(view, query);
+    await renderContextJson(view, query);
   } else if (format === 'additional-context' || format === 'copilot') {
-    const stdout = additionalContextOutput(view);
+    const stdout = await additionalContextOutput(view);
     if (stdout) process.stdout.write(stdout);
   } else {
-    renderContextMarkdown(view);
+    await renderContextMarkdown(view);
   }
 }
 
@@ -237,7 +238,7 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
   };
 }
 
-function renderContextJson(view: ContextView, query: string): void {
+async function renderContextJson(view: ContextView, query: string): Promise<void> {
   const { result, rec } = view;
   const output = result.entries.map((r) => ({
     id: r.entry.id,
@@ -260,7 +261,7 @@ function renderContextJson(view: ContextView, query: string): void {
   });
   console.log(jsonText);
   rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
-  bookLedgerTurn(
+  await bookLedgerTurn(
     {
       uses: [
         {
@@ -272,14 +273,14 @@ function renderContextJson(view: ContextView, query: string): void {
           tokens: estimateTokens(jsonText),
         },
       ],
-      delivery: (write) => flushDeliveryRecorder(rec, write),
+      delivery: takeDelivery(rec),
     },
     view.reach,
   );
 }
 
 /** The default format; the header figure counts the whole block, sections included, as the ledger does. */
-function renderContextMarkdown(view: ContextView): void {
+async function renderContextMarkdown(view: ContextView): Promise<void> {
   const { result, rec, framing } = view;
   // Cross-project inclusions get their own section so they never masquerade as project memory.
   const renderItems = toRenderItems(result.entries.filter((r) => r.category !== 'cross-project'));
@@ -295,7 +296,7 @@ function renderContextMarkdown(view: ContextView): void {
   });
   if (text.length > 0) console.log(text);
   rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
-  bookLedgerTurn(
+  await bookLedgerTurn(
     {
       uses: [
         {
@@ -307,7 +308,7 @@ function renderContextMarkdown(view: ContextView): void {
           tokens: estimateTokens(text),
         },
       ],
-      delivery: (write) => flushDeliveryRecorder(rec, write),
+      delivery: takeDelivery(rec),
     },
     view.reach,
   );

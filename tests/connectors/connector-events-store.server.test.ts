@@ -99,7 +99,6 @@ describe('the connector entry points on a store with connectorEvents', () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryConnectorEventsStore(copyOf());
     const slack: Context = {
-      hippoRoot,
       tenantId: TENANT_A,
       actor: slackActor,
       store: memory.store,

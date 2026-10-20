@@ -62,11 +62,11 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
 }
 
 /** Creates the repo's store when absent and registers it; returns whether it already existed. */
-function initScannedRepo(repo: string, tenantId: string, globalRoot: string): boolean {
+async function initScannedRepo(repo: string, tenantId: string, globalRoot: string): Promise<boolean> {
   const repoHippo = path.join(repo, '.hippo');
   const alreadyExists = isInitialized(repoHippo);
   if (!alreadyExists) {
-    initMemoryStore(cliApiContext(repoHippo, tenantId));
+    await initMemoryStore(cliApiContext(repoHippo, tenantId));
   }
   registerWorkspace(globalRoot, repo);
   return alreadyExists;
@@ -149,7 +149,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
   const learn = !flags['no-learn'];
 
   for (const repo of repos) {
-    const alreadyExists = initScannedRepo(repo, tenantId, globalRoot);
+    const alreadyExists = await initScannedRepo(repo, tenantId, globalRoot);
     const { added, lowInfo } = await learnScannedRepo({ repo, tenantId, seedDays, learn, machine, agentImport });
     totalLessons += added;
     totalLowInfo += lowInfo;
@@ -216,7 +216,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (alreadyExists) {
     console.log('Already initialized at', hippoRoot);
   } else {
-    initMemoryStore(cliApiContext(hippoRoot, tenantId));
+    await initMemoryStore(cliApiContext(hippoRoot, tenantId));
     console.log('Initialized Hippo at', hippoRoot);
     console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
     console.log('   Files: hippo.db stats.json');

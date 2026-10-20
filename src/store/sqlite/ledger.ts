@@ -17,9 +17,11 @@ import {
   deliveryPruneSchedule,
   writeDeliveryEventVia,
 } from './recall-trace.js';
-import type { LedgerTurn, Ledger } from '../local/ledger.js';
+import type { Ledger, LedgerTurn, PilotArmOptions } from '../port/ledger.js';
+import type { DeliveryEventInput } from '../../base/session/delivery.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
+import type { Sync } from './served.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
@@ -105,21 +107,58 @@ function noteLedgerRowSkipped<E>(error: E): void {
   else log.warnThenDebug('token-ledger-row', message, errorFields(error));
 }
 
-/** Books a turn's token rows, then its delivery event, on `db`. */
-function recordLedgerTurnAt(db: DatabaseSyncLike, turn: LedgerTurn, prune: DeliveryPruneSchedule): void {
-  const { onRowError } = turn;
-  for (const use of turn.uses) {
-    if (onRowError === undefined) {
-      recordTokenUse(db, use);
-      continue;
+/** The turn's rows on `db`: each its own attempt with `perRow`, else up to the first that fails. */
+function recordRowsAt(db: DatabaseSyncLike, turn: LedgerTurn): void {
+  try {
+    for (const use of turn.uses) {
+      if (turn.perRow !== true) {
+        recordTokenUse(db, use);
+        continue;
+      }
+      try {
+        recordTokenUse(db, use);
+      } catch (error) {
+        noteLedgerRowSkipped(error);
+      }
     }
-    try {
-      recordTokenUse(db, use);
-    } catch (error) {
-      onRowError(error);
-    }
+  } catch (error) {
+    noteLedgerRowSkipped(error);
   }
-  turn.delivery?.((input) => writeDeliveryEventOnHandle(db, input, prune));
+}
+
+/** The delivery event on the rows' own handle, so it costs no second open; a failed write is logged. */
+function recordDeliveryAt(db: DatabaseSyncLike, input: DeliveryEventInput, prune: DeliveryPruneSchedule): void {
+  try {
+    writeDeliveryEventOnHandle(db, input, prune);
+  } catch (error) {
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
+  }
+}
+
+/** Books a turn's rows, then its delivery event; a store that will not open still gets the event tried on its own. */
+function recordTurnVia(on: OnHandle, turn: LedgerTurn, prune: DeliveryPruneSchedule): void {
+  const { delivery } = turn;
+  let opened = false;
+  try {
+    on((db) => {
+      opened = true;
+      recordRowsAt(db, turn);
+      if (delivery !== undefined) recordDeliveryAt(db, delivery, prune);
+    });
+  } catch (error) {
+    noteLedgerRowSkipped(error);
+    if (!opened && delivery !== undefined) writeDeliveryEventVia(on, delivery, prune);
+  }
+}
+
+/** `read`, or `fallback` once the failure is noted, so a hook never fails on its ledger. */
+function noting<T>(read: () => T, fallback: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    noteLedgerRowSkipped(error);
+    return fallback();
+  }
 }
 
 /** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */
@@ -128,7 +167,7 @@ function pilotArmAt(
   tenantId: string,
   sessionId: string,
   rateBp: number,
-  opts: { write: boolean; ownTenantOnly?: boolean },
+  opts: PilotArmOptions,
 ): PilotArm {
   const { ownTenantOnly } = opts;
   return opts.write
@@ -138,19 +177,28 @@ function pilotArmAt(
 
 /** Each call runs on the request's handle or a short-lived one. The delivery write takes the opener, since it is
  * fail-soft on an open that fails. */
-export function sqliteLedger(on: OnHandle): Ledger {
+export function sqliteLedger(on: OnHandle): Sync<Ledger> {
   // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
   const prune = deliveryPruneSchedule();
-  const ledgerAt: Bodies<Omit<Ledger, 'writeDeliveryEvent' | 'noteSkipped'>> = {
-    recordTurn: (db, turn) => recordLedgerTurnAt(db, turn, prune),
-    recordTokens: recordTokenUse,
+  const ledgerAt: Bodies<Pick<Ledger, 'lastSent' | 'pilotArm' | 'replaceRereads'>> = {
     lastSent: lastSentState,
     pilotArm: pilotArmAt,
     replaceRereads: recordRereadsAt,
   };
+  const reads = bound(on, ledgerAt);
   return {
-    ...bound(on, ledgerAt),
+    recordTurn: (turn) => recordTurnVia(on, turn, prune),
+    lastSent: (tenantId, sessionId, surface) =>
+      noting(
+        () => reads.lastSent(tenantId, sessionId, surface),
+        () => null,
+      ),
+    pilotArm: (tenantId, sessionId, rateBp, opts) =>
+      noting(
+        () => reads.pilotArm(tenantId, sessionId, rateBp, opts),
+        () => hashArm(sessionId, rateBp),
+      ),
     writeDeliveryEvent: (input) => writeDeliveryEventVia(on, input, prune),
-    noteSkipped: noteLedgerRowSkipped,
+    replaceRereads: reads.replaceRereads,
   };
 }

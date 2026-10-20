@@ -1,4 +1,4 @@
-// The global write behind `promote`, which answers through a Promise so a served store runs it on its writer thread.
+// The global write behind `promote`: a promoted copy written into the operator's global store.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 
 /** How a promoted copy is written: the actor its `remember` row names and the local row it copies. */

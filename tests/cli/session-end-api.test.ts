@@ -56,7 +56,10 @@ function work(over: Partial<Work> = {}): Work {
     },
     currentProject: () => PROJECT,
     capture: (into, turns, origin) => {
-      steps.push(`capture:${into.hippoRoot === root ? 'own' : 'global'}:${turns?.join(',') ?? 'all'}:${origin ?? '-'}`);
+      // The global store's Context is built bare, with no reach of its own.
+      steps.push(
+        `capture:${into.reach === undefined ? 'global' : 'own'}:${turns?.join(',') ?? 'all'}:${origin ?? '-'}`,
+      );
       return true;
     },
     digest: async (scan, key) => {

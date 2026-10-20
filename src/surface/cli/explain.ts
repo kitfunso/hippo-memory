@@ -7,7 +7,7 @@ import { dropHeldCopies } from '../../base/util/same-text.js';
 import { getGlobalRoot } from '../../domain/sharing/global-store.js';
 import * as api from '../../api/index.js';
 import { cliRecallOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
-import { cliConfig, cliApiContext, cliLocalFiles, cliSecondStore } from './api-context.js';
+import { cliConfig, cliApiContext, cliSecondStore, cliStore } from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import { printedTokens } from '../../api/context-render.js';
 import { printError } from './output.js';
@@ -25,18 +25,18 @@ import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import type { LocalFiles } from '../../store/local/index.js';
+import type { HippoStore } from '../../store/port.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
-function noteScopeHidden(
+async function noteScopeHidden(
   ctx: ReturnType<typeof cliApiContext>,
-  global: LocalFiles | undefined,
+  global: HippoStore | undefined,
   query: string,
   requested: string | undefined,
-): void {
-  const hidden = scopeHiddenCount(ctx, query, global, requested);
+): Promise<void> {
+  const hidden = await scopeHiddenCount(ctx, query, global, requested);
   if (hidden > 0) {
     printError(
       `[note] ${plural(hidden, 'candidate')} hidden by recall scope policy (pass an explicit --scope to inspect).`,
@@ -65,7 +65,7 @@ async function cmdExplain(hippoRoot: string, tenantId: string, query: string, fl
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
   const origin = cliRecallOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   const explainGlobalOn = origin.globalOn;
-  noteScopeHidden(ctx, explainGlobalOn ? cliLocalFiles(globalRoot) : undefined, query, explicitScope || undefined);
+  await noteScopeHidden(ctx, explainGlobalOn ? cliStore(globalRoot) : undefined, query, explicitScope || undefined);
 
   const config = cliConfig(hippoRoot);
   const engine = engineFlags(flags, config);

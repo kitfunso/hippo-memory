@@ -7,7 +7,7 @@ import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { mergedText } from '../../src/base/util/same-text.js';
-import { recordStatements } from '../_helpers/count-statements.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -79,22 +79,25 @@ const localFtsInSync = (inSync: boolean): void => {
 };
 
 describe('sync down from the global store', () => {
-  it.each([false, true])('copies the rows held by neither id nor tenant and text, index in sync: %s', (inSync) => {
-    const g = seed();
-    localFtsInSync(inSync);
+  it.each([false, true])(
+    'copies the rows held by neither id nor tenant and text, index in sync: %s',
+    async (inSync) => {
+      const g = seed();
+      localFtsInSync(inSync);
 
-    expect(syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).toBe(4);
+      expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).toBe(4);
 
-    const local = new Map(
-      [...loadAllEntries(localRoot, 'default'), ...loadAllEntries(localRoot, 'acme')].map((e) => [e.id, e]),
-    );
-    for (const copied of [g[2], g[4], g[8], g[9]]) expect(local.get(copied.id)?.content).toBe(copied.content);
-    for (const skipped of [g[1], g[3], g[5], g[6], g[7]]) expect(local.has(skipped.id)).toBe(false);
-    expect(local.get(g[0].id)?.content).toBe('A local edit of lesson zero');
-  });
+      const local = new Map(
+        [...loadAllEntries(localRoot, 'default'), ...loadAllEntries(localRoot, 'acme')].map((e) => [e.id, e]),
+      );
+      for (const copied of [g[2], g[4], g[8], g[9]]) expect(local.get(copied.id)?.content).toBe(copied.content);
+      for (const skipped of [g[1], g[3], g[5], g[6], g[7]]) expect(local.has(skipped.id)).toBe(false);
+      expect(local.get(g[0].id)?.content).toBe('A local edit of lesson zero');
+    },
+  );
 
-  it('reads no more rows with 300 local rows that hold none of the global texts', () => {
-    const rowsRead = (bystanders: number): number => {
+  it('reads no more rows with 300 local rows that hold none of the global texts', async () => {
+    const rowsRead = async (bystanders: number): Promise<number> => {
       localRoot = makeStore('global-sync-reads').root;
       globalRoot = makeRoot('global-sync-reads-global');
       seed();
@@ -102,9 +105,9 @@ describe('sync down from the global store', () => {
         localRoot,
         Array.from({ length: bystanders }, (_, k) => row(`xyzzy plugh ${k}`, 100 + k)),
       );
-      return recordStatements(() => syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).rowsRead;
+      return (await recordStatementsAsync(() => syncGlobalToLocal(...sharingStores(localRoot, globalRoot)))).rowsRead;
     };
 
-    expect(rowsRead(300)).toBe(rowsRead(0));
+    expect(await rowsRead(300)).toBe(await rowsRead(0));
   });
 });

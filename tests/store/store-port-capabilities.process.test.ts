@@ -52,7 +52,6 @@ function rootWithConfig(label: string): string {
 }
 
 const ctxOn = (root: string, store: HippoStore): Context => ({
-  hippoRoot: root,
   tenantId: 'default',
   actor: adminActor('capability-test'),
   store,

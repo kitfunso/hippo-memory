@@ -148,7 +148,6 @@ describe('preCompactForCaller', () => {
     initTestStore(server);
     fs.writeFileSync(path.join(server, 'config.json'), JSON.stringify({ sharedStore: true }));
     const ctx: Context = {
-      hippoRoot: server,
       store: sqliteStore(server),
       config: loadConfig(server),
       tenantId: 'acme',

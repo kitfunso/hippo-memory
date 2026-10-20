@@ -13,7 +13,6 @@ import {
   TENANT_A,
   TENANT_B,
   type GroupCall,
-  type Outcome,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import {
@@ -82,9 +81,6 @@ async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
   return sides.sqlite.outcomes;
 }
 
-const contents = (outcome: Outcome<MemoryEntry[]>): string[] =>
-  'value' in outcome ? outcome.value.map((e) => e.content) : [];
-
 beforeAll(() =>
   withSharedStoreHandles(() => {
     fixture = seedTwoTenants();
@@ -122,16 +118,14 @@ describe('Reports.statusCounts', () => {
   });
 });
 
-describe('Reports.correctionEntries and rawEntries', () => {
-  it('return the superseded rows, their successors and sources, and the raw rows, by created then id', async () => {
-    const [corrections, raw] = await conforms([(r) => r.correctionEntries(), (r) => r.rawEntries()]);
-    expect(contents(corrections)).toEqual([
-      'belief: the tier is 100',
-      'slack: the tier moved to 120',
-      'belief: replaced by a deleted row',
-      'belief: the tier is 120',
+describe('Reports.correctionLinks and rawProvenance', () => {
+  it('join each superseded row to a successor that exists and its source, and count the raw rows', async () => {
+    const [links] = await conforms([(r) => r.correctionLinks()]);
+    const [raw] = await conforms([(r) => r.rawProvenance()]);
+    expect('value' in links && links.value.map((l) => [l.correctedAt, l.sourceCreated])).toEqual([
+      [ago(HOUR), ago(30 * 24 * HOUR)],
     ]);
-    expect(contents(raw)).toEqual(['slack: the tier moved to 120']);
+    expect('value' in raw && raw.value.total).toBe(1);
   });
 });
 

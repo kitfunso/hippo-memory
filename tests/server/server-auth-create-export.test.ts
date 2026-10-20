@@ -12,7 +12,6 @@ describe('hippo-memory/server exports authCreate', () => {
   it('mints a key into the named store for the given tenant and role', async () => {
     const root = makeRoot('server-auth-create', { init: false });
     const ctx: Context = {
-      hippoRoot: root,
       store: sqliteStore(root),
       config: loadConfig(root),
       tenantId: 'acme',

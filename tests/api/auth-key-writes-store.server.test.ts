@@ -154,10 +154,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const before = hippoDbState(root);
     const actor: Actor = { subject: `api_key:${fixture.keys.adminA}`, role: 'admin' };
     await expect(
-      authCreate(
-        { hippoRoot: root, tenantId: TENANT_A, actor, store: sqliteStore(root), config: loadConfig(root) },
-        { label: 'x' },
-      ),
+      authCreate({ tenantId: TENANT_A, actor, store: sqliteStore(root), config: loadConfig(root) }, { label: 'x' }),
     ).rejects.toThrow(/audit table unwritable/);
     await expect(authCreate(apiCtx(root, TENANT_A, actor), { label: 'y' })).rejects.toThrow(/audit table unwritable/);
     expect(hippoDbState(root)).toEqual(before);
@@ -181,10 +178,7 @@ describe('authListRows with ctx.store', () => {
       const onHippoDb = await authListRows(apiCtx(root, TENANT_A, actor), { active });
       expect(onHippoDb.length > 0).toBe(listsAny);
       expect(
-        await authListRows(
-          { hippoRoot: markedFolder(), tenantId: TENANT_A, actor, store: memory.store, config: DEFAULT_CONFIG },
-          { active },
-        ),
+        await authListRows({ tenantId: TENANT_A, actor, store: memory.store, config: DEFAULT_CONFIG }, { active }),
       ).toEqual(onHippoDb);
     }
   });

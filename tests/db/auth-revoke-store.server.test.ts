@@ -78,7 +78,7 @@ describe('authRevoke with ctx.store', () => {
     const { memberA } = fixture.keys;
     expect(
       await authRevoke(
-        { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) },
+        { tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) },
         memberA,
       ),
     ).toEqual({ ok: true, revokedAt: NOW });

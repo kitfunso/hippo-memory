@@ -63,7 +63,6 @@ export async function runIncidentRecallEval(opts: {
     readFileSync(join(here, 'scenarios.json'), 'utf-8'),
   ) as Scenario[];
   const ctx: Context = {
-    hippoRoot: opts.hippoRoot,
     tenantId: 'default',
     actor: adminActor('eval:slack'),
     store: sqliteStore(opts.hippoRoot), config: loadConfig(opts.hippoRoot),

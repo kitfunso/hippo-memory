@@ -1,6 +1,6 @@
-// The built-in store's sharing reads and writes: the existing functions, bound to this store.
+// The built-in store's sharing reads: the existing functions, bound to this store.
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { tallySourcesAt } from './candidates.js';
+import { EVERY_SCOPE, loadTextsHoldingWordsAt, tallySourcesAt } from './candidates.js';
 import {
   loadEntriesByIdsAt,
   loadEntriesPageAt,
@@ -9,38 +9,31 @@ import {
   selectTakenIdsAt,
   selectTextKeysHoldingAt,
 } from './entry-reads.js';
-import { writeEntriesSkippingRejectedAt } from './entry-writes.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
-import { served } from './served.js';
-import type { Sharing } from '../local/sharing.js';
+import { bound, type Bodies } from './bound.js';
+import type { Sync } from './served.js';
+import type { Sharing } from '../port/sharing.js';
 import { loadRecallEntriesAt, loadSearchEntriesAt } from './search-rows.js';
 
-type SharingReads = Omit<Sharing, 'writeSkippingRejected' | 'sourceTallies'>;
-
-const sharingReadsAt: Bodies<SharingReads> = {
+const sharingReadsAt: Bodies<Sharing> = {
   entriesPage: loadEntriesPageAt,
   entriesWithSignals: loadEntriesWithSignalsAt,
   textKeysPage: loadEntryTextKeysPageAt,
   textKeysHolding: selectTextKeysHoldingAt,
+  textsHolding: (db, tenantId, words, { project, everyScope }) =>
+    loadTextsHoldingWordsAt(db, tenantId, words, project, everyScope === true ? EVERY_SCOPE : undefined),
   takenIds: selectTakenIdsAt,
   entriesByIds: (db, ids) => loadEntriesByIdsAt(db, ids, ALL_TENANTS),
+  sourceTallies: tallySourcesAt,
   searchEntries: loadSearchEntriesAt,
   recallEntries: loadRecallEntriesAt,
 };
 
-type Tallies = Pick<Sharing, 'sourceTallies'>;
+export function sqliteSharing(on: OnHandle): Sync<Sharing> {
+  return bound(on, sharingReadsAt, openStore);
+}
 
-export function sqliteSharing(on: OnHandle): Sharing {
-  return {
-    ...bound(on, sharingReadsAt, openStore),
-    ...boundWithFiles<Pick<Sharing, 'writeSkippingRejected'>>(
-      on,
-      { writeSkippingRejected: writeEntriesSkippingRejectedAt },
-      openStore,
-    ),
-    // hippo_peers awaits the tallies on a served store's worker, so this one method answers through a Promise.
-    ...served<Tallies>(bound<Tallies>(on, { sourceTallies: tallySourcesAt }, openStore)),
-  };
+export function sqliteImportKeys(on: OnHandle): Sync<Pick<Sharing, 'textKeysHolding'>> {
+  return bound<Pick<Sharing, 'textKeysHolding'>>(on, { textKeysHolding: selectTextKeysHoldingAt }, openStore);
 }

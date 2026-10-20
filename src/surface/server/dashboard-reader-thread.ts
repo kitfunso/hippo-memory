@@ -39,7 +39,6 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
   const stamp = (fresh: boolean) => view.clock.at(tenantId, fresh);
   // A fresh Context per call, so a config edit shows on the next request.
   const context = (): Context => ({
-    hippoRoot,
     tenantId,
     actor: adminActor(DASHBOARD_ACTOR),
     store,

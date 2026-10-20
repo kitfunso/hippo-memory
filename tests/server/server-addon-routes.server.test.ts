@@ -85,7 +85,7 @@ describe('an add-on route behind serve()', () => {
     expect(res).toEqual({ status: 200, reply: { seen: 1, nested: { list: [1, 'two', null] } } });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.ctx.tenantId).toBe('tenant-x');
-    expect(calls[0]!.ctx.hippoRoot).toBe(root);
+    expect(calls[0]!.ctx).not.toHaveProperty('hippoRoot');
     expect(calls[0]!.body).toEqual({ a: 1, b: { c: 'd' } });
   });
 

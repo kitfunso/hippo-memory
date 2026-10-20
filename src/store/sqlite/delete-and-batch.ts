@@ -16,6 +16,7 @@ import type { StoreFiles } from './open.js';
 import { clock, type WriteBudget } from '../../base/util/write-budget.js';
 import { chunked } from '../../base/util/chunked.js';
 import { placeholders } from '../../base/util/sql.js';
+import { cachedStatement } from '../../db/statement-cache.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../local/consolidation.js';
 
@@ -41,23 +42,35 @@ const AUTOMATIC_DELETE: SqlFragment = {
   params: AUTO_DELETABLE.params,
 };
 
-/** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing
- * from an older schema is skipped. */
-export function memoriesBackingObjectsAt(db: DatabaseSyncLike): Set<string> {
-  const ids = new Set<string>();
-  for (const table of MEMORY_BACKED_TABLES) {
-    try {
-      // SAFETY: the WHERE drops rows whose memory_id is NULL.
-      const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as {
-        memory_id: string;
-      }[];
-      for (const r of rows) ids.add(r.memory_id);
-    } catch (err) {
-      // A missing table is an older schema; any other error could hide a backing memory, so the caller stops.
-      if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
-    }
+/** The ids among `ids` that back a first-class object, one statement per chunk, for passes that plan deletes before
+ * making them. */
+export function memoriesBackingAmongAt(db: DatabaseSyncLike, ids: readonly string[]): Set<string> {
+  const backed = new Set<string>();
+  if (ids.length === 0) return backed;
+  const tables = backingTablesAt(db);
+  // The NOT NULL term lets each table's partial memory_id index answer the IN.
+  const sql = tables
+    .map(
+      (t) => `SELECT memory_id FROM ${t} WHERE memory_id IS NOT NULL AND memory_id IN (SELECT value FROM json_each(?))`,
+    )
+    .join(' UNION ');
+  for (const chunk of chunked([...new Set(ids)])) {
+    const list = JSON.stringify(chunk);
+    // SAFETY: every arm selects memory_id under IS NOT NULL.
+    const rows = cachedStatement(db, sql).all(...tables.map(() => list)) as Array<{ memory_id: string }>;
+    for (const row of rows) backed.add(row.memory_id);
   }
-  return ids;
+  return backed;
+}
+
+// Quality repair opens an older schema unmigrated, which can lack some of the tables.
+function backingTablesAt(db: DatabaseSyncLike): string[] {
+  const rows = cachedStatement(
+    db,
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${placeholders(MEMORY_BACKED_TABLES.length)})`,
+  ).all(...MEMORY_BACKED_TABLES) as Array<{ name: string }>;
+  const present = new Set(rows.map((row) => row.name));
+  return MEMORY_BACKED_TABLES.filter((table) => present.has(table));
 }
 
 // The abort text of trg_memories_raw_append_only (migration v14), the one place src matches it.
@@ -70,7 +83,7 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
 /** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes RawAppendOnlyError. */
 function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, params: readonly string[]): number {
   try {
-    return Number(db.prepare(sql).run(...params).changes ?? 0);
+    return Number(cachedStatement(db, sql).run(...params).changes ?? 0);
   } catch (cause) {
     throw isRawTriggerAbort(cause) ? new RawAppendOnlyError(cause) : cause;
   }
@@ -85,9 +98,10 @@ export function deleteEntryCore(
   tenantId: string,
   opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },
 ): { tenantId: string; dagParentId: string | null } | null {
-  const row = db
-    .prepare(`SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`)
-    .get(id, tenantId) as DeleteTarget | undefined;
+  const row = cachedStatement(db, `SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`).get(
+    id,
+    tenantId,
+  ) as DeleteTarget | undefined;
   return row?.id ? deleteTargetRow(db, row, opts) : null;
 }
 
@@ -126,57 +140,56 @@ function deleteTargetRow(
   return { tenantId, dagParentId: row.dag_parent_id ?? null };
 }
 
-/**
- * deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits alone.
- */
-function deleteEntryOn(
-  db: DatabaseSyncLike,
-  hippoRoot: string,
-  id: string,
-  opts?: { actor?: string; reason?: string; automatic?: boolean },
-): boolean {
-  // A host-wide pass: the row's own tenant goes into the DELETE.
-  const result = withWriteScope(db, 'delete_entry', () => {
-    const row = selectDeleteTargets(db, [id]).get(id);
-    return row ? deleteTargetRow(db, row, opts) : null;
-  });
-  if (!result) return false;
-
-  purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
-  return true;
-}
-
-/** deleteEntry with `automatic` for each removal and its own forget row and reason, all in one transaction after one
- * read of the id set. Returns the ids deleted, in `removals` order; a missing, repeated, pinned, raw or object-backing
- * id is left out. */
+/** deleteEntry with `automatic` for each removal and its own forget row and reason. Returns the ids deleted, in
+ * `removals` order; a missing, repeated, pinned, raw or object-backing id is left out. */
 export function deleteEntriesAutomaticallyAt(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   removals: readonly { id: string; reason: string }[],
   actor: string,
 ): string[] {
-  const deleted = withWriteScope(db, 'delete_entries_automatically', () => {
-    const rows = selectDeleteTargets(
-      db,
-      removals.map((removal) => removal.id),
-    );
-    return removals
-      .filter(({ id, reason }) => {
-        const row = rows.get(id);
-        return row !== undefined && deleteTargetRow(db, row, { actor, reason, automatic: true }) !== null;
-      })
-      .map((removal) => removal.id);
-  });
-  for (const id of deleted) purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
-  return deleted;
+  const went = deleteEntriesInBatchesAt(db, files, removals, { actor, automatic: true });
+  return removals.filter((_, i) => went[i]).map((removal) => removal.id);
+}
+
+/** Deletes each target with its own forget row and reason, one transaction per chunk after one read of its ids;
+ * `true` where the row went, so a repeated id is true once. A host-wide pass: each row's own tenant goes into its
+ * DELETE. */
+export function deleteEntriesInBatchesAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
+  targets: readonly { id: string; reason: string }[],
+  opts: { actor?: string; automatic?: boolean },
+): boolean[] {
+  const gone = new Set<string>();
+  for (const chunk of chunked(targets)) {
+    const deleted = withWriteScope(db, 'delete_entries', () => {
+      const rows = selectDeleteTargets(
+        db,
+        chunk.map((target) => target.id),
+      );
+      return chunk
+        .filter(({ id, reason }) => {
+          const row = rows.get(id);
+          return row !== undefined && deleteTargetRow(db, row, { ...opts, reason }) !== null;
+        })
+        .map((target) => target.id);
+    });
+    for (const id of deleted) {
+      gone.add(id);
+      purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
+    }
+  }
+  return targets.map((target) => gone.delete(target.id));
 }
 
 function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<string, DeleteTarget> {
   const rows = new Map<string, DeleteTarget>();
   for (const chunk of chunked([...new Set(ids)])) {
-    const found = db
-      .prepare(`SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id IN (${placeholders(chunk.length)})`)
-      .all(...chunk) as Array<DeleteTarget>;
+    const found = cachedStatement(
+      db,
+      `SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))`,
+    ).all(JSON.stringify(chunk)) as Array<DeleteTarget>;
     for (const row of found) rows.set(row.id, row);
   }
   return rows;
@@ -347,7 +360,7 @@ function moveDormantAndDelete(
   for (const move of movable) {
     insertDormantRow(db, move);
   }
-  const deleteRow = db.prepare('DELETE FROM memories WHERE id = ?');
+  const deleteRow = cachedStatement(db, 'DELETE FROM memories WHERE id = ?');
   for (const id of [...deletableIds, ...movable.map((m) => m.entry.id)]) {
     deleteRow.run(id);
     out.removedIds.push(id);
@@ -360,19 +373,17 @@ interface DirtyParents {
   tenantById: Map<string, string>;
 }
 
-/** The still auto-deletable rows among `ids`, recording each one's DAG parent as dirty. Placeholders come from `ids`
- * itself. */
+/** The still auto-deletable rows among `ids`, recording each one's DAG parent as dirty. */
 function selectAutoDeletableRows(
   db: DatabaseSyncLike,
   ids: readonly string[],
   dirty: DirtyParents,
 ): Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }> {
-  const rows = db
-    .prepare(
-      `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders(ids.length)}) AND ` +
-        `${AUTOMATIC_DELETE.sql}`,
-    )
-    .all(...ids, ...AUTOMATIC_DELETE.params) as Array<{
+  const rows = cachedStatement(
+    db,
+    `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (SELECT value FROM json_each(?)) AND ` +
+      `${AUTOMATIC_DELETE.sql}`,
+  ).all(JSON.stringify(ids), ...AUTOMATIC_DELETE.params) as Array<{
     id: string;
     dag_parent_id: string | null;
     tenant_id: string | null;
@@ -406,7 +417,7 @@ function applyBatchWrites(
   // Probe tombstones per entry on THIS connection inside the transaction: the producer's check ran earlier on another
   // connection, so a reject committed in between would be re-inserted. Skip, never throw, so the rest lands.
   const { written, fts, dirty } = out;
-  const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
+  const readLiveRow = cachedStatement(db, `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
   for (const op of ops) {
     const base = snapshot?.get(op.id);
     const liveRow = readLiveRow.get(op.id) as MemoryRow | undefined;
@@ -462,16 +473,6 @@ function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
     throw err;
   }
   return false;
-}
-
-/** Deletes each target in its own transaction on one store handle; `true` where the row went. */
-export function deleteEntriesOneByOneAt(
-  db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
-  targets: readonly { id: string; reason: string }[],
-  opts: { actor?: string; automatic?: boolean },
-): boolean[] {
-  return targets.map((target) => deleteEntryOn(db, hippoRoot, target.id, { ...opts, reason: target.reason }));
 }
 
 /** Commits whole components in transactions of about `budget.holdMs`, letting other writers in between; returns the ids

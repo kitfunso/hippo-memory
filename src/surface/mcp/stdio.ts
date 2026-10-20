@@ -159,12 +159,12 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
 
 /** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
  * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
-function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): string {
+async function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): Promise<string> {
   const root = getGlobalRoot();
   const target = host.contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
   if (target === undefined) return root;
-  target.store.localFiles.ensureFiles();
+  await target.store.folderFiles.ensure();
   log.warn(
     `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
   );
@@ -173,10 +173,10 @@ function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): string {
 
 /** Runs one frame in the host's scope; only a tool call builds a context, so tools/list never creates a store. */
 function handleFrame(req: McpRequest, host: McpHost): Promise<McpResponse | null> {
-  return host.runRequest(() => {
+  return host.runRequest(async () => {
     if (req.method !== 'tools/call') return handleMcpRequest(req, undefined);
     const tenantId = envTenant();
-    const root = findHippoRoot() ?? createGlobalStoreOnFirstRun(host, tenantId);
+    const root = findHippoRoot() ?? (await createGlobalStoreOnFirstRun(host, tenantId));
     return handleMcpRequest(req, host.contextFor(root, tenantId));
   });
 }

@@ -116,27 +116,27 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     expect(index[shared!.id]).toBeUndefined();
   });
 
-  it('autoShare succeeds and writes no embedding index entry (skipEmbed + batch embedAll no-op)', () => {
+  it('autoShare succeeds and writes no embedding index entry (skipEmbed + batch embedAll no-op)', async () => {
     const entry = createMemory('deterministic no-embed autoshare test content', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
     writeEntry(localRoot, entry);
 
-    const shared = autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
+    const shared = await autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
     expect(shared.length).toBe(1);
 
     const index = loadEmbeddingIndex(globalRoot);
     expect(index[shared[0].id]).toBeUndefined();
   });
 
-  it('syncGlobalToLocal succeeds and writes no embedding index entry on the local store', () => {
+  it('syncGlobalToLocal succeeds and writes no embedding index entry on the local store', async () => {
     disableEmbeddings(localRoot);
     const entry = createMemory('deterministic no-embed sync test content', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
     writeEntry(globalRoot, entry);
 
-    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
     expect(count).toBe(1);
 
     const index = loadEmbeddingIndex(localRoot);
@@ -169,7 +169,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     writeEntry(globalRoot, entry);
 
-    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
     expect(count).toBe(1);
 
     // syncGlobalToLocal already fired its own embedAll(localRoot); this call
@@ -190,7 +190,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
+    const shared = await autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
     expect(shared.length).toBe(1);
 
     await embedAll(localIndex(globalRoot));

@@ -80,10 +80,12 @@ describe('share and promote refuse personal rows', () => {
     expect(globalContents()).toEqual([TEAM]);
   });
 
-  it('autoShare skips the personal row and shares the team row in the same run', () => {
+  it('autoShare skips the personal row and shares the team row in the same run', async () => {
     expect(transferScore(mine)).toBeGreaterThanOrEqual(0.6);
     expect(transferScore(team)).toBeGreaterThanOrEqual(0.6);
-    expect(autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS }).map((e) => e.content)).toEqual([TEAM]);
+    expect((await autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS })).map((e) => e.content)).toEqual([
+      TEAM,
+    ]);
     expect(globalContents()).toEqual([TEAM]);
   });
 });

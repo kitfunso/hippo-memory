@@ -30,6 +30,7 @@ import { computeSchemaFit } from '../../src/index.js';
 import { inMemoryVectorStore } from './in-memory-vector-store.js';
 import type { StoreSide } from './store-conformance.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { isoInstant } from '../../src/base/memory/created-stamp.js';
 
 export interface InMemoryContextStore extends StoreSide {
   readonly store: HippoStore & { readonly contextReads: ContextReads; readonly vectors: VectorReads };
@@ -172,7 +173,10 @@ function recentRows(
   origins?: RecentOrigins,
 ): MemoryEntry[] {
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
-  const newest = [...live].sort((a, b) => bytes(b.created, a.created) || bytes(b.id, a.id));
+  // A drifted stamp sorts at the instant Date reads in it, an unreadable one last, as if written in toISOString form.
+  const at = (r: MemoryRow): string =>
+    [...r.created].length === 24 && /z$/i.test(r.created) ? r.created : (isoInstant(r.created) ?? '');
+  const newest = [...live].sort((a, b) => bytes(at(b), at(a)) || bytes(b.id, a.id));
   // The SQL origin filter differs from inOrigins: a '' name in the list admits '' rows even without userGlobal.
   const own = origins
     ? newest.filter(
@@ -182,8 +186,6 @@ function recentRows(
       )
     : newest;
   const window = Math.max(needed * 4, 32);
-  const drifted = live.some((r) => [...r.created].length !== 24 || !/z$/i.test(r.created));
-  if (drifted) return own.map(rowToEntry).filter(keep);
   const windowed = newest.slice(0, window).map(rowToEntry);
   let kept = windowed.filter(keep);
   if (kept.length >= needed || windowed.length < window) return kept;

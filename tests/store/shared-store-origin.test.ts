@@ -139,20 +139,20 @@ describe('shared store origin stamp', () => {
     }
   });
 
-  it('hippo sync refuses a flagged store and copies nothing', () => {
+  it('hippo sync refuses a flagged store and copies nothing', async () => {
     initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(true)) {
-      expect(() => syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toThrow(BadRequestError);
+      await expect(syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).rejects.toThrow(BadRequestError);
       expect(loadAllEntries(store, 'default')).toHaveLength(0);
     }
   });
 
-  it('hippo sync into an unflagged store copies as before', () => {
+  it('hippo sync into an unflagged store copies as before', async () => {
     initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(false)) {
-      expect(syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toBe(1);
+      expect(await syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toBe(1);
       expect(loadAllEntries(store, 'default')).toHaveLength(1);
     }
   });

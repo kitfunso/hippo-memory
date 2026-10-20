@@ -348,8 +348,9 @@ describe('strengthSql parity', () => {
       for (const e of entries) writeEntry(home, e);
       const db = openHippoDb(home);
       try {
+        const strength = strengthSql(now, {});
         // SAFETY: the SELECT names exactly the columns id and s.
-        const rows = db.prepare(`SELECT id, ${strengthSql(now, {})} AS s FROM memories`).all() as Array<{
+        const rows = db.prepare(`SELECT id, ${strength.sql} AS s FROM memories`).all(...strength.params) as Array<{
           id: string;
           s: number;
         }>;
