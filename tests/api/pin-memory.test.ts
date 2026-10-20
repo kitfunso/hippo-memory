@@ -1,12 +1,14 @@
 // api.memoryPin sets the flag through the store port, audits each call as a pin by the caller, and refuses rows out of reach.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
 import { adminActor, NotFoundError, memoryPin } from '../../src/api/index.js';
 import { memoryGet } from '../../src/api/memories/memories.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 
@@ -15,7 +17,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 function seed(tenantId = 'default', scope: string | null = null): MemoryEntry {

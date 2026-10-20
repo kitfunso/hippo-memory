@@ -4,6 +4,9 @@ import { listMemoryConflicts, writeEntry, loadAllEntries } from '../_helpers/roo
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let tmpDir: string;
 

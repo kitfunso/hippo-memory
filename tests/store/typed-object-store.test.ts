@@ -1,6 +1,5 @@
 // Store rules every typed object shares, one table row per kind; a rule only one kind has stays in its <kind>-store test.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type {
@@ -65,6 +64,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let home: string;
 beforeEach(() => {
@@ -72,7 +74,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   try {
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   } catch {
     /* best-effort */
   }

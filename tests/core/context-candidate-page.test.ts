@@ -1,6 +1,5 @@
 // A no-query contextGet reads a page of the strongest rows sized from its budget, not the 2000 rows the cap allows.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { contextGet } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -8,6 +7,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const ROWS = 2300;
 const DAY_MS = 86_400_000;
@@ -47,7 +49,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 // Each case seeds 2300 rows in a real store, and a runner's disk sets how long that takes.

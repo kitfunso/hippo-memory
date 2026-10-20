@@ -2,6 +2,7 @@
 // superseded and raw rows, open and resolved conflicts, and a vector whose memory is gone.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -21,6 +22,9 @@ import {
   resolveConflictKeeping,
   saveStoredVectors,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const HOUR = 60 * 60 * 1000;
@@ -81,10 +85,12 @@ async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
 const contents = (outcome: Outcome<MemoryEntry[]>): string[] =>
   'value' in outcome ? outcome.value.map((e) => e.content) : [];
 
-beforeAll(() => {
-  fixture = seedTwoTenants();
-  seed(fixture.dir);
-});
+beforeAll(() =>
+  withSharedStoreHandles(() => {
+    fixture = seedTwoTenants();
+    seed(fixture.dir);
+  }),
+);
 
 afterAll(() => rmSync(fixture.dir, { recursive: true, force: true }));
 

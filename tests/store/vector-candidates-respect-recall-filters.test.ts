@@ -9,6 +9,9 @@ import {
 } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, loadVectorCandidateEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const QUERY = [1, 0, 0];
 let root: string;

@@ -1,12 +1,14 @@
 // Pins stdout, stderr and exit code of every brief, note, policy, process and skill verb, run through runCli on a
 // real store, so one shared handler set cannot change a byte unseen. Memory ids and timestamps are masked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 interface KindRow {
   readonly cmd: string;
@@ -82,7 +84,7 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));

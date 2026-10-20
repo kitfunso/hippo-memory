@@ -2,7 +2,7 @@
 // Ids are random per seed, so rows are named by label.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
@@ -21,6 +21,9 @@ import {
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -191,7 +194,7 @@ describe('MCP hippo_recall ranking', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', undefined);
     vi.stubEnv('OPENAI_API_KEY', undefined);
     vi.unstubAllGlobals();
-    for (const h of homes.splice(0)) rmSync(h, { recursive: true, force: true });
+    for (const h of homes.splice(0)) removeAfterRequest(h);
   });
 
   it('default hybrid mode, default budget', async () => {

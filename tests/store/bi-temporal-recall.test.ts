@@ -5,6 +5,9 @@ import { markRetrieved } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 async function hippo(home: string, globalHome: string, ...args: string[]): Promise<string> {
   return (await runCliOut(args, { cwd: home, env: { ...process.env, HIPPO_HOME: globalHome } })).trim();

@@ -5,6 +5,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { layerDir, writeMarkdownMirror } from '../../src/store/sqlite/mirrors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, writeEntry, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 

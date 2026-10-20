@@ -16,7 +16,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve } from '../../src/api/index.js';
@@ -29,14 +28,9 @@ import { compareEntryIdentity, type EntryIdentity } from '../../src/base/rank/co
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
 
 // ---------------------------------------------------------------------------
 // api.ts:833 — DAG-substitution ordering (overflow-child count desc)
@@ -71,7 +65,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
   beforeEach(() => {
     root = makeRoot('dag-tiebreak');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', async () => {
     // Every leaf under both topics tokenizes to the SAME 4-term bag ("alpha
@@ -228,7 +222,7 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
   beforeEach(() => {
     home = makeRoot('hop-tiebreak');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('primary wins (hop distance) and the tail decides same-hop ties', async () => {
     // a (origin, base seed) --1hop--> b, c (tied score: same origin+hop under

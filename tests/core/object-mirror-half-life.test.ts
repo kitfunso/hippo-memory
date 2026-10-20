@@ -1,7 +1,6 @@
 // A typed object's mirror memory is stored as it was before the Objects store group took the save: on the flat half-life until the typed
 // migration has run and on the configured default after, with the strength the decay function gives the stored row.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { loadConfig } from '../../src/base/config/config.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -21,6 +20,9 @@ import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const FROZEN = new Date('2026-03-01T12:00:00.000Z');
 const TENANT = 'acme';
@@ -31,7 +33,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  for (const root of roots.splice(0)) removeAfterRequest(root);
 });
 
 /** A fresh store has the typed migration marked done; `migrated: false` takes the mark away, as a store made before the migration has it. */

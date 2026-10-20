@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -19,6 +18,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { pushGoal } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 type HippoRecallToolArgs = {
   query: string;
@@ -62,7 +64,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
     home = makeRoot('mcp-goal-boost');
   });
 
-  afterEach(() => rmSync(home, { recursive: true, force: true }));
+  afterEach(() => removeAfterRequest(home));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
     const ctx: McpContext = {

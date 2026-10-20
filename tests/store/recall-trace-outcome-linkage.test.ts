@@ -13,7 +13,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
-import { rmSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   openHippoDb,
@@ -29,6 +29,9 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 /** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
@@ -48,7 +51,7 @@ type RecallTraceOutcomeRow = { outcome: string; memory_ids_json: string };
 
 function tmpHome() {
   const home = makeRoot('recall-trace-outcome');
-  return { home, restore: () => rmSync(home, { recursive: true, force: true }) };
+  return { home, restore: () => removeAfterRequest(home) };
 }
 
 describe('outcome linkage E2E (CLI recall -> outcome)', () => {

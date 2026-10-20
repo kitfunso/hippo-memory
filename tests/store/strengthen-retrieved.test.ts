@@ -1,10 +1,13 @@
 // Recall strengthening updates the live row's four retrieval columns, never a stale copy.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const roots: string[] = [];
 
@@ -16,7 +19,7 @@ function newRoot(): string {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 describe('strengthenRetrieved', () => {

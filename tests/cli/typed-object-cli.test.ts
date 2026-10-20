@@ -1,10 +1,12 @@
 // The `hippo note|incident|policy|process|brief|skill` verbs, run in process through runCli on a real store. The codex
 // P2 regressions (a create keyword stored as the name, a lenient parseInt on a mutating verb) run once per noun.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 interface Noun {
   readonly noun: string;
@@ -116,7 +118,7 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(env.cwd, { recursive: true, force: true });
+  removeAfterRequest(env.cwd);
 });
 
 const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));

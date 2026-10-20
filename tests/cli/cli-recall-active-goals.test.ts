@@ -2,13 +2,15 @@
 // in HIPPO_SESSION_ID or --session-id, capped at MAX_FINAL_MULTIPLIER (3.0x); an explicit --goal wins over the stack.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { pushGoal, completeGoal } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const savedCwd = process.cwd();
 
@@ -50,7 +52,7 @@ describe('cli recall + active goal stack', () => {
   afterEach(() => {
     process.chdir(savedCwd);
     vi.unstubAllEnvs();
-    rmSync(env.cwd, { recursive: true, force: true });
+    removeAfterRequest(env.cwd);
   });
 
   it('without active goals (no HIPPO_SESSION_ID), top-3 unchanged from baseline', async () => {

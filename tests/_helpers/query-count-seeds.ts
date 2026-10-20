@@ -10,6 +10,7 @@ import { adminActor } from '../../src/api/types.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { writeEntriesTogether } from './root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { removeAfterRequest } from './one-request-per-test.js';
 
 export const SIZES = [10, 200] as const;
 export const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -21,7 +22,7 @@ const roots: string[] = [];
 export function useQueryCountRoots(): void {
   afterEach(() => {
     vi.unstubAllEnvs();
-    for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+    for (const dir of roots.splice(0)) removeAfterRequest(dir);
   });
 }
 

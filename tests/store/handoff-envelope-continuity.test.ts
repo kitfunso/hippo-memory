@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { contextGet, adminActor } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   closeTaskSnapshotsForSession,
   loadLatestHandoff,
@@ -16,6 +17,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 
 let root: string;
 
+oneRequestPerTest();
 beforeEach(() => {
   root = makeRoot('w1-handoff', { init: false });
 });

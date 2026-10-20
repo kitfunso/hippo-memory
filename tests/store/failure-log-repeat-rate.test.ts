@@ -19,6 +19,9 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { FailureOutcome } from '../../src/store/port/failure-log.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 

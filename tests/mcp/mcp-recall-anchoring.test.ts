@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -21,6 +20,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { createCallerState } from '../../src/api/callers.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -79,7 +81,7 @@ describe('mcp hippo_recall anchoringHint', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
     vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
 

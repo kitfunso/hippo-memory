@@ -1,6 +1,5 @@
 // Past the cap, loadContextCandidates reads the v60 decay-key subset and must return the rows the full-tenant rank would.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../../src/db/decay-key.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
@@ -11,6 +10,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadContextCandidates } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -112,7 +114,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
-  rmSync(home, { recursive: true, force: true });
+  removeAfterRequest(home);
 });
 
 // Ten-day half-life rows, aged in half-lives: a boosted row the unscaled key would leave out must still outrank a plain one.

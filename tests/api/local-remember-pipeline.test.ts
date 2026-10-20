@@ -17,6 +17,9 @@ import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed
 import { makeRoot, type MakeRootOptions } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries, readEntry, writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const TEXT = 'the billing service retries a failed charge three times';
 const SALIENCE_ON = { salience: { enabled: true } };

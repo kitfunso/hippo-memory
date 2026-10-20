@@ -1,7 +1,7 @@
 // Pins `hippo eval` stdout, stderr and exit code across corpus, compare, bootstrap and suite modes, in process,
 // so a split of cmdEval that changes a byte or an exit path fails here. Timings and timestamps are masked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { PACKAGE_VERSION } from '../../src/base/util/version.js';
@@ -10,6 +10,9 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root = '';
 let store = '';
@@ -31,7 +34,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 function mask(text: string): string {

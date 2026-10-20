@@ -2,10 +2,13 @@
 // try/catch, so a sleep rejection became an unhandled promise rejection
 // that could crash the process before capture/close ran.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function withScratchEnv(dir: string) {
   return { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
@@ -15,7 +18,7 @@ let dir: string;
 
 afterEach(() => {
   try {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    removeAfterRequest(dir);
   } catch {
     // best-effort cleanup only
   }

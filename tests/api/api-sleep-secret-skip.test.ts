@@ -16,6 +16,9 @@ import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // Same secret shape tests/util/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.

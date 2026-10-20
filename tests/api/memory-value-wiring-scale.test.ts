@@ -14,6 +14,7 @@ import {
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   dir,
   useMemoryValueScratch,
@@ -305,6 +306,8 @@ function parseRemovedIds(details: string[]): Set<string> {
 // (i) dry-run parity
 // ---------------------------------------------------------------------------
 describe('(i) dry-run parity', () => {
+  // The (h) seed is bound by mirror-file writes, which one shared handle does not change.
+  oneRequestPerTest();
   it('dry-run preview decisions match a real run on a cloned store', async () => {
     const dirDry = makeRoot('case');
     const dirReal = makeRoot('case');

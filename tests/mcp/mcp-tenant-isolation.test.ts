@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -11,6 +10,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
@@ -48,8 +50,8 @@ describe('mcp tenant + client-key isolation', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    removeAfterRequest(home);
+    removeAfterRequest(globalHome);
   });
 
   // ---- Test 1: last-shown list keyed by clientKey --------------------------

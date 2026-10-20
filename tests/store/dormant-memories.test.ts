@@ -46,6 +46,8 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+oneRequestPerTest();
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };
@@ -781,8 +783,7 @@ describe('hippo dormant CLI', () => {
     expect((await runCli(workspace, 'dormant')).out).toContain('No dormant memories');
     expect((await runCli(workspace, 'dormant', 'restore', drop.id)).status).not.toBe(0);
 
-    // `hippo forget` on a dormant id points at the dormant command instead
-    // of a bare "not found".
+    // `hippo forget` on a dormant id points at the dormant command instead of a bare "not found".
     writeEntry(
       hippoRoot,
       aged(

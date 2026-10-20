@@ -16,6 +16,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha',
   'database-migration-rollback-procedure',

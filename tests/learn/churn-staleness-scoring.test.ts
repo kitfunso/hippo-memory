@@ -15,6 +15,9 @@ import * as api from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // ---------------------------------------------------------------------------
 // api.outcome(): a good outcome clears the churn-stale tag
@@ -28,7 +31,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    removeAfterRequest(hippoRoot);
   });
 
   it('drops the churn-stale tag on good=true', async () => {
@@ -147,7 +150,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
       expect(results[1].breakdown!.churnStaleMultiplier).toBe(STALE_FACTOR);
     } finally {
-      fs.rmSync(hippoRoot, { recursive: true, force: true });
+      removeAfterRequest(hippoRoot);
     }
   });
 
@@ -185,7 +188,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       expect(staleScore).toBeCloseTo(STALE_FACTOR, 5);
       expect(results[0].entry.id).toBe(plain.id);
     } finally {
-      fs.rmSync(hippoRoot, { recursive: true, force: true });
+      removeAfterRequest(hippoRoot);
     }
   });
 
@@ -230,7 +233,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       expect(ids).toHaveLength(3);
       expect(ids[0]).not.toBe(stale.id);
     } finally {
-      fs.rmSync(hippoRoot, { recursive: true, force: true });
+      removeAfterRequest(hippoRoot);
     }
   });
 
@@ -256,7 +259,7 @@ describe('config.churnStaleness', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    removeAfterRequest(hippoRoot);
   });
 
   it('defaults to disabled', () => {

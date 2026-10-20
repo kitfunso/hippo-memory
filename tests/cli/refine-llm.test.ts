@@ -2,17 +2,19 @@ import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } fr
 import { refineStore } from '../../src/surface/cli/refine-llm.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import * as fs from 'fs';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { refineOne } from '../_helpers/refine-one.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function tmpStore(): string {
   const dir = makeRoot('refine');
   return dir;
 }
 function cleanup(dir: string): void {
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeAfterRequest(dir);
 }
 
 /** A fetch stub that returns a canned Claude-shaped JSON response. */

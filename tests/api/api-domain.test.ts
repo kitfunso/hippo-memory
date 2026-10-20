@@ -20,6 +20,9 @@ import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;

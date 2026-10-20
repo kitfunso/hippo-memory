@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { type ImportOptions } from '../../src/surface/importers/core.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { removeAfterRequest } from './one-request-per-test.js';
 
 export let tmpDir: string; // hippo root (the store)
 export let vaultDir: string; // a scratch vault folder we mutate per-test
@@ -20,7 +21,7 @@ export function useVaultImport() {
   });
 
   afterEach(() => {
-    fs.rmSync(vaultDir, { recursive: true, force: true });
+    removeAfterRequest(vaultDir);
   });
 }
 

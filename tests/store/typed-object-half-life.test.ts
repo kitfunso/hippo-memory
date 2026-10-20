@@ -18,10 +18,13 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const dirs: string[] = [];
 afterEach(() => {
-  while (dirs.length) fs.rmSync(dirs.pop()!, { recursive: true, force: true });
+  while (dirs.length) removeAfterRequest(dirs.pop()!);
 });
 function store(config: Partial<HippoConfig> | undefined): string {
   const root = path.join(makeRoot('typed-hl', { init: false }), '.hippo');

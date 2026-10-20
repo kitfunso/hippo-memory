@@ -14,6 +14,9 @@ import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let s: Scratch;
 

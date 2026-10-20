@@ -26,6 +26,9 @@ import {
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 type Call = GroupCall<'contextReads', unknown>;
 type Named = readonly [string, Call];

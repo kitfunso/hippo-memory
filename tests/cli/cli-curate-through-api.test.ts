@@ -1,7 +1,6 @@
 // `hippo reject` and `hippo invalidate` reach the trust and learn flows through src/api, as HTTP and MCP do.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { adminActor, ForbiddenError, memoryInvalidate, rejectOnHost, remember } from '../../src/api/index.js';
 import { handleInvalidate, handleReject } from '../../src/surface/cli/curate.js';
 import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
@@ -10,6 +9,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 const cli = (tenantId = 'default'): FullContext => apiCtx(root, tenantId, adminActor('cli'));
@@ -17,7 +19,7 @@ const cli = (tenantId = 'default'): FullContext => apiCtx(root, tenantId, adminA
 beforeEach(() => {
   root = makeRoot('cli-curate-api', { config: { embeddings: { enabled: false } } });
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => removeAfterRequest(root));
 
 describe('the CLI curate verbs go through src/api', () => {
   it('hippo reject writes the tombstone under the api actor and removes the row', async () => {

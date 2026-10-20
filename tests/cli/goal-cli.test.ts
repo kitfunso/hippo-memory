@@ -1,10 +1,12 @@
 // `hippo goal push|list|complete|suspend|resume` and its flag errors, run in process through runCli on a real
 // store with an isolated HIPPO_HOME, so dev memories don't leak in.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const savedCwd = process.cwd();
 let env: TestEnv;
@@ -22,7 +24,7 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(env.cwd, { recursive: true, force: true });
+  removeAfterRequest(env.cwd);
 });
 
 const goal = (...args: string[]): Promise<InProcessResult> =>

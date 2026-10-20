@@ -4,7 +4,7 @@ import { cpSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, getMeta, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
@@ -26,6 +26,9 @@ import {
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/store/local/index.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
@@ -148,27 +151,32 @@ beforeAll(async () => {
   partly = join(home, 'partly');
   initTestStore(partly);
   const rows = Array.from({ length: ROWS }, (_, i) => row(i));
-  rows.forEach((entry, i) => {
-    if (!isLate(i)) writeEntry(partly, entry);
-  });
-  await embedAll(localIndex(partly), undefined, fake('fake-old'));
-  rows.forEach((entry, i) => {
-    if (isLate(i)) writeEntry(partly, entry);
+  // Each request ends before its store is copied, so the copy carries no write-ahead log.
+  await withSharedStoreHandles(async () => {
+    rows.forEach((entry, i) => {
+      if (!isLate(i)) writeEntry(partly, entry);
+    });
+    await embedAll(localIndex(partly), undefined, fake('fake-old'));
+    rows.forEach((entry, i) => {
+      if (isLate(i)) writeEntry(partly, entry);
+    });
   });
 
   indexedOld = copyOf(partly);
-  await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
-  const db = openHippoDb(indexedOld);
-  try {
-    savePhysicsState(
-      db,
-      loadEveryTenantEntries(indexedOld).map((e) =>
-        initializeParticle(e, fakeVector('fake-old', e), {}, new Date(SEEDED_AT)),
-      ),
-    );
-  } finally {
-    closeHippoDb(db);
-  }
+  await withSharedStoreHandles(async () => {
+    await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
+    const db = openHippoDb(indexedOld);
+    try {
+      savePhysicsState(
+        db,
+        loadEveryTenantEntries(indexedOld).map((e) =>
+          initializeParticle(e, fakeVector('fake-old', e), {}, new Date(SEEDED_AT)),
+        ),
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+  });
 }, 120_000);
 
 afterAll(async () => {

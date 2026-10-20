@@ -14,6 +14,9 @@ import {
   wmPush,
   wmRead,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const TENANT = 'default';
 const PRIVATE_TEXT = 'private-tag-text';

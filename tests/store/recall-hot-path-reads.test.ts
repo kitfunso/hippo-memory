@@ -23,12 +23,15 @@ import {
   updateStats,
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const roots: string[] = [];
 
 afterEach(() => {
   vi.useRealTimers();
-  for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of roots.splice(0)) removeAfterRequest(dir);
 });
 
 function freshRoot(label: string): string {

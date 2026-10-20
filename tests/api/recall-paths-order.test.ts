@@ -1,7 +1,6 @@
 // What each recall path of retrieve() returns and writes over one fixed store: the ids in order, the audit rows, the
 // strengthened ids, the trace and last_retrieval_ids, pinned so folding the paths into one ranker cannot move any of it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { adminActor, type RecallResult } from '../../src/api/index.js';
 import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
@@ -17,6 +16,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
 import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
 import type { AppendAuditOpts, AuditEvent } from '../../src/store/port/types.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const ROWS = [
   seeded('deploy pipeline uses blue green rollout', 'mem_o_a', '2026-01-28T00:00:00.000Z'),
@@ -124,7 +126,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 describe('retrieve paths: order and writes', () => {

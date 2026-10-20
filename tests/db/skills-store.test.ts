@@ -11,20 +11,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { saveSkill, closeSkill, loadSkills, skillsMarkdown } from '../../src/domain/objects/skills.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
 
 function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
   // SAFETY: every call site below passes a SELECT whose column list is
@@ -50,7 +44,7 @@ describe('skills store (executable/exportable first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('skills');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', async () => {
     const s = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

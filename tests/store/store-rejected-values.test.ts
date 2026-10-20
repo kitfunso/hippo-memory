@@ -11,6 +11,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 // Another person's personal scope, which a rejection with no personal scope of its own leaves alone.

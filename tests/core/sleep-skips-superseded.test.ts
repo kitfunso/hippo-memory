@@ -1,7 +1,6 @@
 // Sleep never builds a new memory from a superseded one, so an old claim cannot come back as a current row.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
@@ -9,6 +8,9 @@ import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadChildrenOfSummary, loadAllL2Summaries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const DAY = 86_400_000;
 const roots: string[] = [];
@@ -25,7 +27,7 @@ const ctxFor = (hippoRoot: string): FullContext =>
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 describe('sleep skips superseded rows', () => {

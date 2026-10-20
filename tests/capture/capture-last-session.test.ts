@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { summariseTranscript, resolveLastSessionTranscript } from '../../src/surface/capture/transcript.js';
 import { trySymlink } from '../_helpers/symlink.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -18,7 +21,7 @@ function withTmpDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-capture-test-'));
   return {
     dir,
-    cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
+    cleanup: () => removeAfterRequest(dir),
   };
 }
 

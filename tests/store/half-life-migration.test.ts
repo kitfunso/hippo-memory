@@ -20,6 +20,7 @@ import {
 import { migrateDefaultHalfLife } from '../../src/domain/consolidate/half-life-migration.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { consolidate } from '../../src/index.js';
 import { saveDecision, closeDecision } from '../../src/domain/objects/decisions.js';
 import { openIncident, resolveOpenIncident } from '../../src/domain/objects/incidents.js';
@@ -62,30 +63,35 @@ function unrecord(root: string, ...keys: string[]): void {
     closeHippoDb(db);
   }
 }
-/** A store as a pre-1.46 hippo left it: memories on the 7-day base and no recorded base. */
+/** A store as a pre-1.46 hippo left it: memories on the 7-day base and no recorded base. Seeded on one connection that
+ *  closes before the test opens the store, as the old hippo's process would have. */
 function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
-  const root = store();
-  for (const e of entries) writeEntry(root, e);
-  unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
-  return root;
+  return withRequestStoresSync(() => {
+    const root = store();
+    for (const e of entries) writeEntry(root, e);
+    unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
+    return root;
+  });
 }
 /** A legacy store of `n` copies of one 7-day memory, made in SQL so the setup stays fast. */
 function bulkLegacyStore(n: number): string {
-  const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
-  const db = openHippoDb(root);
-  try {
-    // SAFETY: pragma_table_info yields one row per column with its name.
-    const columns = (
-      db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]
-    ).map((c) => c.name);
-    db.prepare(`
-      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
-      INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
-    `).run(n - 1);
-  } finally {
-    closeHippoDb(db);
-  }
-  return root;
+  return withRequestStoresSync(() => {
+    const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: pragma_table_info yields one row per column with its name.
+      const columns = (
+        db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]
+      ).map((c) => c.name);
+      db.prepare(`
+        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+        INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
+      `).run(n - 1);
+    } finally {
+      closeHippoDb(db);
+    }
+    return root;
+  });
 }
 const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });

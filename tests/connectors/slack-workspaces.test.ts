@@ -9,6 +9,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { addWorkspace, listWorkspaces, removeWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 describe('slack workspaces helper', () => {
   let hippoRoot: string;

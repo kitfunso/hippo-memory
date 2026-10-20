@@ -15,7 +15,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
@@ -31,18 +30,14 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // The module's own summary and headline caps, pinned here so a change to either shows up as a test edit.
 const MAX_BRIEF_SUMMARY_LEN = 8192;
 const MAX_RECEIPT_HEADLINE_LEN = 200;
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
 /** The repo's newest active brief, read the way refreshBrief reads it. */
 async function activeBrief(home: string, tenantId: string, repo: string) {
   return (await loadProjectBriefs(objectsAt(home), tenantId, { status: 'active', repo, limit: 1 }))[0] ?? null;
@@ -84,7 +79,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   beforeEach(() => {
     home = makeRoot('project-briefs');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
     const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

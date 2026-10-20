@@ -1,7 +1,6 @@
 // The ambient summary describes the whole visible store, not the rows a query or the no-query cap happened to load.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -20,6 +19,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root = '';
 let store = '';
@@ -37,7 +39,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 describe('ambient summary over the whole store', () => {

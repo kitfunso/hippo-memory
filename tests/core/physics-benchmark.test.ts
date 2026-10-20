@@ -12,12 +12,15 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { computeSystemEnergy, simulate, type ForceContext } from '../../src/base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // ---------------------------------------------------------------------------
 // Synthetic embedding generator
@@ -90,7 +93,7 @@ function seed(
   return withLabel;
 }
 
-beforeAll(() => {
+function seedCorpus(): void {
   tmpDir = makeRoot('physics-bench');
 
   // ── FRED cluster (3 tightly clustered memories) ──────────────────────
@@ -320,7 +323,9 @@ beforeAll(() => {
   } finally {
     closeHippoDb(db);
   }
-});
+}
+
+beforeAll(() => withSharedStoreHandles(seedCorpus));
 
 // ---------------------------------------------------------------------------
 // Metric helpers
@@ -519,10 +524,12 @@ describe('Physics vs Classic A/B Benchmark', () => {
   // Scored once, in a fixed order, before the stability test resets physics state, so no test order can move a total.
   let standard: QueryScore[] = [];
   let cluster: QueryScore[] = [];
-  beforeAll(async () => {
-    standard = await scoreQueries(STANDARD_QUERIES);
-    cluster = await scoreQueries(CLUSTER_QUERIES);
-  });
+  beforeAll(() =>
+    withSharedStoreHandles(async () => {
+      standard = await scoreQueries(STANDARD_QUERIES);
+      cluster = await scoreQueries(CLUSTER_QUERIES);
+    }),
+  );
 
   describe('Standard queries', () => {
     STANDARD_QUERIES.forEach((tc, i) => {

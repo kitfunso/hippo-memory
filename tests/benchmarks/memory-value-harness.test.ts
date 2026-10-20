@@ -62,10 +62,14 @@ import {
   clearAblationEnv,
   QUESTIONS,
   QUESTION_C,
+  benchmarkStores,
   cleanupScratch,
   runPipeline,
   TEST_SIM_ROUNDS,
 } from './memory-value-fixtures.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest(benchmarkStores);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -267,7 +271,7 @@ describe('memory-value harness (real stores)', () => {
     }
 
     const run1 = await runOnceAndScore();
-    cleanupScratch();
+    for (const q of QUESTIONS) removeAfterRequest(questionDir(q.question_id), benchmarkStores);
     const run2 = await runOnceAndScore();
 
     expect(run2.rowCounts).toEqual(run1.rowCounts);
@@ -323,7 +327,7 @@ describe('causal clock clamp', () => {
       expect(s0Rows.length).toBe(3);
       for (const row of s0Rows) expect(row.features.age_days).toBe(10);
     } finally {
-      fs.rmSync(questionDir(QUESTION_C.question_id), { recursive: true, force: true });
+      removeAfterRequest(questionDir(QUESTION_C.question_id), benchmarkStores);
     }
   });
 });
@@ -361,7 +365,7 @@ describe('--skip-simulate variance-gate exemption', () => {
       expect(CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE).toBe(3);
       expect(skipSimulateGate.passed).toBe(true);
     } finally {
-      for (const q of QUESTIONS) fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
+      for (const q of QUESTIONS) removeAfterRequest(questionDir(q.question_id), benchmarkStores);
     }
   });
 });

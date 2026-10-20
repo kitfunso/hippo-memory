@@ -1,6 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { randomBytes, scryptSync } from 'node:crypto';
-import { rmSync } from 'node:fs';
 import { insertApiKey } from '../../src/store/sqlite/auth.js';
 import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
@@ -8,6 +7,9 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 describe('api key scrypt parameters', () => {
   let root: string;
@@ -20,7 +22,7 @@ describe('api key scrypt parameters', () => {
   });
   afterEach(() => {
     closeHippoDb(db);
-    rmSync(root, { recursive: true, force: true });
+    removeAfterRequest(root);
   });
 
   function seed(keyHash: string, keyId: string): void {

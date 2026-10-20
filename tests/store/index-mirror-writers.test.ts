@@ -6,6 +6,9 @@ import { rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, loadLastRecall, saveIndex, writeEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 const indexPath = (): string => path.join(root, 'index.json');

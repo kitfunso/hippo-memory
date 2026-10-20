@@ -18,19 +18,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { computePredictionBaserate, closePrediction } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 function countPredictBaserateAudits(root: string): number {
   const db = openHippoDb(root);
   try {
@@ -48,7 +43,7 @@ describe('computePredictionBaserate emitAudit flag', () => {
   beforeEach(() => {
     root = makeRoot('emitaudit');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('default emitAudit=true on n=0 path: emits exactly one predict_baserate audit', () => {
     expect(countPredictBaserateAudits(root)).toBe(0);

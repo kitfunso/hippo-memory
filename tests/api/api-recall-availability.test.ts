@@ -15,25 +15,20 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memory/memory.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 }
@@ -82,7 +77,7 @@ describe('api.recall availabilityHint', () => {
     vi.stubEnv('HIPPO_AVAILABILITY', undefined);
   });
   afterEach(() => {
-    safeRmSync(root);
+    removeAfterRequest(root);
     vi.stubEnv('HIPPO_AVAILABILITY', undefined);
   });
 

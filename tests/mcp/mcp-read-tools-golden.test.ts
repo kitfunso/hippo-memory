@@ -18,6 +18,9 @@ import {
   type Store,
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 type ToolArgs = Record<string, string | number | boolean>;
 
@@ -45,7 +48,7 @@ async function onFreshStore(run: (s: Store) => Promise<string[]>): Promise<strin
   try {
     return normalize(await run(s), s);
   } finally {
-    rmSync(s.home, { recursive: true, force: true });
+    removeAfterRequest(s.home);
   }
 }
 
