@@ -22,7 +22,6 @@ export const v39: Migration = {
       // Provenance-source evidence first (shared:<project>: / promoted:<localRoot>, parsed by the markdown-import
       // stamp's helper), then the store's own location for everything else.
       const homeName = path.basename(os.homedir()).toLowerCase();
-      // SAFETY: sourcedRows' shape matches the two columns (id, source) named in the SELECT above.
       const sourcedRows = db
         .prepare(
           `SELECT id, source FROM memories WHERE origin_project IS NULL ` +

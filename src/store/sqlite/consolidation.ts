@@ -71,8 +71,6 @@ import type { AppendAuditOpts } from '../port/types.js';
  * SQL-level filter, since in-memory `survivors` lacks L2s created by phase 1.7. Entries carry tenantId so per-cluster
  * writes stay tenant-scoped. */
 function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
-  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
-  // MemoryRow's field set.
   const rows = db
     .prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
@@ -91,8 +89,6 @@ function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
  * when omitted) so HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later
  * writes stay tenant-scoped. */
 function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit?: number): MemoryEntry[] {
-  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
-  // MemoryRow's field set.
   const rows = db
     .prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
@@ -110,8 +106,6 @@ function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit?: number): MemoryEn
  * defence in depth. */
 function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string, tenantId: string): MemoryEntry[] {
   assertTenantId('loadChildrenOfSummary', tenantId);
-  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
-  // MemoryRow's field set.
   const rows = db
     .prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
@@ -142,7 +136,6 @@ function childrenOfSummariesAt(
   const out = new Map<string, MemoryEntry[]>();
   for (const [tenantId, ids] of byTenant) {
     for (const slice of chunked(ids)) {
-      // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
       const rows = db
         .prepare(`
         SELECT ${MEMORY_SELECT_COLUMNS}
@@ -312,7 +305,6 @@ function clearSummaryDirtyAfterBuildAt(
 ): void {
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
   // RETURNING dag_level reads the actual level so audit metadata stays accurate without an extra SELECT.
-  // SAFETY: result's shape matches the single `dag_level` column returned below.
   const result = db
     .prepare(`
     UPDATE memories

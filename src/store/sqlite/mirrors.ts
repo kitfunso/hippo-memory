@@ -16,6 +16,7 @@ import {
   MEMORY_SELECT_COLUMNS,
   type MemoryRow,
   rowToEntry,
+  MEMORY_CONFLICT_COLUMNS,
   type MemoryConflictRow,
   rowToMemoryConflict,
 } from './rows.js';
@@ -321,7 +322,6 @@ export function purgeMirrorBestEffortIn(files: StoreFiles, id: string, isRaw: bo
 
 /** Derive the current `HippoIndex` from SQLite. Exported for the longmemeval benchmark. */
 export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
-  // SAFETY: rows' shape matches the seven columns named in the SELECT below.
   const rows = db
     .prepare(
       `SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ` +
@@ -361,7 +361,7 @@ export function readLastRecall(
   db: ReturnType<typeof openHippoDb>,
 ): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
   // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent saveIndex and return a
-  // mismatched pair. SAFETY: lockstepRows' shape matches the key/value columns named above.
+  // mismatched pair.
   const lockstepRows = db
     .prepare(`SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`)
     .all() as Array<{ key: string; value: string }>;
@@ -377,7 +377,6 @@ export function readLastRecall(
 }
 
 export function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStats {
-  // SAFETY: runs' shape matches the four columns named in the SELECT below.
   const runs = db
     .prepare(`
     SELECT timestamp, decayed, merged, removed FROM (
@@ -515,13 +514,11 @@ const MIRROR_PAGE_ROWS = 500;
 /** Pages through every row by rowid: each file is independent of the others, so row order does not reach the output,
  * and rowid keeps each page a seek (no index covers `created, id`). */
 function* pagedMemoryRows(db: ReturnType<typeof openHippoDb>): Generator<MemoryEntry> {
-  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS beside the rowid, matching MemoryRow's field set.
   const page = db.prepare(
     `SELECT rowid AS page_rowid, ${MEMORY_SELECT_COLUMNS} FROM memories WHERE rowid > ? ORDER BY rowid LIMIT ?`,
   );
   let after = 0;
   for (;;) {
-    // SAFETY: the SELECT above names page_rowid plus exactly MEMORY_SELECT_COLUMNS.
     const rows = page.all(after, MIRROR_PAGE_ROWS) as Array<MemoryRow & { page_rowid: number }>;
     if (rows.length === 0) return;
     after = rows[rows.length - 1]!.page_rowid;
@@ -546,11 +543,10 @@ export function syncChangedMirrors(
 
 /** The conflict and stats mirrors, which a full sync and a partial one refresh alike. */
 function syncSideMirrors(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
-  // SAFETY: conflicts' shape matches the eight columns named in the SELECT above.
   const conflicts = db
     .prepare(
       `
-    SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+    SELECT ${MEMORY_CONFLICT_COLUMNS}
     FROM memory_conflicts
     WHERE status = 'open'
     ORDER BY updated_at DESC, id DESC

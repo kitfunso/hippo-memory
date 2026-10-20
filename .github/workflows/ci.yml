@@ -80,6 +80,8 @@ jobs:
         run: node scripts/check-process-exit.mjs
       - name: Every promise call in src awaited or handled
         run: node scripts/check-floating-promises.mjs
+      - name: Every SQLite row cast in src proven by its SELECT
+        run: node scripts/check-row-casts.mjs
       - name: Every api write call in src and tests awaited or returned
         run: node scripts/check-floating-api.mjs
       - name: Store-port ratchet

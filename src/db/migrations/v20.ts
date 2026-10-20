@@ -8,7 +8,6 @@ export const v20: Migration = {
     // GDPR Path A backfill: redact every existing raw_archive.payload_json to the metadata-only shape
     // (store/raw-archive.ts); unparseable legacy JSON gets tenant_id='unknown', kind='unknown'. The audit_log remains
     // the compliance record.
-    // SAFETY: rows' shape matches the four columns named in the SELECT above.
     const rows = db.prepare(`SELECT id, archived_at, reason, payload_json FROM raw_archive`).all() as Array<{
       id: number;
       archived_at: string;

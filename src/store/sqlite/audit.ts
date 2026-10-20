@@ -66,7 +66,6 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions):
   const after = keysetAfter('ts', 'id', opts.after);
   // One past the cap: GET /v1/audit reads a row ahead to tell whether another page exists.
   const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT + 1));
-  // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(
       `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC ` +
@@ -92,7 +91,6 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
     params.push(opts.tenantId);
   }
   const limit = Math.max(1, Math.min(opts.limit ?? 1000, MAX_AUDIT_LIMIT));
-  // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(`SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT ?`)
     .all(...params, limit) as AuditRow[];
@@ -101,8 +99,7 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
 
 /** How many of a tenant's audit rows are older than `cutoff`. */
 function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
-  // SAFETY: row comes from `SELECT COUNT(*) AS c`; COUNT(*) always yields exactly one row with a numeric `c` column
-  // (number or bigint depending on the node:sqlite driver's integer handling).
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = db
     .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
     .get(tenantId, cutoff) as { c: number | bigint };
@@ -118,7 +115,6 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
 /** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike queryAuditEvents it has
  * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
 export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
-  // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
   const rows = db
     .prepare(
       `SELECT target_id, MAX(ts) AS ts FROM audit_log
@@ -132,6 +128,7 @@ export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string, 
 
 const AUDIT_COLUMNS = 'id, ts, tenant_id, actor, op, target_id, metadata_json';
 
+// SAFETY: every read cast to this row selects AUDIT_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface AuditRow {
   id: number;
   ts: string;

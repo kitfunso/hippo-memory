@@ -5,6 +5,7 @@ import { scopeAdmitSql } from './rule-sql.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
+// SAFETY: every read cast to this row selects COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface CompactionRow {
   tenant_id: string;
   id: string;
@@ -22,6 +23,7 @@ export interface CompactionRow {
   status: CompactionStatus;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface HeldMemoryRow {
   id: string;
   source_session_id: string | null;
@@ -57,7 +59,6 @@ const COLUMNS =
   'items_json, items_written, status';
 
 function selectRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
-  // SAFETY: the SELECT names exactly COLUMNS, matching CompactionRow's field set.
   return db.prepare(`SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
 }
 
@@ -223,7 +224,6 @@ export function nextCompactionStart(
 /** Live rows of one tenant and origin set that default recall shows. */
 export function heldMemoryRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): HeldMemoryRow[] {
   const deny = scopeAdmitSql('');
-  // SAFETY: the SELECT names the id, source_session_id and content columns.
   return db
     .prepare(
       `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND ` +
@@ -245,7 +245,6 @@ export function compactionTranscripts(
   db: DatabaseSyncLike,
   tenantId: string,
 ): Array<{ transcript: string; cwd: string | null }> {
-  // SAFETY: the SELECT names the two columns of the row type.
   return db
     .prepare(
       `SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path ` +
@@ -258,7 +257,6 @@ export function compactionOriginsWithCwd(
   db: DatabaseSyncLike,
   tenantId: string,
 ): Array<{ origin: string; cwd: string }> {
-  // SAFETY: the SELECT names the two columns of the row type.
   return db
     .prepare(
       `SELECT DISTINCT origin_project AS origin, cwd FROM compactions WHERE tenant_id = ? AND origin_project <> '' ` +

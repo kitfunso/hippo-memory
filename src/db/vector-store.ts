@@ -91,6 +91,7 @@ export function replaceVectorsWithStaged(db: DatabaseSyncLike, model: string): v
   });
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface VectorCounts {
   readonly vectors: number;
   /** Vectors whose memory row still exists. */
@@ -98,7 +99,7 @@ export interface VectorCounts {
 }
 
 export function countVectors(db: DatabaseSyncLike): VectorCounts {
-  // SAFETY: the SELECT names exactly the two counts read.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = db
     .prepare(
       'SELECT COUNT(*) AS vectors, ' +
@@ -116,20 +117,22 @@ export function deleteOrphanVectors(db: DatabaseSyncLike): number {
   );
 }
 
+// SAFETY: every read cast to this row selects all its keys, and node:sqlite returns BLOBs as Uint8Array.
+type StoredVectorRow = { memory_id: string; vector: Uint8Array };
+
 // One read behind the copied and the viewed shape, so the two can never return different rows.
 function eachStoredVector(
   db: DatabaseSyncLike,
   ids: readonly string[] | undefined,
   take: (id: string, vector: Float32Array) => void,
 ): void {
-  const read = (rows: Iterable<unknown>): void => {
-    // SAFETY: both SELECTs below name exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
-    for (const row of rows as Iterable<{ memory_id: string; vector: Uint8Array }>) {
+  const read = (rows: Iterable<StoredVectorRow>): void => {
+    for (const row of rows) {
       take(row.memory_id, decodeVector(row.vector));
     }
   };
   if (ids === undefined) {
-    read(db.prepare('SELECT memory_id, vector FROM memory_vectors').iterate());
+    read(db.prepare('SELECT memory_id, vector FROM memory_vectors').iterate() as Iterable<StoredVectorRow>);
     return;
   }
   const unique = [...new Set(ids)];
@@ -137,7 +140,7 @@ function eachStoredVector(
     read(
       db
         .prepare(`SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${placeholders(chunk.length)})`)
-        .all(...chunk),
+        .all(...chunk) as StoredVectorRow[],
     );
   }
 }
@@ -157,7 +160,6 @@ export function loadVectorViews(db: DatabaseSyncLike, ids: readonly string[]): M
 }
 
 export function storedVectorIds(db: DatabaseSyncLike): Set<string> {
-  // SAFETY: the SELECT names exactly the one column read.
   return new Set(
     (db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map((r) => r.memory_id),
   );
@@ -165,7 +167,6 @@ export function storedVectorIds(db: DatabaseSyncLike): Set<string> {
 
 /** Float count of the first stored row, from its blob length; the vector is never read. */
 export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
-  // SAFETY: the SELECT names exactly the one column read.
   const row = db.prepare('SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as
     | { bytes: number }
     | undefined;
@@ -284,7 +285,7 @@ export async function topVectorMatches(db: DatabaseSyncLike, options: TopVectorM
   // sleep child live too short a time to build one, so they score every admitted vector, a chunk per event-loop turn.
   const proposed = index?.matches(db, query, k, where, params);
   if (proposed !== undefined) return proposed;
-  // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
+  // SAFETY: node:sqlite returns BLOBs as Uint8Array.
   const rows = db.prepare(admittedVectorsSql(where)).iterate(query.length, ...params) as Iterable<{
     id: string;
     vector: Uint8Array;
@@ -395,7 +396,6 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
     );
     return;
   }
-  // SAFETY: the SELECT names exactly the one column read.
   const model =
     (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(EMBEDDING_MODEL_META_KEY) as { value?: string } | undefined)
       ?.value ?? '';

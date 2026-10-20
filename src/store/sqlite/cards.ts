@@ -1,17 +1,11 @@
 // hippo.db's Cards group: the agent work board.
 import { generateId } from '../../core/memory.js';
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
-import {
-  SessionHandoff,
-  SessionHandoffRow,
-  rowToSessionHandoff,
-  isHandoffOutcome,
-  HandoffOutcome,
-} from '../../core/handoff.js';
+import { SessionHandoff, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../../core/handoff.js';
 import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../../core/card.js';
 import { assertTenantId } from '../../core/tenant-id.js';
 import { chunked } from '../../util/chunked.js';
-import { HANDOFF_COLUMNS } from './handoffs.js';
+import { HANDOFF_COLUMNS, type SessionHandoffDbRow } from './handoffs.js';
 import { placeholders } from '../../util/sql.js';
 import type { CardDetail } from '../port/cards.js';
 import type { CardCreate, Cards } from '../port-groups.js';
@@ -20,6 +14,8 @@ import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 
+// SAFETY: every read cast to this row selects CARD_COLUMNS; scripts/check-row-casts.mjs proves it.
+// The status column only ever holds a CardStatus value.
 interface CardRow {
   id: string;
   title: string;
@@ -59,13 +55,13 @@ function rowToCard(row: CardRow): Card {
 }
 
 function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
-  // SAFETY: row's shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
   const row = db.prepare(`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
     | CardRow
     | undefined;
   return row ? rowToCard(row) : null;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface CardRunRow {
   id: number;
   card: string;
@@ -88,6 +84,7 @@ function rowToCardRun(row: CardRunRow): CardRun {
   };
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface CardCommentRow {
   id: number;
   card_id: string;
@@ -135,7 +132,6 @@ function assertRunId(runId: number): void {
 
 // A second run that has not ended means a corrupt store; throw rather than guess which run the caller means.
 function isLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, runId: number): boolean {
-  // SAFETY: rows' shape matches the single `id` column named in the SELECT below.
   const rows = db
     .prepare(`SELECT id FROM card_runs WHERE tenant_id = ? AND card = ? AND ended IS NULL`)
     .all(tenantId, cardId) as Array<{ id: number }>;
@@ -244,7 +240,6 @@ function createCardAt(db: DatabaseSyncLike, tenantId: string, input: CardCreate)
 function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: readonly string[]): boolean {
   if (dependsOn.length === 0) return true;
   const marks = placeholders(dependsOn.length);
-  // SAFETY: rows' shape matches the two columns named in the SELECT below.
   const rows = db
     .prepare(`SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${marks})`)
     .all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
@@ -273,7 +268,6 @@ function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { status?: Ca
     conditions.push('status = ?');
     params.push(opts.status);
   }
-  // SAFETY: rows' shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
   const rows = db
     .prepare(`
     SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
@@ -283,13 +277,11 @@ function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { status?: Ca
 }
 
 function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
-  // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
   const parents = (
     db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{
       parent: string;
     }>
   ).map((r) => r.parent);
-  // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
   const children = (
     db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{
       child: string;
@@ -299,7 +291,6 @@ function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
 }
 
 function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
-  // SAFETY: rows' shape matches CardRunRow.
   const rows = db
     .prepare(`
     SELECT id, card, runtime, session_id, started, ended, outcome
@@ -310,7 +301,6 @@ function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: string): Car
 }
 
 function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
-  // SAFETY: rows' shape matches CardCommentRow.
   const rows = db
     .prepare(`
     SELECT id, card_id, author, body, created_at
@@ -321,13 +311,12 @@ function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string):
 }
 
 function loadLatestHandoffForCardAt(db: DatabaseSyncLike, tenantId: string, cardId: string): SessionHandoff | null {
-  // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db
     .prepare(`
     SELECT ${HANDOFF_COLUMNS} FROM session_handoffs
     WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
   `)
-    .get(tenantId, cardId) as SessionHandoffRow | undefined;
+    .get(tenantId, cardId) as SessionHandoffDbRow | undefined;
   return row ? rowToSessionHandoff(row) : null;
 }
 
@@ -488,7 +477,7 @@ function completeCardAt(
  * write scope. */
 function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parentId: string): string[] {
   // The child's status and its open parents are result columns, not joins, so the rows keep the order of a plain read
-  // of the parent's children. SAFETY: rows' shape matches the three columns named in the SELECT below.
+  // of the parent's children.
   const children = db
     .prepare(
       `
@@ -518,7 +507,6 @@ function reclaimExpiredCardsAt(db: DatabaseSyncLike, tenantId: string): string[]
   return withWriteScope(db, 'reclaim_expired_cards', () => {
     // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
     const now = new Date().toISOString();
-    // SAFETY: rows' shape matches the single `id` column named in the SELECT below.
     const ids = (
       db
         .prepare(`

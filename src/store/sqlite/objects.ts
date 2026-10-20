@@ -420,7 +420,6 @@ function openIncidentRow(
   const held = new Set<string>();
   for (const ids of chunked(linkedMemoryIds)) {
     const marks = placeholders(ids.length);
-    // SAFETY: rows' shape matches the one column named in the SELECT.
     const found = db
       .prepare(`SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`)
       .all(tenantId, ...ids) as Array<{ id: string }>;
@@ -509,7 +508,6 @@ function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: Policies
   const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';
   const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
   if (name !== undefined) params.push(name);
-  // SAFETY: the SELECT names the policy row's own columns, each under the alias p.
   const rows = db
     .prepare(`
       SELECT p.id, p.memory_id, p.tenant_id, p.policy_name, p.policy_text,
@@ -541,10 +539,12 @@ function activeSkillsByName(db: DatabaseSyncLike, tenantId: string, limit: numbe
   return rows.map(rowSpec('skill').rowTo);
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+type BriefReceiptDbRow = BriefReceipt;
+
 /** The quotes around the tag stop `path:hip` matching a memory tagged `path:hippo`. */
 function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limit: number): BriefReceipt[] {
   const admit = scopeAdmitSql('');
-  // SAFETY: the SELECT names the four columns a receipt holds.
   return db
     .prepare(`
       SELECT id, created, source, content FROM memories
@@ -555,5 +555,5 @@ function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limi
       ORDER BY created DESC, id DESC
       LIMIT ?
     `)
-    .all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceipt[];
+    .all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceiptDbRow[];
 }

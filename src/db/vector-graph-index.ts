@@ -58,16 +58,16 @@ function nextTurn(): Promise<void> {
 }
 
 function dataVersion(db: DatabaseSyncLike): number {
-  // SAFETY: PRAGMA data_version answers one row with one integer column of that name.
+  // SAFETY: PRAGMA data_version always answers one row.
   return (db.prepare('PRAGMA data_version').get() as { data_version: number }).data_version;
 }
 
 // max(rowid) is one lookup and bounds the row count from above, so a store far under the threshold is never counted.
 function holdsAtLeast(db: DatabaseSyncLike, threshold: number): boolean {
-  // SAFETY: an aggregate SELECT answers one row; this one names one column, n, null on an empty table.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const top = (db.prepare('SELECT max(rowid) AS n FROM memory_vectors').get() as { n: number | null }).n ?? 0;
   if (top < threshold) return false;
-  // SAFETY: an aggregate SELECT answers one row; this one names one column, n.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   return (db.prepare('SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n >= threshold;
 }
 
@@ -138,7 +138,7 @@ export class VectorGraphs implements VectorIndex {
     slot.seenOn = db;
     slot.dataVersion = version;
     if (++slot.refreshes % RECOUNT_EVERY === 0) {
-      // SAFETY: the SELECT names exactly one column, n.
+      // SAFETY: an aggregate with no GROUP BY always answers one row.
       slot.rows.live = (db.prepare('SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
     }
     if (staleNodes(slot.rows) <= STALE_SHARE * slot.rows.ids.length) return true;
@@ -202,7 +202,6 @@ export class VectorGraphs implements VectorIndex {
       const model = storedModel(db);
       const staged = new StagedRows(dim);
       let slice = performance.now();
-      // SAFETY: ROWS_ABOVE_SQL names exactly these three columns; node:sqlite returns BLOBs as Uint8Array.
       for (const row of db.prepare(ROWS_ABOVE_SQL).iterate(afterRowid, dim) as Iterable<StoredRow>) {
         staged.add(row);
         if (performance.now() - slice < SLICE_MS) continue;

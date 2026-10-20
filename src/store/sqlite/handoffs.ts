@@ -19,6 +19,8 @@ import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.j
 export const HANDOFF_COLUMNS =
   'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, ' +
   'evidence_json, outcome, target_runtime, card_id';
+// SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/check-row-casts.mjs proves it.
+export type SessionHandoffDbRow = SessionHandoffRow;
 
 function insertHandoffRow(
   db: DatabaseSyncLike,
@@ -70,9 +72,8 @@ export function saveSessionHandoffAt(
   const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
 
   const id = Number(result.lastInsertRowid ?? 0);
-  // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`).get(id) as
-    | SessionHandoffRow
+    | SessionHandoffDbRow
     | undefined;
   if (!row) {
     throw new Error('Failed to reload saved session handoff');
@@ -136,7 +137,6 @@ export function loadLatestHandoffAt(
 ): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
   const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
-  // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db
     .prepare(`
     SELECT ${HANDOFF_COLUMNS}
@@ -145,7 +145,7 @@ export function loadLatestHandoffAt(
     ORDER BY created_at DESC, id DESC
     LIMIT 1
   `)
-    .get(...params) as SessionHandoffRow | undefined;
+    .get(...params) as SessionHandoffDbRow | undefined;
 
   return row ? rowToSessionHandoff(row) : null;
 }
@@ -153,14 +153,13 @@ export function loadLatestHandoffAt(
 /** Load a specific handoff by its row ID. */
 export function loadHandoffByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
   assertTenantId('loadHandoffById', tenantId);
-  // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db
     .prepare(`
     SELECT ${HANDOFF_COLUMNS}
     FROM session_handoffs
     WHERE id = ? AND tenant_id = ?
   `)
-    .get(id, tenantId) as SessionHandoffRow | undefined;
+    .get(id, tenantId) as SessionHandoffDbRow | undefined;
 
   return row ? rowToSessionHandoff(row) : null;
 }
@@ -226,9 +225,8 @@ function replaceTranscriptHandoffAt(
       ...params,
     );
   if (Number(result.changes ?? 0) === 0) return null;
-  // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(...params) as
-    | SessionHandoffRow
+    | SessionHandoffDbRow
     | undefined;
   return row ? rowToSessionHandoff(row) : null;
 }
@@ -325,7 +323,6 @@ export function writeSessionEndHandoffAt(
 }
 
 function sessionOutcomeAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): HandoffOutcome | null {
-  // SAFETY: row's shape matches the single `content` column below.
   const content = (
     db
       .prepare(`

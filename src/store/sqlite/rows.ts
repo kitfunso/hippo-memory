@@ -33,6 +33,8 @@ export interface HippoIndex {
   last_trace_id: string | null;
 }
 
+// SAFETY: every read cast to this row selects MEMORY_SELECT_COLUMNS or MEMORY_SEARCH_COLUMNS.
+// scripts/check-row-casts.mjs proves it.
 export interface MemoryRow {
   id: string;
   created: string;
@@ -81,6 +83,7 @@ export interface MemoryRow {
   bm25_score?: number;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export interface ConsolidationRunRow {
   timestamp: string;
   decayed: number;
@@ -88,6 +91,7 @@ export interface ConsolidationRunRow {
   removed: number;
 }
 
+// SAFETY: every read cast to this row selects TASK_SNAPSHOT_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface TaskSnapshotRow {
   id: number;
   task: string;
@@ -100,7 +104,10 @@ export interface TaskSnapshotRow {
   created_at: string;
   updated_at: string;
 }
+export const TASK_SNAPSHOT_COLUMNS =
+  'id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at';
 
+// SAFETY: every read cast to this row selects MEMORY_CONFLICT_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface MemoryConflictRow {
   id: number;
   memory_a_id: string;
@@ -111,7 +118,9 @@ export interface MemoryConflictRow {
   detected_at: string;
   updated_at: string;
 }
+export const MEMORY_CONFLICT_COLUMNS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
 
+// SAFETY: every read cast to this row selects SESSION_EVENT_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface SessionEventRow {
   id: number;
   session_id: string;
@@ -123,6 +132,8 @@ export interface SessionEventRow {
   metadata_json: string;
   created_at: string;
 }
+export const SESSION_EVENT_COLUMNS =
+  'id, session_id, task, event_type, content, source, scope, metadata_json, created_at';
 
 export const INDEX_VERSION = 3;
 const MEMORY_COLUMN_NAMES = [

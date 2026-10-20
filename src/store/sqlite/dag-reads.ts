@@ -35,11 +35,13 @@ interface LevelRead {
   readonly rows: MemoryEntry[];
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface ChildKey extends DescendantOrigin {
   readonly id: string;
   readonly dag_parent_id: string;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface ChildGroup extends DescendantOrigin {
   readonly dag_parent_id: string;
   readonly n: number;
@@ -76,8 +78,7 @@ function keyedLevel(
 ): LevelRead {
   const byParent = new Map<string, ChildKey[]>();
   for (const chunk of chunked([...parents])) {
-    // SAFETY: the SELECT names ChildKey's four fields, origin_project aliased to the entry's name; the WHERE keeps
-    // dag_parent_id a string.
+    // SAFETY: the WHERE keeps dag_parent_id a string.
     const keys = db
       .prepare(
         `SELECT id, dag_parent_id, scope, origin_project AS originProject FROM memories ` +
@@ -115,8 +116,7 @@ function countedLevel(
 ): LevelRead | null {
   const perParent = new Map<string, number>();
   for (const chunk of chunked([...parents])) {
-    // SAFETY: the SELECT names ChildGroup's four fields, origin_project aliased to the entry's name; the WHERE keeps
-    // dag_parent_id a string.
+    // SAFETY: the WHERE keeps dag_parent_id a string.
     const groups = db
       .prepare(
         `SELECT dag_parent_id, scope, origin_project AS originProject, COUNT(*) AS n FROM memories ` +
@@ -171,7 +171,6 @@ function childrenInOrder(
 ): MemoryEntry[] {
   const byParent = new Map<string, MemoryEntry[]>();
   for (const chunk of chunked([...parents])) {
-    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db
       .prepare(
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND ` +

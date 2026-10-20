@@ -4,7 +4,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../core/rejection-digest.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
+import { MEMORY_CONFLICT_COLUMNS, type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
@@ -27,9 +27,8 @@ import type { Conflicts } from '../port-groups.js';
 import type { Sync } from './served.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 
-// The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
-const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
-const CONFLICT_COLS_MC = CONFLICT_COLS.split(', ')
+// The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be ambiguous.
+const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
   .map((c) => `mc.${c}`)
   .join(', ');
 
@@ -43,6 +42,7 @@ const memberCols = (alias: string, side: string): string =>
   MEMBER_COLS.map((c) => `${alias}.${c} AS ${side}_${c}`).join(', ');
 const CONFLICT_ROW_COLS = `${CONFLICT_COLS_MC}, ${memberCols('ma', 'a')}, ${memberCols('mb', 'b')}`;
 
+// SAFETY: every read cast to this row selects CONFLICT_ROW_COLS; scripts/check-row-casts.mjs proves it.
 interface ConflictJoinRow extends MemoryConflictRow {
   a_id: string | null;
   a_scope: string | null;
@@ -101,7 +101,6 @@ export function conflictPageAt(
   if (status !== '*') filters.push({ sql: 'mc.status = ?', params: [status] });
   if (after) filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
   const select = conflictSelect(tenantId, filters);
-  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
   const rows = db
     .prepare(`${select.sql} ORDER BY mc.updated_at DESC, mc.id DESC LIMIT ?`)
     .all(...select.params, limit + 1) as ConflictJoinRow[];
@@ -113,7 +112,6 @@ export function conflictPageAt(
 /** Conflict `conflictId`, any status, when both its members are in `tenantId`. */
 function conflictByIdAt(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
   const select = conflictSelect(tenantId, [{ sql: 'mc.id = ?', params: [conflictId] }]);
-  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
   const row = db.prepare(select.sql).get(...select.params) as ConflictJoinRow | undefined;
   return row ? toConflictRow(row) : null;
 }
@@ -126,7 +124,7 @@ const OPEN_IN_TENANT = `FROM memory_conflicts mc
 
 /** countOpenConflicts on a handle the caller holds, so it can share a snapshot with other reads. */
 export function countOpenConflictsAt(db: DatabaseSyncLike, tenantId: string): number {
-  // SAFETY: one row with the single aliased count column.
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = db.prepare(`SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(tenantId, tenantId) as { n: number | bigint };
   return Number(row.n);
 }
@@ -137,7 +135,6 @@ export function openConflictsNamingAt(db: DatabaseSyncLike, tenantId: string, me
     { sql: `mc.status = 'open'`, params: [] },
     { sql: '(mc.memory_a_id = ? OR mc.memory_b_id = ?)', params: [memoryId, memoryId] },
   ]);
-  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
   const rows = db
     .prepare(`${select.sql} ORDER BY mc.updated_at DESC, mc.id DESC`)
     .all(...select.params) as ConflictJoinRow[];
@@ -170,7 +167,6 @@ function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedCo
   // rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
-  // SAFETY: rows' shape matches the three columns named in the SELECT.
   const rows = db
     .prepare(`
     SELECT id, tenant_id, conflicts_with_json FROM memories
@@ -188,7 +184,6 @@ function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedCo
   );
   for (const ids of chunked(given)) {
     const marks = placeholders(ids.length);
-    // SAFETY: rows' shape matches the two columns named in the SELECT.
     const found = db.prepare(`SELECT id, tenant_id FROM memories WHERE id IN (${marks})`).all(...ids) as Array<{
       id: string;
       tenant_id: string;
@@ -230,10 +225,9 @@ function resolveStaleOpenConflicts(
 ): void {
   const detectedKeys = new Set(canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`));
 
-  // SAFETY: openRows' shape matches the columns named in CONFLICT_COLS.
   const openRows = db
     .prepare(`
-    SELECT ${CONFLICT_COLS}
+    SELECT ${MEMORY_CONFLICT_COLUMNS}
     FROM memory_conflicts
     WHERE status = 'open'
   `)
@@ -274,7 +268,6 @@ function upsertDetectedConflicts(
 
 /** Rewrites only the rows whose conflicts_with_json changes, and returns their ids. */
 function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs }: ConflictRefreshReads): string[] {
-  // SAFETY: openConflicts' shape matches the two columns named above.
   const openConflicts = db
     .prepare(`
     SELECT memory_a_id, memory_b_id
@@ -376,6 +369,7 @@ interface LoserRemoval {
   extraRemovedRawIds: string[];
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface LoserRow {
   kind: string;
   content: string;
@@ -405,7 +399,6 @@ function removeConflictLoser(db: DatabaseSyncLike, tenantId: string, r: Conflict
   // reject verb.
   const removal = emptyRemoval();
   const loserId = r.loser.id;
-  // SAFETY: loserRow's shape matches the three columns named in the SELECT below.
   const loserRow = db
     .prepare(`SELECT kind, content, tenant_id FROM memories WHERE id = ? AND tenant_id = ?`)
     .get(loserId, tenantId) as LoserRow | undefined;
@@ -460,7 +453,6 @@ function removeDuplicatesOfRejectedValue(
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
   // SHORTCUT: streams the tenant to hold only the matches; a stored digest column with a (tenant_id, digest) index
   // would read just those.
-  // SAFETY: each row has the four columns named in the SELECT.
   const dupRows = db
     .prepare(`SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)
     .iterate(loserTenantId, r.loser.id, r.keep.id) as Iterable<{
@@ -497,7 +489,6 @@ function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string
 
 /** Drops `ref` from row `id`'s conflicts_with_json, when the row is in the tenant. */
 function dropConflictRef(db: DatabaseSyncLike, tenantId: string, id: string, ref: string): void {
-  // SAFETY: the single `conflicts_with_json` column named in the SELECT.
   const row = db
     .prepare(`SELECT conflicts_with_json FROM memories WHERE id = ? AND tenant_id = ?`)
     .get(id, tenantId) as { conflicts_with_json: string } | undefined;
@@ -568,7 +559,7 @@ function purgeRemovedLoserMirrors(
 
 /** The conflict and loser ids every conflict_resolve audit row names. */
 export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
-  // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta above).
+  // SAFETY: every conflict_resolve audit row's metadata holds both ids (ConflictResolveMeta above).
   return db
     .prepare(
       `SELECT json_extract(metadata_json, '$.conflictId') ` +
@@ -582,7 +573,6 @@ export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictI
 export function resolvedConflictsAt(
   db: DatabaseSyncLike,
 ): Array<{ id: number; memory_a_id: string; memory_b_id: string }> {
-  // SAFETY: SELECT of three columns of resolved conflicts.
   return db.prepare(`SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`).all() as {
     id: number;
     memory_a_id: string;

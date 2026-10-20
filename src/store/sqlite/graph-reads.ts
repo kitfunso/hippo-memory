@@ -45,7 +45,6 @@ function loadEntitiesByNameAt(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
-  // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
   const rows = db
     .prepare(`
     SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
@@ -74,7 +73,6 @@ export function loadEntitiesAt(
     params.push(opts.entityType);
   }
   params.push(limit);
-  // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
   const rows = db
     .prepare(`
     SELECT ${ENTITY_COLS} FROM entities
@@ -100,7 +98,6 @@ export function loadRelationsAt(
     params.push(opts.fromEntityId);
   }
   params.push(limit);
-  // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
   const rows = db
     .prepare(`
     SELECT ${RELATION_COLS} FROM relations
@@ -120,7 +117,6 @@ function loadEntitiesByIdsAt(db: DatabaseSyncLike, tenantId: string, ids: readon
   const out: Entity[] = [];
   for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
-    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
     const rows = db
       .prepare(`
       SELECT ${ENTITY_COLS} FROM entities
@@ -152,7 +148,6 @@ function loadNeighborRelationsAt(
   const byId = new Map<number, Relation>();
   for (const slice of chunked(entityIds, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
-    // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
     const rows = db
       .prepare(`
       SELECT ${RELATION_COLS} FROM relations
@@ -182,7 +177,6 @@ function loadRelationsAmongAt(
     throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
   }
   const ph = placeholders(entityIds.length);
-  // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
   const rows = db
     .prepare(`
     SELECT ${RELATION_COLS} FROM relations
@@ -203,7 +197,6 @@ function loadEntitiesByMemoryIdAt(db: DatabaseSyncLike, tenantId: string, memory
   for (const slice of chunked(memoryIds, GRAPH_ID_BATCH)) {
     const ph = placeholders(slice.length);
     // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
-    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
     const rows = db
       .prepare(`
       SELECT ${ENTITY_COLS} FROM entities
@@ -216,31 +209,34 @@ function loadEntitiesByMemoryIdAt(db: DatabaseSyncLike, tenantId: string, memory
   return out;
 }
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+type StoredEntityDbRow = StoredEntity;
+
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+type StoredRelationDbRow = StoredRelation;
+
 /** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write
  * lock. */
 export function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
   const kinds = memoryKindsOn(db, memoryIds);
-  // SAFETY: the SELECT names exactly the columns of StoredEntity.
   const entities = db
     .prepare(
       `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities ` +
         `WHERE tenant_id = ? ORDER BY id`,
     )
-    .all(tenantId) as StoredEntity[];
-  // SAFETY: the SELECT names exactly the columns of StoredRelation.
+    .all(tenantId) as StoredEntityDbRow[];
   const relations = db
     .prepare(
       `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, ` +
         `source_kind, source_object_type, source_object_id ` +
         `FROM relations WHERE tenant_id = ? ORDER BY id`,
     )
-    .all(tenantId) as StoredRelation[];
+    .all(tenantId) as StoredRelationDbRow[];
   return { kinds, entities, relations };
 }
 
 function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): ReadonlyMap<string, string> {
   if (memoryIds.length === 0) return new Map();
-  // SAFETY: the SELECT names exactly the two columns of the row type.
   const rows = db
     .prepare(`SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`)
     .all(JSON.stringify(memoryIds)) as Array<{ id: string; kind: string }>;
@@ -281,7 +277,6 @@ function readableOnly<T extends { memoryId: string | null }>(
   const ids = [...new Set(items.flatMap((i) => (i.memoryId === null ? [] : [i.memoryId])))];
   const readable = new Set<string>();
   for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
-    // SAFETY: rows' shape matches the id and scope columns named in the SELECT.
     const rows = db
       .prepare(`SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(slice.length)})`)
       .all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;

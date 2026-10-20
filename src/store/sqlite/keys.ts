@@ -77,7 +77,6 @@ function revokeKeyAt(db: DatabaseSyncLike, revoke: KeyRevoke): string {
 }
 
 function auditHighIdAt(db: DatabaseSyncLike): number {
-  // SAFETY: the SELECT names one column, seq; `.get` returns undefined before audit_log's first row.
   const row = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'audit_log'").get() as
     | { seq: number }
     | undefined;

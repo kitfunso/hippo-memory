@@ -17,6 +17,7 @@ export interface ArchiveOptions {
 }
 
 /** The subset of `memories` columns this function reads off a `SELECT *` row. */
+// SAFETY: its one read is SELECT * on memories, and the memories schema holds every key here.
 interface ArchivedMemoryRow {
   kind: string;
   tenant_id: string | null;
@@ -29,8 +30,6 @@ export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: st
 }
 
 function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
-  // SAFETY: SELECT * returns every memories column; only kind, tenant_id and dag_parent_id are read below, all
-  // guaranteed present (possibly null) by the schema.
   const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as ArchivedMemoryRow | undefined;
   if (!row) throw new NotFoundError(`memory not found: ${id}`);
   if (row.kind !== 'raw') {

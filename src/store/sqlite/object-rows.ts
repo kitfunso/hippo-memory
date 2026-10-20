@@ -93,6 +93,7 @@ interface CustomerNoteRow extends VersionedRow<NoteStatus> {
   note: string;
 }
 
+// SAFETY: every read cast to one of these rows selects its kind's rowSpec(kind).cols.
 export interface RowByKind {
   decision: DecisionRow;
   incident: IncidentRow;

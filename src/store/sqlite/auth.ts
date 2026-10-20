@@ -77,8 +77,6 @@ export interface ValidateResult {
 
 /** The api_keys row for `keyId` with its scope grants; null when no row matches. */
 export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRecord | null {
-  // SAFETY: row comes from the SELECT above, which projects exactly key_hash, tenant_id, revoked_at, role, expires_at,
-  // owner_subject; `.get` returns undefined when no row matches key_id.
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`)
     .get(keyId) as
@@ -135,7 +133,6 @@ export function ungrantScope(db: DatabaseSyncLike, keyId: string, scope: string)
 
 /** Every restricted scope `keyId` may read. */
 function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
-  // SAFETY: rows' shape matches the single `scope` column named in the SELECT above.
   const rows = db
     .prepare(`SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`)
     .all(keyId) as Array<{ scope: string }>;
@@ -180,7 +177,6 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
   const sql =
     `SELECT id, key_id, tenant_id, label, created_at, revoked_at, role, expires_at, owner_subject FROM api_keys ` +
     `WHERE ${where.join(' AND ')}${after.sql} ORDER BY id DESC${limitSql}`;
-  // SAFETY: the SELECT above projects exactly these 9 columns, in this order.
   const rows = db.prepare(sql).all(...params) as Array<{
     id: number;
     key_id: string;
@@ -215,7 +211,6 @@ export function listLiveOwnedKeyIds(
   ownerSubject: string,
   now: number,
 ): string[] {
-  // SAFETY: the SELECT names exactly these two columns.
   const rows = db
     .prepare(
       `SELECT key_id, expires_at FROM api_keys WHERE tenant_id = ? AND owner_subject = ? AND revoked_at IS NULL ` +

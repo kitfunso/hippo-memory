@@ -74,7 +74,6 @@ function checkSourceMemory(
   let memKind: SourceKind | null = null;
   let effectiveMemoryId: string | null = memoryId;
   if (memoryId != null) {
-    // SAFETY: row's shape matches the two columns (kind, tenant_id) named in the SELECT above.
     const row = cachedStatement(db, `SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
       | { kind: string; tenant_id: string }
       | undefined;
@@ -112,7 +111,7 @@ function assertSourceObjectUsable(
       throw new Error(`${label}: unsupported source_object_type '${sourceObject.type}'`);
     }
     // `table` is a fixed SOURCE_OBJECT_TABLE value (never user-supplied), so interpolation is safe; `id`/`tenant_id`
-    // stay parametrized. SAFETY: row's shape matches the single `status` column named in the SELECT above.
+    // stay parametrized.
     const row = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
       sourceObject.id,
       tenantId,
@@ -167,7 +166,6 @@ export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: In
     now,
   );
   const id = Number(result.lastInsertRowid ?? 0);
-  // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
   const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
   if (!row) throw new Error('insertEntity: failed to reload inserted entity');
   return rowToEntity(row);
@@ -192,7 +190,6 @@ export function updateEntityRow(
 ): Entity | null {
   assertTenantId('updateEntity', tenantId);
   const name = checkedName('updateEntity', opts.name);
-  // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
   const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(
     id,
     tenantId,
@@ -216,7 +213,6 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
     [opts.fromEntityId, 'from'],
     [opts.toEntityId, 'to'],
   ] as const) {
-    // SAFETY: ent's shape matches the single `tenant_id` column named in the SELECT above.
     const ent = cachedStatement(db, `SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as
       | { tenant_id: string }
       | undefined;
@@ -293,7 +289,6 @@ function relationSource(
 export function objectInForce(db: DatabaseSyncLike, tenantId: string, ref: SourceObjectRef): boolean {
   // `table` comes from the fixed SOURCE_OBJECT_TABLE map, never from input.
   const table = SOURCE_OBJECT_TABLE[ref.type];
-  // SAFETY: row's shape matches the single `status` column named in the SELECT.
   const row = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
     ref.id,
     tenantId,
@@ -308,7 +303,6 @@ export function entityIdBySource(
   entityType: EntityType,
   sourceObject: SourceObjectRef,
 ): number | undefined {
-  // SAFETY: row's shape matches the single `id` column named in the SELECT.
   const row = cachedStatement(
     db,
     `SELECT id FROM entities WHERE tenant_id = ? AND entity_type = ? AND source_object_type = ? AND ` +
@@ -324,7 +318,6 @@ export function relationPresent(
   toEntityId: number,
   relType: RelationType,
 ): boolean {
-  // SAFETY: row's shape matches the single aliased column named in the SELECT.
   const present = cachedStatement(
     db,
     `SELECT 1 AS hit FROM relations WHERE tenant_id = ? AND from_entity_id = ? AND to_entity_id = ? AND rel_type = ` +

@@ -22,6 +22,7 @@ export const GRAPH_RELATION_TYPES: ReadonlySet<RelationType> = new Set<RelationT
 
 export type GraphQueueStatus = 'pending' | 'processed' | 'skipped';
 
+// SAFETY: every read cast to this row selects ENTITY_COLS; scripts/check-row-casts.mjs proves it.
 export interface EntityRow {
   id: number;
   tenant_id: string;
@@ -33,6 +34,7 @@ export interface EntityRow {
   source_object_id: number | null;
   created_at: string;
 }
+// SAFETY: every read cast to this row selects RELATION_COLS; scripts/check-row-casts.mjs proves it.
 export interface RelationRow {
   id: number;
   tenant_id: string;
@@ -94,6 +96,7 @@ export interface GraphQueueItem {
   processedAt: string | null;
 }
 
+// SAFETY: every read cast to this row selects QUEUE_COLS; scripts/check-row-casts.mjs proves it.
 export interface QueueRow {
   id: number;
   tenant_id: string;

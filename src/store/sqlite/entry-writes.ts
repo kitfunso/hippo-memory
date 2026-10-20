@@ -558,7 +558,7 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
   auditingRefusal(db, actor, () =>
     withWriteScope(db, 'supersede', () => {
       assertInReach(db, write, oldId);
-      // SAFETY: RETURNING names one column, dag_parent_id; no row means another writer got there first.
+      // No row means another writer got there first.
       const won = db
         .prepare(
           'UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING ' +

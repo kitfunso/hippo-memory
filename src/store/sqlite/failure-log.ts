@@ -79,7 +79,6 @@ function settleFailureOutcome(
 
 /** The tenant's rated failures per session since `sinceIso`, under the rule in core/failure-repeats.ts. */
 function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
-  // SAFETY: the SELECT names exactly these three TEXT columns.
   const rows = db
     .prepare(
       `SELECT ts, session_id, sig_hash FROM failure_log
@@ -94,7 +93,6 @@ function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: str
 
 /** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
 export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): number {
-  // SAFETY: COUNT aggregate row.
   const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as
     | { n: number }
     | undefined;
@@ -103,7 +101,6 @@ export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): numb
 
 /** Sum the failure log for one tenant since `sinceIso`. */
 export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceIso: string): FailureSummary {
-  // SAFETY: the SELECT names exactly these two columns, TEXT and an aggregate.
   const rows = db
     .prepare(`SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`)
     .all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;

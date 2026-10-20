@@ -21,7 +21,6 @@ function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: str
   `)
     .run(tenantId, memoryId, sourceKind, now);
   const id = Number(result.lastInsertRowid ?? 0);
-  // SAFETY: row's shape matches the columns named in QUEUE_COLS above.
   const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as
     | QueueRow
     | undefined;
@@ -66,7 +65,6 @@ export function markPendingProcessedUpToAt(db: DatabaseSyncLike, tenantId: strin
  * host-wide, as sleep is cross-tenant. The drain marks only items at or below it processed, so items enqueued DURING
  * the rebuild stay pending (no lost update). */
 export function loadPendingExtractionTenantsAt(db: DatabaseSyncLike): { tenantId: string; maxPendingId: number }[] {
-  // SAFETY: rows' shape matches the two aliased columns (tenant_id, max_id) named in the SELECT above.
   const rows = db
     .prepare(`
     SELECT tenant_id AS tenant_id, MAX(id) AS max_id

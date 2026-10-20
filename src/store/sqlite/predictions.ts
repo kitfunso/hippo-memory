@@ -41,6 +41,7 @@ interface ListPredictionsOptions {
   after?: KeysetPosition;
 }
 
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface PredictionRow {
   id: number;
   memory_id: string | null;
@@ -139,7 +140,6 @@ function insertPredictionRow(
     );
 
   const predictionId = Number(result.lastInsertRowid ?? 0);
-  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(`
         SELECT ${SELECT_COLUMNS}
@@ -220,7 +220,6 @@ function closeOpenPredictionRow(
 
   if (updateResult.changes === 0) throwCloseMiss(db, tenantId, id);
 
-  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(`
         SELECT ${SELECT_COLUMNS}
@@ -248,7 +247,6 @@ function closeOpenPredictionRow(
 
 function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): never {
   // Distinguish 'not found' from 'already closed' so callers (CLI, HTTP) surface the right error.
-  // SAFETY: row shape matches the single `closure_state` column named in the SELECT above.
   const existing = db
     .prepare(`
           SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
@@ -265,7 +263,6 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
 
 function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
   assertTenantId('loadPredictionById', tenantId);
-  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(`
     SELECT ${SELECT_COLUMNS}
@@ -292,7 +289,6 @@ function loadPredictionsByClassAt(
           `${opts.closureState}`,
       );
     }
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}
@@ -303,7 +299,6 @@ function loadPredictionsByClassAt(
     `)
       .all(tenantId, classTag, opts.closureState, ...after.params, limit) as PredictionRow[];
   } else {
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}
@@ -325,7 +320,6 @@ function loadAllPredictionsAt(
 ): Prediction[] {
   assertTenantId('loadAllPredictions', tenantId);
   const after = keysetAfter('created_at', 'id', opts.after);
-  // SAFETY: rows' shape matches the columns named in the SELECT.
   const rows = db
     .prepare(`
     SELECT ${SELECT_COLUMNS}
@@ -339,6 +333,7 @@ function loadAllPredictionsAt(
 }
 
 /** One closed prediction as the baserate reads it: both values set. */
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface BaserateRow {
   estimate_value: number;
   actual_value: number;
@@ -359,7 +354,6 @@ export function computePredictionBaserateAt(
   assertTenantId('computePredictionBaserate', tenantId);
   if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
   // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
-  // SAFETY: rows' shape matches the two columns named in the SELECT above.
   const rows = db
     .prepare(`
     SELECT estimate_value, actual_value
@@ -461,7 +455,6 @@ function loadOpenPredictionsAt(
   const after = keysetAfter('created_at', 'id', opts.after);
   let rows: PredictionRow[];
   if (opts.classTag) {
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}
@@ -472,7 +465,6 @@ function loadOpenPredictionsAt(
     `)
       .all(tenantId, opts.classTag, ...after.params, limit) as PredictionRow[];
   } else {
-    // SAFETY: rows' shape matches the columns named in the SELECT above.
     rows = db
       .prepare(`
       SELECT ${SELECT_COLUMNS}

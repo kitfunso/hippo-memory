@@ -26,6 +26,7 @@ import type { DormantSnapshot } from '../port/types.js';
  * goes, so every reader of `memories` stops seeing it, as if deleted. Not the raw archive (`raw_archive`,
  * `archiveRawMemory`), which keeps metadata only. db-taking helpers leave the handle and transaction to the caller. */
 
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface DormantKey {
   readonly tenantId: string;
   readonly id: string;
@@ -33,7 +34,6 @@ interface DormantKey {
 
 function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
   const sql = `SELECT tenant_id AS tenantId, id FROM dormant_memories WHERE dormant_at < ?`;
-  // SAFETY: rows' shape matches the two columns named in the SELECT.
   return db.prepare(sql).all(cutoffIso) as DormantKey[];
 }
 

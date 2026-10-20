@@ -47,7 +47,7 @@ export function memoriesBackingObjectsAt(db: DatabaseSyncLike): Set<string> {
   const ids = new Set<string>();
   for (const table of MEMORY_BACKED_TABLES) {
     try {
-      // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
+      // SAFETY: the WHERE drops rows whose memory_id is NULL.
       const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as {
         memory_id: string;
       }[];
@@ -85,18 +85,19 @@ export function deleteEntryCore(
   tenantId: string,
   opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },
 ): { tenantId: string; dagParentId: string | null } | null {
-  // SAFETY: row's shape matches the three columns named in the SELECT above.
   const row = db
-    .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ? AND tenant_id = ?`)
+    .prepare(`SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`)
     .get(id, tenantId) as DeleteTarget | undefined;
   return row?.id ? deleteTargetRow(db, row, opts) : null;
 }
 
+// SAFETY: every read cast to this row selects DELETE_TARGET_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface DeleteTarget {
   id: string;
   tenant_id: string;
   dag_parent_id?: string | null;
 }
+const DELETE_TARGET_COLUMNS = 'id, tenant_id, dag_parent_id';
 
 function deleteTargetRow(
   db: DatabaseSyncLike,
@@ -173,9 +174,8 @@ export function deleteEntriesAutomaticallyAt(
 function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<string, DeleteTarget> {
   const rows = new Map<string, DeleteTarget>();
   for (const chunk of chunked([...new Set(ids)])) {
-    // SAFETY: rows' shape matches the three columns named in the SELECT.
     const found = db
-      .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id IN (${placeholders(chunk.length)})`)
+      .prepare(`SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id IN (${placeholders(chunk.length)})`)
       .all(...chunk) as Array<DeleteTarget>;
     for (const row of found) rows.set(row.id, row);
   }
@@ -367,7 +367,6 @@ function selectAutoDeletableRows(
   ids: readonly string[],
   dirty: DirtyParents,
 ): Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }> {
-  // SAFETY: rows' shape matches the three columns named in the SELECT.
   const rows = db
     .prepare(
       `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders(ids.length)}) AND ` +
@@ -410,7 +409,6 @@ function applyBatchWrites(
   const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
   for (const op of ops) {
     const base = snapshot?.get(op.id);
-    // SAFETY: MEMORY_SELECT_COLUMNS is the MemoryRow shape rowToEntry reads.
     const liveRow = readLiveRow.get(op.id) as MemoryRow | undefined;
     const live = liveRow ? rowToEntry(liveRow) : undefined;
     const row = batchRow(op, base, live);

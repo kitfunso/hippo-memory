@@ -32,6 +32,7 @@ export function createPhysicsTable(db: DatabaseSyncLike): void {
   `);
 }
 
+// SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface PhysicsRow {
   memory_id: string;
   position_blob: Buffer;
@@ -41,6 +42,7 @@ interface PhysicsRow {
   temperature: number;
   last_simulation: string;
 }
+const PHYSICS_COLUMNS = 'memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation';
 
 /**
  * Load physics state for specific memory IDs (or all if no IDs given).
@@ -53,21 +55,19 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
     // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
     for (const chunk of chunked(memoryIds)) {
       const marks = placeholders(chunk.length);
-      // SAFETY: the SELECT projects exactly the PhysicsRow columns, in order.
       rows.push(
         ...(db
           .prepare(
-            `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
+            `SELECT ${PHYSICS_COLUMNS}
          FROM memory_physics WHERE memory_id IN (${marks})`,
           )
           .all(...chunk) as PhysicsRow[]),
       );
     }
   } else {
-    // SAFETY: same PhysicsRow column projection as the branch above, just without the memory_id filter.
     rows = db
       .prepare(
-        `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
+        `SELECT ${PHYSICS_COLUMNS}
        FROM memory_physics`,
       )
       .all() as PhysicsRow[];

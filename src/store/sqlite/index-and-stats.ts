@@ -114,7 +114,6 @@ export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, 
 
 /** Timestamp of the latest consolidation run, or undefined when there is none. */
 export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
-  // SAFETY: row's shape matches the single `timestamp` column named in the SELECT.
   const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as
     | { timestamp?: string }
     | undefined;
@@ -124,7 +123,6 @@ export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
 /** Load the session decay context; session intervals come from consolidation_runs timestamps. */
 export function loadSessionDecayContextAt(db: DatabaseSyncLike): SessionDecayContext {
   // Get recent consolidation timestamps (last 20)
-  // SAFETY: rows' shape matches the single `timestamp` column above.
   const rows = db
     .prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`)
     .all() as Array<{ timestamp: string }>;
