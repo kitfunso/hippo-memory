@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll } from 'vitest';
+import { releaseHeldStores } from './held-stores.js';
 import { initTestStore } from './store-template.js';
 
 export interface MakeRootOptions {
@@ -21,6 +22,8 @@ export interface MadeStore {
 // Removed after the file's last test, not each test's: a store made in beforeAll must outlive its first test.
 const made: string[] = [];
 afterAll(() => {
+  // A store made after the file's last test is still held.
+  releaseHeldStores();
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 

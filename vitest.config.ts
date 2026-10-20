@@ -67,6 +67,7 @@ export default defineConfig({
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
     },
     globalSetup: ['tests/_build-freshness.ts', 'tests/_real-store-guard.ts', 'tests/_store-template.ts'],
+    runner: 'tests/_held-stores-runner.ts',
     // About a fifth of the files spawn git/hippo/nested-vitest children, so one fork per core oversubscribes a big box (CHANGELOG 1.38.3).
     maxWorkers: 6,
     coverage: {
