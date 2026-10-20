@@ -21,7 +21,7 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
@@ -166,7 +166,7 @@ function project(name: string): string {
 
 function controlRun(name: string): Run {
   const local = join(project(name), '.hippo');
-  initStore(local);
+  initTestStore(local);
   return { local, global: join(w.dir, `${name}-global`) };
 }
 

@@ -5,7 +5,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { V1_ROUTES } from '../../src/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const KNOWN_AUTH: ReadonlySet<string> = new Set(['caller', 'admin', 'host-admin-local', 'webhook-signature']);
 const WEBHOOKS = ['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
@@ -111,7 +111,7 @@ describe('a request with no credential', () => {
     vi.stubEnv('SLACK_SIGNING_SECRET', 'slack-test-secret');
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'github-test-secret');
     root = makeRoot('route-auth-gate');
-    initStore(root);
+    initTestStore(root);
     handle = await serve({ hippoRoot: root, port: 0 });
   });
 

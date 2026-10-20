@@ -6,7 +6,7 @@ import { deleteEntryCore } from '../../src/store/sqlite/delete-and-batch.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let root: string;
 let db: ReturnType<typeof openHippoDb>;
@@ -14,7 +14,7 @@ const entry = createMemory('tenant a keeps this', { tenantId: 'tenant-a' });
 
 beforeEach(() => {
   root = makeRoot('delete-tenant');
-  initStore(root);
+  initTestStore(root);
   writeEntry(root, entry);
   db = openHippoDb(root);
 });

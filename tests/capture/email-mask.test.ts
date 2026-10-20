@@ -10,7 +10,7 @@ import { recordSessionDigest } from '../../src/capture/session-digest.js';
 import { captureTarget, syncStore } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const EMAIL = 'alice@example.com';
 const REPLY = `Updated ${EMAIL} in customer.ts because the export failed.`;
@@ -24,7 +24,7 @@ beforeEach(() => {
   tmp = makeRoot('email-mask', { init: false });
   repo = path.join(tmp, 'repo');
   hippoRoot = path.join(repo, '.hippo');
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });
 

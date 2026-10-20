@@ -11,7 +11,7 @@ import { boundPort } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
-import { initStore } from '../src/store/sqlite/handles.js';
+import { initTestStore } from './_helpers/store-template.js';
 
 const CONNECTIONS_CLI = resolve(__dirname, 'fixtures', 'dashboard-connections-cli.mjs');
 // How long the child gets to reach a state the test waits for.
@@ -40,7 +40,7 @@ afterEach(async () => {
 function project(): Scratch {
   const s = scratch();
   scratches.push(s);
-  initStore(s.hippoRoot);
+  initTestStore(s.hippoRoot);
   return s;
 }
 

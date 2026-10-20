@@ -8,7 +8,7 @@ import type { MemoryEntry } from '../../src/core/memory.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 
 let root: string;
 
@@ -39,7 +39,10 @@ function seed(): void {
   dangling.supersededBy = 'mem_gone';
   const lone = at(createMemory('belief: never corrected'), '2026-03-18T00:00:00.000Z');
   for (const e of [raw, rawGap, oldFact, newFact, oldManual, newManual, dangling, lone]) writeEntry(root, e);
-  for (let i = 0; i < 30; i++) writeEntry(root, createMemory(`filler memory number ${i}`));
+  writeEntriesTogether(
+    root,
+    Array.from({ length: 30 }, (_, i) => createMemory(`filler memory number ${i}`)),
+  );
 }
 
 describe('status report reads', () => {

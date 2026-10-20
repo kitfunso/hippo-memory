@@ -9,7 +9,7 @@ import { realpathOrResolve } from '../../src/util/real-path.js';
 import { hippoIn, type Project } from '../_helpers/delivery-boundary.js';
 import { fireIn, seed, type TurnSpec, type Verdict } from '../_helpers/host-transcript.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import {
   SCRIPT,
   V,
@@ -56,7 +56,7 @@ describe('store paths through a link', () => {
 
   it('TF9b a project .hippo that links to the global store reads its own rows in a class read', async (ctx) => {
     p = mk();
-    initStore(p.globalRoot);
+    initTestStore(p.globalRoot);
     fs.writeFileSync(
       path.join(p.globalRoot, 'config.json'),
       JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }),
@@ -85,7 +85,7 @@ describe('store paths through a link', () => {
 
   it('TF10 version 3 rows keep the two-path rule behind a linked HIPPO_HOME, and a version 3 row with the version 4 hash is foreign', async (ctx) => {
     p = mk();
-    initStore(p.globalRoot);
+    initTestStore(p.globalRoot);
     fs.writeFileSync(
       path.join(p.globalRoot, 'config.json'),
       JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }),

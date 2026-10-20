@@ -12,7 +12,7 @@ import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -83,7 +83,7 @@ beforeEach(async () => {
   localRoot = join(home, '.hippo');
   globalRoot = join(home, 'global-hippo');
   vi.stubEnv('HIPPO_HOME', globalRoot);
-  initStore(localRoot);
+  initTestStore(localRoot);
   ctx = apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' });
   await remember(ctx, { content: `${CANARY} stored memory body` });
 });
@@ -105,7 +105,7 @@ describe('recall audits store a query hash, never the text', () => {
   });
 
   it('context recall writes the same hashed row into the global store it reached', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     await contextGet(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), {
       currentProject: cwdProject(),
       q: QUERY,

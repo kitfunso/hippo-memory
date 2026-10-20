@@ -19,7 +19,7 @@ import {
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -303,7 +303,7 @@ describe("a read still running at its request's deadline", () => {
     const server = await start(root, { store: workerSqliteStore(root, executor) });
     const before = await counts(server);
     mkdirSync(join(root, '.hippo'), { recursive: true });
-    initStore(root);
+    initTestStore(root);
     // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
     await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });
     executor.terminateWriter();
@@ -485,7 +485,7 @@ describe('the handler deadline', () => {
 
   it('drops a store call still queued when its request is aborted, without running it', async () => {
     const root = newRoot();
-    initStore(root);
+    initTestStore(root);
     const controller = new AbortController();
     const { executor } = watched(createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS }));
     cleanups.push(() => executor.close());

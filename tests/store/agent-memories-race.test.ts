@@ -14,7 +14,7 @@ import {
   projectNotes,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const WORKERS = 4;
 const NOTES = 40;
@@ -116,7 +116,7 @@ describe('agent memory sync: concurrent first imports', () => {
     );
     const roots = Array.from({ length: WORKERS }, (_, i) => {
       const root = join(w.dir, `p${i}`, '.hippo');
-      initStore(root);
+      initTestStore(root);
       return root;
     });
 

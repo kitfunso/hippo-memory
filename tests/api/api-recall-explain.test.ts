@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import { remember, retrieve } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 describe('api.recall explain', () => {
   let hippoRoot: string;
@@ -24,7 +24,7 @@ describe('api.recall explain', () => {
 
   beforeEach(async () => {
     hippoRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hippo-a7-api-'));
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     ctx = apiCtx(hippoRoot, tenantId, { subject: 'test', role: 'admin' });
   });
 

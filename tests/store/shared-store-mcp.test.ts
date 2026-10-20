@@ -12,7 +12,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -33,7 +33,7 @@ let handle: ServerHandle | null = null;
 function flaggedStore(): string {
   const store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });
-  initStore(store);
+  initTestStore(store);
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
   return store;
 }

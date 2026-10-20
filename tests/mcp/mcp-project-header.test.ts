@@ -8,7 +8,7 @@ import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../../src/entry/
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -30,7 +30,7 @@ let handle: ServerHandle | null = null;
 function makeStore(shared: boolean): string {
   const store = path.join(tmp, 'srv', shared ? 'hippo-team' : 'hippo-solo');
   fs.mkdirSync(store, { recursive: true });
-  initStore(store);
+  initTestStore(store);
   if (shared) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
   return store;
 }

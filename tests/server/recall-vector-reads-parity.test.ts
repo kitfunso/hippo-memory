@@ -28,8 +28,8 @@ import {
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { inMemoryVectorStore } from '../_helpers/in-memory-vector-store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 beforeEach(() => {
@@ -103,7 +103,10 @@ function withDb(root: string, fn: (db: ReturnType<typeof openHippoDb>) => void):
 
 function seedVectorStore(root: string): void {
   const rows = [...ADMITTED, ...HIDDEN];
-  for (const r of rows) writeEntry(root, r.entry);
+  writeEntriesTogether(
+    root,
+    rows.map((r) => r.entry),
+  );
   const index = Object.fromEntries(rows.map((r): [string, number[]] => [r.entry.id, [...r.vector]]));
   const vectors: [string, readonly number[]][] = [...Object.entries(index), [ORPHAN, NEAR]];
   withDb(root, (db) => {
@@ -209,9 +212,9 @@ beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   const dir = makeRoot('vector-reads', { init: false });
   const local = join(dir, 'local');
-  initStore(local);
+  initTestStore(local);
   seedVectorStore(local);
-  initStore(join(dir, 'global'));
+  initTestStore(join(dir, 'global'));
   templates = { dir, goalId: 'no-goal-in-this-seed' };
 });
 

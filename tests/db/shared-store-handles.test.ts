@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmp: string;
 let root: string;
@@ -14,7 +14,7 @@ beforeEach(() => {
 describe('withSharedStoreHandles', () => {
   it('hands back one open handle per store and closes it when the scope ends', async () => {
     const other = path.join(tmp, 'other');
-    initStore(other);
+    initTestStore(other);
     const seen = await withSharedStoreHandles(() => {
       const a = openHippoDb(root);
       closeHippoDb(a);

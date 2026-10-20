@@ -12,7 +12,7 @@ import {
   appendSessionEvent,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let root: string;
 
@@ -22,7 +22,7 @@ beforeEach(() => {
 
 describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
   it('surfaces the newest unfinished handoff, then the next one after each stamp', async () => {
-    initStore(root);
+    initTestStore(root);
     const ctx = apiCtx(root, 'default', adminActor('test'));
 
     for (let i = 1; i <= 10; i++) {
@@ -58,7 +58,7 @@ describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
 
 describe('test 8: scope filtering on the continuity read paths', () => {
   it('8a: ambient fallback does not surface a private-scoped unfinished handoff', async () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-priv',
@@ -72,7 +72,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   });
 
   it('8b: ambient fallback does not surface an unknown:legacy scoped unfinished handoff', async () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-legacy',
@@ -86,7 +86,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   });
 
   it('8c: ambient fallback surfaces a null-scoped unfinished handoff', async () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-pub',
@@ -100,7 +100,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   });
 
   it('8d: session-keyed path does not inject a private-scoped active snapshot or handoff', async () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'private task',
       summary: 'summary',
@@ -122,7 +122,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   });
 
   it("8e: session-keyed path does not fall through to another session's unfinished handoff", async () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'private task',
       summary: 'summary',
@@ -144,7 +144,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   });
 
   it('8f: recentEvents admits each event on its own scope, keyed on the raw snapshot', async () => {
-    initStore(root);
+    initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'private task',
       summary: 'summary',
@@ -173,7 +173,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
 
 describe('fix 1: unfinishedOnly selects the newest revision per session', () => {
   it('does not resurrect an older null-outcome revision after the newest is stamped', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-s', summary: 'older', artifacts: [] });
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-s', summary: 'newer', artifacts: [] });
     expect(stampHandoffOutcome(root, 'default', 'sess-s', 'success')).toBe(1);
@@ -190,7 +190,7 @@ describe('fix 1: unfinishedOnly selects the newest revision per session', () => 
 
 describe('fix 2: scopeFilter default-deny admits scope before LIMIT 1', () => {
   it('skips a newer private-scoped row to return an older public one', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-pub',
@@ -214,7 +214,7 @@ describe('fix 2: scopeFilter default-deny admits scope before LIMIT 1', () => {
   });
 
   it('skips an unknown:legacy scoped row', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-pub2',
@@ -240,7 +240,7 @@ describe('fix 2: scopeFilter default-deny admits scope before LIMIT 1', () => {
 
 describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metadata', () => {
   it('same task keeps constraints/cardId/targetRuntime/artifacts/repoRoot; a different task does not inherit them', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-carry',
@@ -292,7 +292,7 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
   });
 
   it('same task but scope mismatch does not carry a private handoff into an unscoped envelope', () => {
-    initStore(root);
+    initTestStore(root);
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-scope-mismatch',

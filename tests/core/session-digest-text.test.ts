@@ -9,7 +9,7 @@ import { digestSentences, recordSessionDigest, type DigestEdit } from '../../src
 import { makeRoot } from '../_helpers/make-root.js';
 import { syncStore } from '../_helpers/cli-stores.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 // The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
 const MAX_DIGEST_CHARS = 1200;
@@ -38,7 +38,7 @@ afterEach(() => {
 /** The digest a session ending on `finalText` stores, '' for none. A fresh store each call, so no earlier digest echoes. */
 function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[] } = {}): string {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   const turns = (opts.echo ?? ['go']).map((text) => ({ role: 'user' as const, text }));
   const log: string[] = [];
   recordSessionDigest(

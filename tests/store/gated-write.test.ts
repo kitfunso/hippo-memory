@@ -11,7 +11,8 @@ import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/core/rejection-digest.js';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import { openStore, initStore } from '../../src/store/sqlite/handles.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let s: Scratch;
 
@@ -48,7 +49,7 @@ function reject(text: string): void {
 describe('the shared gated write', () => {
   let db: DatabaseSyncLike;
   beforeEach(() => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     db = openStore(s.hippoRoot);
   });
   afterEach(() => closeHippoDb(db));

@@ -25,7 +25,7 @@ import {
   writeEntry,
   loadEmbeddingIndex,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
@@ -146,7 +146,7 @@ beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   home = makeRoot('embed-index-state', { init: false });
   partly = join(home, 'partly');
-  initStore(partly);
+  initTestStore(partly);
   const rows = Array.from({ length: ROWS }, (_, i) => row(i));
   rows.forEach((entry, i) => {
     if (!isLate(i)) writeEntry(partly, entry);

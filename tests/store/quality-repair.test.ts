@@ -23,7 +23,7 @@ import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, repairAutomaticMemories, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_JS = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -373,8 +373,8 @@ describe('hippo audit repair', () => {
     dir = makeRoot('repair-cli', { init: false });
     local = join(dir, '.hippo');
     global = join(dir, 'global');
-    initStore(local);
-    initStore(global);
+    initTestStore(local);
+    initTestStore(global);
     env = { ...process.env, HIPPO_HOME: global, HOME: dir, USERPROFILE: dir };
   });
   const cli = (...args: string[]) =>

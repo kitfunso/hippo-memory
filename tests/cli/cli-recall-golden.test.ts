@@ -11,7 +11,7 @@ import { ownStderr } from '../_helpers/own-stderr.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -210,7 +210,7 @@ function freshStore(c: Pick<Case, 'global'>): FreshStore {
   cpSync(template, join(home, '.hippo'), { recursive: true });
   const globalRoot = join(home, 'global-hippo');
   if (c.global) {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     seedGlobal(globalRoot);
   }
   const env: NodeJS.ProcessEnv = { ...process.env };

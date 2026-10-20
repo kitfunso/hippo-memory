@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 interface KindRow {
   readonly cmd: string;
@@ -72,7 +72,7 @@ let root = '';
 beforeEach(() => {
   root = makeRoot('versioned-cli');
   // The CLI looks for the store in `.hippo` under the working directory.
-  initStore(join(root, '.hippo'));
+  initTestStore(join(root, '.hippo'));
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   vi.stubEnv('HIPPO_TENANT', '');

@@ -11,7 +11,7 @@ import { cardDetailOf } from '../_helpers/card-detail.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { createCard } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { root, useCardsRoot } from '../_helpers/work-queue-cards.js';
 
 useCardsRoot();
@@ -96,7 +96,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     const home = makeRoot('w2a-cli', { init: false });
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     try {
-      initStore(join(home, '.hippo'));
+      initTestStore(join(home, '.hippo'));
       // parseArgs collects --depends-on into an array, so the in-process call passes one.
       const create = await runInProcess(() =>
         handleCard({
@@ -298,7 +298,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
 
 describe('test 11: the card verb is wired through the flag parser and the command table', () => {
   it('`card create` with a repeated --depends-on reaches the card verb and records every parent', async () => {
-    initStore(root);
+    initTestStore(root);
     const a = createCard(root, 'default', { title: 'A' });
     const b = createCard(root, 'default', { title: 'B' });
     const { args, flags } = parseArgs([

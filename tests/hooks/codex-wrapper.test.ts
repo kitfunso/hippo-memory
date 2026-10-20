@@ -18,7 +18,7 @@ import {
 import { resolveCodexSessionTranscript } from '../../src/hooks/codex-session.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -429,7 +429,7 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     fs.utimesSync(decoy, future, future);
 
     const globalRoot = path.join(root, 'global');
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     const work = path.join(root, 'work');
     fs.mkdirSync(work, { recursive: true });
     const standIn = writeStandInCodex(path.join(root, 'real-bin'));

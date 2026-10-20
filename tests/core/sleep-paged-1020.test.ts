@@ -10,7 +10,7 @@ import { auditMemoryQuality } from '../../src/api/auth/audit.js';
 import { deduplicateStore, type DedupPair } from '../../src/consolidate/dedupe.js';
 import { auditMemories, type AuditIssue } from '../../src/core/memory-audit.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
-import { loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 const PAGE = 4;
 const roots: string[] = [];
@@ -51,10 +51,13 @@ const ROWS: ReadonlyArray<readonly [string, string, { tenantId?: string; pinned?
 function seeded(): string {
   const root = makeRoot('sleep-paged');
   roots.push(root);
-  for (const [id, text, { tenantId = 'default', pinned = false, retrievals = 0 }] of ROWS) {
-    const entry = createMemory(text, { tags: ['ops'], tenantId, pinned, layer: Layer.Semantic });
-    writeEntry(root, { ...entry, id, retrievalCount: retrievals });
-  }
+  writeEntriesTogether(
+    root,
+    ROWS.map(([id, text, { tenantId = 'default', pinned = false, retrievals = 0 }]) => {
+      const entry = createMemory(text, { tags: ['ops'], tenantId, pinned, layer: Layer.Semantic });
+      return { ...entry, id, retrievalCount: retrievals };
+    }),
+  );
   return root;
 }
 

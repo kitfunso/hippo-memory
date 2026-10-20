@@ -16,7 +16,7 @@ import { loadConfig } from '../../src/core/config.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 describe('physics scoring default', () => {
   it('is off unless a config opts in', () => {
@@ -43,7 +43,7 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
     writeFileSync(join(repo, 'a.txt'), 'x', 'utf8');
     git('add', '.');
     git('commit', '-q', '-m', 'oops: parser dropped the trailing newline on windows paths during export');
-    initStore(join(repo, '.hippo'));
+    initTestStore(join(repo, '.hippo'));
   });
 
   function learn(): void {

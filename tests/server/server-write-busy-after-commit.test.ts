@@ -16,7 +16,7 @@ import * as client from '../../src/cli/client.js';
 import { mcpErrorResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { updateStatsUnlessBusy, copyToGlobal } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -91,7 +91,7 @@ describe('routed writes under a busy store', () => {
     home = makeRoot('busy-after-commit');
     globalHome = makeRoot('busy-after-commit-global', { init: false });
     vi.stubEnv('HIPPO_HOME', globalHome);
-    initStore(globalHome);
+    initTestStore(globalHome);
     busyErr = realBusyError(home);
     const handle = await serve({ hippoRoot: home, port: 0 });
     url = handle.url;

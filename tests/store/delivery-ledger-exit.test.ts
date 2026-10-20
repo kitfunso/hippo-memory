@@ -26,7 +26,7 @@ import {
   type TurnSpec,
   type Verdict,
 } from '../_helpers/host-transcript.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const PROMPT = 'how should the postgres migration rollback plan work';
 const P1 = 'first question about deploys';
@@ -529,7 +529,7 @@ describe('context availability: was the block that carried the lesson delivered'
 
   it('X20 a pin that lives only in the global store is application-unknown with source_store global', async () => {
     make();
-    initStore(p.globalRoot);
+    initTestStore(p.globalRoot);
     const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
     const r = await fireIn(p, 'x20', P1);
     const [e] = events('x20');

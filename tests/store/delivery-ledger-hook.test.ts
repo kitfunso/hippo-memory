@@ -13,7 +13,7 @@ import type { HippoConfig } from '../../src/core/config.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -126,7 +126,7 @@ beforeEach(() => {
   tmp = makeRoot('delivery-hook', { init: false });
   proj = path.join(tmp, 'proj');
   fs.mkdirSync(store(proj), { recursive: true });
-  initStore(store(proj));
+  initTestStore(store(proj));
   configure(true);
   seeded.length = 0;
 });
@@ -336,7 +336,7 @@ describe('what one hook call records', () => {
     const bare = path.join(tmp, 'bare');
     const globalRoot = path.join(bare, 'global');
     fs.mkdirSync(globalRoot, { recursive: true });
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     writeEntry(globalRoot, {
       ...createMemory('PINNED: always check the rollback plan before deploy', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

@@ -42,7 +42,7 @@ import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
@@ -98,7 +98,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY }]);
     expect(liveRows(w.global)[0].source).toMatch(/^agent-memory:claude-code:p-/);
 
-    initStore(join(hand, '.hippo'));
+    initTestStore(join(hand, '.hippo'));
     expect(claude(importProjectMemories(join(hand, '.hippo'), opts()))).toMatchObject({ imported: 1, handedOver: 1 });
     expect(liveRows(w.global)).toEqual([]);
     expect(dormantRows(w.global).map((d) => d.reason)).toEqual(['source-deleted']);
@@ -107,7 +107,7 @@ describe('agent memory sync: routing and sharing', () => {
 
   it('a project Y row with the same text does not hide the note from project X in the global store', () => {
     const SHARED = 'Every service logs in UTC with ISO timestamps.';
-    initStore(w.global);
+    initTestStore(w.global);
     plainRow(w.global, DEPLOY, 'projy');
     plainRow(w.global, SHARED, '');
     const hx = join(w.dir, 'hookx');
@@ -180,7 +180,7 @@ describe('agent memory sync: routing and sharing', () => {
     const notes = projectNotes(w, w.dir);
     const transcript = join(dirname(note(notes, 'h.md', HOME_NOTE)), '..', 's.jsonl');
     writeFileSync(transcript, `${JSON.stringify({ cwd: w.dir })}\n`, 'utf8');
-    initStore(w.global);
+    initTestStore(w.global);
     const stray = {
       ...createMemory('An older wording of the home note.', { tenantId: 'default', baseHalfLifeDays: 30 }),
       originProject: 'repoa',
@@ -295,7 +295,7 @@ describe('agent memory sync: routing and sharing', () => {
     mkdirSync(repo);
     expect(spawnSync('git', ['init', '-q', repo], { encoding: 'utf8', windowsHide: true }).status).toBe(0);
     const store = join(repo, 'sub', '.hippo');
-    initStore(store);
+    initTestStore(store);
     note(projectNotes(w, repo), 'deploy.md', DEPLOY);
     expect(claude(importForStore(store, opts())).imported).toBe(1);
 

@@ -5,7 +5,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -52,7 +52,7 @@ function seedContinuity(): void {
 
 describe('hippo recall --continuity', () => {
   it('JSON: returns continuity alongside memories', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
@@ -69,7 +69,7 @@ describe('hippo recall --continuity', () => {
   });
 
   it('text: prints snapshot/handoff/trail headings above the memory list', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('another deploy memo', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
@@ -83,7 +83,7 @@ describe('hippo recall --continuity', () => {
   });
 
   it('does not include continuity when flag is absent (hot path)', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('hot path memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
@@ -96,7 +96,7 @@ describe('hippo recall --continuity', () => {
 
   // codex round 2 P1: zero-result regression must surface continuity.
   it('zero-result JSON: continuity still present when no memories match', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
@@ -109,7 +109,7 @@ describe('hippo recall --continuity', () => {
   });
 
   it('zero-result text: prints continuity instead of bare "No memories found"', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
@@ -122,7 +122,7 @@ describe('hippo recall --continuity', () => {
   });
 
   it('zero-result without --continuity still prints "No memories found"', async () => {
-    initStore(hippoDir);
+    initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 

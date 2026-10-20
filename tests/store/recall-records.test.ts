@@ -26,7 +26,7 @@ import {
 import type { CliFlags } from '../../src/cli/flag-values.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 
@@ -210,7 +210,7 @@ function seedContinuity(root: string): void {
 function emptyStore(): Store {
   const home = makeRoot('records-empty', { init: false });
   const root = join(home, 'store');
-  initStore(root);
+  initTestStore(root);
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
   return { home, root, globalRoot: join(home, 'global'), goalId: 'no-goal' };
 }

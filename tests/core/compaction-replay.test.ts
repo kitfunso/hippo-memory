@@ -19,7 +19,7 @@ import {
 } from '../_helpers/compaction-hooks.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { log as hippoLog } from '../../src/util/log.js';
 
 const MINUTE = 60_000;
@@ -116,7 +116,7 @@ function writeSpool(name: string, over: { tenantId?: string; sessionId?: string;
 }
 
 describe('replay of records a killed hook left', () => {
-  beforeEach(() => initStore(s.hippoRoot));
+  beforeEach(() => initTestStore(s.hippoRoot));
 
   it('finishes a record left summarised for over 10 minutes, once', () => {
     seed(s.hippoRoot, {
@@ -423,7 +423,7 @@ describe('replay of records a killed hook left', () => {
 });
 
 describe('two replayers working the same store', () => {
-  beforeEach(() => initStore(s.hippoRoot));
+  beforeEach(() => initTestStore(s.hippoRoot));
 
   it('a stale replayer writes nothing and reports what the first one wrote', () => {
     seed(s.hippoRoot, {
@@ -509,7 +509,7 @@ describe('hippo sleep finishes what the hook could not', () => {
   const sleep = async () => await runHippo(['sleep', '--no-learn', '--no-share'], s.proj, s.env);
 
   it('a hook killed after the record step: sleep writes the items once', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     const hook = await runHippo(['post-compact'], s.proj, s.env, fixturePayload(0, { cwd: s.proj }));
     expect(oneLine(hook.stdout)).toBe('Hippo saved 4 memories from this compaction.');
 
@@ -528,7 +528,7 @@ describe('hippo sleep finishes what the hook could not', () => {
   });
 
   it('a dry run replays nothing', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     seed(s.hippoRoot, {
       id: 'cmp-1',
       status: 'summarised',
@@ -542,7 +542,7 @@ describe('hippo sleep finishes what the hook could not', () => {
   });
 
   it('the next post-compact also finishes an earlier compaction', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     seed(s.hippoRoot, {
       id: 'cmp-1',
       status: 'summarised',
@@ -569,7 +569,7 @@ describe('hippo sleep finishes what the hook could not', () => {
 
 describe('the daily runner finishes the global store', () => {
   it('imports what a hook in a folder with no store of its own spooled into the global store', async () => {
-    initStore(s.globalRoot);
+    initTestStore(s.globalRoot);
     const db = openHippoDb(s.globalRoot);
     try {
       db.exec('BEGIN IMMEDIATE');

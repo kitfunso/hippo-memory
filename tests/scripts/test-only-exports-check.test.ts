@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -7,12 +7,11 @@ import { spawnSync } from 'node:child_process';
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-test-only-exports.mjs');
 const PKG = JSON.stringify({ exports: { '.': './dist/index.js' } });
 const TEST = "import { seam } from '../src/a.js';\nseam();\n";
-const baselineOf = (...exports: string[]) => JSON.stringify({ count: exports.length, exports });
 
 type Run = { args?: string[]; status: number; output: string[] };
-type Row = { name: string; files: Record<string, string>; runs: Run[]; count?: number };
+type Row = { name: string; files: Record<string, string>; runs: Run[] };
 
-// A second src user keeps the ratchet quiet so each row isolates the naming rule.
+// A second src user keeps the export check quiet so each row isolates the naming rule.
 function seamRow(name: string, seam: string, status: number, output: string[]): Row {
   return {
     name,
@@ -22,7 +21,6 @@ function seamRow(name: string, seam: string, status: number, output: string[]): 
       'src/b.ts': `import { ${seam} } from './a.js';
 ${seam}();
 `,
-      '.test-only-exports-baseline.json': baselineOf(),
     },
     runs: [{ status, output }],
   };
@@ -30,7 +28,7 @@ ${seam}();
 
 function seamRows(): Row[] {
   return [
-    seamRow('a _verbThingForTests seam name passes', '_setThingForTests', 0, ['ratchet OK']),
+    seamRow('a _verbThingForTests seam name passes', '_setThingForTests', 0, ['check OK']),
     seamRow('a __setX seam name fails with file:line name', '__setThing', 1, ['src/a.ts:1 __setThing']),
     seamRow('a ForTests name without the underscore fails', 'setThingForTests', 1, ['src/a.ts:1 setThingForTests']),
   ];
@@ -42,7 +40,6 @@ const rows: Row[] = [
     files: {
       'src/a.ts': 'export function seam() {}\n',
       'tests/a.test.ts': TEST,
-      '.test-only-exports-baseline.json': baselineOf(),
     },
     runs: [{ status: 1, output: ['src/a.ts:seam', 'tests/_helpers'] }],
   },
@@ -52,9 +49,8 @@ const rows: Row[] = [
       'src/a.ts': 'export function seam() {}\n',
       'src/b.ts': "import { seam } from './a.js';\nseam();\n",
       'tests/a.test.ts': TEST,
-      '.test-only-exports-baseline.json': baselineOf(),
     },
-    runs: [{ status: 0, output: ['0 exports'] }],
+    runs: [{ status: 0, output: ['check OK'] }],
   },
   {
     name: 'a src comment that names an export is not a use',
@@ -62,7 +58,6 @@ const rows: Row[] = [
       'src/a.ts': 'export function seam() {}\n',
       'src/b.ts': '// seam is what the tests call\n/* seam */\nexport const other = 1;\n',
       'tests/a.test.ts': TEST,
-      '.test-only-exports-baseline.json': baselineOf(),
     },
     runs: [{ status: 1, output: ['src/a.ts:seam'] }],
   },
@@ -71,38 +66,23 @@ const rows: Row[] = [
     files: {
       'src/index.ts': 'export const seam = 1;\n',
       'tests/a.test.ts': "import { seam } from '../src/index.js';\nseam;\n",
-      '.test-only-exports-baseline.json': baselineOf(),
     },
-    runs: [{ status: 0, output: ['0 exports'] }],
+    runs: [{ status: 0, output: ['check OK'] }],
   },
   {
-    name: 'a shrunk set passes and --update lowers the count',
+    name: 'a leftover baseline file exempts nothing',
     files: {
       'src/a.ts': 'export function seam() {}\n',
       'tests/a.test.ts': TEST,
-      '.test-only-exports-baseline.json': baselineOf('src/a.ts:seam', 'src/a.ts:gone'),
+      '.test-only-exports-baseline.json': JSON.stringify({ count: 1, exports: ['src/a.ts:seam'] }),
     },
-    runs: [
-      { status: 0, output: ['--update', '1 exports'] },
-      { args: ['--update'], status: 0, output: ['Wrote'] },
-    ],
-    count: 1,
-  },
-  {
-    name: '--update refuses a grown set and leaves the baseline alone',
-    files: {
-      'src/a.ts': 'export function seam() {}\n',
-      'tests/a.test.ts': TEST,
-      '.test-only-exports-baseline.json': baselineOf(),
-    },
-    runs: [{ args: ['--update'], status: 1, output: ['Refusing to update', 'src/a.ts:seam'] }],
-    count: 0,
+    runs: [{ status: 1, output: ['src/a.ts:seam'] }],
   },
   ...seamRows(),
 ];
 
 describe('check-test-only-exports.mjs', () => {
-  it.each(rows)('$name', ({ files, runs, count }) => {
+  it.each(rows)('$name', ({ files, runs }) => {
     const root = mkdtempSync(join(tmpdir(), 'hippo-tox-'));
     try {
       const all = { 'package.json': PKG, 'src/keep.ts': '', 'tests/keep.test.ts': '', ...files };
@@ -114,9 +94,6 @@ describe('check-test-only-exports.mjs', () => {
         const r = spawnSync(process.execPath, [SCRIPT, ...args], { cwd: root, encoding: 'utf-8' });
         expect(r.status).toBe(status);
         for (const line of output) expect(r.stdout + r.stderr).toContain(line);
-      }
-      if (count !== undefined) {
-        expect(JSON.parse(readFileSync(join(root, '.test-only-exports-baseline.json'), 'utf8')).count).toBe(count);
       }
     } finally {
       rmSync(root, { recursive: true, force: true });

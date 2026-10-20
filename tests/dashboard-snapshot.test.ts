@@ -3,7 +3,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../src/core/memory.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
-import { buildSnapshot } from '../src/api/dashboard/snapshot.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { storedVectorIds } from '../src/db/vector-store.js';
 import { buildOverview } from '../src/api/dashboard/queries.js';
@@ -17,6 +16,7 @@ import {
   snapshotsOf,
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
+import { snapshotOfRows } from './_helpers/snapshot-of-rows.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import {
   listMemoryConflicts,
@@ -169,22 +169,21 @@ describe('dashboard snapshot', () => {
     } finally {
       closeHippoDb(db);
     }
-    const fromWholeRows = buildSnapshot({
-      id: snap.id,
-      tenantId: 'default',
-      nowMs: NOW,
-      entries: loadAllEntries(root, 'default').map((e) => asDashboardRow(e, embeddedIds.has(e.id))),
-      openConflicts: listMemoryConflicts(root, 'open', 'default'),
-      scanText: () => {},
-      lossAversion: {},
-    });
+    const fromWholeRows = snapshotOfRows(
+      NOW,
+      loadAllEntries(root, 'default').map((e) => asDashboardRow(e, embeddedIds.has(e.id))),
+      listMemoryConflicts(root, 'open', 'default'),
+    );
 
     expect(snap.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });
     expect(snap.facts).toHaveLength(6);
-    expect(JSON.stringify({ ...snap, memo: null, byKey: [...snap.byKey] })).toBe(
-      JSON.stringify({ ...fromWholeRows, memo: null, byKey: [...fromWholeRows.byKey] }),
+    // Each build takes the next id, so the two snapshots compare with it set aside.
+    expect(JSON.stringify({ ...snap, id: 0, memo: null, byKey: [...snap.byKey] })).toBe(
+      JSON.stringify({ ...fromWholeRows, id: 0, memo: null, byKey: [...fromWholeRows.byKey] }),
     );
-    expect(JSON.stringify(buildOverview(snap))).toBe(JSON.stringify(buildOverview(fromWholeRows)));
+    expect(JSON.stringify({ ...buildOverview(snap), snapshotId: 0 })).toBe(
+      JSON.stringify({ ...buildOverview(fromWholeRows), snapshotId: 0 }),
+    );
   });
 
   it("reads vectors only for its own tenant's rows, never the whole vector table", () => {

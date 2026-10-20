@@ -4,7 +4,7 @@ import { listMemoryConflicts, loadAllEntries, appendSessionEvent } from '../_hel
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpDir: string;
 
@@ -14,7 +14,7 @@ beforeEach(() => {
 
 describe('consolidate auto-promote: session -> trace', () => {
   it('promotes a session with a session_complete event into a trace', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const sid = 'test-session-auto';
     appendSessionEvent(tmpDir, 'default', {
       session_id: sid,
@@ -55,7 +55,7 @@ describe('consolidate auto-promote: session -> trace', () => {
   });
 
   it('does NOT promote sessions that lack a session_complete event', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const sid = 'test-no-outcome';
     appendSessionEvent(tmpDir, 'default', {
       session_id: sid,
@@ -71,7 +71,7 @@ describe('consolidate auto-promote: session -> trace', () => {
   });
 
   it('does NOT promote a session whose completion outcome is not a known one', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-bogus',
       event_type: 'session_complete',
@@ -86,7 +86,7 @@ describe('consolidate auto-promote: session -> trace', () => {
   });
 
   it('does NOT create duplicate traces across repeated sleep runs', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const sid = 'test-idempotent';
     appendSessionEvent(tmpDir, 'default', {
       session_id: sid,
@@ -112,7 +112,7 @@ describe('consolidate auto-promote: session -> trace', () => {
   });
 
   it('does NOT fire conflict detection between two trace-layer memories', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
 
     // Two traces whose content would otherwise trip the enabled/disabled
     // polarity heuristic (distinctive shared tokens + opposing polarity).
@@ -147,7 +147,7 @@ describe('consolidate auto-promote: session -> trace', () => {
   });
 
   it('skips sessions older than autoTraceWindowDays (default 7)', async () => {
-    initStore(tmpDir);
+    initTestStore(tmpDir);
     const sid = 'test-stale';
 
     // Poke the DB directly to backdate the session_complete row by 30 days.

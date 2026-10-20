@@ -34,7 +34,7 @@ import {
   loadAllEntries,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';
@@ -73,7 +73,7 @@ beforeEach(() => {
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });
-  initStore(root);
+  initTestStore(root);
   seed();
 });
 

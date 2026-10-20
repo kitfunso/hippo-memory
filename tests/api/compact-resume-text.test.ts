@@ -13,7 +13,7 @@ import { truncateCodePointSafe } from '../../src/util/transcript-tail.js';
 import { resolveTenantId } from '../../src/server/boot.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let s: Scratch;
 
@@ -142,7 +142,7 @@ describe('preCompactForCaller', () => {
 
     const server = path.join(s.dir, 'server', '.hippo');
     fs.mkdirSync(server, { recursive: true });
-    initStore(server);
+    initTestStore(server);
     fs.writeFileSync(path.join(server, 'config.json'), JSON.stringify({ sharedStore: true }));
     const ctx: Context = {
       hippoRoot: server,

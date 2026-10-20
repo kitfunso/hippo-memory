@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { loadRecallEntriesAt } from '../../src/store/sqlite/search-rows.js';
-import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
+import { loadSearchEntries, writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -214,7 +214,10 @@ describe('loadSearchEntries bm25_score', () => {
     // limit=10 returned all 30 rows; the fix added LIMIT ?. This test
     // would FAIL on pre-v1.7.0 store.ts (returned 30) and PASSES on the
     // fix (returns exactly 10).
-    for (let i = 0; i < 30; i++) writeEntry(root, makeRaw(`content ${i}`));
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 30 }, (_, i) => makeRaw(`content ${i}`)),
+    );
     const results = loadSearchEntries(root, 'zzzznonexistenttokenxxxxxx qqqqqqq', 10, 'default');
     expect(results.length).toBe(10);
     for (const e of results) {

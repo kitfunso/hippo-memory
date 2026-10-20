@@ -9,7 +9,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const FAKE_NOW = '2026-06-01T12:00:00.000Z';
@@ -46,7 +46,7 @@ function seed(root: string, content: string, created: string, extra: Partial<Mem
 
 // Stamped by hand: derived from the temp dir, the origin is whichever project marker sits above it on this machine.
 function seedGlobalPin(): void {
-  initStore(globalRoot);
+  initTestStore(globalRoot);
   seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', {
     pinned: true,
     originProject: '',
@@ -114,7 +114,7 @@ beforeEach(() => {
   localRoot = path.join(projectDir, '.hippo');
   globalRoot = path.join(tmp, 'global');
   fs.mkdirSync(projectDir, { recursive: true });
-  initStore(localRoot);
+  initTestStore(localRoot);
   seed(localRoot, 'PINNED: always check the rollback plan before deploy', '2026-05-01T00:00:00.000Z', { pinned: true });
   seed(localRoot, 'the postgres migration needs a rollback plan and a dry run', '2026-05-20T00:00:00.000Z');
   seed(localRoot, 'deploy windows are Tuesday and Thursday afternoons only', '2026-05-21T00:00:00.000Z');

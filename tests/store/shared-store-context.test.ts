@@ -14,7 +14,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -59,7 +59,7 @@ async function start(flagged: boolean, extra: Record<string, boolean> = {}): Pro
   writeEntry(home, { ...createMemory(ROWS.alias), originProject: 'app' });
   writeEntry(home, { ...createMemory(ROWS.beta), originProject: 'beta' });
   writeEntry(home, { ...createMemory(ROWS.none), originProject: null });
-  initStore(globalHome);
+  initTestStore(globalHome);
   writeEntry(globalHome, { ...createMemory(ROWS.global), originProject: '' });
   handle = await serve({ hippoRoot: home, port: 0 });
   return handle;

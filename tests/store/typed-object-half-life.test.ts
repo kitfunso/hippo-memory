@@ -17,7 +17,7 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -26,7 +26,7 @@ afterEach(() => {
 function store(config: Partial<HippoConfig> | undefined): string {
   const root = path.join(makeRoot('typed-hl', { init: false }), '.hippo');
   dirs.push(path.dirname(root));
-  initStore(root);
+  initTestStore(root);
   if (config) fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify(config));
   return root;
 }

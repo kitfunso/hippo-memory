@@ -13,7 +13,7 @@ import {
   writeEntry,
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import {
   dir,
   useMemoryValueScratch,
@@ -139,7 +139,7 @@ describe('(h) scale characterization', () => {
     const entries = buildEntries();
     expect(entries).toHaveLength(TENANTS.length * N_PER_TENANT);
 
-    initStore(dir);
+    initTestStore(dir);
     enableMemoryValue(dir, { replay: { count: 0 }, autoTraceCapture: false });
     batchWriteAndDelete(dir, entries, []);
 

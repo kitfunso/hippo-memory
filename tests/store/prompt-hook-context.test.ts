@@ -17,7 +17,7 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -62,7 +62,7 @@ beforeEach(() => {
 function makeProject(dir: string, rateBp: number | null = null): string {
   const store = path.join(dir, '.hippo');
   fs.mkdirSync(store, { recursive: true });
-  initStore(store);
+  initTestStore(store);
   if (rateBp !== null) {
     fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: rateBp } }));
   }
@@ -413,7 +413,7 @@ describe('promptHookContext on a shared store', () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const globalStore = path.join(tmp, 'global');
-    initStore(globalStore);
+    initTestStore(globalStore);
     pin(globalStore, 'PINNED: the operator keeps a personal note about the vpn', '');
     expect((await ask(store, 'g-own', false)).stdout).toContain('personal note');
     const shared = await ask(store, 'g-shared', true);

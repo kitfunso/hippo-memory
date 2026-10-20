@@ -7,7 +7,7 @@ import type { JsonValue } from '../../src/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -25,7 +25,7 @@ function projectStore(config: Record<string, JsonValue>): string {
   fs.mkdirSync(path.join(tmp, 'proj', '.git'), { recursive: true });
   const store = path.join(tmp, 'proj', '.hippo');
   fs.mkdirSync(store, { recursive: true });
-  initStore(store);
+  initTestStore(store);
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ ...config, embeddings: { enabled: false } }));
   return store;
 }

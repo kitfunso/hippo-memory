@@ -25,7 +25,7 @@ import {
 let root: string;
 
 beforeEach(() => {
-  root = makeRoot('w2b-leases', { init: false });
+  root = makeRoot('w2b-leases');
 });
 
 function pastIso(): string {

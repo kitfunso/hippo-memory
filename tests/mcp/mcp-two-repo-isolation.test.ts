@@ -25,7 +25,8 @@ import {
   saveSessionHandoff,
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
-import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -168,7 +169,7 @@ beforeAll(async () => {
 
   store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });
-  initStore(store);
+  initTestStore(store);
   writeConfig();
   const db = openHippoDb(store);
   try {

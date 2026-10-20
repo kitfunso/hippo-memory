@@ -13,7 +13,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 type Body = { [key: string]: JsonValue };
 
@@ -488,7 +488,7 @@ describe('typed-object CLI verbs', () => {
   beforeAll(async () => {
     root = makeRoot('typed-object-cli');
     // The CLI looks for the store in `.hippo` under the working directory.
-    initStore(join(root, '.hippo'));
+    initTestStore(join(root, '.hippo'));
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     // An empty tenant falls through to `default`, whatever the shell running the suite has set.
     vi.stubEnv('HIPPO_TENANT', '');

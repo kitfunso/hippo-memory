@@ -14,6 +14,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember, outcomeForLastRecall } from '../../src/api/index.js';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 import { recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -132,7 +133,9 @@ describe('api.outcomeForLastRecall reads', () => {
     const home = tmpHome();
     try {
       const ids: string[] = [];
-      for (let i = 0; i < 40; i++) ids.push(await seedMemory(home, `bystander or recalled memory number ${i}`));
+      await withSharedStoreHandles(async () => {
+        for (let i = 0; i < 40; i++) ids.push(await seedMemory(home, `bystander or recalled memory number ${i}`));
+      });
       const recalled = [ids[3], ids[17]];
       seedLastRetrievalIds(home, recalled);
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });

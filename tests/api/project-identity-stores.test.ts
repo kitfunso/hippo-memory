@@ -31,7 +31,7 @@ import { loadConfig } from '../../src/core/config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 // Every sync asks git for each folder's layout in a child process, and the re-sync cases run several syncs.
 const RESYNC_MS = 15_000;
@@ -123,7 +123,7 @@ describe('two repos named api in one global store', () => {
   let b: string;
 
   beforeEach(() => {
-    initStore(w.global);
+    initTestStore(w.global);
     a = checkout('git@github.com:acme-pay/api.git', 'pay', 'api');
     b = checkout('https://github.com/acme-search/api', 'search', 'api');
     pinned(w.global, OLD, 'api');
@@ -330,7 +330,7 @@ describe('a project store with an id', () => {
   it("repair folds the store's own folder name into its id; nothing runs it unasked", () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
-    initStore(store);
+    initTestStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('svc');
 
@@ -343,7 +343,7 @@ describe('a project store with an id', () => {
   it('repair folds the folder name when only a compaction record still carries it', () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
-    initStore(store);
+    initTestStore(store);
     withDb(store, (db) =>
       db
         .prepare(
@@ -361,7 +361,7 @@ describe('repair on sleep', () => {
   it('folds the folder name of a project store once, then never runs again', () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
-    initStore(store);
+    initTestStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     const first = projectNameRepairOnce(cliApiContext(store, T));
     expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
@@ -371,7 +371,7 @@ describe('repair on sleep', () => {
   });
 
   it('leaves global folds to the manual repair, since a same-named repo may never have compacted', () => {
-    initStore(w.global);
+    initTestStore(w.global);
     const a = checkout('git@github.com:acme-pay/api.git', 'pay', 'api');
     pinned(w.global, 'OLD-API rows under the folder name.', 'api');
     compaction('c-a', 'api', a);

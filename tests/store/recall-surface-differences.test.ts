@@ -30,7 +30,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 
@@ -649,7 +649,7 @@ describe('shared store recall, MCP vs HTTP', () => {
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     let handle: ServerHandle | undefined;
     try {
-      initStore(root);
+      initTestStore(root);
       writeFileSync(join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
       writeEntry(
         root,

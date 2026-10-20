@@ -9,7 +9,7 @@ import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index
 import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export const TENANT_A = 'acme';
@@ -29,7 +29,7 @@ export interface TwoTenantFixture {
 /** Keys and audit rows in both tenants, the newest row pruned so the high-water id sits above every id left. */
 export function seedTwoTenants(): TwoTenantFixture {
   const dir = mkdtempSync(join(tmpdir(), 'hippo-conformance-template-'));
-  initStore(dir);
+  initTestStore(dir);
   const db = openHippoDb(dir);
   try {
     const mint = (tenantId: string, role: 'admin' | 'member'): CreateApiKeyResult => {

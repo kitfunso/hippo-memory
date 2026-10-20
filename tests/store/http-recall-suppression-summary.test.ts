@@ -16,7 +16,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memo
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -40,17 +40,17 @@ let handle: ServerHandle;
 beforeEach(async () => {
   home = makeRoot('http-c5');
   // Seed 20 query-matching memories so droppedByBudget > 0 when limit < 20.
-  for (let i = 0; i < 20; i++) {
-    writeEntry(
-      home,
+  writeEntriesTogether(
+    home,
+    Array.from({ length: 20 }, (_, i) =>
       createMemory(`omega ${i}`, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         kind: 'raw',
         tenantId: 'default',
       }),
-    );
-  }
+    ),
+  );
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 

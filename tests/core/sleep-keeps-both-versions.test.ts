@@ -35,7 +35,8 @@ import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const DAY = 86_400_000;
@@ -49,7 +50,7 @@ function tmp(): string {
 
 function newRoot(): string {
   const root = join(tmp(), '.hippo'); // the CLI finds its store at <cwd>/.hippo
-  initStore(root);
+  initTestStore(root);
   // Replay would refresh the sources whose fade these tests watch.
   writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
   return root;
@@ -732,7 +733,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
   it('autoShare', () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
-    initStore(getGlobalRoot());
+    initTestStore(getGlobalRoot());
     write(getGlobalRoot(), LONG_OLD);
     const root = newRoot();
     write(root, LONG_NEW);
@@ -745,7 +746,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
   it('search across the local and global stores', async () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
-    initStore(getGlobalRoot());
+    initTestStore(getGlobalRoot());
     write(getGlobalRoot(), LONG_OLD);
     const root = newRoot();
     write(root, LONG_NEW);

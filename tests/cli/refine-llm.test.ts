@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
-import { refineSemanticMemory, refineStore } from '../../src/cli/refine-llm.js';
+import { refineStore } from '../../src/cli/refine-llm.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import * as fs from 'fs';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { refineOne } from '../_helpers/refine-one.js';
 
 function tmpStore(): string {
   const dir = makeRoot('refine');
@@ -23,14 +24,10 @@ function mockFetcher(body: string, ok = true): typeof fetch {
   return async () => new Response(JSON.stringify({ content: [{ text: body }] }), { status });
 }
 
-describe('refineSemanticMemory', () => {
+describe('refining one consolidated entry', () => {
   it('returns the refined text from a successful API response', async () => {
     const fetcher = mockFetcher('Prefer async over sync in production paths.');
-    const result = await refineSemanticMemory(
-      '[Consolidated from 3 related memories]\n\nuse async ... use async ... use async',
-      [],
-      { apiKey: 'test', fetcher },
-    );
+    const result = await refineOne('use async ... use async ... use async', [], { apiKey: 'test', fetcher });
     expect(result).toBe('Prefer async over sync in production paths.');
   });
 
@@ -69,7 +66,7 @@ describe('refineSemanticMemory', () => {
         /empty or too short/,
       ],
     ])('returns null and logs one warning when %s', async (_label, fetcher, pattern) => {
-      const result = await refineSemanticMemory('merged', [], { apiKey: API_KEY, fetcher });
+      const result = await refineOne('merged', [], { apiKey: API_KEY, fetcher });
       expect(result).toBeNull();
       const lines = warnLines();
       expect(lines).toHaveLength(1);
@@ -83,7 +80,7 @@ describe('refineSemanticMemory', () => {
       const fetcher = async (): Promise<Response> => {
         throw new TypeError('fetch failed', { cause: reset });
       };
-      await refineSemanticMemory('merged', [], { apiKey: API_KEY, fetcher });
+      await refineOne('merged', [], { apiKey: API_KEY, fetcher });
       const line = warnLines().join('');
       expect(line).toContain('errorClass=TypeError');
       expect(line).toContain('errno=ECONNRESET');

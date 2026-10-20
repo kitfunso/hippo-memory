@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { COMPACTION_DB_WAIT_MS } from '../../src/core/compaction-timing.js';
 import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../../src/db/index.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import {
   compactionMemories,
   compactionRows,
@@ -55,7 +55,7 @@ describe('pre-compact on a locked store', () => {
         }) +
         '\n',
     );
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
@@ -82,7 +82,7 @@ describe('pre-compact on a locked store', () => {
 
 describe('post-compact on a locked store', () => {
   it('a locked store makes the hook spool inside its budget, and sleep imports the spool', async () => {
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     const db = openHippoDb(s.hippoRoot);
     const waits = path.join(s.dir, 'lock-waits');
     try {

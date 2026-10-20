@@ -19,7 +19,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { renderGraphHtml } from '../../src/graph/view.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -104,7 +104,7 @@ describe('heartbeatVerdict', () => {
 
 describe('embedding provider', () => {
   it('logs at debug why an error body could not be read', async () => {
-    initStore(root);
+    initTestStore(root);
     fs.writeFileSync(
       path.join(root, 'config.json'),
       JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }),
@@ -150,7 +150,7 @@ describe('repo scan in init', () => {
 
 describe('capture log append', () => {
   it('warns once when appends fail after the banner', () => {
-    initStore(root);
+    initTestStore(root);
     const logFile = path.join(root, 'capture.log');
     const blank = path.join(root, 'blank.txt');
     fs.writeFileSync(blank, ' ');
@@ -182,7 +182,7 @@ describe('capture log append', () => {
 
 describe('config stamp', () => {
   it('throws with the path and code when config.json cannot be reached, instead of falling back', () => {
-    initStore(root);
+    initTestStore(root);
     const config = path.join(root, 'config.json');
     fs.writeFileSync(config, '{}');
     failStat('EACCES', config);
@@ -190,7 +190,7 @@ describe('config stamp', () => {
   });
 
   it('reads a path refused with ENOTDIR as missing', () => {
-    initStore(root);
+    initTestStore(root);
     const config = path.join(root, 'config.json');
     failStat('ENOTDIR', config);
     expect(loadConfig(root).embeddings).toBeDefined();
@@ -208,7 +208,7 @@ describe('resolveEmbeddingModel', () => {
 
 describe('countTableRows', () => {
   it('warns with the table name and keeps the null', () => {
-    initStore(root);
+    initTestStore(root);
     const db = openHippoDb(root);
     try {
       expect(countTableRows(db, 'no_such_table')).toBeNull();
@@ -222,7 +222,7 @@ describe('countTableRows', () => {
 
 describe('dormant snapshot', () => {
   it('warns when the stored content no longer matches its snapshot', () => {
-    initStore(root);
+    initTestStore(root);
     const db = openHippoDb(root);
     try {
       const entry = createMemory('the retired cron host was called nightly-02');

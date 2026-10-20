@@ -10,7 +10,7 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -110,7 +110,7 @@ beforeEach(() => {
   tmp = makeRoot('pilot-arm', { init: false });
   proj = path.join(tmp, 'proj');
   fs.mkdirSync(store(proj), { recursive: true });
-  initStore(store(proj));
+  initTestStore(store(proj));
   writeEntry(store(proj), { ...createMemory('PINNED: always check the rollback plan before deploy'), pinned: true });
   setRate(10000);
 });
@@ -148,7 +148,7 @@ describe('the per-prompt hook', () => {
   it('hippo arm on an EMPTY store still books a row, so an empty injection is not a selection filter', async () => {
     const empty = path.join(tmp, 'empty');
     fs.mkdirSync(store(empty), { recursive: true });
-    initStore(store(empty));
+    initTestStore(store(empty));
     const id = sessionFor('hippo', 5000);
     setRate(5000, store(empty));
     const r = await run(HOOK_ARGS, prompt(id), empty);
@@ -267,7 +267,7 @@ describe('the per-prompt hook', () => {
     fs.mkdirSync(bare, { recursive: true });
     const globalRoot = path.join(tmp, 'global');
     fs.mkdirSync(globalRoot, { recursive: true });
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     setRate(10000, globalRoot);
     saveActiveTaskSnapshot(globalRoot, 'default', {
       task: 'ship',

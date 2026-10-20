@@ -18,7 +18,7 @@ import {
   type Project,
 } from '../_helpers/delivery-boundary.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
 const FAKE_NOW = '2099-01-01T00:00:00.000Z';
@@ -129,7 +129,7 @@ describe('what one hippo context call records', () => {
 
   it('C4: a store with nothing to load writes no trace, so the empty row keeps the query hash and links none', async () => {
     fs.rmSync(p.hippoRoot, { recursive: true, force: true });
-    initStore(p.hippoRoot);
+    initTestStore(p.hippoRoot);
     writeConfig(p);
     const r = await run(p, QUERY);
     expect([r.status, r.stdout]).toEqual([0, '']);

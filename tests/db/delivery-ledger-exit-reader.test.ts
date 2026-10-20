@@ -9,7 +9,7 @@ import { seed, verdictOf } from '../_helpers/host-transcript.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import {
   STAGES,
   REASONS,
@@ -290,7 +290,7 @@ describe('fold edge cases', () => {
     });
     const g = path.join(dir, 'g31');
     fs.mkdirSync(g);
-    initStore(g);
+    initTestStore(g);
     expect(read('r31', 'mem_nowhere', { global: g })).toMatchObject({ class: 'not-written', reason: 'no-row' });
   });
 

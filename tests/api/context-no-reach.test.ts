@@ -8,7 +8,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -39,8 +39,8 @@ beforeEach(() => {
   globalRoot = path.join(tmpRoot, 'global');
   fs.mkdirSync(local, { recursive: true });
   fs.mkdirSync(globalRoot, { recursive: true });
-  initStore(local);
-  initStore(globalRoot);
+  initTestStore(local);
+  initTestStore(globalRoot);
   vi.stubEnv('HIPPO_HOME', globalRoot);
   localPin = seedPin(local, 'a local pin that the prompt must carry every turn');
   globalPin = seedPin(globalRoot, 'a global pin that only a reach to the global store brings');

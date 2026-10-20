@@ -12,7 +12,7 @@ import {
   saveActiveTaskSnapshot,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 // AWS's documented example key, a placeholder that is safe to embed.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
@@ -47,7 +47,7 @@ const assistant = (text: string) => ({
 
 function store(): string {
   const root = tmp();
-  initStore(root);
+  initTestStore(root);
   return root;
 }
 

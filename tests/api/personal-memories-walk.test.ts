@@ -29,7 +29,7 @@ import {
   readEntry,
   writeEntry,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -179,7 +179,7 @@ beforeAll(async () => {
   vi.stubEnv('HIPPO_V1_RPS', '0'); // every call comes from one address, so the per-address limiter would cut the walk short
   store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });
-  initStore(store);
+  initTestStore(store);
   fs.writeFileSync(
     path.join(store, 'config.json'),
     JSON.stringify({ sharedStore: true, pinnedInject: { promptRecall: true } }),
@@ -334,7 +334,7 @@ describe('personal memories walk (plan lane T)', () => {
     expect(bare.text).toContain("hippo_context needs the caller's project on a shared store");
     const solo = path.join(tmp, 'solo', '.hippo');
     fs.mkdirSync(solo, { recursive: true });
-    initStore(solo);
+    initTestStore(solo);
     const soloKeys: Keys = {
       A: mint('solo-a', 'member', 'oid-a', solo),
       B: mint('solo-b', 'member', 'oid-b', solo),

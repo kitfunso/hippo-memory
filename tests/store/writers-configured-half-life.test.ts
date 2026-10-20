@@ -28,7 +28,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -48,7 +48,7 @@ function tmp(): string {
 
 function store(): string {
   const root = path.join(tmp(), '.hippo');
-  initStore(root);
+  initTestStore(root);
   fs.writeFileSync(
     path.join(root, 'config.json'),
     JSON.stringify({ defaultHalfLifeDays: CONFIGURED, replay: { count: 0 } }),

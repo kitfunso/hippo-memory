@@ -30,7 +30,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -103,7 +103,7 @@ describe('GET /v1/context', () => {
     const isoTmp = makeRoot('srv-iso', { init: false });
     const projHippo = join(isoTmp, 'proj-a', '.hippo');
     mkdirSync(projHippo, { recursive: true });
-    initStore(projHippo);
+    initTestStore(projHippo);
     const projHandle = await serve({ hippoRoot: projHippo, port: 0 });
     try {
       const ctx: FullContext = apiCtx(projHippo, 'default', { subject: 'localhost:cli', role: 'admin' });

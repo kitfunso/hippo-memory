@@ -19,7 +19,7 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
@@ -36,7 +36,7 @@ describe('git-learned rows and the global store', () => {
   beforeEach(() => {
     tmp = makeRoot('gitshare', { init: false });
     hippoRoot = join(tmp, 'proj', '.hippo');
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     // The tags learnFromRepo gives every seed.
     seed = createMemory(SEED, {

@@ -13,7 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -143,8 +143,8 @@ describe('request-path output on a fixed store', () => {
     mkdirSync(join(tmp, 'proj'), { recursive: true });
     vi.stubEnv('HIPPO_HOME', globalRoot);
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
-    initStore(localRoot);
-    initStore(globalRoot);
+    initTestStore(localRoot);
+    initTestStore(globalRoot);
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 80; i++) writeEntry(localRoot, localRow(i));
       writeEntry(localRoot, merged());

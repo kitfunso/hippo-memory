@@ -22,6 +22,7 @@ import {
   closeHippoDb,
   getHippoDbPath,
   runWithRequestStores,
+  withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../src/util/write-budget.js';
@@ -369,14 +370,17 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       policyText: 'retry 3x',
     });
     let prev: number | undefined;
-    for (let i = 0; i < 40; i++) {
-      prev = (
-        await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-          decisionText: `Call ${i} adopts RetryPolicy`,
-          supersedesDecisionId: i % 10 === 9 ? prev : undefined,
-        })
-      ).id;
-    }
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(async () => {
+      for (let i = 0; i < 40; i++) {
+        prev = (
+          await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+            decisionText: `Call ${i} adopts RetryPolicy`,
+            supersedesDecisionId: i % 10 === 9 ? prev : undefined,
+          })
+        ).id;
+      }
+    });
     const copy = `${home}-copy`;
     cpSync(home, copy, { recursive: true });
     try {

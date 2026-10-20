@@ -16,7 +16,7 @@ import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
@@ -50,7 +50,7 @@ beforeEach(() => {
   projectDir = path.join(tmp, 'proj');
   localRoot = path.join(projectDir, '.hippo');
   fs.mkdirSync(projectDir, { recursive: true });
-  initStore(localRoot);
+  initTestStore(localRoot);
   writeEntry(localRoot, {
     ...createMemory('PINNED: always check the rollback plan before deploy', { baseHalfLifeDays: 30 }),
     pinned: true,

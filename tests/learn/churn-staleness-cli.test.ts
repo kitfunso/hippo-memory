@@ -7,7 +7,7 @@ import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { initGitRepo, commit, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ describe('hippo invalidate --churn (CLI)', () => {
   });
 
   it("also tags this repo's memories in the global store", async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.originProject = path.basename(repoDir).toLowerCase();

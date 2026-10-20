@@ -11,7 +11,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
@@ -23,9 +23,9 @@ let root: string;
 beforeEach(() => {
   const tmp = makeRoot('autoshare-pages', { init: false });
   vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
-  initStore(getGlobalRoot());
+  initTestStore(getGlobalRoot());
   root = join(tmp, 'proj', '.hippo');
-  initStore(root);
+  initTestStore(root);
 });
 
 afterEach(() => {

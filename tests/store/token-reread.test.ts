@@ -20,7 +20,7 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordRereads, writeEntry, appendSessionEvent, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;
@@ -317,8 +317,8 @@ describe('__session-end-worker counts re-reads', () => {
   beforeEach(() => {
     root = makeRoot('reread-worker', { init: false });
     ({ env, proj, globalRoot } = scratch(root));
-    initStore(join(proj, '.hippo'));
-    initStore(globalRoot);
+    initTestStore(join(proj, '.hippo'));
+    initTestStore(globalRoot);
   });
 
   async function worker(transcript: string, spawned = false): Promise<string> {
@@ -420,7 +420,7 @@ describe('compact-resume books the block it prints', () => {
 
   it('prints the same bytes as before and books them under the payload session id', async () => {
     const store = join(proj, '.hippo');
-    initStore(store);
+    initTestStore(store);
     const snapshot = saveActiveTaskSnapshot(store, 'default', {
       task: 'add rate limiting',
       summary: 'The handler is done.',
@@ -478,7 +478,7 @@ describe('compact-resume books the block it prints', () => {
   });
 
   it('books into the global store when the project has none, and creates no project store', async () => {
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     saveActiveTaskSnapshot(globalRoot, 'default', {
       task: 'global task',
       summary: 's',
@@ -511,7 +511,7 @@ describe('compact-resume books the block it prints', () => {
 
   it('still prints the snapshot when a trail row cannot be read, and says why on stderr', async () => {
     const store = join(proj, '.hippo');
-    initStore(store);
+    initTestStore(store);
     const snapshot = saveActiveTaskSnapshot(store, 'default', {
       task: 'add rate limiting',
       summary: 'The handler is done.',
@@ -567,7 +567,7 @@ describe('compact-resume books the block it prints', () => {
 
   it('prints nothing on a broken store and says why on stderr', async () => {
     const store = join(proj, '.hippo');
-    initStore(store);
+    initTestStore(store);
     writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
     for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
     const result = await hippo(['compact-resume'], proj, env, payload);
@@ -578,7 +578,7 @@ describe('compact-resume books the block it prints', () => {
 
   it('reports the skip reason through the logger, so HIPPO_LOG=error silences it', async () => {
     const store = join(proj, '.hippo');
-    initStore(store);
+    initTestStore(store);
     writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
     for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
     const loud = await hippo(['compact-resume'], proj, env, payload);
@@ -603,7 +603,7 @@ describe("a sub-agent's hooks", () => {
     root = makeRoot('reread-subagent', { init: false });
     ({ env, proj } = scratch(root));
     store = join(proj, '.hippo');
-    initStore(store);
+    initTestStore(store);
   });
 
   it('tells a sub-agent payload by agent_id alone, since an --agent session also sends agent_type', async () => {
@@ -690,7 +690,7 @@ describe('re-read reports', () => {
   beforeEach(() => {
     root = makeRoot('reread-report', { init: false });
     ({ env, proj } = scratch(root));
-    initStore(join(proj, '.hippo'));
+    initTestStore(join(proj, '.hippo'));
     withDb(join(proj, '.hippo'), (db) => {
       const at = Date.now() - 60_000;
       book(db, 'hook', 'inject', at, 100, 's1');

@@ -29,10 +29,10 @@ export const MAX_EXTRACT_PER_TYPE = 10000;
 
 /** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short, generic words; MAX skips prose
  *  (a decision's prose name is never a target, only a source). */
-export const MIN_REF_NAME_LEN = 4;
-export const MAX_REF_NAME_LEN = 80;
+const MIN_REF_NAME_LEN = 4;
+const MAX_REF_NAME_LEN = 80;
 /** Per-source cap so one object cannot explode the graph with references edges. */
-export const MAX_REFERENCES_PER_OBJECT = 25;
+const MAX_REFERENCES_PER_OBJECT = 25;
 /** Regex-size bound: at most this many distinct target names enter the combined
  *  alternation, keeping the scan regex sane on a huge store. */
 export const MAX_TARGET_NAMES = 5000;

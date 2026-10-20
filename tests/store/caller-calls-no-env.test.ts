@@ -15,7 +15,7 @@ import {
   sessionEndHandoffForCaller,
 } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const TENANT = 'acme-tenant';
 const ENV_TENANT = 'env-tenant';
@@ -48,7 +48,7 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_TENANT', ENV_TENANT);
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });
-  initStore(root);
+  initTestStore(root);
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
   // A folder outside any repo, so a call that fell back to the process folder would stamp its name.
   const elsewhere = path.join(dir, 'elsewhere');

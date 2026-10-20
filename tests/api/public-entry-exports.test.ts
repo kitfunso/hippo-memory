@@ -8,7 +8,7 @@ import { strengthBucket } from '../../src/consolidate/dedupe.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -69,7 +69,7 @@ describe('package entry re-exports sleep', () => {
     const origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', home);
     try {
-      initStore(home);
+      initTestStore(home);
       const result = await entry.sleep(
         {
           hippoRoot: home,

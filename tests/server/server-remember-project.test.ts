@@ -10,7 +10,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -31,7 +31,7 @@ let handle: ServerHandle | null = null;
 async function start(config: Record<string, JsonValue>): Promise<ServerHandle> {
   store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });
-  initStore(store);
+  initTestStore(store);
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify(config));
   handle = await serve({ hippoRoot: store, port: 0 });
   return handle;

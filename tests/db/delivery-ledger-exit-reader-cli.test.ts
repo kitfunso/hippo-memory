@@ -10,7 +10,7 @@ import { seed, verdictOf, writeHostTranscript, type Verdict } from '../_helpers/
 import { dispose, project, type Project } from '../_helpers/delivery-boundary.js';
 import { fire } from '../_helpers/host-transcript.js';
 import { trySymlink } from '../_helpers/symlink.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import {
   SCRIPT,
   dir,
@@ -98,7 +98,7 @@ describe('store paths through a link', () => {
 
   it('R27 the global store through a linked HIPPO_HOME', (ctx) => {
     p = project();
-    initStore(p.globalRoot);
+    initTestStore(p.globalRoot);
     fs.writeFileSync(
       path.join(p.globalRoot, 'config.json'),
       JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }),
@@ -124,7 +124,7 @@ describe('store paths through a link', () => {
 
   it('R28 the command line classifies the global store behind a linked HIPPO_HOME under --no-global, with the link above the store', (ctx) => {
     p = project();
-    initStore(p.globalRoot);
+    initTestStore(p.globalRoot);
     fs.writeFileSync(
       path.join(p.globalRoot, 'config.json'),
       JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }),

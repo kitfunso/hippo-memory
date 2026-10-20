@@ -5,7 +5,7 @@ import * as path from 'path';
 import { cmdCapture } from '../../src/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let dir: string;
 let savedExitCode: typeof process.exitCode;
@@ -20,7 +20,7 @@ afterEach(() => {
 
 describe('cmdCapture failure', () => {
   it.each([
-    ['a missing file', (): string => (initStore(path.join(dir, '.hippo')), path.join(dir, '.hippo'))],
+    ['a missing file', (): string => (initTestStore(path.join(dir, '.hippo')), path.join(dir, '.hippo'))],
     ['an uninitialised store', (): string => path.join(dir, 'no-store')],
   ])('restores stdio and sets exit code 1 for %s', (_name, makeRoot) => {
     const root = makeRoot();

@@ -19,7 +19,8 @@ import {
   saveActiveTaskSnapshot,
   appendSessionEvent,
 } from '../_helpers/root-forms.js';
-import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -48,7 +49,7 @@ function makeHome(config?: StoreConfig): string {
   const home = makeRoot('mcp-ranking', { init: false });
   mkdirSync(join(home, '.hippo'), { recursive: true });
   if (config) writeFileSync(join(home, 'config.json'), JSON.stringify(config), 'utf8');
-  initStore(home);
+  initTestStore(home);
   return home;
 }
 

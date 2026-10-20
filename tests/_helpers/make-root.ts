@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll } from 'vitest';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 export interface MakeRootOptions {
   /** Written to `<root>/config.json`, where the store reads its config. */
@@ -29,9 +29,9 @@ function build(label: string, rootOf: (base: string) => string, { config, init =
   made.push(base);
   const root = rootOf(base);
   if (!init) return { base, root };
-  // makeStore's root is left for initStore to create, so it gets the owner-only mode a real store gets.
+  // makeStore's root is left for initTestStore to create, so it gets the owner-only mode a real store gets.
   if (root === base) mkdirSync(join(base, '.hippo'), { recursive: true });
-  initStore(root);
+  initTestStore(root);
   if (config) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   return { base, root };
 }

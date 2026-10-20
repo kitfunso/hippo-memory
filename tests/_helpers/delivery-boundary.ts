@@ -11,7 +11,7 @@ import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';
 import { writeEntry, saveActiveTaskSnapshot } from './root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
@@ -47,7 +47,7 @@ export function writeConfig(p: Project, { ledger = true, holdout = false }: Conf
 /** A scratch project with a store, the ledger on and one pinned memory. */
 export function project(config: Config = {}): Project {
   const s = scratch();
-  initStore(s.hippoRoot);
+  initTestStore(s.hippoRoot);
   // Copilot and VS Code folders sit inside the scratch home so no run reads the real ones.
   const env = {
     ...s.env,

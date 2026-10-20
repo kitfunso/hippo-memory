@@ -15,7 +15,7 @@ import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmpRoot: string;
 let projectStore: string;
@@ -36,8 +36,8 @@ beforeEach(() => {
   globalStore = join(tmpRoot, 'global');
   mkdirSync(projectStore, { recursive: true });
   mkdirSync(globalStore, { recursive: true });
-  initStore(projectStore);
-  initStore(globalStore);
+  initTestStore(projectStore);
+  initTestStore(globalStore);
   vi.stubEnv('HIPPO_HOME', globalStore);
 });
 

@@ -9,7 +9,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
@@ -23,7 +23,7 @@ let root: string;
 beforeEach(() => {
   scratch = makeRoot('defects-local', { init: false });
   root = join(scratch, 'project', '.hippo');
-  initStore(root);
+  initTestStore(root);
   writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }));
   vi.stubEnv('HIPPO_HOME', join(scratch, 'global'));
 });

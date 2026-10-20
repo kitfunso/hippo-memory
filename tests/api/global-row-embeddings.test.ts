@@ -19,7 +19,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
@@ -291,7 +291,7 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
     try {
       // Seed an unembedded global row directly, bypassing the CLI, so the
       // row predates any embed call.
-      initStore(globalRoot);
+      initTestStore(globalRoot);
       const entry = createMemory('cli embed --global test content delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       writeEntry(globalRoot, entry);
 

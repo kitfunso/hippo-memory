@@ -12,21 +12,22 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { consolidate } from '../../src/index.js';
-import { Layer, calculateStrength, type MemoryEntry, type DecayOptions } from '../../src/core/memory.js';
+import {
+  Layer,
+  calculateStrength,
+  strengthOptionsOf,
+  type MemoryEntry,
+  type DecayOptions,
+} from '../../src/core/memory.js';
 import { toWire } from '../../src/core/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/core/config.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import {
-  computeMvFeatures,
-  MV_FEATURE_NAMES,
-  scoreEntries,
-  type MvFeatureVector,
-} from '../../src/consolidate/memory-value.js';
+import { mvCandidate, scoreEntries, type MvFeatureVector } from '../../src/consolidate/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/consolidate/memory-value-weights.js';
 import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
 import { loadEveryTenantEntries, loadSessionDecayContext, writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import {
   createMemory7,
   repoRoot,
@@ -40,12 +41,18 @@ import {
 
 useMemoryValueScratch();
 
+/** The features the decay pass scores an entry by, at the default loss-aversion rules. */
+const featuresOf = (entry: MemoryEntry): MvFeatureVector =>
+  mvCandidate(entry, NOW, strengthOptionsOf(undefined)).features;
+// SAFETY: the frozen weights' keys; test (c) checks they are exactly the scorer's feature keys.
+const FEATURE_NAMES = Object.keys(MEMORY_VALUE_WEIGHTS) as ReadonlyArray<keyof MvFeatureVector>;
+
 // ---------------------------------------------------------------------------
 // (a) feature parity vs benchmarks/memory-value/extract.mjs
 // ---------------------------------------------------------------------------
 describe('(a) feature parity vs extract.mjs computeFeatures', () => {
-  it('computeMvFeatures matches the benchmark for all 8 shared dims on real store-round-tripped entries', () => {
-    initStore(dir);
+  it('the decay scorer features match the benchmark for all 8 shared dims on real store-round-tripped entries', () => {
+    initTestStore(dir);
     const built: MemoryEntry[] = [
       createMemory7('alpha short note about a topic', { layer: Layer.Episodic }),
       {
@@ -79,12 +86,12 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
     expect(loaded.length).toBe(built.length);
 
     for (const entry of loaded) {
-      const mv = computeMvFeatures(entry, NOW);
+      const mv = featuresOf(entry);
       // SAFETY: computeFeatures (extract.mjs) computes the same 8-dim
-      // feature vector as computeMvFeatures — proving that parity is this
-      // test's whole point (the loop below checks every MV_FEATURE_NAMES dim).
+      // feature vector as the scorer; proving that parity is this
+      // test's whole point (the loop below checks every FEATURE_NAMES dim).
       const bench = computeFeatures(toWire(entry), NOW) as MvFeatureVector;
-      for (const f of MV_FEATURE_NAMES) {
+      for (const f of FEATURE_NAMES) {
         expect(mv[f]).toBeCloseTo(bench[f], 10);
       }
     }
@@ -96,7 +103,7 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
 // ---------------------------------------------------------------------------
 describe('(b) normalization parity vs evaluate.mjs min-max', () => {
   it('scoreEntries matches an independently-computed min-max normalization + weighted dot product', () => {
-    initStore(dir);
+    initTestStore(dir);
     const built: MemoryEntry[] = [
       createMemory7('one', { layer: Layer.Semantic }),
       createMemory7('two two', { layer: Layer.Semantic }),
@@ -115,9 +122,9 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
     for (const e of built) writeEntry(dir, e);
     const loaded = loadEveryTenantEntries(dir);
 
-    const raw = new Map(loaded.map((e) => [e.id, computeMvFeatures(e, NOW)]));
+    const raw = new Map(loaded.map((e) => [e.id, featuresOf(e)]));
     const minMax: Record<string, { min: number; max: number }> = {};
-    for (const f of MV_FEATURE_NAMES) {
+    for (const f of FEATURE_NAMES) {
       let min = Infinity;
       let max = -Infinity;
       for (const e of loaded) {
@@ -136,7 +143,7 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
     for (const e of loaded) {
       const nf = raw.get(e.id)!;
       let sum = 0;
-      for (const f of MV_FEATURE_NAMES) sum += MEMORY_VALUE_WEIGHTS[f] * norm(f, nf[f]);
+      for (const f of FEATURE_NAMES) sum += MEMORY_VALUE_WEIGHTS[f] * norm(f, nf[f]);
       expected.set(e.id, sum);
     }
 
@@ -147,7 +154,7 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
   });
 
   it('a feature constant across the entry set normalizes to 0 (matches evaluate.mjs semantics)', () => {
-    initStore(dir);
+    initTestStore(dir);
     // Identical created/last_retrieved/half_life/outcome/retrieval fields ->
     // every dim except content_length is constant across the set, so it is
     // the ONLY nonzero contribution (weight -0.615, negative -> shorter wins).
@@ -182,7 +189,9 @@ describe('(c) weights-sync vs the committed JSON artifact', () => {
     const meta = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')) as { weightsFileSha256: string };
 
     expect(Object.keys(MEMORY_VALUE_WEIGHTS).sort()).toEqual(Object.keys(artifactWeights).sort());
-    expect(Object.keys(MEMORY_VALUE_WEIGHTS).sort()).toEqual([...MV_FEATURE_NAMES].sort());
+    expect(Object.keys(MEMORY_VALUE_WEIGHTS).sort()).toEqual(
+      Object.keys(featuresOf(createMemory7('weights sync probe'))).sort(),
+    );
     for (const key of Object.keys(artifactWeights)) {
       expect(MEMORY_VALUE_WEIGHTS[key]).toBe(artifactWeights[key]);
     }
@@ -195,7 +204,7 @@ describe('(c) weights-sync vs the committed JSON artifact', () => {
 // ---------------------------------------------------------------------------
 describe('(d) flag-off byte-identical', () => {
   it('bigger mixed store (~40 entries, pinned/condemned/healthy, 3 tenants): survivor set, counts, and full details match a predicate-computed expectation', async () => {
-    initStore(dir);
+    initTestStore(dir);
     // Disable the other decay-adjacent passes so result.details is
     // decay-pass-only and directly comparable to the predicate below
     // (review-round F8 wants the FULL details array checked, not just

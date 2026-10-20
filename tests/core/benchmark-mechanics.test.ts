@@ -4,7 +4,7 @@ import { calculateStrength, applyOutcome, type MemoryEntry } from '../../src/cor
 import { search } from '../../src/search/bm25-search.js';
 import { markRetrieved } from '../../src/core/memory.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { createMemory7, tmpDir, daysAgo, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
 
 useBenchmarkCorpus();
@@ -15,7 +15,7 @@ useBenchmarkCorpus();
 
 describe('Decay mechanics', () => {
   it('strength drops below 0.25 after 14 days without retrieval (default half-life=7d)', () => {
-    initStore(tmpDir); // already init, no-op if exists
+    initTestStore(tmpDir); // already init, no-op if exists
     const entry = createMemory7('temporary note');
     const fourteenDaysAgo = daysAgo(14);
     const aged: MemoryEntry = { ...entry, lastRetrieved: fourteenDaysAgo };

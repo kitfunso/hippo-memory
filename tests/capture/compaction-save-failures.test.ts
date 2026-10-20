@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { log as logger } from '../../src/util/log.js';
 import { removeScratch, scratch, summaryWith, type Scratch } from '../_helpers/compaction-hooks.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let s: Scratch;
 let logs: string[];
@@ -14,7 +14,7 @@ let logs: string[];
 beforeEach(() => {
   s = scratch();
   logs = [];
-  initStore(s.hippoRoot);
+  initTestStore(s.hippoRoot);
 });
 afterEach(() => {
   vi.restoreAllMocks();

@@ -9,7 +9,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let tmp: string;
 
@@ -21,7 +21,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
   it('books no ledger row and leaves no hippo.db under the root', async () => {
     const donor = path.join(tmp, 'donor');
     fs.mkdirSync(donor);
-    initStore(donor);
+    initTestStore(donor);
     const pin = createMemory('PINNED: always check the rollback plan', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(donor, { ...pin, pinned: true, originProject: 'p' });
     const root = path.join(tmp, 'bare');

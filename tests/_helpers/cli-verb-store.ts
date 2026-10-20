@@ -16,7 +16,7 @@ import { runInProcess } from './run-in-process.js';
 import { runCliAs } from './run-cli-as.js';
 import { hippoRunAsync } from './spawn-hippo.js';
 import { writeEntry } from './root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from './store-template.js';
 
 const SPAWN_MS = 60_000;
 const STRENGTH_DECIMALS = 6;
@@ -154,8 +154,8 @@ export class Store {
     const user = join(this.base, 'user');
     mkdirSync(user);
     this.env = childEnv(this.home, user);
-    if (opts.init !== false) initStore(this.root);
-    if (opts.global) initStore(this.home);
+    if (opts.init !== false) initTestStore(this.root);
+    if (opts.global) initTestStore(this.home);
     this.settle();
   }
 

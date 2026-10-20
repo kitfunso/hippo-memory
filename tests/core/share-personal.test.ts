@@ -8,7 +8,7 @@ import { BadRequestError } from '../../src/core/api-errors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
@@ -42,7 +42,7 @@ describe('share and promote refuse personal rows', () => {
   beforeEach(() => {
     tmp = makeRoot('share-personal', { init: false });
     hippoRoot = join(tmp, 'proj', '.hippo');
-    initStore(hippoRoot);
+    initTestStore(hippoRoot);
     origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     const opts = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'], tenantId: 'default' };

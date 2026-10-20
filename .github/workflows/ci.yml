@@ -86,7 +86,7 @@ jobs:
         run: node scripts/check-store-port.mjs
       - name: Layer order
         run: node scripts/check-layers.mjs
-      - name: Test-only export ratchet
+      - name: No test-only exports
         run: node scripts/check-test-only-exports.mjs
       # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.
       - name: Tests build temp stores through makeRoot and makeStore
@@ -156,12 +156,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
       # Floors are zeroed per shard: each sees a third of the suite, and the coverage job applies them to the merge.
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob --coverage.thresholds.lines=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0
         env:
-          TMPDIR: /dev/shm
           HIPPO_REQUIRE_SYMLINKS: '1'
       - name: Upload blob report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -281,7 +279,6 @@ jobs:
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}/3
         env:
-          TMPDIR: /dev/shm
           HIPPO_REQUIRE_SYMLINKS: '1'
 
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
@@ -305,36 +302,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # Test stores on a RAM disk, the Windows twin of TMPDIR=/dev/shm (#214): the runner's D: stalls for minutes (#903).
-      # Arsenal Image Mounter, not ImDisk: an ImDisk volume skips the mount manager, so realpathSync.native throws EISDIR.
-      - name: Temp dir on a RAM disk
-        if: runner.os == 'Windows'
-        timeout-minutes: 5
-        run: |
-          $src = 'https://github.com/ArsenalRecon/Arsenal-Image-Mounter/raw/642f08bd3452df09c119c1fb18e45b18f77ad6e5'
-          $aim = Join-Path $env:RUNNER_TEMP 'aim'
-          $zips = @{
-            'll'  = @("$src/Command%20line%20applications/aim_ll.zip", '2055d72571eedef5b6f5dbb325ef8600ff189dea6675f1021c59df414c49626c')
-            'drv' = @("$src/DriverSetup/DriverFiles.zip", '709dac0a2e6a0cfff7b332ccafd688f30f0e56926eb68c0f5b8ab44083f02fe8')
-          }
-          foreach ($name in $zips.Keys) {
-            $url, $want = $zips[$name]
-            Invoke-WebRequest $url -OutFile "$aim-$name.zip"
-            $got = (Get-FileHash "$aim-$name.zip" -Algorithm SHA256).Hash.ToLower()
-            if ($got -ne $want) { throw "$name.zip hash $got, want $want" }
-            Expand-Archive "$aim-$name.zip" "$aim\$name"
-          }
-          Set-StorageSetting -NewDiskPolicy OnlineAll
-          & "$aim\ll\x64\aim_ll.exe" --install "$aim\drv"
-          if ($LASTEXITCODE) { throw "aim_ll --install failed: $LASTEXITCODE" }
-          & "$aim\ll\x64\aim_ll.exe" -a -t vm -s 4G -m R: -p "/fs:ntfs /q /y"
-          if ($LASTEXITCODE) { throw "aim_ll attach failed: $LASTEXITCODE" }
-          $d = 'R:\tmp'
-          New-Item -ItemType Directory -Force $d | Out-Null
-          node -e "require('fs').realpathSync.native(process.argv[1])" $d
-          if ($LASTEXITCODE) { throw "realpathSync.native fails on the RAM disk" }
-          "TEMP=$d" >> $env:GITHUB_ENV
-          "TMP=$d" >> $env:GITHUB_ENV
       - name: Vitest
         # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
         run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}

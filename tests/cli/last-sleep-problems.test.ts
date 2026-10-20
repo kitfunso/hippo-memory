@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { cmdLastSleep, sleepProblems } from '../../src/cli/last-sleep.js';
 import { initProject, oneLine, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let s: Scratch;
 let logFile: string;
@@ -101,7 +101,7 @@ describe('cmdLastSleep output', () => {
 
   it('a TTY with no mode gets terminal output', () => {
     withTty(true);
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     writeLog([...CLEAN, '[hippo] sleep failed: store locked']);
     const streams = capture();
     cmdLastSleep(s.hippoRoot, { path: logFile });
@@ -112,7 +112,7 @@ describe('cmdLastSleep output', () => {
 
   it('terminal mode writes the problems line to stderr and nothing to stdout', () => {
     withTty(false);
-    initStore(s.hippoRoot);
+    initTestStore(s.hippoRoot);
     writeLog([...CLEAN, '[hippo] sleep failed: store locked']);
     const streams = capture();
     cmdLastSleep(s.hippoRoot, { path: logFile }, 'terminal');

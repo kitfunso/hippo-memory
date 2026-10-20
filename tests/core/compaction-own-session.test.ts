@@ -16,7 +16,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
@@ -76,8 +76,8 @@ beforeEach(() => {
   const globalRoot = join(tmpRoot, 'global');
   mkdirSync(local, { recursive: true });
   mkdirSync(globalRoot, { recursive: true });
-  initStore(local);
-  initStore(globalRoot);
+  initTestStore(local);
+  initTestStore(globalRoot);
   vi.stubEnv('HIPPO_HOME', globalRoot);
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });

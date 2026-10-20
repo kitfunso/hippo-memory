@@ -13,7 +13,7 @@ import type { JsonValue } from '../../src/util/json.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -435,7 +435,7 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
   it('delivers a pinned global memory once from a projectless cwd', async () => {
     const m = machine();
     const globalStore = path.join(m.root, 'global');
-    initStore(globalStore);
+    initTestStore(globalStore);
     const entry = createMemory('projectless hook remembers the staging flag', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       pinned: true,

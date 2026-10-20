@@ -13,7 +13,7 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 let home: string;
 let project: string;
@@ -263,7 +263,7 @@ describe('a memory with a copy in the global store', () => {
     const store = (name: string): string => {
       const root = path.join(home, name);
       fs.mkdirSync(root);
-      initStore(root);
+      initTestStore(root);
       return root;
     };
     const mem = (root: string, text: string): MemoryEntry => {

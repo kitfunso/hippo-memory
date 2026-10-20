@@ -8,7 +8,7 @@ import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
   totalTally(
@@ -41,7 +41,7 @@ function writeLesson(home: string, project: string, file: string, body: string):
 
 function store(dir: string): string {
   const hippoRoot = path.join(dir, '.hippo');
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   return hippoRoot;
 }
 

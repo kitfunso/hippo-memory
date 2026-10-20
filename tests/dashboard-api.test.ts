@@ -3,7 +3,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { buildSnapshot } from '../src/api/dashboard/snapshot.js';
 import { buildOverview, buildProjectDetail } from '../src/api/dashboard/queries.js';
 import type {
   MemoryDetail,
@@ -28,6 +27,7 @@ import {
   type RunningDashboard,
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
+import { snapshotOfRows } from './_helpers/snapshot-of-rows.js';
 
 const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
 const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;
@@ -106,15 +106,7 @@ describe('overview and project', () => {
       lastRetrieved: isoAgo(i % 300),
     }));
     const rows = entries.map((e) => asDashboardRow(e));
-    const snap = buildSnapshot({
-      id: 1,
-      tenantId: 'default',
-      nowMs: NOW,
-      entries: rows,
-      openConflicts: [],
-      scanText: () => {},
-      lossAversion: {},
-    });
+    const snap = snapshotOfRows(NOW, rows);
 
     // SAFETY: 4,001 members is over the cut-off, so the scatter is the grid shape.
     const grid = buildProjectDetail(snap, 'p:big')!.scatter as ScatterGrid;
@@ -129,15 +121,7 @@ describe('overview and project', () => {
 describe('KPI series', () => {
   const seriesOf = (id: 'total' | 'projects', entries: MemoryEntry[]): number[] => {
     const rows = entries.map((e) => asDashboardRow(e));
-    const snap = buildSnapshot({
-      id: 1,
-      tenantId: 'default',
-      nowMs: NOW,
-      entries: rows,
-      openConflicts: [],
-      scanText: () => {},
-      lossAversion: {},
-    });
+    const snap = snapshotOfRows(NOW, rows);
     return buildOverview(snap).kpis.find((k) => k.id === id)!.series!;
   };
   const aged = (days: number, project: string): MemoryEntry => ({

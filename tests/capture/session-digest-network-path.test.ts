@@ -10,7 +10,7 @@ import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { syncStore } from '../_helpers/cli-stores.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];
@@ -45,7 +45,7 @@ const touched = (): string[] => probes.filter((p) => HOST.test(p));
 /** One session end on a fresh store: the line it logs and the digest it stores, '' for none. */
 function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
-  initStore(hippoRoot);
+  initTestStore(hippoRoot);
   const store = syncStore(hippoRoot);
   // Probes count from the session end itself, not the store set-up before it.
   probes.length = 0;

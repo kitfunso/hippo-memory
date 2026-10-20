@@ -10,7 +10,7 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLatestHandoff, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
@@ -227,7 +227,7 @@ describe('a folder with only the global store', () => {
     const folder = path.join(env.USERPROFILE!, 'billing');
     fs.mkdirSync(path.join(folder, '.git'), { recursive: true });
     const globalRoot = path.join(tmp, 'global');
-    initStore(globalRoot);
+    initTestStore(globalRoot);
     const transcript = claudeTranscript('g1', { cwd: folder, prompt: `${RULE}; uploads keep timing out overnight.` });
     expect((await hippo(workerArgs('G1', transcript), undefined, folder)).status).toBe(0);
     expect(fs.readFileSync(log, 'utf8')).toContain('digest: skip: this folder has no store of its own');
