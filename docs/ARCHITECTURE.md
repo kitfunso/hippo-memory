@@ -511,10 +511,32 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `TASK_OWNER_MIN_BINARY` (src/base/util/version.ts): The floor a store takes on its first session bind or its first owner snapshot, raised in the same transaction and never lowered. An older binary supersedes snapshots across the whole tenant, so it would close other people's rows; it must refuse the store from then on. It names the first release that ships v54, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` checks it beside `EXPIRING_KEYS_MIN_BINARY`, and fails on a checkout with no tags, where every tag check would pass by finding nothing.
 - Owner keying: On a shared store, snapshot and handoff reads and writes take a `ContinuityKey`: the caller's owner (`ownerOrSubject`, the key's owner or else its id) and its project names. The session trail is read only for the session of the caller's own snapshot. `recordFailure` stamps the owner and project when it is given them. A keyed save supersedes only that owner's rows in that project and writes no mirror file. A key with no owner or no project matches nothing on a read and throws on a write, so it never falls back to the tenant's newest row. Recall's continuity block and `getContext`'s task state use the same key, so a developer's next session picks up their own handoff. A local store passes no key and keeps its SQL and mirror files as before.
 
+### src/db/vector-graph-index.ts
+- `VECTOR_GRAPH_THRESHOLD` (wave 1020h): 1,000 stored vectors, down from 20,000. `MODE=crossover node benchmarks/vector-index/bench.mjs` timed the paged scan against the graph on 384-dim clustered vectors, one machine, p50 / p95 in ms. At 500 the graph wins p50 by 0.15 ms and ties p95; from 1,000 on it wins both.
+
+  | Vectors | Scan p50 / p95 | Graph p50 / p95 | Graph build | Graph heap a vector |
+  |---|---|---|---|---|
+  | 250 | 0.81 / 1.35 | 1.07 / 2.00 | 0.04 s | 7.3 KB |
+  | 500 | 1.68 / 2.52 | 1.53 / 2.53 | 0.1 s | 3.7 KB |
+  | 1,000 | 3.66 / 5.20 | 2.11 / 2.78 | 0.3 s | 2.2 KB |
+  | 2,000 | 9.46 / 14.20 | 4.10 / 5.33 | 0.8 s | 2.2 KB |
+  | 5,000 | 22.97 / 29.09 | 5.02 / 7.27 | 2.8 s | 2.3 KB |
+  | 10,000 | 45.42 / 62.34 | 6.47 / 9.90 | 10.5 s | 2.0 KB |
+  | 20,000 | 106.69 / 174.14 | 8.99 / 14.72 | 35.5 s | 1.8 KB |
+  | 50,000 | 179.06 / 224.18 | 8.36 / 11.81 | 104.9 s | 1.6 KB |
+
+- Recall at the new threshold: `MODE=store` (a real store, the store worker's graph against the exact scan, `NOISE=2`) gave recall@10 of 1.000 at 1,000, 2,000 and 5,000 vectors, for all rows and for one tenant of three. Graph p50 at 1,000 was 2.14 ms against 4.11 ms for the scan.
+- `maxVectors` (config `vectorGraph.maxVectors`, default 200,000): from 1,000 to 50,000 vectors the graph held 1.6 to 2.3 KB of heap a vector, so the default is about 400 MB in the server's store worker. Over the cap the store logs one warn line with the count, drops the graph and scans.
+- The paged scan (`topVectorMatches` in src/db/vector-store.ts): with no graph, a read takes `VECTOR_SCAN_PAGE` (1,024) vectors a statement on the memory_vectors key and keeps the best k in a heap, so memory stays flat as the store grows. Its time still grows with the store, as the table shows.
+- The daemon hop (`askingNearestFirst` in src/store/sqlite/vector-reads.ts, `serverNearestAsk` in src/surface/cli/server-nearest.ts): a CLI or hook store whose hippo.db holds between the threshold and the cap asks a running `hippo serve` on the same store for the nearest ids (`POST /v1/vectors/nearest`), then reads those rows from its own store, so the output is the same as the direct path. A smaller store scans: the scan is as fast as the HTTP hop. A server that does not answer in 1 s costs one warn line, then the local scan.
+
 ### src/db/vector-graph-rows.ts
 - `GRAPH_M`, `GRAPH_EF_CONSTRUCTION` (wave 1020 C, slice 4.2): chosen with `benchmarks/vector-index/bench.mjs` in graph mode, 100,000 clustered vectors of length 384, five runs at once on one machine. With `NOISE=2` (two rows of a cluster at cosine about 0.2, the rest at 0 +- 0.05), M 16 and efConstruction 100 give recall@10 0.998 at ef 128 and at ef 200. With `NOISE=2.5` (cosine about 0.14), recall@10 at ef 200 is 0.79 for M 16 and efConstruction 100 (build 255 s), 0.82 for efConstruction 200 (424 s) and 0.83 for M 24 with efConstruction 200 (717 s). More build bought little recall, so the graph keeps the cheaper pair.
 - `EF_FLOOR`: 128. At `NOISE=2` and 100,000 vectors, ef 64 gave recall@10 0.978 and ef 128 gave 0.998, for about 1 ms more a walk.
 - `graphMatches` stops at the first walk that yields k admitted rows. In store mode at `NOISE=2` and 100,000 vectors, walking on until 2k or 4k rows passed the filter raised recall@10 for one tenant of three from 0.978 to 0.980 and 0.988, at 3 and 5 times the time of the read.
+
+### benchmarks/a1/p99-recall.ts
+- CI gate (wave 1020h): the checks job runs the 1k store, 5 rounds of 200 queries, and fails when the fastest round's p99 is 40 ms or more. Six CI runs on ubuntu-latest (2026-10-21) gave a fastest-round p99 of 5.7 to 9.3 ms, and no round passed 14.3 ms. Three runs on a Windows 11 box with other test lanes running gave 14.3, 17.2 and 26.9 ms. 40 ms is about 4 times the slowest CI result and 1.5 times the slowest loaded Windows result, so a slow runner passes and a recall that does several times the work fails. The 10k run stays manual.
 
 ### src/domain/objects/decisions.ts
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).

@@ -20,6 +20,12 @@ export interface VectorReads {
   physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
 }
 
+/** Asks another process for the ids nearest a query, nearest first; undefined leaves the read to this store's scan. */
+export type NearestIdsAsk = (
+  queryVector: readonly number[],
+  spec: VectorCandidateSpec,
+) => Promise<readonly string[] | undefined>;
+
 /**
  * Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load.
  */

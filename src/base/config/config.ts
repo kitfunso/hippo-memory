@@ -168,6 +168,11 @@ export interface HippoConfig {
   /** The store serves many people, so a write that names no project is stamped NULL, never this folder's project, and a
    *  context read must name the caller's project. Default false. Read it through isSharedStore. */
   sharedStore: boolean;
+  /** The served store's vector graph. Past `maxVectors` stored vectors it keeps none, so the worker's heap stays
+   *  bounded, and nearest-row reads scan; docs/ARCHITECTURE.md has the heap a vector costs. */
+  vectorGraph: {
+    maxVectors: number;
+  };
   /** What the composition root read from the environment for this command or request; config.json never sets it. */
   runtime?: RuntimeSettings;
 }
@@ -311,6 +316,10 @@ export const DEFAULT_CONFIG: HippoConfig = {
     remote: true,
   },
   sharedStore: false,
+  // About 400 MB of worker heap at the measured 1.6 to 2.3 KB a 384-dim vector.
+  vectorGraph: {
+    maxVectors: 200_000,
+  },
 };
 
 type ConfigKey = Exclude<keyof HippoConfig, 'runtime'>;
@@ -478,6 +487,12 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
     })),
   ),
   configKey('sharedStore', flag(D.sharedStore)),
+  configKey(
+    'vectorGraph',
+    block('an object like {"maxVectors": 200000}', D.vectorGraph, (read) => ({
+      maxVectors: read('maxVectors', count(D.vectorGraph.maxVectors)),
+    })),
+  ),
 ];
 
 /** Reads the folder's config.json on every call; a root that loads often holds a configReader instead. */

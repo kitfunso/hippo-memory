@@ -1,11 +1,12 @@
 // The vector graph a store worker holds, on a real store in process: it only proposes rows, so SQL's admission and the
 // stored vectors decide every answer, and a read it cannot answer scans.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
 import { loadVectorCandidateEntriesAt } from '../../src/store/sqlite/search-rows.js';
+import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
 
@@ -26,14 +27,15 @@ interface Fixture {
 const opened: DatabaseSyncLike[] = [];
 afterEach(() => {
   for (const db of opened.splice(0)) closeHippoDb(db);
+  vi.restoreAllMocks();
 });
 
-function fixture(rows: readonly VectorRowSeed[]): Fixture {
+function fixture(rows: readonly VectorRowSeed[], maxVectors?: number): Fixture {
   const root = makeRoot('vector-graph');
   seedVectorRows(root, rows, MODEL);
   const db = openHippoDb(root);
   opened.push(db);
-  const graphs = new VectorGraphs(root, { threshold: THRESHOLD });
+  const graphs = new VectorGraphs(root, { threshold: THRESHOLD, maxVectors });
   const answered: boolean[] = [];
   const index: VectorIndex = {
     matches: (...args) => {
@@ -254,5 +256,46 @@ describe('a read the graph cannot fill', () => {
     expect([...answer].sort()).toEqual(['few-0', 'few-1', 'few-2']);
     expect(answer).toEqual(await scanned(f, q, spec('few')));
     expect(f.answered.slice(1)).toEqual([false]);
+  });
+});
+
+describe('a store over the vector graph cap', () => {
+  const capLines = (warn: { mock: { calls: unknown[][] } }): unknown[] =>
+    warn.mock.calls.filter(([line]) => String(line).includes('over the vector graph cap')).map(([line]) => line);
+
+  it('scans with one warn line naming the count, and builds no graph', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    const rows = tenantRows('t1', 400, 11);
+    const f = fixture(rows, 350);
+    const q = near(rows[4].vector, 11);
+
+    await built(f, q, spec('t1'));
+    elsewhere(f.root, (db) => upsertVectors(db, [[rows[0].id, q]], MODEL));
+    const answer = await nearest(f, q, spec('t1'));
+
+    expect(answer).toEqual(await scanned(f, q, spec('t1')));
+    expect(f.answered).toEqual([false, false]);
+    expect(capLines(warn)).toEqual([
+      'the store holds 400 vectors, over the vector graph cap of 350 (vectorGraph.maxVectors), so nearest-row reads scan',
+    ]);
+  });
+
+  it('drops a ready graph once the store grows past the cap, then scans with one warn line', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    const rows = tenantRows('t1', 400, 12);
+    const f = fixture(rows, 410);
+    const q = near(rows[9].vector, 12);
+    await built(f, q, spec('t1'));
+    const ready = await nearest(f, q, spec('t1'));
+
+    seedVectorRows(f.root, tenantRows('t2', 20, 13), MODEL);
+    const over = await nearest(f, q, spec('t1'));
+    await f.graphs.idle();
+    const still = await nearest(f, q, spec('t1'));
+
+    expect([ready, over, still]).toEqual([0, 1, 2].map(() => ready));
+    expect(ready).toEqual(await scanned(f, q, spec('t1')));
+    expect(f.answered).toEqual([false, true, false, false]);
+    expect(capLines(warn)).toHaveLength(1);
   });
 });

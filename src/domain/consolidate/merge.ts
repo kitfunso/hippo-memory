@@ -35,21 +35,23 @@ export async function retireHeldTexts(run: SleepRun): Promise<void> {
     // Sources come from the store, as the loaded rows did, never from a pass's pending changes.
     const parentIds = [...new Set([...rows.values()].flatMap((r) => r.parents))];
     const sources = new Map((await run.rows.read(parentIds)).map((s) => [s.id, s]));
+    const rejected = await rejectedAmongPage(run, [...rows.values()], sources);
     for (const [index, id] of [...page].reverse()) {
       const row = rows.get(id);
-      if (row) await retireHeldText(run, index, row, sources);
+      if (row) retireHeldText(run, index, row, sources, rejected);
     }
   }
 }
 
-async function retireHeldText(
+function retireHeldText(
   run: SleepRun,
   index: number,
   row: MemoryEntry,
   sources: ReadonlyMap<string, MemoryEntry>,
-): Promise<void> {
-  const rejected = await rejectedTexts(run, row, sources);
-  const successor = successorAfterRetirement(row, sources, (text) => rejected.has(text));
+  rejected: ReadonlyMap<string, ReadonlySet<string>>,
+): void {
+  const digests = rejected.get(row.tenantId);
+  const successor = successorAfterRetirement(row, sources, (text) => digests?.has(rejectionDigest(text)) === true);
   if (successor === undefined) return;
   run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
   if (run.dryRun) return;
@@ -59,20 +61,31 @@ async function retireHeldText(
   run.survivors.replaceAt(index, successor);
 }
 
-/** The texts the retirement check asks about, the row's own and its live sources', that the row's tenant rejected. */
-async function rejectedTexts(
-  run: SleepRun,
-  row: MemoryEntry,
-  sources: ReadonlyMap<string, MemoryEntry>,
-): Promise<Set<string>> {
-  const rejected = new Set<string>();
-  if (row.source !== 'consolidation' || row.supersededBy) return rejected;
+/** The texts the retirement check asks about, the row's own and its live sources'. */
+function askedTexts(row: MemoryEntry, sources: ReadonlyMap<string, MemoryEntry>): string[] {
+  if (row.source !== 'consolidation' || row.supersededBy) return [];
   const live = row.parents.flatMap((id) => {
     const source = sources.get(id);
     return source && !source.supersededBy ? [source.content] : [];
   });
-  for (const text of new Set([...live, ...heldTexts(row)])) {
-    if ((await run.tombstones.find(row.tenantId, rejectionDigest(text))) !== null) rejected.add(text);
+  return [...new Set([...live, ...heldTexts(row)])];
+}
+
+/** Per tenant, the digests of the page's asked texts that tenant rejected: one read per tenant, not one per text. */
+async function rejectedAmongPage(
+  run: SleepRun,
+  rows: readonly MemoryEntry[],
+  sources: ReadonlyMap<string, MemoryEntry>,
+): Promise<Map<string, ReadonlySet<string>>> {
+  const asked = new Map<string, string[]>();
+  for (const row of rows) {
+    const digests = asked.get(row.tenantId) ?? [];
+    digests.push(...askedTexts(row, sources).map(rejectionDigest));
+    asked.set(row.tenantId, digests);
+  }
+  const rejected = new Map<string, ReadonlySet<string>>();
+  for (const [tenantId, digests] of asked) {
+    rejected.set(tenantId, await run.tombstones.rejectedAmong(tenantId, digests));
   }
   return rejected;
 }

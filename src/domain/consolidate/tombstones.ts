@@ -8,6 +8,8 @@ import { errorMessage } from '../../base/util/log.js';
 export interface TombstoneChecks {
   /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
   find(tenantId: string, digest: string): Promise<RejectedValueRow | null>;
+  /** The digests among `digests` the tenant holds a tombstone for, in one store call; none under dryRun, as `find`. */
+  rejectedAmong(tenantId: string, digests: readonly string[]): Promise<Set<string>>;
   /** One audit row; nothing under dryRun. */
   audit(event: AppendAuditOpts): Promise<void>;
   /** `audit`, with a failed write logged and counted instead of thrown, for a refusal that stands without its row. */
@@ -21,6 +23,8 @@ export function tombstoneChecks(store: StoreWith<'consolidation'>, dryRun: boole
   };
   return {
     find: async (tenantId, digest) => (dryRun ? null : store.consolidation.rejectedValue(tenantId, digest)),
+    rejectedAmong: async (tenantId, digests) =>
+      dryRun || digests.length === 0 ? new Set() : store.consolidation.rejectedDigests(tenantId, digests),
     audit,
     async auditOrCount(event) {
       try {

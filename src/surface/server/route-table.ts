@@ -43,6 +43,7 @@ import { PROCESS_ROUTES } from './routes/processes.js';
 import { PROJECT_BRIEF_ROUTES } from './routes/project-briefs.js';
 import { SKILL_ROUTES } from './routes/skills.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './routes/recall.js';
+import { handleNearestVectors } from './routes/vectors.js';
 import { parseJsonBody } from './validation.js';
 import type { AuthedRouteRequest, ResolvedServeOptions, Route, RouteRequest, RouteEndpoint } from './types.js';
 
@@ -124,6 +125,12 @@ export const V1_ROUTES: readonly Route[] = [
     path: '/v1/context',
     auth: 'caller',
     handler: handleGetContext,
+  },
+  {
+    method: 'POST',
+    path: '/v1/vectors/nearest',
+    auth: 'caller',
+    handler: handleNearestVectors,
   },
   {
     method: 'POST',

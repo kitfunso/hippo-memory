@@ -116,9 +116,9 @@ async function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 
   }
   // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed), so the user still
   // sees what is already indexed.
-  const { ids: embeddedIds, dims } = await vectorSummary(ctx);
-  if (!embAvail && embeddedIds.size === 0) return;
-  const orphaned = embeddedIds.size - counts.embedded;
+  const { vectors, dims } = await vectorSummary(ctx);
+  if (!embAvail && vectors === 0) return;
+  const orphaned = vectors - counts.embedded;
   let line = `Embedded:          ${counts.embedded}/${counts.total} memories`;
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;

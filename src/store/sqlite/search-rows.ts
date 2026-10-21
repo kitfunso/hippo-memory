@@ -252,13 +252,21 @@ export async function loadVectorCandidateEntriesAt(
     params,
     index,
   });
-  if (matches.length === 0) return [];
+  return entriesInOrderAt(
+    db,
+    matches.map((m) => m.id),
+  );
+}
+
+/** The rows of `ids` in that order; an id deleted since it was matched is skipped. */
+export function entriesInOrderAt(db: DatabaseSyncLike, ids: readonly string[]): MemoryEntry[] {
+  if (ids.length === 0) return [];
   const rows = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))`,
-  ).all(JSON.stringify(matches.map((m) => m.id))) as MemoryRow[];
+  ).all(JSON.stringify(ids)) as MemoryRow[];
   const byId = new Map(rows.map((r) => [r.id, rowToEntry(r)]));
-  return matches.flatMap((m) => byId.get(m.id) ?? []);
+  return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
 /** Rarest-K prompt terms for this connection's FTS index, as a space-joined query string.

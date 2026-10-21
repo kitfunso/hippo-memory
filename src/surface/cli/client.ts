@@ -1,6 +1,6 @@
 /**
- * HTTP client wrapper for `hippo serve`: only the routed writes (remember, forget, archive, promote); every other
- * command opens the store directly.
+ * HTTP client wrapper for `hippo serve`: the routed writes (remember, forget, archive, promote) and the nearest-vector
+ * read; every other command opens the store directly.
  * Server errors rethrow with the message verbatim so CLI substring matches still work; network errors propagate as the
  * native fetch failure.
  */
@@ -170,6 +170,33 @@ export async function archiveRaw(
   return readReply<{ ok: true; archivedAt: string }>(res, 'POST /v1/memories/:id/archive', (b) =>
     isJsonString(b.archivedAt),
   );
+}
+
+/** The nearest-row read's body: the query vector and the spec the caller's own scan would apply. */
+export interface NearestIdsBody {
+  readonly vector: readonly number[];
+  readonly spec: JsonValue;
+}
+
+/** The ids the server finds nearest `body.vector`, nearest first, in one try that gives up after `timeoutMs`. */
+export async function nearestIds(
+  serverUrl: string,
+  apiKey: string | undefined,
+  body: NearestIdsBody,
+  timeoutMs: number,
+): Promise<string[]> {
+  const res = await fetchWithRetry(
+    `${serverUrl}/v1/vectors/nearest`,
+    { method: 'POST', headers: buildHeaders(apiKey, true), body: JSON.stringify(body) },
+    { timeoutMs, attempts: 1 },
+  );
+  if (!res.ok) await throwForStatus(res);
+  const reply = await readReply<{ ids: string[] }>(
+    res,
+    'POST /v1/vectors/nearest',
+    (b) => Array.isArray(b.ids) && b.ids.every(isJsonString),
+  );
+  return reply.ids;
 }
 
 /**

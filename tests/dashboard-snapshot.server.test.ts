@@ -7,7 +7,6 @@ import { memoryFacts, seriesDay } from '../src/base/memory/memory-facts.js';
 import { AT_RISK_BELOW } from '../src/base/memory/strength-bands.js';
 import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { storedVectorIds } from '../src/db/vector-store.js';
 import { isLiveMemory } from '../src/api/dashboard/live.js';
 import { buildOverview } from '../src/api/dashboard/overview.js';
 import { buildMemoryPage, type MemoryQuery } from '../src/api/dashboard/queries.js';
@@ -216,7 +215,12 @@ describe('dashboard tallies', () => {
     const db = openHippoDb(root);
     let vectors: Set<string>;
     try {
-      vectors = storedVectorIds(db);
+      // SAFETY: the SELECT names the one column read.
+      vectors = new Set(
+        (db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map(
+          (r) => r.memory_id,
+        ),
+      );
     } finally {
       closeHippoDb(db);
     }

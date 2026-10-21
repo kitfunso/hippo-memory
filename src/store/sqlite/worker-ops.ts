@@ -297,6 +297,7 @@ export const WORKER_OPS = {
     ftsDrift: 'write',
     sessionDecayContext: 'read',
     rejectedValue: 'read',
+    rejectedDigests: 'read',
     halfLifeBase: 'read',
     moveHalfLives: 'write',
     promotableSessions: 'read',
@@ -393,8 +394,10 @@ export interface WorkerInit {
   readonly busyWaitMs: number;
   /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph it holds. */
   readonly pinned?: boolean;
-  /** Stored vectors a store holds before the pinned reader builds its graph; 20,000 when omitted. */
+  /** Stored vectors a store holds before the pinned reader builds its graph; VECTOR_GRAPH_THRESHOLD when omitted. */
   readonly vectorGraphThreshold?: number | undefined;
+  /** Stored vectors past which the pinned reader keeps no graph; the config default when omitted. */
+  readonly vectorGraphMaxVectors?: number | undefined;
   /** One shared integer the writer sets to a job's id before that job may commit; the server thread reads it when the
    * job passes its deadline. */
   readonly commitFlag?: SharedArrayBuffer;

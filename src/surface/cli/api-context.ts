@@ -13,6 +13,7 @@ import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../store/index.js';
 import type { OptionalGroup } from '../../store/port.js';
 import {
+  askingNearestFirst,
   runDetachedSqliteRequest,
   runSqliteBatch,
   runSqliteHookRequest,
@@ -27,6 +28,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import type { RerankerFn } from '../../domain/rerankers/index.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
+import { serverNearestAsk } from './server-nearest.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
  * config.json once. */
@@ -38,9 +40,11 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
   return rerankerWithClef(name, envClefSettings());
 }
 
-/** The store the CLI and the stdio MCP server open; the adapter is named here so src/surface/mcp never imports it. */
+/** The store the CLI and the stdio MCP server open; the adapter is named here so src/surface/mcp never imports it. A
+ * `hippo serve` on the same store answers its nearest-row reads from the graph it holds. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
-  return sqliteStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+  const store = sqliteStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+  return askingNearestFirst(hippoRoot, store, serverNearestAsk(hippoRoot), cliConfig(hippoRoot).vectorGraph.maxVectors);
 }
 
 /** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found it. */

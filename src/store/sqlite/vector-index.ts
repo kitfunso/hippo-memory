@@ -32,8 +32,8 @@ import {
   openVectorStaging,
   replaceVectorsWithStaged,
   stageVectors,
+  storedVectorCount,
   storedVectorDims,
-  storedVectorIds,
   upsertVectors,
 } from '../../db/vector-store.js';
 import { countAllEntriesAt, loadEntryIdsByIdAt, selectEntriesByIds } from './entry-reads.js';
@@ -104,9 +104,9 @@ export function loadEmbeddingIndexAt(db: DatabaseSyncLike): Record<string, numbe
   return Object.fromEntries(loadVectors(db));
 }
 
-/** Every stored vector id and the float count of the first row, with no vector decoded. */
+/** How many vectors are stored and the float count of the first row, with no vector decoded. */
 export function storedVectorSummaryAt(db: DatabaseSyncLike): StoredVectorSummary {
-  return { ids: storedVectorIds(db), dims: storedVectorDims(db) };
+  return { vectors: storedVectorCount(db), dims: storedVectorDims(db) };
 }
 
 /** Stored vectors for `ids` only. */

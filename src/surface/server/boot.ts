@@ -20,7 +20,7 @@ import {
   type ResolveOptions,
   type SqliteServerRuntime,
 } from '../../store/sqlite/index.js';
-import { configReader } from '../../base/config/config.js';
+import { configReader, loadConfig } from '../../base/config/config.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { MINUTE_MS } from '../../base/util/time.js';
@@ -474,6 +474,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
     store: opts.store,
     queueMax: envStoreQueueMax(),
     lossAversionRatio: envLossAversionRatio(),
+    vectorGraphMaxVectors: loadConfig(opts.hippoRoot).vectorGraph.maxVectors,
   });
   const served = servedOptsFor(opts, plan, runtime);
 

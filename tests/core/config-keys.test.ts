@@ -97,6 +97,11 @@ const CASES: KeyCase[] = [
     badField: { name: 'remote', value: 'no', reads: true },
   },
   { ...scalar('sharedStore', true), bad: 'yes' },
+  {
+    ...block('vectorGraph', { maxVectors: 50_000 }),
+    bad: 200_000,
+    badField: { name: 'maxVectors', value: 'many', reads: 200_000 },
+  },
 ];
 
 interface Loaded {
@@ -123,7 +128,7 @@ describe('every top-level config key is checked', () => {
 
   it('has a case for each key loadConfig reads', () => {
     expect(CASES.map((c) => c.key).sort()).toEqual(Object.keys(DEFAULT_CONFIG).sort());
-    expect(CASES).toHaveLength(30);
+    expect(CASES).toHaveLength(31);
   });
 
   describe.each(CASES)('$key', (c) => {
