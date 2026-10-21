@@ -18,6 +18,9 @@ import { simulate, type PhysicsParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -42,7 +45,7 @@ describe('Decay pass', () => {
     const ancient = { ...entry, lastRetrieved: veryOldDate, pinned: false };
     writeEntry(tmpDir, ancient);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
     expect(result.removed).toBe(1);
 
     const remaining = loadAllEntries(tmpDir, 'default');
@@ -57,7 +60,7 @@ describe('Decay pass', () => {
     const ancient = { ...entry, lastRetrieved: veryOldDate, pinned: true };
     writeEntry(tmpDir, ancient);
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     const remaining = loadAllEntries(tmpDir, 'default');
     const found = remaining.find((e) => e.id === ancient.id);
@@ -74,7 +77,7 @@ describe('Decay pass', () => {
     const ancient = { ...entry, lastRetrieved: veryOldDate, pinned: false };
     writeEntry(tmpDir, ancient);
 
-    const result = await consolidate(tmpDir, { dryRun: true, now: new Date() });
+    const result = await consolidate(tmpDir, { dryRun: true, now: FIXED_NOW });
     expect(result.dryRun).toBe(true);
     expect(result.removed).toBe(1);
 
@@ -151,7 +154,7 @@ describe('Replay pass (integration)', () => {
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     // Default config replay count is 5
     expect(result.replayed).toBe(5);
@@ -164,13 +167,12 @@ describe('Replay pass (integration)', () => {
 
     // Each rehearsed entry must have:
     // - retrieval_count = 1 (started at 0)
-    // - last_retrieved updated to a recent timestamp
+    // - last_retrieved set to the now consolidate was given
     // - half_life_days bumped by +2 from the default
     const defaultHalfLife = memories[0].halfLifeDays;
-    const recentThreshold = new Date(Date.now() - 60_000).getTime();
     for (const r of rehearsed) {
       expect(r.retrievalCount).toBe(1);
-      expect(new Date(r.lastRetrieved).getTime()).toBeGreaterThan(recentThreshold);
+      expect(r.lastRetrieved).toBe(FIXED_NOW.toISOString());
       expect(r.halfLifeDays).toBe(defaultHalfLife + 2);
     }
   });
@@ -188,7 +190,7 @@ describe('Replay pass (integration)', () => {
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.replayed).toBe(0);
     const after = loadAllEntries(tmpDir, 'default');
@@ -206,7 +208,7 @@ describe('Replay pass (integration)', () => {
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.replayed).toBe(2);
     expect(result.details.some((l) => /^ {2}💭 replayed 2 memories: /.test(l))).toBe(true);
@@ -226,7 +228,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.merged).toBe(2);
     expect(result.semanticCreated).toBe(1);
@@ -245,7 +247,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
     expect(result.merged).toBe(0);
     expect(result.semanticCreated).toBe(0);
   });
@@ -302,7 +304,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(readEntry(tmpDir, e1.id)!.halfLifeDays).toBe(1);
     expect(readEntry(tmpDir, e2.id)!.halfLifeDays).toBe(1);
@@ -322,7 +324,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.details).toContain('  ⚠️ detected 1 memory conflict');
     const conflicts = listMemoryConflicts(tmpDir);
@@ -349,7 +351,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     const conflicts = listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
@@ -376,7 +378,7 @@ describe('Merge pass', () => {
       writeEntry(caseDir, a);
       writeEntry(caseDir, b);
 
-      await consolidate(caseDir, { now: new Date() });
+      await consolidate(caseDir, { now: FIXED_NOW });
 
       const conflicts = listMemoryConflicts(caseDir);
       expect(conflicts, `${left} <> ${right}`).toHaveLength(1);
@@ -397,7 +399,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     expect(readEntry(tmpDir, a.id)?.conflictsWith ?? []).toEqual([]);
@@ -427,7 +429,7 @@ describe('Merge pass', () => {
       return [leftEntry.id, rightEntry.id];
     });
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     for (const id of ids) {
@@ -449,11 +451,11 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
     expect(listMemoryConflicts(tmpDir)).toHaveLength(1);
 
     writeEntry(tmpDir, { ...b, content: 'The feature flag is enabled for production users' });
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     expect(readEntry(tmpDir, a.id)?.conflictsWith ?? []).toEqual([]);
@@ -559,7 +561,7 @@ describe('Physics pass', () => {
     seedConflictingParticles(true);
     const seeded = storedParticles();
 
-    const result = await consolidate(tmpDir, { now: new Date(), dryRun: true });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW, dryRun: true });
 
     expect(result.physicsSimulated).toBe(0);
     expect(storedParticles()).toEqual(seeded);
@@ -568,14 +570,14 @@ describe('Physics pass', () => {
   it('leaves the stored particles alone when physics is off, and reports nothing when none is stored', async () => {
     seedConflictingParticles(false);
     const seeded = storedParticles();
-    const off = await consolidate(tmpDir, { now: new Date() });
+    const off = await consolidate(tmpDir, { now: FIXED_NOW });
     expect(off.physicsSimulated).toBe(0);
     expect(storedParticles()).toEqual(seeded);
 
     const empty = makeRoot('consolidate-nophysics');
     fs.writeFileSync(path.join(empty, 'config.json'), JSON.stringify({ physics: { enabled: true } }), 'utf8');
     writeEntry(empty, createMemory7('A memory with no particle stored for it'));
-    const result = await consolidate(empty, { now: new Date() });
+    const result = await consolidate(empty, { now: FIXED_NOW });
     expect(result.physicsSimulated).toBe(0);
     expect(result.details.filter((line) => line.includes('physics'))).toEqual([]);
   });

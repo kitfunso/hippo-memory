@@ -1,6 +1,6 @@
 /**
  * Shared fixtures for the LC2-E1 memory-value harness test suite
- * (memory-value-harness.test.ts + memory-value-determinism.test.ts).
+ * (memory-value-harness.process.test.ts + memory-value-determinism.test.ts).
  *
  * Split out (codex confirmation-pass P1-B fix, 2026-08-09) so both test
  * files share one fixture definition instead of drifting copies — the
@@ -11,7 +11,7 @@
  * (`tests/**\/*.test.ts`), so this file is never itself run as a suite —
  * it is purely an import target.
  *
- * See memory-value-harness.test.ts's header for the hand-computable
+ * See memory-value-harness.process.test.ts's header for the hand-computable
  * retention design note (why Q_A/Q_B are shaped the way they are).
  */
 import * as fs from 'node:fs';

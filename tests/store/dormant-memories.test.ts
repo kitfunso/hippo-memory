@@ -1,13 +1,9 @@
 /**
- * Dormant memories: what sleep does with a faded memory instead of deleting it.
- *
- * On by default (`"dormant": { "enabled": false }` opts out). The sleep decay
- * pass moves a memory that faded below the threshold out of active memory
- * into the dormant store. Dormant memories never reach recall or context,
- * sit out every later sleep, and can be listed, searched, restored or
- * permanently forgotten. Guardrails: a faded secret is deleted, never kept
- * dormant, and a dormant memory older than `retentionDays` (default 180, 0 =
- * forever) is deleted for good. Real SQLite throughout.
+ * Dormant memories: what sleep does with a faded memory instead of deleting it. On by default
+ * (`"dormant": { "enabled": false }` opts out). The sleep decay pass moves a memory that faded below the threshold
+ * into the dormant store. Dormant memories never reach recall or context, sit out every later sleep, and can be
+ * listed, searched, restored or permanently forgotten. Guardrails: a faded secret is deleted, never kept dormant, and
+ * a dormant memory older than `retentionDays` (default 180, 0 = forever) is deleted for good. Real SQLite throughout.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -47,6 +43,9 @@ import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 oneRequestPerTest();
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };
@@ -63,9 +62,8 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
   };
 }
 
-function ctxFor(home: string, tenantId = 'default'): FullContext {
-  return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
-}
+const ctxFor = (home: string, tenantId = 'default'): FullContext =>
+  apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
 
 function auditRows(home: string, op: AuditOp): AuditEvent[] {
   const db = openHippoDb(home);
@@ -108,7 +106,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
     );
     writeEntry(home, faded);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
 
     expect(result.removed).toBe(0);
     expect(result.dormant).toBe(1);
@@ -126,7 +124,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
     );
     writeEntry(home, faded);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
 
     expect(result.removed).toBe(1);
     expect(result.dormant).toBe(0);
@@ -168,7 +166,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
     writeEntry(home, secret);
     writeEntry(home, plain);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
 
     expect(result.removed).toBe(1);
     expect(result.dormant).toBe(1);
@@ -189,7 +187,7 @@ describe('a faded credential-tagged memory', () => {
     );
     writeEntry(home, tagged);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
 
     expect(result.removed).toBe(1);
     expect(result.dormant).toBe(0);
@@ -226,11 +224,11 @@ describe('dormant retention', () => {
 
   it('sleep deletes a dormant memory once it outlives retentionDays', async () => {
     const { home } = storeWithOldDormant('dormant-expire', { dormant: { retentionDays: 30 } }, 45);
-    const dry = await consolidate(home, { now: new Date(), dryRun: true });
+    const dry = await consolidate(home, { now: FIXED_NOW, dryRun: true });
     expect(dry.dormantExpired).toBe(1);
     expect(countDormantRows(home)).toBe(1);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
     expect(result.dormantExpired).toBe(1);
     expect(countDormantRows(home)).toBe(0);
   });
@@ -238,8 +236,8 @@ describe('dormant retention', () => {
   it('keeps a dormant memory inside the window, and forever with retentionDays 0', async () => {
     const inside = storeWithOldDormant('dormant-inside', { dormant: { retentionDays: 180 } }, 45);
     const forever = storeWithOldDormant('dormant-forever', { dormant: { retentionDays: 0 } }, 4000);
-    expect((await consolidate(inside.home, { now: new Date() })).dormantExpired).toBe(0);
-    expect((await consolidate(forever.home, { now: new Date() })).dormantExpired).toBe(0);
+    expect((await consolidate(inside.home, { now: FIXED_NOW })).dormantExpired).toBe(0);
+    expect((await consolidate(forever.home, { now: FIXED_NOW })).dormantExpired).toBe(0);
     expect(countDormantRows(inside.home)).toBe(1);
     expect(countDormantRows(forever.home)).toBe(1);
   });
@@ -279,7 +277,7 @@ describe('dormant retention', () => {
       }
     };
     const spy = vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(pause);
-    const result = await consolidate(home, { now: new Date(), budget: { holdMs: 0 } }).finally(() => spy.mockRestore());
+    const result = await consolidate(home, { now: FIXED_NOW, budget: { holdMs: 0 } }).finally(() => spy.mockRestore());
     expect(result.dormantExpired).toBe(4);
     expect(pauses).toBe(4);
     expect(ids).toContain(kept);
@@ -288,7 +286,7 @@ describe('dormant retention', () => {
 
   it('still ages out old dormant memories after the feature is turned off', async () => {
     const { home } = storeWithOldDormant('dormant-off-expire', { dormant: { enabled: false } }, 400);
-    expect((await consolidate(home, { now: new Date() })).dormantExpired).toBe(1);
+    expect((await consolidate(home, { now: FIXED_NOW })).dormantExpired).toBe(1);
   });
 });
 
@@ -308,7 +306,7 @@ describe('with dormant memories enabled', () => {
     writeEntry(home, faded);
     writeEntry(home, fresh);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
 
     expect(result.removed).toBe(0);
     expect(result.dormant).toBe(1);
@@ -334,7 +332,7 @@ describe('with dormant memories enabled', () => {
       90,
     );
     writeEntry(home, faded);
-    await consolidate(home, { now: new Date() });
+    await consolidate(home, { now: FIXED_NOW });
 
     const recalled = await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' });
     expect(recalled.results.map((r) => r.id)).not.toContain(faded.id);
@@ -349,7 +347,7 @@ describe('with dormant memories enabled', () => {
       90,
     );
     writeEntry(home, faded);
-    await consolidate(home, { now: new Date() });
+    await consolidate(home, { now: FIXED_NOW });
     const before = await api.dormantList(ctxFor(home));
 
     const second = await consolidate(home, { now: new Date(Date.now() + 30 * DAY_MS) });
@@ -376,7 +374,7 @@ describe('with dormant memories enabled', () => {
     writeEntry(home, pinned);
     writeEntry(home, receipt);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
 
     expect(result.dormant).toBe(0);
     expect(
@@ -397,7 +395,7 @@ describe('with dormant memories enabled', () => {
     );
     writeEntry(home, faded);
 
-    const result = await consolidate(home, { now: new Date(), dryRun: true });
+    const result = await consolidate(home, { now: FIXED_NOW, dryRun: true });
 
     expect(result.dormant).toBe(1);
     expect(result.details.some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `))).toBe(true);
@@ -433,7 +431,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       writeEntry(home, entry);
       ids.push(entry.id);
     }
-    await consolidate(home, { now: new Date() });
+    await consolidate(home, { now: FIXED_NOW });
     return { home, ids };
   }
 
@@ -471,7 +469,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       (await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' })).results.map((r) => r.id),
     ).toContain(ids[0]);
 
-    const next = await consolidate(home, { now: new Date() });
+    const next = await consolidate(home, { now: FIXED_NOW });
     expect(next.dormant).toBe(0);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(ids[0]);
 
@@ -562,7 +560,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
     );
     writeEntry(home, mine);
     writeEntry(home, team);
-    await consolidate(home, { now: new Date() });
+    await consolidate(home, { now: FIXED_NOW });
     const as = (owner: string | undefined, role: 'admin' | 'member'): FullContext =>
       apiCtx(home, 'default', owner === undefined ? { subject: 'adm', role } : { subject: owner, role, owner });
     for (const ctx of [as('oid-b', 'member'), as(undefined, 'admin'), as('oid-b', 'admin')]) {
@@ -759,7 +757,7 @@ describe('hippo dormant CLI', () => {
     );
     writeEntry(hippoRoot, keep);
     writeEntry(hippoRoot, drop);
-    await consolidate(hippoRoot, { now: new Date() });
+    await consolidate(hippoRoot, { now: FIXED_NOW });
 
     const list = await runCli(workspace, 'dormant');
     expect(list.status).toBe(0);
@@ -791,7 +789,7 @@ describe('hippo dormant CLI', () => {
         90,
       ),
     );
-    await consolidate(hippoRoot, { now: new Date() });
+    await consolidate(hippoRoot, { now: FIXED_NOW });
     const [third] = await api.dormantList(ctxFor(hippoRoot));
     const hint = await runCli(workspace, 'forget', third.id);
     expect(hint.status).not.toBe(0);

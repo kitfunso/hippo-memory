@@ -38,6 +38,9 @@ import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { REAL_IO } from '../_helpers/real-io.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -79,7 +82,6 @@ function hermeticEnv(): NodeJS.ProcessEnv {
     APPDATA: home,
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   };
-  delete env.ANTHROPIC_API_KEY;
   const pathKey = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
   env[pathKey] = (env[pathKey] ?? '')
     .split(delimiter)
@@ -246,7 +248,7 @@ describe('merge caps', () => {
       write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`),
     );
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(1);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(1);
 
     const [row] = merged(root);
     expect(row.parents).toHaveLength(5);
@@ -265,7 +267,7 @@ describe('merge caps', () => {
     for (const e of sources) expect(e.content.length).toBeGreaterThan(700); // two fit under the cap, three do not
     for (const e of sources) expect(e.content.length).toBeLessThan(1000);
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(1);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(1);
 
     const [row] = merged(root);
     expect(row.parents).toHaveLength(2);
@@ -285,7 +287,7 @@ describe('merge caps', () => {
       'Deploy step: warm the cache, flip the traffic and watch the error rate.',
     ].map((text) => write(root, text));
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
     halfLifeKept(root, [seed, ...steps]);
   });
 
@@ -293,7 +295,7 @@ describe('merge caps', () => {
     const root = newRoot();
     const rows = ['预发布服务监听端口四千四百', '分析服务监听端口七千七百'].map((text) => write(root, text));
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
     halfLifeKept(root, rows);
   });
 
@@ -319,7 +321,7 @@ describe('merge caps', () => {
     ]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(1);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(1);
     expect([...merged(root)[0].parents].sort()).toEqual(
       rows
         .slice(5)
@@ -342,7 +344,7 @@ describe('merge caps', () => {
     reject(root, [`[Consolidated pattern from 7 related memories]\n\n${rows.map((e) => `- ${e.content}`).join('\n')}`]); // the old format merged every look-alike
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
     halfLifeKept(root, rows);
   });
 });
@@ -355,7 +357,7 @@ describe('merged row', () => {
       write(root, text);
     }
 
-    await consolidate(root, { now: new Date() });
+    await consolidate(root, { now: FIXED_NOW });
 
     const [row] = merged(root);
     expect(row.parents).toHaveLength(3);
@@ -377,7 +379,7 @@ describe('merged row', () => {
     const root = newRoot();
     writeAll(root);
 
-    await consolidate(root, { now: new Date() });
+    await consolidate(root, { now: FIXED_NOW });
     expect(merged(root)[0].content).toBe(
       `[Consolidated pattern from 3 related memories, newest first]\n\n${[...texts]
         .reverse()
@@ -389,7 +391,7 @@ describe('merged row', () => {
     writeAll(again);
     reject(again, [`[Consolidated pattern from 3 related memories]\n\n${texts.map((t) => `- ${t}`).join('\n')}`]); // the old format: longest first
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect((await consolidate(again, { now: new Date() })).semanticCreated).toBe(0);
+    expect((await consolidate(again, { now: FIXED_NOW })).semanticCreated).toBe(0);
   });
 
   it('a merge rejected before this release stays rejected', async () => {
@@ -406,7 +408,7 @@ describe('merged row', () => {
     ]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
     expect(merged(root)).toHaveLength(0);
     halfLifeKept(root, sources);
   });
@@ -438,7 +440,7 @@ describe('a retired version leaves the merged row', () => {
     const root = newRoot();
     const old = write(root, OLD, { created: new Date(Date.now() - DAY).toISOString() });
     const next = write(root, NEW);
-    await consolidate(root, { now: new Date() });
+    await consolidate(root, { now: FIXED_NOW });
     const [row] = merged(root);
     expect(row.parents.sort()).toEqual([old.id, next.id].sort());
     return { root, old, next, row };
@@ -527,7 +529,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '');
     const root = newRoot();
     for (const text of FACTS) write(root, text, { kind: 'raw' }); // raw, so the fresh tail offers them too
-    await consolidate(root, { now: new Date() });
+    await consolidate(root, { now: FIXED_NOW });
     const [row] = merged(root);
     return { root, row };
   }
@@ -618,7 +620,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     const pin = write(root, 'Deploy rule: the staging service listens on port 4400.', { pinned: true });
     write(root, 'Deploy rule: the staging service listens on port 4401.');
 
-    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
+    expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
     expect(await hookContext(root)).toContain(pin.id);
   });
 

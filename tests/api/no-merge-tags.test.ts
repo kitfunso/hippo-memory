@@ -7,6 +7,9 @@ import { NO_MERGE_TAGS } from '../../src/domain/sharing/share.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -23,7 +26,7 @@ async function sleepOver(tags: string[]) {
   for (const content of [BASE, `${BASE} again today`, `${BASE} once more`]) {
     writeEntry(hippoRoot, createMemory(content, { layer: Layer.Episodic, tenantId: 'default', tags }));
   }
-  return consolidate(hippoRoot, { dryRun: false, now: new Date() });
+  return consolidate(hippoRoot, { dryRun: false, now: FIXED_NOW });
 }
 
 describe('NO_MERGE_TAGS', () => {

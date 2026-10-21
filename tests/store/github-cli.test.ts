@@ -58,7 +58,6 @@ describe('hippo github CLI', () => {
 
   it('backfill --repo without GITHUB_TOKEN exits 2 with actionable error', async () => {
     const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
-    delete env.GITHUB_TOKEN;
     const { status, stderr } = await runCliAs(['github', 'backfill', '--repo', 'a/b'], { cwd: root, env });
     expect(status).toBe(2);
     expect(stderr).toMatch(/GITHUB_TOKEN/);
