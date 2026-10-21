@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { createCrossEncoderReranker } from '../../src/domain/rerankers/cross-encoder.js';
+import { transformersCrossEncoder } from '../../src/infra/cross-encoder.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 
-const crossEncoderReranker = createCrossEncoderReranker();
+const crossEncoderReranker = createCrossEncoderReranker(transformersCrossEncoder());
 
 function asResult(content: string, score: number): SearchResult {
   return { entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 };

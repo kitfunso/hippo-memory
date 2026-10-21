@@ -11,7 +11,7 @@ import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { isEmbeddingAvailable } from '../../src/base/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';

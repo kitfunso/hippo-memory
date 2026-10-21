@@ -1,47 +1,8 @@
 // The optional Transformers.js package, and a bounded load of a model from it, shared by the local embedder and the
 // cross-encoder.
-import { MINUTE_MS } from '../util/time.js';
-import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
-import { errorCode, errorMessage } from '../util/log.js';
-import { ignoringCodes } from '../util/expected-errors.js';
-
-const _require = createRequire(import.meta.url);
-
-// Importing both loads two onnxruntime-node builds whose finalizers can double-free on exit, so one is picked: the
-// maintained package hippo ships, with Xenova only as a fallback a user installed.
-const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
-
-export interface TransformersPackage {
-  readonly name: string;
-  /**
-   * The ESM entry; a require-style import picks the CommonJS build and puts a second copy of the library, with its own
-   * ONNX sessions, in the process.
-   */
-  readonly url: string;
-}
-
-/** The installed package to import, or null when neither is installed. */
-export function resolveTransformersPackage(): TransformersPackage | null {
-  for (const name of TRANSFORMERS_PACKAGES) {
-    const url = entryUrl(name);
-    if (url) return { name, url };
-  }
-  return null;
-}
-
-// Neither resolver finding the package means it is not installed, and the caller tries the next one.
-const NOT_INSTALLED = ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_PACKAGE_PATH_NOT_EXPORTED'];
-
-function entryUrl(name: string): string | null {
-  // import.meta.resolve is missing under some module runners (vitest's included), so the require-based resolve stands
-  // in there.
-  const viaImport =
-    'resolve' in import.meta ? ignoringCodes(NOT_INSTALLED, () => import.meta.resolve(name)) : undefined;
-  if (viaImport !== undefined) return viaImport;
-  const viaRequire = ignoringCodes(NOT_INSTALLED, () => _require.resolve(name));
-  return viaRequire === undefined ? null : pathToFileURL(viaRequire).href;
-}
+import { resolveTransformersPackage } from '../base/embeddings/local.js';
+import { MINUTE_MS } from '../base/util/time.js';
+import { errorCode, errorMessage } from '../base/util/log.js';
 
 /** The package's module namespace, typed by the parts the caller reads; null when neither package is installed. */
 export async function importTransformers<M>(): Promise<{ readonly name: string; readonly mod: M } | null> {

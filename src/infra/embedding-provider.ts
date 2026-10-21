@@ -3,23 +3,27 @@
  * identity adds `#t<N>` (`embeddingIndexIdentity`), so changes reindex. `embed()` MAY throw on hard transport/auth
  * failure so a reindex aborts atomically; hot paths wrap it and fall back to BM25. */
 
-import { envByName } from '../util/env.js';
+import { DEFAULT_EMBEDDING_MODEL, resolveEmbeddingModel } from '../base/embeddings/local.js';
+import type {
+  EmbedCallOptions,
+  EmbeddingProvider,
+  EmbeddingProviderKind,
+  EmbeddingRole,
+} from '../base/ports/embedder.js';
+import { envByName } from '../base/util/env.js';
+import type { EmbeddingsConfig } from '../base/config/config.js';
+import { errorMessage, log, errorFields } from '../base/util/log.js';
+import { redactSecretsStrict } from '../base/util/secret-detect.js';
+import type { JsonValue } from '../base/util/json.js';
+import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
+import { parseOutboundUrl } from '../base/util/net.js';
+import { fetchWithRetry } from './http-retry.js';
 import {
   createLocalEmbedder,
-  type EmbeddingRole,
   type LocalEmbedder,
   type LocalTransformers,
-  resolveEmbeddingModel,
   sharedLocalEmbedder,
-  DEFAULT_EMBEDDING_MODEL,
-} from './local.js';
-import type { EmbeddingsConfig } from '../config/config.js';
-import { errorMessage, log, errorFields } from '../util/log.js';
-import { redactSecretsStrict } from '../util/secret-detect.js';
-import { fetchWithRetry } from '../util/http-retry.js';
-import type { JsonValue } from '../util/json.js';
-import { readCappedJson, readCappedText } from '../util/capped-json.js';
-import { parseOutboundUrl } from '../util/net.js';
+} from './local-embedder.js';
 
 const ERROR_DETAIL_CHARS = 300;
 // An error body is read for its first lines only; 4x leaves room for multi-byte text.
@@ -27,8 +31,6 @@ const ERROR_BODY_MAX_BYTES = ERROR_DETAIL_CHARS * 4;
 // 16,384 dimensions at 32 bytes a number: four times a 4,096-dimension model.
 const EMBED_REPLY_BYTES_PER_INPUT = 512 * 1024;
 const EMBED_REPLY_BASE_BYTES = 64 * 1024;
-
-export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
 export const API_PROVIDER_KINDS: readonly EmbeddingProviderKind[] = ['openai', 'voyage', 'cohere'];
 
@@ -42,35 +44,6 @@ const DEFAULT_API_BATCH_SIZE = 64;
 const REQUEST_TIMEOUT_MS = 30_000;
 // Under a caller's deadline a longer Retry-After hands the reply back at once; the remote rerankers use the same cap.
 const DEADLINE_RETRY_WAIT_CAP_MS = 2_000;
-
-export interface EmbedCallOptions {
-  /** Ends the whole call when it aborts, every batch and retry included. The local provider stops waiting only on a
-   * model download, since nothing stops a load from disk or an in-process inference. */
-  signal?: AbortSignal;
-}
-
-export interface EmbeddingProvider {
-  readonly kind: EmbeddingProviderKind;
-  readonly model: string;
-  /**
-   * Identity recorded in DB meta to drive reindex-on-change: bare model string for local, `${kind}:${model}` for api.
-   */
-  readonly id: string;
-  /** Known fixed output dimension, if any (undefined for local / unknown). */
-  readonly dimensions?: number;
-  /** Env var holding this provider's API key (undefined for the local provider). */
-  readonly keyEnv?: string;
-  /** local -> dependency installed; api -> key present. NEVER throws. */
-  isAvailable(): boolean;
-  /** Batch-embed: one row per input in order, `[]` when that item could not be embedded.
-   * MAY throw on a hard transport/auth failure so a reindex aborts before saving a partial index. */
-  embed(texts: string[], role?: EmbeddingRole, call?: EmbedCallOptions): Promise<number[][]>;
-}
-
-/** True when the provider names a key variable that is unset or blank; the adapter reads its own key. */
-export function apiKeyMissing(provider: Pick<EmbeddingProvider, 'keyEnv'>): boolean {
-  return !!provider.keyEnv && !envByName(provider.keyEnv)?.trim();
-}
 
 class LocalEmbeddingProvider implements EmbeddingProvider {
   readonly kind = 'local' as const;

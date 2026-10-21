@@ -21,6 +21,7 @@ import {
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
 import { defaultReach } from './surface/open-store.js';
 import { loadConfig } from './base/config/config.js';
+import { resolveEmbeddingProvider } from './infra/embedding-provider.js';
 
 export { serve } from './surface/server/boot.js';
 
@@ -37,7 +38,7 @@ async function promptHookContext(
 async function folderReach(store: HippoStore, opts: PromptHookOptions | undefined): Promise<ContextReach | undefined> {
   if (!hasGroup(store, 'folderFiles')) return undefined;
   const { folder } = await store.folderFiles.home();
-  return contextReach(defaultReach(folder, store, opts?.sharedStore), loadConfig);
+  return contextReach(defaultReach(folder, store, opts?.sharedStore), loadConfig, resolveEmbeddingProvider);
 }
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.

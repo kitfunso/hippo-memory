@@ -2,7 +2,8 @@
 
 import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import { dedupeStore, type DedupResult } from '../../api/sleep/upkeep.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../base/embeddings/provider.js';
+import type { EmbeddingProvider } from '../../base/ports/embedder.js';
+import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
 import { memoryCountAll } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliStore, type CliContext } from './api-context.js';

@@ -4,7 +4,7 @@ import { adminActor, retrieve, retrieveRanking, retrieveWithCliCore, type Contex
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/surface/cli/flag-values.js';
 import { loadConfig } from '../../dist/base/config/config.js';
-import { getReranker } from '../../dist/domain/rerankers/index.js';
+import { getReranker } from '../../dist/entry/eval-scripts.js';
 import { envActiveScope as detectScope } from '../../dist/base/util/env.js';
 import type { SearchResult } from '../../dist/base/rank/search-types.js';
 import { getGlobalRoot } from '../../dist/domain/sharing/global-store.js';

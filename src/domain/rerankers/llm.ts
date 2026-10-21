@@ -5,6 +5,7 @@ import {
   envLlmRerankerUrl,
 } from '../../base/util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
+import type { Http } from '../../base/ports/http.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
@@ -29,7 +30,7 @@ interface FetchHeaders {
  * Timeout is 30s for the whole call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to
  * identity ordering, so recall never hangs.
  */
-export function createLlmReranker(): RerankerFn {
+export function createLlmReranker(http: Http): RerankerFn {
   const outage = createOutageWarning('llm', 'keeping the input order');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
     const url = envLlmRerankerUrl();
@@ -40,7 +41,7 @@ export function createLlmReranker(): RerankerFn {
 
     let permutation: number[] | null = null;
     try {
-      permutation = await requestPermutation(url, query, head);
+      permutation = await requestPermutation(http, url, query, head);
       outage.answered();
     } catch (err) {
       // A read path never throws, and never hands back the unranked order without saying so.
@@ -67,7 +68,12 @@ function replyText(body: JsonValue): string {
 }
 
 /** One chat-completions call; rejects with the reason when the reply holds no usable permutation. */
-async function requestPermutation(url: string, query: string, head: readonly SearchResult[]): Promise<number[]> {
+async function requestPermutation(
+  http: Http,
+  url: string,
+  query: string,
+  head: readonly SearchResult[],
+): Promise<number[]> {
   parseOutboundUrl(url, 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY');
   const key = envLlmRerankerKey();
   const prompt = [
@@ -86,6 +92,7 @@ async function requestPermutation(url: string, query: string, head: readonly Sea
   }
 
   const resp = await rerankerPost(
+    http,
     `${url.replace(/\/$/, '')}/chat/completions`,
     {
       headers: { ...headers },

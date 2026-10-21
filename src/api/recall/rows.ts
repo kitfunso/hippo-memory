@@ -4,7 +4,7 @@
 import { confidenceFacets, Layer } from '../../base/memory/memory.js';
 import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
 import type { ClefSettings } from '../../base/config/config.js';
-import { getReranker } from '../../domain/rerankers/index.js';
+import { getReranker } from '../infra.js';
 import { isClefModel } from '../../domain/rerankers/clef.js';
 import { JEV_DEFAULT_TOP_K } from '../../domain/rerankers/jev.js';
 import { DEFAULT_RERANK_TOP_K } from '../../domain/search/rerank.js';

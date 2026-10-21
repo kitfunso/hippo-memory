@@ -4,7 +4,7 @@
  */
 
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
-import { fetchWithRetry } from '../../../base/util/http-retry.js';
+import { fetchWithRetry } from '../../../infra/http-retry.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { readCappedJson, readCappedText } from '../../../base/util/capped-json.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';

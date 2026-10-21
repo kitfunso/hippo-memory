@@ -29,6 +29,7 @@ import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } 
 import type { RerankerFn } from '../../domain/rerankers/index.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
 import { anthropicLlmFromEnv } from '../../infra/ports.js';
+import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { serverNearestAsk } from './server-nearest.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
@@ -55,7 +56,7 @@ export function cliDiagnostics(hippoRoot: string): Pick<StoreGroups, 'diagnostic
 
 /** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */
 export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & StoreGroups> {
-  return { store: cliStore(hippoRoot), config: cliConfig(hippoRoot) };
+  return { store: cliStore(hippoRoot), config: cliConfig(hippoRoot), embedderFor: resolveEmbeddingProvider };
 }
 
 /** The folder's hippo.db as an import reaches it, answering at once: the published importers return their result. */
@@ -101,7 +102,7 @@ export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: stri
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config. */
 function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
-  return contextReach(defaultReach(hippoRoot, store, undefined, cliStore), cliConfig);
+  return contextReach(defaultReach(hippoRoot, store, undefined, cliStore), cliConfig, resolveEmbeddingProvider);
 }
 
 // The one place the CLI names its audit actor and builds its store; root is a parameter because some verbs target the

@@ -7,6 +7,7 @@ import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '..
 import type { ConfiguredFolder } from '../domain/search/embed-memories.js';
 import type { CallerState } from './callers.js';
 import type { InfraPorts } from '../base/ports/infra.js';
+import type { EmbedderFor } from '../base/ports/embedder.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -55,8 +56,13 @@ export interface Context {
   readonly infra?: InfraPorts;
 }
 
-/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader. */
-export function contextReach(reach: StoreReach, configAt: (root: string) => HippoConfig): ContextReach {
+/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader, and a promote
+ * embeds its copy with `embedderFor`. */
+export function contextReach(
+  reach: StoreReach,
+  configAt: (root: string) => HippoConfig,
+  embedderFor: EmbedderFor,
+): ContextReach {
   const { global, globalTarget, ...rest } = reach;
   // Both name the operator's global store, so one load serves both.
   let last: { readonly root: string; readonly config: HippoConfig } | undefined;
@@ -67,7 +73,10 @@ export function contextReach(reach: StoreReach, configAt: (root: string) => Hipp
   let withConfig: ContextReach = rest;
   if (global !== undefined) withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
   if (globalTarget !== undefined) {
-    withConfig = { ...withConfig, globalTarget: { store: globalTarget.store, config: at(globalTarget.root) } };
+    withConfig = {
+      ...withConfig,
+      globalTarget: { store: globalTarget.store, config: at(globalTarget.root), embedderFor },
+    };
   }
   return withConfig;
 }

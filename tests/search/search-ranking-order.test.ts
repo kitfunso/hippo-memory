@@ -5,7 +5,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';

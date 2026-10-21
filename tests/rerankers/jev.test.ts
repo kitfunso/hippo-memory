@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { getReranker } from '../../src/domain/rerankers/index.js';
+import { getReranker } from '../../src/infra/rerankers.js';
 import { createJevReranker } from '../../src/domain/rerankers/jev.js';
+import { processHttp } from '../../src/infra/http.js';
 import type { RerankerFn } from '../../src/domain/rerankers/types.js';
 
 afterEach(() => {
@@ -20,7 +21,7 @@ const reversingFallback: RerankerFn = async (_query, results) =>
   }));
 
 // warn-once is per reranker, so every test builds its own.
-const freshReranker = (): RerankerFn => createJevReranker(reversingFallback);
+const freshReranker = (): RerankerFn => createJevReranker(reversingFallback, processHttp);
 
 const FAKE_KEY = 'fake-key-for-tests';
 
@@ -168,7 +169,7 @@ describe('jev reranker', () => {
   it('hands the fallback the same slice Jev was given', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', undefined);
     const fallback = vi.fn(reversingFallback);
-    await createJevReranker(fallback)('q', many(45));
+    await createJevReranker(fallback, processHttp)('q', many(45));
     expect(fallback.mock.calls[0][1]).toHaveLength(40);
   });
 
@@ -238,7 +239,7 @@ describe('jev reranker reply size cap', () => {
     });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
     const items = [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
-    const out = await createJevReranker(reversingFallback)('q', items);
+    const out = await createJevReranker(reversingFallback, processHttp)('q', items);
     vi.stubEnv('TYPESAFE_API_KEY', undefined);
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
     expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('reply over 1048576 bytes');

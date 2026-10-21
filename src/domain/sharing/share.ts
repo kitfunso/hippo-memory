@@ -149,6 +149,7 @@ export async function shareMemory(
     const target = {
       store: global.store,
       embeddings: global.config.embeddings,
+      embedderFor: global.embedderFor,
       strength: strengthOptionsOf(global.config.runtime),
     };
     embedMemoryDetached(target, globalEntry);

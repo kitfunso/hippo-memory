@@ -1,9 +1,9 @@
-// Embeds memories into the vector index: picks the configured provider, computes each vector and hands it to the store,
-// which only keeps it (src/store/port.ts VectorWrites).
+// Embeds memories into the vector index: asks the target's embedder for the configured provider, computes each vector
+// and hands it to the store, which only keeps it (src/store/port.ts VectorWrites).
 
 import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../../base/memory/memory.js';
 import { initializeParticle } from '../../base/rank/physics.js';
-import { apiKeyMissing, resolveEmbeddingProvider, type EmbeddingProvider } from '../../base/embeddings/provider.js';
+import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
 import type { EmbeddingsConfig, HippoConfig } from '../../base/config/config.js';
 import {
   embeddingIndexIdentity,
@@ -297,32 +297,39 @@ const INLINE_REINDEX_MAX_ROWS = 256;
 export type EmbedOutcome = 'indexed' | 'off' | 'failed';
 
 /** Where vectors go: a store's own index under its lock, or a store's vector groups, with the embeddings config that
- * names the provider. */
+ * names the provider and the embedder that builds it. */
 export type EmbedTarget = IndexEmbedTarget | StoreEmbedTarget;
 
-export interface IndexEmbedTarget {
-  readonly embeddingIndex: EmbeddingIndex;
+/** The embeddings config and the root's embedder, which every target carries. */
+interface EmbedWith {
   readonly embeddings: EmbeddingsConfig;
+  readonly embedderFor: EmbedderFor;
+}
+
+export interface IndexEmbedTarget extends EmbedWith {
+  readonly embeddingIndex: EmbeddingIndex;
 }
 
 /** A store's vector groups, with the strength rules the particles a vector write seeds are scored by. */
-export interface StoreEmbedTarget {
+export interface StoreEmbedTarget extends EmbedWith {
   readonly store: HippoStore;
-  readonly embeddings: EmbeddingsConfig;
   readonly strength: StrengthOptions;
 }
 
-/** A store with the config its root loaded, so a write into it embeds with the provider that config names. */
+/** A store with the config its root loaded and the root's embedder, so a write into it embeds with the provider that
+ * config names. */
 export interface ConfiguredFolder<S extends HippoStore = HippoStore> {
   readonly store: S;
   readonly config: HippoConfig;
+  readonly embedderFor: EmbedderFor;
 }
 
 /** The store's own index when it keeps one, else its vector groups. */
-export function folderIndex({ store, config }: ConfiguredFolder): EmbedTarget {
+export function folderIndex({ store, config, embedderFor }: ConfiguredFolder): EmbedTarget {
   const { embeddingIndex } = store;
-  if (embeddingIndex !== undefined) return { embeddingIndex, embeddings: config.embeddings };
-  return { store, embeddings: config.embeddings, strength: strengthOptionsOf(config.runtime) };
+  const { embeddings } = config;
+  if (embeddingIndex !== undefined) return { embeddingIndex, embeddings, embedderFor };
+  return { store, embeddings, embedderFor, strength: strengthOptionsOf(config.runtime) };
 }
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
@@ -332,7 +339,7 @@ export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: s
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
-    provider = resolveEmbeddingProvider(on.embeddings, { model });
+    provider = on.embedderFor(on.embeddings, { model });
     available = provider.isAvailable();
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
@@ -421,10 +428,9 @@ async function initializePhysicsIfMissing(index: EmbeddingIndex, entry: MemoryEn
 
 /** Throws when an unavailable provider is a misconfiguration rather than an intentional no-op. */
 function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingProvider): void {
-  // A configured API provider with a missing key is a misconfiguration: surface it so callers of the exported
-  // embedAll() learn nothing was written.
-  // Local-not-installed and an explicit enabled=false stay silent no-ops.
-  if (provider.kind !== 'local' && cfg.enabled !== false && apiKeyMissing(provider)) {
+  // An enabled API provider is unavailable only when its own read finds no key: a misconfiguration, surfaced so callers
+  // of the exported embedAll() learn nothing was written. Local-not-installed and enabled=false stay silent no-ops.
+  if (provider.kind !== 'local' && cfg.enabled !== false && provider.keyEnv !== undefined) {
     throw new Error(`Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`);
   }
 }
@@ -479,11 +485,11 @@ async function backfillAllPending(
 }
 
 /** Embeds every entry with no cached vector, prunes vectors of deleted memories, and returns how many it embedded;
- * `provider` defaults to the configured one. With a store, every tenant's memories with no vector for the provider's
- * model go through its `vectorWrites`. */
+ * `provider` defaults to the one the target's embedder builds. With a store, every tenant's memories with no vector
+ * for the provider's model go through its `vectorWrites`. */
 export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: EmbeddingProvider): Promise<number> {
   const cfg = on.embeddings;
-  const provider = givenProvider ?? resolveEmbeddingProvider(cfg, { model });
+  const provider = givenProvider ?? on.embedderFor(cfg, { model });
   if (!provider.isAvailable()) {
     throwIfProviderKeyMissing(cfg, provider);
     return 0;
