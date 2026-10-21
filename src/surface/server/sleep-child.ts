@@ -2,6 +2,7 @@
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
 import { sleep } from '../../api/sleep/sleep.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
+import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import { isStoreBusy } from '../../store/port.js';
 import { configReader } from '../../base/config/config.js';
 import { runSqliteRequest, sqliteReach, sqliteStore } from '../../store/sqlite/index.js';
@@ -52,6 +53,7 @@ process.once('message', (message) => {
       ? runConsolidation(storeAt(job.hippoRoot), {
           config: loadConfig(job.hippoRoot),
           tenantId: envTenant(),
+          llm: anthropicLlmFromEnv(),
         })
       : sleepJob(job);
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.

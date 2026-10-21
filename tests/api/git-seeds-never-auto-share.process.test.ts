@@ -2,6 +2,7 @@
 // a hand-run share or promote of one still does. Real stores and the real CLI.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -125,13 +126,11 @@ describe('git-learned rows and the global store', () => {
     ).map((f) => ({ ...f, dagLevel: 1 }));
     await buildDag(sqliteStore(hippoRoot), facts.slice(0, 3), {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'test',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test', fetcher }),
     });
     await buildDag(sqliteStore(hippoRoot), facts.slice(3), {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'test',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test', fetcher }),
     });
     const summaries = loadAllEntries(hippoRoot, 'default').filter((e) => e.dagLevel === 2);
     expect(summaries).toHaveLength(2);
@@ -139,8 +138,7 @@ describe('git-learned rows and the global store', () => {
 
     await buildEntityProfiles(sqliteStore(hippoRoot), summaries, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'test',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test', fetcher }),
     });
     const profiles = loadAllEntries(hippoRoot, 'default').filter((e) => e.dagLevel === 3);
     expect(profiles).toHaveLength(1);

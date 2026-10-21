@@ -1,6 +1,7 @@
 /** Sleep in a store shared by projects (the global store) never blends, dedups or conflicts two projects' memories. */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
@@ -136,8 +137,7 @@ describe('sleep partitions by origin project', () => {
       (
         await buildDag(sqliteStore(home), facts, {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          apiKey: 'k',
-          fetcher: fetcher('alice files, notes and closes tickets'),
+          llm: anthropicLlm({ apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') }),
         })
       ).summariesCreated,
     ).toBe(2);
@@ -161,8 +161,7 @@ describe('sleep partitions by origin project', () => {
       (
         await buildEntityProfiles(sqliteStore(home), [...l2s, ...more], {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          apiKey: 'k',
-          fetcher: fetcher('alice is the typed-python API owner'),
+          llm: anthropicLlm({ apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') }),
         })
       ).profilesCreated,
     ).toBe(2);

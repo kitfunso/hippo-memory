@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
 
 describe('generateDagSummary', () => {
@@ -23,7 +24,7 @@ describe('generateDagSummary', () => {
         'John wants to improve shooting percentage',
         'John dreams of winning a championship',
       ],
-      { apiKey: 'test', fetcher: mockFetcher },
+      { llm: anthropicLlm({ apiKey: 'test', fetcher: mockFetcher }) },
     );
 
     expect(summary).not.toBeNull();
@@ -33,8 +34,7 @@ describe('generateDagSummary', () => {
   it('returns null on API failure', async () => {
     const mockFetcher = async () => new Response('', { status: 500 });
     const summary = await generateDagSummary('label', ['fact'], {
-      apiKey: 'test',
-      fetcher: mockFetcher,
+      llm: anthropicLlm({ apiKey: 'test', fetcher: mockFetcher }),
     });
     expect(summary).toBeNull();
   });
@@ -43,8 +43,7 @@ describe('generateDagSummary', () => {
     const mockFetcher = async () =>
       new Response(JSON.stringify({ content: [{ type: 'text', text: 'too short' }] }), { status: 200 });
     const summary = await generateDagSummary('label', ['fact'], {
-      apiKey: 'test',
-      fetcher: mockFetcher,
+      llm: anthropicLlm({ apiKey: 'test', fetcher: mockFetcher }),
     });
     expect(summary).toBeNull();
   });

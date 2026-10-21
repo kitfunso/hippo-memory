@@ -25,7 +25,6 @@ export const ENV_READERS = [
     'webhook adapters: their own signing secrets and unknown-tenant escape hatch',
   ],
   [/^base\/memory\/ablation\.ts$/, 'the eval-only HIPPO_ABLATE_* and HIPPO_FAKE_NOW switches'],
-  [/^base\/util\/anthropic-messages\.ts$/, 'the Anthropic adapter: its own key and timeout'],
   [/^infra\//, 'the outside-service adapters: their own key, timeout, model cache and machine'],
   [/^base\/util\/log\.ts$/, 'the log sink: its own level and format'],
   [/^base\/util\/spawn-argv\.ts$/, 'the process adapter: PATH and PATHEXT'],

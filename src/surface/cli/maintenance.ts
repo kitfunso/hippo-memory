@@ -1,6 +1,6 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
-import { envAnthropicApiKey } from '../../base/util/env.js';
+import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import { dedupeStore, type DedupResult } from '../../api/sleep/upkeep.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../base/embeddings/provider.js';
 import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
@@ -20,8 +20,8 @@ const PAIR_PREVIEW_CHARS = 90;
 export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  const apiKey = envAnthropicApiKey();
-  if (!apiKey) {
+  const llm = anthropicLlmFromEnv();
+  if (!llm) {
     fail('hippo refine needs ANTHROPIC_API_KEY in the environment.');
   }
 
@@ -32,7 +32,7 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
   const asJson = boolFlag(flags, 'json');
 
   const result = await refineStore(hippoRoot, {
-    apiKey,
+    llm,
     model,
     limit,
     dryRun,

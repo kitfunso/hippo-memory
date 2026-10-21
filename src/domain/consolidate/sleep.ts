@@ -6,6 +6,7 @@
 import { evalNow, strengthAblation } from '../../base/memory/ablation.js';
 import { MemoryEntry, canAutoDelete, LEGACY_TYPED_HALF_LIFE, type DecayOptions } from '../../base/memory/memory.js';
 import type { HippoConfig } from '../../base/config/config.js';
+import type { Llm } from '../../base/ports/llm.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../base/util/write-budget.js';
@@ -32,7 +33,8 @@ import { tombstoneChecks } from './tombstones.js';
 export type ConsolidateOptions = {
   dryRun?: boolean;
   now?: Date;
-  fetcher?: typeof fetch;
+  /** The model the LLM phases call; absent, they are skipped as when no key is set. */
+  llm?: Llm;
   /** How long one flush transaction may hold the write lock; a WriteBudget fits, and only its hold is read. */
   budget?: Pick<WriteBudget, 'holdMs'>;
   /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
@@ -88,7 +90,7 @@ export async function runConsolidation(
 
 async function runAndFlush(run: SleepRun, options: ConsolidateOptions): Promise<void> {
   const decay = await decayPass(run);
-  await runPassesAfterDecay(run, options.fetcher);
+  await runPassesAfterDecay(run, options.llm);
 
   const { holdMs } = options.budget ?? WRITE_BUDGET;
   await flushPending(run, holdMs);
@@ -107,10 +109,10 @@ async function sessionDecayOptions(store: ConsolidationStore, config: SleepRun['
   };
 }
 
-async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
+async function runPassesAfterDecay(run: SleepRun, llm: Llm | undefined): Promise<void> {
   await promoteSessionTraces(run);
   await replayPass(run);
-  await llmPasses(run, fetcher);
+  await llmPasses(run, llm);
   await physicsPass(run);
   await retireHeldTexts(run);
   const mergesSkippedRejected = await mergePass(run);

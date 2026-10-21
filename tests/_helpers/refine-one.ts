@@ -1,4 +1,5 @@
 import { refineStore } from '../../src/surface/cli/refine-llm.js';
+import type { Llm } from '../../src/base/ports/llm.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from './default-half-life-memory.js';
 import { makeRoot } from './make-root.js';
@@ -9,7 +10,7 @@ import { readEntry, writeEntry } from './root-forms.js';
 export async function refineOne(
   merged: string,
   sources: readonly MemoryEntry[],
-  opts: { apiKey: string; fetcher: typeof fetch },
+  opts: { llm: Llm },
 ): Promise<string | null> {
   // The label keeps "refine" out of the path, since tests filter stderr on that word.
   const root = makeRoot('consolidated');

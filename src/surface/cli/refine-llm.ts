@@ -1,7 +1,7 @@
 /**
  * LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in;
  * idempotent via the `llm-refined` tag.
- * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
+ * Calls the model through the Llm port; on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../../base/memory/memory.js';
 import { REFINED_TAG, storeRefinement } from '../../api/index.js';
@@ -9,11 +9,7 @@ import { memoryList, memoryListByIds, type TenantReach } from '../../api/memorie
 import { cliApiContext, type CliContext } from './api-context.js';
 import { chunked } from '../../base/util/chunked.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import {
-  failureFields,
-  sendAnthropicMessage,
-  type AnthropicMessageFailure,
-} from '../../base/util/anthropic-messages.js';
+import { llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { log } from '../../base/util/log.js';
 
 const MAX_REFINE_SOURCES = 8;
@@ -25,14 +21,12 @@ const REFINE_MIN_CHARS = 10;
 const CONSOLIDATED_MARKERS = ['[Consolidated from', '[Consolidated pattern from'];
 
 export interface RefineOptions {
-  apiKey: string;
+  llm: Llm;
   model?: string;
   limit?: number;
   dryRun?: boolean;
   /** Ignore the llm-refined tag and re-refine everything eligible. */
   all?: boolean;
-  /** Injected for testing — defaults to the real fetch. */
-  fetcher?: typeof fetch;
   /**
    * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are
    * skipped.
@@ -55,7 +49,7 @@ export interface RefineResult {
 async function refineSemanticMemory(
   merged: string,
   sources: MemoryEntry[],
-  opts: { apiKey: string; model?: string; fetcher?: typeof fetch },
+  opts: { llm: Llm; model?: string },
 ): Promise<string | null> {
   const sourceBlock = sources
     .slice(0, MAX_REFINE_SOURCES)
@@ -80,15 +74,13 @@ ${redactSecretsStrict(merged)}
 Source memories (up to 8 shown):
 ${sourceBlock}`;
 
-  const reply = await sendAnthropicMessage({
-    apiKey: opts.apiKey,
+  const reply = await opts.llm.send({
     model: opts.model,
     maxTokens: REFINE_MAX_TOKENS,
     prompt,
-    fetcher: opts.fetcher,
   });
   if (!reply.ok) {
-    log.warn(describeRefineFailure(reply.failure), failureFields(reply.failure));
+    log.warn(describeRefineFailure(reply.failure), llmFailureFields(reply.failure));
     return null;
   }
   if (reply.text.length < REFINE_MIN_CHARS) {
@@ -98,7 +90,7 @@ ${sourceBlock}`;
   return reply.text;
 }
 
-function describeRefineFailure(failure: AnthropicMessageFailure): string {
+function describeRefineFailure(failure: LlmFailure): string {
   switch (failure.kind) {
     case 'request':
       return `refine: request failed: ${failure.message}`;
@@ -171,9 +163,8 @@ async function refineOneEntry(
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 
   const refined = await refineSemanticMemory(entry.content, sources, {
-    apiKey: opts.apiKey,
+    llm: opts.llm,
     model: opts.model,
-    fetcher: opts.fetcher,
   });
 
   if (refined === null) {
