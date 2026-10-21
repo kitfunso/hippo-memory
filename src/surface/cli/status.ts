@@ -139,7 +139,7 @@ async function printPhysicsStatus(ctx: CliContext): Promise<void> {
       console.log('');
       console.log(
         `Physics: ${stats.count} particles, ` +
-          `${physicsEnergyText(stats, cliConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(stats.meanSpeed, 4)}`,
+          `${physicsEnergyText(stats, cliConfig(ctx.hippoRoot).physics.gMemory)}, avg vel: ${fmt(stats.meanSpeed, 4)}`,
       );
     }
   } catch (err) {

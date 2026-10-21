@@ -336,23 +336,24 @@ function enabledBlock(fallback: { enabled: boolean }): Reader<{ enabled: boolean
   }));
 }
 
+// A config file keeps the snake_case physics keys, such as G_query; each reads into its camelCase field.
 function physicsFields(read: FieldReader): PhysicsConfig {
   const P = D.physics;
   return {
     enabled: read('enabled', flagOrAuto(P.enabled)),
-    G_query: read('G_query', finite(P.G_query)),
-    G_memory: read('G_memory', finite(P.G_memory)),
-    K_repulsion: read('K_repulsion', finite(P.K_repulsion)),
+    gQuery: read('G_query', finite(P.gQuery)),
+    gMemory: read('G_memory', finite(P.gMemory)),
+    kRepulsion: read('K_repulsion', finite(P.kRepulsion)),
     drag: read('drag', finite(P.drag)),
-    interference_gain: read('interference_gain', finite(P.interference_gain)),
-    momentum_weight: read('momentum_weight', finite(P.momentum_weight)),
-    max_velocity: read('max_velocity', finite(P.max_velocity)),
+    interferenceGain: read('interference_gain', finite(P.interferenceGain)),
+    momentumWeight: read('momentum_weight', finite(P.momentumWeight)),
+    maxVelocity: read('max_velocity', finite(P.maxVelocity)),
     dt: read('dt', finite(P.dt)),
     substeps: read('substeps', count(P.substeps)),
-    feedback_alpha: read('feedback_alpha', finite(P.feedback_alpha)),
-    temperature_decay: read('temperature_decay', finite(P.temperature_decay)),
-    cluster_threshold: read('cluster_threshold', finite(P.cluster_threshold)),
-    cluster_top_k: read('cluster_top_k', count(P.cluster_top_k)),
+    feedbackAlpha: read('feedback_alpha', finite(P.feedbackAlpha)),
+    temperatureDecay: read('temperature_decay', finite(P.temperatureDecay)),
+    clusterThreshold: read('cluster_threshold', finite(P.clusterThreshold)),
+    clusterTopK: read('cluster_top_k', count(P.clusterTopK)),
   };
 }
 

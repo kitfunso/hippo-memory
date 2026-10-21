@@ -131,9 +131,9 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
  * Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0,
  * cosine(pos, query))^2.
  */
-export function queryGravityMagnitude(particle: PhysicsParticle, queryEmbedding: number[], G_query: number): number {
+export function queryGravityMagnitude(particle: PhysicsParticle, queryEmbedding: number[], gQuery: number): number {
   const cos = cosineOf(particle.position, queryEmbedding);
-  return G_query * particle.mass * Math.pow(Math.max(0, cos), 2);
+  return gQuery * particle.mass * Math.pow(Math.max(0, cos), 2);
 }
 
 /** Momentum bonus in [0, 1]: how aligned the particle's velocity is with the query direction. */
@@ -154,14 +154,14 @@ export function velocityAlignmentBonus(particle: PhysicsParticle, queryEmbedding
 export function attractionForce(
   pi: PhysicsParticle,
   pj: PhysicsParticle,
-  G_memory: number,
+  gMemory: number,
   out: number[] = vecZero(pi.position.length),
   diff: number[] = vecZero(pi.position.length),
 ): number[] {
   const cos = cosineOf(pi.position, pj.position);
   if (cos <= 0) return out;
 
-  const magnitude = G_memory * pi.mass * pj.mass * Math.pow(cos, 3);
+  const magnitude = gMemory * pi.mass * pj.mass * Math.pow(cos, 3);
   // Direction: from i toward j (tangent projection handled by normalization after integration)
   for (let k = 0; k < out.length; k++) diff[k] = pj.position[k] - pi.position[k];
   const norm = vecNorm(diff);
@@ -175,10 +175,10 @@ export function attractionForce(
  * Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where
  * cosine_distance = 1 - cosine_similarity.
  */
-export function repulsionForce(pi: PhysicsParticle, pj: PhysicsParticle, K_repulsion: number): number[] {
+export function repulsionForce(pi: PhysicsParticle, pj: PhysicsParticle, kRepulsion: number): number[] {
   const cos = cosineOf(pi.position, pj.position);
   const dist = Math.max(MIN_COSINE_DISTANCE, 1 - cos);
-  const magnitude = (K_repulsion * pi.mass * pj.mass) / (dist * dist);
+  const magnitude = (kRepulsion * pi.mass * pj.mass) / (dist * dist);
   // Direction: away from j
   const direction = vecNormalize(vecSub(pi.position, pj.position));
   return vecScale(direction, magnitude);
@@ -217,9 +217,9 @@ function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceCont
     if (i === j) continue;
     const pj = particles[j];
 
-    attractionForce(pi, pj, ctx.config.G_memory, net, diff);
+    attractionForce(pi, pj, ctx.config.gMemory, net, diff);
 
-    if (conflicts?.has(pj.memoryId)) addInto(net, repulsionForce(pi, pj, ctx.config.K_repulsion));
+    if (conflicts?.has(pj.memoryId)) addInto(net, repulsionForce(pi, pj, ctx.config.kRepulsion));
   }
 
   addInto(net, dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS));
@@ -238,7 +238,7 @@ function computeAcceleration(i: number, particles: PhysicsParticle[], ctx: Force
 /** One Velocity Verlet step for all particles; mutates in place for performance. */
 function verletStep(particles: PhysicsParticle[], accelerations: number[][], ctx: ForceContext): void {
   const dt = ctx.config.dt;
-  const maxVel = ctx.config.max_velocity;
+  const maxVel = ctx.config.maxVelocity;
 
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
@@ -309,7 +309,7 @@ export function simulate(particles: PhysicsParticle[], ctx: ForceContext): Simul
 }
 
 /** Kinetic plus pairwise potential energy; all pairs, so a caller reads it only on demand and under a particle cap. */
-export function computeSystemEnergy(particles: PhysicsParticle[], G_memory: number): SystemEnergy {
+export function computeSystemEnergy(particles: PhysicsParticle[], gMemory: number): SystemEnergy {
   let kinetic = 0;
   let potential = 0;
 
@@ -321,7 +321,7 @@ export function computeSystemEnergy(particles: PhysicsParticle[], G_memory: numb
   for (let i = 0; i < particles.length; i++) {
     for (let j = i + 1; j < particles.length; j++) {
       const cos = cosineOf(particles[i].position, particles[j].position);
-      potential -= G_memory * particles[i].mass * particles[j].mass * Math.max(0, cos);
+      potential -= gMemory * particles[i].mass * particles[j].mass * Math.max(0, cos);
     }
   }
 
@@ -337,15 +337,15 @@ export function physicsScore(
   config: PhysicsConfig,
   /**
    * Cross-ingest-stable tie key per memoryId (typically the memory content, from a caller with entries in scope);
-   * without it ties fall to memoryId, which is per-instance only and lets the cluster_top_k amplification set vary
+   * without it ties fall to memoryId, which is per-instance only and lets the clusterTopK amplification set vary
    * across fresh ingests. */
   tieKeyOf?: (memoryId: string) => string,
 ): ScoredPhysicsResult[] {
   if (particles.length === 0 || queryEmbedding.length === 0) return [];
 
   const results: ScoredPhysicsResult[] = particles.map((p) => {
-    const gravity = queryGravityMagnitude(p, queryEmbedding, config.G_query);
-    const momentum = config.momentum_weight * velocityAlignmentBonus(p, queryEmbedding);
+    const gravity = queryGravityMagnitude(p, queryEmbedding, config.gQuery);
+    const momentum = config.momentumWeight * velocityAlignmentBonus(p, queryEmbedding);
     return {
       memoryId: p.memoryId,
       baseScore: gravity + momentum,
@@ -354,7 +354,7 @@ export function physicsScore(
     };
   });
 
-  // Base-score order picks the cluster_top_k amplification SET (which mutates scores), so ties must be
+  // Base-score order picks the clusterTopK amplification SET (which mutates scores), so ties must be
   // cross-ingest-stable when the caller supplies a content tie key (see comparePhysicsResultsBy in compare.ts).
   const tie = tieKeyOf ? (r: ScoredPhysicsResult) => tieKeyOf(r.memoryId) : undefined;
   results.sort(comparePhysicsResultsBy((r) => r.baseScore, tie));
@@ -373,7 +373,7 @@ function applyClusterAmplification(
   particles: PhysicsParticle[],
   config: PhysicsConfig,
 ): void {
-  const topK = Math.min(config.cluster_top_k, results.length);
+  const topK = Math.min(config.clusterTopK, results.length);
   if (topK < 2) return;
 
   const particleMap = new Map<string, PhysicsParticle>();
@@ -392,12 +392,12 @@ function applyClusterAmplification(
       if (!pj) continue;
 
       const proximity = cosineOf(pi.position, pj.position);
-      if (proximity > config.cluster_threshold) {
+      if (proximity > config.clusterThreshold) {
         clusterSignal += top[j].baseScore * proximity;
       }
     }
 
-    const amplification = 1 + Math.tanh(clusterSignal * config.interference_gain);
+    const amplification = 1 + Math.tanh(clusterSignal * config.interferenceGain);
     top[i].clusterAmplification = amplification;
     top[i].finalScore = top[i].baseScore * amplification;
   }

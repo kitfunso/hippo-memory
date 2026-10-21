@@ -29,7 +29,8 @@ export function check<T extends JsonValue | undefined>(
   };
 }
 
-/** A block of named fields over `fallback`: fields the block does not name pass through as written. */
+/** A block of named fields over `fallback`: fields the block does not read pass through as written, and a file key
+ * read into a field of another name does not. */
 export function block<T extends object>(expect: string, fallback: T, fields: (read: FieldReader) => T): Reader<T> {
   return (raw, path) => {
     if (raw === undefined) return { ...fallback };
@@ -37,8 +38,14 @@ export function block<T extends object>(expect: string, fallback: T, fields: (re
       reject(path, expect, raw, 'the defaults');
       return { ...fallback };
     }
-    const read: FieldReader = (field, reader) => reader(raw[field], `${path}.${field}`);
-    return { ...fallback, ...raw, ...fields(read) };
+    const named = new Set<string>();
+    const read: FieldReader = (field, reader) => {
+      named.add(field);
+      return reader(raw[field], `${path}.${field}`);
+    };
+    const parsed = fields(read);
+    const unread = Object.fromEntries(Object.entries(raw).filter(([key]) => !named.has(key)));
+    return { ...fallback, ...unread, ...parsed };
   };
 }
 
