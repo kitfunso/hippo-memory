@@ -13,7 +13,7 @@ import { printError } from './surface/cli/output.js';
 import { exitAfterFlush } from './base/util/crash-handlers.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './base/util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './store/port.js';
-import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './surface/cli/flag-values.js';
+import { type CliFlags, boolFlag, isBooleanFlag, isStringFlag } from './surface/cli/flag-values.js';
 import {
   USAGE_HEADER,
   USAGE_EXAMPLES,
@@ -111,7 +111,7 @@ export function parseArgs(argv: string[]) {
 export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliFlags): boolean {
   if (envSkipAutoIntegrations()) return false;
   if (!COMMAND_INDEX.get(currentCommand)?.repairsCodexWrapper) return false;
-  if (currentCommand === 'init' && flagIsTrue(flags, 'no-hooks')) return false;
+  if (currentCommand === 'init' && boolFlag(flags, 'no-hooks')) return false;
   return true;
 }
 
@@ -219,7 +219,7 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
 }
 
 async function main(command: string, args: string[], flags: CliFlags, hippoRoot: string): Promise<void> {
-  if (command === '--version' || command === '-v' || flags['version']) printVersion();
+  if (command === '--version' || command === '-v' || boolFlag(flags, 'version')) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
     printUsage();
     return;

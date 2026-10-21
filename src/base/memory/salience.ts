@@ -34,7 +34,7 @@ const LENGTH_BONUS = 0.1;
 const LONG_CONTENT_CHARS = 100;
 const VERY_LONG_CONTENT_CHARS = 300;
 
-const DEFAULTS: Required<SalienceOptions> = {
+export const SALIENCE_DEFAULTS: Required<SalienceOptions> = {
   recentWindow: 20,
   overlapThreshold: 0.6,
   minContentLength: 5,
@@ -47,7 +47,7 @@ export function computeSalience(
   recentMemories: MemoryEntry[],
   options: SalienceOptions = {},
 ): SalienceResult {
-  const opts = { ...DEFAULTS, ...options };
+  const opts = { ...SALIENCE_DEFAULTS, ...options };
   const trimmed = content.trim();
   const isPinned = tags.includes('pinned');
 

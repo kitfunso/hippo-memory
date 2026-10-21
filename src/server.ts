@@ -12,14 +12,14 @@ import {
   type ContextReach,
   contextReach,
 } from './api/index.js';
-import type { HippoStore } from './store/index.js';
+import { hasGroup, type HippoStore } from './store/port.js';
 import {
   promptHookContext as renderPromptHook,
   type PromptHookOptions,
   type PromptHookRequest,
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
-import { isHippoDbStore, sqliteReach } from './store/sqlite/index.js';
+import { defaultReach } from './surface/open-store.js';
 import { loadConfig } from './base/config/config.js';
 
 export { serve } from './surface/server/boot.js';
@@ -32,11 +32,12 @@ async function promptHookContext(
   return renderPromptHook({ ...ctx, reach: ctx.reach ?? (await folderReach(ctx.store, opts)) }, req, opts);
 }
 
-/** Only hippo.db has a global store beside it; an add-on's own store reads as one project. */
+/** The reach every root probes for a store kept in a folder, from the folder its port names; a store without
+ * folderFiles keeps the Context's default, one project and no global store. */
 async function folderReach(store: HippoStore, opts: PromptHookOptions | undefined): Promise<ContextReach | undefined> {
-  if (!isHippoDbStore(store) || store.folderFiles === undefined) return undefined;
+  if (!hasGroup(store, 'folderFiles')) return undefined;
   const { folder } = await store.folderFiles.home();
-  return contextReach(sqliteReach(folder, store, opts?.sharedStore), loadConfig);
+  return contextReach(defaultReach(folder, store, opts?.sharedStore), loadConfig);
 }
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.

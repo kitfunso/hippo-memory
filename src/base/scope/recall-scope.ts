@@ -150,8 +150,8 @@ export function isRestrictedScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
   // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string literals; widening the array lets .includes() take
   // any scope.
-  // `:private:` anywhere, any case, matches the SQL default-deny in src/store/search-rows.ts so JS never admits what
-  // SQL hides.
+  // `:private:` anywhere, any case, matches the SQL default-deny in src/store/sqlite/search-rows.ts so JS never admits
+  // what SQL hides.
   return (
     isPrivateScope(scope) ||
     /:private:/i.test(scope) ||

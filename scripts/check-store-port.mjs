@@ -11,7 +11,7 @@
 // groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // portFunctionParams fails outright on any parameter of a method on a port interface whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data. No baseline.
 // A file under src/surface/server/routes or src/surface/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
-// folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any but FOLDER_FORM_EXCEPTIONS fails outright.
+// folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any one fails outright.
 // A .ts file directly in src/store other than STORE_TOP_FILES fails outright: a group's SQL goes in src/store/sqlite, a pure rule in src/base.
 // A src/store function or port method whose tenant, or an argument's tenant property, is optional, defaulted or admits undefined or null fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
@@ -464,11 +464,6 @@ const FOLDER_OPENERS = new Set([
   'sqliteStore',
   'sqliteSyncStore',
 ]);
-// Only the SQLite adapter holds a folder; each folder form left above it, as `file name`, with why.
-const FOLDER_FORM_EXCEPTIONS = new Map([
-  ['src/store/search-rows.ts loadRecallSearchEntries', 'the eval kit serves the frozen q3b-ranker-floor benchmark'],
-]);
-
 /** The file's top-level functions, declared or bound to a const, each with its node and whether the file exports it. */
 function topLevelFunctions(sf) {
   const fns = new Map();
@@ -542,8 +537,8 @@ function folderFormsIn(file, sf) {
     .map((name) => `${file}:${lineOf(sf, fns.get(name).node)} ${name}`);
 }
 
-// The port, its published entry, and the root form the frozen q3b-ranker-floor benchmark imports from dist.
-const STORE_TOP_FILES = new Set(['port.ts', 'port-groups.ts', 'index.ts', 'search-rows.ts']);
+// The port and its published entry.
+const STORE_TOP_FILES = new Set(['port.ts', 'port-groups.ts', 'index.ts']);
 
 /** Each .ts file directly in src/store that STORE_TOP_FILES does not name. */
 function strayStoreTopFiles() {
@@ -766,13 +761,11 @@ if (rose.length > 0) {
   console.error('`node scripts/check-store-port.mjs --list` shows every count.');
   process.exit(1);
 }
+// Only the SQLite adapter holds a folder.
 const folderForms = folderFormsAboveAdapter();
-const strayForms = folderForms.filter((site) => !FOLDER_FORM_EXCEPTIONS.has(site.replace(/:\d+ /, ' ')));
-if (strayForms.length > 0) {
-  console.error(
-    `Folder forms above src/store/sqlite: ${folderForms.length}, at most ${FOLDER_FORM_EXCEPTIONS.size} allowed:`,
-  );
-  for (const site of strayForms) console.error(`  ${site}`);
+if (folderForms.length > 0) {
+  console.error(`Folder forms above src/store/sqlite: ${folderForms.length}, none allowed:`);
+  for (const site of folderForms) console.error(`  ${site}`);
   console.error(
     'Take the store or the handle the caller holds; a folder form for a script or the eval kit goes in src/store/sqlite/folder-forms.ts.',
   );

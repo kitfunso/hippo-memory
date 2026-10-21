@@ -2,8 +2,8 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { cosineOf } from '../../base/rank/cosine.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
 import type { EmbeddingProvider } from '../../base/embeddings/provider.js';
-import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
-import { errorMessage, log } from '../../base/util/log.js';
+import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
+import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { HippoStore, VectorReads } from '../../store/index.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -77,11 +77,12 @@ export async function embedQueryBy(
 
 // Search runs on every hook prompt, so one line per reason per process says why vectors went unused without flooding
 // stderr.
-function warnBm25Fallback(reason: string, detail: string): void {
-  log.once(
+// A repeat still logs, at debug and then every 100th at warn, so a fallback that keeps happening stays visible.
+function warnBm25Fallback(reason: string, detail: string, fields?: LogFields): void {
+  log.warnThenSample(
     `search.bm25-fallback.${reason}`,
-    'warn',
     `hybrid search fell back to BM25 only: ${redactSecretsStrict(detail)}`,
+    fields,
   );
 }
 
@@ -89,7 +90,7 @@ function reindexHint({ store, onHippoDb }: VectorSource): string {
   const why = 'the embedding index was built by another model or is being rebuilt';
   return onHippoDb
     ? `${why}; run 'hippo embed'`
-    : `${why}; run 'hippo embed' on the SQLite store, then rebuild the '${store.kind}' database from it`;
+    : `${why}; run 'hippo embed' on the folder's hippo.db, then rebuild the '${store.kind}' database from it`;
 }
 
 /** The nearest admitted rows not already in `entries`. */
@@ -117,8 +118,8 @@ export async function resolveVectorArm(
   try {
     await fillVectorArm(arm, query, source, options);
   } catch (err) {
-    rethrowIfSqliteBlocked(err);
-    warnBm25Fallback('error', errorMessage(err));
+    rethrowIfStoreBlocked(err);
+    warnBm25Fallback('error', errorMessage(err), errorFields(err, redactSecretsStrict));
   }
   return arm;
 }

@@ -30,6 +30,26 @@ export function parseListLimit(
   return limit;
 }
 
+/** An optional query number that must be above zero, or from zero when `allowZero`; absent is undefined. */
+export function parseNumberParam(raw: string | null, name: string, allowZero = false): number | undefined {
+  if (raw === null) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || (allowZero ? value < 0 : value <= 0)) {
+    throw new HttpError(400, `${name} must be a ${allowZero ? 'non-negative' : 'positive'} number`);
+  }
+  return value;
+}
+
+/** An optional query integer in min..max, refused rather than clamped; absent is undefined. */
+export function parseIntParam(raw: string | null, name: string, min: number, max: number): number | undefined {
+  if (raw === null) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new HttpError(400, `${name} must be a positive integer between ${min} and ${max}`);
+  }
+  return value;
+}
+
 /** `_authed` is proof the caller passed auth, so a full-size body is read only for an authenticated caller; the key
  * mint reads under its own small cap. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {

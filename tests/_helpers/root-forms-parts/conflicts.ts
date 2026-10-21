@@ -1,6 +1,7 @@
 // Root-keyed conflicts forms tests call; production code goes through the store port or the At forms.
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
+import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
 import { replaceDetectedConflictsAt } from '../../../src/store/sqlite/conflicts.js';
 import { onHandle, openStore } from '../../../src/store/sqlite/handles.js';
@@ -50,7 +51,7 @@ export function resolveConflictKeeping(
     conflictId,
     keep,
     loser,
-    fate: { kind: 'weaken' },
+    fate: conflictLoserFate({}, loser, null),
     actor: CLI_ACTOR,
     reason: '',
   });

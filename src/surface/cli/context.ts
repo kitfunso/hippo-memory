@@ -28,13 +28,12 @@ import {
 } from '../../api/prompt-hook.js';
 import {
   type CliFlags,
-  parseLimitFlag,
-  parseCountFlag,
-  parseBudgetFlag,
   type CommandContext,
-  flagIsTrue,
-  stringFlagOrExit,
   boolFlag,
+  parseBudgetFlag,
+  parseCountFlag,
+  parseLimitFlag,
+  stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -51,7 +50,7 @@ async function printContext(
   const rec = await startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
     stdinText,
     runtime: hookRuntime(flags),
-    eventType: flagIsTrue(flags, 'pinned-only') ? undefined : 'context',
+    eventType: boolFlag(flags, 'pinned-only') ? undefined : 'context',
     envSessionId: hostSessionId(),
   });
   // No try/finally: a render throw keeps its own exit code and writes no event.
@@ -99,7 +98,7 @@ async function contextGate(
 ): Promise<ContextGate | null> {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit and api.contextGet
   // falls back to global-only.
-  const pinnedOnly = flagIsTrue(flags, 'pinned-only');
+  const pinnedOnly = boolFlag(flags, 'pinned-only');
   if (!pinnedOnly) {
     requireInit(hippoRoot);
   }
@@ -218,7 +217,7 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
   const ctxExplicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const ctxActiveScope = ctxExplicitScope || envActiveScope();
   // --cross-project re-includes other-project memories, rendered under their own section.
-  const crossProject = flagIsTrue(flags, 'cross-project');
+  const crossProject = boolFlag(flags, 'cross-project');
   return {
     q: input.query,
     budget: input.budget,

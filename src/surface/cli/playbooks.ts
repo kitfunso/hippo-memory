@@ -3,14 +3,14 @@
 import { policiesInForce, skillsExport } from '../../api/objects/object-kinds.js';
 import type { Context } from '../../api/types.js';
 import type { Policy, Process, Skill } from '../../base/records/object-types.js';
-import { nonEmptyStringFlag, repeatedFlag, type CliFlags } from './flag-values.js';
+import { flagValueless, nonEmptyStringFlag, repeatedFlag, type CliFlags } from './flag-values.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
 // A value-less --step errors; repeated and single values both come back as a list.
 function collectProcessSteps(flags: CliFlags): string[] {
-  if (flags['step'] === true) {
+  if (flagValueless(flags, 'step')) {
     fail('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
   }
   return repeatedFlag(flags, 'step');

@@ -5,7 +5,7 @@ import type { AmbientTallies } from '../../base/memory/ambient.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { LossAversion, MemoryEntry } from '../../base/memory/memory.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb } from '../../db/index.js';
-import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
+import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { loadAmbientTalliesAt } from './ambient.js';
 import { batchWriteAndDeleteAt } from './delete-and-batch.js';
 import { loadAllEntriesAt, loadEntriesPageAt, readEntryAt } from './entry-reads.js';
@@ -19,6 +19,7 @@ import { loadEntitiesAt, loadRelationsAt } from './graph-reads.js';
 import { saveSessionHandoffAt } from './handoffs.js';
 import type { DormantMove } from '../port/consolidation.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
+import type { RecallSearchEntriesOptions } from '../port/sharing.js';
 import type { Entity, EntityType, Relation } from '../port/graph-reads.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
@@ -26,6 +27,7 @@ import type { ContinuityKey } from '../port/types.js';
 import { appendSessionEventAt } from './sessions.js';
 import { saveActiveTaskSnapshotAt } from './task-snapshots.js';
 import { loadEmbeddingIndexAt } from './vector-index.js';
+import { loadRecallEntriesAt } from './search-rows.js';
 import { onHandle, openStore } from './handles.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../port/types.js';
@@ -67,6 +69,16 @@ export function readEntry(hippoRoot: string, id: string): MemoryEntry | null {
 /** Every stored vector keyed by memory id; `{}` when none. */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
   return onHandle(hippoRoot, (db) => loadEmbeddingIndexAt(db));
+}
+
+/** The folder form of `loadRecallEntriesAt`; the eval kit's positional `loadRecallSearchEntries` serves the frozen
+ * q3b-ranker-floor benchmark through it. */
+export function loadRecallSearchEntries(
+  hippoRoot: string,
+  query: string,
+  options: RecallSearchEntriesOptions,
+): MemoryEntry[] {
+  return onHandle(hippoRoot, (db) => loadRecallEntriesAt(db, query, options), openStore);
 }
 
 export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
@@ -135,7 +147,7 @@ export function strengthenRetrieved(
   try {
     db = openHippoDb(hippoRoot);
   } catch (error) {
-    rethrowIfSqliteBlocked(error);
+    rethrowIfStoreBlocked(error);
     warnStrengthenFailed(error);
     return new Set();
   }

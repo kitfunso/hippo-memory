@@ -158,8 +158,8 @@ export function boolFlag(flags: CliFlags, name: string): boolean {
   return Boolean(flags[name]);
 }
 
-// Only a bare switch counts; `--x value` is false.
-export function flagIsTrue(flags: CliFlags, name: string): boolean {
+// A flag that takes a value was typed with none (`--x` and nothing after it).
+export function flagValueless(flags: CliFlags, name: string): boolean {
   return flags[name] === true;
 }
 
@@ -192,11 +192,11 @@ export function parseAsOfFlag(flags: CliFlags): string | undefined {
 /** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns it off. */
 export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   return {
-    usePhysics: boolFlag(flags, 'physics') || (!flags['classic'] && config.physics.enabled !== false),
+    usePhysics: boolFlag(flags, 'physics') || (!boolFlag(flags, 'classic') && config.physics.enabled !== false),
     physicsConfig: config.physics,
-    mmr: !flags['no-mmr'] && config.mmr.enabled,
+    mmr: !boolFlag(flags, 'no-mmr') && config.mmr.enabled,
     mmrLambda: numberFlag(flags, 'mmr-lambda') ?? config.mmr.lambda,
-    localBump: flags['equal-sources'] ? 1.0 : (numberFlag(flags, 'local-bump') ?? config.search.localBump),
+    localBump: boolFlag(flags, 'equal-sources') ? 1.0 : (numberFlag(flags, 'local-bump') ?? config.search.localBump),
   };
 }
 
