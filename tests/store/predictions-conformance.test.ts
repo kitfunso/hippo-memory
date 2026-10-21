@@ -4,7 +4,6 @@ import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/store/port.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
-import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -13,6 +12,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent, PredictionBaserate } from '../../src/store/port/types.js';
 import type { Prediction, SavePredictionOptions } from '../../src/store/port/predictions.js';
@@ -44,8 +44,8 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'predictions', inMemoryPredictionsStore, calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  const sides = await onBothStores(fixture, 'predictions', calls);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

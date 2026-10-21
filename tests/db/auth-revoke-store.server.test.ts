@@ -7,9 +7,9 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
-import { inMemoryKeyAuditStore } from '../_helpers/in-memory-key-audit-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { memorySide } from '../_helpers/memory-side.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 let fixture: TwoTenantFixture;
@@ -74,7 +74,7 @@ describe('authRevoke with ctx.store', () => {
 
   it('revokes through keyAudit and creates no hippo.db in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryKeyAuditStore(copyOf());
+    const memory = memorySide(copyOf());
     const { memberA } = fixture.keys;
     expect(
       await authRevoke(
@@ -93,7 +93,7 @@ describe('authRevoke with ctx.store', () => {
   });
 
   it("keeps hippo.db's checks: a member key revokes only itself, a foreign key is unknown", async () => {
-    const memory = inMemoryKeyAuditStore(copyOf());
+    const memory = memorySide(copyOf());
     const { adminA, memberA, memberB } = fixture.keys;
     const member = {
       hippoRoot: markedFolder(),
@@ -127,7 +127,7 @@ describe('DELETE /v1/auth/keys/:keyId under another store', () => {
   it('revokes through the store that has keyAudit, and the revoked key is refused at once', async () => {
     const root = copyOf();
     const before = hippoDbState(root, fixture.keys.memberA);
-    const memory = inMemoryKeyAuditStore(root);
+    const memory = memorySide(root);
     handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
     // A route that needs local files still verifies the key first, which puts it in the verified-key cache.
     const { url } = handle;

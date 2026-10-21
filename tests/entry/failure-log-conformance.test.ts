@@ -6,7 +6,6 @@ import type { FailureEvent, FailureOutcome } from '../../src/entry/store-kit.js'
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryFailureLogStore } from '../_helpers/in-memory-failure-log-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -14,6 +13,7 @@ import {
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -59,8 +59,8 @@ function seed(dir: string): void {
 }
 
 async function conforms<G extends 'failureLog' | 'lessonWrites'>(group: G, calls: readonly GroupCall<G, Value>[]) {
-  const sides = await onBothStores(fixture, group, inMemoryFailureLogStore, calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  const sides = await onBothStores(fixture, group, calls);
+  expectSameOutcomes(sides);
   return sides.sqlite.outcomes;
 }
 

@@ -1,5 +1,5 @@
 // Calls, expected rows and hooks the objects-conformance tests share; useObjectsConformance seeds the two-tenant store.
-import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -15,7 +15,6 @@ import type {
   SavableKind,
 } from '../../src/base/records/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/store/port.js';
-import { inMemoryObjectsStore } from '../_helpers/in-memory-objects-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -24,6 +23,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
@@ -158,8 +158,8 @@ let baseline: Side;
 let nextAuditId: number;
 
 export async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'objects', inMemoryObjectsStore, calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  const sides = await onBothStores(fixture, 'objects', calls);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

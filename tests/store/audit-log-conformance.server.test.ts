@@ -10,7 +10,6 @@ import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
-import { inMemoryAuditLogStore } from '../_helpers/in-memory-audit-log-store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import {
   onBothStores,
@@ -19,10 +18,12 @@ import {
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { memorySide } from '../_helpers/memory-side.js';
 
 const HOST = '__host__';
 const at = (second: number): string => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
@@ -57,8 +58,8 @@ let hostAdminToken: string;
 
 /** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's values. */
 async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
-  const sides = await onBothStores(fixture, 'auditLog', inMemoryAuditLogStore, calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  const sides = await onBothStores(fixture, 'auditLog', calls);
+  expectSameOutcomes(sides);
   expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return sides.sqlite.outcomes.map((o) => {
     if ('error' in o) throw new Error(o.error);
@@ -297,6 +298,6 @@ describe('GET /v1/audit over serve()', () => {
       false,
       false,
     ]);
-    expect(await runServed((root) => inMemoryAuditLogStore(root).store)).toEqual(onHippoDb);
+    expect(await runServed((root) => memorySide(root).store)).toEqual(onHippoDb);
   });
 });
