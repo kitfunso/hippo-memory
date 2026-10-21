@@ -382,6 +382,6 @@ async function emitSleepAudit(
     ]);
   } catch (auditErr) {
     // Logged, never thrown: a second failure must not mask the original phaseError.
-    reportAuditWriteFailure('consolidate', String(auditErr));
+    reportAuditWriteFailure('consolidate', auditErr);
   }
 }

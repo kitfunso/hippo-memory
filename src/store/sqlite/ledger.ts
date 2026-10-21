@@ -103,7 +103,7 @@ function noteLedgerRowSkipped<E>(error: E): void {
     return;
   }
   const message = `token ledger row skipped: ${errorMessage(error)}`;
-  if (skip === 'absent') log.debug(message);
+  if (skip === 'absent') log.debug(message, errorFields(error));
   else log.warnThenDebug('token-ledger-row', message, errorFields(error));
 }
 

@@ -3,7 +3,6 @@ import type { StoreWith } from '../../store/port.js';
 import type { RejectedValueRow } from '../../store/port/rejections.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import { errorMessage } from '../../base/util/log.js';
 
 export interface TombstoneChecks {
   /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
@@ -26,7 +25,7 @@ export function tombstoneChecks(store: StoreWith<'consolidation'>, dryRun: boole
       try {
         await audit(event);
       } catch (error) {
-        reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
+        reportAuditWriteFailure(event.op, error, event.targetId);
       }
     },
   };

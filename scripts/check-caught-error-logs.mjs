@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Per-file count of log calls inside a catch block, a `.catch` callback or an 'error' event listener that omit
-// errorFields() may fall, never rise, so an operator reading the log sees the error class and stack of every failure.
+// Per-file count of log calls inside a catch block, a `.catch` callback, an 'error' event listener or a function taking
+// the caught error as a parameter that omit errorFields() may fall, never rise, so an operator reading the log sees the error class and stack of every failure.
 // A call that reads one field of errorFields(...) fails anywhere in src, with no baseline: it drops the rest.
 // Usage: check-caught-error-logs.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
@@ -23,6 +23,10 @@ const isLogCall = (n) =>
 const isErrorFieldsCall = (n) =>
   ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorFields';
 
+// errorClassFields keeps the class and errno but not the text or stack, for a line that must not carry caller data.
+const isErrorClassFieldsCall = (n) =>
+  ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorClassFields';
+
 /** True for `errorFields(x).errorClass`, `errorFields(x)['errorClass']` and `const { errorClass } = errorFields(x)`. */
 function readsOneField(call) {
   const p = call.parent;
@@ -34,7 +38,7 @@ function readsOneField(call) {
 function carriesErrorFields(call) {
   let found = false;
   const visit = (n) => {
-    if (isErrorFieldsCall(n) && !readsOneField(n)) found = true;
+    if ((isErrorFieldsCall(n) || isErrorClassFieldsCall(n)) && !readsOneField(n)) found = true;
     ts.forEachChild(n, visit);
   };
   visit(call);
@@ -68,9 +72,21 @@ function errorListenerBodies(node, functions) {
   return named ? [named] : [];
 }
 
-/** The bodies a node hands to the failure path: a catch block, a `.catch(...)` callback or an 'error' listener. */
+const ERROR_PARAM = /^(?:err|error|e|[a-z]\w*(?:Err|Error))$/;
+
+/** The body of a function that takes a caught error as a parameter, such as `reportFailure(step, err)`. */
+function errorParamBody(node) {
+  const fn = ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || isFunction(node);
+  if (!fn || !node.body) return [];
+  return node.parameters.some((p) => ts.isIdentifier(p.name) && ERROR_PARAM.test(p.name.text)) ? [node.body] : [];
+}
+
+/** The bodies a node hands to the failure path: a catch block, a `.catch(...)` callback, an 'error' listener or a
+ * function that takes the error as a parameter. */
 function failureBodies(node, functions) {
   if (ts.isCatchClause(node)) return [node.block];
+  const withParam = errorParamBody(node);
+  if (withParam.length > 0) return withParam;
   if (!ts.isCallExpression(node)) return [];
   if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'catch') {
     return node.arguments.filter(isFunction).map((a) => a.body);

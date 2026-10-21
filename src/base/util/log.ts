@@ -58,34 +58,38 @@ function write(level: LogLevel, message: string, fields?: LogFields): void {
 }
 
 // No key follows the data: each names a table, column, errno or site. The cap guards a call site that puts a per-row
-// value in its key, which would otherwise push every later failure class down to debug.
+// value in its key, which would otherwise grow the set without bound.
 const ONCE_KEY_CAP = 1_000;
 const onceKeys = new Set<string>();
 let onceCapReported = false;
 
-/** 'new' records the key and 'seen' is a repeat. 'uncounted' is an unseen key once the set is full: it is not recorded,
- * and the first one says so at warn. */
-function sightOnceKey(key: string): 'new' | 'seen' | 'uncounted' {
-  if (onceKeys.has(key)) return 'seen';
-  if (onceKeys.size < ONCE_KEY_CAP) {
+/** 'new' records the key and 'seen' is a repeat. A full set forgets its least recently seen key to take a new one, so
+ * a new failure class always logs at its level; the first eviction says so at warn. */
+function sightOnceKey(key: string): 'new' | 'seen' {
+  if (onceKeys.has(key)) {
+    // Re-inserting moves the key last in Set order, so Set order tracks least recently seen.
+    onceKeys.delete(key);
     onceKeys.add(key);
-    return 'new';
+    return 'seen';
   }
-  if (!onceCapReported) {
-    onceCapReported = true;
-    write(
-      'warn',
-      `log: ${ONCE_KEY_CAP} once-only warnings were written; further new ones in this process log at debug`,
-    );
+  if (onceKeys.size >= ONCE_KEY_CAP) {
+    const oldest = onceKeys.values().next();
+    if (!oldest.done) {
+      onceKeys.delete(oldest.value);
+      repeatCounts.delete(oldest.value);
+    }
+    if (!onceCapReported) {
+      onceCapReported = true;
+      write('warn', `log: ${ONCE_KEY_CAP} once-only warnings were written; the least recently seen are now forgotten`);
+    }
   }
-  return 'uncounted';
+  onceKeys.add(key);
+  return 'new';
 }
 
-/** Write `message` at `level` the first time `key` is seen in this process; later calls are dropped. Past the key cap
- * an unseen key logs at debug. */
+/** Write `message` at `level` the first time `key` is seen in this process; later calls are dropped. */
 function once(key: string, level: LogLevel, message: string, fields?: LogFields): void {
-  const sighting = sightOnceKey(key);
-  if (sighting !== 'seen') write(sighting === 'new' ? level : 'debug', message, fields);
+  if (sightOnceKey(key) === 'new') write(level, message, fields);
 }
 
 /** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure stays findable without
@@ -104,7 +108,7 @@ function warnThenSample(key: string, message: string, fields?: LogFields): void 
     write('warn', message, fields);
     return;
   }
-  // Counts only keys sightOnceKey recorded, so the map is bounded by ONCE_KEY_CAP.
+  // Counts only keys sightOnceKey recorded, and it drops a count with its key, so the map is bounded by ONCE_KEY_CAP.
   const seen = (repeatCounts.get(key) ?? 0) + 1;
   repeatCounts.set(key, seen);
   if (seen % SAMPLE_EVERY === 0) write('warn', `${message} (${seen} more since the first warning)`, fields);
