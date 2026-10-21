@@ -484,18 +484,21 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
  */
 function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> {
   return new Promise((resolve) => {
-    const failed = (reason: string): void => {
-      log.debug(`codex run: the session-end worker did not spawn, running inline: ${reason}`);
+    const failed = <E>(err: E): void => {
+      log.warn(
+        `codex run: the session-end worker did not spawn, running inline: ${errorMessage(err)}`,
+        errorFields(err),
+      );
       resolve(false);
     };
     try {
       const worker = spawn(process.execPath, workerArgs, { detached: true, stdio: 'ignore', windowsHide: true });
       // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try cannot catch.
-      worker.on('error', (err) => failed(err.message));
+      worker.on('error', failed);
       worker.once('spawn', () => resolve(true));
       worker.unref();
     } catch (err) {
-      failed(errorMessage(err));
+      failed(err);
     }
   });
 }

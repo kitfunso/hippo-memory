@@ -3,7 +3,7 @@
 import path from 'node:path';
 import { plural } from '../../base/util/format.js';
 import type { Machine } from '../../base/util/agent-homes.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import { namesFoldedInto } from './project-folds.js';
@@ -270,6 +270,7 @@ function listSafely(adapter: Adapter, pass: Pass, report: ImportReport): Listing
   try {
     listing = pass.list(adapter);
   } catch (err) {
+    log.debug(`${tool.label}: listing failed`, errorFields(err));
     report.warnings.push(`${tool.label}: ${errorMessage(err)}`);
     return [];
   }
@@ -459,6 +460,7 @@ async function syncOne(
     addTally(out.tally, outcome.tally);
     return outcome;
   } catch (err) {
+    log.debug(`${out.label}: ${work.container.path} not synced`, errorFields(err));
     if (isBusy(err)) {
       out.tally.busy++;
       report.warnings.push(`${out.label}: ${work.container.path} skipped, the store was busy`);
@@ -473,6 +475,7 @@ async function bumpRemembered(store: ImportStore, remembered: number, report: Im
   try {
     await store.lessonWrites.bumpRemembered(remembered);
   } catch (err) {
+    log.debug('remembered counter not updated', errorFields(err));
     report.warnings.push(`remembered counter not updated: ${errorMessage(err)}`);
   }
 }

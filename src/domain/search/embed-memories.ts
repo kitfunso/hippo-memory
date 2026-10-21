@@ -25,6 +25,7 @@ import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.j
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
+import { SerialQueues } from '../../base/util/serial-queue.js';
 
 const STORE_PAGE = 64;
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.
@@ -92,8 +93,8 @@ const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_FIRST_POLL_MS = 50;
 const EMBED_LOCK_MAX_POLL_MS = 1_000;
 
-// In-process mutex plus the index's own lock, which other processes on the store honour.
-let _embedWriteLock: Promise<void> = Promise.resolve();
+// One turn at a time per hippo.db or store, then the index's own lock, which other processes and handles honour.
+const embedTurns = new SerialQueues<HippoStore | string>();
 
 /** Waits up to EMBED_LOCK_WAIT_MS for the index's lock; the token to release it with. */
 async function acquireIndexLock(index: EmbeddingIndex): Promise<string> {
@@ -109,7 +110,7 @@ async function acquireIndexLock(index: EmbeddingIndex): Promise<string> {
 }
 
 async function withEmbedLock<T>(index: EmbeddingIndex, fn: () => Promise<T>): Promise<T> {
-  return withProcessEmbedLock(async () => {
+  return embedTurns.run(await index.lockKey(), async () => {
     const token = await acquireIndexLock(index);
     try {
       return await fn();
@@ -117,22 +118,6 @@ async function withEmbedLock<T>(index: EmbeddingIndex, fn: () => Promise<T>): Pr
       await index.unlock(token);
     }
   });
-}
-
-// A store keeps each write whole in its own transaction, and an index lock would not reach a worker on another host.
-async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
-  let resolve!: () => void;
-  const next = new Promise<void>((r) => {
-    resolve = r;
-  });
-  const prev = _embedWriteLock;
-  _embedWriteLock = next;
-  await prev;
-  try {
-    return await fn();
-  } finally {
-    resolve();
-  }
 }
 
 // A bad key fails every write; one full warning per distinct failure tells the user, and a count of the repeats follows
@@ -263,31 +248,33 @@ function embedMemoryInStore(
   provider: EmbeddingProvider,
   entry: MemoryEntry,
 ): Promise<EmbedOutcome> {
-  return withProcessEmbedLock(async () => {
-    const { vectors: reads, vectorWrites: writes } = store;
-    const model = embeddingIndexIdentity(provider.id);
-    try {
-      const refused =
-        replacesIndex(await reads.embeddingIndexState(), model) ||
-        (
-          await writeVectorPage(
-            writes,
-            { model, replaceIndex: false },
-            [entry],
-            await provider.embed([embeddingInputText(entry)], 'passage'),
-            strength,
-          )
-        ).modelMismatch;
-      if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
-      return refused ? 'failed' : 'indexed';
-    } catch (err) {
-      warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
+  return embedTurns
+    .run(store, async () => {
+      const { vectors: reads, vectorWrites: writes } = store;
+      const model = embeddingIndexIdentity(provider.id);
+      try {
+        const refused =
+          replacesIndex(await reads.embeddingIndexState(), model) ||
+          (
+            await writeVectorPage(
+              writes,
+              { model, replaceIndex: false },
+              [entry],
+              await provider.embed([embeddingInputText(entry)], 'passage'),
+              strength,
+            )
+          ).modelMismatch;
+        if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
+        return refused ? 'failed' : 'indexed';
+      } catch (err) {
+        warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
+        return 'failed';
+      }
+    })
+    .catch((err): EmbedOutcome => {
+      log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`, errorFields(err));
       return 'failed';
-    }
-  }).catch((err): EmbedOutcome => {
-    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`, errorFields(err));
-    return 'failed';
-  });
+    });
 }
 
 const INLINE_REINDEX_MAX_ROWS = 256;
@@ -494,7 +481,7 @@ export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: 
     throwIfProviderKeyMissing(cfg, provider);
     return 0;
   }
-  if ('store' in on) return withProcessEmbedLock(() => embedAllInStore(on.store, provider, on.strength));
+  if ('store' in on) return embedTurns.run(on.store, () => embedAllInStore(on.store, provider, on.strength));
   const index = on.embeddingIndex;
   return withEmbedLock(index, async () => {
     const identity = provider.id;
