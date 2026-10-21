@@ -10,7 +10,7 @@ import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extr
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import type { Context, SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
-import { infraOf } from '../infra.js';
+import { globalTargetOf, infraOf } from '../infra.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -228,7 +228,7 @@ async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: 
 
 async function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): Promise<void> {
   // No global target means a store with no operator's global store beside it, as context reads it.
-  const target = ctx.reach?.globalTarget;
+  const target = globalTargetOf(ctx);
   const { sharing, folderFiles } = ctx.store;
   if (!ctx.config.autoShareOnSleep || target === undefined || sharing === undefined || folderFiles === undefined) {
     return;

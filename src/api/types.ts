@@ -37,8 +37,12 @@ export interface GlobalInReach {
 /** A store reach as a composition root sets it: each global store carries its own config, so the api reads no file. */
 export interface ContextReach extends Omit<StoreReach, 'global' | 'globalTarget'> {
   readonly global?: GlobalInReach;
-  readonly globalTarget?: ConfiguredFolder<StoreWith<GlobalTargetGroup>>;
+  readonly globalTarget?: GlobalTargetInReach;
 }
+
+/** The global write target a host builds: without `embedderFor` the context's own embedder embeds the copy. */
+export type GlobalTargetInReach = Omit<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'> &
+  Partial<Pick<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'>>;
 
 export interface Context {
   tenantId: string;

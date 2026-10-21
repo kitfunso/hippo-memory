@@ -9,6 +9,7 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
+import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
 import {
   mcpApiContext,
@@ -107,7 +108,7 @@ function boundTool(entry: ToolEntry, store: HippoStore): StoreTool | undefined {
   if (!hasGroup(store, entry.needs)) return undefined;
   const { run } = entry;
   return (ctx) => {
-    const globalTarget = ctx.reach?.globalTarget;
+    const globalTarget = globalTargetOf(ctx);
     return globalTarget === undefined ? undefined : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
   };
 }

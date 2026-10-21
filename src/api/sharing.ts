@@ -5,8 +5,8 @@ import type { MemoryEntry } from '../base/memory/memory.js';
 import { ALL_TENANTS } from '../base/util/tenant.js';
 import { syncGlobalToLocal } from '../domain/sharing/global-sync.js';
 import { autoShare, listPeers, shareMemory } from '../domain/sharing/share.js';
-import { infraOf } from './infra.js';
-import { requireHostAdmin, type Context, type ContextWith, type ContextReach } from './types.js';
+import { globalTargetOf, infraOf } from './infra.js';
+import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 export { AUTO_SHARE_MIN_SCORE, transferScore } from '../domain/sharing/share.js';
 
@@ -18,8 +18,8 @@ export interface SharePeer {
 }
 
 // A root's reach sets it for a store kept in a folder, so only a context built without a reach lacks it.
-function globalTargetOf(ctx: Context, action: string): NonNullable<ContextReach['globalTarget']> {
-  const target = ctx.reach?.globalTarget;
+function requireGlobalTarget(ctx: Context, action: string): NonNullable<ReturnType<typeof globalTargetOf>> {
+  const target = globalTargetOf(ctx);
   if (target === undefined) throw new Error(`${action} needs ctx.reach.globalTarget, the global store`);
   return target;
 }
@@ -31,7 +31,7 @@ export async function shareToGlobal(
   id: string,
   opts: { readonly force: boolean },
 ): Promise<MemoryEntry | null> {
-  return shareMemory(ctx, globalTargetOf(ctx, 'share'), id, { force: opts.force, tenantId: ctx.tenantId });
+  return shareMemory(ctx, requireGlobalTarget(ctx, 'share'), id, { force: opts.force, tenantId: ctx.tenantId });
 }
 
 /** The caller's memories whose transfer score reaches `minScore`, copied to the global store unless `dryRun`. */
@@ -39,13 +39,13 @@ export async function autoShareToGlobal(
   ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly minScore: number; readonly dryRun: boolean },
 ): Promise<MemoryEntry[]> {
-  return autoShare(ctx, globalTargetOf(ctx, 'auto-share'), { ...opts, tenantId: ctx.tenantId });
+  return autoShare(ctx, requireGlobalTarget(ctx, 'auto-share'), { ...opts, tenantId: ctx.tenantId });
 }
 
 /** The projects that shared into the global store: the caller's tenant, or every tenant for the host's operator. */
 export async function sharePeers(ctx: Context, opts: { readonly allTenants?: boolean } = {}): Promise<SharePeer[]> {
   if (opts.allTenants === true) requireHostAdmin(ctx, "Listing every tenant's peers");
-  return listPeers(globalTargetOf(ctx, 'peers'), opts.allTenants === true ? ALL_TENANTS : ctx.tenantId);
+  return listPeers(requireGlobalTarget(ctx, 'peers'), opts.allTenants === true ? ALL_TENANTS : ctx.tenantId);
 }
 
 /** Copies the global rows the caller's store lacks into it; other projects' rows only with `includeCrossProject`. */
@@ -54,5 +54,5 @@ export async function syncFromGlobal(
   opts: { readonly includeCrossProject: boolean },
 ): Promise<number> {
   const local = { store: ctx.store, config: ctx.config, embedderFor: infraOf(ctx).embedderFor };
-  return syncGlobalToLocal(local, globalTargetOf(ctx, 'sync'), opts);
+  return syncGlobalToLocal(local, requireGlobalTarget(ctx, 'sync'), opts);
 }
