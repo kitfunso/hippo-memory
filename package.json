@@ -42,7 +42,7 @@
     "test:unit": "vitest run --project unit",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:delivery-ledger": "vitest run tests/delivery-ledger tests/migration-v55",
+    "test:delivery-ledger": "vitest run tests/db/delivery-ledger tests/store/delivery-ledger tests/capture/delivery-ledger tests/util/delivery-ledger",
     "test:eval": "vitest run --config vitest.eval.config.ts",
     "lint": "oxlint",
     "fmt": "oxfmt src tests scripts bin",
