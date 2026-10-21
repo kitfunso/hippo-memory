@@ -31,6 +31,13 @@ describe('requireInit', () => {
 
   it('returns for an initialised store', () => {
     const root = makeRoot('require-init-ok');
-    expect(() => requireInit(root)).not.toThrow();
+    const exit = vi.spyOn(process, 'exit');
+    const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(requireInit(root)).toBeUndefined();
+
+    expect(errs).not.toHaveBeenCalled();
+    expect(exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBeUndefined();
   });
 });

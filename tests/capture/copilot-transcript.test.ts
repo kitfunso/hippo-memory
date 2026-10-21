@@ -27,7 +27,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-describe('a Copilot events.jsonl tail with no first line (critic test 4)', () => {
+describe('a Copilot events.jsonl tail with no first line', () => {
   // events.jsonl: VS Code's sessionTranscriptService.ts line format (scratchpad copilot-details 1a), plus copilot-sdk streaming-events.md's agentId.
   it('gives the human and main-agent turns from a tail that starts mid-line', () => {
     expect(collectSessionTurns(copilotEventsTail())).toEqual([

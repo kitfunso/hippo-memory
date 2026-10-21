@@ -30,7 +30,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     hippoRoot = makeRoot('dag-e3');
   });
 
-  it('test #1: happy path — 1 dirty summary + 3 children → content updated, audit emitted, FTS synced', async () => {
+  it('happy path: 1 dirty summary + 3 children → content updated, audit emitted, FTS synced', async () => {
     const summary = makeSummary('old content');
     writeEntry(hippoRoot, summary);
     const child1 = makeChild(summary.id, 'fact 1');
@@ -105,7 +105,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #2: idempotent re-run — no further mutations → second call returns all-zero result', async () => {
+  it('idempotent re-run: no further mutations → second call returns all-zero result', async () => {
     const summary = makeSummary();
     writeEntry(hippoRoot, summary);
     const child = makeChild(summary.id, 'fact');
@@ -141,7 +141,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #3: multi-tenant isolation — 2 dirty summaries in different tenants, each rebuilt with own children', async () => {
+  it('multi-tenant isolation: 2 dirty summaries in different tenants, each rebuilt with own children', async () => {
     const sumA = makeSummary('A old', 'tenant-a');
     const sumB = makeSummary('B old', 'tenant-b');
     writeEntry(hippoRoot, sumA);
@@ -179,7 +179,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(bHits[0]).not.toContain('tenant A specific fact xyz');
   });
 
-  it('test #4: cap enforcement — 25 dirty summaries with cap=20 → attempted=20, capped=true', async () => {
+  it('cap enforcement: 25 dirty summaries with cap=20 → attempted=20, capped=true', async () => {
     // One connection for the seed loop and the rebuild: a close per write checkpoints the WAL, which is slow on Windows.
     const result = await withSharedStoreHandles(async () => {
       for (let i = 0; i < 25; i++) {
@@ -204,7 +204,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(stillDirty.length).toBe(5);
   });
 
-  it('test #5: zero-child case — dirty summary, all children archived → no LLM call, dirty cleared, counts zeroed, rebuild_count UNCHANGED', async () => {
+  it('zero-child case: dirty summary, all children archived → no LLM call, dirty cleared, counts zeroed, rebuild_count UNCHANGED', async () => {
     const summary = makeSummary('to be zero-ed');
     writeEntry(hippoRoot, summary);
     const child = makeChild(summary.id, 'soon to be archived');
@@ -269,7 +269,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #6: fetcher throws — summary stays dirty, rebuild_count UNCHANGED, NEXT summary in queue still processed', async () => {
+  it('fetcher throws: summary stays dirty, rebuild_count UNCHANGED, NEXT summary in queue still processed', async () => {
     // Setup TWO dirty summaries — fetcher throws on first call, succeeds on second
     const sum1 = makeSummary('summary 1');
     const sum2 = makeSummary('summary 2');
@@ -303,7 +303,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(stillDirty.length).toBe(1);
   });
 
-  it('test #7: fetcher returns null (HTTP non-OK) — same as throw — summary stays dirty, no audit, loop continues', async () => {
+  it('fetcher returns null (HTTP non-OK): same as throw, summary stays dirty, no audit, loop continues', async () => {
     const sum1 = makeSummary('sum-one');
     const sum2 = makeSummary('sum-two');
     writeEntry(hippoRoot, sum1);
@@ -330,7 +330,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(loadAllDirtySummaries(hippoRoot).length).toBe(1);
   });
 
-  it('test #8: atomicity — applyRebuildResult issues exactly ONE UPDATE memories statement (jest.spyOn-equivalent via SQL spy)', () => {
+  it('atomicity: applyRebuildResult issues exactly ONE UPDATE memories statement (jest.spyOn-equivalent via SQL spy)', () => {
     const summary = makeSummary('s8-summary');
     writeEntry(hippoRoot, summary);
     forceMarkDirty(hippoRoot, summary.id);
@@ -393,7 +393,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #9: apiKey gate — consolidate without ANTHROPIC_API_KEY → rebuild phase skipped, dirty stays set', async () => {
+  it('apiKey gate: consolidate without ANTHROPIC_API_KEY → rebuild phase skipped, dirty stays set', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', undefined);
     const summary = makeSummary('untouched by sleep');
     writeEntry(hippoRoot, summary);

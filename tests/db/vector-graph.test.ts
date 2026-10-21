@@ -1,5 +1,6 @@
 // The handwritten HNSW graph against an exact scan of the same vectors.
 import { describe, it, expect, vi } from 'vitest';
+import { mulberry32 } from '../_helpers/property.js';
 import { createVectorGraph, insertNode, searchGraph, type VectorGraph } from '../../src/db/vector-graph.js';
 
 // Some cases build two 3000-node graphs, which can pass the unit budget on a busy runner.
@@ -8,22 +9,12 @@ vi.setConfig({ testTimeout: 20_000 });
 const DIM = 64;
 const N = 3000;
 
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), a | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 function gauss(r: () => number): number {
   return Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
 }
 
 function clustered(n: number, seed: number): Float32Array[] {
-  const r = rng(seed);
+  const r = mulberry32(seed);
   const centres = Array.from({ length: n / 100 }, () =>
     Float32Array.from({ length: DIM }, () => gauss(r) / Math.sqrt(DIM)),
   );
@@ -62,7 +53,7 @@ function build(vectors: Float32Array[], seed: number): VectorGraph {
 
 const vectors = clustered(N, 7);
 const queries = Array.from({ length: 40 }, (_, i) => {
-  const r = rng(1000 + i);
+  const r = mulberry32(1000 + i);
   return Float32Array.from(vectors[(i * 73) % N], (x) => x + (gauss(r) * 0.1) / Math.sqrt(DIM));
 });
 const graph = build(vectors, 42);

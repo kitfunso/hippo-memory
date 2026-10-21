@@ -191,7 +191,7 @@ describe('server lifecycle', () => {
     }
   });
 
-  it('refuses to start a second server on a hippoRoot already served (H3)', async () => {
+  it('refuses to start a second server on a hippoRoot already served', async () => {
     const home = makeRoot();
     const first = await serve({ hippoRoot: home, port: 0 });
     try {
@@ -209,7 +209,7 @@ describe('server lifecycle', () => {
     }
   });
 
-  it('answers an upload still streaming past 1 MB with its 413, then closes the connection (M3)', async () => {
+  it('answers an upload still streaming past 1 MB with its 413, then closes the connection', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
     try {

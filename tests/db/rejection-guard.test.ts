@@ -149,7 +149,7 @@ describe('rejection guard', () => {
     }
   });
 
-  it('applyRebuildResult refuses a rebuild patch matching a rejected value: old content survives, dirty cleared, one reject_refusal audit, no loop on second run (P1a fix)', () => {
+  it('applyRebuildResult refuses a rebuild patch matching a rejected value: old content survives, dirty cleared, one reject_refusal audit, no loop on second run', () => {
     const home = makeRoot('rejection');
     const summary = createMemory('old summary content', {
       layer: Layer.Semantic,

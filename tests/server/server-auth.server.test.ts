@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -40,8 +39,6 @@ describe('server auth middleware', () => {
 
   afterEach(async () => {
     await handle.stop();
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('loopback no-auth: 200 and audit shows actor=localhost:cli', async () => {
@@ -191,8 +188,6 @@ describe('server auth middleware for a non-loopback peer', () => {
 
   afterEach(async () => {
     await handle.stop();
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   function rememberAs(content: string, headers: Record<string, string> = {}): Promise<Response> {

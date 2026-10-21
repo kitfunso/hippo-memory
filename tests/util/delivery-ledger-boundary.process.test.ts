@@ -42,7 +42,7 @@ afterEach(() => {
 
 describe('what one boundary hook call records', () => {
   // B1, B3 and E1 stay spawned: each pins one hook verb end to end in a real child; the rest run in process.
-  it('B1: a Claude Code PreCompact payload leaves one sent row priced on the summariser text', () => {
+  it('a Claude Code PreCompact payload leaves one sent row priced on the summariser text', () => {
     const r = hippo(p, ['pre-compact'], { input: preCompactPayload('b1') });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).not.toBe('');
@@ -60,7 +60,7 @@ describe('what one boundary hook call records', () => {
     expect([e.candidates, e.considered_count, e.emitted_count, e.rejected_count]).toEqual([[], 0, 0, 0]);
   });
 
-  it('B3: compact-resume with a fresh snapshot of the same session leaves one sent row and its token-ledger row', () => {
+  it('compact-resume with a fresh snapshot of the same session leaves one sent row and its token-ledger row', () => {
     saveSnapshot(p, 'b3');
     const r = hippo(p, ['compact-resume'], { input: resumePayload('b3') });
     expect(r.status, r.stderr).toBe(0);
@@ -78,7 +78,7 @@ describe('what one boundary hook call records', () => {
     ).toHaveLength(1);
   });
 
-  it('B2: pre-compact --runtime copilot leaves one empty row with runtime copilot and prints nothing', async () => {
+  it('pre-compact --runtime copilot leaves one empty row with runtime copilot and prints nothing', async () => {
     const payload = copilotPayload('preCompact', p.cwd, 'no-such-transcript.jsonl');
     const r = await hippoIn(p, ['pre-compact', '--runtime', 'copilot'], { input: payload });
     expect([r.status, r.stdout]).toEqual([0, '']);
@@ -92,7 +92,7 @@ describe('what one boundary hook call records', () => {
     ]);
   });
 
-  it('B4: compact-resume records empty without a snapshot, empty for another session, disabled in the holdout arm', async () => {
+  it('compact-resume records empty without a snapshot, empty for another session, disabled in the holdout arm', async () => {
     expect((await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-none') })).stdout).toBe('');
     saveSnapshot(p, 'other-session');
     expect((await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-mismatch') })).stdout).toBe('');
@@ -106,7 +106,7 @@ describe('what one boundary hook call records', () => {
     ]).toEqual(['empty', 'empty', 'disabled']);
   });
 
-  it('B6: a sub-agent payload leaves one subagent row with no turn number, on both hooks', async () => {
+  it('a sub-agent payload leaves one subagent row with no turn number, on both hooks', async () => {
     saveSnapshot(p, 'b6');
     const resume = await hippoIn(p, ['compact-resume'], { input: resumePayload('b6', { agent_id: 'agent-1' }) });
     const pre = await hippoIn(p, ['pre-compact'], { input: preCompactPayload('b6', { agent_id: 'agent-1' }) });
@@ -119,7 +119,7 @@ describe('what one boundary hook call records', () => {
     ]);
   });
 
-  it('V6: a sub-agent payload on compact-resume in a holdout session records empty, not disabled', async () => {
+  it('a sub-agent payload on compact-resume in a holdout session records empty, not disabled', async () => {
     writeConfig(p, { holdout: true });
     saveSnapshot(p, 'v6');
     const r = await hippoIn(p, ['compact-resume'], { input: resumePayload('v6', { agent_id: 'agent-1' }) });
@@ -128,7 +128,7 @@ describe('what one boundary hook call records', () => {
     expect([e.session_state, e.turn_seq, e.block_state]).toEqual(['subagent', null, 'empty']);
   });
 
-  it('V7b: a VS Code payload on pre-compact with no hippo.json records runtime claude-code and state empty', async () => {
+  it('a VS Code payload on pre-compact with no hippo.json records runtime claude-code and state empty', async () => {
     const input = preCompactPayload('v7b', { transcript_path: writeVscodeTranscript(p) });
     const r = await hippoIn(p, ['pre-compact'], { input });
     expect(r.status, r.stderr).toBe(0);
@@ -136,7 +136,7 @@ describe('what one boundary hook call records', () => {
     expect([e.event_type, e.runtime, e.block_state]).toEqual(['pre-compact', 'claude-code', 'empty']);
   });
 
-  it('B12: a manual run records a row; the session comes from the environment, else it is missing and unnumbered', async () => {
+  it('a manual run records a row; the session comes from the environment, else it is missing and unnumbered', async () => {
     saveSnapshot(p, null);
     const bare = await hippoIn(p, ['compact-resume']);
     expect(bare.stdout).toContain(SNAPSHOT_TASK);
@@ -163,7 +163,7 @@ describe('what one boundary hook call records', () => {
     ]);
   });
 
-  it('B7: one session in order shows the boundary and context rows between the prompt rows, numbered per type', async () => {
+  it('one session in order shows the boundary and context rows between the prompt rows, numbered per type', async () => {
     const transcript = writeTranscript(p);
     const steps: Array<[string[], string]> = [
       [PROMPT_HOOK, promptPayload('b7', 'first question about deploys')],
@@ -191,7 +191,7 @@ describe('what one boundary hook call records', () => {
   });
 });
 
-describe('I3: the ledger changes nothing session-end prints or exits with', () => {
+describe('the ledger changes nothing session-end prints or exits with', () => {
   let off: Project;
 
   beforeEach(() => {
@@ -203,7 +203,7 @@ describe('I3: the ledger changes nothing session-end prints or exits with', () =
   });
 
   // B9 in delivery-ledger-boundary-faults.process.test.ts holds the same off-and-on check for pre-compact and compact-resume.
-  it('I3: session-end gives the same stdout and status off and on', async () => {
+  it('session-end gives the same stdout and status off and on', async () => {
     const on = await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('i3') });
     const plain = await hippoInNoWorker(off, ['session-end'], { input: sessionEndPayload('i3') });
     expect([on.status, plain.status], `${on.stderr}${plain.stderr}`).toEqual([0, 0]);
@@ -214,7 +214,7 @@ describe('I3: the ledger changes nothing session-end prints or exits with', () =
 });
 
 describe('what one session-end hook call records', () => {
-  it('E1: a Claude Code SessionEnd payload leaves one empty boundary row and prints nothing', () => {
+  it('a Claude Code SessionEnd payload leaves one empty boundary row and prints nothing', () => {
     const r = hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('e1') });
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'e1', 1);
@@ -237,7 +237,7 @@ describe('what one session-end hook call records', () => {
     ]);
   });
 
-  it('E2: a second fire inside the window is a duplicate of the first', async () => {
+  it('a second fire inside the window is a duplicate of the first', async () => {
     for (let i = 0; i < 2; i++) {
       expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e2') })).status).toBe(0);
     }
@@ -250,7 +250,7 @@ describe('what one session-end hook call records', () => {
     ]);
   });
 
-  it('E3: a Copilot sessionEnd run from another folder records runtime copilot in the payload folder store', async () => {
+  it('a Copilot sessionEnd run from another folder records runtime copilot in the payload folder store', async () => {
     const r = await hippoInNoWorker(p, ['session-end', '--runtime', 'copilot'], {
       input: copilotPayload('sessionEnd', p.cwd),
       cwd: p.dir,
@@ -265,7 +265,7 @@ describe('what one session-end hook call records', () => {
     ]);
   });
 
-  it('E4: a manual run, a malformed payload, a turn end and a ledger switched off leave no row', async () => {
+  it('a manual run, a malformed payload, a turn end and a ledger switched off leave no row', async () => {
     expect((await hippoInNoWorker(p, ['session-end'])).status).toBe(0);
     expect((await hippoInNoWorker(p, ['session-end'], { input: 'not json' })).status).toBe(0);
     // A VS Code Stop payload, the one turn mode accepts, so the call reaches the recorder's turn check.
@@ -282,7 +282,7 @@ describe('what one session-end hook call records', () => {
   });
 });
 
-describe('B5: calls the hooks do not accept leave no row', () => {
+describe('calls the hooks do not accept leave no row', () => {
   const IDLE_STDIN_ENV = { HIPPO_STDIN_WAIT_MS: '150' };
 
   function noRow(): void {
