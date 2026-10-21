@@ -4,14 +4,14 @@ import { cpSync, mkdtempSync } from 'node:fs';
 import { expect } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { initTestStore } from './store-template.js';
-import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { removeAfterRequest } from './one-request-per-test.js';
 import { memorySide } from './memory-side.js';
 
@@ -140,7 +140,7 @@ export interface SideResult<R> {
 function auditRowsAt(root: string): AuditEvent[] {
   const db = openHippoDb(root);
   try {
-    return listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
+    return auditRowsOn(db);
   } finally {
     closeHippoDb(db);
   }

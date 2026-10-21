@@ -23,7 +23,8 @@ import {
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js';
-import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from '../_helpers/audit-rows.js';
+import type { AuditEvent } from '../../src/store/port/types.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -50,10 +51,10 @@ async function start(
   return handle;
 }
 
-function auditRows(tenantId: string): ReturnType<typeof listAuditEventsAfter> {
+function auditRows(tenantId: string): AuditEvent[] {
   const db = openHippoDb(home);
   try {
-    return listAuditEventsAfter(db, { afterId: 0, tenantId });
+    return auditRowsOn(db, tenantId);
   } finally {
     closeHippoDb(db);
   }
@@ -164,7 +165,7 @@ describe('auth resolver acceptance', () => {
     expect(res.status).toBe(200);
     const db = openHippoDb(home);
     try {
-      const rows = listAuditEventsAfter(db, { afterId: 0, tenantId: 'ext-tenant' });
+      const rows = auditRowsOn(db, 'ext-tenant');
       expect(rows.some((r) => r.op === 'remember' && r.actor === 'user-1')).toBe(true);
     } finally {
       closeHippoDb(db);
@@ -324,8 +325,8 @@ describe('auth resolver sanitising', () => {
     expect((await post('/v1/memories', EXT, { content: 'trimmed tenant write' })).status).toBe(200);
     const db = openHippoDb(home);
     try {
-      expect(listAuditEventsAfter(db, { afterId: 0, tenantId: 'acme' }).some((r) => r.op === 'remember')).toBe(true);
-      expect(listAuditEventsAfter(db, { afterId: 0, tenantId: ' acme ' })).toHaveLength(0);
+      expect(auditRowsOn(db, 'acme').some((r) => r.op === 'remember')).toBe(true);
+      expect(auditRowsOn(db, ' acme ')).toHaveLength(0);
     } finally {
       closeHippoDb(db);
     }
@@ -691,7 +692,7 @@ describe('package surface', () => {
       "const url = import.meta.resolve('hippo-memory/server');",
       "const srv = await import('hippo-memory/server');",
       "const idx = await import('hippo-memory');",
-      "const names = ['appendAuditEvent','queryAuditEvents','listAuditEventsAfter','AUDIT_OPS'];",
+      "const names = ['appendAuditEvent','queryAuditEvents','AUDIT_OPS'];",
       'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, leaked: names.filter((n) => idx[n] !== undefined), indexServe: "serve" in idx }));',
     ].join('\n');
     // cwd is the checkout because self-reference resolves from the nearest package.json.

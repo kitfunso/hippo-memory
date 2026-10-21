@@ -40,8 +40,6 @@ export const WORKER_OPS = {
   },
   keyAudit: {
     revokeApiKey: 'write',
-    auditEventsAfter: 'read',
-    auditHighId: 'read',
   },
   keyWrites: {
     createApiKey: 'write',
@@ -143,7 +141,6 @@ export const WORKER_OPS = {
   },
   // finishRecall strengthens the global store's rows too, from the writer thread of this one.
   lastRecall: {
-    applyTracedOutcome: 'write',
     applyOutcomeToLast: 'write',
     finishRecall: 'write',
   },
@@ -296,7 +293,6 @@ export const WORKER_OPS = {
     sessionDecayContext: 'read',
     rejectedValue: 'read',
     rejectedDigests: 'read',
-    halfLifeBase: 'read',
     moveHalfLives: 'write',
     promotableSessions: 'read',
     traceExists: 'read',

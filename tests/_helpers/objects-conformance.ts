@@ -1,7 +1,7 @@
 // Calls, expected rows and hooks the objects-conformance tests share; useObjectsConformance seeds the two-tenant store.
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from './audit-rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { objectMirror } from '../../src/domain/objects/lifecycle.js';
 import { auditHighId } from '../_helpers/root-forms.js';
@@ -327,7 +327,7 @@ export function superseded(
 export function auditRowsAt(root: string): AuditEvent[] {
   const db = openHippoDb(root);
   try {
-    return listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
+    return auditRowsOn(db);
   } finally {
     closeHippoDb(db);
   }

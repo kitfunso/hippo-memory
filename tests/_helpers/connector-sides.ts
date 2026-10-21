@@ -1,9 +1,8 @@
 // hippo.db's side of the connector conformance tests: its store with reads of the event logs, quarantine records
 // and dead-letter queues straight from their tables, the same reads memorySide answers from its own.
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import type { LoggedEvent, ParkedLetter } from '../../src/store/memory/tables.js';
-import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from './audit-rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { StoreSide } from './store-conformance.js';
 
@@ -58,8 +57,7 @@ export function rowsOf<T>(hippoRoot: string, sql: string): T[] {
 export function sqliteConnectorSide(hippoRoot: string): ConnectorSide {
   return {
     store: sqliteStore(hippoRoot),
-    auditRows: () =>
-      onDb(hippoRoot, (db) => listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 })),
+    auditRows: () => onDb(hippoRoot, (db) => auditRowsOn(db)),
     events: () => rowsOf<LoggedEvent>(hippoRoot, EVENTS_SQL),
     records: () => rowsOf<HeldRecord>(hippoRoot, RECORDS_SQL),
   };

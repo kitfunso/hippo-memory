@@ -452,7 +452,6 @@ const bareRowsAt: Bodies<Pick<Consolidation, BareRows>> = {
   ftsDrift: ftsDriftAt,
   rejectedValue: findRejectedValue,
   rejectedDigests: rejectedDigestsAt,
-  halfLifeBase: recordedHalfLifeBaseAt,
   particleIds: storedParticleIdsAt,
   particlesByIds: storedParticlesByIdsAt,
   saveParticles: saveStoredParticlesAt,

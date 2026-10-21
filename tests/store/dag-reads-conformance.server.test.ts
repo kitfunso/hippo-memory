@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from '../_helpers/audit-rows.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
@@ -21,7 +21,6 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { memorySide } from '../_helpers/memory-side.js';
 
 const SESSION = 'sess-dag';
@@ -149,7 +148,7 @@ beforeAll(() => {
   for (const entry of dagRows()) writeEntry(fixture.dir, entry);
   const db = openHippoDb(fixture.dir);
   try {
-    fixtureAudit = listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
+    fixtureAudit = auditRowsOn(db);
   } finally {
     closeHippoDb(db);
   }

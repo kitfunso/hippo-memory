@@ -13,7 +13,6 @@ export type {
   OriginFilter,
   ContinuityKey,
 } from '../store/port/types.js';
-export type { ListAuditAfterOpts } from '../store/port/key-audit.js';
 export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../store/port/recall-writes.js';
 export type { RecallScopeFilter, VectorCandidateSpec, EmbeddingIndexState } from '../store/port/vector-reads.js';
 export type { DormantSnapshot, EntryCursor, EntryPage } from '../store/port/types.js';

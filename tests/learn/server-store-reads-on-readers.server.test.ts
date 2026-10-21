@@ -263,12 +263,6 @@ const READS: readonly Read[] = [
     (s) => s.vectorViews.storedVectorViews(VECTOR_IDS),
     /'mem_p_noise' => Float32Array\(8\) \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
   ),
-  read(
-    'keyAudit.auditEventsAfter',
-    (s) => s.keyAudit.auditEventsAfter({ tenantId: ALL_TENANTS, afterId: 0, limit: 5 }),
-    "op: 'remember'",
-  ),
-  read('keyAudit.auditHighId', (s) => s.keyAudit.auditHighId(), /^[1-9]\d*$/),
   read('keyWrites.listApiKeys', (s) => s.keyWrites.listApiKeys({ tenantId: TENANT, active: true }), "role: 'member'"),
   read(
     'vectorWrites.entriesWithoutVector',
