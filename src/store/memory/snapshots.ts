@@ -2,7 +2,7 @@
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
-import type { ContinuityKey } from '../port/types.js';
+import { continuityStamp, type ContinuityKey } from '../port/types.js';
 import type { Sessions } from '../port-groups.js';
 import { byBytes, nextId, storedObject } from './rows.js';
 import type { Owned, Tenanted } from './session-tables.js';
@@ -16,13 +16,6 @@ export function keyMatches(key: ContinuityKey | null | undefined, row: Owned<unk
   const names = key.project.filter((n) => n !== '');
   if (key.owner === '' || names.length === 0) return false;
   return row.owner === key.owner && row.origin !== null && names.includes(row.origin);
-}
-
-/** As hippo.db's continuityStamp, which the adapter may not import: a partial key's row would match no reader. */
-function continuityStamp(key: ContinuityKey) {
-  const origin = key.project.find((n) => n !== '');
-  if (key.owner === '' || origin === undefined) throw new Error('continuity key needs an owner and a project');
-  return { owner: key.owner, origin };
 }
 
 /** The columns a keyed write stamps; a partial key throws before anything changes. */

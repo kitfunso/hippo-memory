@@ -10,10 +10,14 @@ import { keysetAfter, type KeysetPosition } from '../../base/util/keyset.js';
 import type { PredictionSave, Predictions } from '../port.js';
 import type { Sync } from './served.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
-import { plural } from '../../base/util/format.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { PredictionBaserate } from '../port/types.js';
-import type { Prediction, PredictionListQuery, SavePredictionOptions } from '../port/predictions.js';
+import {
+  predictionBaserateOf,
+  type Prediction,
+  type PredictionListQuery,
+  type SavePredictionOptions,
+} from '../port/predictions.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -378,7 +382,10 @@ export function computePredictionBaserateAt(
   `,
   ).all(tenantId, classTag) as BaserateRow[];
 
-  const baserate = predictionBaserateOf(classTag, rows);
+  const baserate = predictionBaserateOf(
+    classTag,
+    rows.map((r) => ({ estimate: r.estimate_value, actual: r.actual_value })),
+  );
   // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits its
   // own hint.
   if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
@@ -399,61 +406,6 @@ function auditBaserateRead(
     targetId: classTag,
     metadata: { class_tag: classTag, n_closed: nClosed },
   });
-}
-
-function emptyBaserate(classTag: string): PredictionBaserate {
-  return {
-    classTag,
-    nClosed: 0,
-    nRatioEligible: 0,
-    meanEstimate: null,
-    meanActual: null,
-    meanRatio: null,
-    p50Ratio: null,
-    mae: null,
-    summary: '',
-  };
-}
-
-/** A class's stats over its closed rows, summed in the order given. Every store computes them here, so no two can
- * disagree on the arithmetic. */
-export function predictionBaserateOf(classTag: string, rows: readonly BaserateRow[]): PredictionBaserate {
-  const nClosed = rows.length;
-  if (nClosed === 0) return emptyBaserate(classTag);
-  const ratioEligible = rows.filter((r) => r.estimate_value > 0);
-  const nRatioEligible = ratioEligible.length;
-
-  const meanEstimate = rows.reduce((s, r) => s + r.estimate_value, 0) / nClosed;
-  const meanActual = rows.reduce((s, r) => s + r.actual_value, 0) / nClosed;
-  const mae = rows.reduce((s, r) => s + Math.abs(r.actual_value - r.estimate_value), 0) / nClosed;
-
-  let meanRatio: number | null = null;
-  let p50Ratio: number | null = null;
-  if (nRatioEligible > 0) {
-    const ratios = ratioEligible.map((r) => r.actual_value / r.estimate_value);
-    meanRatio = ratios.reduce((s, x) => s + x, 0) / nRatioEligible;
-    const sorted = ratios.slice().sort((a, b) => a - b);
-    p50Ratio =
-      nRatioEligible % 2 === 1
-        ? sorted[(nRatioEligible - 1) / 2]
-        : (sorted[nRatioEligible / 2 - 1] + sorted[nRatioEligible / 2]) / 2;
-  }
-
-  const ratioPart =
-    meanRatio !== null ? `averaged ${meanRatio.toFixed(2)}x actual` : 'no ratio-eligible rows (all estimates were 0)';
-  const summary = `Last ${plural(nClosed, 'estimate')} in class ${classTag} ${ratioPart} (MAE ` + `${mae.toFixed(2)}).`;
-
-  return {
-    classTag,
-    nClosed,
-    nRatioEligible,
-    meanEstimate,
-    meanActual,
-    meanRatio,
-    p50Ratio,
-    mae,
-    summary,
-  };
 }
 
 function loadOpenPredictionsAt(

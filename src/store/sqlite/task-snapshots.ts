@@ -2,7 +2,7 @@
 import { isSharedStore } from '../../base/config/config.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
-import { originInSql } from '../../base/scope/project-identity.js';
+import { originInSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
@@ -10,7 +10,7 @@ import { TASK_SNAPSHOT_COLUMNS, type TaskSnapshotRow, rowToTaskSnapshot } from '
 import type { TaskSnapshot, SnapshotInput } from '../port/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './mirrors.js';
 import type { StoreFiles } from './open.js';
-import type { ContinuityKey } from '../port/types.js';
+import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 interface ContinuityFilter {
@@ -18,23 +18,11 @@ interface ContinuityFilter {
   readonly params: readonly string[];
 }
 
-interface ContinuityStamp {
-  readonly owner: string;
-  readonly origin: string;
-}
-
 /** All or nothing: a key missing its owner or every project name matches no row, never the tenant's newest. */
 export function continuityWhere(key: ContinuityKey): ContinuityFilter {
   const names = key.project.filter((n) => n !== '');
   if (key.owner === '' || names.length === 0) return { sql: '0', params: [] };
   return { sql: `owner_subject = ? AND ${originInSql(names)}`, params: [key.owner, ...names] };
-}
-
-/** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no reader. */
-export function continuityStamp(key: ContinuityKey): ContinuityStamp {
-  const origin = key.project.find((n) => n !== '');
-  if (key.owner === '' || origin === undefined) throw new Error('continuity key needs an owner and a project');
-  return { owner: key.owner, origin };
 }
 
 // An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.

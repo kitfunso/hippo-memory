@@ -11,8 +11,8 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { TaskSnapshot } from '../port/sessions.js';
 import type { StoreFiles } from './open.js';
-import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';
-import type { ContinuityKey } from '../port/types.js';
+import { continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';
+import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
@@ -27,7 +27,7 @@ function insertHandoffRow(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
-  stamp: ReturnType<typeof continuityStamp> | null,
+  stamp: ContinuityStamp | null,
   now: string,
 ) {
   return cachedStatement(
