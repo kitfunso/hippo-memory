@@ -577,8 +577,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       const id = cardIdFrom(create.out);
       const claim = await runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
       const runId = runIdFrom(claim.out);
-      // The first run of a fresh store.
-      expect(runId).toBe('1');
+      expect(runId, 'the first run of a fresh store').toBe('1');
 
       const ok = await runCli(home, env, 'card', 'heartbeat', id, '--run', runId);
       expect(ok.status, ok.out).toBe(0);

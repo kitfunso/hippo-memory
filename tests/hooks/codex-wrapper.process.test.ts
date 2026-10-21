@@ -39,10 +39,15 @@ function withFakeHome() {
   vi.stubEnv('PATH', '');
   return {
     home: fake,
-    cleanup: () => {
-      // Tests wait for the worker's last write; retries cover Windows releasing an exited worker's handles late.
-      fs.rmSync(fake, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-    },
+    // A detached session-end worker keeps the folder as its cwd until it exits, after its last log line.
+    cleanup: () =>
+      waitFor(
+        () => {
+          fs.rmSync(fake, { recursive: true, force: true });
+          return true;
+        },
+        { what: 'the fake home to come free of the exited worker', timeoutMs: 15_000, retryOnThrow: true },
+      ),
   };
 }
 
@@ -51,14 +56,14 @@ function withFakeHome() {
 // session transcript). Linux/macOS do not need a shim for the same flow,
 // so the assertions diverge by platform. Skip on non-Windows in CI.
 describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
-  let env: { cleanup: () => void; home: string };
+  let env: { cleanup: () => Promise<void>; home: string };
 
   beforeEach(() => {
     env = withFakeHome();
   });
 
-  afterEach(() => {
-    env.cleanup();
+  afterEach(async () => {
+    await env.cleanup();
   });
 
   function recordOptedInCli(cliPath: string): void {
@@ -266,14 +271,14 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
 });
 
 describe('resolveCodexSessionTranscript', () => {
-  let env: { cleanup: () => void; home: string };
+  let env: { cleanup: () => Promise<void>; home: string };
 
   beforeEach(() => {
     env = withFakeHome();
   });
 
-  afterEach(() => {
-    env.cleanup();
+  afterEach(async () => {
+    await env.cleanup();
   });
 
   it('prefers the transcript whose filename matches the new Codex session id in history.jsonl', () => {
@@ -305,14 +310,14 @@ describe('resolveCodexSessionTranscript', () => {
 });
 
 describe('resolveCodexWrapperPaths and CODEX_HOME', () => {
-  let env: { cleanup: () => void; home: string };
+  let env: { cleanup: () => Promise<void>; home: string };
 
   beforeEach(() => {
     env = withFakeHome();
   });
 
-  afterEach(() => {
-    env.cleanup();
+  afterEach(async () => {
+    await env.cleanup();
   });
 
   it('puts the history and sessions paths under $CODEX_HOME and keeps hippo-owned paths under HOME', () => {
@@ -342,15 +347,15 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   const SENTINEL = 'zeta-7731';
   const DECOY = 'decoy-4410';
   let root: string;
-  let env: { cleanup: () => void; home: string };
+  let env: { cleanup: () => Promise<void>; home: string };
 
   beforeEach(() => {
     env = withFakeHome();
     root = env.home;
   });
 
-  afterEach(() => {
-    env.cleanup();
+  afterEach(async () => {
+    await env.cleanup();
   });
 
   const rollout = (text: string): string =>
