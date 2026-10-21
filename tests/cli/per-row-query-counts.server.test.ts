@@ -27,6 +27,7 @@ import {
   seed,
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
+import { testInfra } from '../_helpers/infra.js';
 
 useQueryCountRoots();
 
@@ -273,6 +274,7 @@ describe('hippo_status', () => {
             clientKey: 'client-1',
             store: sqliteStore(root),
             config: loadConfig(root),
+            infra: testInfra(),
           },
         ),
       );

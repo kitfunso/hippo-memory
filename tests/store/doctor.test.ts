@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { createHash } from 'node:crypto';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { runDoctor, formatDoctor } from '../../src/doctor.js';
+import { runDoctor, formatDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import type { SpoolFs } from '../../src/surface/capture/compaction-spool.js';
 import { startCompaction } from '../../src/store/sqlite/compactions-record.js';

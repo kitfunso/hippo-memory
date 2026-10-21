@@ -1,4 +1,5 @@
 // Project ids in real stores: two `api` repos sharing a global store, the upgrade re-sync, folds the sync follows, and the repairs.
+import { diskAgentFiles } from '../../src/infra/agent-files.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -7,7 +8,7 @@ import { containerId, containerPrefix } from '../../src/domain/agent-memories/so
 import { importAtSessionEnd } from '../../src/domain/agent-memories/sync.js';
 import { saveItems } from '../../src/store/sqlite/compactions-record.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
-import { runDoctor } from '../../src/doctor.js';
+import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
@@ -115,7 +116,10 @@ async function nextProcess() {
 }
 
 const prefixFor = (cwd: string, origin: string): string =>
-  containerPrefix('claude-code', containerId(projectNotes(w, cwd), 'project', process.platform, origin));
+  containerPrefix(
+    'claude-code',
+    containerId(projectNotes(w, cwd), 'project', { platform: process.platform, files: diskAgentFiles }, origin),
+  );
 
 describe('two repos named api in one global store', () => {
   const OLD = 'OLD-API the old api rows predate project ids';

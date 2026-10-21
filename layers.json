@@ -20,10 +20,8 @@
   },
   "rootFiles": {
     "cli.ts": "surface",
-    "doctor.ts": "surface",
     "index.ts": "surface",
-    "server.ts": "surface",
-    "support-bundle.ts": "surface"
+    "server.ts": "surface"
   },
   "apart": {
     "api": ["infra"]

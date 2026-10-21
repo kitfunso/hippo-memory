@@ -25,8 +25,6 @@ import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import type { Context } from '../../../api/index.js';
-import type { HippoConfig } from '../../../base/config/config.js';
-import type { HippoStore } from '../../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -37,7 +35,7 @@ import {
   type WebhookRequest,
 } from '../../../base/util/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
-import type { InfraPorts } from '../../../base/ports/infra.js';
+import type { WebhookPorts } from '../ingest.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ replay alike. */
 export function githubPreviousSecret(): string | undefined {
@@ -65,12 +63,7 @@ async function readSignedBody(request: WebhookRequest, secret: string, sigStr: s
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
  *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409
  *  on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
-export async function handleGitHubEventsWebhook(
-  request: WebhookRequest,
-  store: HippoStore,
-  config: HippoConfig,
-  infra: InfraPorts,
-): Promise<void> {
+export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: WebhookPorts): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGitHubWebhookSecret();
@@ -101,9 +94,7 @@ export async function handleGitHubEventsWebhook(
   try {
     await routeSignedDelivery({
       hippoRoot: opts.hippoRoot,
-      store,
-      config,
-      infra,
+      ...ports,
       res,
       rawBody,
       eventName,
@@ -131,11 +122,8 @@ const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
 type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
 
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
-interface SignedDelivery {
+interface SignedDelivery extends WebhookPorts {
   hippoRoot: string;
-  store: HippoStore;
-  config: HippoConfig;
-  infra: InfraPorts;
   res: ServerResponse;
   rawBody: string;
   eventName: string | null;

@@ -17,6 +17,7 @@ import type { HippoStore } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
+import { testInfra } from '../_helpers/infra.js';
 
 let root: string;
 
@@ -42,6 +43,7 @@ function ctx(over: Partial<McpContext> = {}): McpContext {
     hostAdmin: true,
     store: sqliteStore(root),
     config: loadConfig(root),
+    infra: testInfra(),
     ...over,
   };
 }

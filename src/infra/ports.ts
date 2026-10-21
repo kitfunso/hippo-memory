@@ -7,6 +7,7 @@ import { anthropicLlm } from './anthropic-llm.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { currentMachine } from './machine.js';
 import { realRerankers } from './rerankers.js';
+import { readApiCalls } from './transcript-calls.js';
 
 /** The Llm ANTHROPIC_API_KEY opens, or undefined when the key is unset: with no key, no model is called. */
 export function anthropicLlmFromEnv(fetcher?: typeof fetch): Llm | undefined {
@@ -21,6 +22,7 @@ export function realInfra(reranker: RerankerLookup): InfraPorts {
     llm: anthropicLlmFromEnv(),
     embedderFor: (embeddings, opts) => resolveEmbeddingProvider(embeddings, opts),
     reranker,
+    transcriptCalls: readApiCalls,
   };
 }
 

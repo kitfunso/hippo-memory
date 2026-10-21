@@ -17,8 +17,6 @@ import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForSlackTeam, type SlackFallback } from './tenant-routing.js';
 import type { Context } from '../../../api/index.js';
-import type { HippoConfig } from '../../../base/config/config.js';
-import type { HippoStore } from '../../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -29,7 +27,7 @@ import {
   type WebhookRequest,
 } from '../../../base/util/http-util.js';
 import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/json.js';
-import type { InfraPorts } from '../../../base/ports/infra.js';
+import type { WebhookPorts } from '../ingest.js';
 
 export function warnSlackPreviousSecretOpen(): void {
   warnIfOpenEnded(SLACK_PREVIOUS, envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
@@ -38,12 +36,7 @@ export function warnSlackPreviousSecretOpen(): void {
 /** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
  * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
  * cannot tell a gated-off route from a missing one. */
-export async function handleSlackEventsWebhook(
-  request: WebhookRequest,
-  store: HippoStore,
-  config: HippoConfig,
-  infra: InfraPorts,
-): Promise<void> {
+export async function handleSlackEventsWebhook(request: WebhookRequest, ports: WebhookPorts): Promise<void> {
   const { req, res, opts } = request;
   // Secret and well-formed headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
@@ -80,9 +73,7 @@ export async function handleSlackEventsWebhook(
   }
   await routeUnlessReplayed({
     hippoRoot: opts.hippoRoot,
-    store,
-    config,
-    infra,
+    ...ports,
     res,
     rawBody: rawBytes.toString('utf8'),
     signature: sigStr,
@@ -119,11 +110,8 @@ async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
 }
 
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
-interface SignedSlackRequest {
+interface SignedSlackRequest extends WebhookPorts {
   hippoRoot: string;
-  store: HippoStore;
-  config: HippoConfig;
-  infra: InfraPorts;
   res: ServerResponse;
   rawBody: string;
   signature: string;

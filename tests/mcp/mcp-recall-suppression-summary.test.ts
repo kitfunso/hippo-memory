@@ -32,6 +32,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -96,6 +97,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     const text = extractText(res);
@@ -133,6 +135,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     const text = extractText(res);
@@ -164,6 +167,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     const text = extractText(res);
@@ -200,6 +204,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     const text = extractText(res);

@@ -17,6 +17,7 @@ import { makeStore } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 const TAGS = [
@@ -113,6 +114,7 @@ async function mcpText(name: string, args: McpArgs): Promise<string> {
       hostAdmin: true,
       store: sqliteStore(hippoDir),
       config: loadConfig(hippoDir),
+      infra: testInfra(),
     },
   );
   // SAFETY: tools/call answers carry one MCP text content block.

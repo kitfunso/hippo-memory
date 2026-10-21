@@ -6,8 +6,9 @@ import * as path from 'path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
-import { readApiCalls, type TranscriptCalls } from '../base/session/transcript-calls.js';
-import { truncateCodePointSafe } from '../base/util/transcript-tail.js';
+import type { TranscriptCalls } from '../base/session/transcript-calls.js';
+import { infraOf } from './infra.js';
+import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
@@ -94,9 +95,11 @@ export async function bookSessionRereads(
   sessionId: string | null,
 ): Promise<string[]> {
   if (!transcriptPath || !sessionId) return [];
+  const { transcriptCalls } = infraOf(ctx);
+  if (transcriptCalls === undefined) return ['skip re-read count: this context reads no transcripts'];
   let read: TranscriptCalls;
   try {
-    read = await readApiCalls(transcriptPath);
+    read = await transcriptCalls(transcriptPath);
   } catch (err) {
     return [`skip re-read count: cannot read the transcript: ${errorMessage(err)}`];
   }

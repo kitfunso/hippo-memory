@@ -14,6 +14,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -42,7 +43,14 @@ async function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot), config: loadConfig(ctx.hippoRoot) },
+    {
+      ...ctx,
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(ctx.hippoRoot),
+      config: loadConfig(ctx.hippoRoot),
+      infra: testInfra(),
+    },
   );
 }
 
@@ -77,6 +85,7 @@ describe('mcp hippo_drill', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     // SAFETY: `tools/list` responses always carry `result.tools` as the

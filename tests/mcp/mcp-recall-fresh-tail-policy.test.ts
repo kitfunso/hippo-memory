@@ -25,6 +25,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -86,6 +87,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
           hostAdmin: true,
           store: sqliteStore(home),
           config: cliConfig(home),
+          infra: testInfra(),
         },
       );
     } catch (err) {
@@ -123,6 +125,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: cliConfig(home),
+        infra: testInfra(),
       },
     );
     // SAFETY: hippo_recall's MCP tool result envelope always carries
@@ -161,6 +164,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: cliConfig(home),
+        infra: testInfra(),
       },
     );
     const r = res!;
@@ -201,6 +205,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
       project: { name: 'acme', legacyName: 'acme' },
       store: sqliteStore(shared),
       config: cliConfig(shared),
+      infra: testInfra(),
     };
     for (const args of [{ fresh_tail_count: 3 }, { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' }]) {
       // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.

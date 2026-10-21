@@ -20,7 +20,8 @@ import type { StoreGroups } from '../../store/port.js';
 import { loadConfig } from '../../base/config/config.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';
-import { readTranscriptTail, truncateCodePointSafe } from '../../base/util/transcript-tail.js';
+import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
+import { readTranscriptTail } from '../../infra/transcript-tail.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */

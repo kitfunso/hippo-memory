@@ -12,6 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T2 tests: the two
 // ambient surfaces (MCP recall block, CLI `hippo context`) reroute through
@@ -56,6 +57,7 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
   }

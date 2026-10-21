@@ -27,6 +27,7 @@ import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { processGit } from '../../src/infra/git-runner.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(undoAll);
 
@@ -56,6 +57,7 @@ const ctxOn = (root: string, store: HippoStore): Context => ({
   actor: adminActor('capability-test'),
   store,
   config: loadConfig(root),
+  infra: testInfra(),
 });
 
 describe.each([
@@ -184,6 +186,7 @@ describe('MCP hippo_remember', () => {
         hostAdmin: true,
         store,
         config: loadConfig(root),
+        infra: testInfra(),
       },
     );
     // SAFETY: a tools/call reply carries result.content[0].text.

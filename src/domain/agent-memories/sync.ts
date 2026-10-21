@@ -26,7 +26,7 @@ import { legacyWork, type LegacyWork } from './legacy.js';
 import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
 import { addTally, emptyReport, mergeReports, toolReport, type ImportReport, type ToolReport } from './report.js';
-import { containerId, containerPrefix } from './source.js';
+import { containerId, containerPrefix, type ContainerMachine } from './source.js';
 import {
   AGENT_MEMORY_TOOLS,
   isToolId,
@@ -331,7 +331,7 @@ interface PassStore {
   readonly earlier: readonly string[];
   /** A project's rows in the global store are parted by origin: a worktree and its main checkout share a folder. */
   readonly partition: string | null;
-  readonly platform: NodeJS.Platform;
+  readonly machine: ContainerMachine;
   readonly isBusy: ImportStores['isBusy'];
 }
 
@@ -357,7 +357,7 @@ async function syncStore(
     legacy,
     earlier,
     partition,
-    platform: opts.machine.platform,
+    machine: opts.machine,
     isBusy: opts.stores.isBusy,
   };
   const synced: ContainerWork[] = [];
@@ -382,7 +382,7 @@ async function syncListing(at: PassStore, listing: Listing, report: ImportReport
       continue;
     }
     const work = containerWork(tool, container, {
-      platform: at.platform,
+      machine: at.machine,
       legacy: at.legacy,
       origin: at.partition ?? '',
       earlier: at.earlier,
@@ -397,7 +397,7 @@ async function syncListing(at: PassStore, listing: Listing, report: ImportReport
       tool,
       scope: at.pass.scope,
       listing,
-      platform: at.platform,
+      machine: at.machine,
       partition: at.partition === null ? null : [at.partition, ...at.earlier],
     });
   }
@@ -412,7 +412,7 @@ async function earlierNames(store: ImportStore, tenantId: string, names: readonl
 }
 
 interface ContainerWorkOptions {
-  readonly platform: NodeJS.Platform;
+  readonly machine: ContainerMachine;
   readonly legacy: LegacyWork | null;
   readonly origin: string;
   readonly earlier: readonly string[];
@@ -423,11 +423,11 @@ function containerWork(
   container: ContainerWork['container'],
   options: ContainerWorkOptions,
 ): ContainerWork {
-  const { platform, legacy, origin, earlier } = options;
+  const { machine, legacy, origin, earlier } = options;
   const none = new Map<string, readonly MemoryEntry[]>();
   const own = tool.id === 'claude-code' ? legacy?.byContainer.get(container.path) : undefined;
   const prefixOf = (name: string): string =>
-    containerPrefix(tool.id, containerId(container.path, container.scope, platform, name));
+    containerPrefix(tool.id, containerId(container.path, container.scope, machine, name));
   return {
     tool,
     container,
@@ -483,14 +483,14 @@ interface UnlistedRowsOptions {
   readonly tool: AgentMemoryTool;
   readonly scope: Scope;
   readonly listing: Listing;
-  readonly platform: NodeJS.Platform;
+  readonly machine: ContainerMachine;
   readonly partition: readonly string[] | null;
 }
 
 async function unlistedRows(session: StoreSession, options: UnlistedRowsOptions): Promise<number> {
-  const { tool, scope, listing, platform, partition } = options;
+  const { tool, scope, listing, machine, partition } = options;
   const listed = listing.containers.flatMap((c) =>
-    (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, name))),
+    (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, machine, name))),
   );
   const prefix = `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`;
   return (await session.store.agentImport.liveBySourcePrefix(session.tenantId, prefix))

@@ -1,5 +1,5 @@
 // Which sentences of a session's final reply carry a lesson, and the digest text built from them. No file or store
-// access: surface/capture/session-digest.ts reads the transcript, probes the paths and writes the row.
+// access: surface/capture/session-digest.ts reads the transcript, api/memories/session-digest.ts writes the row.
 import { USER_SEGMENT } from '../../base/util/home-path.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 

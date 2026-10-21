@@ -17,7 +17,7 @@ import type {
   RecallGraphStream,
   RecallReranker,
 } from '../../api/recall/pipeline.js';
-import { availabilityPool, cutoffClauses, detectRecallHints, suppressionSummary } from '../mcp/recall-text.js';
+import { availabilityPool, cutoffClauses, detectRecallHints, suppressionSummary } from '../render/recall-text.js';
 import {
   recallRowOrigin,
   recallRerankerPick,

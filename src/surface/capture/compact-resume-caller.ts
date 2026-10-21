@@ -12,7 +12,7 @@ import type { CallerProject } from '../../api/prompt-hook.js';
 import type { Sessions } from '../../store/port-groups.js';
 import type { SessionEvent } from '../../store/port/sessions.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { truncateCodePointSafe } from '../../base/util/transcript-tail.js';
+import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';
 import type { CallerHookOutput } from './pre-compact-caller.js';
 import { withEntryInfra } from '../entry-infra.js';

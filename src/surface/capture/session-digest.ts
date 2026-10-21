@@ -1,5 +1,4 @@
 // One memory per ended session, built without a model call from the agent's final message and the files it changed.
-import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './transcript.js';
@@ -7,17 +6,18 @@ import { isObjectLike, isStringValue } from '../../base/session/capture-contract
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { adminActor } from '../../api/types.js';
+import {
+  writeSessionDigest,
+  type DigestOutcome,
+  type DigestRepo,
+  type DigestStore,
+} from '../../api/memories/session-digest.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
-import { SESSION_DIGEST_TAG } from '../../base/session/session-digest-row.js';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
-import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { buildSessionDigest } from '../../domain/learn/session-digest.js';
 import { isInitialized } from '../../base/scope/project-identity.js';
-import type { HippoStore } from '../../store/port.js';
-import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../base/session/session-snapshot.js';
 import { isSyntheticMessage } from '../../base/session/transcript-calls.js';
-import { readOpenTranscriptTail } from '../../base/util/transcript-tail.js';
+import { readOpenTranscriptTail } from '../../infra/transcript-tail.js';
 
 /** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses nothing. */
 export const READ_CAP_BYTES = 64 * 1024 * 1024;
@@ -364,11 +364,6 @@ function changedFiles(edits: readonly DigestEdit[], repoRoot: string): string[] 
   return files;
 }
 
-/** Same session, same row: a second worker for one session updates the digest instead of adding one. */
-export function sessionDigestId(tenantId: string, key: string): string {
-  return `mem_${createHash('sha256').update(`${SESSION_DIGEST_TAG}\n${tenantId}\n${key}`).digest('hex').slice(0, 12)}`;
-}
-
 export interface SessionDigestOptions {
   /** Session id, or the transcript's basename when the host gives none. */
   key: string;
@@ -377,85 +372,32 @@ export interface SessionDigestOptions {
   config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 }
 
-export interface DigestOutcome {
-  written: boolean;
-  reason: string;
-  sentences: number;
-  files: number;
+/** The repo under the store, read from disk for the digest's path checks. */
+function diskRepo(hippoRoot: string, edits: readonly DigestEdit[]): DigestRepo {
+  return {
+    root: () => realFsPath(path.dirname(hippoRoot)),
+    relative: repoRelative,
+    changedFiles: (root) => changedFiles(edits, root),
+  };
 }
 
-/** The repo store's reads and the digest's write, built by the CLI root. */
-export type DigestStore = Pick<HippoStore, 'contextReads' | 'sessions' | 'entryWrites'>;
-
-/** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient
- * handoff, never this session's own. */
-async function injectedTexts(store: DigestStore, opts: SessionDigestOptions): Promise<string[]> {
-  const digests = await store.contextReads.liveContentsBySourceAndTag(
-    opts.tenantId,
-    SESSION_DIGEST_TAG,
-    SESSION_DIGEST_TAG,
-    opts.key,
-  );
-  const handoff = await store.sessions.latestHandoff(
-    opts.tenantId,
-    null,
-    {
-      unfinishedOnly: true,
-      maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
-      scopeFilter: 'default-deny',
-      excludeSessionId: opts.key,
-    },
-    null,
-  );
-  if (!handoff) return digests;
-  return [...digests, [handoff.taskId, handoff.summary, handoff.nextAction].filter(Boolean).join('\n')];
-}
-
-function skipped(reason: string): DigestOutcome {
-  return { written: false, reason, sentences: 0, files: 0 };
-}
-
-async function writeSessionDigest(
+function writeScanDigest(
   hippoRoot: string,
   store: DigestStore,
   scan: SessionScan,
   opts: SessionDigestOptions,
 ): Promise<DigestOutcome> {
-  const prompts = scan.turns.filter((t) => t.role === 'user').map((t) => t.text);
-  if (prompts.length === 0) return skipped('no human prompt');
-  if (!scan.finalText.trim() && scan.edits.length === 0) return skipped('no final message and no edits');
-  if (!scan.cwd) return skipped('the transcript names no working directory');
-  const repoRoot = realFsPath(path.dirname(hippoRoot));
-  if (repoRoot === null) return skipped('the repo is on a network path');
-  if (repoRelative(scan.cwd, repoRoot) === null) return skipped('the session ran outside this repo');
-
-  const draft = buildSessionDigest({
-    finalText: scan.finalText,
-    echoTexts: [...prompts, ...(await injectedTexts(store, opts))],
-    files: changedFiles(scan.edits, repoRoot),
-    relativePath: (p) => repoRelative(p, repoRoot),
-  });
-  if (!draft) return skipped('nothing left after the filters');
-
-  const entry: MemoryEntry = {
-    ...createMemory(draft.content, {
-      layer: Layer.Episodic,
-      tags: [SESSION_DIGEST_TAG],
-      source: SESSION_DIGEST_TAG,
-      confidence: 'observed',
-      sourceSessionId: opts.key,
-      tenantId: opts.tenantId,
-      baseHalfLifeDays: opts.config.defaultHalfLifeDays,
-    }),
-    id: sessionDigestId(opts.tenantId, opts.key),
-  };
-  try {
-    await store.entryWrites.writeEntry({ entry, actor: CLI_ACTOR });
-  } catch (err) {
-    if (err instanceof RejectedValueError) return skipped('it matches a rejected value');
-    throw err;
-  }
-  return { written: true, reason: '', sentences: draft.sentences, files: draft.files };
+  return writeSessionDigest(
+    { store, tenantId: opts.tenantId, config: opts.config, actor: adminActor(CLI_ACTOR) },
+    {
+      key: opts.key,
+      prompts: scan.turns.filter((t) => t.role === 'user').map((t) => t.text),
+      finalText: scan.finalText,
+      cwd: scan.cwd,
+      editCount: scan.edits.length,
+      repo: diskRepo(hippoRoot, scan.edits),
+    },
+  );
 }
 
 export interface DigestRunOptions extends SessionDigestOptions {
@@ -479,7 +421,7 @@ export async function recordSessionDigest(
     return;
   }
   try {
-    const outcome = await writeSessionDigest(hippoRoot, store, scan, opts);
+    const outcome = await writeScanDigest(hippoRoot, store, scan, opts);
     opts.log(
       outcome.written
         ? `digest: wrote ${outcome.sentences} sentence(s), ${outcome.files} file(s) for ${opts.key}`

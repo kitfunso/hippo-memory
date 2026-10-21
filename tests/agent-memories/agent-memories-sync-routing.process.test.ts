@@ -1,4 +1,5 @@
 // Design 2 and 9: which store each pass writes to, the handover, and what may leave a store.
+import { diskAgentFiles } from '../../src/infra/agent-files.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -192,7 +193,7 @@ describe('agent memory sync: routing and sharing', () => {
     const stray = {
       ...createMemory('An older wording of the home note.', { tenantId: 'default', baseHalfLifeDays: 30 }),
       originProject: 'repoa',
-      source: `${containerPrefix('claude-code', containerId(notes, 'project', process.platform, 'repoa'))}h.md#abc`,
+      source: `${containerPrefix('claude-code', containerId(notes, 'project', { platform: process.platform, files: diskAgentFiles }, 'repoa'))}h.md#abc`,
       tags: ['claude-code-memory'],
     };
     writeEntry(w.global, stray);

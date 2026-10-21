@@ -39,6 +39,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { testInfra } from '../_helpers/infra.js';
 
 pinClock();
 
@@ -112,6 +113,7 @@ async function mcp(root: string, name: string, args: ToolArgs): Promise<string> 
       hostAdmin: true,
       store: sqliteStore(root),
       config: loadConfig(root),
+      infra: testInfra(),
     },
   );
   // SAFETY: the tools/call case always wraps a tool's output as { content: [{ type: 'text', text }] }.

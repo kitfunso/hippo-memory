@@ -226,8 +226,5 @@ export async function rankBothStores(
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
   const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });
   const globalResults = await hybridSearch(query, entries.global, { ...side(true), source: sources.global });
-
-  const deduped = mergeStoreResults(localResults, globalResults, localBump);
-
-  return fitBudget(deduped, budget, minResults ?? 1, cost);
+  return fitBudget(mergeStoreResults(localResults, globalResults, localBump), budget, minResults ?? 1, cost);
 }

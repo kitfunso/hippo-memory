@@ -6,7 +6,7 @@ import { storeLesson } from './capture-error.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { scrubForSharing } from './share-scrub.js';
-import { truncateCodePointSafe } from '../../base/util/transcript-tail.js';
+import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { assertRequestId, bindCaller } from './caller-session.js';
 import { FAILURE_TEXT_MAX_CHARS, failureHash } from './failure-reading.js';
 import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../../store/port/failure-log.js';

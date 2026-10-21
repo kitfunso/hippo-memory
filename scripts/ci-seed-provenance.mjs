@@ -23,8 +23,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../dist/entry/testing.js';
 import { sqliteStore } from '../dist/store/sqlite/store.js';
-import { ingestEvent } from '../dist/surface/connectors/github/ingest.js';
-import { ingestMessage } from '../dist/surface/connectors/slack/ingest.js';
+import { ingestEvent, ingestMessage } from '../dist/entry/eval-scripts.js';
 import { adminActor } from '../dist/api/index.js';
 import { loadConfig } from '../dist/base/config/config.js';
 

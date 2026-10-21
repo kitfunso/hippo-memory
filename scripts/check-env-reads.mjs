@@ -18,7 +18,6 @@ export const ENV_READERS = [
   [/^surface\/server\//, 'the HTTP server composition root'],
   [/^surface\/mcp\//, 'the stdio MCP composition root'],
   [/^(?:domain\/hooks|surface\/hooks-install)\//, 'the hook entry points and installers the CLI root runs'],
-  [/^support-bundle\.ts$/, 'reports which variables are set'],
   [/^domain\/rerankers\//, 'adapters: their own endpoint, key, model and timeout'],
   [
     /^surface\/connectors\/[^/]+\/webhook\.ts$/,

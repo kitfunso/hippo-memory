@@ -29,6 +29,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
 import { contextReach } from '../../src/api/types.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
+import { testInfra } from '../_helpers/infra.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
 import { memoryContextRowsOf } from '../_helpers/memory-recall-rows.js';
@@ -385,6 +386,7 @@ async function runPass(
     store: served,
     reach,
     config: loadConfig(root),
+    infra: testInfra(),
   };
   const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
   const result =

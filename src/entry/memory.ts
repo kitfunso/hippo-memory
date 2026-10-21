@@ -23,7 +23,7 @@ export {
   markRetrieved,
 } from '../base/memory/memory.js';
 
-/** Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in memory.ts. */
+/** The published signature keeps `baseHalfLifeDays` optional; hippo's own writers use the strict one in memory.ts. */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   return createStoreMemory(content, {
     ...options,

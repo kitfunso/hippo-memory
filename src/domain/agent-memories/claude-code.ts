@@ -2,7 +2,6 @@
 // folder.
 import path from 'node:path';
 import { resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
-import { realpathOrResolve } from '../../base/util/real-path.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
 import { claudeConfigDir } from '../../base/util/agent-homes.js';
 import type { AgentFiles } from '../../base/util/agent-files.js';
@@ -23,7 +22,7 @@ const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
  * outside a repository.
  */
 function claudeMemoryFolderNames(ctx: AdapterContext, projectRoot: string): Set<string> {
-  const roots = [projectRoot, realpathOrResolve(projectRoot)];
+  const roots = [projectRoot, ctx.files.realPath(projectRoot)];
   const layout = gitLayout(ctx.git, projectRoot);
   if (layout) roots.push(claudeCheckoutRoot(ctx.files, layout));
   const fold = (name: string): string => (ctx.platform === 'win32' ? name.toLowerCase() : name);
@@ -99,7 +98,7 @@ export function transcriptNotesProject(
       dir = path.dirname(dir) === dir ? null : path.dirname(dir)
     ) {
       // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
-      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) {
+      if ([dir, machine.files.realPath(dir)].some((d) => fold(claudeFolderName(d)) === folder)) {
         return machine.files.exists(dir) ? resolveProjectIdentity(dir) : null;
       }
     }

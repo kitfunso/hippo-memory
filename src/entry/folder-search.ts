@@ -1,6 +1,5 @@
 // The published hybridSearch and physicsSearch: each fills the hippo.db folder and working-folder defaults, then calls
-// the domain ranker of the same name, which takes both from the caller. The eval kit's embedMemory and loadRecallSearchEntries take a
-// folder the same way.
+// the domain ranker of that name. The eval kit's embedMemory and loadRecallSearchEntries take a folder the same way.
 
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
