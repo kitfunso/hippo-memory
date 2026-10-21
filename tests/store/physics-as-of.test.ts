@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
 import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import { loadConfig } from '../../src/base/config/config.js';

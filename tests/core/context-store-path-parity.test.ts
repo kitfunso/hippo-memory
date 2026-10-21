@@ -28,6 +28,7 @@ import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
 import { contextReach } from '../../src/api/types.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
 import { memoryContextRowsOf } from '../_helpers/memory-recall-rows.js';
@@ -373,7 +374,10 @@ async function runPass(
   const store = side?.store;
   const served = store ?? sqliteStore(root);
   // A store of another kind gets no reach: the api reads it as one project with no global store.
-  const reach = served.kind === 'sqlite' ? contextReach(sqliteReach(root, served), loadConfig) : undefined;
+  const reach =
+    served.kind === 'sqlite'
+      ? contextReach(sqliteReach(root, served), loadConfig, resolveEmbeddingProvider)
+      : undefined;
   const ctx = {
     hippoRoot: root,
     tenantId: c.tenantId ?? TENANT_A,

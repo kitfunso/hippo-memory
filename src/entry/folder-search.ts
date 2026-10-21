@@ -10,7 +10,7 @@ import type { TenantId } from '../base/util/tenant.js';
 import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
 import { loadConfig } from '../base/config/config.js';
-import { resolveEmbeddingProvider } from '../base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';
 
@@ -65,7 +65,8 @@ export async function physicsSearch(
 export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
   const store = defaultStore(hippoRoot);
   try {
-    return await embedInto(folderIndex({ store, config: loadConfig(hippoRoot) }), entry);
+    const config = loadConfig(hippoRoot);
+    return await embedInto(folderIndex({ store, config, embedderFor: resolveEmbeddingProvider }), entry);
   } finally {
     await store.close();
   }

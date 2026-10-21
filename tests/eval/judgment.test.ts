@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { judgeAll, type JudgeOptions, type Judgment } from '../../src/domain/eval/judgment.js';
+import { judgeAll, type JudgeConnection as JudgeOptions } from '../../src/entry/eval-scripts.js';
+import type { Judgment } from '../../src/domain/eval/judgment.js';
 import { envTypesafeApiKey } from '../../src/base/util/env.js';
 
 afterEach(() => {

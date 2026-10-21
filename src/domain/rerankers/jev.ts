@@ -1,5 +1,6 @@
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../../base/util/env.js';
+import type { Http } from '../../base/ports/http.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -66,13 +67,14 @@ export function buildRelevanceRequest(query: string, head: readonly SearchResult
 }
 
 /** One batched request for the whole candidate list. Rejects with the reason when there are no usable scores. */
-async function requestScores(query: string, head: SearchResult[]): Promise<number[]> {
+async function requestScores(http: Http, query: string, head: SearchResult[]): Promise<number[]> {
   const key = envTypesafeApiKey();
   if (!key) throw new Error('TYPESAFE_API_KEY not set');
 
   const { state, questions } = buildRelevanceRequest(query, head);
 
   const resp = await rerankerPost(
+    http,
     ENDPOINT,
     {
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
@@ -99,7 +101,7 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
 }
 
 /** Builds a Jev reranker around the reranker it degrades to. Exported so a test can pass a stand-in. */
-export function createJevReranker(localFallback: RerankerFn): RerankerFn {
+export function createJevReranker(localFallback: RerankerFn, http: Http): RerankerFn {
   const outage = createOutageWarning('jev', 'falling back to the local cross-encoder');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
     const head = results.slice(0, options?.topK ?? JEV_DEFAULT_TOP_K);
@@ -107,7 +109,7 @@ export function createJevReranker(localFallback: RerankerFn): RerankerFn {
 
     let scores: readonly number[];
     try {
-      scores = await requestScores(query, head);
+      scores = await requestScores(http, query, head);
       outage.answered();
     } catch (err) {
       // A read path never throws, and never hands back the unranked order without saying so: warn, then use the free

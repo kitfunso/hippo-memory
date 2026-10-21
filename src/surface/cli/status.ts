@@ -12,7 +12,7 @@ import {
   Layer,
   strengthOptionsOf,
 } from '../../base/memory/memory.js';
-import { resolveEmbeddingProvider } from '../../base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor, type DoctorStore } from '../../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../../support-bundle.js';

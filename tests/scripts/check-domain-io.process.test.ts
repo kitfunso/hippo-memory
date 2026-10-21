@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { findDomainIo, ioImports } from '../../scripts/check-domain-io.mjs';
+import { adapterReach, findDomainIo, ioImports } from '../../scripts/check-domain-io.mjs';
 
 describe('check-domain-io', () => {
   let dir: string;
@@ -52,6 +52,42 @@ describe('check-domain-io', () => {
   it('fails the file it once exempted: no exemption list exists to put one back on', () => {
     file('domain/sharing/project-merge.ts', "import * as fs from 'node:fs';\n");
     expect(findDomainIo(dir)).toEqual([{ file: 'domain/sharing/project-merge.ts', line: 1, spec: 'node:fs' }]);
+  });
+
+  it('finds a domain import of src/infra, an adapter module or function, and a fetch call', () => {
+    const src = join(dir, 'src');
+    const text = [
+      "import { processHttp } from '../../infra/http.js';",
+      "import type { EmbeddingProvider } from '../../base/embeddings/provider.js';",
+      "import { fetchWithRetry as send } from '../../base/util/net-tools.js';",
+      "export { importTransformers } from '../../base/model/loader.js';",
+      "import type { Http } from '../../base/ports/http.js';",
+      "const later = () => import('../../base/util/http-retry.js');",
+      'const reply = await fetch(url);',
+      'const again = await globalThis.fetch(url);',
+      'const port = await http.send(url, init, policy);',
+    ].join('\n');
+    expect(adapterReach(text, join(src, 'domain', 'search', 'a.ts'), src)).toEqual([
+      { line: 1, spec: '../../infra/http.js' },
+      { line: 2, spec: '../../base/embeddings/provider.js' },
+      { line: 3, spec: '../../base/util/net-tools.js' },
+      { line: 4, spec: '../../base/model/loader.js' },
+      { line: 6, spec: '../../base/util/http-retry.js' },
+      { line: 7, spec: 'fetch()' },
+      { line: 8, spec: 'globalThis.fetch()' },
+    ]);
+  });
+
+  it('holds domain to its ports and leaves infra, api and surface to reach the adapters', () => {
+    file('domain/rerankers/a.ts', "import { processHttp } from '../../infra/http.js';\n");
+    file('domain/search/b.ts', "export const x = 1;\nconst r = await fetch('https://example.com');\n");
+    file('api/c.ts', "import { getReranker } from '../infra/rerankers.js';\n");
+    file('infra/d.ts', "import { fetchWithRetry } from './http-retry.js';\n");
+    file('surface/e.ts', "import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';\n");
+    expect(findDomainIo(dir)).toEqual([
+      { file: 'domain/rerankers/a.ts', line: 1, spec: '../../infra/http.js' },
+      { file: 'domain/search/b.ts', line: 2, spec: 'fetch()' },
+    ]);
   });
 
   it('passes on the real src tree', () => {

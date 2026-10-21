@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { loadConfig } from '../../src/base/config/config.js';

@@ -3,7 +3,7 @@
  *  flat schema_fit of 0.5. */
 
 import { ConfidenceLevel, EmotionalValence } from '../../base/memory/memory.js';
-import { fetchWithRetry } from '../../base/util/http-retry.js';
+import type { Http } from '../../base/ports/http.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { readCappedJson, readCappedText } from '../../base/util/capped-json.js';
 import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../../base/util/json.js';
@@ -27,8 +27,8 @@ export interface Judgment {
 export interface JudgeOptions {
   apiKey: string;
   model?: string;
-  /** Injected for testing — defaults to the real fetch. */
-  fetcher?: typeof fetch;
+  /** Sends each request; a root passes the real one, a test one over its own fetch. */
+  http: Http;
   /** Bounded parallelism for `judgeAll`. */
   concurrency?: number;
 }
@@ -100,7 +100,7 @@ const JUDGE_TIMEOUT_MS = 15_000;
 async function post(content: string, opts: JudgeOptions): Promise<Response | null> {
   let res: Response;
   try {
-    res = await fetchWithRetry(
+    res = await opts.http.send(
       ENDPOINT,
       {
         method: 'POST',
@@ -114,7 +114,7 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
           questions: QUESTIONS,
         }),
       },
-      { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher },
+      { timeoutMs: JUDGE_TIMEOUT_MS },
     );
   } catch (err) {
     log.warn(`judge: request failed: ${errorMessage(err)}`, errorFields(err));

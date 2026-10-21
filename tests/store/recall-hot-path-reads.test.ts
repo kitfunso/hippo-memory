@@ -1,6 +1,6 @@
 // The recall and context hot paths read each candidate once and a fixed number of rows, however large the store's history grows.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';

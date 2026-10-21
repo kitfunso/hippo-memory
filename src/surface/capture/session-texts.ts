@@ -2,6 +2,7 @@
 // never the store's folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { ContextWith } from '../../api/types.js';
+import { infraOf } from '../../api/infra.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { longestWord, storedTextKeys } from '../../base/util/same-text.js';
@@ -63,8 +64,9 @@ export async function captureSessionTexts(
     items.map((i) => longestWord(i.content)),
     { project: dedup.project },
   );
+  const { store, config } = ctx;
   const tally = await captureExtractedItems(
-    { store: ctx.store, config: ctx.config, index: folderIndex(ctx) },
+    { store, config, index: folderIndex({ store, config, embedderFor: infraOf(ctx).embedderFor }) },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,

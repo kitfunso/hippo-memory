@@ -1,3 +1,8 @@
+entry/eval-scripts.d.ts: JudgeConnection type
+entry/eval-scripts.d.ts: embedAll re-export
+entry/eval-scripts.d.ts: folderIndex function
+entry/eval-scripts.d.ts: getReranker re-export
+entry/eval-scripts.d.ts: judgeAll function
 entry/folder-search.d.ts: embedMemory function
 entry/folder-search.d.ts: folderVectorSource function
 entry/folder-search.d.ts: hybridSearch function

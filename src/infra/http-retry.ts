@@ -1,9 +1,9 @@
 /** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection
  * where a replay is safe. */
 
-import { MINUTE_MS } from './time.js';
-import { errorCode, errorFields, log } from './log.js';
-import { tryParseUrl } from './net.js';
+import { MINUTE_MS } from '../base/util/time.js';
+import { errorCode, errorFields, log } from '../base/util/log.js';
+import { tryParseUrl } from '../base/util/net.js';
 
 export interface RetryPolicy {
   /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */

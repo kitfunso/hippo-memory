@@ -8,7 +8,7 @@ import {
   llmTimeoutMs,
   llmTotalMs,
   parseRetryAfterMs,
-} from '../../src/base/util/http-retry.js';
+} from '../../src/infra/http-retry.js';
 import { envLlmTimeoutMs } from '../../src/base/util/env.js';
 import { classifyTransportFailure } from '../../src/surface/cli/client.js';
 import { waitFor } from '../_helpers/wait-for.js';

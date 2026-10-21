@@ -3,8 +3,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockIns
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/base/embeddings/transformers.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/infra/transformers.js';
+import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { embedQueryBy } from '../../src/domain/search/vector.js';
 import { loadConfig } from '../../src/base/config/config.js';
 

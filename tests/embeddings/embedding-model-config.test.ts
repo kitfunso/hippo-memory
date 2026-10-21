@@ -107,7 +107,7 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../../src/base/embeddings/provider.js');
+      const { resolveEmbeddingProvider } = await import('../../src/infra/embedding-provider.js');
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
@@ -181,7 +181,7 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../../src/base/embeddings/provider.js');
+      const { resolveEmbeddingProvider } = await import('../../src/infra/embedding-provider.js');
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/base/memory/memory.js');

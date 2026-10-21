@@ -15,7 +15,7 @@ import {
 import { embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
-import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import {
   decodeVector,
   deleteOrphanVectors,

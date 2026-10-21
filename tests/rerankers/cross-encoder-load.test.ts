@@ -1,7 +1,8 @@
 // The cross-encoder's model load is bounded, a failure is fetched again once per backoff window, and the warning carries the real error.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { MODEL_LOAD_POLICY } from '../../src/base/embeddings/transformers.js';
+import { MODEL_LOAD_POLICY } from '../../src/infra/transformers.js';
 import { createCrossEncoderReranker } from '../../src/domain/rerankers/cross-encoder.js';
+import { transformersCrossEncoder } from '../../src/infra/cross-encoder.js';
 import type { RerankerFn } from '../../src/domain/rerankers/types.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
@@ -21,13 +22,15 @@ function rerankerFetching(fetch: () => Promise<void>): RerankerFn {
   const model = async (inputs: { input_ids: object }): Promise<{ logits: { data: number[] } }> => ({
     logits: { data: [pairs.get(inputs.input_ids) === 'beta' ? 3 : -3] },
   });
-  return createCrossEncoderReranker(async () => ({
-    name: '@huggingface/transformers',
-    mod: {
-      AutoTokenizer: { from_pretrained: async () => (await fetch(), tokenizer) },
-      AutoModelForSequenceClassification: { from_pretrained: async () => (await fetch(), model) },
-    },
-  }));
+  return createCrossEncoderReranker(
+    transformersCrossEncoder(async () => ({
+      name: '@huggingface/transformers',
+      mod: {
+        AutoTokenizer: { from_pretrained: async () => (await fetch(), tokenizer) },
+        AutoModelForSequenceClassification: { from_pretrained: async () => (await fetch(), model) },
+      },
+    })),
+  );
 }
 
 const asResult = (content: string, score: number): SearchResult => ({
@@ -92,17 +95,19 @@ describe('the cross-encoder model load', () => {
   });
 
   it('warns when the model loads but every inference throws, and keeps the base order', async () => {
-    const rerank = createCrossEncoderReranker(async () => ({
-      name: '@huggingface/transformers',
-      mod: {
-        AutoTokenizer: { from_pretrained: async () => async () => ({ input_ids: {}, attention_mask: {} }) },
-        AutoModelForSequenceClassification: {
-          from_pretrained: async () => async () => {
-            throw new Error('onnx runtime crashed');
+    const rerank = createCrossEncoderReranker(
+      transformersCrossEncoder(async () => ({
+        name: '@huggingface/transformers',
+        mod: {
+          AutoTokenizer: { from_pretrained: async () => async () => ({ input_ids: {}, attention_mask: {} }) },
+          AutoModelForSequenceClassification: {
+            from_pretrained: async () => async () => {
+              throw new Error('onnx runtime crashed');
+            },
           },
         },
-      },
-    }));
+      })),
+    );
 
     const out = await rerank('q', INPUTS);
 

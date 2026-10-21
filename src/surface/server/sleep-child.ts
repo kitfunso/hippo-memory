@@ -3,6 +3,7 @@
 import { sleep } from '../../api/sleep/sleep.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { anthropicLlmFromEnv } from '../../infra/ports.js';
+import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { isStoreBusy } from '../../store/port.js';
 import { configReader } from '../../base/config/config.js';
 import { defaultReach, defaultStore, runStoreRequest } from '../open-store.js';
@@ -30,7 +31,7 @@ function failed<E>(err: E): SleepReply<never> {
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
 function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
   const store = storeAt(hippoRoot);
-  const reach = contextReach(defaultReach(hippoRoot, store, undefined, storeAt), loadConfig);
+  const reach = contextReach(defaultReach(hippoRoot, store, undefined, storeAt), loadConfig, resolveEmbeddingProvider);
   const config = loadConfig(hippoRoot);
   return sleep({ tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
 }

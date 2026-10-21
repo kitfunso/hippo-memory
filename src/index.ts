@@ -99,7 +99,8 @@ function isFolder(target: string | SleepStore): target is string {
 export { strengthTieKey as strengthBucket } from './domain/consolidate/dedupe.js';
 
 // Embedding search
-export { isEmbeddingAvailable, getEmbedding } from './base/embeddings/local.js';
+export { isEmbeddingAvailable } from './base/embeddings/local.js';
+export { getEmbedding } from './infra/local-embedder.js';
 
 // Auto-learn from errors
 export { captureError, extractLessons, partitionLessons } from './domain/learn/autolearn.js';

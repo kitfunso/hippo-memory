@@ -4,8 +4,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseOutboundUrl } from '../../src/base/util/net.js';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createLlmReranker } from '../../src/domain/rerankers/llm.js';
+import { processHttp } from '../../src/infra/http.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
@@ -83,7 +84,7 @@ describe('HIPPO_LLM_RERANKER_URL', () => {
       vi.stubEnv('HIPPO_LLM_RERANKER_URL', url);
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-      const out = await createLlmReranker()('q', head);
+      const out = await createLlmReranker(processHttp)('q', head);
 
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
