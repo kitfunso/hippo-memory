@@ -41,7 +41,8 @@ import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../../api/session-end.js';
 import { normalizeHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { cmdShimArgs } from '../../base/util/spawn-argv.js';
+import { exitAfterFlush } from '../../base/util/crash-handlers.js';
+import { cmdShimArgs, npmShimEntry } from '../../base/util/spawn-argv.js';
 import { bookLedgerTurn } from '../../api/ledger-db.js';
 import {
   flushDeliveryRecorder,
@@ -391,11 +392,12 @@ function spawnRealCodex(realCodexPath: string, forwardArgs: string[], cwd: strin
   const ext = path.extname(realCodexPath).toLowerCase();
 
   if (process.platform === 'win32' && ext === '.ps1') {
-    return spawn(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', realCodexPath, ...forwardArgs],
-      { cwd, stdio: 'inherit', windowsHide: false },
-    );
+    // Node runs the shim's script directly: no PowerShell, no execution-policy bypass, no shell parsing the arguments.
+    const entry = npmShimEntry(realCodexPath);
+    if (entry === null) {
+      throw new Error(`${realCodexPath} is not an npm shim whose script hippo can find, so Codex was not started.`);
+    }
+    return spawn(process.execPath, [entry, ...forwardArgs], { cwd, stdio: 'inherit', windowsHide: false });
   }
 
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
@@ -426,7 +428,7 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
   const child = spawnRealCodex(realCodexPath, args, process.cwd());
   child.on('error', (err) => {
     printError(`Failed to launch Codex: ${err.message}`);
-    process.exit(1);
+    exitAfterFlush(1);
   });
 
   child.on('exit', async (code, signal) => {
