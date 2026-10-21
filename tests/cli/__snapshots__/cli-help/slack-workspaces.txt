@@ -1,0 +1,4 @@
+hippo slack workspaces <add|list|remove> [options]
+  add --team <T> --tenant <t>   Register a workspace (upserts on existing team-id)
+  list                          List all registered workspaces
+  remove --team <T>             Remove a workspace registration

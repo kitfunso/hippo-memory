@@ -1,0 +1,7 @@
+  explain <query>          Show full score breakdown for each retrieved memory
+    --budget <n>           Token budget, counted as recall prints (default: 4000)
+    --limit <n>            Cap the number of results displayed
+    --json                 Output as JSON
+    --physics | --classic  Force search mode (default: from config)
+    --no-mmr               Disable MMR diversity re-ranking
+    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)

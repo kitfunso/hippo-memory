@@ -1,0 +1,5 @@
+hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]
+  --older-than <Nd>  Delete audit_log rows with ts older than N days (e.g. 90d).
+  --dry-run          Count matching rows without deleting (operator safety).
+  --tenant <t>       Tenant scope. Defaults to HIPPO_TENANT or "default".
+  --json             Output the result as JSON {cutoff, count, dryRun}.

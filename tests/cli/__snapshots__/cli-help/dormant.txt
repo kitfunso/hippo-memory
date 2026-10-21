@@ -1,0 +1,7 @@
+  dormant [<query>]        List faded memories sleep kept instead of deleting
+                           (on by default; "dormant": {"enabled": false} deletes instead)
+    --limit <n>            Max rows, newest first (default: 20)
+    --json                 Output as JSON
+    --global               Operate on the global store
+    dormant restore <id>   Bring a dormant memory back to active memory
+    dormant forget <id>    Delete a dormant memory permanently

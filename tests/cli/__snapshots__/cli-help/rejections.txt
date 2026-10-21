@@ -1,0 +1,3 @@
+  rejections               List rejected-value tombstones for the active tenant
+    --json                 Output as JSON
+    --global               Operate on the global store

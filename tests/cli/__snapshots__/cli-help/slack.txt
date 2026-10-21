@@ -1,0 +1,8 @@
+  slack                    Slack connector subcommands (backfill, dlq, workspaces)
+    backfill --channel <id> [--since ISO]
+                           Backfill a channel's history (needs SLACK_BOT_TOKEN)
+    dlq list               List DLQ entries for the active tenant
+    dlq replay <id> [--force]
+                           Re-ingest a DLQ entry (--force skips sig check)
+    workspaces <add|list|remove>
+                           Map Slack workspaces (team ids) to tenants

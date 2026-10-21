@@ -1,0 +1,5 @@
+  share <id>               Share a memory with attribution + transfer scoring
+    --force                Share even if transfer score is low
+    --auto                 Auto-share all high-transfer-score memories
+    --dry-run              Preview what would be shared
+    --min-score <n>        Minimum transfer score (default: 0.6)

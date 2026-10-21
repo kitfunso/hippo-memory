@@ -1,0 +1,2 @@
+  graph extract            Rebuild the entity/relation graph from consolidated objects
+                           (decisions/policies/customer-notes/project-briefs); idempotent

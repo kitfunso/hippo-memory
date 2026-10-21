@@ -1,0 +1,28 @@
+  card <sub>                Manage claimable work-queue cards
+    card create             Create a new card
+      --title <text>        Card title (required)
+      --repo <name>         Associated repo
+      --contract <text>     Associated contract
+      --budget <n>           Token/step budget
+      --depends-on <id>     Parent card id (repeatable)
+    card show <id>          Show a card, its deps, runs, comments and latest handoff
+      --json                 Output as JSON
+    card list                List cards, newest-updated first
+      --status <status>     Filter by status
+    card claim <id>          Claim a ready or blocked card; prints its run id and lease
+      --runtime <name>       Claiming runtime (required)
+      --session <id>         Session ID
+    card heartbeat <id>       Extend a running card's lease
+      --run <n>              Your run id, as card claim printed it (required)
+    card block <id>           Block a running card
+      --reason "<why>"       Reason recorded as a card comment (required)
+      --run <n>              Refuse unless <n> is the card's live run
+    card review <id>          Move a running card to review
+      --run <n>              Refuse unless <n> is the card's live run
+    card complete <id>       Complete a card in review
+      --outcome <o>          success | failure | partial (required)
+      --run <n>              Refuse unless <n> is the card's live run
+    card reclaim              Return every running card whose lease has expired to ready
+    card comment <id>         Add a comment to a card
+      --body <text>          Comment body (required)
+      --author <name>       Comment author (default: cli)

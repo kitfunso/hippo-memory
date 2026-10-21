@@ -1,0 +1,11 @@
+  snapshot <sub>           Persist or inspect the current active task
+    snapshot save          Save active task state
+      --task <task>
+      --summary <summary>
+      --next-step <step>
+      --source <source>    Optional source label
+      --session <id>       Link snapshot to a session trail
+    snapshot show          Show the active task snapshot
+      --json               Output as JSON
+    snapshot clear         Clear the active task snapshot
+      --status <status>    Mark final status (default: cleared)

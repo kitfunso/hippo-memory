@@ -1,0 +1,2 @@
+  embed                    Embed all memories for semantic search
+    --status               Show embedding coverage

@@ -1,0 +1,2 @@
+  unreject <digest-prefix> Delete a tombstone (the only escape hatch)
+    --global               Operate on the global store

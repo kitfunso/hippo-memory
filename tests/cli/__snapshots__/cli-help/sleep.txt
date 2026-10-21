@@ -1,0 +1,7 @@
+  sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
+                           Runs at Claude Code and OpenCode session end and in the daily job.
+                           With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
+                           fact extraction; {"extraction":{"enabled":false}} turns that off
+    --dry-run              Preview without writing
+    --no-learn             Skip auto git-learn and the agent memory import before consolidation
+    --no-share             Skip auto-sharing to global store

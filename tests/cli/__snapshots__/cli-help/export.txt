@@ -1,0 +1,2 @@
+  export [file]            Export all memories (default: stdout)
+    --format <fmt>         Output format: json (default) or markdown

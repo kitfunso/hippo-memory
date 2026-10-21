@@ -1,0 +1,3 @@
+  post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
+                           the next hippo sleep) and print one line saying how many
+    --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)

@@ -1,0 +1,9 @@
+  note new "<customer>"    Record a customer/account-scoped note
+    --text "<note>"        The note body (required)
+  note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
+                           List customer notes (table is authoritative, survives decay)
+  note get <id>            Show a customer note by its table id
+  note supersede <id>      Record a new version that supersedes an active note
+    --text "<note>"        The new note body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  note close <id>          Retire (close) an active customer note by its table id

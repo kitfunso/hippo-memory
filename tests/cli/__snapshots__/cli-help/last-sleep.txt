@@ -1,0 +1,3 @@
+  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
+    --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
+    --keep                 Print without clearing

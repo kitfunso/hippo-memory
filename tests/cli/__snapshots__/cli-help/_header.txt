@@ -1,0 +1,6 @@
+
+Hippo - Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+
+Usage: hippo <command> [options]
+
+Commands:

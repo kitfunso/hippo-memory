@@ -1,0 +1,3 @@
+  conflicts                List detected open memory conflicts
+    --status <status>      Filter by status (default: open)
+    --json                 Output as JSON

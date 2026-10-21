@@ -1,0 +1,1 @@
+  promote <id>             Copy a local memory to the global store

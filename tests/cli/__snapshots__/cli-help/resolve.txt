@@ -1,0 +1,5 @@
+  resolve <conflict_id>    Resolve a memory conflict
+    --keep <memory_id>     Memory to keep (required)
+    --forget               Delete the losing memory (default: halve half-life)
+    --reject-loser         Tombstone the loser's value too (implies removal)
+    --reason "<why>"       Reason for --reject-loser (default: conflict context)

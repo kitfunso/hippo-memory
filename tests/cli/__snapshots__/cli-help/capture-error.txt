@@ -1,0 +1,3 @@
+  capture-error            Store a failed tool call as an error memory (reads the Claude Code
+                           PostToolUseFailure hook payload on stdin; skips routine failures)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd

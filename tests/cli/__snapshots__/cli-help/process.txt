@@ -1,0 +1,11 @@
+  process new "<name>"     Record a process map (first-class object + memory mirror)
+    --step "<text>"        An ordered step (repeatable)
+    --description "<text>" Optional summary of the process
+  process list [--status active|superseded|closed|all] [--limit N]
+                           List processes (table is authoritative, survives decay)
+  process get <id>         Show a process (with its steps) by its table id
+  process supersede <id>   Record a new version that supersedes an active process
+    --step "<text>"        A step of the new version (repeatable, required)
+    --change "<summary>"   What changed in this version (the delta note)
+    --description "<text>" Optional summary of the new version
+  process close <id>       Retire (close) an active process by its table id

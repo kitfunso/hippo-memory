@@ -1,0 +1,5 @@
+  failures                 Failed tool calls capture-error saw, by outcome, and how
+                           many errors first happened in another session
+    --days <n>             Window in days (default: 30)
+    --json                 Output as JSON
+    --global               Operate on the global store

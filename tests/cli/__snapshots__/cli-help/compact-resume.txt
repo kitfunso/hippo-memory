@@ -1,0 +1,1 @@
+  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old

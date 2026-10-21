@@ -1,0 +1,3 @@
+hippo slack backfill --channel <id> [--since ISO]
+  --channel  Slack channel id (required, e.g. C0123ABC)
+  --since    backfill from ISO timestamp (default: cursor)

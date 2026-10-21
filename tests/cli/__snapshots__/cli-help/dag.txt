@@ -1,0 +1,2 @@
+  dag                      Show the summary tree: entity profiles, topic summaries, facts
+    --stats                Count memories per DAG level instead

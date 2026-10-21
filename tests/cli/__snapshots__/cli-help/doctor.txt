@@ -1,0 +1,2 @@
+  doctor                   Check the install: Node, store, schema, sleep, agent hooks
+    --json                 Machine-readable report (exit code 1 on any failure)

@@ -1,0 +1,16 @@
+  handoff <sub>            Manage session handoffs for continuity
+    handoff create         Create a new session handoff
+      --summary <text>     Handoff summary (required)
+      --next <text>        Next action for successor
+      --session <id>       Session ID (auto-generated if omitted)
+      --task <id>          Associated task ID
+      --artifact <path>    Related file path (repeatable)
+      --constraint <text>  Constraint for the successor to respect (repeatable)
+      --outcome <o>        success | failure | partial
+      --target-runtime <n> Name of the runtime the successor will run in
+      --card-id <id>       Associated card/ticket ID
+      --tests <status>     pass | fail | unknown (default: unknown)
+    handoff latest         Show the most recent handoff
+      --session <id>       Filter by session
+      --json               Output as JSON
+    handoff show <id>      Show a specific handoff by ID

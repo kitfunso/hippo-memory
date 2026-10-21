@@ -1,0 +1,7 @@
+  decide "<decision>"      Record a decision (first-class object + memory mirror)
+    --context "<why>"      Why this decision was made
+    --supersedes <mem-id>  Supersede the decision backed by this memory id
+  decide list [--status active|superseded|closed|all] [--limit N]
+                           List decisions (table is authoritative, survives decay)
+  decide get <id>          Show a decision by its table id
+  decide close <id>        Retire (close) an active decision by its table id

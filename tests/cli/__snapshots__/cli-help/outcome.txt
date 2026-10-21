@@ -1,0 +1,4 @@
+  outcome                  Apply feedback to last recall
+    --good                 Memories were helpful
+    --bad                  Memories were irrelevant
+    --id <id>              Target a specific memory

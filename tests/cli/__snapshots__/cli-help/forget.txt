@@ -1,0 +1,3 @@
+  forget <id>              Force remove a memory
+    --archive              Archive a raw (append-only) memory instead of deleting
+    --reason "<why>"       Reason recorded on the archive (required with --archive)
