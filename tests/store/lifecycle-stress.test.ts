@@ -206,7 +206,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     }
   }, 60_000);
 
-  it('G1 leak sanity: a noise-only store does not surface any fact answer token', async (ctx) => {
+  it('leak sanity: a noise-only store does not surface any fact answer token', async (ctx) => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     // labels for facts that are NEVER injected (noise-only store)
     const { labels } = injectStream({ seed: 99, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });

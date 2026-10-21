@@ -94,7 +94,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     hippoRoot = makeRoot('dag-e5');
   });
 
-  it('test #1: buildEntityProfiles happy path — 3 L2 summaries -> 1 L3 profile', async () => {
+  it('buildEntityProfiles happy path: 3 L2 summaries -> 1 L3 profile', async () => {
     const l2a = makeL2Summary('alice prefers python type hints', 'alice');
     const l2b = makeL2Summary('alice ships features in 2-week cycles', 'alice');
     const l2c = makeL2Summary('alice owns the API layer', 'alice');
@@ -147,7 +147,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     }
   });
 
-  it('test #2: no clustering below threshold — 1 L2 summary -> 0 profiles', async () => {
+  it('no clustering below threshold: 1 L2 summary -> 0 profiles', async () => {
     const l2 = makeL2Summary('alone fact content', 'alice');
     writeEntry(hippoRoot, l2);
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [l2], {
@@ -158,7 +158,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(result.candidateClusters).toBe(0);
   });
 
-  it('test #3: skips L2s with existing L3 parent', async () => {
+  it('skips L2s with existing L3 parent', async () => {
     const existing = makeL3Profile('existing alice profile content', 'alice');
     writeEntry(hippoRoot, existing);
     const parented = makeL2Summary('already linked alice topic', 'alice', existing.id);
@@ -187,7 +187,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     }
   });
 
-  it('test #4: L3 born-dirty cancellation — summary_dirty=0 after build + audit source=buildEntityProfiles-clean', async () => {
+  it('L3 born-dirty cancellation: summary_dirty=0 after build + audit source=buildEntityProfiles-clean', async () => {
     const l2a = makeL2Summary('alice topic one for clean test', 'alice');
     const l2b = makeL2Summary('alice topic two for clean test', 'alice');
     writeEntry(hippoRoot, l2a);
@@ -225,7 +225,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     }
   });
 
-  it('test #5: markSummaryDirtyInTx widened to L3 — write L2 with dag_parent_id=L3 marks L3 dirty', () => {
+  it('markSummaryDirtyInTx widened to L3: write L2 with dag_parent_id=L3 marks L3 dirty', () => {
     const l3 = makeL3Profile('alice existing profile content', 'alice');
     writeEntry(hippoRoot, l3);
     const db1 = openHippoDb(hippoRoot);
@@ -259,7 +259,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     }
   });
 
-  it('test #6: rebuildDirtySummaries handles dirty L3 (label derivation + dag_level_3_built_at preserved)', async () => {
+  it('rebuildDirtySummaries handles dirty L3 (label derivation + dag_level_3_built_at preserved)', async () => {
     const l3 = makeL3Profile('old alice profile content xxx', 'alice');
     const builtAtIso = '2026-01-01T00:00:00.000Z';
     l3.dagLevel3BuiltAt = builtAtIso;
@@ -341,7 +341,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(r.children.map((child) => child.id)).toEqual([l2.id]);
   });
 
-  it('test #8: drillDown depth=2 from L3 returns L2s + L1s with dedup + totalChildren=8', async () => {
+  it('drillDown depth=2 from L3 returns L2s + L1s with dedup + totalChildren=8', async () => {
     const l3 = makeL3Profile('alice profile for depth test', 'alice');
     l3.descendantCount = 2; // stored direct-child count (2 L2 kids)
     writeEntry(hippoRoot, l3);
@@ -366,7 +366,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(ids.size).toBe(8);
   });
 
-  it('test #9: drillDown depth=3 over-walks safely — BFS exhausts at depth=2 since L1s have no children', async () => {
+  it('drillDown depth=3 over-walks safely: BFS exhausts at depth=2 since L1s have no children', async () => {
     const l3 = makeL3Profile('alice profile depth3 test', 'alice');
     writeEntry(hippoRoot, l3);
     const l2 = makeL2Summary('alice topic for depth3', 'alice', l3.id);
@@ -381,7 +381,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(r.totalChildren).toBe(3);
   });
 
-  it('test #10: drillDown depth=2 global budget truncates mid-walk', async () => {
+  it('drillDown depth=2 global budget truncates mid-walk', async () => {
     const l3 = makeL3Profile('alice profile budget test', 'alice');
     writeEntry(hippoRoot, l3);
     const l2 = makeL2Summary('alice topic for budget test xxxxx', 'alice', l3.id);
@@ -400,7 +400,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(r.children.length).toBeLessThan(6);
   });
 
-  it('test #11: drillDown depth tenant isolation — L1s in different tenant are excluded at level 2', async () => {
+  it('drillDown depth tenant isolation: L1s in different tenant are excluded at level 2', async () => {
     const l3 = makeL3Profile('alice profile tenant test', 'alice');
     writeEntry(hippoRoot, l3);
     const l2a = makeL2Summary('alice topic A in tenant-a', 'alice', l3.id);
@@ -428,7 +428,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(r.children[0]!.id).toBe(l2a.id);
   });
 
-  it('test #12: isDagSummary matches L2 + L3 only', () => {
+  it('isDagSummary matches L2 + L3 only', () => {
     const l3 = makeL3Profile('test profile content for isDagSummary', 'alice');
     const l2 = makeL2Summary('test summary content for isDagSummary', 'alice');
     const l1 = makeL1Fact('placeholder-parent-id-here-fake', 'l1 fact content for test');
@@ -439,7 +439,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(isDagSummary(l0)).toBe(false);
   });
 
-  it('test #14: buildEntityProfiles partitions clusters by tenantId', async () => {
+  it('buildEntityProfiles partitions clusters by tenantId', async () => {
     // 3 alice L2s in tenant-A, 3 alice L2s in tenant-B with similar content
     const tenantAL2s = [
       'alice does python in tenant A repo one',
@@ -487,7 +487,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     }
   });
 
-  it('test #13: E4 deboost applies to L3 in hybridSearch — breakdown.summaryDeboost=0.85, breakdown.dagLevel=3', async () => {
+  it('the summary deboost applies to L3 in hybridSearch: breakdown.summaryDeboost=0.85, breakdown.dagLevel=3', async () => {
     const l3 = makeL3Profile('alice entity profile xyz searchable content', 'alice');
     writeEntry(hippoRoot, l3);
     const results = await hybridSearch('searchable xyz', [l3], { explain: true });

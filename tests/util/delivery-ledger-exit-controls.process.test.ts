@@ -75,7 +75,7 @@ const label = (session: string, application: string, signal: string, memory = pi
 });
 
 describe('negative controls', () => {
-  it('N1 a resolved-check label on a rejected memory leaves it rejected and is reported as a conflict', () => {
+  it('a resolved-check label on a rejected memory leaves it rejected and is reported as a conflict', () => {
     p = project();
     const big = seed(p.hippoRoot, BIG, { pinned: true });
     fire(p, 'n1', PROMPT, { args: TIGHT });
@@ -86,7 +86,7 @@ describe('negative controls', () => {
     expect(v.notes.includes('label-conflict')).toBe(true);
   });
 
-  it('N2 a label for session A read in session B leaves B application-unknown with no label', () => {
+  it('a label for session A read in session B leaves B application-unknown with no label', () => {
     p = project();
     const a = fire(p, 'n2a', P1);
     const b = fire(p, 'n2b', P1);
@@ -102,7 +102,7 @@ describe('negative controls', () => {
     expect(v.label).toBeNull();
   });
 
-  it('N3 one changed character in the attachment is delivery-unconfirmed no-attachment', () => {
+  it('one changed character in the attachment is delivery-unconfirmed no-attachment', () => {
     p = project();
     const r = fire(p, 'n3', P1);
     const sent = additionalContextOf(r.stdout);
@@ -116,7 +116,7 @@ describe('negative controls', () => {
     ok(v, 'n3', pinId(), { class: 'delivery-unconfirmed', reason: 'no-attachment', turn: at(e.id, 1), stage: 'final' });
   });
 
-  it('N4 with the ledger off and one fired transcript prompt, a present memory is indeterminate no-event-row', () => {
+  it('with the ledger off and one fired transcript prompt, a present memory is indeterminate no-event-row', () => {
     p = project();
     writeConfig(p, { ledger: false });
     const r = fire(p, 'n4', P1);
@@ -129,7 +129,7 @@ describe('negative controls', () => {
     ]);
   });
 
-  it('N5 a label with an inferred application is ignored and reported', () => {
+  it('a label with an inferred application is ignored and reported', () => {
     p = project();
     const r = fire(p, 'n5', P1);
     const [e] = events('n5');
@@ -142,7 +142,7 @@ describe('negative controls', () => {
     expect([v.label, v.notes.includes('label-error:application')]).toEqual([null, true]);
   });
 
-  it('N6 the hippo attachment under prompt 2 instead of prompt 1 leaves turn 1 unconfirmed', () => {
+  it('the hippo attachment under prompt 2 instead of prompt 1 leaves turn 1 unconfirmed', () => {
     p = project();
     const r1 = fire(p, 'n6', P1);
     const r2 = fire(p, 'n6', P2);
@@ -170,7 +170,7 @@ describe('negative controls', () => {
     ]);
   });
 
-  it('N7 a store copied after turn 1 reads turn 2 as reused with no original, and notes the foreign row', () => {
+  it('a store copied after turn 1 reads turn 2 as reused with no original, and notes the foreign row', () => {
     p = project();
     fire(p, 'n7', P1);
     const copyProj = path.join(p.dir, 'copy', 'proj');
@@ -201,7 +201,7 @@ describe('negative controls', () => {
     expect(v.notes.includes(`foreign-store:${evs[0].id}`)).toBe(true);
   });
 
-  it("N8 another tenant's row under the same session id is never read", () => {
+  it("another tenant's row under the same session id is never read", () => {
     p = project();
     for (let i = 0; i < 3; i++) {
       seed(p.hippoRoot, `office note ${i}: the coffee machine schedule changes for team lunch on friday`, {
@@ -225,7 +225,7 @@ describe('negative controls', () => {
     expect(v.turns.map((t) => t.event_id)).toEqual([mine[0].id]);
   });
 
-  it("N9 a sub-agent row under the parent session is a note and never changes the parent's class", () => {
+  it("a sub-agent row under the parent session is a note and never changes the parent's class", () => {
     p = project();
     const big = seed(p.hippoRoot, BIG, { pinned: true });
     hippo(p, PROMPT_HOOK, {
@@ -251,7 +251,7 @@ describe('negative controls', () => {
     expect([v.turns.length, v.notes]).toEqual([1, [`subagent:${evs[0].id}`, `subagent-outcome:${evs[0].id}:emitted`]]);
   });
 
-  it('N10 command, shell and notification lines with no attachments, plus one real turn, leave no gaps', () => {
+  it('command, shell and notification lines with no attachments, plus one real turn, leave no gaps', () => {
     p = project();
     const r = fire(p, 'n10', P1);
     const [e] = events('n10');
@@ -261,7 +261,7 @@ describe('negative controls', () => {
     expect([v.notes.filter((n) => n.startsWith('gap:')), v.turns.filter((t) => t.event_id === null)]).toEqual([[], []]);
   });
 
-  it('N11 a lost row, a compaction and a quiet reused turn with other text is never confirmed', () => {
+  it('a lost row, a compaction and a quiet reused turn with other text is never confirmed', () => {
     p = project();
     const r1 = fire(p, 'n11', P1);
     const r3 = fire(p, 'n11', P3);
@@ -287,7 +287,7 @@ describe('negative controls', () => {
     ]);
   });
 
-  it("N12 a queued prompt's attachment is never given to the prompt before it", () => {
+  it("a queued prompt's attachment is never given to the prompt before it", () => {
     p = project();
     const r1 = fire(p, 'n12', P1);
     expect(hippo(p, ['pre-compact'], { input: preCompactPayload('n12') }).status).toBe(0);

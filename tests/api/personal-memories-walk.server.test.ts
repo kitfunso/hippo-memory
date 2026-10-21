@@ -223,7 +223,7 @@ afterAll(async () => {
 });
 
 describe('personal memories walk (plan lane T)', () => {
-  it('line 1: POST /v1/memories personal stamps the owner scope and a user-global origin', async () => {
+  it('POST /v1/memories personal stamps the owner scope and a user-global origin', async () => {
     expect(readEntry(store, ids.aZircon)).toMatchObject({ scope: A_SCOPE, originProject: '' });
     expect(readEntry(store, ids.bBasalt)).toMatchObject({ scope: B_SCOPE, originProject: '' });
     const signedIn = await post(SIGNIN_A, { content: 'signin-only note for alpha', personal: true });
@@ -237,7 +237,7 @@ describe('personal memories walk (plan lane T)', () => {
     ).toBe(400);
   });
 
-  it('line 2: GET /v1/memories?q=zircon shows A its row, and ?scope= is 403 for B and ADM', async () => {
+  it('GET /v1/memories?q=zircon shows A its row, and ?scope= is 403 for B and ADM', async () => {
     for (const token of [keys.A.plaintext, SIGNIN_A]) {
       expect((await recallIds(token, 'q=zircon')).ids).toEqual(expect.arrayContaining([ids.aZircon, ids.teamZircon]));
     }
@@ -256,7 +256,7 @@ describe('personal memories walk (plan lane T)', () => {
     for (const who of OTHERS) expect((await recallIds(keys[who].plaintext, scoped)).status, who).toBe(403);
   });
 
-  it('line 3: GET /v1/context with and without a query gives A its row in every project, and nobody else', async () => {
+  it('GET /v1/context with and without a query gives A its row in every project, and nobody else', async () => {
     for (const project of ['alpha', 'beta']) {
       for (const q of ['&q=zircon', '']) {
         const route = `project=${project}${q}`;
@@ -271,7 +271,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it("line 4: GET /v1/sessions/:id/assemble and GET /v1/recall/drill/:id on A's summary", async () => {
+  it("GET /v1/sessions/:id/assemble and GET /v1/recall/drill/:id on A's summary", async () => {
     const assembled = async (who: Who): Promise<string[]> => {
       const r = await http(keys[who].plaintext, 'GET', `/v1/sessions/${SESSION}/assemble`);
       expect(r.status, r.text).toBe(200);
@@ -295,7 +295,7 @@ describe('personal memories walk (plan lane T)', () => {
     for (const who of OTHERS) await sameAsMissing(ids.summary, (id) => drill(who, id), 404);
   });
 
-  it('line 5: POST /mcp hippo_recall, hippo_context, hippo_assemble, hippo_drill and hippo_remember personal', async () => {
+  it('POST /mcp hippo_recall, hippo_context, hippo_assemble, hippo_drill and hippo_remember personal', async () => {
     const say = (who: Who, name: string, args: Record<string, JsonValue>): Promise<string> =>
       tool(keys[who].plaintext, name, args);
     expect(await say('A', 'hippo_recall', { query: 'cold start' })).toContain('quillonmarsh');
@@ -324,7 +324,7 @@ describe('personal memories walk (plan lane T)', () => {
     );
   });
 
-  it('line 5, hippo_context: a shared store refuses it without a project, so a second store that is not shared shows A its row and nobody else', async () => {
+  it('hippo_context: a shared store refuses it without a project, so a second store that is not shared shows A its row and nobody else', async () => {
     const bare = await http(keys.A.plaintext, 'POST', '/mcp', {
       jsonrpc: '2.0',
       id: 1,
@@ -361,7 +361,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it('line 6: promptHookContext gives A its row in every project, and B and ADM never', async () => {
+  it('promptHookContext gives A its row in every project, and B and ADM never', async () => {
     const hook = async (who: Who, project: string): Promise<string> =>
       (
         await promptHookContext(
@@ -383,7 +383,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it('line 6, pinned: pinned-only context, with and without include_recent, and the hook give A its pinned row, and B and ADM never', async () => {
+  it('pinned: pinned-only context, with and without include_recent, and the hook give A its pinned row, and B and ADM never', async () => {
     const mine = seedRow('the marrowfield pin: my standing rule for every session', A_SCOPE, '', { pinned: true });
     const team = seedRow('the larchwood pin: the team standing rule for every session', null, '', { pinned: true });
     for (const route of ['project=alpha&pinned_only=1', 'project=alpha&pinned_only=1&include_recent=5']) {
@@ -414,7 +414,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it("line 7: DELETE, archive, supersede, promote and POST /v1/outcome on A's row, then outcome with no ids (F13, F12)", async () => {
+  it("DELETE, archive, supersede, promote and POST /v1/outcome on A's row, then outcome with no ids", async () => {
     type Path = {
       name: string;
       kind: string;
@@ -496,7 +496,7 @@ describe('personal memories walk (plan lane T)', () => {
     );
   });
 
-  it("line 8: MCP hippo_share and hippo_resolve are off, hippo_conflicts, and a team rejectLoser spares A's row (F1)", async () => {
+  it("MCP hippo_share and hippo_resolve are off, hippo_conflicts, and a team rejectLoser spares A's row", async () => {
     const off = 'the gravelpine cache must stay off during load tests';
     const alpha = { name: 'alpha' };
     const p1 = await post(keys.A.plaintext, { content: off, personal: true });
@@ -543,7 +543,7 @@ describe('personal memories walk (plan lane T)', () => {
     expect(readEntry(store, p1)?.content).toBe(off);
   });
 
-  it("line 9: GET /v1/graph shows the entity from A's row to A only", async () => {
+  it("GET /v1/graph shows the entity from A's row to A only", async () => {
     insertEntityAt(store, 'default', { entityType: 'system', name: 'ZirconKettle', memoryId: ids.aZircon });
     insertEntityAt(store, 'default', { entityType: 'system', name: 'TealHarbour', memoryId: ids.teamZircon });
     const names = async (who: Who): Promise<string[]> => {
@@ -559,7 +559,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it("line 10: captureSessionTexts by B with A's exact text captures a team row", async () => {
+  it("captureSessionTexts by B with A's exact text captures a team row", async () => {
     const said = 'We decided to pin the frostgale build cache because the nightly job keeps evicting it.';
     const item = extractFromTexts([said])[0]!.content;
     await post(keys.A.plaintext, { content: item, personal: true, project: { name: 'alpha' } });
@@ -569,7 +569,7 @@ describe('personal memories walk (plan lane T)', () => {
     expect(await captureSessionTexts(ctxOf('B'), req('walk-capture-2'))).toMatchObject({ captured: 0, skipped: 1 });
   });
 
-  it("line 11: api.authGrant of A's scope is 400, and a resolver scope list naming it opens nothing (F8)", async () => {
+  it("api.authGrant of A's scope is 400, and a resolver scope list naming it opens nothing", async () => {
     await expect(api.authGrant(ctxOf('ADM'), keys.B.keyId, A_SCOPE)).rejects.toThrow(BadRequestError);
     expect(await api.authGrant(ctxOf('ADM'), keys.B.keyId, 'slack:private:C9')).toEqual({ ok: true });
 
@@ -581,7 +581,7 @@ describe('personal memories walk (plan lane T)', () => {
     expect(open.ids).not.toContain(ids.aZircon);
   });
 
-  it('line 12: GET /v1/memories?scope=slack:private:C1 reads for a granted member and ADM, unchanged', async () => {
+  it('GET /v1/memories?scope=slack:private:C1 reads for a granted member and ADM, unchanged', async () => {
     const granted = mint('walk-c', 'member');
     await api.authGrant(ctxOf('ADM'), granted.keyId, 'slack:private:C1');
     const slack = seedRow('the kowalskiwharf payroll rollout starts thursday', 'slack:private:C1', null);
@@ -594,7 +594,7 @@ describe('personal memories walk (plan lane T)', () => {
     expect((await recallIds(keys.B.plaintext, route)).status).toBe(403);
   });
 
-  it("line 13: GET /v1/audit names A's write by actor and memory id and holds no row text", async () => {
+  it("GET /v1/audit names A's write by actor and memory id and holds no row text", async () => {
     for (const who of ['A', 'B'] as const) {
       expect((await http(keys[who].plaintext, 'GET', '/v1/audit?op=remember&limit=1000')).status, who).toBe(403);
     }
@@ -608,7 +608,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it("line 14: POST /v1/sleep derives from each pair of seeds into that pair's scope and mixes nothing", async () => {
+  it("POST /v1/sleep derives from each pair of seeds into that pair's scope and mixes nothing", async () => {
     const base = 'rotate the cobaltfern staging certificates before expiry';
     const scopeOf = new Map<string, string | null>([
       ['amberquill', A_SCOPE],
@@ -633,7 +633,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it('line 15: local CLI recall --scope personal:private:oid-a returns no personal row', async () => {
+  it('local CLI recall --scope personal:private:oid-a returns no personal row', async () => {
     // Fresh rows, because the line 14 sleep may merge the earlier zircon rows into one consolidated row.
     const team = seedRow('the harrowfen pump note for the cli, team row', null, '');
     const mine = seedRow('the harrowfen pump note for the cli, kept by A', A_SCOPE, '');

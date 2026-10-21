@@ -172,7 +172,7 @@ describe('api.recall — trace wiring', () => {
     }
   });
 
-  it('F2: suppressRecallTrace:true writes NO trace row', async () => {
+  it('suppressRecallTrace:true writes NO trace row', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -231,7 +231,7 @@ describe('api.contextGet - trace wiring', () => {
     }
   });
 
-  it('F5: the bare zero-result/no-continuity early return still writes an empty trace (result_count 0), but never touches last_retrieval_ids/last_trace_id', async () => {
+  it('the bare zero-result/no-continuity early return still writes an empty trace (result_count 0), but never touches last_retrieval_ids/last_trace_id', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -292,7 +292,7 @@ describe('api.contextGet - trace wiring', () => {
     }
   });
 
-  it('F5 + caller id: the zero-result early-return trace also stamps opts.currentSessionId', async () => {
+  it('+ caller id: the zero-result early-return trace also stamps opts.currentSessionId', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });

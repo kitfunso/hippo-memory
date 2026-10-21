@@ -63,7 +63,7 @@ function seed(home: string, content: string, opts: { pinned?: boolean; created?:
 }
 
 describe('includeRecent quality floor (api.contextGet)', () => {
-  it('test 1 — red-under-old: one junk + four clean recent writes inject only the clean four', async () => {
+  it('red-under-old: one junk + four clean recent writes inject only the clean four', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -103,7 +103,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 2 — filter-before-slice: backfills past junk to exactly N clean entries, not N-minus-junk', async () => {
+  it('filter-before-slice: backfills past junk to exactly N clean entries, not N-minus-junk', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -157,7 +157,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 3 — pinned unaffected: a pinned entry that fails the heuristic still injects', async () => {
+  it('pinned unaffected: a pinned entry that fails the heuristic still injects', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -182,7 +182,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 3b: pinned displacement under budget pressure, a pinned entry occupying a recent slot must still inject once budget is tight', async () => {
+  it('pinned displacement under budget pressure, a pinned entry occupying a recent slot must still inject once budget is tight', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -228,7 +228,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 4 — measured-limitation pin: a real mid-sentence fragment is NOT filtered', async () => {
+  it('measured-limitation pin: a real mid-sentence fragment is NOT filtered', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -255,7 +255,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 5 — includeRecent 0/absent: byte-identical behavior to today (junk never considered)', async () => {
+  it('includeRecent 0/absent: byte-identical behavior to today (junk never considered)', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -290,7 +290,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 3c — repro: shared-budget reserve keeps a pin outside the recent-N window from being displaced by DF3 backfill', async () => {
+  it('repro: shared-budget reserve keeps a pin outside the recent-N window from being displaced by DF3 backfill', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -336,7 +336,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 3d — pins win under heavy budget pressure: budget only fits the pin, all recents are dropped', async () => {
+  it('pins win under heavy budget pressure: budget only fits the pin, all recents are dropped', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -365,7 +365,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 3e — no under-fill regression: generous budget returns the same entries as before the reserve', async () => {
+  it('no under-fill regression: generous budget returns the same entries as before the reserve', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -407,7 +407,7 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     }
   });
 
-  it('test 6 — all-recent-junk: recent contributes nothing, no crash, pinned entries still returned', async () => {
+  it('all-recent-junk: recent contributes nothing, no crash, pinned entries still returned', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -458,7 +458,7 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
     }
   }
 
-  it('test 7 — `hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', async () => {
+  it('`hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', async () => {
     initTestStore(hippoDir);
     const junk = createMemory('fixed signals', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     const clean = createMemory('clean CLI-seeded memory with plenty of specific detail worth keeping', {

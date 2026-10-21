@@ -196,7 +196,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.summary).toContain('DISCOVERABLE SESSION');
   });
 
-  it('fail-closed (X4): non-empty stdin JSON object with no transcript_path field -> exit 0, skip, no auto-discovery fallback', async () => {
+  it('fail-closed: non-empty stdin JSON object with no transcript_path field -> exit 0, skip, no auto-discovery fallback', async () => {
     // Companion to the positive control above: the same payload shape, but
     // sent as real (non-empty) stdin rather than omitted entirely. A decoy
     // transcript sits exactly where auto-discovery would look; the fixed
@@ -217,7 +217,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('fail-closed (X4): "transcript_path": null -> exit 0, skip, no auto-discovery fallback', async () => {
+  it('fail-closed: "transcript_path": null -> exit 0, skip, no auto-discovery fallback', async () => {
     const decoyProjectDir = path.join(dir, '.claude', 'projects', 'decoy-null-path');
     fs.mkdirSync(decoyProjectDir, { recursive: true });
     fs.writeFileSync(
@@ -239,7 +239,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('X11: payload transcript_path not ending .jsonl -> exit 0, skip', async () => {
+  it('payload transcript_path not ending .jsonl -> exit 0, skip', async () => {
     const transcriptPath = path.join(dir, 'transcript.txt');
     fs.writeFileSync(
       transcriptPath,
@@ -384,7 +384,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(manualSnapshot!.nextStep.length).toBe(3000);
   });
 
-  it('X1: per-field merge — a tool-heavy tail with no plain-text user turn keeps the existing task instead of blanking it', async () => {
+  it('per-field merge: a tool-heavy tail with no plain-text user turn keeps the existing task instead of blanking it', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'user-authored task must survive',
@@ -429,7 +429,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.nextStep).toContain('verify the output');
   });
 
-  it('X7: corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash output', async () => {
+  it('corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash output', async () => {
     const hippoRoot = getHippoRoot(dir);
     const dbPath = path.join(hippoRoot, 'hippo.db');
     fs.writeFileSync(dbPath, 'not a valid sqlite database file, just garbage bytes 0000000', 'utf8');
@@ -466,7 +466,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(result.stderr).not.toMatch(/at Object\.<anonymous>|node:internal|Uncaught|SQLITE_/i);
   });
 
-  it('X9: secret-shaped content in the transcript is redacted before it lands in the snapshot fields', async () => {
+  it('secret-shaped content in the transcript is redacted before it lands in the snapshot fields', async () => {
     const transcriptPath = path.join(dir, 'secret.jsonl');
     fs.writeFileSync(
       transcriptPath,

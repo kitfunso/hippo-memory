@@ -27,7 +27,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     hippoRoot = makeRoot('dag-e3');
   });
 
-  it('test #10: REGRESSION LOCK: buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
+  it('REGRESSION LOCK: buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
     // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
     const factA = createMemory('alice did X', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -169,7 +169,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #11: race-loser no-op — pre-cleared dirty flag → applyRebuildResult returns false, no audit, no rebuild_count bump', () => {
+  it('race-loser no-op: pre-cleared dirty flag → applyRebuildResult returns false, no audit, no rebuild_count bump', () => {
     const summary = makeSummary('s11-summary-content');
     writeEntry(hippoRoot, summary);
     // Note: we do NOT force-mark dirty — simulate the race-loser by leaving clean
@@ -211,7 +211,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #12: cap hard-ceiling: consolidate() clamps HIPPO_DAG_REBUILD_CAP before it reaches rebuildDirtySummaries', async () => {
+  it('cap hard-ceiling: consolidate() clamps HIPPO_DAG_REBUILD_CAP before it reaches rebuildDirtySummaries', async () => {
     const originalFetch = global.fetch;
     // The spy reads the cap consolidate() computed, so the 1000 ceiling is
     // proven without seeding more than 1000 dirty rows.
@@ -251,7 +251,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #13: T4 — tombstone-hit rebuild increments refused, not rebuilt (dirty still clears, content unchanged)', async () => {
+  it('tombstone-hit rebuild increments refused, not rebuilt (dirty still clears, content unchanged)', async () => {
     const summary = makeSummary('original summary content');
     writeEntry(hippoRoot, summary);
     const child = makeChild(summary.id, 'fact for refused rebuild');
@@ -311,7 +311,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #14: T4 — clean rebuild (no tombstone hit) increments rebuilt, refused stays zero', async () => {
+  it('clean rebuild (no tombstone hit) increments rebuilt, refused stays zero', async () => {
     const summary = makeSummary('stale summary content');
     writeEntry(hippoRoot, summary);
     const child = makeChild(summary.id, 'fact for clean rebuild');
