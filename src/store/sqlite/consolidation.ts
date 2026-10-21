@@ -1,13 +1,6 @@
 // hippo.db's Consolidation group: sleep's reads and writes, the DAG summaries, half-life moves and tombstone checks.
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
-import {
-  type DatabaseSyncLike,
-  withWriteScope,
-  getMeta,
-  setMeta,
-  closeHippoDb,
-  SLEEP_DB_WAIT_MS,
-} from '../../db/index.js';
+import { type DatabaseSyncLike, withWriteScope, getMeta, setMeta, SLEEP_DB_WAIT_MS } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { findRejectedValue } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
@@ -19,14 +12,15 @@ import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type {
-  RebuildPatch,
-  HalfLifeMove,
-  HalfLifeRow,
-  HalfLifeRows,
-  TombstoneChecks,
-  Consolidation,
-} from '../local/consolidation.js';
+import { WRITE_BUDGET } from '../../base/util/write-budget.js';
+import {
+  planHalfLifeMoves,
+  type HalfLifeMove,
+  type HalfLifeOutcome,
+  type HalfLifeRow,
+  type HalfLifeRows,
+} from '../../base/memory/half-life-plan.js';
+import type { RebuildPatch, Consolidation } from '../port/consolidation.js';
 import { appendAuditEvent, recordAuditEventsRowByRowAt } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt, replaceDetectedConflictsAt } from './conflicts.js';
 import {
@@ -37,15 +31,10 @@ import {
   loadEntryIdsPageAt,
   selectEntriesByIds,
 } from './entry-reads.js';
-import { setHalfLivesAt, writeEntriesTogetherAt, writeEntryAt } from './entry-writes.js';
+import { setHalfLivesAt } from './entry-writes.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, type Handles, waitingOpener } from './open.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import {
-  commitInChunksAt,
-  deleteEntriesInBatchesAt,
-  failedUnitOf,
-  memoriesBackingAmongAt,
-} from './delete-and-batch.js';
+import { commitInChunksAt, deleteEntriesInBatchesAt, memoriesBackingAmongAt } from './delete-and-batch.js';
 import { expireDormantBeforeAt } from './dormant.js';
 import { loadPendingExtractionTenantsAt, markPendingProcessedUpToAt } from './graph-queue.js';
 import { appendConsolidationRunAt, incrementSleepCountAt, loadSessionDecayContextAt } from './index-and-stats.js';
@@ -62,6 +51,8 @@ import {
   type FileBodies,
 } from './bound.js';
 import type { AppendAuditOpts } from '../port/types.js';
+import type { Sync } from './served.js';
+import { served } from './served.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/domain/consolidate/dag.ts, because it needs module-private
@@ -124,12 +115,12 @@ function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string, tenant
   return rows.map(rowToEntry);
 }
 
-/** loadChildrenOfSummary for many summaries in one IN query per tenant chunk, looked up per summary; each list in
- * created order. */
+/** loadChildrenOfSummary for many summaries in one IN query per tenant chunk: one list per summary in the order given,
+ * each in created order. */
 function childrenOfSummariesAt(
   db: DatabaseSyncLike,
   summaries: ReadonlyArray<{ id: string; tenantId: string }>,
-): (summary: { id: string; tenantId: string }) => MemoryEntry[] {
+): MemoryEntry[][] {
   const byTenant = new Map<string, string[]>();
   for (const s of summaries) {
     assertTenantId('loadChildrenOfSummaries', s.tenantId);
@@ -160,7 +151,7 @@ function childrenOfSummariesAt(
       }
     }
   }
-  return (summary) => out.get(childrenKey(summary.tenantId, summary.id)) ?? [];
+  return summaries.map((summary) => out.get(childrenKey(summary.tenantId, summary.id)) ?? []);
 }
 
 /** Key into the map childrenOfSummariesAt reads. */
@@ -383,20 +374,18 @@ function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): voi
   }
 }
 
-/** Moves the store's half-lives to base `to` as `plan` decides from the rows read here, then records the base.
- * `outcome` is null when no move is due; a dry run plans and writes nothing. */
-function moveHalfLivesAt<R>(
+/** Moves the store's half-lives to base `to` as planned from the rows read here, then records the base. `outcome` is
+ * null when no move is due; a dry run plans and writes nothing. */
+function moveHalfLivesAt(
   db: DatabaseSyncLike,
   to: number,
   opts: { dryRun: boolean; actor: string },
-  plan: (rows: HalfLifeRows) => { moves: readonly HalfLifeMove[]; outcome: R },
-): { from: number; outcome: R | null } {
+): { from: number; outcome: HalfLifeOutcome | null } {
   const run = () => {
     const from = recordedHalfLifeBaseAt(db);
     const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
     if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) return { from, outcome: null };
-    const rows = readRows(db, from, typedPending);
-    const { moves, outcome } = plan(rows);
+    const { moves, outcome } = planHalfLifeMoves(readRows(db, from, typedPending), to);
     if (opts.dryRun) return { from, outcome };
 
     for (const move of moves) writeMove(db, move, opts.actor);
@@ -406,37 +395,6 @@ function moveHalfLivesAt<R>(
   };
   // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
   return opts.dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
-}
-
-// Lazy so a sleep that checks nothing never opens the store; make it IMMEDIATELY before the try whose finally closes
-// it, so a throw in any phase cannot leak the handle.
-function lazyTombstoneChecks(open: () => DatabaseSyncLike, dryRun: boolean): TombstoneChecks {
-  let handle: DatabaseSyncLike | null = null;
-  const opened = (): DatabaseSyncLike | null => {
-    if (dryRun) return null;
-    handle ??= open();
-    return handle;
-  };
-  return {
-    find(tenantId, digest) {
-      const db = opened();
-      return db ? findRejectedValue(db, tenantId, digest) : null;
-    },
-    audit(event) {
-      const db = opened();
-      if (db) appendAuditEvent(db, event);
-    },
-    auditOrCount(event) {
-      try {
-        this.audit(event);
-      } catch (error) {
-        reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
-      }
-    },
-    close() {
-      if (handle) closeHippoDb(handle);
-    },
-  };
 }
 
 // The wait is sleep's own, not a server request's 250 ms.
@@ -450,6 +408,12 @@ function auditEachRowAt(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]
   return failed.length;
 }
 
+/** The chunked writers yield between chunks, so the synchronous form keeps them async. */
+type Chunked = 'commitFlush' | 'expireDormant';
+
+/** hippo.db's Consolidation group as the synchronous store holds it. */
+export type SqliteConsolidation = Sync<Omit<Consolidation, Chunked>> & Pick<Consolidation, Chunked>;
+
 type StoreReads =
   | 'entryIdsPage'
   | 'entriesByIds'
@@ -461,9 +425,8 @@ type StoreReads =
   | 'countSleep'
   | 'entriesPage'
   | 'duplicateCandidates';
-type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteInBatches' | 'writeEntry' | 'writeTogether';
-type Unbound = 'tombstoneChecks' | 'reportAuditFailure' | 'failedUnitOf' | 'commitFlush' | 'expireDormant';
-type BareRows = Exclude<keyof Consolidation, Unbound | StoreReads | StoreWrites | keyof SummaryOps>;
+type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteInBatches';
+type BareRows = Exclude<keyof Consolidation, Chunked | StoreReads | StoreWrites | keyof SummaryOps>;
 
 const storeReadsAt: Bodies<Pick<Consolidation, StoreReads>> = {
   entryIdsPage: (db, page) => loadEntryIdsPageAt(db, ALL_TENANTS, page),
@@ -482,13 +445,12 @@ const storeWritesAt: FileBodies<Pick<Consolidation, StoreWrites>> = {
   replaceConflicts: replaceDetectedConflictsAt,
   recordRun: appendConsolidationRunAt,
   deleteInBatches: deleteEntriesInBatchesAt,
-  writeEntry: writeEntryAt,
-  writeTogether: writeEntriesTogetherAt,
 };
 
 const bareRowsAt: Bodies<Pick<Consolidation, BareRows>> = {
   objectBackedAmong: memoriesBackingAmongAt,
   ftsDrift: ftsDriftAt,
+  rejectedValue: findRejectedValue,
   halfLifeBase: recordedHalfLifeBaseAt,
   particleIds: storedParticleIdsAt,
   particlesByIds: storedParticlesByIdsAt,
@@ -507,16 +469,33 @@ const summariesAt: Bodies<SummaryOps> = {
   unprofiledTopicSummaries: loadAllL2SummariesAt,
 };
 
+/** The chunked writers on the store's own clock and pause, under sleep's own lock wait. */
+function chunkedWriters({ onAsync }: Handles): Pick<Consolidation, Chunked> {
+  const { commitFlush } = boundAsyncWithFiles<Pick<Consolidation, 'commitFlush'>>(
+    onAsync,
+    {
+      commitFlush: (db, files, components, { snapshot, holdMs }) =>
+        commitInChunksAt(db, files, components, { snapshot, budget: { ...WRITE_BUDGET, holdMs } }),
+    },
+    sleepStoreOpener,
+  );
+  const { expireDormant } = boundAsync<Pick<Consolidation, 'expireDormant'>>(
+    onAsync,
+    {
+      expireDormant: (db, cutoffIso, { dryRun, holdMs }) =>
+        expireDormantBeforeAt(db, cutoffIso, { dryRun, budget: { ...WRITE_BUDGET, holdMs } }),
+    },
+    sleepOpener,
+  );
+  return { commitFlush: skipEmpty(commitFlush, async () => []), expireDormant };
+}
+
 /** Sleep's store work on its hippo.db, each call on its own short-lived handle; an empty batch opens none. */
-export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidation {
+export function sqliteConsolidation(handles: Handles): SqliteConsolidation {
+  const { on } = handles;
   const reads = bound(on, storeReadsAt, openStore);
   const writes = boundWithFiles(on, storeWritesAt, openStore);
   const bare = bound(on, bareRowsAt);
-  const { commitFlush } = boundAsyncWithFiles<Pick<Consolidation, 'commitFlush'>>(
-    onAsync,
-    { commitFlush: commitInChunksAt },
-    sleepStoreOpener,
-  );
   return {
     ...reads,
     ...writes,
@@ -526,13 +505,14 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
     particlesByIds: skipEmpty(bare.particlesByIds, () => []),
     deleteInBatches: skipEmpty(writes.deleteInBatches, () => []),
     objectBackedAmong: skipEmpty(bare.objectBackedAmong, () => new Set<string>()),
-    writeTogether: skipEmpty(writes.writeTogether, () => 0),
-    commitFlush: skipEmpty(commitFlush, async () => []),
-    ...boundAsync<Pick<Consolidation, 'expireDormant'>>(onAsync, { expireDormant: expireDormantBeforeAt }, sleepOpener),
-    tombstoneChecks: (dryRun) => lazyTombstoneChecks(open, dryRun),
-    reportAuditFailure: (op, reason) => reportAuditWriteFailure(op, reason),
-    failedUnitOf,
+    ...chunkedWriters(handles),
   };
+}
+
+/** The synchronous group as the port serves it: the chunked writers answer through their own Promises already. */
+export function servedConsolidation(sync: SqliteConsolidation): Consolidation {
+  const { commitFlush, expireDormant } = sync;
+  return { ...served<Omit<Consolidation, Chunked>>(sync), commitFlush, expireDormant };
 }
 
 type SummaryOps = Pick<

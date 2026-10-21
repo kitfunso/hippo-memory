@@ -32,7 +32,7 @@ function seed(count: number, opts: { tenantId?: string; tags?: string[] } = {}):
 }
 
 const tagAll = (ids: readonly string[]) =>
-  recordStatements(() => sqliteSyncStore(root).localFiles.learning.addTagToEntries('default', ids, TAG)).statements;
+  recordStatements(() => sqliteSyncStore(root).learning.addTagToEntries('default', ids, TAG)).statements;
 
 describe('addTagToEntries', () => {
   it('commits one transaction for one row and for many', () => {

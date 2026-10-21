@@ -15,7 +15,7 @@ import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { withoutLocalFiles } from '../_helpers/port-only-store.js';
+import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 
 let root: string;
@@ -87,7 +87,7 @@ describe('replies built by the dispatcher', () => {
   });
 
   it('a tool the store cannot run, with -32603', async () => {
-    const store: HippoStore = { ...withoutLocalFiles(sqliteStore(root)), kind: 'other' };
+    const store: HippoStore = { ...withoutFolderGroups(sqliteStore(root)), kind: 'other' };
     expect(await call(6, 'hippo_share', {}, { store })).toBe(
       `{"jsonrpc":"2.0","id":6,"error":{"code":-32603,"message":${JSON.stringify(STORE_NOT_PORTED_MESSAGE)}}}`,
     );

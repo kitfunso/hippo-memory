@@ -14,7 +14,7 @@ import { plural } from '../../base/util/format.js';
 // 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no
 // trace (idempotent via source_session_id) is rendered as markdown and persisted as a Layer.Trace memory, which
 // inherits decay, search, replay and physics.
-export function promoteSessionTraces(run: SleepRun): void {
+export async function promoteSessionTraces(run: SleepRun): Promise<void> {
   const { result } = run;
   if (run.dryRun || run.config.autoTraceCapture === false) return;
   let tracesSkippedRejected = 0;
@@ -22,13 +22,13 @@ export function promoteSessionTraces(run: SleepRun): void {
   const sinceMs = run.now.getTime() - windowDays * DAY_MS;
   // Auto-trace runs for the caller's tenant alone; consolidating every tenant needs a per-tenant loop on top of this.
   const consolidationTenant = run.tenantId;
-  const promotable = run.store.promotableSessions(consolidationTenant, sinceMs);
+  const promotable = await run.store.consolidation.promotableSessions(consolidationTenant, sinceMs);
 
   for (const session of promotable) {
-    const built = sessionTrace(run, consolidationTenant, session.session_id);
+    const built = await sessionTrace(run, consolidationTenant, session.session_id);
     if (!built) continue;
     const { trace, outcome } = built;
-    if (traceRejected(run, trace, session.session_id)) {
+    if (await traceRejected(run, trace, session.session_id)) {
       tracesSkippedRejected++;
       continue;
     }
@@ -55,15 +55,15 @@ export function promoteSessionTraces(run: SleepRun): void {
 type TraceOutcome = 'success' | 'failure' | 'partial';
 
 /** The trace a completed session renders to, or null when it already has one or cannot be promoted. */
-function sessionTrace(
+async function sessionTrace(
   run: SleepRun,
   consolidationTenant: string,
   sessionId: string,
-): { trace: MemoryEntry; outcome: TraceOutcome } | null {
+): Promise<{ trace: MemoryEntry; outcome: TraceOutcome } | null> {
   // Idempotency: skip if a trace for this session already exists.
-  if (run.store.traceExists(consolidationTenant, sessionId)) return null;
+  if (await run.store.consolidation.traceExists(consolidationTenant, sessionId)) return null;
 
-  const events = run.store.sessionEvents(consolidationTenant, {
+  const events = await run.store.consolidation.sessionEvents(consolidationTenant, {
     session_id: sessionId,
     limit: 1000,
   });
@@ -118,11 +118,11 @@ function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome
 
 // traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every sleep; check the
 // tombstone under the entry's own stamped tenantId, never a guessed one.
-function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
+async function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): Promise<boolean> {
   const traceDigest = rejectionDigest(trace.content);
-  const tombstone = run.tombstones.find(trace.tenantId, traceDigest);
+  const tombstone = await run.tombstones.find(trace.tenantId, traceDigest);
   if (!tombstone) return false;
-  run.tombstones.auditOrCount({
+  await run.tombstones.auditOrCount({
     tenantId: trace.tenantId,
     actor: 'sleep',
     op: 'reject_refusal',
@@ -137,18 +137,18 @@ function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): bo
 
 // 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal
 // and idle time, then applying the `markRetrieved` strengthening, so important memories don't fade.
-export function replayPass(run: SleepRun): void {
+export async function replayPass(run: SleepRun): Promise<void> {
   const { survivors, now } = run;
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
   // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences
   // the whole pass; persisting unmutated entries anyway would still refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.size > 0 && !isRecallBoostAblated())) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
-  const picked = survivors.get(sampleForReplay(survivors.rows(), replayCount, now, seed));
+  const picked = await survivors.get(await sampleForReplay(survivors.rows(), replayCount, now, seed));
   if (picked.length === 0) return;
   const rehearsed = markRetrieved(picked, now, clockBasisOf(run.decayOpts));
   // Update survivors in place so downstream passes see rehearsed state.
-  survivors.set(rehearsed);
+  await survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;
   run.result.details.push(
     `  💭 replayed ${plural(rehearsed.length, 'memory', 'memories')}: ` + rehearsed.map((e) => e.id).join(', '),

@@ -41,7 +41,7 @@ function work(over: Partial<Work> = {}): Work {
     sleep: async () => {
       steps.push('sleep');
     },
-    importAgentNotes: () => {
+    importAgentNotes: async () => {
       steps.push('import');
     },
     readScan: () => {
@@ -55,7 +55,7 @@ function work(over: Partial<Work> = {}): Work {
       },
     },
     currentProject: () => PROJECT,
-    capture: (into, turns, origin) => {
+    capture: async (into, turns, origin) => {
       // The global store's Context is built bare, with no reach of its own.
       steps.push(
         `capture:${into.reach === undefined ? 'global' : 'own'}:${turns?.join(',') ?? 'all'}:${origin ?? '-'}`,

@@ -93,7 +93,7 @@ async function learnScannedRepo(
     added = result.added;
     lowInfo = result.lowInfo;
   }
-  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, cliSyncOptions(repoHippo, tenantId, machine)));
+  if (learn) mergeReports(agentImport, await importProjectMemories(repoHippo, cliSyncOptions(tenantId, machine)));
   return { added, lowInfo };
 }
 
@@ -163,7 +163,7 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
   if (learn) {
-    mergeReports(agentImport, importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, machine)));
+    mergeReports(agentImport, await importUserMemories(globalRoot, cliSyncOptions(tenantId, machine)));
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
@@ -174,7 +174,7 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
-function initGlobalOnly(tenantId: string, flags: CliFlags): void {
+async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> {
   const globalRoot = resolveGlobalRootDir();
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
@@ -183,7 +183,7 @@ function initGlobalOnly(tenantId: string, flags: CliFlags): void {
     console.log('Initialized global Hippo store at', globalRoot);
   }
   if (!boolFlag(flags, 'no-learn')) {
-    printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine())));
+    printAgentImport(await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())));
   }
 }
 
@@ -207,7 +207,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   }
 
   if (boolFlag(flags, 'global')) {
-    initGlobalOnly(tenantId, flags);
+    await initGlobalOnly(tenantId, flags);
     return;
   }
 
@@ -238,7 +238,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (!alreadyExists && learn && !boolFlag(flags, 'global')) await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
-  if (learn) printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, tenantId, currentMachine())));
+  if (learn) printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())));
 }
 
 /**

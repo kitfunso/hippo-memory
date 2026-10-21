@@ -16,17 +16,17 @@ import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
 import { totalTally, type Tally } from '../../src/domain/agent-memories/report.js';
 import { detectSecret } from '../../src/base/util/secret-detect.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 
-const sync = (root: string, home: string): Tally =>
+const sync = async (root: string, home: string): Promise<Tally> =>
   totalTally(
-    importProjectMemories(root, {
+    await importProjectMemories(root, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport({}),
+      stores: sqliteImportStores({}),
       machine: { home, env: {}, platform: process.platform, ...REAL_IO },
     }),
   );
@@ -60,7 +60,7 @@ describe('agent memory import secret veto', () => {
     expect(detectSecret({ content: `key: ${FAKE_KEY}`, tags: [] }).flagged).toBe(true);
   });
 
-  it('imports a benign memory file but skips a secret-bearing one', () => {
+  it('imports a benign memory file but skips a secret-bearing one', async () => {
     writeMemoryFile(
       'reference_some_api_key.md',
       'name: some-api-key\ntype: reference',
@@ -72,7 +72,7 @@ describe('agent memory import secret veto', () => {
       'Always run lighthouse after deploys and check the console before shipping.',
     );
 
-    const tally = sync(hippoRoot, homeDir);
+    const tally = await sync(hippoRoot, homeDir);
 
     // Only the benign file is ingested.
     expect([tally.imported, tally.secret]).toEqual([1, 1]);
@@ -87,7 +87,7 @@ describe('agent memory import secret veto', () => {
     expect(joined).not.toContain('only recoverable copy');
   });
 
-  it('imports normally when no secret files are present', () => {
+  it('imports normally when no secret files are present', async () => {
     writeMemoryFile(
       'lesson_one.md',
       'name: one\ntype: reference',
@@ -99,6 +99,6 @@ describe('agent memory import secret veto', () => {
       'Pin dependency versions and review before upgrading them.',
     );
 
-    expect(sync(hippoRoot, homeDir).imported).toBe(2);
+    expect((await sync(hippoRoot, homeDir)).imported).toBe(2);
   });
 });

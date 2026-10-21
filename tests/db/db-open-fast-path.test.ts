@@ -242,16 +242,16 @@ describe('full-text drift repair moved off the open path', () => {
     expect(result.details.some((line) => line.includes('re-synced the full-text index'))).toBe(true);
   });
 
-  it('doctor warns on drift and points at sleep', () => {
+  it('doctor warns on drift and points at sleep', async () => {
     vi.stubEnv('HIPPO_HOME', path.join(cwd, 'global'));
     expect(
-      runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' }).checks.find(
+      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'fts',
       ),
     ).toMatchObject({ status: 'pass' });
     desyncFts();
     expect(
-      runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' }).checks.find(
+      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'fts',
       ),
     ).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });

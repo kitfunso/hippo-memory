@@ -8,7 +8,7 @@ import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js'
 import { Layer } from '../../src/base/memory/memory.js';
 import { assessAutomaticMemory } from '../../src/base/memory/memory-quality.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -62,11 +62,11 @@ describe('quality at automatic derivation boundaries', () => {
     expect(result.extractionCandidates).toBe(2);
   });
 
-  it('writes complete extracted facts while refusing returned fragments per fact', () => {
+  it('writes complete extracted facts while refusing returned fragments per fact', async () => {
     const source = createMemory('A discussion about the production migration deployment ordering.');
     writeEntry(root, source);
-    const facts = storeExtractedFacts(
-      sqliteSyncStore(root).localFiles.learning,
+    const facts = await storeExtractedFacts(
+      sqliteStore(root),
       source,
       [
         { content: 'Found local migration files to be', tags: [], valence: 'neutral' },

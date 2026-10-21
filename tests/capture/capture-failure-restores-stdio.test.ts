@@ -22,11 +22,11 @@ describe('cmdCapture failure', () => {
   it.each([
     ['a missing file', (): string => (initTestStore(path.join(dir, '.hippo')), path.join(dir, '.hippo'))],
     ['an uninitialised store', (): string => path.join(dir, 'no-store')],
-  ])('restores stdio and sets exit code 1 for %s', (_name, makeRoot) => {
+  ])('restores stdio and sets exit code 1 for %s', async (_name, makeRoot) => {
     const root = makeRoot();
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
     const log = path.join(dir, 'tee.log');
-    expect(() =>
+    await expect(
       cmdCapture(captureTarget(root), {
         tenantId: 'default',
         source: 'file',
@@ -35,7 +35,7 @@ describe('cmdCapture failure', () => {
         dryRun: false,
         global: false,
       }),
-    ).not.toThrow();
+    ).resolves.toBeUndefined();
     expect(errs).toHaveBeenCalled();
     expect(process.exitCode).toBe(1);
     process.stdout.write('after-capture-marker');

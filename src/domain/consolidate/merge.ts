@@ -2,7 +2,7 @@ import { MemoryEntry, Layer, calculateStrength, createMemory } from '../../base/
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
-import { duplicateKey, mergedText } from '../../base/util/same-text.js';
+import { duplicateKey, heldTexts, mergedText } from '../../base/util/same-text.js';
 import { successorAfterRetirement } from '../../base/memory/merged-row.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
@@ -21,30 +21,35 @@ const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
 // deriveHalfLife grants its high-fit bonus only above 0.7, so a rollup at 0.7 gets none.
 const MERGED_SCHEMA_FIT = 0.7;
 
-export function retireHeldTexts(run: SleepRun): void {
+export async function retireHeldTexts(run: SleepRun): Promise<void> {
   const { survivors } = run;
   // Only a merged row can hold a retired text, so only those are kept, by place, while the rest page past.
   const held: Array<readonly [number, string]> = [];
-  for (const [index, row] of survivors.indexed()) {
+  for await (const [index, row] of survivors.indexed()) {
     if (row.source === 'consolidation' && !row.supersededBy && run.retirable(row)) held.push([index, row.id]);
   }
   // From the last place back, so dropping a survivor never moves one still to come.
   for (let end = held.length; end > 0; end -= run.rows.pageRows) {
     const page = held.slice(Math.max(0, end - run.rows.pageRows), end);
-    const rows = new Map(survivors.get(page.map(([, id]) => id)).map((row) => [row.id, row]));
+    const rows = new Map((await survivors.get(page.map(([, id]) => id))).map((row) => [row.id, row]));
     // Sources come from the store, as the loaded rows did, never from a pass's pending changes.
     const parentIds = [...new Set([...rows.values()].flatMap((r) => r.parents))];
-    const sources = new Map(run.rows.read(parentIds).map((s) => [s.id, s]));
+    const sources = new Map((await run.rows.read(parentIds)).map((s) => [s.id, s]));
     for (const [index, id] of [...page].reverse()) {
       const row = rows.get(id);
-      if (row) retireHeldText(run, index, row, sources);
+      if (row) await retireHeldText(run, index, row, sources);
     }
   }
 }
 
-function retireHeldText(run: SleepRun, index: number, row: MemoryEntry, sources: ReadonlyMap<string, MemoryEntry>) {
-  const rejected = (text: string): boolean => run.tombstones.find(row.tenantId, rejectionDigest(text)) !== null;
-  const successor = successorAfterRetirement(row, sources, rejected);
+async function retireHeldText(
+  run: SleepRun,
+  index: number,
+  row: MemoryEntry,
+  sources: ReadonlyMap<string, MemoryEntry>,
+): Promise<void> {
+  const rejected = await rejectedTexts(run, row, sources);
+  const successor = successorAfterRetirement(row, sources, (text) => rejected.has(text));
   if (successor === undefined) return;
   run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
   if (run.dryRun) return;
@@ -52,6 +57,24 @@ function retireHeldText(run: SleepRun, index: number, row: MemoryEntry, sources:
   run.units.push(successor ? [row.id, successor.id] : [row.id]);
   if (successor) run.pendingWrites.push(successor);
   run.survivors.replaceAt(index, successor);
+}
+
+/** The texts the retirement check asks about, the row's own and its live sources', that the row's tenant rejected. */
+async function rejectedTexts(
+  run: SleepRun,
+  row: MemoryEntry,
+  sources: ReadonlyMap<string, MemoryEntry>,
+): Promise<Set<string>> {
+  const rejected = new Set<string>();
+  if (row.source !== 'consolidation' || row.supersededBy) return rejected;
+  const live = row.parents.flatMap((id) => {
+    const source = sources.get(id);
+    return source && !source.supersededBy ? [source.content] : [];
+  });
+  for (const text of new Set([...live, ...heldTexts(row)])) {
+    if ((await run.tombstones.find(row.tenantId, rejectionDigest(text))) !== null) rejected.add(text);
+  }
+  return rejected;
 }
 
 /** The tenant, scope and origin every row merged out of one partition inherits. */
@@ -70,14 +93,14 @@ interface MergeBucket {
 }
 
 /** The episodic survivors a merge may consume, grouped by the partition their merged row would land in. */
-function partitionMergeCandidates(run: SleepRun): Map<string, MergeBucket> {
+async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, MergeBucket>> {
   const alreadyMergedIds = new Set<string>();
-  for (const e of run.survivors.rows()) for (const id of e.parents) alreadyMergedIds.add(id);
+  for await (const e of run.survivors.rows()) for (const id of e.parents) alreadyMergedIds.add(id);
 
   // Partition BEFORE the overlap loop so a cluster can never span tenants and merge cross-tenant content.
   // Map keeps insertion order, so a single-tenant store gets one partition in the original order.
   const buckets = new Map<string, MergeBucket>();
-  for (const e of run.survivors.rows()) {
+  for await (const e of run.survivors.rows()) {
     const candidate =
       e.layer === Layer.Episodic &&
       !e.supersededBy &&
@@ -102,12 +125,12 @@ function partitionMergeCandidates(run: SleepRun): Map<string, MergeBucket> {
 }
 
 /** Returns how many clusters were skipped because their merged text matches a rejected value. */
-export function mergePass(run: SleepRun): number {
+export async function mergePass(run: SleepRun): Promise<number> {
   const used = new Set<string>();
-  // The rejection guard reuses the run's one lazily opened tombstone handle; a dry-run never reaches
+  // The rejection guard reuses the run's tombstone checks; a dry-run never reaches
   // batchWriteAndDelete's guard bypass, so it has nothing to protect there.
   let mergesSkippedRejected = 0;
-  for (const bucket of partitionMergeCandidates(run).values()) {
+  for (const bucket of (await partitionMergeCandidates(run)).values()) {
     const { ids, lengths } = bucket;
     const partnersOf = mergePartners(bucket.sets);
     for (let i = 0; i < ids.length; i++) {
@@ -123,23 +146,23 @@ export function mergePass(run: SleepRun): number {
       }
 
       if (cluster.length < MERGE_MIN_CLUSTER) continue;
-      const relatedRows = run.survivors.get(related.map((k) => ids[k]));
+      const relatedRows = await run.survivors.get(related.map((k) => ids[k]));
       const clusterIds = new Set(cluster.map((k) => ids[k]));
       const clusterRows = relatedRows.filter((e) => clusterIds.has(e.id));
-      if (!mergeCluster(run, bucket.partition, clusterRows, relatedRows, used)) mergesSkippedRejected++;
+      if (!(await mergeCluster(run, bucket.partition, clusterRows, relatedRows, used))) mergesSkippedRejected++;
     }
   }
   return mergesSkippedRejected;
 }
 
 /** Merges one cluster into a semantic row; returns false when a tombstone refuses the merged text. */
-function mergeCluster(
+async function mergeCluster(
   run: SleepRun,
   partition: MergePartition,
   cluster: MemoryEntry[],
   related: MemoryEntry[],
   used: Set<string>,
-): boolean {
+): Promise<boolean> {
   const { result, dryRun } = run;
   const mergedContent = mergeContents(cluster);
 
@@ -147,7 +170,7 @@ function mergeCluster(
   // partition's tenant, the one every cluster member shares and the row will land in.
   const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run.config.defaultHalfLifeDays);
 
-  if (semantic && mergeRejected(run, semantic, cluster, related, used)) return false;
+  if (semantic && (await mergeRejected(run, semantic, cluster, related, used))) return false;
 
   for (const e of cluster) used.add(e.id);
   result.merged += cluster.length;
@@ -163,7 +186,7 @@ function mergeCluster(
 
     // Scale half_life_days so merged sources decay sooner but stay recoverable; ranking is unchanged on purpose
     // (demoting children regresses QA).
-    demoteMergedSources(run, cluster);
+    await demoteMergedSources(run, cluster);
   }
   return true;
 }
@@ -194,31 +217,31 @@ function semanticSummary(
 }
 
 /** The later conflict check reads the survivors, so it sees the post-demotion half-life. */
-function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): void {
+async function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): Promise<void> {
   const demoted = cluster.map((e) => {
     const row = { ...e, halfLifeDays: Math.max(1, Math.floor(e.halfLifeDays * MERGE_SOURCE_HALF_LIFE_FACTOR)) };
     return { ...row, strength: calculateStrength(row, run.now, run.decayOpts) };
   });
-  run.survivors.set(demoted);
+  await run.survivors.set(demoted);
   for (const e of demoted) run.pendingWrites.push(e);
 }
 
 // mergeContents is deterministic, so a rollup a human already rejected would regenerate each cycle and
 // batchWriteAndDelete's guard bypass would re-assert it; this producer-side check makes that bypass safe. A hit skips
 // the whole cluster (no demote, no delete) so a later sleep can retry.
-function mergeRejected(
+async function mergeRejected(
   run: SleepRun,
   semantic: MemoryEntry,
   cluster: MemoryEntry[],
   related: MemoryEntry[],
   used: Set<string>,
-): boolean {
+): Promise<boolean> {
   const { tombstones } = run;
   const newDigest = rejectionDigest(semantic.content);
   // tombstones from older releases hold this format's digest
   const oldDigest = rejectionDigest(legacyMergeContents(related));
-  const newHit = tombstones.find(semantic.tenantId, newDigest);
-  const tombstone = newHit ?? tombstones.find(semantic.tenantId, oldDigest);
+  const newHit = await tombstones.find(semantic.tenantId, newDigest);
+  const tombstone = newHit ?? (await tombstones.find(semantic.tenantId, oldDigest));
   const mergeDigest = newHit ? newDigest : oldDigest;
   if (!tombstone) return false;
   // Still mark used: these members are not re-tried against a different cluster in this pass; the next sleep
@@ -226,7 +249,7 @@ function mergeRejected(
   // the old format digested the uncapped list, so rows past the cap were rejected too
   const rejected = newHit ? cluster : related;
   for (const e of rejected) used.add(e.id);
-  tombstones.auditOrCount({
+  await tombstones.auditOrCount({
     tenantId: semantic.tenantId,
     actor: 'sleep',
     op: 'reject_refusal',

@@ -1,4 +1,4 @@
-// A store worker's thrown error crosses to the server as plain data: for generated errors of every listed class the server still gets the class, the message, the fields and the cause chain.
+// A store worker's thrown error crosses to the server as plain data: for generated errors of every listed class the server still gets the class, the message, the fields (a flush's list of unit ids among them) and the cause chain.
 import { describe, it, expect } from 'vitest';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
@@ -54,7 +54,7 @@ type Recipe = readonly [maker: number, text: string];
 interface Case {
   readonly top: Recipe;
   /** Extra fields holding plain data, which must cross. */
-  readonly carried: readonly (readonly [string, string | number | boolean | null])[];
+  readonly carried: readonly (readonly [string, string | number | boolean | null | readonly string[]])[];
   /** Extra fields holding something a thread message cannot carry as a field, which must be left behind. */
   readonly dropped: readonly (readonly [string, object | bigint])[];
   readonly causes: readonly Recipe[];
@@ -62,8 +62,8 @@ interface Case {
 
 const RECIPE: Gen<Recipe> = both(int(0, MAKERS.length - 1), str('abc XYZ 019 .:/-_"é東\n', 0, 24));
 const CARRIED = both(
-  pick(['retries', 'hint', 'detail', 'flag']),
-  pick(['x', '', 0, 42, -1.5, Number.NaN, true, false, null]),
+  pick(['retries', 'hint', 'detail', 'flag', 'failedUnitIds']),
+  pick(['x', '', 0, 42, -1.5, Number.NaN, true, false, null, ['mem_a', 'mem_b'], []]),
 );
 const DROPPED = both(pick(['handle', 'rows']), pick([{ a: 1 }, [1, 2], 10n, new Date(0)]));
 

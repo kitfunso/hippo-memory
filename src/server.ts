@@ -19,9 +19,7 @@ import {
   type PromptHookRequest,
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
-import { isLocalStore, type LocalStore } from './store/local/index.js';
-import type { LocalContext } from './api/types.js';
-import { sqliteReach } from './store/sqlite/index.js';
+import { isHippoDbStore, sqliteReach } from './store/sqlite/index.js';
 import { loadConfig } from './base/config/config.js';
 
 export { serve } from './surface/server/boot.js';
@@ -36,13 +34,12 @@ async function promptHookContext(
 
 /** Only hippo.db has a global store beside it; an add-on's own store reads as one project. */
 async function folderReach(store: HippoStore, opts: PromptHookOptions | undefined): Promise<ContextReach | undefined> {
-  if (!isLocalStore(store) || store.folderFiles === undefined) return undefined;
+  if (!isHippoDbStore(store) || store.folderFiles === undefined) return undefined;
   const { folder } = await store.folderFiles.home();
   return contextReach(sqliteReach(folder, store, opts?.sharedStore), loadConfig);
 }
 
-// Add-on packages mint and revoke keys through these without importing the whole api surface; a route narrows its
-// Context with isLocalStore before captureSessionTexts.
+// Add-on packages mint and revoke keys through these without importing the whole api surface.
 export {
   authCreate,
   authCreateSelf,
@@ -50,7 +47,6 @@ export {
   BadRequestError,
   ConflictError,
   ForbiddenError,
-  isLocalStore,
   NotFoundError,
   promptHookContext,
   type AuthCreateSelfOpts,
@@ -58,8 +54,6 @@ export {
   type AuthRevokeResult,
   type Context,
   type Actor,
-  type LocalContext,
-  type LocalStore,
 };
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './base/util/http-util.js';
 export { clientIpForRateLimit } from './surface/server/client-ip.js';
@@ -80,9 +74,11 @@ export type { HippoStore } from './store/index.js';
 export { HttpError } from './base/util/http-util.js';
 export type { CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './base/util/json.js';
-// A session-end route stores the turns its caller read from a transcript on the caller's own machine.
+// A session-end route stores the turns its caller read from a transcript on the caller's own machine; it narrows its
+// Context with store-kit's hasGroup(ctx.store, 'captures') first.
 export {
   captureSessionTexts,
+  type CaptureContext,
   type SessionCaptureRequest,
   type SessionCaptureResult,
 } from './surface/capture/session-texts.js';

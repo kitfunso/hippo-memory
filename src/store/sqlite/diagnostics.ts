@@ -21,10 +21,10 @@ import type {
   CompactionCounts,
   TokenTally,
   Diagnostics,
-} from '../local/diagnostics.js';
+} from '../port/diagnostics.js';
 import type { OnHandle } from './open.js';
-import { projectTagReads } from './project-tags.js';
 import { bound, type Bodies } from './bound.js';
+import type { Sync } from './served.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 function attempt<T>(read: () => T): Attempt<T> {
@@ -93,14 +93,11 @@ function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
   return { injected: Number(row?.n ?? 0), tokensSent: Number(row?.t ?? 0), tokensReread: Number(row?.r ?? 0) };
 }
 
-const diagnosticsAt: Bodies<Pick<Diagnostics, 'health' | 'inventory'>> = {
+const diagnosticsAt: Bodies<Diagnostics> = {
   health: storeHealthAt,
   inventory: storeInventoryAt,
 };
 
-export function sqliteDiagnostics(on: OnHandle): Diagnostics {
-  return {
-    ...bound(on, diagnosticsAt, openHippoDbReadOnly),
-    projectTags: (tenantId, read) => on((db) => read(projectTagReads(db, tenantId)), openHippoDbReadOnly),
-  };
+export function sqliteDiagnostics(on: OnHandle): Sync<Diagnostics> {
+  return bound(on, diagnosticsAt, openHippoDbReadOnly);
 }

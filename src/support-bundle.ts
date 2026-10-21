@@ -94,7 +94,11 @@ function readStoreConfig(storeDir: string): StoreConfigReport {
   return { configFile, config: redactConfigValue(effective) };
 }
 
-function buildStoreEntry(opts: SupportBundleOptions, kind: 'project' | 'global', storeDir: string): JsonObject {
+async function buildStoreEntry(
+  opts: SupportBundleOptions,
+  kind: 'project' | 'global',
+  storeDir: string,
+): Promise<JsonObject> {
   const dbPath = path.join(storeDir, 'hippo.db');
   if (!fs.existsSync(dbPath)) {
     return { kind, path: storeDir, error: 'no hippo.db here (hippo init has not run)' };
@@ -105,7 +109,8 @@ function buildStoreEntry(opts: SupportBundleOptions, kind: 'project' | 'global',
   if (fs.existsSync(walPath)) files['hippo.db-wal'] = fs.statSync(walPath).size;
 
   try {
-    const { schemaVersion, minCompatibleBinary, tables } = opts.diagnosticsAt(storeDir).inventory();
+    const { diagnostics } = opts.diagnosticsAt(storeDir);
+    const { schemaVersion, minCompatibleBinary, tables } = await diagnostics.inventory();
     const { configFile, config } = readStoreConfig(storeDir);
     return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };
   } catch (err) {
@@ -113,14 +118,14 @@ function buildStoreEntry(opts: SupportBundleOptions, kind: 'project' | 'global',
   }
 }
 
-function buildStores(opts: SupportBundleOptions): JsonValue[] {
+async function buildStores(opts: SupportBundleOptions): Promise<JsonValue[]> {
   const stores: JsonValue[] = [];
   const projectDir = findHippoStoreDir(opts.cwd, { homeDir: opts.home });
-  if (projectDir !== null) stores.push(buildStoreEntry(opts, 'project', projectDir));
+  if (projectDir !== null) stores.push(await buildStoreEntry(opts, 'project', projectDir));
 
   const globalDir = getGlobalRoot();
   const alreadyListed = projectDir !== null && isGlobalStoreRoot(projectDir);
-  if (isInitialized(globalDir) && !alreadyListed) stores.push(buildStoreEntry(opts, 'global', globalDir));
+  if (isInitialized(globalDir) && !alreadyListed) stores.push(await buildStoreEntry(opts, 'global', globalDir));
 
   return stores;
 }
@@ -321,15 +326,15 @@ function redactStrings(value: JsonValue, homePattern: RegExp | null): JsonValue 
 }
 
 /** Read-only: builds one redacted support-ticket snapshot. Never reads a memory content column. */
-export function buildSupportBundle(opts: SupportBundleOptions): JsonObject {
+export async function buildSupportBundle(opts: SupportBundleOptions): Promise<JsonObject> {
   // Before doctor: its read-only open leaves an empty -wal that the store's file list would then report.
-  const stores = buildStores(opts);
+  const stores = await buildStores(opts);
   const bundle: JsonObject = {
     format: 'hippo-support-bundle/1',
     createdAt: opts.now.toISOString(),
     hippo: opts.version,
     runtime: buildRuntime(),
-    doctor: JSON.parse(JSON.stringify(runDoctor(opts))),
+    doctor: JSON.parse(JSON.stringify(await runDoctor(opts))),
     stores,
     env: listSetEnvNames(),
     logs: buildLogsSection(opts),

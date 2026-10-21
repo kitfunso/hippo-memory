@@ -9,7 +9,10 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../base/config/config.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { log } from '../../base/util/log.js';
-import type { LocalFiles } from '../../store/local/index.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
+import type { EntryWrites } from '../../store/port/entry-writes.js';
+import type { Rejections } from '../../store/port/rejections.js';
+import type { Sharing } from '../../store/port/sharing.js';
 
 /** Below this length a chunk holds nothing worth recalling. */
 const MIN_IMPORT_CHARS = 10;
@@ -54,10 +57,22 @@ export interface ImportOptions {
   scope?: string;
 }
 
-/** The folder an import writes to and its local files, which answer at once; a composition root builds it. */
+/** A port call answered at once: the published importers return their result, never a Promise. */
+type AtOnce<F> = F extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never;
+
+/** The port calls an import makes on its folder's store, answered at once; a composition root builds them. */
+export interface ImportFiles {
+  /** Creates the store's files when they are missing, as a first import to the global store needs. */
+  readonly ensure: () => void;
+  readonly writeEntry: AtOnce<EntryWrites['writeEntry']>;
+  readonly refusedAmong: AtOnce<Rejections['refusedAmong']>;
+  readonly textKeysHolding: AtOnce<Sharing['textKeysHolding']>;
+}
+
+/** The folder an import writes to and its store's calls; a composition root builds it. */
 export interface ImportTarget {
   readonly root: string;
-  readonly files: LocalFiles;
+  readonly files: ImportFiles;
   /** Runs the import's writes as one batch on the store, which for hippo.db opens it once. */
   readonly batch: <T>(run: () => T) => T;
 }
@@ -116,28 +131,19 @@ export function importEntries(chunks: string[], source: string, tags: string[], 
 
 interface OpenImport {
   readonly targetRoot: string;
-  readonly learning: LocalFiles['learning'];
-  readonly importKeys: LocalFiles['importKeys'];
+  readonly files: ImportFiles;
   /** Whose rows a chunk is checked against. */
   readonly tenantId: TenantId;
   /** Keys of the chunks this run wrote; a dry run writes none. */
   readonly written: Set<string>;
-  readonly rejections: LocalFiles['rejections'];
 }
 
 /** The store the import writes to, made ready. */
 function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImport {
   const { files } = target;
-  if (global) files.ensureFiles();
+  if (global) files.ensure();
   const scope = global ? ALL_TENANTS : (tenantId ?? DEFAULT_TENANT_ID);
-  return {
-    targetRoot: target.root,
-    learning: files.learning,
-    importKeys: files.importKeys,
-    tenantId: scope,
-    written: new Set(),
-    rejections: files.rejections,
-  };
+  return { targetRoot: target.root, files, tenantId: scope, written: new Set() };
 }
 
 function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate' | null {
@@ -147,9 +153,9 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
 }
 
 /** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those alone. */
-function storeHolds({ importKeys, tenantId }: OpenImport, chunk: string): boolean {
+function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
-  return importKeys.textKeysHolding(tenantId, [chunk]).some((row) => heldTextKeys(row).includes(key));
+  return files.textKeysHolding(tenantId, [chunk]).some((row) => heldTextKeys(row).includes(key));
 }
 
 /** The secret-vetted chunk capped at MAX_IMPORT_CHARS, and whether vetting changed it. */
@@ -186,14 +192,14 @@ function createImportEntry(
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
 function writeOrProbeImport(target: OpenImport, entry: MemoryEntry, options: ImportOptions): boolean {
-  const { learning, rejections } = target;
+  const { files } = target;
   if (options.dryRun) {
     const check = { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, entryId: entry.id, content: entry.content };
-    return !rejections.refusedAmong([check])[0];
+    return !files.refusedAmong([check])[0];
   }
   // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
-    learning.writeEntry(entry);
+    files.writeEntry({ entry, actor: CLI_ACTOR });
   } catch (err) {
     if (err instanceof RejectedValueError) return false;
     throw err;

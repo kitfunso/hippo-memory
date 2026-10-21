@@ -12,13 +12,12 @@ import {
 import { loadAmbientTalliesAt } from '../../src/store/sqlite/ambient.js';
 import { pendingVectorIdsAt, pruneOrphanVectorsAt } from '../../src/store/sqlite/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
-import { projectTagReads } from '../../src/store/sqlite/project-tags.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { SleepRows } from '../../src/domain/consolidate/survivors.js';
 import { rowsInPages } from '../../src/base/util/pages.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import type { EntryCursor } from '../../src/store/port/types.js';
@@ -131,11 +130,15 @@ describe('walks of every row a read names', () => {
     }
   });
 
-  it('hand sleep its rows one page of ids and then of rows at a time, never every id in one read', () => {
+  it('hand sleep its rows one page of ids and then of rows at a time, never every id in one read', async () => {
     const root = makeRoot('bounded-sleep-pages');
     const rows = seeded(root, 7);
-    const sleepRows = new SleepRows(sqliteSyncStore(root).localFiles.consolidation, new Map(), 3);
-    const log = recordStatements(() => [...sleepRows.pages()].map((page) => page.map((e) => e.id)));
+    const sleepRows = new SleepRows(sqliteStore(root).consolidation, new Map(), 3);
+    const log = await recordStatementsAsync(async () => {
+      const pages: string[][] = [];
+      for await (const page of sleepRows.pages()) pages.push(page.map((e) => e.id));
+      return pages;
+    });
     const ids = rows.map((r) => r.id);
     expect(log.result).toEqual([ids.slice(0, 3), ids.slice(3, 6), ids.slice(6)]);
     expect(peakRowsRead(log.reads, ID_PAGE_READ)).toBe(4);
@@ -170,20 +173,18 @@ describe('walks of every row a read names', () => {
     }
   });
 
-  it('read nothing past the first page when the caller stops walking', () => {
+  it('read nothing past the page the caller asks for', async () => {
     const root = makeRoot('bounded-tag-lazy');
     const rows = seeded(root, 3, () => ({ source: 'agent-memory:claude-code:p/note.md' }));
-    const db = openHippoDb(root);
-    try {
-      const walk = projectTagReads(db, rows[0].tenantId).liveEntriesBySourcePrefix('agent-memory:');
-      const log = recordStatements(() => walk[Symbol.iterator]().next().value?.id);
-      expect(log.result).toBe(rows[0].id);
-      expect(log.reads.filter((read) => read.sql.includes(MEMORY_SELECT_COLUMNS)).map((r) => r.sql)).toEqual([
-        expect.stringMatching(/ORDER BY created ASC, id ASC LIMIT \?$/),
-      ]);
-    } finally {
-      closeHippoDb(db);
-    }
+    const tags = sqliteStore(root).projectTags;
+    const log = await recordStatementsAsync(async () => {
+      const page = await tags.liveEntriesBySourcePrefix(rows[0].tenantId, 'agent-memory:', { limit: 1 });
+      return page.entries[0]?.id;
+    });
+    expect(log.result).toBe(rows[0].id);
+    expect(log.reads.filter((read) => read.sql.includes(MEMORY_SELECT_COLUMNS)).map((r) => r.sql)).toEqual([
+      expect.stringMatching(/ORDER BY created ASC, id ASC LIMIT \?$/),
+    ]);
   });
 });
 

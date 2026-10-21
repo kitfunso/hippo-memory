@@ -10,7 +10,7 @@ import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
 import { processGit } from '../../base/util/git-runner.js';
-import { cliApiContext, cliInitGlobal, cliLocalFiles } from './api-context.js';
+import { cliApiContext, cliInitGlobal, cliStore } from './api-context.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { printError } from './output.js';
@@ -27,11 +27,11 @@ export function requireInit(hippoRoot: string): void {
 }
 
 /** Runs detectChurnStale against every store this repo's memories can live in. */
-export function runChurnStaleForRepo(
+export async function runChurnStaleForRepo(
   hippoRoot: string,
   tenantId: string,
   dryRun: boolean,
-): { root: string; result: ChurnStaleResult }[] {
+): Promise<{ root: string; result: ChurnStaleResult }[]> {
   const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
     cwd: process.cwd(),
     encoding: 'utf8',
@@ -41,22 +41,24 @@ export function runChurnStaleForRepo(
   const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
   const globalRoot = resolveGlobalRootDir();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
-  return roots.map((root) => {
+  const results: { root: string; result: ChurnStaleResult }[] = [];
+  for (const root of roots) {
     // One store failing must not abort sleep's later phases or skip the other store.
     try {
       const opts = { tenantId, projectName, legacyName, dryRun };
-      return {
+      results.push({
         root,
-        result: detectChurnStale(cliLocalFiles(root).learning, { root: repoRoot, git: processGit }, opts),
-      };
+        result: await detectChurnStale(cliStore(root), { root: repoRoot, git: processGit }, opts),
+      });
     } catch (err) {
       const message = errorMessage(err);
-      return {
+      results.push({
         root,
         result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message },
-      };
+      });
     }
-  });
+  }
+  return results;
 }
 
 /**

@@ -4,7 +4,7 @@ import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getMeta, setMeta } from '../../src/db/meta.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -43,33 +43,27 @@ describe('loadEntriesMentioning on the FTS path', () => {
     for (const content of CONTENTS) writeEntry(root, createMemory(content, { tags: ['Ops'] }));
   });
 
-  it('matches the same rows for invalidation on both paths', () => {
+  it('matches the same rows for invalidation on both paths', async () => {
     for (const from of TARGETS) {
       const target = { from, to: null, type: 'removal' as const };
-      const viaFts = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { dryRun: true });
+      const viaFts = await invalidateMatching(sqliteStore(root), target, 'default', { dryRun: true });
       setFts(root, '0');
-      const viaLike = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
+      const viaLike = await invalidateMatching(sqliteStore(root), target, 'default', {
         dryRun: true,
       });
       setFts(root, '1');
       expect(viaFts.targets.slice().sort()).toEqual(viaLike.targets.slice().sort());
     }
-    const hit = invalidateMatching(
-      sqliteSyncStore(root).localFiles.learning,
-      { from: 'café', to: null, type: 'removal' },
-      'default',
-      { dryRun: true },
-    );
+    const hit = await invalidateMatching(sqliteStore(root), { from: 'café', to: null, type: 'removal' }, 'default', {
+      dryRun: true,
+    });
     expect(hit.targets).toHaveLength(1);
   });
 
-  it('matches an exact tag through the tags column', () => {
-    const result = invalidateMatching(
-      sqliteSyncStore(root).localFiles.learning,
-      { from: 'ops', to: null, type: 'removal' },
-      'default',
-      { dryRun: true },
-    );
+  it('matches an exact tag through the tags column', async () => {
+    const result = await invalidateMatching(sqliteStore(root), { from: 'ops', to: null, type: 'removal' }, 'default', {
+      dryRun: true,
+    });
     expect(result.targets).toHaveLength(CONTENTS.length);
   });
 });

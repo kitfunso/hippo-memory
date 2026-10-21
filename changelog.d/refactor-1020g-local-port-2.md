@@ -1,0 +1,5 @@
+### Changed
+
+- **Sleep, captures, the compaction hooks, project names, doctor's reads, the graph rebuild and the agent import are optional store groups.** They were the last of hippo.db's synchronous local files. Each is now a group of async methods that take only data. `sqliteStore` serves them on its worker threads, and an add-on store may leave them out. A sleep still writes each step in the same transaction as before, and every path writes the same rows. `POST /v1/sleep` now needs the `consolidation` group.
+- **`captureSessionTexts` on `hippo-memory/server` returns a Promise.** It takes a `CaptureContext`. `isLocalStore`, `LocalContext` and `LocalStore` are gone: narrow with `hasGroup` from `hippo-memory/store-kit`, and type sleep's inputs with `SleepContext` and `SleepStore` from the package root. See `docs/UPGRADING-3.0.md`.
+- **Internal:** `.surface-domain-pending.json` is gone. `scripts/check-layers.mjs` now fails every runtime import from `src/surface/cli` or `src/surface/mcp` into `src/domain`, with no list.

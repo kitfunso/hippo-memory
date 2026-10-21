@@ -5,18 +5,18 @@ import { execFileSync } from 'child_process';
 import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
 import { totalTally } from '../../src/domain/agent-memories/report.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 
-const learnFromClaude = (hippoRoot: string, home: string): number =>
+const learnFromClaude = async (hippoRoot: string, home: string): Promise<number> =>
   totalTally(
-    importProjectMemories(hippoRoot, {
+    await importProjectMemories(hippoRoot, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport({}),
+      stores: sqliteImportStores({}),
       machine: { home, env: {}, platform: process.platform, ...REAL_IO },
     }),
   ).imported;
@@ -60,7 +60,7 @@ const contents = (hippoRoot: string) =>
     .join('\n');
 
 describe('the project pass reads only the Claude Code memory of the store project', () => {
-  it('imports its own project folder and no other project', () => {
+  it('imports its own project folder and no other project', async () => {
     const home = tmp();
     const project = tmp();
     const other = tmp();
@@ -68,22 +68,22 @@ describe('the project pass reads only the Claude Code memory of the store projec
     writeLesson(home, other, 'other.md', 'The billing export for the other client runs on Fridays.');
     const hippoRoot = store(project);
 
-    expect(learnFromClaude(hippoRoot, home)).toBe(1);
+    expect(await learnFromClaude(hippoRoot, home)).toBe(1);
     expect(contents(hippoRoot)).toContain('migration check before every deploy');
     expect(contents(hippoRoot)).not.toContain('billing export');
   });
 
-  it('reads the repository folder for a store in a subfolder', () => {
+  it('reads the repository folder for a store in a subfolder', async () => {
     const home = tmp();
     const repo = tmp();
     git(repo, 'init', '-q');
     fs.mkdirSync(path.join(repo, 'pkg'));
     writeLesson(home, repo, 'repo.md', 'The package tests need the fixture server started first.');
 
-    expect(learnFromClaude(store(path.join(repo, 'pkg')), home)).toBe(1);
+    expect(await learnFromClaude(store(path.join(repo, 'pkg')), home)).toBe(1);
   });
 
-  it('reads the main checkout folder for a store in a linked worktree', () => {
+  it('reads the main checkout folder for a store in a linked worktree', async () => {
     const home = tmp();
     const repo = tmp();
     git(repo, 'init', '-q');
@@ -92,10 +92,10 @@ describe('the project pass reads only the Claude Code memory of the store projec
     git(repo, 'worktree', 'add', '-q', worktree);
     writeLesson(home, repo, 'main.md', 'Worktrees share the build cache, so clean it before a release build.');
 
-    expect(learnFromClaude(store(worktree), home)).toBe(1);
+    expect(await learnFromClaude(store(worktree), home)).toBe(1);
   });
 
-  it("reads a bare repository's folder, not its parent's, for a store in its worktree", () => {
+  it("reads a bare repository's folder, not its parent's, for a store in its worktree", async () => {
     const home = tmp();
     const parent = tmp();
     const seed = tmp();
@@ -112,11 +112,11 @@ describe('the project pass reads only the Claude Code memory of the store projec
     writeLesson(home, parent, 'parent.md', 'The parent folder keeps its invoices under the finance share.');
     const hippoRoot = store(path.join(parent, 'wt'));
 
-    expect(learnFromClaude(hippoRoot, home)).toBe(1);
+    expect(await learnFromClaude(hippoRoot, home)).toBe(1);
     expect(contents(hippoRoot)).toContain('fixture server');
   });
 
-  it('reads the checkout folder of a repository whose git folder lives elsewhere', () => {
+  it('reads the checkout folder of a repository whose git folder lives elsewhere', async () => {
     const home = tmp();
     const base = tmp();
     fs.mkdirSync(path.join(base, 'gitdirs'));
@@ -130,11 +130,11 @@ describe('the project pass reads only the Claude Code memory of the store projec
     );
     const hippoRoot = store(path.join(base, 'proj'));
 
-    expect(learnFromClaude(hippoRoot, home)).toBe(1);
+    expect(await learnFromClaude(hippoRoot, home)).toBe(1);
     expect(contents(hippoRoot)).toContain('schema check');
   });
 
-  it('reads the submodule root folder for a store in a submodule subfolder', () => {
+  it('reads the submodule root folder for a store in a submodule subfolder', async () => {
     const home = tmp();
     const lib = tmp();
     git(lib, 'init', '-q');
@@ -148,11 +148,11 @@ describe('the project pass reads only the Claude Code memory of the store projec
     writeLesson(home, sup, 'super.md', 'The superproject deploys from the release branch only.');
     const hippoRoot = store(path.join(sup, 'lib', 'pkg'));
 
-    expect(learnFromClaude(hippoRoot, home)).toBe(1);
+    expect(await learnFromClaude(hippoRoot, home)).toBe(1);
     expect(contents(hippoRoot)).toContain('vendored headers');
   });
 
-  it("reads the folder Claude Code names with a hash when the project's name passes 200 characters", () => {
+  it("reads the folder Claude Code names with a hash when the project's name passes 200 characters", async () => {
     // Vector from Claude Code's own function, so the oracle above cannot drift from it.
     expect(claudeName(`/tmp/${'p'.repeat(210)}`).slice(195)).toBe('ppppp-4wf9bb');
     const home = tmp();
@@ -162,10 +162,10 @@ describe('the project pass reads only the Claude Code memory of the store projec
     writeLesson(home, project, 'own.md', 'The long-path project pins its toolchain in the lockfile.');
 
     expect(claudeFolder(project).length).toBeGreaterThan(200);
-    expect(learnFromClaude(store(project), home)).toBe(1);
+    expect(await learnFromClaude(store(project), home)).toBe(1);
   });
 
-  it("reads a long-named repository's hashed folder for a store in a subfolder", () => {
+  it("reads a long-named repository's hashed folder for a store in a subfolder", async () => {
     // git prints a win32 toplevel as C:/..., while Claude Code hashes the resolved C:\... form.
     const home = tmp();
     const base = fs.realpathSync.native(tmp());
@@ -176,10 +176,10 @@ describe('the project pass reads only the Claude Code memory of the store projec
     writeLesson(home, repo, 'repo.md', 'The long-named repository builds its docs before the package.');
 
     expect(claudeFolder(repo).length).toBeGreaterThan(200);
-    expect(learnFromClaude(store(path.join(repo, 'pkg')), home)).toBe(1);
+    expect(await learnFromClaude(store(path.join(repo, 'pkg')), home)).toBe(1);
   });
 
-  it('keeps a folder name of exactly 200 characters plain', () => {
+  it('keeps a folder name of exactly 200 characters plain', async () => {
     const home = tmp();
     const base = fs.realpathSync.native(tmp());
     const project = path.join(base, 'q'.repeat(199 - base.length));
@@ -187,10 +187,10 @@ describe('the project pass reads only the Claude Code memory of the store projec
     writeLesson(home, project, 'own.md', 'The exact-length project keeps its fixtures beside the tests.');
 
     expect(claudeFolder(project)).toHaveLength(200);
-    expect(learnFromClaude(store(project), home)).toBe(1);
+    expect(await learnFromClaude(store(project), home)).toBe(1);
   });
 
-  it("keeps a bare repository's worktree in its own folder when the bare repository holds a .git entry", () => {
+  it("keeps a bare repository's worktree in its own folder when the bare repository holds a .git entry", async () => {
     const home = tmp();
     const parent = tmp();
     const seed = tmp();
@@ -208,7 +208,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     );
     const hippoRoot = store(path.join(parent, 'wt'));
 
-    expect(learnFromClaude(hippoRoot, home)).toBe(1);
+    expect(await learnFromClaude(hippoRoot, home)).toBe(1);
     expect(contents(hippoRoot)).toContain('smoke tests');
     expect(contents(hippoRoot)).not.toContain('mirrors the upstream');
   });

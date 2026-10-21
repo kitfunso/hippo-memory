@@ -9,7 +9,7 @@ import { chunked } from '../../base/util/chunked.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import type { DormantMove } from '../local/consolidation.js';
+import type { DormantMove } from '../port/consolidation.js';
 import type { DormantMemory, ListDormantOpts } from '../port/dormant.js';
 import type { DormantSnapshot } from '../port/types.js';
 

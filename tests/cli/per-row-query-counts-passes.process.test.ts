@@ -12,15 +12,14 @@ import { importEntries, importVault } from '../../src/entry/importers.js';
 import { invalidateMatching, detectChurnStale } from '../../src/domain/learn/invalidation.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { buildDag } from '../../src/domain/consolidate/dag.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   listMemoryConflicts,
   replaceDetectedConflicts,
   resolveConflictKeeping,
   loadAllEntries,
 } from '../_helpers/root-forms.js';
-import { openStore, handlesOf } from '../../src/store/sqlite/handles.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 import {
   ROW_READ,
   SIZES,
@@ -86,23 +85,24 @@ describe('importVault', () => {
 });
 
 describe('invalidateMatching', () => {
-  it('weakens every match on one store handle', () => {
-    const opens = SIZES.map((n) => {
+  it('weakens every match on one store handle', async () => {
+    const opens: number[] = [];
+    for (const n of SIZES) {
       const root = freshRoot('qc-invalidate');
       seed(ctxFor(root), rows(n, 'invalidate', { tags: ['oldlib'] }));
       const target = { from: 'oldlib', to: null, type: 'removal' as const };
-      const { result, statements } = recordStatements(() =>
-        invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default'),
+      const { result, statements } = await recordStatementsAsync(() =>
+        invalidateMatching(sqliteStore(root), target, 'default'),
       );
       expect(result.invalidated).toBe(n);
-      return countMatching(statements, STORE_OPEN);
-    });
+      opens.push(countMatching(statements, STORE_OPEN));
+    }
     expect(opens[1]).toBe(opens[0]);
   });
 });
 
 describe('detectChurnStale', () => {
-  it('tags every stale memory with one batched read on one handle', () => {
+  it('tags every stale memory with one batched read on one handle', async () => {
     const repo = freshRoot('qc-churn-repo');
     const git = (...args: string[]): void => {
       execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
@@ -128,15 +128,16 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repo, 'a.ts'), 'v2');
     commitAt('2026-01-10T00:00:00.000Z');
 
-    const counts = SIZES.map((n) => {
+    const counts: { opens: number; reads: number }[] = [];
+    for (const n of SIZES) {
       const root = freshRoot('qc-churn');
       seed(
         ctxFor(root),
         rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', originProject: 'qcproj' }),
       );
-      const { result, statements } = recordStatements(() =>
+      const { result, statements } = await recordStatementsAsync(() =>
         detectChurnStale(
-          sqliteSyncStore(root).localFiles.learning,
+          sqliteStore(root),
           { root: repo, git: processGit },
           {
             tenantId: 'default',
@@ -145,8 +146,8 @@ describe('detectChurnStale', () => {
         ),
       );
       expect(result.marked).toBe(n);
-      return { opens: countMatching(statements, STORE_OPEN), reads: countMatching(statements, ROW_READ) };
-    });
+      counts.push({ opens: countMatching(statements, STORE_OPEN), reads: countMatching(statements, ROW_READ) });
+    }
     expect(counts[1]).toEqual(counts[0]);
   });
 });
@@ -185,15 +186,16 @@ describe('replaceDetectedConflicts', () => {
 });
 
 describe('deduplicateStore', () => {
-  it('deletes every duplicate on one store handle', () => {
-    const opens = SIZES.map((n) => {
+  it('deletes every duplicate on one store handle', async () => {
+    const opens: number[] = [];
+    for (const n of SIZES) {
       const root = freshRoot('qc-dedupe');
       const originals = rows(n, 'dedupe');
       seed(ctxFor(root), [...originals, ...originals.map((e) => memory(e.content))]);
-      const { result, statements } = recordStatements(() => deduplicateStore(sqliteConsolidation(handlesOf(root))));
+      const { result, statements } = await recordStatementsAsync(() => deduplicateStore(sqliteStore(root)));
       expect(result.removed).toBe(n);
-      return countMatching(statements, STORE_OPEN);
-    });
+      opens.push(countMatching(statements, STORE_OPEN));
+    }
     expect(opens[1]).toBe(opens[0]);
   });
 });
@@ -302,7 +304,7 @@ describe('buildDag', () => {
           { status: 200 },
         );
       const { result, statements } = await recordStatementsAsync(() =>
-        buildDag(sqliteSyncStore(root).localFiles, facts, {
+        buildDag(sqliteStore(root), facts, {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           apiKey: 'test-key',
           fetcher,

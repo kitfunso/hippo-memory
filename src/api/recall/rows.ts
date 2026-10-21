@@ -3,6 +3,7 @@
 
 import { confidenceFacets, Layer } from '../../base/memory/memory.js';
 import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
+import type { ClefSettings } from '../../base/config/config.js';
 import { getReranker } from '../../domain/rerankers/index.js';
 import { isClefModel } from '../../domain/rerankers/clef.js';
 import { JEV_DEFAULT_TOP_K } from '../../domain/rerankers/jev.js';
@@ -94,6 +95,14 @@ export function cliRecallReranker(name: string): CliRecallRerankerPick | null {
   const fn = getReranker(name);
   if (!fn) return null;
   return { fn, defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : 50 };
+}
+
+/** A registry reranker that sends `clef` when a call names no transport of its own, for a script that reranks outside a
+ * recall; a blank name picks none. */
+export function rerankerWithClef(name: string | null | undefined, clef: ClefSettings): RerankerFn | null {
+  const fn = getReranker(name);
+  if (fn === null) return null;
+  return (query, results, options) => fn(query, results, { ...options, clef: options?.clef ?? clef });
 }
 
 /** The ranked rows a print budget holds, best first; the first `floor` stay whatever they cost. */

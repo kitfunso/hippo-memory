@@ -79,8 +79,8 @@ async function sleepWithPages(pageSize: number, dryRun: boolean): Promise<SleepR
     { noShare: true, dryRun },
     {
       pageSize,
-      deduplicateStore: (store, options) => {
-        const out = deduplicateStore(store, options);
+      deduplicateStore: async (store, options) => {
+        const out = await deduplicateStore(store, options);
         pairs.push(...out.pairs);
         return out;
       },

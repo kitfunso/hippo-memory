@@ -22,8 +22,8 @@ import * as client from './client.js';
 import {
   cliApiContext,
   cliBatch,
+  cliImportFiles,
   cliInitGlobal,
-  cliLocalFiles,
   cliRequest,
   cliStore,
   cliSyncOptions,
@@ -181,7 +181,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
 
   const targetRoot = useGlobal ? resolveGlobalRootDir() : hippoRoot;
 
-  if (boolFlag(flags, 'agents')) return importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
+  if (boolFlag(flags, 'agents')) return await importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
 
   if (useGlobal) {
     cliInitGlobal();
@@ -195,7 +195,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     extraTags,
     hippoRoot,
     tenantId,
-    target: { root: targetRoot, files: cliLocalFiles(targetRoot), batch: cliBatch },
+    target: { root: targetRoot, files: cliImportFiles(targetRoot), batch: cliBatch },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through
@@ -302,17 +302,17 @@ function printFileImportSummary(
   }
 }
 
-function importAgentMemories(
+async function importAgentMemories(
   hippoRoot: string,
   tenantId: string,
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
-): void {
-  const opts = cliSyncOptions(hippoRoot, tenantId, currentMachine(), { dryRun });
+): Promise<void> {
+  const opts = cliSyncOptions(tenantId, currentMachine(), { dryRun });
   // A folder without a store of its own imports as session end would there, so its notes are not hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
-      ? importForStore(useGlobal ? resolveGlobalRootDir() : hippoRoot, opts)
-      : importAtSessionEnd(process.cwd(), undefined, opts);
+      ? await importForStore(useGlobal ? resolveGlobalRootDir() : hippoRoot, opts)
+      : await importAtSessionEnd(process.cwd(), undefined, opts);
   for (const line of detailLines(report, dryRun)) console.log(line);
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }

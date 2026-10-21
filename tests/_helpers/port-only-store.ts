@@ -2,37 +2,40 @@
 // path that still opens hippo.db directly throws, while the port's own methods reach the same rows.
 import { withSqliteAllowed } from '../../src/db/index.js';
 import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/index.js';
-import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
-// The groups hippo.db serves from its folder, which a store that is not hippo.db holds none of.
-type FolderGroup = 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing';
-
-// The optional groups and the local files beside the port, which an add-on store at its smallest has none of.
-const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup | 'localFiles'>([
-  'localFiles',
-  'vectorViews',
-  'readiness',
-  'lastRecall',
+/** The groups only a store kept as files in a folder serves, which an add-on store holds none of. */
+export const FOLDER_GROUPS = [
   'ledger',
   'embeddingIndex',
   'promotion',
   'folderFiles',
   'sharing',
+  'consolidation',
+  'learning',
+  'captures',
+  'compactionHooks',
+  'projectTags',
+  'diagnostics',
+  'graphRebuild',
+  'agentImport',
+] as const satisfies readonly OptionalGroup[];
+type FolderGroup = (typeof FOLDER_GROUPS)[number];
+
+// The optional groups, which an add-on store at its smallest has none of.
+const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup>([
+  'vectorViews',
+  'readiness',
+  'lastRecall',
+  ...FOLDER_GROUPS,
 ]);
 
-/** `store` without its local files and the groups they became, as a store that is not hippo.db holds none. */
-export function withoutLocalFiles<S extends LocalStore>(store: S): Omit<S, 'localFiles' | FolderGroup> {
-  const {
-    localFiles: _files,
-    ledger: _l,
-    embeddingIndex: _e,
-    promotion: _p,
-    folderFiles: _f,
-    sharing: _s,
-    ...port
-  } = store;
-  return port;
+/** `store` without its folder groups, as a store that is not hippo.db holds none; copying string keys alone drops the
+ * symbol that marks a store as hippo.db. */
+export function withoutFolderGroups<S extends HippoStore>(store: S): Omit<S, FolderGroup> {
+  const folder: ReadonlySet<string> = new Set(FOLDER_GROUPS);
+  // SAFETY: the string-keyed members of `store` minus exactly the folder groups.
+  return Object.fromEntries(Object.entries(store).filter(([key]) => !folder.has(key))) as Omit<S, FolderGroup>;
 }
 
 function allowed<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
@@ -44,7 +47,7 @@ function allowedGroup<T extends object>(group: T): T {
   return Object.fromEntries(Object.entries(group).map(([name, method]) => [name, allowed(method)])) as T;
 }
 
-/** hippo.db's required groups and none of the optional ones, so no local files: an add-on store at its smallest. Base
+/** hippo.db's required groups and none of the optional ones: an add-on store at its smallest. Base
  * methods are listed by hand so one added to the port fails to compile here until it is wired. */
 export function portOnlyStore(hippoRoot: string): HippoStore {
   const inner = sqliteStore(hippoRoot);

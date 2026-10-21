@@ -10,12 +10,10 @@ import { detectConflicts } from '../../src/domain/consolidate/conflicts.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.js';
 import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -76,13 +74,13 @@ describe('sleep partitions by origin project', () => {
     ).toEqual([null]);
   });
 
-  it('dedup keeps one copy per project and still removes a copy within one project', () => {
+  it('dedup keeps one copy per project and still removes a copy within one project', async () => {
     const text = 'the staging database password lives in the team vault under ops';
     writeEntry(home, inProject(createMemory(text, { layer: Layer.Semantic }), 'proj-b'));
     writeEntry(home, inProject(createMemory(text, { layer: Layer.Semantic }), 'proj-c'));
     writeEntry(home, inProject(createMemory(text, { layer: Layer.Semantic }), 'proj-c'));
 
-    expect(deduplicateStore(sqliteConsolidation(handlesOf(home))).removed).toBe(1);
+    expect((await deduplicateStore(sqliteStore(home))).removed).toBe(1);
     expect(
       live()
         .map((e) => e.originProject)
@@ -90,7 +88,7 @@ describe('sleep partitions by origin project', () => {
     ).toEqual(['proj-b', 'proj-c']);
   });
 
-  it('two projects may hold opposite rules, but a user-global rule still conflicts with a project rule', () => {
+  it('two projects may hold opposite rules, but a user-global rule still conflicts with a project rule', async () => {
     const now = new Date();
     const rule = (text: string, origin: string, id: string): MemoryEntry => ({
       ...inProject(createMemory(text, {}), origin),
@@ -100,17 +98,17 @@ describe('sleep partitions by origin project', () => {
     });
     const always = rule('always alpha beta gamma', 'proj-b', 'b');
     const never = rule('never alpha beta gamma zeta', 'proj-c', 'c');
-    expect(detectConflicts([always, never], now)).toEqual([]);
-    expect(detectConflicts([always, { ...never, originProject: '' }], now)).toHaveLength(1);
-    expect(detectConflicts([always, { ...never, originProject: 'proj-b', tenantId: 'other' }], now)).toEqual([]);
+    expect(await detectConflicts([always, never], now)).toEqual([]);
+    expect(await detectConflicts([always, { ...never, originProject: '' }], now)).toHaveLength(1);
+    expect(await detectConflicts([always, { ...never, originProject: 'proj-b', tenantId: 'other' }], now)).toEqual([]);
   });
 
-  it('facts extracted from a project row stay in that project; from an unknown row they stay unknown', () => {
+  it('facts extracted from a project row stay in that project; from an unknown row they stay unknown', async () => {
     for (const origin of ['proj-b', null]) {
       const source = inProject(createMemory(`alice prefers dark mode in ${origin}`, { layer: Layer.Episodic }), origin);
       writeEntry(home, source);
-      const [fact] = storeExtractedFacts(
-        sqliteSyncStore(home).localFiles.learning,
+      const [fact] = await storeExtractedFacts(
+        sqliteStore(home),
         source,
         [{ content: `alice prefers dark mode (${origin})`, tags: [], valence: 'neutral' }],
         DEFAULT_HALF_LIFE_DAYS,
@@ -136,7 +134,7 @@ describe('sleep partitions by origin project', () => {
 
     expect(
       (
-        await buildDag(sqliteSyncStore(home).localFiles, facts, {
+        await buildDag(sqliteStore(home), facts, {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           apiKey: 'k',
           fetcher: fetcher('alice files, notes and closes tickets'),
@@ -161,7 +159,7 @@ describe('sleep partitions by origin project', () => {
 
     expect(
       (
-        await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...l2s, ...more], {
+        await buildEntityProfiles(sqliteStore(home), [...l2s, ...more], {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           apiKey: 'k',
           fetcher: fetcher('alice is the typed-python API owner'),
@@ -188,27 +186,29 @@ describe('conflicts never pair across a personal scope', () => {
   });
   const ALICE = 'personal:private:alice';
 
-  it('a personal row against a team row gives no pair, while two team rows do', () => {
+  it('a personal row against a team row gives no pair, while two team rows do', async () => {
     const always = rule('always alpha beta gamma', 'a', null);
     const never = rule('never alpha beta gamma zeta', 'b', null);
-    expect(detectConflicts([always, never], now)).toHaveLength(1);
-    expect(detectConflicts([{ ...always, scope: ALICE }, never], now)).toEqual([]);
-    expect(detectConflicts([always, { ...never, scope: ALICE }], now)).toEqual([]);
+    expect(await detectConflicts([always, never], now)).toHaveLength(1);
+    expect(await detectConflicts([{ ...always, scope: ALICE }, never], now)).toEqual([]);
+    expect(await detectConflicts([always, { ...never, scope: ALICE }], now)).toEqual([]);
   });
 
-  it('two rows in one personal scope still pair', () => {
-    const pair = detectConflicts(
+  it('two rows in one personal scope still pair', async () => {
+    const pair = await detectConflicts(
       [rule('always alpha beta gamma', 'a', ALICE), rule('never alpha beta gamma zeta', 'b', ALICE)],
       now,
     );
     expect(pair.map((p) => [p.memory_a_id, p.memory_b_id])).toEqual([['a', 'b']]);
   });
 
-  it('two owners, or a case variant of one owner, never pair', () => {
+  it('two owners, or a case variant of one owner, never pair', async () => {
     const mine = rule('always alpha beta gamma', 'a', ALICE);
-    expect(detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'personal:private:bob')], now)).toEqual([]);
-    expect(detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'Personal:private:alice')], now)).toEqual(
-      [],
-    );
+    expect(
+      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'personal:private:bob')], now),
+    ).toEqual([]);
+    expect(
+      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'Personal:private:alice')], now),
+    ).toEqual([]);
   });
 });

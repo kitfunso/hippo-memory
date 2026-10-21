@@ -5,7 +5,7 @@ import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEventsAt, queryAuditEvents } from './audit.js';
-import { getHippoDbPath, type DatabaseSyncLike } from '../../db/index.js';
+import { getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../../db/index.js';
 import { activeGoalsWithPoliciesAt, sqliteGoals } from './goals.js';
 import { planningFallacyEvidenceAt } from './planning-fallacy-evidence.js';
 import { sqlitePredictions } from './predictions.js';
@@ -23,18 +23,18 @@ import { sqliteCompactionHooks } from './compaction-hooks.js';
 import { sqliteCards } from './cards.js';
 import { sqliteConflicts } from './conflicts.js';
 import { sqliteDormant } from './dormant.js';
-import { sqliteRefusedAmong, sqliteRejections } from './rejections.js';
+import { sqliteRejections } from './rejections.js';
 import { sqliteFailureLog } from './failure-log.js';
 import { sqliteCompactions } from './compactions.js';
 import { sqliteReports } from './reports.js';
 import { sqliteSessions, listSessionEventsAt } from './sessions.js';
 import { sqliteConnectorEvents } from './connector-events.js';
 import { sqliteConnectorWrites } from './connector-writes.js';
-import { sqliteConsolidation } from './consolidation.js';
+import { servedConsolidation, sqliteConsolidation, type SqliteConsolidation } from './consolidation.js';
 import { sqliteLearning } from './learning.js';
 import { sqlitePromotion } from './promotion.js';
 import { sqliteProjectTags } from './project-tags.js';
-import { sqliteImportKeys, sqliteSharing } from './sharing.js';
+import { sqliteSharing } from './sharing.js';
 import { sqliteDiagnostics } from './diagnostics.js';
 import { sqliteEmbeddingIndex } from './embedding-index.js';
 import { sqliteGraphRebuild } from './graph-rebuild.js';
@@ -91,15 +91,21 @@ import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../por
 import type { Rejections } from '../port/rejections.js';
 import type { FailureLog } from '../port/failure-log.js';
 import type { Compactions } from '../port/compactions.js';
-import type { LocalFiles } from '../local/local-files.js';
+import type { Learning } from '../port/learning.js';
+import type { Captures } from '../port/captures.js';
+import type { CompactionHooks } from '../port/compaction-hooks.js';
+import type { ProjectTags } from '../port/project-tags.js';
+import type { Diagnostics } from '../port/diagnostics.js';
+import type { GraphRebuild } from '../port/graph-rebuild.js';
+import type { AgentImport } from '../port/agent-import.js';
 import { served } from './served.js';
+import { asHippoDb, isHippoDbStore } from './hippo-db-stores.js';
 import { isSharedStore } from '../../base/config/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { loadRecallEntriesAt } from './search-rows.js';
 import { loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
-import { isLocalStore, type LocalStore } from '../local/index.js';
 
 /** Not on the synchronous store: the nearest-row scan yields to the event loop, so this group answers only through
  * Promises. */
@@ -108,23 +114,34 @@ type AsyncOnly = 'vectors';
 /**
  * The port as hippo.db answers it: each call runs to its end and returns the value, so no write scope spans an await.
  */
-// LocalFiles is written synchronous already, and Sync would erase its plain methods.
-export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>> & Pick<LocalStore, 'localFiles'>;
+export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'consolidation'>> & {
+  readonly consolidation: SqliteConsolidation;
+};
 
-function sqliteLocalFiles(handles: Handles): LocalFiles {
+/** The folder groups `served` wraps whole; consolidation keeps its chunked flush async, so it is served apart. */
+type LocalGroup =
+  | 'learning'
+  | 'graphRebuild'
+  | 'captures'
+  | 'compactionHooks'
+  | 'projectTags'
+  | 'diagnostics'
+  | 'agentImport';
+
+type LocalGroups = Sync<Pick<StoreGroups, LocalGroup>> & { readonly consolidation: SqliteConsolidation };
+
+/** The groups that read and write hippo.db's own files beside its rows. */
+function sqliteLocalGroups(handles: Handles): LocalGroups {
   const { on } = handles;
   return {
-    ensureFiles: () => on(() => undefined, openStore),
     consolidation: sqliteConsolidation(handles),
-    agentImport: sqliteAgentImport(handles.files),
+    learning: sqliteLearning(on),
     captures: sqliteCaptures(on),
     compactionHooks: sqliteCompactionHooks(on),
     projectTags: sqliteProjectTags(on),
-    learning: sqliteLearning(on),
     diagnostics: sqliteDiagnostics(on),
     graphRebuild: sqliteGraphRebuild(on),
-    rejections: sqliteRefusedAmong(on),
-    importKeys: sqliteImportKeys(on),
+    agentImport: sqliteAgentImport(on),
   };
 }
 
@@ -132,13 +149,12 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
 export function sqliteSyncStore(
   hippoRoot: string,
   rules: LossAversion = {},
-): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly>> {
+): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'consolidation'>> {
   const handles = handlesOf(hippoRoot, rules);
   const { on } = handles;
-  const localFiles = sqliteLocalFiles(handles);
   return {
     kind: 'sqlite',
-    localFiles,
+    ...sqliteLocalGroups(handles),
     ...sqliteBaseReads(on),
     ...sqliteRecallWrites(on),
     keyAudit: sqliteKeyAudit(on),
@@ -281,9 +297,9 @@ export function sqliteReach(
   hippoRoot: string,
   store: HippoStore,
   shared?: boolean,
-  openGlobal: (root: string) => LocalStore & StoreGroups = sqliteStore,
+  openGlobal: (root: string) => HippoStore & StoreGroups = sqliteStore,
 ): StoreReach {
-  const other = isLocalStore(store) ? undefined : store;
+  const other = isHippoDbStore(store) ? undefined : store;
   const sharedStore = shared === true || isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
@@ -299,14 +315,23 @@ export function sqliteReach(
   return { ...reach, global: { root: globalRoot, store: openGlobal(globalRoot) } };
 }
 
+/** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the project-tag reads on read-only
+ * handles, so a check never creates or migrates the store it inspects. */
+export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'diagnostics' | 'projectTags'> {
+  const { on } = handlesOf(hippoRoot);
+  return {
+    diagnostics: served<Diagnostics>(sqliteDiagnostics(on)),
+    projectTags: served<ProjectTags>(sqliteProjectTags(on, openHippoDbReadOnly)),
+  };
+}
+
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
  * another store's would. */
-export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): LocalStore & StoreGroups {
+export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): HippoStore & StoreGroups {
   const handles = handlesOf(hippoRoot, rules);
   const sync = sqliteSyncStore(hippoRoot, rules);
-  return {
+  return asHippoDb({
     ...served<ServedBaseMethods>(baseMethodsOf(sync)),
-    localFiles: sync.localFiles,
     vectors: sqliteVectorReads(handles),
     vectorViews: served<VectorViews>(sync.vectorViews),
     keyAudit: served<KeyAudit>(sync.keyAudit),
@@ -341,8 +366,16 @@ export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): LocalS
     promotion: served<Promotion>(sync.promotion),
     folderFiles: served<FolderFiles>(sync.folderFiles),
     sharing: served<Sharing>(sync.sharing),
+    consolidation: servedConsolidation(sync.consolidation),
+    learning: served<Learning>(sync.learning),
+    captures: served<Captures>(sync.captures),
+    compactionHooks: served<CompactionHooks>(sync.compactionHooks),
+    projectTags: served<ProjectTags>(sync.projectTags),
+    diagnostics: served<Diagnostics>(sync.diagnostics),
+    graphRebuild: served<GraphRebuild>(sync.graphRebuild),
+    agentImport: served<AgentImport>(sync.agentImport),
     close: async () => sync.close(),
-  };
+  });
 }
 
 type ServedBaseMethods = Pick<

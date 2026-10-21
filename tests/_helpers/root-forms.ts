@@ -146,7 +146,7 @@ import type {
   LoadedRows,
   SessionDecayContext,
   RebuildPatch,
-} from '../../src/store/local/consolidation.js';
+} from '../../src/store/port/consolidation.js';
 import type { Prediction, PredictionClose } from '../../src/store/port/predictions.js';
 import type { ClosureState } from '../../src/base/records/prediction.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
@@ -624,19 +624,19 @@ export function findPromotableSessions(
 }
 
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).localFiles.consolidation.unprofiledTopicSummaries();
+  return sqliteSyncStore(hippoRoot).consolidation.unprofiledTopicSummaries();
 }
 
 export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).localFiles.consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+  return sqliteSyncStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
 }
 
 export function loadChildrenOfSummary(hippoRoot: string, summaryId: string, tenantId: string): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).localFiles.consolidation.childrenOfSummary(summaryId, tenantId);
+  return sqliteSyncStore(hippoRoot).consolidation.childrenOfSummary(summaryId, tenantId);
 }
 
 export function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
-  return sqliteSyncStore(hippoRoot).localFiles.consolidation.applyRebuild(summary, patch);
+  return sqliteSyncStore(hippoRoot).consolidation.applyRebuild(summary, patch);
 }
 
 export function recordRereads(

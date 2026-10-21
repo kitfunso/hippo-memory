@@ -9,13 +9,13 @@ import {
   type MemoryEntry,
 } from './base/memory/memory.js';
 import { sqliteStore, withSharedStoreHandles } from './store/sqlite/index.js';
-import type { LocalStore } from './store/local/index.js';
+import type { SleepStore } from './store/port.js';
 import { runConsolidation, type ConsolidateOptions } from './domain/consolidate/sleep.js';
 import { loadConfig } from './base/config/config.js';
 import { DEFAULT_TENANT_ID } from './base/util/tenant.js';
 import type { ConsolidationResult } from './domain/consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
-import type { LocalContext } from './api/types.js';
+import type { SleepContext } from './api/types.js';
 export {
   MemoryEntry,
   Layer,
@@ -67,9 +67,9 @@ export {
 export { ConsolidationResult } from './domain/consolidate/run.js';
 export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
 // Named in the signatures of sleep and consolidate, so a caller needs them to type its own variable.
-export type { LocalContext, LocalStore };
-/** Sleeps the whole store under `ctx`, whose store carries the local files a sleep pass works on. */
-export async function sleep(ctx: LocalContext, opts?: SleepOpts): Promise<SleepResult> {
+export type { SleepContext, SleepStore };
+/** Sleeps the whole store under `ctx`, whose store sets the groups a sleep pass works on. */
+export async function sleep(ctx: SleepContext, opts?: SleepOpts): Promise<SleepResult> {
   // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close SQLite's last, which
   // checkpoints and deletes the WAL.
   return withSharedStoreHandles(() => sleepStore(ctx, opts));
@@ -77,16 +77,16 @@ export async function sleep(ctx: LocalContext, opts?: SleepOpts): Promise<SleepR
 /** Run a full consolidation pass on `store`, or on the hippo.db under a folder. With no `options.config`, a folder
  * reads its config.json and a store the defaults. */
 export async function consolidate(
-  target: string | LocalStore,
+  target: string | SleepStore,
   options: ConsolidateOptions = {},
 ): Promise<ConsolidationResult> {
   const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   // One handle per store, for the reason `sleep` gives.
-  return withSharedStoreHandles(() => runConsolidation(store.localFiles, { ...options, config, tenantId }));
+  return withSharedStoreHandles(() => runConsolidation(store, { ...options, config, tenantId }));
 }
-function isFolder(target: string | LocalStore): target is string {
+function isFolder(target: string | SleepStore): target is string {
   return typeof target === 'string';
 }
 // The one dedupe.js export that is public; the rest of dedupe.js stays internal.

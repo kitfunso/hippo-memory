@@ -3,10 +3,9 @@
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type { HippoStore, StoreReach } from '../store/port.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { GlobalTargetGroup, OptionalGroup, StoreWith } from '../store/port.js';
+import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '../store/port.js';
 import type { ConfiguredFolder } from '../domain/search/embed-memories.js';
 import type { CallerState } from './callers.js';
-import type { LocalStore } from '../store/local/index.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -78,8 +77,8 @@ export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
 /** A context whose store sets the optional groups `G`: the surface proved them once, so the api checks nothing. */
 export type ContextWith<G extends OptionalGroup> = Context & { readonly store: StoreWith<G> };
 
-/** A context whose store carries a folder's local files, as sleep, embedding and the project tags need. */
-export type LocalContext = Context & { readonly store: LocalStore };
+/** A context whose store sets the groups a sleep runs on. */
+export type SleepContext = ContextWith<SleepGroup>;
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed
  * callers build Actor from the api_keys row instead. */

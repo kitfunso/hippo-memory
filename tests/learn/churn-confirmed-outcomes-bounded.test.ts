@@ -2,9 +2,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { detectChurnStale } from '../../src/domain/learn/invalidation.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { recordStatements } from '../_helpers/count-statements.js';
+import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
@@ -61,7 +61,7 @@ describe('confirmedOutcomeTimes', () => {
   it('returns the latest good outcome per target since the bound and reads no older row', () => {
     const root = newRoot();
     seedHistory(root);
-    const learning = sqliteSyncStore(root).localFiles.learning;
+    const learning = sqliteSyncStore(root).learning;
 
     const { result, reads } = recordStatements(() =>
       learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
@@ -79,7 +79,7 @@ describe('confirmedOutcomeTimes', () => {
     const root = newRoot();
     seedHistory(root);
     const { statements } = recordStatements(() =>
-      sqliteSyncStore(root).localFiles.learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
+      sqliteSyncStore(root).learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
     );
     const sql = statements.find((s) => s.includes('FROM audit_log') && s.includes('GROUP BY target_id'));
     expect(sql).toBeDefined();
@@ -100,15 +100,15 @@ describe('confirmedOutcomeTimes', () => {
 });
 
 describe('detectChurnStale', () => {
-  it('starts its outcome read at the oldest candidate, so older outcomes never reach it', () => {
+  it('starts its outcome read at the oldest candidate, so older outcomes never reach it', async () => {
     const root = newRoot();
     seedHistory(root);
     const entry = { ...createMemory('a plain note about the team', { tenantId: 'default' }), originProject: 'proj' };
     writeEntry(root, entry);
 
-    const { result, reads } = recordStatements(() =>
+    const { result, reads } = await recordStatementsAsync(() =>
       detectChurnStale(
-        sqliteSyncStore(root).localFiles.learning,
+        sqliteStore(root),
         { root: '/no/such/repo', git: processGit },
         {
           tenantId: 'default',

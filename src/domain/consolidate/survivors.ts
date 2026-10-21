@@ -1,7 +1,7 @@
 // Sleep holds ids, strengths and the few rows a pass changed; every other row is read back a page at a time by id.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { Consolidation } from '../../store/local/index.js';
+import type { Consolidation } from '../../store/port/consolidation.js';
 import type { EntryCursor } from '../../store/port/types.js';
 
 /** Rows per read: one id-list query's worth, so a page is one statement and about a megabyte of rows. */
@@ -23,11 +23,11 @@ export class SleepRows {
   }
 
   /** The rows for `ids` in that order; an id deleted since it was listed is skipped. */
-  read(ids: readonly string[]): MemoryEntry[] {
+  async read(ids: readonly string[]): Promise<MemoryEntry[]> {
     const out: MemoryEntry[] = [];
     for (const page of chunked(ids, this.pageRows)) {
-      const byId = this.store.entriesByIds(page);
-      for (const id of this.store.objectBackedAmong([...byId.keys()])) this.backed.add(id);
+      const byId = await this.store.entriesByIds(page);
+      for (const id of await this.store.objectBackedAmong([...byId.keys()])) this.backed.add(id);
       for (const id of page) {
         const row = byId.get(id);
         if (row) out.push(this.loaded(row));
@@ -42,18 +42,18 @@ export class SleepRows {
   }
 
   /** Every row of the run, one keyset page of ids and then their rows at a time. */
-  *pages(): Generator<MemoryEntry[]> {
+  async *pages(): AsyncGenerator<MemoryEntry[]> {
     let after: EntryCursor | undefined;
     do {
-      const page = this.store.entryIdsPage({ limit: this.idPage, after });
-      yield this.read(page.ids);
+      const page = await this.store.entryIdsPage({ limit: this.idPage, after });
+      yield await this.read(page.ids);
       after = page.next ?? undefined;
     } while (after);
   }
 
   /** The rows for `ids`, a page at a time. */
-  *pagesOf(ids: readonly string[]): Generator<MemoryEntry[]> {
-    for (const page of chunked(ids, this.pageRows)) yield this.read(page);
+  async *pagesOf(ids: readonly string[]): AsyncGenerator<MemoryEntry[]> {
+    for (const page of chunked(ids, this.pageRows)) yield await this.read(page);
   }
 
   private loaded(row: MemoryEntry): MemoryEntry {
@@ -89,9 +89,9 @@ export class Survivors {
   }
 
   /** Changed rows, each kept in its place. */
-  set(rows: readonly MemoryEntry[]): void {
+  async set(rows: readonly MemoryEntry[]): Promise<void> {
     const fresh = rows.filter((row) => !this.held.has(row.id) && this.strength.has(row.id));
-    const loaded = new Map(this.stored.read(fresh.map((row) => row.id)).map((row) => [row.id, row]));
+    const loaded = new Map((await this.stored.read(fresh.map((row) => row.id))).map((row) => [row.id, row]));
     // A row gone since decay read it is its own base, so the flush skips it rather than write it back.
     for (const row of fresh) this.bases.set(row.id, loaded.get(row.id) ?? row);
     for (const row of rows) this.held.set(row.id, row);
@@ -112,19 +112,21 @@ export class Survivors {
   }
 
   /** The survivors among `ids`, in that order. */
-  get(ids: readonly string[]): MemoryEntry[] {
+  async get(ids: readonly string[]): Promise<MemoryEntry[]> {
     const unchanged = ids.filter((id) => !this.held.has(id) && this.strength.has(id));
     const read = new Map<string, MemoryEntry>();
-    for (const row of this.stored.read(unchanged)) read.set(row.id, { ...row, strength: this.strength.get(row.id)! });
+    for (const row of await this.stored.read(unchanged)) {
+      read.set(row.id, { ...row, strength: this.strength.get(row.id)! });
+    }
     return ids.flatMap((id) => this.held.get(id) ?? read.get(id) ?? []);
   }
 
   /** Every survivor with its place in run order, a page at a time. */
-  *indexed(): Generator<readonly [number, MemoryEntry]> {
+  async *indexed(): AsyncGenerator<readonly [number, MemoryEntry]> {
     const { pageRows } = this.stored;
     for (let start = 0; start < this.order.length; start += pageRows) {
       const page = this.order.slice(start, start + pageRows);
-      const byId = new Map(this.get(page).map((row) => [row.id, row]));
+      const byId = new Map((await this.get(page)).map((row) => [row.id, row]));
       for (const [k, id] of page.entries()) {
         const row = byId.get(id);
         if (row) yield [start + k, row];
@@ -132,12 +134,12 @@ export class Survivors {
     }
   }
 
-  *rows(): Generator<MemoryEntry> {
-    for (const [, row] of this.indexed()) yield row;
+  async *rows(): AsyncGenerator<MemoryEntry> {
+    for await (const [, row] of this.indexed()) yield row;
   }
 
   /** The survivors among `ids`, a page at a time. */
-  *pagesOf(ids: readonly string[]): Generator<MemoryEntry[]> {
-    for (const page of chunked(ids, this.stored.pageRows)) yield this.get(page);
+  async *pagesOf(ids: readonly string[]): AsyncGenerator<MemoryEntry[]> {
+    for (const page of chunked(ids, this.stored.pageRows)) yield await this.get(page);
   }
 }

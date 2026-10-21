@@ -8,7 +8,7 @@ import { extractChurnRefs, detectChurnStale } from '../../src/domain/learn/inval
 import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import * as api from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initGitRepo, commit, DAY, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
@@ -96,15 +96,15 @@ describe('detectChurnStale', () => {
     return mem;
   }
 
-  it('file-changed: a tracked file edited after the memory anchor is evidence', () => {
+  it('file-changed: a tracked file edited after the memory anchor is evidence', async () => {
     fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see a.ts for the setup', { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -116,7 +116,7 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('checks rows stamped with the legacy folder name once the project has an id', () => {
+  it('checks rows stamped with the legacy folder name once the project has an id', async () => {
     fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     storeMemory('see a.ts for the setup', { created: ANCHOR });
@@ -125,27 +125,28 @@ describe('detectChurnStale', () => {
 
     const opts = { tenantId: 'default', projectName: 'github.com/acme/churn', dryRun: true };
     expect(
-      detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, { root: repoDir, git: processGit }, opts)
-        .preview,
+      (await detectChurnStale(sqliteStore(hippoRoot), { root: repoDir, git: processGit }, opts)).preview,
     ).toHaveLength(0);
     expect(
-      detectChurnStale(
-        sqliteSyncStore(hippoRoot).localFiles.learning,
-        { root: repoDir, git: processGit },
-        { ...opts, legacyName: project },
+      (
+        await detectChurnStale(
+          sqliteStore(hippoRoot),
+          { root: repoDir, git: processGit },
+          { ...opts, legacyName: project },
+        )
       ).preview,
     ).toHaveLength(1);
   });
 
-  it('file-deleted: a tracked file removed after the anchor is evidence (--no-renames)', () => {
+  it('file-deleted: a tracked file removed after the anchor is evidence (--no-renames)', async () => {
     fs.writeFileSync(path.join(repoDir, 'b.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see b.ts for the setup', { created: ANCHOR });
     fs.rmSync(path.join(repoDir, 'b.ts'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -157,7 +158,7 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('a rename shows as delete+add and is still evidence (--no-renames)', () => {
+  it('a rename shows as delete+add and is still evidence (--no-renames)', async () => {
     fs.writeFileSync(
       path.join(repoDir, 'old.ts'),
       'v1 has enough content to avoid a similarity-based rename detection false negative',
@@ -167,8 +168,8 @@ describe('detectChurnStale', () => {
     fs.renameSync(path.join(repoDir, 'old.ts'), path.join(repoDir, 'new.ts'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -180,15 +181,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('symbol-gone: a backtick symbol present at the anchor but absent at HEAD is evidence', () => {
+  it('symbol-gone: a backtick symbol present at the anchor but absent at HEAD is evidence', async () => {
     fs.writeFileSync(path.join(repoDir, 'c.ts'), 'export function helperSymbolName() {}\n');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see `helperSymbolName` for the setup', { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'c.ts'), 'export function renamedFunction() {}\n');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -200,15 +201,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('script-gone: an npm script present at the anchor but absent at HEAD is evidence', () => {
+  it('script-gone: an npm script present at the anchor but absent at HEAD is evidence', async () => {
     fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { oldscript: 'echo hi' } }));
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('run `npm run oldscript` to build', { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { newscript: 'echo hi' } }));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -220,15 +221,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('a file changed BEFORE the anchor is not evidence', () => {
+  it('a file changed BEFORE the anchor is not evidence', async () => {
     fs.writeFileSync(path.join(repoDir, 'd.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     fs.writeFileSync(path.join(repoDir, 'd.ts'), 'v2');
     commit(repoDir, new Date(new Date(ANCHOR).getTime() - 1).toISOString());
     const mem = storeMemory('see d.ts for the setup', { created: ANCHOR });
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -239,13 +240,13 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('a path that was never tracked in the repo is ignored (no evidence)', () => {
+  it('a path that was never tracked in the repo is ignored (no evidence)', async () => {
     fs.writeFileSync(path.join(repoDir, 'real.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see phantom-file-that-never-existed.ts for setup', { created: ANCHOR });
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -256,7 +257,7 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('resolves an absolute path under the repo root and ignores one outside it', () => {
+  it('resolves an absolute path under the repo root and ignores one outside it', async () => {
     const root = fs.realpathSync.native(repoDir).replace(/\\/g, '/');
     fs.writeFileSync(path.join(repoDir, 'n.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
@@ -265,8 +266,8 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'n.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: root, git: processGit },
       {
         tenantId: 'default',
@@ -277,15 +278,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, outside.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('strips a leading <repoName>/ prefix when the rest is tracked', () => {
+  it('strips a leading <repoName>/ prefix when the rest is tracked', async () => {
     fs.writeFileSync(path.join(repoDir, 'o.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory(`see ${project}/o.ts for the setup`, { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'o.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -296,15 +297,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('flags a changed package.json (whole-extension capture)', () => {
+  it('flags a changed package.json (whole-extension capture)', async () => {
     fs.writeFileSync(path.join(repoDir, 'package.json'), '{}');
     commit(repoDir, BEFORE_ANCHOR);
     storeMemory('the version lives in package.json', { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'package.json'), '{"version":"2.0.0"}');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -314,15 +315,15 @@ describe('detectChurnStale', () => {
     expect(result.preview[0]?.evidence).toBe('file-changed: package.json');
   });
 
-  it('skips a memory whose created is unparsable instead of throwing', () => {
+  it('skips a memory whose created is unparsable instead of throwing', async () => {
     fs.writeFileSync(path.join(repoDir, 'q.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see q.ts for the setup', { created: 'not-a-date' });
     fs.writeFileSync(path.join(repoDir, 'q.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -334,15 +335,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('skips a pinned memory and reports it in skippedPinned', () => {
+  it('skips a pinned memory and reports it in skippedPinned', async () => {
     fs.writeFileSync(path.join(repoDir, 'e.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see e.ts for the setup', { created: ANCHOR, pinned: true });
     fs.writeFileSync(path.join(repoDir, 'e.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -354,15 +355,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('skips a memory from a different origin_project', () => {
+  it('skips a memory from a different origin_project', async () => {
     fs.writeFileSync(path.join(repoDir, 'f.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see f.ts for the setup', { created: ANCHOR, origin: 'some-other-project' });
     fs.writeFileSync(path.join(repoDir, 'f.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -373,15 +374,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('skips a memory with a null/empty origin_project (deny by default)', () => {
+  it('skips a memory with a null/empty origin_project (deny by default)', async () => {
     fs.writeFileSync(path.join(repoDir, 'g.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see g.ts for the setup', { created: ANCHOR, origin: null });
     fs.writeFileSync(path.join(repoDir, 'g.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -392,15 +393,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('is idempotent: a rerun reports the same memory as alreadyMarked, not marked again', () => {
+  it('is idempotent: a rerun reports the same memory as alreadyMarked, not marked again', async () => {
     fs.writeFileSync(path.join(repoDir, 'h.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     storeMemory('see h.ts for the setup', { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'h.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const first = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const first = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -408,8 +409,8 @@ describe('detectChurnStale', () => {
       },
     );
     expect(first.marked).toBe(1);
-    const second = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const second = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -420,15 +421,15 @@ describe('detectChurnStale', () => {
     expect(second.alreadyMarked).toBe(1);
   });
 
-  it('dry run reports the candidate but writes nothing', () => {
+  it('dry run reports the candidate but writes nothing', async () => {
     fs.writeFileSync(path.join(repoDir, 'i.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see i.ts for the setup', { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'i.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -451,8 +452,8 @@ describe('detectChurnStale', () => {
     const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
     await api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -462,7 +463,7 @@ describe('detectChurnStale', () => {
     expect(result.marked).toBe(0);
   });
 
-  it('a merge after the anchor of a branch commit dated before it is evidence (first-parent diff)', () => {
+  it('a merge after the anchor of a branch commit dated before it is evidence (first-parent diff)', async () => {
     fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v1');
     commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
     const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
@@ -479,8 +480,8 @@ describe('detectChurnStale', () => {
       env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
     });
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -491,7 +492,7 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('resolves the anchor snapshot on first-parent history, so a merged side-branch removal counts', () => {
+  it('resolves the anchor snapshot on first-parent history, so a merged side-branch removal counts', async () => {
     fs.writeFileSync(path.join(repoDir, 's.ts'), 'export function mergedAwaySymbol() {}\n');
     commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
     const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
@@ -508,8 +509,8 @@ describe('detectChurnStale', () => {
       env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
     });
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -520,7 +521,7 @@ describe('detectChurnStale', () => {
     expect(result.preview[0]?.evidence).toBe('symbol-gone: `mergedAwaySymbol`');
   });
 
-  it('reads tracked files from HEAD, not the index (a staged removal does not hide a change)', () => {
+  it('reads tracked files from HEAD, not the index (a staged removal does not hide a change)', async () => {
     fs.writeFileSync(path.join(repoDir, 'r.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     storeMemory('see r.ts for the setup', { created: ANCHOR });
@@ -528,8 +529,8 @@ describe('detectChurnStale', () => {
     commit(repoDir, AFTER_ANCHOR);
     execFileSync('git', ['rm', '-q', '--cached', 'r.ts'], { cwd: repoDir });
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',
@@ -540,7 +541,7 @@ describe('detectChurnStale', () => {
     expect(result.preview[0]?.evidence).toBe('file-changed: r.ts');
   });
 
-  it('script-gone fires when package.json itself was deleted after the anchor', () => {
+  it('script-gone fires when package.json itself was deleted after the anchor', async () => {
     fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { goner: 'echo hi' } }));
     fs.writeFileSync(path.join(repoDir, 'keep.txt'), 'x');
     commit(repoDir, BEFORE_ANCHOR);
@@ -548,8 +549,8 @@ describe('detectChurnStale', () => {
     fs.rmSync(path.join(repoDir, 'package.json'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+    const result = await detectChurnStale(
+      sqliteStore(hippoRoot),
       { root: repoDir, git: processGit },
       {
         tenantId: 'default',

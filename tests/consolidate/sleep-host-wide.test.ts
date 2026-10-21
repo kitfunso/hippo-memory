@@ -16,7 +16,7 @@ import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -33,10 +33,6 @@ const DAY = 86_400_000;
 const TENANTS = ['default', 'acme', 'globex'] as const;
 const SEEDED_SIM = '2000-01-01T00:00:00.000Z';
 const CLUSTER_HEADER = '[Consolidated pattern from 3 related memories, newest first]';
-const fastBudget = {
-  ...WRITE_BUDGET,
-  pause: () => new Promise<void>((resolve) => setImmediate(resolve)),
-};
 
 type Tenant = (typeof TENANTS)[number];
 
@@ -163,7 +159,7 @@ function seed(config: { memoryValue?: { enabled: boolean } }): string {
       normalizedChars: normalizeValueForRejection(refused).length,
     });
   });
-  sqliteSyncStore(root).localFiles.consolidation.replaceConflicts(
+  sqliteSyncStore(root).consolidation.replaceConflicts(
     [
       {
         memory_a_id: 'mem_acme_04',
@@ -247,13 +243,12 @@ function hostState(root: string) {
 }
 
 async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: number } = {}) {
-  const local = sqliteSyncStore(root).localFiles;
+  const local = sqliteStore(root);
   const result = await withCountedIds(() =>
     runConsolidation(local, {
       ...opts,
       now: NOW,
       config: loadConfig(root),
-      budget: fastBudget,
       tenantId: 'default',
     }),
   );
@@ -270,10 +265,13 @@ async function sleepAtEveryPageSize(config: { memoryValue?: { enabled: boolean }
 beforeEach(() => {
   vi.stubEnv('HIPPO_FAKE_NOW', NOW.toISOString());
   vi.stubEnv('HIPPO_TENANT', 'default');
+  // The store reads its pause at each flush, so a yield here stands in for the real gap between chunks.
+  vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(() => new Promise<void>((resolve) => setImmediate(resolve)));
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 type HostState = ReturnType<typeof hostState>;

@@ -33,7 +33,7 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
@@ -47,11 +47,11 @@ beforeEach(() => {
 });
 afterEach(() => closeWorld(w));
 
-const sync = (): ImportReport =>
+const sync = (): Promise<ImportReport> =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport({}),
+    stores: sqliteImportStores({}),
     machine: w.machine,
   });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
@@ -68,11 +68,11 @@ function legacyRow(content: string, file: string): MemoryEntry {
 }
 
 describe('agent memory sync', () => {
-  it('a new note is imported as one tagged, distilled row keyed by its folder, file and hash', () => {
+  it('a new note is imported as one tagged, distilled row keyed by its folder, file and hash', async () => {
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);
 
-    expect(claude(sync()).imported).toBe(1);
+    expect(claude(await sync()).imported).toBe(1);
     const rows = liveRows(w.local);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -89,27 +89,27 @@ describe('agent memory sync', () => {
     expect(existsSync(join(w.local, 'episodic', `${rows[0].id}.md`))).toBe(true);
   });
 
-  it('an unchanged note is skipped', () => {
+  it('an unchanged note is skipped', async () => {
     note(projectNotes(w), 'deploy.md', DEPLOY);
-    sync();
+    await sync();
     const [first] = liveRows(w.local);
 
-    expect(claude(sync())).toMatchObject({ imported: 0, replaced: 0, unchanged: 1 });
+    expect(claude(await sync())).toMatchObject({ imported: 0, replaced: 0, unchanged: 1 });
     expect(agentRows(w.local).map((e) => e.id)).toEqual([first.id]);
   });
 
-  it('an edit past character 1500 supersedes the row, though the stored text is the same', () => {
+  it('an edit past character 1500 supersedes the row, though the stored text is the same', async () => {
     const dir = projectNotes(w);
     const long = 'The deploy checklist says to run the schema check, then the smoke test, then tell the desk. '
       .repeat(20)
       .trim();
     note(dir, 'checklist.md', long);
-    sync();
+    await sync();
     const [old] = liveRows(w.local);
     expect(old.content.endsWith(' [truncated]')).toBe(true);
 
     note(dir, 'checklist.md', `${long} Then close the ticket.`);
-    expect(claude(sync())).toMatchObject({ replaced: 1, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ replaced: 1, imported: 0 });
     const [now] = liveRows(w.local);
     expect(now.id).not.toBe(old.id);
     expect(now.content).toBe(old.content);
@@ -118,11 +118,11 @@ describe('agent memory sync', () => {
 
   it('a deleted note is set aside through the real SQL, as source-deleted, and can be restored', async () => {
     const file = note(projectNotes(w), 'deploy.md', DEPLOY);
-    sync();
+    await sync();
     const [row] = liveRows(w.local);
 
     unlinkSync(file);
-    expect(claude(sync()).setAside).toBe(1);
+    expect(claude(await sync()).setAside).toBe(1);
     expect(liveRows(w.local)).toEqual([]);
     expect(withDb(w.local, (db) => db.prepare('SELECT 1 FROM memories WHERE id = ?').get(row.id))).toBeUndefined();
     expect(existsSync(join(w.local, 'episodic', `${row.id}.md`))).toBe(false);
@@ -135,21 +135,21 @@ describe('agent memory sync', () => {
     expect(liveRows(w.local).map((e) => e.id)).toEqual([row.id]);
   });
 
-  it('a missing folder changes nothing', () => {
+  it('a missing folder changes nothing', async () => {
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);
-    sync();
+    await sync();
     const [row] = liveRows(w.local);
 
     rmSync(dir, { recursive: true });
-    expect(claude(sync())).toMatchObject({ setAside: 0, untagged: 0, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ setAside: 0, untagged: 0, imported: 0 });
     expect(liveRows(w.local)).toMatchObject([{ id: row.id, tags: ['claude-code-memory'] }]);
     expect(dormantRows(w.local)).toEqual([]);
   });
 
-  it("a note whose row went dormant from decay gets its live row back, under the sync's own audit op", () => {
+  it("a note whose row went dormant from decay gets its live row back, under the sync's own audit op", async () => {
     note(projectNotes(w), 'deploy.md', DEPLOY);
-    sync();
+    await sync();
     const [row] = liveRows(w.local);
     withDb(w.local, (db) => {
       db.exec('BEGIN IMMEDIATE');
@@ -160,14 +160,14 @@ describe('agent memory sync', () => {
     removeEntryMirrors(w.local, row.id);
     expect(liveRows(w.local)).toEqual([]);
 
-    expect(claude(sync())).toMatchObject({ restored: 1, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ restored: 1, imported: 0 });
     expect(liveRows(w.local)).toMatchObject([{ id: row.id, content: DEPLOY, tags: ['claude-code-memory'] }]);
     expect(dormantRows(w.local)).toEqual([]);
     expect(auditCount(w.local, 'agent_memory_restore')).toBe(1);
     expect(auditCount(w.local, 'dormant_restore')).toBe(0);
   });
 
-  it("legacy rows are adopted from the store's own folder only: same text first, then one row per file name", () => {
+  it("legacy rows are adopted from the store's own folder only: same text first, then one row per file name", async () => {
     const dir = projectNotes(w);
     const OTHER = 'The billing queue drains at midnight in the other project.';
     note(dir, 'deploy.md', DEPLOY);
@@ -177,7 +177,7 @@ describe('agent memory sync', () => {
     const edited = legacyRow('The staging database lives in us-east.', 'staging.md');
     const foreign = legacyRow(OTHER, 'billing.md');
 
-    expect(claude(sync())).toMatchObject({ adopted: 1, replaced: 1, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ adopted: 1, replaced: 1, imported: 0 });
     expect(readEntry(w.local, renamed.id)).toMatchObject({
       source: `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(DEPLOY).slice(0, 16)}`,
       supersededBy: null,
@@ -194,10 +194,10 @@ describe('agent memory sync', () => {
     const edited = legacyRow('The staging database lives in us-east.', 'staging.md');
 
     const winner = await stageSupersedeWinner(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.');
-    const report = importForStore(w.local, {
+    const report = await importForStore(w.local, {
       configAt: loadConfig,
       tenantId: 'default',
-      agentImport: sqliteAgentImport({}),
+      stores: sqliteImportStores({}),
       machine: w.machine,
       busyWaitMs: 5000,
     });
@@ -209,17 +209,17 @@ describe('agent memory sync', () => {
     expect(auditCount(w.local, 'supersede')).toBe(1);
   });
 
-  it('an old row with an email in clear matches its masked note, and a copy already imported collapses into one row', () => {
+  it('an old row with an email in clear matches its masked note, and a copy already imported collapses into one row', async () => {
     const MAIL = 'Release notes go to ops-team@example.com before each tag.';
     const MASKED = 'Release notes go to [email] before each tag.';
     const dir = projectNotes(w);
     note(dir, 'release.md', MAIL);
     const renamed = legacyRow(MAIL, 'old-release-name.md');
-    expect(claude(sync())).toMatchObject({ adopted: 1, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ adopted: 1, imported: 0 });
     expect(readEntry(w.local, renamed.id)?.supersededBy).toBeNull();
 
     note(dir, 'mail.md', MAIL.replace('Release', 'Weekly'));
-    sync();
+    await sync();
     const stale = {
       ...createMemory(MAIL.replace('Release', 'Weekly'), {
         tags: ['claude-code-memory'],
@@ -230,7 +230,7 @@ describe('agent memory sync', () => {
     };
     writeEntry(w.local, stale);
 
-    sync();
+    await sync();
     const copy = liveRows(w.local).find((e) => e.content === MASKED.replace('Release', 'Weekly'));
     expect(readEntry(w.local, stale.id)?.supersededBy).toBe(copy?.id);
     expect(liveRows(w.local).filter((e) => e.content.includes('Weekly'))).toHaveLength(1);
@@ -238,15 +238,15 @@ describe('agent memory sync', () => {
 
   it.skipIf(process.platform !== 'win32')(
     'Windows folder case is normalised: the same folders in another case are the same container',
-    () => {
+    async () => {
       note(projectNotes(w), 'deploy.md', DEPLOY);
-      sync();
+      await sync();
       const upper: Machine = { ...w.machine, env: { CLAUDE_CONFIG_DIR: join(w.home, '.claude').toUpperCase() } };
 
-      const again = importProjectMemories(w.local.toUpperCase(), {
+      const again = await importProjectMemories(w.local.toUpperCase(), {
         configAt: loadConfig,
         tenantId: 'default',
-        agentImport: sqliteAgentImport({}),
+        stores: sqliteImportStores({}),
         machine: upper,
       });
       expect(claude(again)).toMatchObject({ unchanged: 1, imported: 0, setAside: 0 });
@@ -254,21 +254,21 @@ describe('agent memory sync', () => {
     },
   );
 
-  it('a secret note is skipped and counted, at every sync', () => {
+  it('a secret note is skipped and counted, at every sync', async () => {
     const dir = projectNotes(w);
     note(dir, 'key.md', `The staging deploy user signs in with ${FAKE_KEY} on the build box.`);
     note(dir, 'deploy.md', DEPLOY);
 
-    expect(claude(sync())).toMatchObject({ imported: 1, secret: 1 });
-    expect(claude(sync())).toMatchObject({ imported: 0, secret: 1 });
+    expect(claude(await sync())).toMatchObject({ imported: 1, secret: 1 });
+    expect(claude(await sync())).toMatchObject({ imported: 0, secret: 1 });
     expect(liveTexts(w.local)).toEqual([DEPLOY]);
     expect(loadAllEntries(w.local, 'default').some((e) => e.content.includes(FAKE_KEY))).toBe(false);
   });
 
-  it('the sync never writes to stdout or stderr, even when it skips, sets aside and warns', () => {
+  it('the sync never writes to stdout or stderr, even when it skips, sets aside and warns', async () => {
     const dir = projectNotes(w);
     const gone = note(dir, 'gone.md', 'This note is deleted before the second sync.');
-    sync();
+    await sync();
     unlinkSync(gone);
     note(dir, 'key.md', `The staging deploy user signs in with ${FAKE_KEY} on the build box.`);
     note(dir, 'deploy.md', DEPLOY);
@@ -284,7 +284,7 @@ describe('agent memory sync', () => {
     ];
     let report: ImportReport;
     try {
-      report = sync();
+      report = await sync();
     } finally {
       for (const spy of spies) spy.mockRestore();
     }
@@ -297,7 +297,7 @@ describe('agent memory sync', () => {
     const BASE = 'Fixed the server crash due to memory overflow in the worker process `pool.ts`';
     const dir = projectNotes(w);
     [BASE, `${BASE} again today`, `${BASE} once more`].forEach((text, i) => note(dir, `crash-${i}.md`, text));
-    sync();
+    await sync();
     const before = liveRows(w.local)
       .map((e) => e.id)
       .sort();
@@ -313,7 +313,7 @@ describe('agent memory sync', () => {
     expect(loadAllEntries(w.local, 'default').filter((e) => e.layer === Layer.Semantic)).toEqual([]);
   });
 
-  it('session end in a folder without a store imports the project and session folder notes into the global store with the project as origin', () => {
+  it('session end in a folder without a store imports the project and session folder notes into the global store with the project as origin', async () => {
     const cwd = join(w.dir, 'hookproj', 'src');
     mkdirSync(join(w.dir, 'hookproj', '.git'), { recursive: true });
     mkdirSync(cwd);
@@ -324,10 +324,10 @@ describe('agent memory sync', () => {
 
     expect(
       claude(
-        importAtSessionEnd(cwd, transcript, {
+        await importAtSessionEnd(cwd, transcript, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport({}),
+          stores: sqliteImportStores({}),
           machine: w.machine,
         }),
       ).imported,

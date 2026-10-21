@@ -1,7 +1,6 @@
 // Bearer and loopback auth for the HTTP server.
 import { envAllowKeylessLocal, envRequireAuth, envTenant } from '../../base/util/env.js';
 import type { IncomingMessage } from 'node:http';
-import { isLocalStore } from '../../store/local/index.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { verifyApiKeyCached } from './api-key.js';
 import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
@@ -100,7 +99,7 @@ type AuthOptions = Pick<
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 type ContextOptions = AuthOptions &
-  Pick<ResolvedServeOptions, 'configAt'> &
+  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb'> &
   Partial<Pick<ResolvedServeOptions, 'callers'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
@@ -314,7 +313,7 @@ function keylessLocalActor(): Actor {
 
 function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
-  const team = !isLocalStore(opts.store);
+  const team = !opts.onHippoDb;
   // Per request, never cached at serve: the global store can be created while the server runs.
   const reach = contextReach(opts.reachOf(team), opts.configAt);
   // The reader keys on the file's stamp, so each request still sees an edit made while the server runs.

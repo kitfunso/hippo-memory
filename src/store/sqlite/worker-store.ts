@@ -9,7 +9,7 @@ import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
 import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
-import type { GlobalStores, LocalStore } from '../local/index.js';
+import { asHippoDb } from './hippo-db-stores.js';
 
 const offLoopStores = new WeakSet<HippoStore>();
 
@@ -157,6 +157,32 @@ function folderGroups(executor: SqliteExecutor, inProcess: StoreGroups): FolderG
   };
 }
 
+type LocalGroups = Pick<
+  StoreGroups,
+  | 'consolidation'
+  | 'learning'
+  | 'captures'
+  | 'compactionHooks'
+  | 'projectTags'
+  | 'diagnostics'
+  | 'graphRebuild'
+  | 'agentImport'
+>;
+
+function localGroups(executor: SqliteExecutor, inProcess: StoreGroups): LocalGroups {
+  const ops = WORKER_OPS;
+  return {
+    consolidation: onWorkers(executor, 'consolidation', ops.consolidation, inProcess.consolidation),
+    learning: onWorkers(executor, 'learning', ops.learning, inProcess.learning),
+    captures: onWorkers(executor, 'captures', ops.captures, inProcess.captures),
+    compactionHooks: onWorkers(executor, 'compactionHooks', ops.compactionHooks, inProcess.compactionHooks),
+    projectTags: onWorkers(executor, 'projectTags', ops.projectTags, inProcess.projectTags),
+    diagnostics: onWorkers(executor, 'diagnostics', ops.diagnostics, inProcess.diagnostics),
+    graphRebuild: onWorkers(executor, 'graphRebuild', ops.graphRebuild, inProcess.graphRebuild),
+    agentImport: onWorkers(executor, 'agentImport', ops.agentImport, inProcess.agentImport),
+  };
+}
+
 /** `sqliteStore` with every method the op table places on a worker answered from one; close() closes `executor` and
  * resolves once its threads have exited. `executor` defaults to threads of the store's own, with the server's lock
  * wait; `rules` must be the ones it was built with. */
@@ -164,27 +190,34 @@ export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
   rules: LossAversion = {},
-): LocalStore & StoreGroups {
+): HippoStore & StoreGroups {
   const inProcess = sqliteStore(hippoRoot, rules);
-  const store: LocalStore & StoreGroups = {
+  const store: HippoStore & StoreGroups = {
     ...inProcess,
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(executor, inProcess.vectors),
     ...recallAndWriteGroups(executor, inProcess),
     ...sessionAndAdminGroups(executor, inProcess),
     ...folderGroups(executor, inProcess),
+    ...localGroups(executor, inProcess),
     readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
     close: () => executor.close(),
   };
   offLoopStores.add(store);
-  return store;
+  return asHippoDb(store);
+}
+
+/** The operator's global stores a server opens beside its own, closed with it. */
+export interface GlobalStores {
+  readonly open: (root: string) => HippoStore & StoreGroups;
+  readonly close: () => Promise<void>;
 }
 
 /** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server
  * thread; each is built at first use, since the global store can appear while the server runs. */
 export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
   if (!runsOffLoop(served)) return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
-  const opened = new Map<string, LocalStore & StoreGroups>();
+  const opened = new Map<string, HippoStore & StoreGroups>();
   return {
     open(root) {
       const known = opened.get(root);

@@ -14,7 +14,7 @@ import {
 } from '../../base/memory/memory.js';
 import { resolveEmbeddingProvider } from '../../base/embeddings/provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
-import { runDoctor, formatDoctor } from '../../doctor.js';
+import { runDoctor, formatDoctor, type DoctorStore } from '../../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../../support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
@@ -30,11 +30,10 @@ import {
   vectorSummary,
 } from '../../api/status.js';
 import type { StatusCounts } from '../../store/port/reports.js';
-import type { Diagnostics } from '../../store/local/diagnostics.js';
 import type { ParticleStats } from '../../store/port.js';
-import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
+import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
 
-const diagnosticsAt = (hippoRoot: string): Diagnostics => cliLocalFiles(hippoRoot).diagnostics;
+const diagnosticsAt = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue, boolFlag } from './flag-values.js';
@@ -342,13 +341,13 @@ export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandCo
   }
 }
 
-export function handleDoctor({ tenantId, flags }: CommandContext): void {
-  const report = runDoctor({ version: readPackageVersion(), tenantId, diagnosticsAt });
+export async function handleDoctor({ tenantId, flags }: CommandContext): Promise<void> {
+  const report = await runDoctor({ version: readPackageVersion(), tenantId, diagnosticsAt });
   console.log(boolFlag(flags, 'json') ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
 }
 
-export function handleSupportBundle({ tenantId, flags }: CommandContext): void {
+export async function handleSupportBundle({ tenantId, flags }: CommandContext): Promise<void> {
   const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
     fail('--out requires a file path.');
@@ -356,7 +355,7 @@ export function handleSupportBundle({ tenantId, flags }: CommandContext): void {
   const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
   const now = new Date();
-  const bundle = buildSupportBundle({
+  const bundle = await buildSupportBundle({
     cwd: process.cwd(),
     home,
     version: PACKAGE_VERSION,

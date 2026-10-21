@@ -68,7 +68,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     expect(hit!.entry.layer).toBe(Layer.Trace);
   });
 
-  it('traces are candidates for the replay pass', () => {
+  it('traces are candidates for the replay pass', async () => {
     // Seed several traces — sampleForReplay draws from whatever survivors
     // exist, so as long as traces are eligible at all they can be picked.
     const traces = Array.from({ length: 5 }, (_, i) =>
@@ -78,7 +78,7 @@ describe('Trace layer inherits core memory mechanics', () => {
       }),
     );
 
-    const picked = sampleForReplay(traces, 5, new Date(), 42);
+    const picked = await sampleForReplay(traces, 5, new Date(), 42);
     expect(picked.length).toBeGreaterThanOrEqual(1);
     // Every picked entry should be a trace (the only thing in the pool).
     for (const id of picked) expect(traces.find((t) => t.id === id)?.layer).toBe(Layer.Trace);

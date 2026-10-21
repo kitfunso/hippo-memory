@@ -7,7 +7,7 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { withoutLocalFiles } from '../_helpers/port-only-store.js';
+import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 
 const INFO = '/v1/x-info';
 const BODY = { providers: [{ tenant: 't1', scopes: ['api://x/.default'], redirectUris: ['http://localhost/cb'] }] };
@@ -132,7 +132,7 @@ describe('a publicJson path under a store that is not hippo.db', () => {
     const bare = mkdtempSync(join(tmpdir(), 'hippo-public-json-stub-'));
     let lookups = 0;
     const store: HippoStore = {
-      ...withoutLocalFiles(sqliteStore(bare)),
+      ...withoutFolderGroups(sqliteStore(bare)),
       kind: 'stub',
       async findApiKey(): Promise<ApiKeyRecord | null> {
         lookups += 1;

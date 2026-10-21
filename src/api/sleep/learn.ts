@@ -28,7 +28,7 @@ import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js'
 import { duplicateKey, heldTextKeys, longestWord, storedTextKeys } from '../../base/util/same-text.js';
 import type { LessonWrites } from '../../store/port.js';
 import { memoryPages } from '../memories/memories.js';
-import type { Context, LocalContext } from '../types.js';
+import type { Context, ContextWith } from '../types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -248,10 +248,10 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 
 /** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one
  * `options.onlyId` names. */
-export function memoryInvalidate(
-  ctx: LocalContext,
+export async function memoryInvalidate(
+  ctx: ContextWith<'learning'>,
   target: InvalidationTarget,
   options: InvalidationOptions,
-): InvalidationResult {
-  return invalidateMatching(ctx.store.localFiles.learning, target, ctx.tenantId, options);
+): Promise<InvalidationResult> {
+  return invalidateMatching(ctx.store, target, ctx.tenantId, options);
 }

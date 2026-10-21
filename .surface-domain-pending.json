@@ -1,9 +1,0 @@
-{
-  "why": "lane g-local-port PR 2 moves sleep, consolidation and the global store root behind src/api",
-  "files": [
-    "surface/cli/api-context.ts",
-    "surface/cli/maintenance.ts",
-    "surface/mcp/protocol.ts",
-    "surface/mcp/stdio.ts"
-  ]
-}

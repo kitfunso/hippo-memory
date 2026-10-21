@@ -49,7 +49,7 @@ process.once('message', (message) => {
   const job = message as SleepJob;
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
-      ? runConsolidation(storeAt(job.hippoRoot).localFiles, {
+      ? runConsolidation(storeAt(job.hippoRoot), {
           config: loadConfig(job.hippoRoot),
           tenantId: envTenant(),
         })

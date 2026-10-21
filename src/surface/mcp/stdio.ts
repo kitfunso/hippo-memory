@@ -14,7 +14,7 @@ import {
   type McpRequest,
   type McpResponse,
 } from './protocol.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { handleMcpRequest } from './request.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
@@ -160,7 +160,7 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
 /** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
  * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
 async function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): Promise<string> {
-  const root = getGlobalRoot();
+  const root = resolveGlobalRootDir();
   const target = host.contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
   if (target === undefined) return root;

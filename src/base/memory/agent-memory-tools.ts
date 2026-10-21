@@ -27,3 +27,20 @@ export const AGENT_MEMORY_TAGS: readonly string[] = AGENT_MEMORY_TOOLS.map((t) =
 export function isToolId(value: string): value is ToolId {
   return AGENT_MEMORY_TOOLS.some((t) => t.id === value);
 }
+
+/** Whether a row with this source came in from an agent's own memory. */
+export function isImport(source: string): boolean {
+  return source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
+}
+
+/** The tag the tool of an imported row's source files it under, or null for no known tool. */
+export function toolTag(source: string): string | null {
+  const id = source.slice(AGENT_MEMORY_SOURCE_PREFIX.length).split(':')[0];
+  return AGENT_MEMORY_TOOLS.find((t) => t.id === id)?.tag ?? null;
+}
+
+/** Tool, note key and hash of an import, without the container, whose id hashes the project name. */
+export function noteKey(source: string): string {
+  const rest = source.slice(AGENT_MEMORY_SOURCE_PREFIX.length);
+  return `${rest.split(':')[0]}:${rest.slice(rest.indexOf('/') + 1)}`;
+}

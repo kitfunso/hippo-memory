@@ -14,11 +14,12 @@ import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } fro
 import { purgeMirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { clock, type WriteBudget } from '../../base/util/write-budget.js';
+import { noteFailedUnit } from '../../base/errors/failed-unit.js';
 import { chunked } from '../../base/util/chunked.js';
 import { placeholders } from '../../base/util/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../local/consolidation.js';
+import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../port/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/store/dormant-memories.test.ts pins it to the schema. */
@@ -222,25 +223,15 @@ export function batchWriteAndDeleteAt(
   return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
 }
 
-const failedUnits = new WeakMap<Error, string[]>();
-
-/**
- * Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row; the first tag wins.
- */
-function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
-  if (!component || failedUnits.has(err)) return;
-  const ids = [
+/** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row. */
+function noteFailedComponent(err: Error, component: FlushComponent | undefined): void {
+  if (!component) return;
+  noteFailedUnit(err, [
     ...component.refreshes.map((r) => r.id),
     ...component.writes.map((e) => e.id),
     ...component.deletes,
     ...component.dormant.map((m) => m.entry.id),
-  ];
-  failedUnits.set(err, [...new Set(ids)]);
-}
-
-/** The ids noteFailedUnit tagged `err` with, if a flush threw it. */
-export function failedUnitOf(err: Error | null): string[] | undefined {
-  return err ? failedUnits.get(err) : undefined;
+  ]);
 }
 
 /** batchWriteAndDelete on the caller's open store from component `from`, each component whole, closing the transaction
@@ -271,7 +262,7 @@ function batchWriteAndDeleteOn(
       try {
         applyComponent(db, hippoRoot, components[at], opts.snapshot, out);
       } catch (err) {
-        if (err instanceof Error) noteFailedUnit(err, components[at]);
+        if (err instanceof Error) noteFailedComponent(err, components[at]);
         throw err;
       }
     } while (next < components.length && now() - begunAt < opts.holdMs);
@@ -501,7 +492,7 @@ export async function commitInChunksAt(
     }
   } catch (err) {
     // A unit that threw is already tagged; a throw outside one (a pause, BEGIN or COMMIT) names the chunk's first unit.
-    if (err instanceof Error) noteFailedUnit(err, components[next]);
+    if (err instanceof Error) noteFailedComponent(err, components[next]);
     throw err;
   }
   return removed;

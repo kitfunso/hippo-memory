@@ -1,7 +1,7 @@
 // Sleep, sync down and one-id invalidation read only the rows they need: counted in statements and rows, never timed.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
+import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -14,7 +14,7 @@ import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -119,9 +119,9 @@ describe('invalidateMatching with onlyId', () => {
     return { root, rows };
   }
 
-  it('weakens only the named row, as a pattern match over the tenant would', () => {
+  it('weakens only the named row, as a pattern match over the tenant would', async () => {
     const { root, rows } = seeded(5);
-    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
+    const result = await invalidateMatching(sqliteStore(root), target, 'default', {
       onlyId: rows[2]!.id,
     });
     expect(result).toEqual({
@@ -140,37 +140,36 @@ describe('invalidateMatching with onlyId', () => {
     expect(after.get(rows[1]!.id)!.confidence).toBe(rows[1]!.confidence);
   });
 
-  it("cannot see another tenant's id, reports a pinned id and writes nothing on a dry run", () => {
+  it("cannot see another tenant's id, reports a pinned id and writes nothing on a dry run", async () => {
     const root = makeRoot('batch-invalidate-edges');
     const other = createMemory('acme row about the zephyrine cache', { tenantId: 'acme' });
     const pinned = createMemory('pinned row about the zephyrine cache', { pinned: true });
     const plain = createMemory('plain row about the zephyrine cache');
     for (const row of [other, pinned, plain]) writeEntry(root, row);
+    expect((await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: other.id })).targets).toEqual([]);
     expect(
-      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: other.id }).targets,
-    ).toEqual([]);
-    expect(
-      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: pinned.id })
-        .skippedPinned,
+      (await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: pinned.id })).skippedPinned,
     ).toEqual([pinned.id]);
+    expect((await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: 'no-such-id' })).invalidated).toBe(
+      0,
+    );
     expect(
-      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: 'no-such-id' })
-        .invalidated,
-    ).toBe(0);
-    expect(
-      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
-        onlyId: plain.id,
-        dryRun: true,
-      }).targets,
+      (
+        await invalidateMatching(sqliteStore(root), target, 'default', {
+          onlyId: plain.id,
+          dryRun: true,
+        })
+      ).targets,
     ).toEqual([plain.id]);
     expect(loadEveryTenantEntries(root).find((e) => e.id === plain.id)!.confidence).toBe(plain.confidence);
   });
 
-  it('reads one memory row however many the tenant holds', () => {
-    const read = [10, 200].map((n) => {
+  it('reads one memory row however many the tenant holds', async () => {
+    const read: number[] = [];
+    for (const n of [10, 200]) {
       const { root, rows } = seeded(n);
-      const { rowsRead, statements } = recordStatements(() =>
-        invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
+      const { rowsRead, statements } = await recordStatementsAsync(() =>
+        invalidateMatching(sqliteStore(root), target, 'default', {
           onlyId: rows[0]!.id,
           dryRun: true,
         }),
@@ -178,8 +177,8 @@ describe('invalidateMatching with onlyId', () => {
       expect(statements.filter((sql) => sql.startsWith(FULL_ROW))).toEqual([
         `${FULL_ROW} WHERE id = ? AND tenant_id = ?`,
       ]);
-      return rowsRead;
-    });
+      read.push(rowsRead);
+    }
     expect(read[1]).toBe(read[0]);
   });
 });

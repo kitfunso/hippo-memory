@@ -1,7 +1,7 @@
 // `hippo capture --last-session` for a caller whose transcript was read on another machine: its project names the rows,
 // never the store's folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { LocalContext } from '../../api/types.js';
+import type { ContextWith } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { longestWord, storedTextKeys } from '../../base/util/same-text.js';
@@ -9,6 +9,9 @@ import { scrubForSharing } from './share-scrub.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { folderIndex } from '../../domain/search/embed-memories.js';
 import { extractFromTexts } from './extract.js';
+
+/** A context whose store has the captures group, which a session's capture reads and writes. */
+export type CaptureContext = ContextWith<'captures'>;
 
 const MAX_TEXTS = 30;
 const MAX_TEXT_BYTES = 32 * 1024;
@@ -40,35 +43,35 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
 
 /**
  * Captures the session's statements into `ctx`'s tenant under the caller's project, skipping each text a row the caller
- * can see already holds.
- * Synchronous from the dedup read to the last write, so no other write lands between them. No console output and no
- * process.exit.
+ * can see already holds. The write reads those rows again in its own transaction, so no other write lands between the
+ * dedup and the write. No console output and no process.exit.
  */
-export function captureSessionTexts(ctx: LocalContext, req: SessionCaptureRequest): SessionCaptureResult {
+export async function captureSessionTexts(
+  ctx: CaptureContext,
+  req: SessionCaptureRequest,
+): Promise<SessionCaptureResult> {
   assertSessionCapture(req);
   const extracted = extractFromTexts(req.texts.map(scrubForSharing));
   // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
-  // The dedup read and the writes both sit in the request's own hippo.db, so only a store with local files fits.
-  const local = ctx.store.localFiles;
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other
   // projects' rows do not.
-  const held = local.captures.textsHolding(
-    ctx.tenantId,
+  const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
+  const held = await ctx.store.captures.textsHolding(
+    dedup.tenantId,
     items.map((i) => longestWord(i.content)),
-    {
-      project: projectNames(req.project),
-    },
+    { project: dedup.project },
   );
-  const tally = captureExtractedItems(
-    { files: local, config: ctx.config, index: folderIndex(ctx) },
+  const tally = await captureExtractedItems(
+    { store: ctx.store, config: ctx.config, index: folderIndex(ctx) },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,
       sessionId: req.sessionId,
       actor: ctx.actor.subject,
       lean: true,
+      dedup,
     },
     items,
     storedTextKeys(held),

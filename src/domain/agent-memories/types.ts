@@ -1,6 +1,7 @@
 // The contract between a tool's adapter, which knows where its memory lives, and the sync, which knows no tool.
 import type { ToolId } from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
+import type { StoreWith } from '../../store/port.js';
 
 export type Scope = 'project' | 'user';
 
@@ -42,4 +43,19 @@ export interface Listing {
 export interface Adapter {
   readonly tool: ToolId;
   list(ctx: AdapterContext, scope: Scope): Listing;
+}
+
+/** One store a sync reads and writes; the sync closes it. */
+export type ImportStore = StoreWith<'agentImport' | 'projectTags'>;
+
+/** How a sync reaches each store it targets: the caller's, so the sync never names a store adapter. */
+export interface ImportStores {
+  /** `root`'s store; a set `busyWaitMs` is how long its container writes wait on a locked store. */
+  open(root: string, opts: { readonly busyWaitMs?: number }): ImportStore;
+  /** Creates the store at `root` with its folders. */
+  create(root: string): Promise<void>;
+  /** An empty store in a scratch folder a dry run plans against; closing it deletes the folder. */
+  standIn(): ImportStore;
+  /** Whether `err` is a store that stayed locked past its wait; the sync skips that store and goes on. */
+  isBusy<E>(err: E): boolean;
 }

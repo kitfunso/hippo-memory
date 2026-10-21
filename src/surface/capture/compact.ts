@@ -4,6 +4,8 @@ import type { TaskSnapshot } from '../../store/port/sessions.js';
 import { isInitialized } from '../../base/scope/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
 import type { Sessions } from '../../store/port-groups.js';
+import type { CompactionHooks } from '../../store/port/compaction-hooks.js';
+import type { CompactionStart } from '../../store/port/compactions.js';
 import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../../domain/hooks/shared.js';
 import {
@@ -16,7 +18,7 @@ import { errorCode, errorMessage, log as logger, errorFields } from '../../base/
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
-import type { LocalFiles } from '../../store/local/index.js';
+import type { StoreGroups } from '../../store/port.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
@@ -81,10 +83,7 @@ function printPreCompactInstruction(logFile: string): string | null {
 const TWIN_FIRE_MS = 10_000;
 
 /** The folder's store as a compaction hook reaches it, built by the CLI root. */
-export interface CompactionStore {
-  readonly localFiles: LocalFiles;
-  readonly sessions: Sessions;
-}
+export type CompactionStore = Pick<StoreGroups, 'compactionHooks' | 'sessions'>;
 
 async function snapshotJustSaved(sessions: Sessions, tenantId: string, sessionId: string | null): Promise<boolean> {
   if (sessionId === null || sessionId === '') return false;
@@ -134,7 +133,7 @@ async function runPreCompact(
   }
 
   const closable = runtime === 'claude-code' && !vscode;
-  const recordId = markCompactionBoundary(store.localFiles, options, logFile, receipt.input, closable);
+  const recordId = await markCompactionBoundary(store.compactionHooks, options, logFile, receipt.input, closable);
 
   const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
   if (!transcriptPath) return;
@@ -148,23 +147,24 @@ async function runPreCompact(
 
 /** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed;
  * the record id, or null without a record. */
-function markCompactionBoundary(
-  local: LocalFiles,
+async function markCompactionBoundary(
+  hooks: CompactionHooks,
   options: PreCompactOptions,
   logFile: string,
   input: CaptureInput,
   closable: boolean,
-): string | null {
+): Promise<string | null> {
   const { sessionId } = input;
   // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable later.
   // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
   let recordId: string | null = null;
   let printed: string | null = null;
   if (closable && sessionId !== null && sessionId !== '') {
-    recordId = local.compactionHooks.start(
+    recordId = await startRecord(
+      hooks,
       options.tenantId,
       { sessionId, trigger: input.trigger, cwd: input.cwd, transcriptPath: input.transcriptPath },
-      (message) => appendPreCompactLog(logFile, message),
+      logFile,
     );
     printed = printPreCompactInstruction(logFile);
   }
@@ -175,6 +175,35 @@ function markCompactionBoundary(
     appendPreCompactLog(logFile, `boundary callback failed: ${errorMessage(err)}`);
   }
   return recordId;
+}
+
+/** Best effort, never throws: a compaction must not fail because its record could not be written. */
+async function startRecord(
+  hooks: CompactionHooks,
+  tenantId: string,
+  start: Omit<CompactionStart, 'originProject'>,
+  logFile: string,
+): Promise<string | null> {
+  try {
+    return await hooks.start(tenantId, start);
+  } catch (err) {
+    appendPreCompactLog(logFile, `compaction record not started: ${errorMessage(err)}`);
+    return null;
+  }
+}
+
+/** Never throws: the snapshot is saved already, and the record only notes it. */
+async function markSnapshotOnRecord(
+  hooks: CompactionHooks,
+  tenantId: string,
+  recordId: string,
+  logFile: string,
+): Promise<void> {
+  try {
+    await hooks.markSnapshotSaved(tenantId, recordId);
+  } catch (err) {
+    appendPreCompactLog(logFile, `compaction record not marked with its snapshot: ${errorMessage(err)}`);
+  }
 }
 
 /** The transcript to snapshot, or null after logging why there is none. */
@@ -209,7 +238,7 @@ function resolvePreCompactTranscript(
 }
 
 async function saveDerivedSnapshot(
-  { localFiles: local, sessions }: CompactionStore,
+  { compactionHooks: hooks, sessions }: CompactionStore,
   tenantId: string,
   logFile: string,
   { sessionId, recordId }: { sessionId: string | null; recordId: string | null },
@@ -237,9 +266,7 @@ async function saveDerivedSnapshot(
     try {
       await sessions.saveSnapshot(tenantId, { ...merged, source: 'pre-compact', session_id: sessionId }, null);
       appendPreCompactLog(logFile, 'snapshot saved');
-      if (recordId !== null) {
-        local.compactionHooks.markSnapshotSaved(tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
-      }
+      if (recordId !== null) await markSnapshotOnRecord(hooks, tenantId, recordId, logFile);
     } catch (err) {
       appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
     }
@@ -281,7 +308,7 @@ export interface PostCompactOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   logFile?: string;
-  afterSave?: (transcriptPath: string, cwd: string | null, log: (message: string) => void) => void;
+  afterSave?: (transcriptPath: string, cwd: string | null, log: (message: string) => void) => Promise<void>;
 }
 
 /** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
@@ -289,7 +316,11 @@ const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
 
 /** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show.
  * Never throws, so the hook exits 0. */
-export function cmdPostCompact(hippoRoot: string, store: CompactionStore, options: PostCompactOptions): string | null {
+export async function cmdPostCompact(
+  hippoRoot: string,
+  store: CompactionStore,
+  options: PostCompactOptions,
+): Promise<string | null> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   const log = (message: string): void => appendPreCompactLog(logFile, `post-compact: ${message}`);
   const deadline = Date.now() + POST_COMPACT_REPLAY_BUDGET_MS;
@@ -299,24 +330,24 @@ export function cmdPostCompact(hippoRoot: string, store: CompactionStore, option
       return null;
     }
     const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
-    const local = { root: hippoRoot, files: store.localFiles, tenantId: options.tenantId };
+    const folder = { root: hippoRoot, store, tenantId: options.tenantId };
     let line: string | null = null;
     let storeBusy = false;
     if (receipt.status !== 'received') {
       log(`skip: ${receipt.reason}`);
     } else {
-      const saved = saveCompaction(local, receipt.input, log);
+      const saved = await saveCompaction(folder, receipt.input, log);
       line = postCompactLine(saved);
       storeBusy = saved.deferred;
       if (!storeBusy && receipt.input.transcriptPath !== null && options.afterSave) {
         try {
-          options.afterSave(receipt.input.transcriptPath, receipt.input.cwd, log);
+          await options.afterSave(receipt.input.transcriptPath, receipt.input.cwd, log);
         } catch (err) {
           log(`agent memory import failed: ${errorMessage(err)}`);
         }
       }
     }
-    if (!storeBusy) replayCompactions(local, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
+    if (!storeBusy) await replayCompactions(folder, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
     return line;
   } catch (err) {
     log(`failed: ${errorMessage(err)}`);

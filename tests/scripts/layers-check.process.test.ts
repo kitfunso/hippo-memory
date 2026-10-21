@@ -277,31 +277,25 @@ const rows: Row[] = [
     ],
   },
   {
-    name: 'a CLI type-only import of src/domain, and a listed pending file, pass',
+    name: 'a CLI type-only import of src/domain passes',
     files: {
       ...SURFACE_BASE,
       'src/surface/cli/v.ts': "import type { D } from '../../domain/d.js';\nexport type V = D;\n",
-      'src/surface/mcp/t.ts': "import { d } from '../../domain/d.js';\nexport const t = d;\n",
-      '.surface-domain-pending.json': JSON.stringify({ why: 'another lane', files: ['surface/mcp/t.ts'] }),
     },
     map: SURFACE_MAP,
     status: 0,
     output: ['Layer order OK'],
   },
   {
-    name: 'a pending list with no reason, or a file with no domain import left, fails',
+    name: 'a CLI or MCP domain import fails even when an old .surface-domain-pending.json lists it',
     files: {
       ...SURFACE_BASE,
       'src/surface/mcp/t.ts': "import { d } from '../../domain/d.js';\nexport const t = d;\n",
-      'src/surface/cli/v.ts': 'export const v = 1;\n',
-      '.surface-domain-pending.json': JSON.stringify({ why: ' ', files: ['surface/mcp/t.ts', 'surface/cli/v.ts'] }),
+      '.surface-domain-pending.json': JSON.stringify({ why: 'another lane', files: ['surface/mcp/t.ts'] }),
     },
     map: SURFACE_MAP,
     status: 1,
-    output: [
-      '.surface-domain-pending.json gives no reason',
-      'src/surface/cli/v.ts no longer imports src/domain at runtime',
-    ],
+    output: ['src/surface/mcp/t.ts:1 imports src/domain/d.ts at runtime'],
   },
   {
     name: 'an allowed name the file no longer imports fails as stale',
@@ -460,32 +454,15 @@ const rows: Row[] = [
     output: ['src/api/y.ts:1 imports src/store/local/index.ts', 'src/domain/d.ts:2 imports src/store/local/index.ts'],
   },
   {
-    name: 'a store/local import that .store-local-pending.json names with a reason passes',
+    name: 'a store/local import fails even when an old .store-local-pending.json lists it',
     files: {
       ...LOCAL_BASE,
       'src/api/y.ts': LOCAL_IMPORT,
       '.store-local-pending.json': JSON.stringify([{ file: 'api/y.ts', why: 'the next PR moves it' }]),
     },
     map: LOCAL_MAP,
-    status: 0,
-    output: ['Layer order OK'],
-  },
-  {
-    name: 'a pending entry with no reason, or with no store/local import left, fails',
-    files: {
-      ...LOCAL_BASE,
-      'src/api/y.ts': LOCAL_IMPORT,
-      '.store-local-pending.json': JSON.stringify([
-        { file: 'api/y.ts', why: ' ' },
-        { file: 'api/gone.ts', why: 'moved' },
-      ]),
-    },
-    map: LOCAL_MAP,
     status: 1,
-    output: [
-      '.store-local-pending.json: src/api/y.ts gives no reason',
-      '.store-local-pending.json: src/api/gone.ts no longer imports src/store/local/; delete the entry',
-    ],
+    output: ['src/api/y.ts:1 imports src/store/local/index.ts'],
   },
   {
     name: 'isLocalStore in the api or domain fails, and so does hippoRoot in the api',
