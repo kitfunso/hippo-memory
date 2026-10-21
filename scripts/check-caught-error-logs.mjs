@@ -34,16 +34,27 @@ function readsOneField(call) {
   return ts.isVariableDeclaration(p) && p.initializer === call && ts.isObjectBindingPattern(p.name);
 }
 
-/** True when the call hands the whole errorFields(...) result on; `errorFields(x).errorClass` drops the stack and cause. */
-function carriesErrorFields(call) {
+// expectedErrorText (src/base/util/expected-errors.ts) names an error the caller classified as expected.
+const isExpectedErrorTextCall = (n) =>
+  ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'expectedErrorText';
+
+/** True when some node under `call` passes `match`. */
+function contains(call, match) {
   let found = false;
   const visit = (n) => {
-    if ((isErrorFieldsCall(n) || isErrorClassFieldsCall(n)) && !readsOneField(n)) found = true;
+    if (match(n)) found = true;
     ts.forEachChild(n, visit);
   };
   visit(call);
   return found;
 }
+
+/** True when the call hands the whole errorFields(...) result on; `errorFields(x).errorClass` drops the stack and cause. */
+const carriesErrorFields = (call) =>
+  contains(call, (n) => (isErrorFieldsCall(n) || isErrorClassFieldsCall(n)) && !readsOneField(n));
+
+/** True for a `debug` line carrying expectedErrorText(...): an expected error earns that one line with no stack. */
+const isExpectedDebugLine = (call) => call.expression.name.text === 'debug' && contains(call, isExpectedErrorTextCall);
 
 const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
 
@@ -104,7 +115,7 @@ export function unfieldedLogLines(text) {
   const hits = new Map();
   const functions = namedFunctions(sf);
   const collect = (node) => {
-    if (isLogCall(node) && !carriesErrorFields(node)) {
+    if (isLogCall(node) && !carriesErrorFields(node) && !isExpectedDebugLine(node)) {
       hits.set(node.getStart(sf), sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
     }
     ts.forEachChild(node, collect);

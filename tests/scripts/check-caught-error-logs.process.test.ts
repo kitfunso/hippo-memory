@@ -66,6 +66,16 @@ describe('check-caught-error-logs', () => {
     expect(unfieldedLogLines(text)).toEqual([]);
   });
 
+  it('accepts expectedErrorText on a debug line only, the one stackless line an expected error earns', () => {
+    const text = [
+      'function noteSkipped(error) {',
+      '  if (isAbsent(error)) log.debug(`skipped: ${expectedErrorText(error)}`);',
+      '  else log.warn(`skipped: ${expectedErrorText(error)}`);',
+      '}',
+    ].join('\n');
+    expect(unfieldedLogLines(text)).toEqual([3]);
+  });
+
   it('passes a call that carries errorFields, spread or alone, and a log call outside any failure path', () => {
     const text = [
       'try { work(); } catch (err) {',

@@ -36,10 +36,11 @@ export function npmShimEntry(shimPath: string): string | null {
     log.warn(`cannot read the shim ${shimPath}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
-  const relative = NPM_SHIM_ENTRY.exec(text)?.[1];
-  if (relative === undefined) return null;
+  // Split on either slash, so the shim parses the same on every platform, not only where `\` is a separator.
+  const segments = NPM_SHIM_ENTRY.exec(text)?.[1]?.split(/[\\/]/);
+  if (segments === undefined) return null;
   const dir = path.dirname(shimPath);
-  const entry = path.resolve(dir, relative);
+  const entry = path.resolve(dir, ...segments);
   return !path.relative(dir, entry).startsWith('..') && isFile(entry) ? entry : null;
 }
 

@@ -99,7 +99,9 @@ describe('X-Request-Id', () => {
         .filter((l) => l.includes('requestId=req-err-1') && l.includes(' failed: '));
       expect(logged).toHaveLength(1);
       // Refused before any route matched, so the line names no route and never repeats the path sent.
-      expect(logged[0]).toMatch(/^\[hippo\] info: GET unmatched failed: .* requestId=req-err-1 status=400\n$/);
+      expect(logged[0]).toMatch(
+        /^\[hippo\] info: GET unmatched failed: .* requestId=req-err-1 status=400 errorClass=HttpError\n$/,
+      );
     } finally {
       stderrSpy.mockRestore();
     }

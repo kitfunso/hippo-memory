@@ -153,4 +153,15 @@ describe('github DLQ', () => {
     expect(after!.retryCount).toBe(1);
     expect(after!.retriedAt).not.toBeNull();
   });
+
+  it("replayDlqEntry finds an unroutable row and counts the retry on it, but answers not_found for another tenant's row", async () => {
+    const store = sqliteStore(root);
+    const unroutable = await parkInDlq(githubDlq, store, { tenantId: null, rawPayload: 'x{', error: 'no tenant' });
+    const acmes = await parkInDlq(githubDlq, store, { tenantId: 'acme', rawPayload: 'x{', error: 'acme row' });
+
+    expect(await replayDlqEntry(ctx, unroutable)).toMatchObject({ status: 'parse_error', retryCount: 1 });
+    expect((await store.connectorEvents.deadLetter('github', '__unroutable__', unroutable))?.retryCount).toBe(1);
+    expect(await replayDlqEntry(ctx, acmes)).toMatchObject({ status: 'not_found', retryCount: 0 });
+    expect((await store.connectorEvents.deadLetter('github', 'acme', acmes))?.retryCount).toBe(0);
+  });
 });
