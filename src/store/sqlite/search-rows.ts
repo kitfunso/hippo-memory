@@ -268,6 +268,15 @@ export function entriesInOrderAt(db: DatabaseSyncLike, ids: readonly string[]): 
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
+// The vocabulary view is a temp table, so it lives and dies with its connection.
+const vocabReady = new WeakSet<DatabaseSyncLike>();
+
+function ensureRarestVocab(db: DatabaseSyncLike): void {
+  if (vocabReady.has(db)) return;
+  db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
+  vocabReady.add(db);
+}
+
 /** Rarest-K prompt terms for this connection's FTS index, as a space-joined query string.
  *  Without FTS, returns the first 32 terms, as before rarest-term selection. */
 export function pickRarestFtsQuery(
@@ -277,7 +286,7 @@ export function pickRarestFtsQuery(
 ): string {
   // The LIKE path has no bm25 ranking to bound, so it keeps the pre-rarest 32-term query.
   if (!isFtsAvailable(db)) return terms.slice(0, 32).join(' ');
-  db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
+  ensureRarestVocab(db);
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
   // One cached shape per term count: an IN list over a virtual table needs one mark per term to keep its lookups.

@@ -166,22 +166,15 @@ describe('sessionEndWork', () => {
     expect(closed).toBeGreaterThan(lines.indexOf(reread[0]!));
   });
 
-  it('still logs the re-read lines at exit when sleep throws before they are written', async () => {
-    const before = process.listeners('exit');
+  it('logs the re-read lines and leaves no exit listener when sleep throws', async () => {
+    const before = process.listenerCount('exit');
     const sleep = async (): Promise<void> => {
       throw new Error('sleep failed');
     };
     await expect(
       sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}-missing.jsonl`, sleep })),
     ).rejects.toThrow('sleep failed');
-    const added = process.listeners('exit').filter((l) => !before.includes(l));
-    expect(added).toHaveLength(1);
-    try {
-      expect(lines.some((l) => l.startsWith('skip re-read count'))).toBe(false);
-      added[0]!(0);
-      expect(lines.some((l) => l.startsWith('skip re-read count'))).toBe(true);
-    } finally {
-      process.off('exit', added[0]!);
-    }
+    expect(process.listenerCount('exit')).toBe(before);
+    expect(lines.some((l) => l.startsWith('skip re-read count'))).toBe(true);
   });
 });
