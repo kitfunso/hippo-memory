@@ -455,7 +455,6 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
       owner: thinOwnerCheck.value,
       artifactRef: stringFlag(flags, 'artifact-ref'),
       tags,
-      salienceGate: true,
     });
     if ('skipped' in result) {
       printSkipped(result.skipped);

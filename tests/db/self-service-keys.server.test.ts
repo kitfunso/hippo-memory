@@ -383,3 +383,16 @@ describe('GET /v1/auth/keys for members', () => {
     expect(await listKeys(admin.plaintext)).toEqual(all);
   });
 });
+
+describe('POST /v1/auth/keys reply', () => {
+  it('forbids caching, since the body carries the key plaintext', async () => {
+    await start();
+    const res = await fetch(`${handle!.url}/v1/auth/keys`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok.boss', 'content-type': 'application/json' },
+      body: '{"label":"cache-check"}',
+    });
+    expect([res.status, res.headers.get('cache-control')]).toEqual([200, 'no-store']);
+    await res.body?.cancel();
+  });
+});

@@ -3,7 +3,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ensureCodexWrapperInstalled, uninstallCodexWrapper } from '../../src/surface/hooks-install/codex-wrapper.js';
+import {
+  ensureCodexWrapperInstalled,
+  isCodexWrapperInstalled,
+  uninstallCodexWrapper,
+} from '../../src/surface/hooks-install/codex-wrapper.js';
 import { resolveCodexWrapperPaths } from '../../src/domain/hooks/codex-wrapper.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
@@ -108,5 +112,18 @@ describe('a Codex update that put its launcher back over the wrapper', () => {
     uninstallCodexWrapper();
 
     expect(fs.readFileSync(launcher, 'utf8')).toBe('updated codex\n');
+  });
+});
+
+describe('codex wrapper metadata of the wrong shape', () => {
+  it('reads as no metadata, so it neither opts the user in nor reaches the repair', () => {
+    const { metadataPath } = resolveCodexWrapperPaths();
+    fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
+    fs.writeFileSync(
+      metadataPath,
+      JSON.stringify({ originalCodexPath: 5, realCodexPath: ['x'], installMode: 'other' }),
+    );
+
+    expect(isCodexWrapperInstalled()).toBe(false);
   });
 });

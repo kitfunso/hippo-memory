@@ -67,6 +67,8 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
     ttlDays,
     noExpiry,
   });
+  // The reply carries the key plaintext, so no cache or proxy may keep it.
+  res.setHeader('Cache-Control', 'no-store');
   sendJson(res, 200, result);
   return;
 }

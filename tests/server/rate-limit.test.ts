@@ -82,12 +82,27 @@ describe('createRateLimiter', () => {
     }
   });
 
-  it('lets a throttled key start over only after maxKeys other keys arrive while it is silent', () => {
+  it('keeps a throttled key throttled when many new keys arrive while it is silent', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
     for (let i = 0; i < 5; i++) rl.check('attacker', 1000);
-    rl.check('n1', 1000);
-    rl.check('n2', 1000);
-    rl.check('n3', 1000);
-    expect(rl.check('attacker', 1000)).toBe(true);
+    for (let i = 0; i < 50; i++) rl.check(`flood-${i}`, 1000);
+    expect(rl.check('attacker', 1000)).toBe(false);
+  });
+
+  it('drops a refilled bucket before one that can still spend', () => {
+    const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
+    for (let i = 0; i < 4; i++) rl.check('spending', 1000); // one token left
+    rl.check('refilled', 1000); // four tokens at 1000, full again by 1100
+    rl.check('later', 1000);
+    rl.check('new', 1100); // refilled is full again, so it goes; spending holds two tokens and stays
+    expect(Array.from({ length: 3 }, () => rl.check('spending', 1100))).toEqual([true, true, false]);
+  });
+
+  it('drops the oldest bucket only when every bucket is throttled', () => {
+    const rl = createRateLimiter({ ...OPTS, maxKeys: 2 });
+    for (const k of ['first', 'second']) for (let i = 0; i < 5; i++) rl.check(k, 1000);
+    rl.check('new', 1000);
+    expect(rl.check('second', 1000)).toBe(false);
+    expect(rl.check('first', 1000)).toBe(true);
   });
 });

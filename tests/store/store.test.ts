@@ -13,6 +13,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -74,7 +75,7 @@ describe('store initialization', () => {
 
     // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = sqliteSyncStore(tmpDir).reports.stats() as {
+    const stats = sqliteSyncStore(handlesOf(tmpDir)).reports.stats() as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;
@@ -205,7 +206,7 @@ describe('stats tracking', () => {
 
     // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = sqliteSyncStore(tmpDir).reports.stats() as {
+    const stats = sqliteSyncStore(handlesOf(tmpDir)).reports.stats() as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;

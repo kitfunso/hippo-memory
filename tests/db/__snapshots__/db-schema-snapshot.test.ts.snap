@@ -5,6 +5,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
   "objects": [
     "index idx_api_keys_live_owner: CREATE INDEX idx_api_keys_live_owner ON api_keys(tenant_id, owner_subject) WHERE revoked_at IS NULL",
     "index idx_api_keys_tenant_active: CREATE INDEX idx_api_keys_tenant_active ON api_keys(tenant_id) WHERE revoked_at IS NULL",
+    "index idx_audit_log_conflict_resolve: CREATE INDEX idx_audit_log_conflict_resolve ON audit_log(ts) WHERE op = 'conflict_resolve'",
     "index idx_audit_log_tenant_ts: CREATE INDEX idx_audit_log_tenant_ts ON audit_log(tenant_id, ts DESC)",
     "index idx_card_comments_tenant_card: CREATE INDEX idx_card_comments_tenant_card ON card_comments(tenant_id, card_id, created_at DESC)",
     "index idx_card_deps_tenant_child: CREATE INDEX idx_card_deps_tenant_child ON card_deps(tenant_id, child)",
@@ -47,12 +48,14 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "index idx_memories_dag_parent: CREATE INDEX idx_memories_dag_parent ON memories(dag_parent_id) WHERE dag_parent_id IS NOT NULL",
     "index idx_memories_decay_key: CREATE INDEX idx_memories_decay_key ON memories(tenant_id, pinned, (julianday(last_retrieved) + 2.0 * half_life_days * (CASE WHEN COALESCE(outcome_positive, 0) = 0 AND COALESCE(outcome_negative, 0) = 0 THEN 1.0 ELSE 1.0 + 0.5 * (COALESCE(outcome_positive, 0) - COALESCE(outcome_negative, 0)) / (COALESCE(outcome_positive, 0) + COALESCE(outcome_negative, 0) + 1.0) END))) WHERE pinned >= 0",
     "index idx_memories_extracted_from: CREATE INDEX idx_memories_extracted_from ON memories(extracted_from) WHERE extracted_from IS NOT NULL",
+    "index idx_memories_l2_unparented: CREATE INDEX idx_memories_l2_unparented ON memories(created, id) WHERE dag_level = 2 AND dag_parent_id IS NULL AND superseded_by IS NULL",
     "index idx_memories_last_retrieved: CREATE INDEX idx_memories_last_retrieved ON memories(last_retrieved)",
     "index idx_memories_layer_created: CREATE INDEX idx_memories_layer_created ON memories(layer, created)",
     "index idx_memories_pinned: CREATE INDEX idx_memories_pinned ON memories(tenant_id, created, id) WHERE pinned = 1",
     "index idx_memories_scope: CREATE INDEX idx_memories_scope ON memories(scope) WHERE scope IS NOT NULL",
     "index idx_memories_source_session_id: CREATE INDEX idx_memories_source_session_id ON memories(source_session_id) WHERE source_session_id IS NOT NULL",
     "index idx_memories_source_tenant_created: CREATE INDEX idx_memories_source_tenant_created ON memories(source, tenant_id, created, id)",
+    "index idx_memories_summary_dirty: CREATE INDEX idx_memories_summary_dirty ON memories(latest_at DESC, id) WHERE summary_dirty = 1",
     "index idx_memories_tenant_created: CREATE INDEX idx_memories_tenant_created ON memories(tenant_id, created)",
     "index idx_memories_tenant_origin_created: CREATE INDEX idx_memories_tenant_origin_created ON memories(tenant_id, origin_project, created, id)",
     "index idx_memory_conflicts_status_updated: CREATE INDEX idx_memory_conflicts_status_updated ON memory_conflicts(status, updated_at DESC, id DESC)",
@@ -74,6 +77,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "index idx_project_briefs_tenant_status_created: CREATE INDEX idx_project_briefs_tenant_status_created ON project_briefs(tenant_id, status, created_at DESC, id DESC)",
     "index idx_raw_archive_id_at: CREATE UNIQUE INDEX idx_raw_archive_id_at ON raw_archive(memory_id, archived_at)",
     "index idx_raw_archive_memory_id: CREATE INDEX idx_raw_archive_memory_id ON raw_archive(memory_id)",
+    "index idx_raw_archive_mirror_pending: CREATE INDEX idx_raw_archive_mirror_pending ON raw_archive(memory_id) WHERE mirror_cleaned_at IS NULL",
     "index idx_recall_trace_outcomes_trace: CREATE INDEX idx_recall_trace_outcomes_trace ON recall_trace_outcomes(trace_id)",
     "index idx_recall_trace_results_tenant_memory: CREATE INDEX idx_recall_trace_results_tenant_memory ON recall_trace_results(tenant_id, memory_id)",
     "index idx_recall_traces_tenant_ts: CREATE INDEX idx_recall_traces_tenant_ts ON recall_traces(tenant_id, ts DESC)",
@@ -219,6 +223,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "trigger trg_skills_tenant_match_insert: CREATE TRIGGER trg_skills_tenant_match_insert BEFORE INSERT ON skills WHEN NEW.memory_id IS NOT NULL BEGIN SELECT CASE WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id) THEN RAISE(ABORT, 'skills.tenant_id must match memories.tenant_id for the referenced memory') END; END",
     "trigger trg_skills_tenant_match_update: CREATE TRIGGER trg_skills_tenant_match_update BEFORE UPDATE ON skills WHEN NEW.memory_id IS NOT NULL AND (NEW.memory_id IS NOT OLD.memory_id OR NEW.tenant_id IS NOT OLD.tenant_id) BEGIN SELECT CASE WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id) THEN RAISE(ABORT, 'skills.tenant_id must match memories.tenant_id for the referenced memory') END; END",
   ],
-  "userVersion": 61,
+  "userVersion": 62,
 }
 `;

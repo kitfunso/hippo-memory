@@ -197,7 +197,7 @@ describe('auth resolver routing by token shape', () => {
     expect((await get('/v1/memories?q=x', 'hk_forged.secret')).status).toBe(401);
     expect(resolver).not.toHaveBeenCalled();
     expect((await get('/v1/memories?q=x', 'ext.other')).status).toBe(401);
-    expect(resolver).toHaveBeenCalledWith('ext.other');
+    expect(resolver).toHaveBeenCalledWith('ext.other', expect.any(AbortSignal));
   });
 
   it('lets no resolver answer override an API key identity', async () => {

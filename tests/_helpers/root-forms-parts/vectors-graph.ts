@@ -41,23 +41,23 @@ export function loadPendingExtractionTenants(hippoRoot: string): { tenantId: str
 }
 
 export function loadEntitiesByMemoryId(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): Entity[] {
-  return sqliteSyncStore(hippoRoot).graphReads.entitiesForMemories(tenantId, memoryIds);
+  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.entitiesForMemories(tenantId, memoryIds);
 }
 
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).consolidation.unprofiledTopicSummaries();
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.unprofiledTopicSummaries();
 }
 
 export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
 }
 
 export function loadChildrenOfSummary(hippoRoot: string, summaryId: string, tenantId: string): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).consolidation.childrenOfSummary(summaryId, tenantId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.childrenOfSummary(summaryId, tenantId);
 }
 
 export function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
-  return sqliteSyncStore(hippoRoot).consolidation.applyRebuild(summary, patch);
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.applyRebuild(summary, patch);
 }
 
 export function recordRereads(
@@ -106,7 +106,7 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
 }
 
 export function loadEntitiesByIds(hippoRoot: string, tenantId: string, ids: readonly number[]): Entity[] {
-  return sqliteSyncStore(hippoRoot).graphReads.entitiesByIds(tenantId, ids);
+  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.entitiesByIds(tenantId, ids);
 }
 
 export function loadNeighborRelations(
@@ -115,7 +115,9 @@ export function loadNeighborRelations(
   entityIds: readonly number[],
   opts: { limit?: number } = {},
 ): Relation[] {
-  return sqliteSyncStore(hippoRoot).graphReads.neighborRelations(tenantId, entityIds, { limit: opts.limit ?? 1000 });
+  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.neighborRelations(tenantId, entityIds, {
+    limit: opts.limit ?? 1000,
+  });
 }
 
 export function loadVectorCandidateEntries(

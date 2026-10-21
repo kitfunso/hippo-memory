@@ -35,9 +35,9 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
   if (personalRaw !== undefined && !isJsonBoolean(personalRaw)) {
     throw new HttpError(400, 'personal must be a boolean');
   }
-  const gateRaw = body['salienceGate'];
-  if (gateRaw !== undefined && !isJsonBoolean(gateRaw)) {
-    throw new HttpError(400, 'salienceGate must be a boolean');
+  const forceRaw = body['force'];
+  if (forceRaw !== undefined && !isJsonBoolean(forceRaw)) {
+    throw new HttpError(400, 'force must be a boolean');
   }
   const result = await remember(ctx, {
     content,
@@ -48,7 +48,7 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
     tags: getStringArray(body, 'tags', MAX_ARRAY_ITEMS, MAX_ID_LEN),
     project: getCallerProject(body),
     personal: personalRaw === true,
-    salienceGate: gateRaw === true,
+    salienceGate: forceRaw !== true,
   });
   sendJson(res, 200, result);
   return;

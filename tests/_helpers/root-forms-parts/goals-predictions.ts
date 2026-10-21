@@ -2,6 +2,7 @@
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
+import { handlesOf } from '../../../src/store/sqlite/handles.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../../../src/store/port/goals.js';
 import { activeGoalsWithPoliciesAt } from '../../../src/store/sqlite/goals.js';
@@ -14,7 +15,7 @@ import type { Prediction, PredictionClose } from '../../../src/store/port/predic
 import type { ClosureState } from '../../../src/base/records/prediction.js';
 
 export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
-  return sqliteSyncStore(hippoRoot).goals.push(opts.tenantId, opts);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.push(opts.tenantId, opts);
 }
 
 export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
@@ -22,15 +23,15 @@ export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsO
 }
 
 export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
-  return sqliteSyncStore(hippoRoot).goals.complete(resolveTenantId({}), goalId, opts);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.complete(resolveTenantId({}), goalId, opts);
 }
 
 export function suspendGoal(hippoRoot: string, goalId: string): void {
-  return sqliteSyncStore(hippoRoot).goals.suspend(resolveTenantId({}), goalId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.suspend(resolveTenantId({}), goalId);
 }
 
 export function resumeGoal(hippoRoot: string, goalId: string): void {
-  return sqliteSyncStore(hippoRoot).goals.resume(resolveTenantId({}), goalId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.resume(resolveTenantId({}), goalId);
 }
 
 export function closePrediction(
@@ -40,22 +41,26 @@ export function closePrediction(
   close: PredictionClose,
   actor: string = CLI_ACTOR,
 ): Prediction {
-  return sqliteSyncStore(hippoRoot).predictions.closePrediction(tenantId, id, close, actor);
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.closePrediction(tenantId, id, close, actor);
 }
 
 export function loadPredictionById(hippoRoot: string, tenantId: string, id: number): Prediction | null {
-  return sqliteSyncStore(hippoRoot).predictions.predictionById(tenantId, id);
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.predictionById(tenantId, id);
 }
 
 export function loadPredictionsByClass(
   hippoRoot: string,
   tenantId: string,
   classTag: string,
-  opts: { closureState?: ClosureState; limit?: number; after?: KeysetPosition } = {},
+  opts: {
+    closureState?: ClosureState;
+    limit?: number;
+    after?: KeysetPosition;
+  } = {},
 ): Prediction[] {
   const { closureState, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return sqliteSyncStore(hippoRoot).predictions.listPredictions(
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.listPredictions(
     tenantId,
     closureState === undefined ? { classTag, limit, after } : { classTag, closureState, limit, after },
   );
@@ -66,7 +71,7 @@ export function loadAllPredictions(
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
-  return sqliteSyncStore(hippoRoot).predictions.listPredictions(tenantId, {
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.listPredictions(tenantId, {
     limit: opts.limit ?? DEFAULT_LIST_LIMIT,
     after: opts.after,
   });
@@ -89,7 +94,7 @@ export function loadOpenPredictions(
 ): Prediction[] {
   const { classTag, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return sqliteSyncStore(hippoRoot).predictions.listPredictions(tenantId, {
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.listPredictions(tenantId, {
     classTag,
     closureState: 'open',
     limit,

@@ -125,7 +125,7 @@ describe('rejections.apply across pages', () => {
     const ids = seed();
     const dormant = seedDormant();
 
-    const applied = sqliteSyncStore(root).rejections.apply(rejection());
+    const applied = sqliteSyncStore(handlesOf(root)).rejections.apply(rejection());
 
     const removed = [ids[2], ids[600], ids[700], ids[800], dormant.direct, dormant.merged];
     expect(applied.removedIds).toEqual(removed);

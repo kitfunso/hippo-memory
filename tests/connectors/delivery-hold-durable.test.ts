@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
@@ -21,7 +22,7 @@ afterEach(() => {
 const claimOn = (store: ReturnType<typeof sqliteSyncStore>, key: string, nowMs: number) =>
   store.connectorEvents.claimDelivery({ connector: 'slack', key, nowMs, ttlMs: TTL });
 /** Each call builds a store of its own, as a restarted server would. */
-const claim = (key: string, nowMs: number) => claimOn(sqliteSyncStore(root), key, nowMs);
+const claim = (key: string, nowMs: number) => claimOn(sqliteSyncStore(handlesOf(root)), key, nowMs);
 
 function holdRows(): number {
   const db = openHippoDb(root);
@@ -42,12 +43,12 @@ describe('claimDelivery', () => {
 
   it('frees a released key, and keeps a failed delivery from holding its retry back', async () => {
     await claim('sig-a', 0);
-    await sqliteSyncStore(root).connectorEvents.releaseDelivery('slack', 'sig-a');
+    await sqliteSyncStore(handlesOf(root)).connectorEvents.releaseDelivery('slack', 'sig-a');
     expect(await claim('sig-a', 1)).toBe(true);
   });
 
   it('sweeps the holds that ran out, so the rows stay as many as the holds still live', async () => {
-    const store = sqliteSyncStore(root);
+    const store = sqliteSyncStore(handlesOf(root));
     for (let i = 0; i < 40; i++) await claimOn(store, `sig-${i}`, 0);
     expect(holdRows()).toBe(40);
 

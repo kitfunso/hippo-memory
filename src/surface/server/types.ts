@@ -30,7 +30,11 @@ export interface ResolvedBearer {
 
 /** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so throw only when
  * upstream is down. */
-export type AuthResolver = (token: string) => ResolvedBearer | null | Promise<ResolvedBearer | null>;
+export type AuthResolver = (
+  token: string,
+  /** Aborted when the deadline passes, so a slow upstream call can stop. */
+  signal?: AbortSignal,
+) => ResolvedBearer | null | Promise<ResolvedBearer | null>;
 
 /** What an add-on route's handler gets: the caller core authenticated and the parsed JSON body. */
 export interface AddonCall {

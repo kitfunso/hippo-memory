@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -32,7 +33,7 @@ function seed(count: number, opts: { tenantId?: string; tags?: string[] } = {}):
 }
 
 const tagAll = (ids: readonly string[]) =>
-  recordStatements(() => sqliteSyncStore(root).learning.addTagToEntries('default', ids, TAG)).statements;
+  recordStatements(() => sqliteSyncStore(handlesOf(root)).learning.addTagToEntries('default', ids, TAG)).statements;
 
 describe('addTagToEntries', () => {
   it('commits one transaction for one row and for many', () => {

@@ -12,6 +12,7 @@ import {
 } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot, type MakeRootOptions } from '../_helpers/make-root.js';
@@ -38,7 +39,8 @@ function store(config?: MakeRootOptions['config']): FullContext {
   return apiCtx(hippoRoot, 'default', adminActor('cli'));
 }
 
-const counted = (ctx: FullContext): number => Number(sqliteSyncStore(ctx.hippoRoot).reports.stats().total_remembered);
+const counted = (ctx: FullContext): number =>
+  Number(sqliteSyncStore(handlesOf(ctx.hippoRoot)).reports.stats().total_remembered);
 const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
 function seed(ctx: FullContext, content: string, tags: string[]): void {
@@ -110,8 +112,8 @@ describe('rememberLocally', () => {
     const ctx = store();
     for (const n of [1, 2, 3]) seed(ctx, `the billing service sends invoice batch ${n}`, ['billing']);
     const stored = ['billing', 'path:acme', 'scope:eng'];
-    const typedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
-    const storedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
+    const typedFit = sqliteSyncStore(handlesOf(ctx.hippoRoot)).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
+    const storedFit = sqliteSyncStore(handlesOf(ctx.hippoRoot)).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
     expect(typedFit).not.toBe(storedFit);
     expect(
       storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true }))

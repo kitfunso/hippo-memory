@@ -201,7 +201,8 @@ describe('dashboard local access token', () => {
   it.each([true, false])(
     'keeps the token off stdout (a terminal: %s) and writes the full URL to an owner-only file in the hippo root',
     (tty) => {
-      const urlFile = join(hippoRoot, 'dashboard.url');
+      const urlFile =
+        process.platform === 'win32' ? join(home, '.hippo-global', 'dashboard.url') : join(hippoRoot, 'dashboard.url');
       const lines = bannerLines(tty);
       expect(lines.join('\n')).not.toContain('another-token-abcdef');
       expect(lines).toEqual([
@@ -213,4 +214,16 @@ describe('dashboard local access token', () => {
       if (process.platform !== 'win32') expect(statSync(urlFile).mode & 0o777).toBe(0o600);
     },
   );
+
+  it('keeps the file in the store folder off Windows and in the profile-private global folder on Windows', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      printDashboardBanner(hippoRoot, 4567, 'tok-win', null, 'win32');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(readFileSync(join(home, '.hippo-global', 'dashboard.url'), 'utf8')).toBe(
+      'http://localhost:4567/?token=tok-win\n',
+    );
+  });
 });

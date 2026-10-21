@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../base/util/atomic-write.js';
 import { envPath } from '../../base/util/env.js';
+import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   CODEX_LAUNCHER_NAMES,
@@ -29,14 +30,31 @@ function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+const METADATA_TEXT_FIELDS = [
+  'originalCodexPath',
+  'realCodexPath',
+  'commandPath',
+  'backupPath',
+  'logFile',
+  'installedAt',
+] as const;
+
+/** The check at the parse site; whether the paths are the installer's own is isCodexWrapperMetadataValid's. */
+function isCodexWrapperMetadataRecord(value: JsonValue): value is JsonValue & CodexWrapperMetadata {
+  if (!isJsonObject(value)) return false;
+  if (!METADATA_TEXT_FIELDS.every((field) => isJsonString(value[field]))) return false;
+  if (value['installMode'] !== 'same-path' && value['installMode'] !== 'cmd-shim') return false;
+  return value['hippoCliPath'] === undefined || isJsonString(value['hippoCliPath']);
+}
+
 function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
   const { metadataPath } = resolveCodexWrapperPaths();
   if (!fs.existsSync(metadataPath)) return null;
   try {
-    // This optimistic parse is never trusted directly: every call site reads fields off the result only after
-    // isCodexWrapperMetadataValid has runtime-checked each string field and the referenced paths.
-    const parsed: CodexWrapperMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
-    return parsed;
+    const parsed: JsonValue = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    if (isCodexWrapperMetadataRecord(parsed)) return parsed;
+    log.warn(`codex wrapper metadata ${metadataPath} has the wrong shape; it is ignored`);
+    return null;
   } catch (err) {
     // Unreadable metadata is treated like the missing-file case above, after the cause is logged.
     if (errorCode(err) !== 'ENOENT') {

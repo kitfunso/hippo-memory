@@ -2,6 +2,7 @@
 
 import type { HandoffOutcome, SessionHandoff } from '../../../src/base/session/handoff.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
+import { handlesOf } from '../../../src/store/sqlite/handles.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type {
   HandoffFilter,
@@ -105,7 +106,7 @@ export function clearActiveTaskSnapshot(
   tenantId: string,
   clearedStatus: string = 'cleared',
 ): boolean {
-  return sqliteSyncStore(hippoRoot).sessions.clearSnapshot(tenantId, clearedStatus);
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.clearSnapshot(tenantId, clearedStatus);
 }
 
 export function closeTaskSnapshotsForSession(
@@ -115,7 +116,7 @@ export function closeTaskSnapshotsForSession(
   status: string = 'session-ended',
   key?: ContinuityKey,
 ): number {
-  return sqliteSyncStore(hippoRoot).sessions.closeSessionSnapshots(tenantId, sessionId, status, key ?? null);
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.closeSessionSnapshots(tenantId, sessionId, status, key ?? null);
 }
 
 export function listSessionEvents(
@@ -146,7 +147,7 @@ export function wmPush(
     tenantId?: string;
   },
 ): number {
-  return sqliteSyncStore(hippoRoot).sessions.pushWorkingMemory(opts.tenantId ?? resolveTenantId({}), opts);
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.pushWorkingMemory(opts.tenantId ?? resolveTenantId({}), opts);
 }
 
 export function wmRead(
@@ -158,7 +159,10 @@ export function wmRead(
     tenantId?: string;
   },
 ): WorkingMemoryItem[] {
-  return sqliteSyncStore(hippoRoot).sessions.readWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.readWorkingMemory(
+    opts?.tenantId ?? resolveTenantId({}),
+    opts ?? {},
+  );
 }
 
 export function wmClear(
@@ -169,7 +173,10 @@ export function wmClear(
     tenantId?: string;
   },
 ): number {
-  return sqliteSyncStore(hippoRoot).sessions.clearWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.clearWorkingMemory(
+    opts?.tenantId ?? resolveTenantId({}),
+    opts ?? {},
+  );
 }
 
 export function updateStats(hippoRoot: string, delta: Parameters<typeof updateStatsAt>[2]): void {

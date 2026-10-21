@@ -3,6 +3,7 @@
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
+import { handlesOf } from '../../../src/store/sqlite/handles.js';
 import { replaceDetectedConflictsAt } from '../../../src/store/sqlite/conflicts.js';
 import { onHandle, openStore } from '../../../src/store/sqlite/handles.js';
 import type { MemoryConflict } from '../../../src/store/port/conflicts.js';
@@ -24,11 +25,16 @@ export function listMemoryConflicts(
   status: string = 'open',
   tenantId: TenantId = ALL_TENANTS,
 ): MemoryConflict[] {
-  const { conflicts } = sqliteSyncStore(hippoRoot);
+  const { conflicts } = sqliteSyncStore(handlesOf(hippoRoot));
   const out: MemoryConflict[] = [];
   let after: KeysetPosition | undefined;
   do {
-    const page = conflicts.list({ tenantId, status, limit: MAX_LIST_LIMIT, after });
+    const page = conflicts.list({
+      tenantId,
+      status,
+      limit: MAX_LIST_LIMIT,
+      after,
+    });
     out.push(...page.rows.map((row) => row.conflict));
     after = page.next ?? undefined;
   } while (after);
@@ -41,7 +47,7 @@ export function resolveConflictKeeping(
   conflictId: number,
   keepId: string,
 ): boolean {
-  const conflicts = sqliteSyncStore(hippoRoot).conflicts;
+  const conflicts = sqliteSyncStore(handlesOf(hippoRoot)).conflicts;
   const row = conflicts.get(tenantId, conflictId);
   if (!row) return false;
   const a = { id: row.conflict.memory_a_id, scope: row.a?.scope ?? null };

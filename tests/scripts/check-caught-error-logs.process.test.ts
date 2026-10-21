@@ -46,6 +46,36 @@ describe('check-caught-error-logs', () => {
     expect(unfieldedLogLines(text)).toEqual([2, 4, 6]);
   });
 
+  it('flags a log call in a function that takes the caught error as a parameter and sends only its message', () => {
+    const text = [
+      'function report(step, err) {',
+      '  log.warn(`${step} failed: ${errorMessage(err)}`);',
+      '}',
+      'function reportAll(step, err) {',
+      '  log.warn(`${step} failed`, errorFields(err));',
+      '}',
+      'function sizes(label, cause) {',
+      '  log.info(`${label} sized`);',
+      '}',
+    ].join('\n');
+    expect(unfieldedLogLines(text)).toEqual([2]);
+  });
+
+  it('accepts errorClassFields, which keeps the class and drops the text on purpose', () => {
+    const text = ['try { x(); } catch (err) {', '  log.warn("late", errorClassFields(err));', '}'].join('\n');
+    expect(unfieldedLogLines(text)).toEqual([]);
+  });
+
+  it('accepts expectedErrorText on a debug line only, the one stackless line an expected error earns', () => {
+    const text = [
+      'function noteSkipped(error) {',
+      '  if (isAbsent(error)) log.debug(`skipped: ${expectedErrorText(error)}`);',
+      '  else log.warn(`skipped: ${expectedErrorText(error)}`);',
+      '}',
+    ].join('\n');
+    expect(unfieldedLogLines(text)).toEqual([3]);
+  });
+
   it('passes a call that carries errorFields, spread or alone, and a log call outside any failure path', () => {
     const text = [
       'try { work(); } catch (err) {',

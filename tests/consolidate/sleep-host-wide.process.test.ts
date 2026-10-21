@@ -17,6 +17,7 @@ import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/sto
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -156,7 +157,7 @@ function seed(config: { memoryValue?: { enabled: boolean } }): string {
       normalizedChars: normalizeValueForRejection(refused).length,
     });
   });
-  sqliteSyncStore(root).consolidation.replaceConflicts(
+  sqliteSyncStore(handlesOf(root)).consolidation.replaceConflicts(
     [
       {
         memory_a_id: 'mem_acme_04',
