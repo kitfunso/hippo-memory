@@ -18,6 +18,7 @@ import {
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
@@ -58,7 +59,7 @@ let hostAdminToken: string;
 /** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's values. */
 async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
   const sides = await onBothStores(fixture, 'auditLog', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return sides.sqlite.outcomes.map((o) => {
     if ('error' in o) throw new Error(o.error);

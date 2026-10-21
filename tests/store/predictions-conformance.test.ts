@@ -12,6 +12,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent, PredictionBaserate } from '../../src/store/port/types.js';
 import type { Prediction, SavePredictionOptions } from '../../src/store/port/predictions.js';
@@ -44,7 +45,7 @@ let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
   const sides = await onBothStores(fixture, 'predictions', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

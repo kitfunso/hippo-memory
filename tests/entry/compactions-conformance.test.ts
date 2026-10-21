@@ -15,6 +15,7 @@ import {
   TENANT_A,
   TENANT_B,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -148,7 +149,7 @@ describe('Compactions', () => {
           lastRetrieved,
         })),
     ]);
-    expect(sameIds(sides.other)).toEqual(sameIds(sides.sqlite));
+    expectSameOutcomes({ other: sameIds(sides.other), sqlite: sameIds(sides.sqlite) });
     const outcomes = sides.sqlite.outcomes;
     expect(outcomes[3]).toEqual({
       value: {

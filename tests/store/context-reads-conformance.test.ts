@@ -22,6 +22,7 @@ import {
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -42,7 +43,7 @@ async function conforms(named: readonly Named[], on = fixture): Promise<Map<stri
     'contextReads',
     named.map(([, call]) => call),
   );
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   if (on === fixture) expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return new Map(named.map(([name], i) => [name, sides.sqlite.outcomes[i]]));
 }

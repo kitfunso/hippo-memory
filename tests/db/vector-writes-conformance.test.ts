@@ -23,6 +23,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -94,7 +95,7 @@ function seedMemories(dir: string): void {
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
   const sides = await onBothStores(fixture, 'vectorWrites', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

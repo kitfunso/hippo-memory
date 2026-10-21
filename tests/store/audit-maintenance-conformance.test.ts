@@ -17,6 +17,7 @@ import {
   type SideResult,
   valueAt,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -87,7 +88,7 @@ async function conforms(calls: readonly GroupCall<'auditMaintenance', unknown>[]
     return call(methods, store);
   });
   const sides = await onBothStores(fixture, 'auditMaintenance', timed);
-  expect(withoutBackupFile(sides.other)).toEqual(withoutBackupFile(sides.sqlite));
+  expectSameOutcomes({ other: withoutBackupFile(sides.other), sqlite: withoutBackupFile(sides.sqlite) });
   return sides;
 }
 

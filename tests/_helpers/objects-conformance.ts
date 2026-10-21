@@ -1,5 +1,5 @@
 // Calls, expected rows and hooks the objects-conformance tests share; useObjectsConformance seeds the two-tenant store.
-import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -23,6 +23,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
@@ -158,7 +159,7 @@ let nextAuditId: number;
 
 export async function conforms(calls: readonly Call[]): Promise<Side> {
   const sides = await onBothStores(fixture, 'objects', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

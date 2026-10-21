@@ -11,6 +11,7 @@ import {
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -68,7 +69,7 @@ const ids = (entities: readonly number[], relations: readonly Edge[], truncated 
 /** Both stores' answers, asserted equal, with nothing appended to either audit log. */
 async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
   const sides = await onBothStores(fixture, 'graphReads', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   expect(sides.sqlite.audit).toEqual(auditBefore);
   return sides.sqlite.outcomes.map((o) => {
     if ('error' in o) throw new Error(o.error);

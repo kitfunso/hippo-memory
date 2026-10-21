@@ -12,6 +12,7 @@ import {
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -41,7 +42,7 @@ async function conforms(calls: readonly GroupCall<'sessions', unknown>[]) {
     return call(group, store);
   });
   const sides = await onBothStores(fixture, 'sessions', timed);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   return sides.sqlite.outcomes;
 }
 

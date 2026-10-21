@@ -26,6 +26,7 @@ import {
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
 import type { GitHubRouting, StoredCursors, SlackTeamRoute, SlackWorkspace } from '../../src/store/port/connectors.js';
@@ -163,7 +164,7 @@ async function conforms(calls: readonly Call[], prepare: (root: string) => void 
   const sqlite = await runSide(sqliteConnectorEventsSide(copyOfFixture(prepare)), calls, (fn) => fn());
   const memory = memorySide(copyOfFixture(prepare));
   const other = await runSide(memory, calls, (fn) => withSqliteBlocked(memory.store.kind, fn));
-  expect(other).toEqual(sqlite);
+  expectSameOutcomes({ other, sqlite });
   return sqlite;
 }
 

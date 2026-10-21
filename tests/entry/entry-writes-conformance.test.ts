@@ -15,6 +15,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -107,7 +108,7 @@ const project = (entries: MemoryEntry[]): Row[] =>
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
   const sides = await onBothStores(fixture, 'entryWrites', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

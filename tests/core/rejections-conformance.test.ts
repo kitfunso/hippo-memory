@@ -19,6 +19,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -77,7 +78,7 @@ function seed(dir: string): Seeded {
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
   const sides = await onBothStores(fixture, 'rejections', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 
@@ -173,7 +174,7 @@ describe('Rejections.apply', () => {
         }));
       },
     ]);
-    expect(sides.other.outcomes).toEqual(sides.sqlite.outcomes);
+    expectSameOutcomes({ other: sides.other.outcomes, sqlite: sides.sqlite.outcomes });
     expect(sides.other.audit.map((r) => r.op)).toEqual(sides.sqlite.audit.map((r) => r.op));
     const rows = value<Row[]>(sides.sqlite, 0);
     expect(rows.map((r) => r.id)).toEqual(['successor']);

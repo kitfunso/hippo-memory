@@ -13,6 +13,7 @@ import {
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import {
   replaceDetectedConflicts,
@@ -76,7 +77,7 @@ function seed(dir: string): void {
 
 async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
   const sides = await onBothStores(fixture, 'reports', calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   return sides.sqlite.outcomes;
 }
 

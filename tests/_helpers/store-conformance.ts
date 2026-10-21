@@ -1,6 +1,7 @@
 // Runs one store group's calls on hippo.db's store and on memoryStore, each over its own copy of a two-tenant fixture,
 // and returns each side's answers and audit rows so a test can assert the two equal.
 import { cpSync, mkdtempSync } from 'node:fs';
+import { expect } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
@@ -91,6 +92,28 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
     if (!(err instanceof Error)) throw err;
     return { error: `${err.name}: ${err.message}` };
   }
+}
+
+/** BM25 differs in the last bit between FTS5 and the memory store on some platforms, so floats compare at 12 digits. */
+function roundFloats<T>(value: T): T {
+  if (Number.isFinite(value) && !Number.isInteger(value)) {
+    // SAFETY: Number.isFinite on a non-number is false, so value is a number here.
+    return Number(Number(value).toPrecision(12)) as T;
+  }
+  if (Array.isArray(value)) {
+    // SAFETY: map returns an array of the same element shape.
+    return value.map(roundFloats) as T;
+  }
+  if (value != null && Object.getPrototypeOf(Object(value)) === Object.prototype) {
+    // SAFETY: the entries are rebuilt under the same keys with the same value shapes.
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, roundFloats(v)])) as T;
+  }
+  return value;
+}
+
+/** Asserts the two sides agree; the sides stay raw, only the compared copies have their floats rounded. */
+export function expectSameOutcomes<T>(sides: { readonly other: T; readonly sqlite: T }): void {
+  expect(roundFloats(sides.other)).toEqual(roundFloats(sides.sqlite));
 }
 
 export type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
