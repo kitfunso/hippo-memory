@@ -27,7 +27,7 @@ import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue, findRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
@@ -82,7 +82,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
     );
 
     await expect(
-      cmdCapture(captureTarget(home), {
+      runCapture(captureTarget(home), {
         tenantId: 'default',
         source: 'file',
         filePath: fixturePath,
@@ -488,7 +488,7 @@ describe('capture dry-run tombstone accuracy', () => {
     );
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await cmdCapture(captureTarget(home), {
+    await runCapture(captureTarget(home), {
       tenantId: 'default',
       source: 'file',
       filePath: fixturePath,
@@ -502,7 +502,7 @@ describe('capture dry-run tombstone accuracy', () => {
     expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
     // Real run agrees: the tombstoned item is refused, the sibling lands.
-    await cmdCapture(captureTarget(home), {
+    await runCapture(captureTarget(home), {
       tenantId: 'default',
       source: 'file',
       filePath: fixturePath,

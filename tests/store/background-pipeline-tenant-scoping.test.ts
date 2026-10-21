@@ -11,7 +11,7 @@ import { createMemory, Layer } from '../../src/base/memory/memory.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { refineStore } from '../../src/surface/cli/refine-llm.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget, localIndex, hookStore } from '../_helpers/cli-stores.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../../src/entry/importers.js';
@@ -169,7 +169,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(refineCallSources).toBe(0); // cross-tenant parent was silently skipped
   });
 
-  it('case 5: cmdCapture (file source) dedup AND write are both tenant-scoped via options.tenantId', async () => {
+  it('case 5: runCapture (file source) dedup AND write are both tenant-scoped via options.tenantId', async () => {
     // Use a fixture that actually triggers extractFromTexts.
     // 'we decided to X' matches DECISION_PATTERNS and extracts as a decision.
     const fixtureText = 'we decided to use Bearer tokens for HTTP authentication next quarter.';
@@ -189,10 +189,10 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(loadAllEntries(hippoRoot, 'tenant-b').length).toBe(1);
     expect(loadAllEntries(hippoRoot, 'tenant-a').length).toBe(0);
 
-    // Capture with tenant-a scope. The dedup branch in cmdCaptureCore calls
+    // Capture with tenant-a scope. The dedup branch in runCaptureCore calls
     // loadAllEntries(targetRoot, options.tenantId='tenant-a') and sees NOTHING
     // (tenant-b's seed is invisible), so the extracted decision IS written.
-    await cmdCapture(captureTarget(hippoRoot), {
+    await runCapture(captureTarget(hippoRoot), {
       source: 'file',
       filePath: fixturePath,
       dryRun: false,
@@ -218,7 +218,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // tenant-a skips it as a duplicate of tenant-a's own row.
     const fixturePath2 = join(tmpDir, 'capture-fixture2.txt');
     fs.writeFileSync(fixturePath2, fixtureText, 'utf8');
-    await cmdCapture(captureTarget(hippoRoot), {
+    await runCapture(captureTarget(hippoRoot), {
       tenantId: 'tenant-a',
       source: 'file',
       filePath: fixturePath2,

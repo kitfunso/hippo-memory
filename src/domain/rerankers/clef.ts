@@ -4,8 +4,9 @@ import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
+import { rerankerPost } from './remote.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
+import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../base/util/json.js';
 import { errorFields, errorMessage } from '../../base/util/log.js';
 import { parseOutboundUrl } from '../../base/util/net.js';
@@ -142,7 +143,7 @@ async function requestScores(call: ClefCall, query: string, head: SearchResult[]
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
   }
-  const body = await readCappedJson(resp, RERANKER_MAX_REPLY_BYTES);
+  const body = await readCappedJson(resp, MAX_REPLY_BYTES);
   const parsed = parseClefReply(body, head.length, model, route.backend === 'cloudflare');
   if (isRejection(parsed)) throw new Error(parsed);
   return parsed;

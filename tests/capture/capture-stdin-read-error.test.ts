@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -16,11 +16,11 @@ afterEach(() => {
   syncBuiltinESMExports();
 });
 
-describe('cmdCapture reading stdin', () => {
+describe('runCapture reading stdin', () => {
   it('logs the error that stopped the read, then prints the usual advice and sets exit code 1', async () => {
     const root = makeRoot('capture-stdin');
     const target = captureTarget(root);
-    // The stdin read is the first readFileSync cmdCapture makes, so the one failure lands on it.
+    // The stdin read is the first readFileSync runCapture makes, so the one failure lands on it.
     const read = vi.spyOn(fs, 'readFileSync').mockImplementationOnce(() => {
       throw Object.assign(new Error('EAGAIN: resource temporarily unavailable, read'), { code: 'EAGAIN' });
     });
@@ -28,7 +28,7 @@ describe('cmdCapture reading stdin', () => {
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    await cmdCapture(target, { tenantId: 'default', source: 'stdin', dryRun: true, global: false });
+    await runCapture(target, { tenantId: 'default', source: 'stdin', dryRun: true, global: false });
 
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('reading stdin failed: EAGAIN');
     expect(read).toHaveBeenCalledWith(0, 'utf8');

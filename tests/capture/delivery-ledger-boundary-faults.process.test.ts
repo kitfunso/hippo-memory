@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { cmdPreCompact } from '../../src/surface/capture/compact.js';
+import { preCompactHook } from '../../src/surface/capture/compact.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
 import { normalizeHookPayload } from '../../src/surface/cli/stdin.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
@@ -193,7 +193,7 @@ describe('boundary row contents and a boundary callback that throws', () => {
     try {
       const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
       const logFile = path.join(p.dir, 'u1.log');
-      await cmdPreCompact(p.hippoRoot, hookStore(p.hippoRoot), {
+      await preCompactHook(p.hippoRoot, hookStore(p.hippoRoot), {
         tenantId: 'default',
         stdinText: normalizeHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
         runtime: 'copilot',

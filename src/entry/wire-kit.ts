@@ -5,8 +5,7 @@ import { ambientSecretAdmit } from '../base/scope/read-admission.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
 import {
   calculateStrength,
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
+  createMemoryWithDefaults,
   type CreateMemoryOptions,
   type DecayOptions,
 } from '../base/memory/memory.js';
@@ -35,9 +34,7 @@ export type WireStrengthInputs = Pick<
 >;
 
 export function createMemoryWire(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryWire {
-  return toWire(
-    createMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS }),
-  );
+  return toWire(createMemoryWithDefaults(content, options));
 }
 
 export function embedMemoryWire(hippoRoot: string, entry: MemoryWire): Promise<EmbedOutcome> {

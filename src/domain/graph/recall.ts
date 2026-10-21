@@ -39,7 +39,7 @@ export interface GraphExpandOpts {
   tenantId: string;
   /** Mirror the recall handler's hard filters when re-loading graph-reached rows. */
   includeSuperseded?: boolean;
-  /** ISO date; bi-temporal as-of filter applied to graph-reached rows, matching cmdRecall: visible if valid_from <=
+  /** ISO date; bi-temporal as-of filter applied to graph-reached rows, matching recall: visible if valid_from <=
    *  asOf and, when superseded, its successor was not yet valid at asOf. */
   asOf?: string;
   /** Token budget for the augmented set (defaults to DEFAULT_RECALL_BUDGET, matching recall). */
@@ -139,7 +139,7 @@ function passesRecallFilters(
     if (new Date(mem.validFrom) > asOfDate) return false; // not yet valid at asOf
     if (mem.supersededBy) {
       const succVf = successorValidFrom.get(mem.supersededBy);
-      // Visible only while its successor was NOT yet valid at asOf (matches cmdRecall).
+      // Visible only while its successor was NOT yet valid at asOf (matches recall).
       if (succVf && new Date(succVf) <= asOfDate) return false;
     }
   } else if (!includeSuperseded && (mem.supersededBy || isSupersededEndpoint)) {

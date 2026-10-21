@@ -48,12 +48,12 @@ export interface CaptureTarget {
   readonly index: EmbedTarget;
 }
 
-export async function cmdCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
+export async function runCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already
   // wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
   try {
-    await cmdCaptureCore(target, options);
+    await runCaptureCore(target, options);
     if (options.logFile) console.log('[hippo] capture complete');
   } catch (err) {
     if (options.logFile) console.log(`[hippo] capture failed: ${errorMessage(err)}`);
@@ -83,7 +83,7 @@ function writeLogBanner(logFile: string): boolean {
 }
 
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
-async function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
+async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
     await target.store.folderFiles.ensure();
   } else if (!isInitialized(target.root)) {
@@ -91,7 +91,7 @@ async function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): P
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
         `Run \`hippo init\` first.`,
     );
-    // Set, not exit, so cmdCapture's finally restores the tee'd stdio.
+    // Set, not exit, so runCapture's finally restores the tee'd stdio.
     process.exitCode = 1;
     return;
   }
