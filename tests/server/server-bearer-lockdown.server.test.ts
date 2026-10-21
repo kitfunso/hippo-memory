@@ -2,9 +2,6 @@
 // /v1 and /mcp route must 401 without a valid Bearer. The route list is derived from
 // the route table so a new route missing buildContextWithAuth/requireAuth fails here.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { HOST_ROUTES, routeLabel } from '../../src/surface/server/route-table.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
@@ -13,8 +10,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 // The /v1 rows come from the live table; the routes outside it come from HOST_ROUTES, which boot.ts dispatches.
 const INLINE_ROUTES: readonly string[] = Object.values(HOST_ROUTES).map(({ method, path }) => `${method} ${path}`);
@@ -101,6 +96,27 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'GET', pattern: '/mcp/stream' },
 ];
 
+// Every method a client can send; an undeclared pair answering anything but 404 is a route outside the table.
+const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+// Paths no row declares, so a route added outside the table on a new path shows too.
+const UNDECLARED_PATHS = [
+  '/',
+  '/v1',
+  '/v1/unknown',
+  '/v2/memories',
+  '/admin',
+  '/debug',
+  '/metrics',
+  '/healthz',
+  '/mcp/x',
+];
+
+function requestInit(method: string): RequestInit {
+  return method === 'GET' || method === 'HEAD'
+    ? { method }
+    : { method, headers: { 'content-type': 'application/json' }, body: '{}' };
+}
+
 function requestPath(pattern: string, query?: string): string {
   const path = pattern.replace(/:\w+/g, '1');
   return query ? `${path}${query}` : path;
@@ -120,8 +136,6 @@ describe('server Bearer lockdown', () => {
   });
 
   afterEach(async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
-    vi.stubEnv('HIPPO_V1_RPS', undefined);
     await handle.stop();
   });
 
@@ -139,12 +153,36 @@ describe('server Bearer lockdown', () => {
     expect(open).toEqual([]);
   });
 
-  // Source text is the only way to see an inline route nobody listed, since no request names a path the table lacks.
-  it('boot.ts checks no method inline and dispatches each HOST_ROUTES entry once; the public webhooks live in the table', () => {
-    const boot = readFileSync(join(repoRoot, 'src/surface/server/boot.ts'), 'utf8');
-    expect(boot.match(/^\s*if \(method === '/gm) ?? []).toEqual([]);
-    expect((boot.match(/dispatchHostRoute\(/g) ?? []).length).toBe(INLINE_ROUTES.length);
-    expect([...INLINE_ROUTES].sort()).toEqual(['GET /health', 'GET /mcp/stream', 'GET /ready', 'POST /mcp']);
+  it('every method on every path answers 404 unless the route table or HOST_ROUTES declares the pair', async () => {
+    const declared = new Set(
+      [...derivedRoutes()].map((key) => {
+        const [method, pattern] = key.split(' ');
+        return `${method} ${requestPath(pattern)}`;
+      }),
+    );
+    const paths = new Set([...declared].map((key) => key.split(' ')[1]));
+    for (const path of UNDECLARED_PATHS) paths.add(path);
+    const answered: string[] = [];
+    for (const path of paths) {
+      for (const method of METHODS) {
+        if (declared.has(`${method} ${path}`)) continue;
+        const res = await fetch(`http://127.0.0.1:${handle.port}${path}`, requestInit(method));
+        await res.arrayBuffer();
+        if (res.status !== 404) answered.push(`${method} ${path} -> ${res.status}`);
+      }
+    }
+    expect(answered).toEqual([]);
+  });
+
+  it('each HOST_ROUTES entry is served on its own path: the probes with no key, /mcp only with one', async () => {
+    const statuses: Record<string, number> = {};
+    for (const key of INLINE_ROUTES) {
+      const [method, path] = key.split(' ');
+      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`, requestInit(method));
+      await res.arrayBuffer();
+      statuses[key] = res.status;
+    }
+    expect(statuses).toEqual({ 'GET /health': 200, 'GET /ready': 200, 'POST /mcp': 401, 'GET /mcp/stream': 401 });
   });
 
   it('the live /v1 table is at least as large as the 62 rows the old source parse found', () => {
