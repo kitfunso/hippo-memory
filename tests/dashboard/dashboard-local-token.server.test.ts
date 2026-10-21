@@ -48,7 +48,9 @@ describe('dashboard local access token', () => {
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=Strict/i);
     const pair = cookie.split(';')[0]!;
-    expect(pair).toBe(sessionCookie(port, TOKEN));
+    // The issue time is in the value, so a cookie rebuilt from it must match the one the server sent.
+    const issuedAt = Number(pair.slice(pair.indexOf('=') + 1).split('.')[0]);
+    expect(pair).toBe(sessionCookie(port, TOKEN, issuedAt));
 
     const again = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } });
     expect(again.status).toBe(200);
@@ -58,7 +60,7 @@ describe('dashboard local access token', () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/overview?token=${TOKEN}`);
     const cookie = res.headers.get('set-cookie') ?? '';
     expect(cookie).not.toContain(TOKEN);
-    expect(cookie.split(';')[0]).toMatch(new RegExp(`^hippo_dashboard_${port}=[0-9a-f]{64}$`));
+    expect(cookie.split(';')[0]).toMatch(new RegExp(`^hippo_dashboard_${port}=\\d+\\.[0-9a-f]{64}$`));
 
     const raw = await fetch(`http://127.0.0.1:${port}/api/overview`, {
       headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` },

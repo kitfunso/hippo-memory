@@ -59,6 +59,8 @@ export const STORE_NOT_PORTED_MESSAGE = 'store_not_ported';
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {
   const text = JSON.stringify(body);
   if (text === undefined) throw new Error('response body is not JSON');
+  // A reply can carry memory text or keys; a route that set its own Cache-Control keeps it.
+  if (!res.hasHeader('cache-control')) res.setHeader('cache-control', 'no-store');
   res.writeHead(status, JSON_HEADERS);
   res.end(text);
 }

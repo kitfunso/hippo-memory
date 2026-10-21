@@ -164,7 +164,7 @@ describe('key derivation bounds', () => {
     await start({ store: arrivingTogether(keys.length) });
     const before = scryptRuns();
     watchPool();
-    const replies = await Promise.all(keys.map((key) => recall(key)));
+    const replies = await Promise.all(keys.map((key, n) => recall(key, `203.0.113.${n + 1}`)));
     expect(replies.filter((r) => r.status === 200)).toHaveLength(10);
     expect(replies.filter((r) => r.status !== 200)).toEqual(
       Array(3).fill({ status: 429, retryAfter: '1', refusal: { error: 'rate limit exceeded' } }),
@@ -192,6 +192,28 @@ describe('key derivation bounds', () => {
       Array(7).fill({ status: 429, retryAfter: '1', refusal: { error: 'rate limit exceeded' } }),
     );
     expect(scryptRuns() - before).toBe(4);
+  });
+
+  it('charges the failed-auth bucket for an unknown key id as for a wrong secret, so key-id probing ends in 429', async () => {
+    const key = mint();
+    await start({ rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.001, burst: 3 } } });
+    const before = scryptRuns();
+    const unknownId = (n: number): string => `hk_${'abcdefghij'.charAt(n).repeat(24)}.${'b'.repeat(32)}`;
+    const probes: number[] = [];
+    for (let n = 0; n < 6; n++) probes.push((await recall(unknownId(n), '203.0.113.150')).status);
+    expect(probes).toEqual([401, 401, 401, 429, 429, 429]);
+    expect(scryptRuns() - before).toBe(0);
+    expect(await recall(key, '203.0.113.151')).toEqual(OK);
+  });
+
+  it('holds one address to two slots of the scrypt queue, so a third key from it is refused at once while another address still derives', async () => {
+    const keys = Array.from({ length: 4 }, () => mint());
+    await start({ store: arrivingTogether(keys.length) });
+    const before = scryptRuns();
+    const replies = await Promise.all(keys.map((key, n) => recall(key, n < 3 ? '203.0.113.160' : '203.0.113.161')));
+    expect(replies.map((r) => r.status)).toEqual([200, 200, 429, 200]);
+    expect(replies[2]).toMatchObject({ retryAfter: '1', refusal: { error: 'rate limit exceeded' } });
+    expect(scryptRuns() - before).toBe(3);
   });
 
   it("derives an unproved key's secret as a thread-pool job, so the event loop is free while it runs", async () => {

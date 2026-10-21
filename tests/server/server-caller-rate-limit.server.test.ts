@@ -344,7 +344,7 @@ describe('the per-address scrypt bucket', () => {
     expect(scryptRunsSince(before)).toBe(40);
   });
 
-  it('never charges a token that ran no scrypt, so a colleague behind the same address keeps a proved key while junk floods it', async () => {
+  it('charges an unknown, revoked or expired key id once and a junk shape never, so a colleague behind the same address keeps a proved key', async () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     freezeClock();
@@ -366,18 +366,20 @@ describe('the per-address scrypt bucket', () => {
     const office = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
     expect(await office(dev)).toEqual(OK);
     const before = scryptRuns();
-    // Junk shape, an unknown id, a revoked key and an expired key: 60 in all, past the burst. A resolver refusal is charged.
-    const junk = ['hk_junk', `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`, revoked, expired];
-    for (let i = 0; i < 60; i++) expect(await office(junk[i % junk.length]!)).toEqual(UNAUTHORISED);
+    // A junk shape names no key id, so 60 of them past the burst charge nothing and run no scrypt.
+    for (let i = 0; i < 60; i++) expect(await office('hk_junk')).toEqual(UNAUTHORISED);
+    // An unknown, a revoked and an expired key id each spend one token without a derivation.
+    const unusable = [`hk_${'a'.repeat(24)}.${'b'.repeat(32)}`, revoked, expired];
+    for (const token of unusable) expect(await office(token)).toEqual(UNAUTHORISED);
     expect(scryptRunsSince(before)).toBe(0);
-    // Real-shaped wrong secrets run scrypt, so they spend all 39 tokens the developer's first check left, then meet 429.
-    const flood = await replies(wrongSecretsAcross(targets, office), 40);
-    expect(flood.slice(0, 39)).toEqual(Array(39).fill(UNAUTHORISED));
-    expect(flood[39]).toEqual({ status: 429, retryAfter: '200' });
-    expect(scryptRunsSince(before)).toBe(39);
+    // Real-shaped wrong secrets run scrypt, so they spend the 36 tokens left of the developer's first check, then meet 429.
+    const flood = await replies(wrongSecretsAcross(targets, office), 37);
+    expect(flood.slice(0, 36)).toEqual(Array(36).fill(UNAUTHORISED));
+    expect(flood[36]).toEqual({ status: 429, retryAfter: '200' });
+    expect(scryptRunsSince(before)).toBe(36);
     // The bucket is empty, yet the developer's key passes, because its secret is already proved.
     expect(await office(dev)).toEqual(OK);
-    expect(scryptRunsSince(before)).toBe(39);
+    expect(scryptRunsSince(before)).toBe(36);
   });
 
   it('keys an IPv6 address on its /48, so rotating /64s inside one /48 buys no fresh scrypt budget', async () => {

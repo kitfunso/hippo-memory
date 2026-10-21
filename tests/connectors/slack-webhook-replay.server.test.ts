@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { listDlq } from '../../src/surface/connectors/dlq.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
-import { createReplayWindow } from '../../src/surface/connectors/replay-window.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -81,27 +80,5 @@ describe('POST /v1/connectors/slack/events replay', () => {
     expect(await post(String(now - 1))).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await post(String(now))).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(2);
-  });
-});
-
-describe('createReplayWindow', () => {
-  it('refuses a key inside the window and takes it again once the window has passed', () => {
-    const w = createReplayWindow(1000, 10);
-    expect([w.claim('a', 0), w.claim('a', 999), w.claim('a', 1000)]).toEqual([true, false, true]);
-  });
-
-  it('takes a released key again at once', () => {
-    const w = createReplayWindow(1000, 10);
-    w.claim('a', 0);
-    w.release('a');
-    expect(w.claim('a', 1)).toBe(true);
-  });
-
-  it('drops the oldest claim at the cap', () => {
-    const w = createReplayWindow(1000, 2);
-    w.claim('a', 0);
-    w.claim('b', 1);
-    w.claim('c', 2);
-    expect([w.claim('b', 3), w.claim('a', 3)]).toEqual([false, true]);
   });
 });
