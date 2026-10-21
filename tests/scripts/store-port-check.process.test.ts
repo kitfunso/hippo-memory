@@ -13,7 +13,7 @@ type Counts = {
   openersInCli: number;
   storeBranches: number;
   routesNeedingHippoDb: number;
-  sqliteOnlyRoutes: number;
+  hippoDbOnlyRoutes: number;
   twinFunctions: number;
   sqlOutside: number;
   txLiterals: number;
@@ -25,7 +25,7 @@ type Counts = {
   sqlOutsideByFile: Record<string, number>;
   handleHoldersOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
-  sqliteOnlyRoutesList: string[];
+  hippoDbOnlyRoutesList: string[];
   carrierFiles: number;
   carrierFilesList: string[];
   storeFilesWithoutSql?: number;
@@ -38,7 +38,7 @@ const zero: Counts = {
   openersInCli: 0,
   storeBranches: 0,
   routesNeedingHippoDb: 0,
-  sqliteOnlyRoutes: 0,
+  hippoDbOnlyRoutes: 0,
   twinFunctions: 0,
   sqlOutside: 0,
   txLiterals: 0,
@@ -50,7 +50,7 @@ const zero: Counts = {
   sqlOutsideByFile: {},
   handleHoldersOutsideByFile: {},
   sqliteLocalMethods: [],
-  sqliteOnlyRoutesList: [],
+  hippoDbOnlyRoutesList: [],
   carrierFiles: 0,
   carrierFilesList: [],
 };
@@ -330,13 +330,13 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('reads route status from the syntax tree: localFiles and sqliteOnly rows need hippo.db, a comment does not', () => {
+  it('reads route status from the syntax tree: localFiles and hippoDbOnly rows need hippo.db, a comment does not', () => {
     const table =
-      "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'vectorViews', handler: e },\n  { method: 'POST', path: '/c', sqliteOnly: 'runs the local process', handler: c },\n];\n";
+      "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'vectorViews', handler: e },\n  { method: 'POST', path: '/c', hippoDbOnly: 'runs the local process', handler: c },\n];\n";
     withFixture({ 'src/surface/server/route-table.ts': table }, null, ({ run }) => {
-      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', sqliteOnlyRoutes: '1' });
+      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', hippoDbOnlyRoutes: '1' });
     });
-    const listed = { routesNeedingHippoDb: 1, sqliteOnlyRoutes: 1, sqliteOnlyRoutesList: ['POST /c'] };
+    const listed = { routesNeedingHippoDb: 1, hippoDbOnlyRoutes: 1, hippoDbOnlyRoutesList: ['POST /c'] };
     withFixture({ 'src/surface/server/route-table.ts': table }, listed, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
@@ -348,9 +348,9 @@ describe('check-store-port.mjs', () => {
     const bad = (row: string) => `const V1_ROUTES = [\n  ${row}\n];\n`;
     const cases: [string, string][] = [
       ["{ method: 'GET', path: '/a', storeReady: someIdentifier, handler: a },", 'GET /a'],
-      ["{ method: 'POST', path: '/b', sqliteOnly: reason, handler: b },", 'POST /b'],
-      ["{ method: 'POST', path: '/c', sqliteOnly: '', handler: c },", 'POST /c'],
-      ["{ method: 'POST', path: '/d', storeReady: 'base', sqliteOnly: 'x', handler: d },", 'POST /d'],
+      ["{ method: 'POST', path: '/b', hippoDbOnly: reason, handler: b },", 'POST /b'],
+      ["{ method: 'POST', path: '/c', hippoDbOnly: '', handler: c },", 'POST /c'],
+      ["{ method: 'POST', path: '/d', storeReady: 'base', hippoDbOnly: 'x', handler: d },", 'POST /d'],
       ['...MORE_ROUTES,', 'spread'],
     ];
     for (const [row, named] of cases) {
@@ -370,28 +370,28 @@ describe('check-store-port.mjs', () => {
       'src/surface/server/routes/kind-routes.ts': builder,
     });
     withFixture(rows('export function kindRows(kind) {\n  return [];\n}\n'), null, ({ run }) => {
-      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '1', sqliteOnlyRoutes: '0' });
+      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '1', hippoDbOnlyRoutes: '0' });
     });
     withFixture(rows("export const row = { storeReady: 'localFiles' };\n"), null, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('kind-routes.ts builds rows that name a storeReady or sqliteOnly');
+      expect(r.stderr).toContain('kind-routes.ts builds rows that name a storeReady or hippoDbOnly');
     });
   });
 
-  it('fails and names a sqliteOnly route the baseline does not list, and --update will not add it', () => {
+  it('fails and names a hippoDbOnly route the baseline does not list, and --update will not add it', () => {
     const table =
-      "const V1_ROUTES = [\n  { method: 'POST', path: '/x', sqliteOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', sqliteOnly: 'local only', handler: y },\n];\n";
+      "const V1_ROUTES = [\n  { method: 'POST', path: '/x', hippoDbOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', hippoDbOnly: 'local only', handler: y },\n];\n";
     withFixture(
       { 'src/surface/server/route-table.ts': table },
-      { sqliteOnlyRoutes: 2, sqliteOnlyRoutesList: ['POST /x'] },
+      { hippoDbOnlyRoutes: 2, hippoDbOnlyRoutesList: ['POST /x'] },
       ({ run, baseline }) => {
         const r = run();
         expect(r.status).toBe(1);
-        expect(r.stderr).toContain('sqliteOnly POST /y: unlisted -> declared');
-        expect(r.stderr).not.toContain('sqliteOnly POST /x');
+        expect(r.stderr).toContain('hippoDbOnly POST /y: unlisted -> declared');
+        expect(r.stderr).not.toContain('hippoDbOnly POST /x');
         expect(run('--update').status).toBe(1);
-        expect(baseline().sqliteOnlyRoutesList).toEqual(['POST /x']);
+        expect(baseline().hippoDbOnlyRoutesList).toEqual(['POST /x']);
       },
     );
   });

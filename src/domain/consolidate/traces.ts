@@ -81,7 +81,7 @@ async function sessionTrace(
   const { outcome, summary } = ending;
 
   const steps = events
-    .filter((e) => e.event_type !== 'session_complete')
+    .filter((e) => e.eventType !== 'session_complete')
     .map((e) => ({ action: e.content, observation: '' }));
 
   const trace = createMemory(renderTraceContent({ task: summary, steps, outcome }), {
@@ -100,7 +100,7 @@ async function sessionTrace(
 
 /** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
 function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome; summary: string } | null {
-  const completeEvent = events.find((e) => e.event_type === 'session_complete');
+  const completeEvent = events.find((e) => e.eventType === 'session_complete');
   if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
 
   const outcomeRaw = completeEvent.content;

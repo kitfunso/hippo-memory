@@ -12,7 +12,7 @@ import {
   ensureContinuityTables,
 } from './continuity.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations/index.js';
-import { placeholders } from '../base/util/sql.js';
+import { placeholders } from './sql.js';
 import { IncompatibleBinaryError } from '../base/errors/store-open.js';
 
 export function getCurrentSchemaVersion(): number {

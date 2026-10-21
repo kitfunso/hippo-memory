@@ -194,7 +194,7 @@ function seedTeam(root: string): void {
     saveActiveTaskSnapshot(
       root,
       TEAM,
-      { task: `${owner} ships ${project}`, summary: 'in progress', next_step: 'review', session_id: sessionId },
+      { task: `${owner} ships ${project}`, summary: 'in progress', nextStep: 'review', sessionId: sessionId },
       key,
     );
     saveSessionHandoff(
@@ -203,7 +203,7 @@ function seedTeam(root: string): void {
       { version: 1, sessionId, summary: `${owner} hands off ${project}`, nextAction: 'merge' },
       key,
     );
-    appendSessionEvent(root, TEAM, { session_id: sessionId, event_type: 'note', content: `${owner} noted ${project}` });
+    appendSessionEvent(root, TEAM, { sessionId: sessionId, eventType: 'note', content: `${owner} noted ${project}` });
   }
   // Newest on alice's session id, so only the key keeps bob's handoff out.
   saveSessionHandoff(
@@ -333,7 +333,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
       null,
       'local',
       {
-        activeSnapshot: { session_id: SESSION },
+        activeSnapshot: { sessionId: SESSION },
         sessionHandoff: { sessionId: SESSION },
         recentSessionEvents: [{ content: 'canary passed' }],
       },
@@ -362,7 +362,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
       (s) =>
         handlesOf(s.root).on((db, files) => {
           const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined);
-          const sessionId = activeSnapshot?.session_id ?? undefined;
+          const sessionId = activeSnapshot?.sessionId ?? undefined;
           return {
             activeSnapshot,
             sessionHandoff: sessionId ? loadLatestHandoffAt(db, tenantId, sessionId, {}, key ?? undefined) : null,

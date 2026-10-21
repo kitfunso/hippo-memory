@@ -17,7 +17,7 @@ import type { StoreFiles } from './open.js';
 import { clock, type WriteBudget } from '../../base/util/write-budget.js';
 import { noteFailedUnit } from '../../base/errors/failed-unit.js';
 import { chunked, ID_CHUNK } from '../../base/util/chunked.js';
-import { placeholders } from '../../base/util/sql.js';
+import { placeholders } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../port/consolidation.js';

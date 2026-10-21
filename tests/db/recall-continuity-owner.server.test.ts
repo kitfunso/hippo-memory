@@ -21,7 +21,7 @@ const ctx = (owner: string): FullContext =>
   apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner });
 
 function snap(task: string, session: string) {
-  return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
+  return { task, summary: `${task} summary`, nextStep: `${task} next`, sessionId: session };
 }
 
 afterEach(async () => {

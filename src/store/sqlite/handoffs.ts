@@ -11,8 +11,8 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { TaskSnapshot } from '../port/sessions.js';
 import type { StoreFiles } from './open.js';
-import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';
-import type { ContinuityKey } from '../port/types.js';
+import { continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';
+import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
@@ -27,7 +27,7 @@ function insertHandoffRow(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
-  stamp: ReturnType<typeof continuityStamp> | null,
+  stamp: ContinuityStamp | null,
   now: string,
 ) {
   return cachedStatement(
@@ -232,13 +232,13 @@ function replaceTranscriptHandoffAt(
 }
 
 interface HandoffSource {
-  snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step' | 'scope'>;
+  snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep' | 'scope'>;
   evidence: HandoffEvidence | null;
 }
 
 function transcriptHandoffSource(
   existing: SessionHandoff | null,
-  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null,
+  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'> | null,
   evidence: HandoffEvidence | null,
 ): HandoffSource | null {
   // Only an earlier transcript read gives way; `hippo handoff create` and unmarked older handoffs keep winning.
@@ -248,7 +248,7 @@ function transcriptHandoffSource(
     existing &&
     existing.taskId === derived.task &&
     existing.summary === derived.summary &&
-    existing.nextAction === derived.next_step
+    existing.nextAction === derived.nextStep
   ) {
     return null;
   }
@@ -273,7 +273,7 @@ function buildSessionEndHandoff(
     repoRoot: carryForward ? existing.repoRoot : undefined,
     taskId: snapshot.task,
     summary: snapshot.summary,
-    nextAction: snapshot.next_step,
+    nextAction: snapshot.nextStep,
     artifacts: carryForward ? existing.artifacts : [],
     scope: snapshot.scope,
     evidence: handoffEvidence,
@@ -298,15 +298,15 @@ export function writeSessionEndHandoffAt(
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = loadActiveTaskSnapshotAt(db, files, tenantId, key);
   const existing = loadLatestHandoffAt(db, tenantId, sessionId, {}, key);
-  let snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step' | 'scope'>;
+  let snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep' | 'scope'>;
   let handoffEvidence = evidence;
   let fromTranscript = false;
   // After every reply the transcript is newer than the last compaction's snapshot, which the open chat keeps for the
   // next one.
   const snapshotGivesWay = inPlace === true && derived !== null && active?.source === 'pre-compact';
-  if (active && active.session_id === sessionId && !snapshotGivesWay) {
+  if (active && active.sessionId === sessionId && !snapshotGivesWay) {
     // Strict '>': a same-millisecond tie must not swallow the session's only write (test 6e).
-    if (existing && existing.updatedAt > active.updated_at) return null;
+    if (existing && existing.updatedAt > active.updatedAt) return null;
     snapshot = active;
   } else {
     const fromDerived = transcriptHandoffSource(existing, derived, evidence);

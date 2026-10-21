@@ -25,7 +25,15 @@ export const WORKING_STATE_CAPS = {
   next_step: PRE_COMPACT_NEXT_STEP_CAP,
 } as const;
 
-export type WorkingState = Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'>;
+/** Published in snake_case, as a transcript read and a caller's request carry it; the port spells it camelCase. */
+export type WorkingState = { task: string; summary: string; next_step: string };
+
+/** A working state in the store port's field names. */
+export type SnapshotFields = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'>;
+
+export function snapshotFields(state: WorkingState): SnapshotFields {
+  return { task: state.task, summary: state.summary, nextStep: state.next_step };
+}
 
 /** Cuts each field to {@link WORKING_STATE_CAPS}, for after a scrub, as a mask can run longer than what it hides. */
 export function fitWorkingState(state: WorkingState): WorkingState {
@@ -49,17 +57,17 @@ export function mergeWorkingState(
   derived: WorkingState,
   existing: TaskSnapshot | null,
   sessionId: string | null,
-): WorkingState | null {
+): SnapshotFields | null {
   const fallback =
-    existing !== null && (existing.session_id === null || sessionId === null || existing.session_id === sessionId)
+    existing !== null && (existing.sessionId === null || sessionId === null || existing.sessionId === sessionId)
       ? existing
       : null;
   const merged = {
     task: derived.task || (fallback?.task ?? ''),
     summary: derived.summary || (fallback?.summary ?? ''),
-    next_step: derived.next_step || (fallback?.next_step ?? ''),
+    nextStep: derived.next_step || (fallback?.nextStep ?? ''),
   };
-  return merged.task || merged.summary || merged.next_step ? merged : null;
+  return merged.task || merged.summary || merged.nextStep ? merged : null;
 }
 
 /**
@@ -125,10 +133,7 @@ function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
 /**
  * A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null
  * with a logged reason when nothing is derivable. */
-export function transcriptWorkingState(
-  transcriptPath: string,
-  log: (message: string) => void,
-): Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null {
+export function transcriptWorkingState(transcriptPath: string, log: (message: string) => void): WorkingState | null {
   let tail = '';
   let rawTask = '';
   let rawNextStep = '';

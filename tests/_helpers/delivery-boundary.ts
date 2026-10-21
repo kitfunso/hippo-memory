@@ -205,8 +205,8 @@ export function saveSnapshot(p: Project, sessionId: string | null): void {
   saveActiveTaskSnapshot(p.hippoRoot, 'default', {
     task: SNAPSHOT_TASK,
     summary: 'summary of the work',
-    next_step: 'run the tests',
-    session_id: sessionId,
+    nextStep: 'run the tests',
+    sessionId: sessionId,
     source: 'pre-compact',
   });
 }

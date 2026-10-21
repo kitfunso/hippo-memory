@@ -40,7 +40,7 @@ import type {
   PoliciesInForceQuery,
 } from '../port.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
-import { placeholders } from '../../base/util/sql.js';
+import { placeholders } from '../../db/sql.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 

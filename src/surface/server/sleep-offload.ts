@@ -54,7 +54,7 @@ function failureOf<R>(reply: SleepReply<R> | undefined, code: number | null, sig
 function runInChild<R>(job: SleepJob): Promise<R> {
   const deadlineMs = envSleepTimeoutMs() ?? DEFAULT_SLEEP_DEADLINE_MS;
   return new Promise((resolve, reject) => {
-    // The child's stderr is the server's log, so Node's SQLite notice would repeat there on every sleep.
+    // The child's stderr is the server's log, so Node's experimental-module notice would repeat there on every sleep.
     const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', CHILD_ENTRY], {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
       windowsHide: true,
@@ -62,7 +62,7 @@ function runInChild<R>(job: SleepJob): Promise<R> {
     let reply: SleepReply<R> | undefined;
     let timedOut = false;
     let malformed = false;
-    // SIGKILL because the child is inside synchronous SQLite work and cannot run a handler; the OS drops its write
+    // SIGKILL because the child is inside synchronous hippo.db work and cannot run a handler; the OS drops its write
     // lock.
     const timer = setTimeout(() => {
       timedOut = true;

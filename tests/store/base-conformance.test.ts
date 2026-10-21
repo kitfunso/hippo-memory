@@ -126,13 +126,13 @@ describe('HippoStore continuity', () => {
   it('reads the keyed snapshot with its session handoff and newest events, oldest first', async () => {
     const { outcomes } = await conforms([
       (s) =>
-        s.sessions.saveSnapshot(TENANT_A, { task: 'ship', summary: 'half', next_step: 'merge', session_id: 's1' }, KEY),
+        s.sessions.saveSnapshot(TENANT_A, { task: 'ship', summary: 'half', nextStep: 'merge', sessionId: 's1' }, KEY),
       (s) => s.sessions.saveHandoff(TENANT_A, { version: 1, sessionId: 's1', summary: 'carry on' }, KEY),
       (s) => s.sessions.saveHandoff(TENANT_A, { version: 1, sessionId: 's1', summary: 'carry on again' }, KEY),
-      (s) => s.sessions.appendEvent(TENANT_A, { session_id: 's1', event_type: 'note', content: 'one' }),
-      (s) => s.sessions.appendEvent(TENANT_A, { session_id: 's1', event_type: 'note', content: 'two' }),
-      (s) => s.sessions.appendEvent(TENANT_A, { session_id: 's1', event_type: 'note', content: 'three' }),
-      (s) => s.sessions.appendEvent(TENANT_A, { session_id: 's2', event_type: 'note', content: 'other session' }),
+      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'note', content: 'one' }),
+      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'note', content: 'two' }),
+      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'note', content: 'three' }),
+      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's2', eventType: 'note', content: 'other session' }),
       (s) => s.continuity(TENANT_A, 2, KEY),
       (s) => s.continuity(TENANT_A, 8, null),
       (s) => s.continuity(TENANT_A, 8, { owner: 'bob', project: ['proj'] }),

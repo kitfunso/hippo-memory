@@ -1,5 +1,5 @@
 // What turns a compaction's summary into text the store keeps, and the replay that reads the spool and transcripts
-// for it; the SQL is src/store/sqlite/compactions-record.ts.
+// for it; the SQL is the adapter's compactions-record.ts.
 import * as fs from 'fs';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import {

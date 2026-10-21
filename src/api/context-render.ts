@@ -40,15 +40,15 @@ export function snapshotText(s: TaskSnapshot): string {
     '## Active Task Snapshot\n',
     `- Task: ${s.task}`,
     `- Status: ${s.status}`,
-    `- Updated: ${s.updated_at}`,
+    `- Updated: ${s.updatedAt}`,
     `- Source: ${s.source}`,
-    ...(s.session_id ? [`- Session: ${s.session_id}`] : []),
+    ...(s.sessionId ? [`- Session: ${s.sessionId}`] : []),
     '',
     '### Summary',
     s.summary,
     '',
     '### Next step',
-    s.next_step,
+    s.nextStep,
     '',
   ].join('\n');
 }
@@ -76,11 +76,11 @@ export function sessionTrailText(events: SessionEvent[]): string {
   const latest = events[events.length - 1]!;
   return [
     '## Recent Session Trail\n',
-    `- Session: ${latest.session_id}`,
+    `- Session: ${latest.sessionId}`,
     `- Task: ${latest.task ?? 'n/a'}`,
-    `- Updated: ${latest.created_at}`,
+    `- Updated: ${latest.createdAt}`,
     '',
-    ...events.map((e) => `- [${e.created_at}] (${e.event_type}) ${e.content}`),
+    ...events.map((e) => `- [${e.createdAt}] (${e.eventType}) ${e.content}`),
     '',
   ].join('\n');
 }

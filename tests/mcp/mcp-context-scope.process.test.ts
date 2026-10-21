@@ -59,13 +59,13 @@ describe('mcp hippo_context scope filter', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Parity snapshot task',
       summary: 'snapshot summary',
-      next_step: 'snapshot next step',
-      session_id: 'sess-ctx-text',
+      nextStep: 'snapshot next step',
+      sessionId: 'sess-ctx-text',
       source: 'test',
     });
     appendSessionEvent(home, 'default', {
-      session_id: 'sess-ctx-text',
-      event_type: 'note',
+      sessionId: 'sess-ctx-text',
+      eventType: 'note',
       content: 'parity trail event',
       source: 'test',
     });
@@ -100,8 +100,8 @@ describe('mcp hippo_context scope filter', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Zero budget snapshot',
       summary: 'Must not be returned',
-      next_step: 'Stay hidden',
-      session_id: 'sess-zero-budget',
+      nextStep: 'Stay hidden',
+      sessionId: 'sess-zero-budget',
       source: 'test',
     });
 
@@ -126,8 +126,8 @@ describe('mcp hippo_context scope filter', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Private task that must not leak',
       summary: 'Private',
-      next_step: 'Private',
-      session_id: 'sess-private',
+      nextStep: 'Private',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'slack:private:Csecret',
     });
@@ -152,8 +152,8 @@ describe('mcp hippo_context scope filter', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Private task',
       summary: 'Private',
-      next_step: 'Private',
-      session_id: 'sess-private',
+      nextStep: 'Private',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'slack:private:Csecret',
     });

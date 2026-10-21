@@ -306,13 +306,13 @@ describe('serve() under another store reads its folder as shared, though no conf
     id: 1,
     task: 'ship the eu cluster',
     summary: 'cutover planned',
-    next_step: 'run the canary',
+    nextStep: 'run the canary',
     status: 'active',
     source: 'cli',
-    session_id: 's1',
+    sessionId: 's1',
     scope: null,
-    created_at: '2026-10-01T00:00:00.000Z',
-    updated_at: '2026-10-01T00:00:00.000Z',
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
   };
   const notRead = async (): Promise<never> => {
     throw new Error('this recall reads nothing else');

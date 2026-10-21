@@ -71,8 +71,8 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
     const saved = saveActiveTaskSnapshot(home, 'default', {
       task: 'DF1 MCP staleness marker task',
       summary: 'must not appear over MCP once stale',
-      next_step: 'n',
-      session_id: 'sess-mcp-stale',
+      nextStep: 'n',
+      sessionId: 'sess-mcp-stale',
       source: 'test',
     });
     backdateSnapshot(home, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -85,8 +85,8 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
     saveActiveTaskSnapshot(home, 'default', {
       task: 'DF1 MCP fresh marker task',
       summary: 'must still appear over MCP',
-      next_step: 'n',
-      session_id: 'sess-mcp-fresh',
+      nextStep: 'n',
+      sessionId: 'sess-mcp-fresh',
       source: 'test',
     });
 
@@ -145,8 +145,8 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale but explicitly requested task',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-explicit',
+      nextStep: 'n',
+      sessionId: 'sess-explicit',
       source: 'test',
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -166,8 +166,8 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale same-session compact-resume task',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-compact-resume-stale',
+      nextStep: 'n',
+      sessionId: 'sess-compact-resume-stale',
       source: 'pre-compact',
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -206,8 +206,8 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context cross-session marker',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-owner',
+      nextStep: 'n',
+      sessionId: 'sess-owner',
       source: 'test',
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -224,8 +224,8 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context owner-match marker',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-owner',
+      nextStep: 'n',
+      sessionId: 'sess-owner',
       source: 'test',
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -242,8 +242,8 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context host-var owner-match marker',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-owner-hostvar',
+      nextStep: 'n',
+      sessionId: 'sess-owner-hostvar',
       source: 'test',
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -263,8 +263,8 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context payload-beats-hostvar marker',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-owner-hostvar2',
+      nextStep: 'n',
+      sessionId: 'sess-owner-hostvar2',
       source: 'test',
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -284,8 +284,8 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context blank-payload-falls-back marker',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-owner-hostvar3',
+      nextStep: 'n',
+      sessionId: 'sess-owner-hostvar3',
       source: 'test',
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));

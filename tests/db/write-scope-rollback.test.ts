@@ -108,8 +108,8 @@ describe('a write scope that fails in the middle rolls back', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'first',
       summary: 's',
-      next_step: 'n',
-      session_id: 'x',
+      nextStep: 'n',
+      sessionId: 'x',
       source: 'test',
     });
     refuse('task_snapshots', "NEW.task = 'second'");
@@ -117,8 +117,8 @@ describe('a write scope that fails in the middle rolls back', () => {
       saveActiveTaskSnapshot(root, 'default', {
         task: 'second',
         summary: 's',
-        next_step: 'n',
-        session_id: 'x',
+        nextStep: 'n',
+        sessionId: 'x',
         source: 'test',
       }),
     ).toThrow('refused');

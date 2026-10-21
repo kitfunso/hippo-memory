@@ -30,10 +30,10 @@ export async function compactResumeForCaller(ctx: Context, req: CallerCompactRes
   const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, key);
   // One owner's concurrent sessions must not cross-restore; a snapshot with no session still restores, as on the local
   // path.
-  if (snapshot === null || (snapshot.session_id !== null && snapshot.session_id !== req.sessionId)) {
+  if (snapshot === null || (snapshot.sessionId !== null && snapshot.sessionId !== req.sessionId)) {
     return { stdout: '' };
   }
-  const text = compactResumeText(snapshot, await sessionTrail(ctx, sessions, snapshot.session_id));
+  const text = compactResumeText(snapshot, await sessionTrail(ctx, sessions, snapshot.sessionId));
   await bookTokenUse(
     {
       tenantId: ctx.tenantId,

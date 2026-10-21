@@ -9,7 +9,6 @@ import { ignoringCodes, PATH_UNREADABLE } from '../util/expected-errors.js';
 import { originRemoteId, projectFileId, readGitFilePointer } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { hippoHomeDir } from '../util/agent-homes.js';
-import { placeholders } from '../util/sql.js';
 
 /** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means
  * user-global (empty name).
@@ -247,11 +246,6 @@ export function assertCallerProject(project: { readonly name: string; readonly a
   if ([name, ...aliases].some((n) => n !== n.trim().toLowerCase() || /[:\p{Cc}]/u.test(n))) {
     throw new BadRequestError('project names: lowercase, not padded, with no colon or control character');
   }
-}
-
-/** `origin_project IN (?, ...)` with one placeholder per name; an empty list matches nothing. */
-export function originInSql(names: readonly string[], column = 'origin_project'): string {
-  return names.length === 0 ? '0' : `${column} IN (${placeholders(names.length)})`;
 }
 
 /** Classifies a memory's origin_project against the active project. An empty current id (home or markerless cwd) puts

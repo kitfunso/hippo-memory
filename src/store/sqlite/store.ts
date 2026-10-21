@@ -307,7 +307,7 @@ function continuityAt(
   key: ContinuityKey | null,
 ): ContinuityBlock {
   const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key);
-  const sessionId = activeSnapshot?.session_id ?? undefined;
+  const sessionId = activeSnapshot?.sessionId ?? undefined;
   return {
     activeSnapshot,
     sessionHandoff: sessionId ? loadLatestHandoffAt(db, tenantId, sessionId, {}, key) : null,

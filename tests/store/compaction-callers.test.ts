@@ -12,7 +12,7 @@ import {
 } from '../../src/store/sqlite/compactions-record.js';
 import { storeLesson } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { WORKING_STATE_CAPS } from '../../src/surface/capture/working-state.js';
+import { snapshotFields, WORKING_STATE_CAPS } from '../../src/surface/capture/working-state.js';
 import { compactResumeText } from '../../src/api/context-render.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import type { Context } from '../../src/api/types.js';
@@ -111,12 +111,12 @@ describe('preCompactForCaller', () => {
     const bobs = saveActiveTaskSnapshot(
       root,
       TENANT,
-      { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sB' },
+      { task: 'Bob task', summary: 'b', nextStep: 'b', sessionId: 'sB' },
       BOB,
     );
     expect(await preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     const mine = loadActiveTaskSnapshot(root, TENANT, ALICE);
-    expect(mine).toMatchObject({ ...STATE, source: 'pre-compact', session_id: 'sA' });
+    expect(mine).toMatchObject({ ...snapshotFields(STATE), source: 'pre-compact', sessionId: 'sA' });
     withDb((db) =>
       expect(snapshotRow(db, mine?.id ?? 0)).toMatchObject({ owner_subject: 'alice', origin_project: 'acme/app' }),
     );
@@ -128,14 +128,14 @@ describe('preCompactForCaller', () => {
     saveActiveTaskSnapshot(
       root,
       TENANT,
-      { task: 'Earlier task', summary: 'old', next_step: 'Earlier step', session_id: 'sA' },
+      { task: 'Earlier task', summary: 'old', nextStep: 'Earlier step', sessionId: 'sA' },
       ALICE,
     );
     await preCompact(owned('alice'), { task: '', summary: 'New summary', next_step: '' });
     expect(loadActiveTaskSnapshot(root, TENANT, ALICE)).toMatchObject({
       task: 'Earlier task',
       summary: 'New summary',
-      next_step: 'Earlier step',
+      nextStep: 'Earlier step',
     });
   });
 
@@ -170,7 +170,7 @@ describe('preCompactForCaller', () => {
     const saved = loadActiveTaskSnapshot(root, TENANT, ALICE);
     expect(saved?.task).toHaveLength(WORKING_STATE_CAPS.task);
     expect(saved?.task.startsWith('Mail [email] first.')).toBe(true);
-    expect(saved?.next_step).toHaveLength(WORKING_STATE_CAPS.next_step);
+    expect(saved?.nextStep).toHaveLength(WORKING_STATE_CAPS.next_step);
     expect(saved?.summary.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.summary);
     expect(saved?.summary.endsWith('NEWEST')).toBe(true);
   });
@@ -212,25 +212,25 @@ describe('compactResumeForCaller', () => {
     compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
 
   it("source not compact gives ''", async () => {
-    saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
+    saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
     expect(await resume(owned('alice'), 'startup')).toEqual({ stdout: '' });
     expect((await resume(owned('alice'))).stdout).toContain(STATE.task);
   });
 
   it("holdout gives ''", async () => {
-    saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
+    saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
     holdout();
     expect(await resume(owned('alice'))).toEqual({ stdout: '' });
   });
 
   it("another session's snapshot gives ''", async () => {
-    saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sOld' }, ALICE);
+    saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sOld' }, ALICE);
     expect(await resume(owned('alice'))).toEqual({ stdout: '' });
   });
 
   it("renders the owner's snapshot and books one compact_resume row", async () => {
-    const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
-    saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sB' }, BOB);
+    const mine = saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
+    saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', nextStep: 'b', sessionId: 'sB' }, BOB);
     const { stdout } = await resume(owned('alice'));
     expect(stdout).toBe(compactResumeText(mine, []));
     expect(stdout).not.toContain('Bob task');

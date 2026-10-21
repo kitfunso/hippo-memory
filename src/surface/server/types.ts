@@ -140,9 +140,9 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
 
-/** A route's store status: the optional group it needs, a `sqliteOnly` reason, or neither for a route that runs on any
+/** A route's store status: the optional group it needs, a `hippoDbOnly` reason, or neither for a route that runs on any
  * store; never both. */
-type StoreStatus = { storeReady?: OptionalGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
+type StoreStatus = { storeReady?: OptionalGroup; hippoDbOnly?: never } | { hippoDbOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for a
  * route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
@@ -162,7 +162,7 @@ export type RouteEndpoint<R> =
   | { regex: RegExp; handler: (r: R, match: RegExpMatchArray) => Promise<void> };
 
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under another store it runs
- * only with its `storeReady` group; its SQLite work runs on a worker thread when the store has one. */
+ * only with its `storeReady` group; its hippo.db work runs on a worker thread when the store has one. */
 export type Route = { method: string } & StoreStatus &
   (
     | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & PathEndpoint<AuthedRouteRequest>)

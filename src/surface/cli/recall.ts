@@ -50,6 +50,7 @@ import {
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { continuityTexts, recallEntryText, recallHeading } from './print.js';
+import { continuityJson, type ContinuityBlockJson } from '../../api/continuity-json.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -535,14 +536,13 @@ interface RecallJsonTail {
   planningFallacyWatching?: NonNullable<FittedRecall['cmdPlanningFallacyWatching']>;
   anchoringHint?: NonNullable<FittedRecall['hints']['anchoring']>;
   availabilityHint?: NonNullable<FittedRecall['hints']['availability']>;
-  continuity?: api.ContinuityBlock;
+  continuity?: ContinuityBlockJson;
   continuityTokens?: number;
 }
 
 /** The JSON keys after the result list: suppression summary, any bias hints, then continuity when asked for. */
 function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined): RecallJsonTail {
   const { cmdPlanningFallacyHint, cmdPlanningFallacyWatching, continuityTokens } = fit;
-  const { activeSnapshot, sessionHandoff, recentSessionEvents } = fit.continuity;
   const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = fit.hints;
   const tail: RecallJsonTail = { suppressionSummary: cmdSuppressionSummary };
   if (cmdPlanningFallacyHint) tail.planningFallacyHint = cmdPlanningFallacyHint;
@@ -550,11 +550,7 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
   if (cmdAnchoringHint) tail.anchoringHint = cmdAnchoringHint;
   if (cmdAvailabilityHint) tail.availabilityHint = cmdAvailabilityHint;
   if (includeContinuity) {
-    tail.continuity = {
-      activeSnapshot,
-      sessionHandoff,
-      recentSessionEvents,
-    };
+    tail.continuity = continuityJson(fit.continuity);
     tail.continuityTokens = continuityTokens;
   }
   return tail;

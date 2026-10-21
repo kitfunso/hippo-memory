@@ -22,7 +22,7 @@ export interface SessionClose {
    */
   turn: boolean;
   /** The transcript's working state, or null with no readable transcript. */
-  workingState: () => Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null;
+  workingState: () => Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'> | null;
   evidence: () => HandoffEvidence;
   /** One line to the session-end log. */
   log: (line: string) => void;
@@ -42,7 +42,7 @@ export async function closeEndedSession(ctx: Context, close: SessionClose): Prom
 async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): Promise<void> {
   const { sessions } = ctx.store;
   try {
-    const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, null))?.session_id === sessionId;
+    const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, null))?.sessionId === sessionId;
     // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take
     // the slot before the write.
     const derived = close.workingState();
@@ -122,14 +122,14 @@ export async function compactResumeBlock(ctx: Context, payloadSessionId: string 
   // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a manual run with no
   // payload id still prints.
   if (!snapshot) return null;
-  if (payloadSessionId !== null && snapshot.session_id !== null && payloadSessionId !== snapshot.session_id) {
+  if (payloadSessionId !== null && snapshot.sessionId !== null && payloadSessionId !== snapshot.sessionId) {
     return null;
   }
   // A bad trail row costs the trail, not the snapshot; stderr stays out of the model's context.
   let events: SessionEvent[] = [];
   try {
-    if (snapshot.session_id) {
-      events = (await sessions.listEvents(ctx.tenantId, { sessionId: snapshot.session_id })).map((e) => ({
+    if (snapshot.sessionId) {
+      events = (await sessions.listEvents(ctx.tenantId, { sessionId: snapshot.sessionId })).map((e) => ({
         ...e,
         content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
       }));

@@ -156,17 +156,17 @@ describe('api.contextGet', () => {
       saveActiveTaskSnapshot(home, ctx.tenantId, {
         task: 'Test task for api.contextGet',
         summary: 'Stub for the activeSnapshot return path',
-        next_step: 'Verify result.activeSnapshot is populated',
+        nextStep: 'Verify result.activeSnapshot is populated',
         source: 'test',
-        session_id: 'sess-ctxtest',
+        sessionId: 'sess-ctxtest',
         scope: null,
       });
       await remember(ctx, { content: 'snapshot-test-mem', kind: 'distilled' });
 
       const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 });
 
-      expect(result.activeSnapshot).toMatchObject({ session_id: 'sess-ctxtest' });
-      expect(result.activeSnapshot?.session_id).toBe('sess-ctxtest');
+      expect(result.activeSnapshot).toMatchObject({ sessionId: 'sess-ctxtest' });
+      expect(result.activeSnapshot?.sessionId).toBe('sess-ctxtest');
       expect(result.activeSnapshot?.task).toBe('Test task for api.contextGet');
     } finally {
       restore();

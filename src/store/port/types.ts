@@ -63,6 +63,19 @@ export interface ContinuityKey {
   readonly project: readonly string[];
 }
 
+/** The owner and project a keyed write stamps on its row. */
+export interface ContinuityStamp {
+  readonly owner: string;
+  readonly origin: string;
+}
+
+/** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no reader. */
+export function continuityStamp(key: ContinuityKey): ContinuityStamp {
+  const origin = key.project.find((n) => n !== '');
+  if (key.owner === '' || origin === undefined) throw new Error('continuity key needs an owner and a project');
+  return { owner: key.owner, origin };
+}
+
 /** The prediction class a forward claim resolves to, and that class's closed-prediction stats when one resolved. */
 export interface PlanningFallacyEvidence extends ClassResolution {
   readonly baserate: PredictionBaserate | null;

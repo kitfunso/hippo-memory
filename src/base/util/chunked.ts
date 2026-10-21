@@ -1,4 +1,4 @@
-/** Ids per `IN (...)` list: far under SQLite's bound-parameter limit, with room for the tenant filter. */
+/** Ids per `IN (...)` list: far under hippo.db's bound-parameter limit, with room for the tenant filter. */
 export const ID_CHUNK = 500;
 
 /** `items` in consecutive slices of at most `size`. */

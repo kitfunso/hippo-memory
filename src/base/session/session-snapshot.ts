@@ -12,7 +12,7 @@ function isNonEmptySessionId(value: string | null | undefined): value is string 
 }
 
 /** `loadFreshActiveTaskSnapshot`'s owner-match-or-age rule, for a snapshot a store read. */
-export function freshActiveSnapshot<S extends { session_id: string | null; updated_at: string }>(
+export function freshActiveSnapshot<S extends { sessionId: string | null; updatedAt: string }>(
   snapshot: S | null,
   opts: { maxAgeMs?: number; sessionId?: string | null } = {},
 ): S | null {
@@ -21,11 +21,11 @@ export function freshActiveSnapshot<S extends { session_id: string | null; updat
   const callerSessionId = opts.sessionId;
   const isOwnerMatch =
     isNonEmptySessionId(callerSessionId) &&
-    isNonEmptySessionId(snapshot.session_id) &&
-    callerSessionId === snapshot.session_id;
+    isNonEmptySessionId(snapshot.sessionId) &&
+    callerSessionId === snapshot.sessionId;
   if (isOwnerMatch) return snapshot;
 
   const maxAgeMs = opts.maxAgeMs ?? SNAPSHOT_AMBIENT_MAX_AGE_MS;
-  const ageMs = Date.now() - Date.parse(snapshot.updated_at);
+  const ageMs = Date.now() - Date.parse(snapshot.updatedAt);
   return ageMs <= maxAgeMs ? snapshot : null;
 }

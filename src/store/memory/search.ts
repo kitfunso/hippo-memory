@@ -11,7 +11,7 @@ import { ftsMatches } from './fts.js';
 
 const LIKE_WINDOW_ROWS = 2000;
 
-/** memories.updated_at, which both match tiers order by before created; '' sorts as SQLite's NULL does, last. */
+/** memories.updated_at, which both match tiers order by before created; '' sorts as hippo.db's NULL does, last. */
 const updatedOf = (t: MemoryTables, entry: MemoryEntry): string => t.updatedAt.get(entry.id) ?? '';
 
 /** Newest updated_at first, then newest created, then content and id: hippo.db's LIKE tier order. */

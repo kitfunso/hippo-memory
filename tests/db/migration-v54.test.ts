@@ -101,8 +101,8 @@ describe('schema v54', () => {
     const snap = saveActiveTaskSnapshot(home, 'default', {
       task: 'ship v54',
       summary: 'columns',
-      next_step: 'test',
-      session_id: 's1',
+      nextStep: 'test',
+      sessionId: 's1',
     });
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'half done', nextAction: 'finish' });
     sqliteSyncStore(handlesOf(home)).failureLog.record({

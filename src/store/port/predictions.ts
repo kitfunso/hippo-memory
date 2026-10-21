@@ -1,6 +1,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { ClosureState } from '../../base/records/prediction.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
+import { plural } from '../../base/util/format.js';
 import type { PredictionBaserate } from './types.js';
 
 /** A claim to save and the memory row that mirrors it into recall: core builds it with `predictionMirror` in the tenant
@@ -68,4 +69,44 @@ export interface SavePredictionOptions {
   estimateValue?: number;
   estimateUnit?: string;
   targetDate?: string;
+}
+
+/** One closed prediction as the baserate reads it: both values set. */
+export interface ClosedEstimate {
+  readonly estimate: number;
+  readonly actual: number;
+}
+
+function emptyBaserate(classTag: string): PredictionBaserate {
+  const nulls = { meanEstimate: null, meanActual: null, meanRatio: null, p50Ratio: null, mae: null };
+  return { classTag, nClosed: 0, nRatioEligible: 0, summary: '', ...nulls };
+}
+
+function median(sorted: readonly number[]): number {
+  const n = sorted.length;
+  return n % 2 === 1 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+}
+
+/** A class's stats over its closed rows, summed in the order given. Every store computes them here, so no two can
+ * disagree on the arithmetic. */
+export function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[]): PredictionBaserate {
+  const nClosed = rows.length;
+  if (nClosed === 0) return emptyBaserate(classTag);
+  const ratios = rows.filter((r) => r.estimate > 0).map((r) => r.actual / r.estimate);
+  const nRatioEligible = ratios.length;
+  const mae = rows.reduce((s, r) => s + Math.abs(r.actual - r.estimate), 0) / nClosed;
+  const meanRatio = nRatioEligible > 0 ? ratios.reduce((s, x) => s + x, 0) / nRatioEligible : null;
+  const ratioPart =
+    meanRatio !== null ? `averaged ${meanRatio.toFixed(2)}x actual` : 'no ratio-eligible rows (all estimates were 0)';
+  return {
+    classTag,
+    nClosed,
+    nRatioEligible,
+    meanEstimate: rows.reduce((s, r) => s + r.estimate, 0) / nClosed,
+    meanActual: rows.reduce((s, r) => s + r.actual, 0) / nClosed,
+    meanRatio,
+    p50Ratio: nRatioEligible > 0 ? median(ratios.slice().sort((a, b) => a - b)) : null,
+    mae,
+    summary: `Last ${plural(nClosed, 'estimate')} in class ${classTag} ${ratioPart} (MAE ${mae.toFixed(2)}).`,
+  };
 }

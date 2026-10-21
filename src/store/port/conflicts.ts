@@ -55,6 +55,8 @@ export interface ConflictResolution {
   readonly actor: string;
   /** Kept on the tombstone and a raw loser's archive row. */
   readonly reason: string;
+  /** Core's clock, as `toISOString` gives it: the conflict's updated_at and a rejected loser's tombstone time. */
+  readonly at: string;
 }
 
 export interface MemoryConflict {

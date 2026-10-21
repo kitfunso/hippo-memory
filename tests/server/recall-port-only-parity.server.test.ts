@@ -139,7 +139,7 @@ beforeAll(async () => {
     saveActiveTaskSnapshot(
       root,
       TENANT,
-      { task: KEYED_TASK, summary: 'cutover planned', next_step: 'run the canary', session_id: SESSION },
+      { task: KEYED_TASK, summary: 'cutover planned', nextStep: 'run the canary', sessionId: SESSION },
       key,
     );
   });

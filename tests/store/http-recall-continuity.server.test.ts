@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import type { JsonObject } from '../../src/base/util/json.js';
 import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
@@ -42,8 +43,8 @@ describe('GET /v1/memories continuity + scope', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'HTTP continuity',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-http',
+      nextStep: 'n',
+      sessionId: 'sess-http',
       source: 'test',
     });
     saveSessionHandoff(home, 'default', {
@@ -54,8 +55,8 @@ describe('GET /v1/memories continuity + scope', () => {
       artifacts: [],
     });
     appendSessionEvent(home, 'default', {
-      session_id: 'sess-http',
-      event_type: 'note',
+      sessionId: 'sess-http',
+      eventType: 'note',
       content: 'a trail',
       source: 'test',
     });
@@ -82,8 +83,8 @@ describe('GET /v1/memories continuity + scope', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Private HTTP task',
       summary: 'P',
-      next_step: 'P',
-      session_id: 'sess-private',
+      nextStep: 'P',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'slack:private:Csecret',
     });
@@ -99,8 +100,8 @@ describe('GET /v1/memories continuity + scope', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Private HTTP task',
       summary: 'P',
-      next_step: 'P',
-      session_id: 'sess-private',
+      nextStep: 'P',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'slack:private:Csecret',
     });
@@ -111,5 +112,56 @@ describe('GET /v1/memories continuity + scope', () => {
       continuity?: { activeSnapshot?: { task: string } | null };
     }>(res);
     expect(body.continuity?.activeSnapshot?.task).toBe('Private HTTP task');
+  });
+});
+
+// The port's session rows are camelCase; these pin the snake_case JSON both routes have always sent.
+describe('continuity JSON on the wire', () => {
+  const at = (json: string): string => json.replace(/"\d{4}-\d{2}-\d{2}[T ][^"]*"/g, '"<at>"');
+  const SNAPSHOT_JSON =
+    '{"id":1,"task":"pin the wire","summary":"s","next_step":"n","status":"active","source":"test","session_id":"sess-wire","scope":null,"created_at":"<at>","updated_at":"<at>"}';
+  const EVENTS_JSON =
+    '[{"id":1,"session_id":"sess-wire","task":null,"event_type":"note","content":"a trail","source":"test","scope":null,"metadata":{"k":1},"created_at":"<at>"}]';
+
+  function seedSession(): void {
+    saveActiveTaskSnapshot(home, 'default', {
+      task: 'pin the wire',
+      summary: 's',
+      nextStep: 'n',
+      sessionId: 'sess-wire',
+      source: 'test',
+    });
+    appendSessionEvent(home, 'default', {
+      sessionId: 'sess-wire',
+      eventType: 'note',
+      content: 'a trail',
+      source: 'test',
+      metadata: { k: 1 },
+    });
+  }
+
+  it('GET /v1/memories include_continuity sends snake_case snapshot and event keys', async () => {
+    seedSession();
+    const res = await fetch(`${handle.url}/v1/memories?q=wire&include_continuity=1`);
+    expect(res.status).toBe(200);
+    const body = await jsonAs<JsonObject>(res);
+    expect(at(JSON.stringify(body.continuity))).toBe(
+      `{"activeSnapshot":${SNAPSHOT_JSON},"sessionHandoff":null,"recentSessionEvents":${EVENTS_JSON}}`,
+    );
+  });
+
+  it('GET /v1/context sends snake_case snapshot and event keys', async () => {
+    seedSession();
+    writeEntry(
+      home,
+      createMemory('a memory so the context has an entry', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
+    const res = await fetch(`${handle.url}/v1/context?budget=1500`);
+    expect(res.status).toBe(200);
+    const body = await jsonAs<JsonObject>(res);
+    expect(Object.keys(body)).toEqual(['entries', 'tokens', 'activeSnapshot', 'recentEvents', 'ambientState']);
+    expect(at(JSON.stringify({ activeSnapshot: body.activeSnapshot, recentEvents: body.recentEvents }))).toBe(
+      `{"activeSnapshot":${SNAPSHOT_JSON},"recentEvents":${EVENTS_JSON}}`,
+    );
   });
 });

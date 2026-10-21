@@ -292,7 +292,7 @@ export async function rebuildDirtySummaries(
   const queuedIds = new Set(queue.map((s) => s.id));
 
   for (const [index, summary] of queue.entries()) {
-    // Yield the macrotask queue every 25 summaries: each iteration is synchronous SQLite, so a batch of up to 1000
+    // Yield the macrotask queue every 25 summaries: each iteration is synchronous store work, so a batch of up to 1000
     // would starve timers and IPC (server keep-alives, Vitest's birpc heartbeat).
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setImmediate(resolve));
@@ -300,7 +300,7 @@ export async function rebuildDirtySummaries(
     try {
       await rebuildOneSummary({ store, summary, opts, result, preloaded: childrenOf[index] ?? [], queuedIds });
     } catch (err) {
-      // One throw doesn't abort the queue; log enough to triage an exotic failure (SQLite I/O, prepare), since audit()
+      // One throw doesn't abort the queue; log enough to triage an exotic failure (store I/O, prepare), since audit()
       // already catches its own.
       result.failed++;
       log.error(

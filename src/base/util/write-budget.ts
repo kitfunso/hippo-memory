@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 /** A chunk closes at the first unit boundary after this long: a server request gives up after a 250 ms wait. */
 export const TARGET_HOLD_MS = 100;
 
-/** SQLite's longest busy-handler sleep under a hook's 1 s wait, so a waiting hook always wakes inside the gap. */
+/** hippo.db's longest busy-handler sleep under a hook's 1 s wait, so a waiting hook always wakes inside the gap. */
 export const GAP_MS = 100;
 
 export function clock(): number {

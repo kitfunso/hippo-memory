@@ -96,7 +96,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
     expect((await preCompact('s1')).status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(s.hippoRoot, 'default');
     expect(snapshot?.task).toMatch(/npm install/);
-    expect(snapshot?.session_id).toBe('s1');
+    expect(snapshot?.sessionId).toBe('s1');
     expect(fs.existsSync(path.join(path.dirname(logFile), 'pre-compact-last.json'))).toBe(false);
   });
 

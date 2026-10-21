@@ -194,8 +194,8 @@ function seedContinuity(root: string): void {
   saveActiveTaskSnapshot(root, TENANT, {
     task: 'ship the eu cluster',
     summary: 'cutover planned',
-    next_step: 'run the canary',
-    session_id: SESSION,
+    nextStep: 'run the canary',
+    sessionId: SESSION,
   });
   saveSessionHandoff(root, TENANT, {
     version: 1,
@@ -203,7 +203,7 @@ function seedContinuity(root: string): void {
     summary: 'handoff after the canary',
     nextAction: 'promote it',
   });
-  appendSessionEvent(root, TENANT, { session_id: SESSION, event_type: 'note', content: 'canary passed' });
+  appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
 }
 
 /** A store with no memory in it and no global store beside it. */

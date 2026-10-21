@@ -30,8 +30,8 @@ describe('api.recall continuity flag', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship the recall continuity slice',
       summary: 'Plan reviewed, implementation in progress.',
-      next_step: 'Run tests, then commit.',
-      session_id: 'sess-1',
+      nextStep: 'Run tests, then commit.',
+      sessionId: 'sess-1',
       source: 'test',
     });
     saveSessionHandoff(tmpDir, 'default', {
@@ -42,8 +42,8 @@ describe('api.recall continuity flag', () => {
       artifacts: ['src/api/index.ts'],
     });
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-1',
-      event_type: 'note',
+      sessionId: 'sess-1',
+      eventType: 'note',
       content: 'A trail event we want to surface.',
       source: 'test',
     });
@@ -78,8 +78,8 @@ describe('api.recall continuity flag', () => {
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A secret',
       summary: 'A',
-      next_step: 'A',
-      session_id: 'sess-a',
+      nextStep: 'A',
+      sessionId: 'sess-a',
       source: 'test',
     });
     saveSessionHandoff(tmpDir, 'tenantA', {
@@ -90,8 +90,8 @@ describe('api.recall continuity flag', () => {
       artifacts: [],
     });
     appendSessionEvent(tmpDir, 'tenantA', {
-      session_id: 'sess-a',
-      event_type: 'note',
+      sessionId: 'sess-a',
+      eventType: 'note',
       content: 'A trail',
       source: 'test',
     });
@@ -131,8 +131,8 @@ describe('api.recall continuity flag', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'private task',
       summary: 'private',
-      next_step: 'private',
-      session_id: 'sess-private',
+      nextStep: 'private',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'slack:private:Csecret',
     });
@@ -159,8 +159,8 @@ describe('api.recall continuity flag', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Public anchor',
       summary: 'public',
-      next_step: 'public',
-      session_id: 'sess-private-handoff',
+      nextStep: 'public',
+      sessionId: 'sess-private-handoff',
       source: 'test',
     });
     saveSessionHandoff(tmpDir, 'default', {
@@ -199,8 +199,8 @@ describe('api.recall continuity flag', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'C1 task',
       summary: 'C1',
-      next_step: 'C1',
-      session_id: 'sess-c1',
+      nextStep: 'C1',
+      sessionId: 'sess-c1',
       source: 'test',
       scope: 'slack:private:C1',
     });
@@ -227,8 +227,8 @@ describe('api.recall continuity flag', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'aaaa',
       summary: 'bbbb',
-      next_step: 'cccc',
-      session_id: 'sess-1',
+      nextStep: 'cccc',
+      sessionId: 'sess-1',
       source: 'test',
     });
 
@@ -245,8 +245,8 @@ describe('api.recall continuity flag', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'aaaa',
       summary: 'bbbb',
-      next_step: 'cccc',
-      session_id: 'sess-1',
+      nextStep: 'cccc',
+      sessionId: 'sess-1',
       source: 'test',
     });
     const before = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {

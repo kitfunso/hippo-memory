@@ -66,8 +66,8 @@ function seedContinuity(): void {
   saveActiveTaskSnapshot(hippoRoot, 'default', {
     task: 'Route recall through the api',
     summary: 'Moving the store reads.',
-    next_step: 'Run the tests.',
-    session_id: 'sess-1',
+    nextStep: 'Run the tests.',
+    sessionId: 'sess-1',
     source: 'test',
   });
   saveSessionHandoff(hippoRoot, 'default', {
@@ -77,21 +77,21 @@ function seedContinuity(): void {
     nextAction: 'Pick up at the test file.',
   });
   appendSessionEvent(hippoRoot, 'default', {
-    session_id: 'sess-1',
-    event_type: 'note',
+    sessionId: 'sess-1',
+    eventType: 'note',
     content: 'open trail event',
     source: 'test',
   });
   appendSessionEvent(hippoRoot, 'default', {
-    session_id: 'sess-1',
-    event_type: 'note',
+    sessionId: 'sess-1',
+    eventType: 'note',
     content: 'team trail event',
     source: 'test',
     scope: 'team-a',
   });
   appendSessionEvent(hippoRoot, 'default', {
-    session_id: 'sess-1',
-    event_type: 'note',
+    sessionId: 'sess-1',
+    eventType: 'note',
     content: 'private trail event',
     source: 'test',
     scope: 'slack:private:C1',

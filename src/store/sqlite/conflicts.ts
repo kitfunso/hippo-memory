@@ -332,11 +332,11 @@ function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: Confl
   const sides = [keep.id, tenantId, keep.scope, loser.id, tenantId, loser.scope];
   const claimed = cachedStatement(
     db,
-    `UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') ` +
+    `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? ` +
       `WHERE id = ? AND status = 'open' ` +
       `AND ((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) ` +
       `AND ${SIDE_HOLDS} AND ${SIDE_HOLDS}`,
-  ).run(conflictId, ...pair, ...sides);
+  ).run(resolution.at, conflictId, ...pair, ...sides);
   return Number(claimed.changes ?? 0) > 0;
 }
 
@@ -438,7 +438,7 @@ function recordRejectedLoserValue(
     digest,
     reason: r.reason,
     rejectedBy: r.actor,
-    rejectedAt: new Date().toISOString(),
+    rejectedAt: r.at,
     sourceMemoryId: r.loser.id,
     normalizedChars: normalizeValueForRejection(loserRow.content).length,
   });

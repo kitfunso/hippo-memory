@@ -297,7 +297,7 @@ describe('active task snapshots', () => {
     const saved = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Finish SQLite migration hardening',
       summary: 'Build, tests, and smoke pass locally.',
-      next_step: 'Implement active session resume snapshot support.',
+      nextStep: 'Implement active session resume snapshot support.',
       source: 'test',
     });
 
@@ -306,9 +306,9 @@ describe('active task snapshots', () => {
     expect(loaded!.id).toBe(saved.id);
     expect(loaded!.task).toBe('Finish SQLite migration hardening');
     expect(loaded!.summary).toBe('Build, tests, and smoke pass locally.');
-    expect(loaded!.next_step).toBe('Implement active session resume snapshot support.');
+    expect(loaded!.nextStep).toBe('Implement active session resume snapshot support.');
     expect(loaded!.status).toBe('active');
-    expect(loaded!.session_id).toBeNull();
+    expect(loaded!.sessionId).toBeNull();
 
     const mirrorPath = path.join(tmpDir, 'buffer', 'active-task.md');
     expect(fs.existsSync(mirrorPath)).toBe(true);
@@ -321,14 +321,14 @@ describe('active task snapshots', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship session continuity',
       summary: 'Structured session events are flowing.',
-      next_step: 'Surface the session trail in context output.',
+      nextStep: 'Surface the session trail in context output.',
       source: 'test',
-      session_id: 'sess_alpha',
+      sessionId: 'sess_alpha',
     });
 
     const loaded = loadActiveTaskSnapshot(tmpDir, 'default');
     expect(loaded).not.toBeNull();
-    expect(loaded!.session_id).toBe('sess_alpha');
+    expect(loaded!.sessionId).toBe('sess_alpha');
 
     const mirrorPath = path.join(tmpDir, 'buffer', 'active-task.md');
     expect(fs.readFileSync(mirrorPath, 'utf8')).toContain('sess_alpha');
@@ -340,14 +340,14 @@ describe('active task snapshots', () => {
     const first = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'First task',
       summary: 'First summary',
-      next_step: 'First next step',
+      nextStep: 'First next step',
       source: 'test',
     });
 
     const second = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Second task',
       summary: 'Second summary',
-      next_step: 'Second next step',
+      nextStep: 'Second next step',
       source: 'test',
     });
 
@@ -375,7 +375,7 @@ describe('active task snapshots', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Task to clear',
       summary: 'Some progress',
-      next_step: 'Nothing else',
+      nextStep: 'Nothing else',
       source: 'test',
     });
 
@@ -390,18 +390,18 @@ describe('session events', () => {
     initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess_alpha',
+      sessionId: 'sess_alpha',
       task: 'Ship continuity',
-      event_type: 'plan',
+      eventType: 'plan',
       content: 'Decide on the first thin slice.',
       source: 'test',
       metadata: { step: 1 },
     });
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess_alpha',
+      sessionId: 'sess_alpha',
       task: 'Ship continuity',
-      event_type: 'progress',
+      eventType: 'progress',
       content: 'Schema migration is done.',
       source: 'test',
       metadata: { step: 2 },
@@ -409,9 +409,9 @@ describe('session events', () => {
 
     const events = listSessionEvents(tmpDir, 'default', { session_id: 'sess_alpha', limit: 5 });
     expect(events).toHaveLength(2);
-    expect(events[0]!.event_type).toBe('plan');
+    expect(events[0]!.eventType).toBe('plan');
     expect(events[0]!.metadata).toEqual({ step: 1 });
-    expect(events[1]!.event_type).toBe('progress');
+    expect(events[1]!.eventType).toBe('progress');
     expect(events[1]!.content).toContain('Schema migration');
 
     const mirrorPath = path.join(tmpDir, 'buffer', 'recent-session.md');
@@ -423,24 +423,24 @@ describe('session events', () => {
     initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess_old',
+      sessionId: 'sess_old',
       task: 'Old task',
-      event_type: 'note',
+      eventType: 'note',
       content: 'Old event',
       source: 'test',
     });
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess_new',
+      sessionId: 'sess_new',
       task: 'New task',
-      event_type: 'note',
+      eventType: 'note',
       content: 'Newest event',
       source: 'test',
     });
 
     const latest = listSessionEvents(tmpDir, 'default', { limit: 1 });
     expect(latest).toHaveLength(1);
-    expect(latest[0]!.session_id).toBe('sess_new');
+    expect(latest[0]!.sessionId).toBe('sess_new');
     expect(latest[0]!.content).toBe('Newest event');
   });
 });

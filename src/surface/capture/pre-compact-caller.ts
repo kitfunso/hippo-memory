@@ -65,7 +65,7 @@ async function saveOwnerSnapshot(
   const existing = await logged('snapshot not loaded', () => sessions.loadSnapshot(ctx.tenantId, key));
   const merged = mergeWorkingState(state, existing, sessionId);
   if (merged === null) return false;
-  const snapshot = { ...merged, source: 'pre-compact', session_id: sessionId };
+  const snapshot = { ...merged, source: 'pre-compact', sessionId };
   const saved = await logged('snapshot not saved', () => sessions.saveSnapshot(ctx.tenantId, snapshot, key));
   return saved !== null;
 }

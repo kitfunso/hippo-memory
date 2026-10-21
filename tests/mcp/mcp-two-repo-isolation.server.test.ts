@@ -248,13 +248,13 @@ beforeAll(async () => {
   saveActiveTaskSnapshot(
     store,
     TENANT,
-    { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' },
+    { task: 'acmetask ship the release', summary: 'acme summary', nextStep: 'acme next', sessionId: 'acme-s' },
     { owner: 'alice', project: ['acme'] },
   );
   saveActiveTaskSnapshot(
     store,
     TENANT,
-    { task: 'betatask fix the build', summary: 'beta summary', next_step: 'beta next', session_id: 'beta-s' },
+    { task: 'betatask fix the build', summary: 'beta summary', nextStep: 'beta next', sessionId: 'beta-s' },
     { owner: 'alice', project: ['beta'] },
   );
   saveSessionHandoff(
@@ -386,7 +386,7 @@ describe('MCP on a shared store with two repos', () => {
     saveActiveTaskSnapshot(
       store,
       TENANT,
-      { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' },
+      { task: 'acmetask ship the release', summary: 'acme summary', nextStep: 'acme next', sessionId: 'acme-s' },
       { owner: 'alice', project: ['acme'] },
     );
     expect(await taskState('beta')).toEqual(['betatask', 'betahandoff']);

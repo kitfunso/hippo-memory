@@ -114,7 +114,7 @@ describe('a text flag with a value', () => {
     expect(await snapshotLoad(cliApiContext(root, 'default'))).toMatchObject({
       task: 'ship',
       summary: 'half done',
-      next_step: 'merge',
+      nextStep: 'merge',
       source: 'test',
     });
   });
@@ -125,7 +125,7 @@ describe('a text flag with a value', () => {
     );
     expect(log.status).toBe(0);
     expect(await sessionEventList(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([
-      { session_id: 's1', content: 'tried the fix', event_type: 'attempt' },
+      { sessionId: 's1', content: 'tried the fix', eventType: 'attempt' },
     ]);
     const made = await runInProcess(() =>
       handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })),

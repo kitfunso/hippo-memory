@@ -102,9 +102,9 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.source).toBe('pre-compact');
-    expect(snapshot!.session_id).toBe('sess-precompact-e2e-1');
+    expect(snapshot!.sessionId).toBe('sess-precompact-e2e-1');
     expect(snapshot!.task).toContain('rate limiting');
-    expect(snapshot!.next_step).toContain('rate limiter middleware');
+    expect(snapshot!.nextStep).toContain('rate limiter middleware');
     expect(snapshot!.summary).toContain('PostgreSQL');
 
     const entries = loadAllEntries(hippoRoot, 'default');
@@ -366,8 +366,8 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     const TRIM_MARKER = '[...earlier turns trimmed]\n';
     expect(snapshot!.summary.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.summary);
     expect(snapshot!.summary.startsWith(TRIM_MARKER)).toBe(true);
-    expect(snapshot!.next_step.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.next_step);
-    expect(snapshot!.next_step.length).toBe(WORKING_STATE_CAPS.next_step);
+    expect(snapshot!.nextStep.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.next_step);
+    expect(snapshot!.nextStep.length).toBe(WORKING_STATE_CAPS.next_step);
 
     // The shared `saveActiveTaskSnapshot` / `hippo snapshot save` CLI path is
     // untouched — caps are enforced in the pre-compact producer ONLY.
@@ -381,7 +381,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     const manualSnapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(manualSnapshot!.task.length).toBe(3000);
     expect(manualSnapshot!.summary.length).toBe(3000);
-    expect(manualSnapshot!.next_step.length).toBe(3000);
+    expect(manualSnapshot!.nextStep.length).toBe(3000);
   });
 
   it('X1: per-field merge — a tool-heavy tail with no plain-text user turn keeps the existing task instead of blanking it', async () => {
@@ -389,9 +389,9 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'user-authored task must survive',
       summary: 'previous summary',
-      next_step: 'previous next step',
+      nextStep: 'previous next step',
       source: 'cli',
-      session_id: 'sess-merge',
+      sessionId: 'sess-merge',
     });
 
     // Every user turn is a tool_result array, not plain text — summariseTranscript's
@@ -426,7 +426,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     // Task was never re-derivable from this tail — the existing field survives.
     expect(snapshot!.task).toBe('user-authored task must survive');
     // Summary/next_step WERE derivable — they get overwritten as normal.
-    expect(snapshot!.next_step).toContain('verify the output');
+    expect(snapshot!.nextStep).toContain('verify the output');
   });
 
   it('X7: corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash output', async () => {
@@ -506,10 +506,10 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot).not.toBeNull();
     expect(snapshot!.task).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     expect(snapshot!.summary).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-    expect(snapshot!.next_step).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(snapshot!.nextStep).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     expect(snapshot!.task).toContain('[REDACTED]');
     expect(snapshot!.summary).toContain('[REDACTED]');
-    expect(snapshot!.next_step).toContain('[REDACTED]');
+    expect(snapshot!.nextStep).toContain('[REDACTED]');
   });
 
   it('a Bearer JWT an older build left in the snapshot survives neither compaction nor the session-end handoff', async () => {
@@ -542,7 +542,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
 
     expect((await runHippo(['pre-compact'], dir, env, payload)).status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
-    expect(snapshot!.next_step).toBe('retry the export with Authorization: [REDACTED]');
+    expect(snapshot!.nextStep).toBe('retry the export with Authorization: [REDACTED]');
     const handoff = writeSessionEndHandoff(hippoRoot, {
       tenantId: 'default',
       sessionId: 'sess-old-jwt',
@@ -570,6 +570,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(result.stdout).not.toContain('eyJ');
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot!.summary).toBe('the token is [REDACTED]');
-    expect(snapshot!.next_step).toBe('use [REDACTED]');
+    expect(snapshot!.nextStep).toBe('use [REDACTED]');
   });
 });

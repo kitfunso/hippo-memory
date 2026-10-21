@@ -16,7 +16,7 @@ import {
   type LossAversion,
 } from '../../base/memory/memory.js';
 import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../base/scope/recall-scope.js';
-import { placeholders } from '../../base/util/sql.js';
+import { placeholders } from '../../db/sql.js';
 import { REWARD_FACTOR_SQL } from '../../db/decay-key.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
@@ -86,6 +86,12 @@ export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFrag
   if (ownScope == null) return { sql: `(${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
   // The own arm sits inside the outer parentheses so a caller's `AND ${sql}` cannot split it off.
   return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };
+}
+
+/** `origin_project IN (?, ...)` with one placeholder per name, the SQL twin of an origin filter; an empty list matches
+ * nothing. */
+export function originInSql(names: readonly string[], column = 'origin_project'): string {
+  return names.length === 0 ? '0' : `${column} IN (${placeholders(names.length)})`;
 }
 
 /** SQL twin of ownScopeTouches, which is also canReadScope for an admin: every row but another person's personal one.

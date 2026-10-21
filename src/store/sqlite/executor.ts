@@ -11,6 +11,7 @@ import { DeadlineExceededError } from '../../base/util/http-util.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requestScopes } from '../../base/util/request-scope.js';
 import { decodeError } from './error-codec.js';
+import { portError } from './port-errors.js';
 import { workerCounts } from './executor-counts.js';
 import { markAllTenants } from './tenant-wire.js';
 import { type Job, type OpMode, type OpRoute, type Reply, STORE_SETUP_OP, type WorkerInit } from './worker-ops.js';
@@ -160,7 +161,7 @@ class WorkerPool implements SqliteExecutor {
       }
       const settle = (reply: Reply): void => {
         if (!reply.ok) {
-          reject(decodeError(reply.error));
+          reject(portError(decodeError(reply.error)));
           return;
         }
         // SAFETY: the worker ran `op` of the synchronous store, whose result is the T the caller's port method
@@ -203,7 +204,7 @@ class WorkerPool implements SqliteExecutor {
     this.#setup = 'running';
     const pending: Pending = {
       job: { id: this.#nextId++, op: STORE_SETUP_OP, args: [], allTenants: [], requestId: undefined },
-      settle: (reply) => this.#setupEnded(reply.ok ? undefined : decodeError(reply.error)),
+      settle: (reply) => this.#setupEnded(reply.ok ? undefined : portError(decodeError(reply.error))),
       fail: (err) => this.#setupEnded(err),
       deadlineAt: undefined,
       timer: undefined,

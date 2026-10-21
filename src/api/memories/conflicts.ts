@@ -96,6 +96,7 @@ export async function conflictResolve(
     fate,
     actor: ctx.actor.subject,
     reason,
+    at: new Date().toISOString(),
   });
   // Every check passed above, so false here is another resolver, or a scope change, getting there first.
   if (!resolved) throw new ConflictError(`conflict ${conflictId} is already resolved`);

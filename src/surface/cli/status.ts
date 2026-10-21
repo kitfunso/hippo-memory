@@ -123,7 +123,7 @@ async function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   console.log(line);
-  // No index argument: the check then asks SQLite whether any vector exists instead of loading them.
+  // No index argument: the check then asks hippo.db whether any vector exists instead of loading them.
   if (await embeddingReindexNeeded(ctx, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }

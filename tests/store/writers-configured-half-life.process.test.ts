@@ -236,14 +236,14 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     'sleep: auto-promoted trace',
     (root) => {
       appendSessionEvent(root, 'default', {
-        session_id: 's1',
-        event_type: 'action',
+        sessionId: 's1',
+        eventType: 'action',
         content: 'ran the migration',
         source: 'agent',
       });
       appendSessionEvent(root, 'default', {
-        session_id: 's1',
-        event_type: 'session_complete',
+        sessionId: 's1',
+        eventType: 'session_complete',
         content: 'success',
         source: 'agent',
         metadata: { summary: 'migrated the billing table' },

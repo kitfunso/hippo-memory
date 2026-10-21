@@ -34,10 +34,10 @@ describe('sessions group', () => {
     const r = root();
     const sync = sqliteSyncStore(handlesOf(r)).sessions;
     const served = sqliteStore(r).sessions;
-    const snap = { task: 'ship', summary: 'half done', next_step: 'merge', session_id: 's1' };
+    const snap = { task: 'ship', summary: 'half done', nextStep: 'merge', sessionId: 's1' };
     expect(sync.saveSnapshot(T, snap, null).task).toBe('ship');
-    expect((await served.loadSnapshot(T, null))?.next_step).toBe('merge');
-    await served.appendEvent(T, { session_id: 's1', event_type: 'note', content: 'hello' });
+    expect((await served.loadSnapshot(T, null))?.nextStep).toBe('merge');
+    await served.appendEvent(T, { sessionId: 's1', eventType: 'note', content: 'hello' });
     expect((await served.listEvents(T, { sessionId: 's1' })).map((e) => e.content)).toEqual(['hello']);
     expect(sync.listEvents(T, { sessionId: 's1' })).toHaveLength(1);
     const handoff = await served.saveHandoff(T, { version: 1, sessionId: 's1', summary: 'carry on' }, null);
@@ -119,6 +119,7 @@ describe('conflicts group', () => {
       fate: conflictLoserFate({}, loser, null),
       actor: 'test',
       reason: '',
+      at: '2026-02-02T02:02:02.000Z',
     };
     expect(await served.resolve(T, resolution)).toBe(true);
     expect(await served.resolve(T, resolution)).toBe(false);

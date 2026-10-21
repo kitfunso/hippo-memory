@@ -239,8 +239,8 @@ async function main(): Promise<void> {
   saveActiveTaskSnapshot(home, 'default', {
     task: 'Benchmark continuity overhead',
     summary: 'Seed continuity so the helper paths actually do work.',
-    next_step: 'Compare p99 with and without --continuity.',
-    session_id: sessionId,
+    nextStep: 'Compare p99 with and without --continuity.',
+    sessionId: sessionId,
     source: 'bench',
   });
   saveSessionHandoff(home, 'default', {
@@ -252,8 +252,8 @@ async function main(): Promise<void> {
   });
   for (let i = 0; i < 5; i++) {
     appendSessionEvent(home, 'default', {
-      session_id: sessionId,
-      event_type: 'note',
+      sessionId: sessionId,
+      eventType: 'note',
       content: `Bench event ${i}: a small trail row to exercise listSessionEvents.`,
       source: 'bench',
     });

@@ -10,6 +10,7 @@ import {
   type SpoolFs,
   type SpoolImporter,
 } from '../../src/surface/capture/compaction-spool.js';
+import { StoreBusyError } from '../../src/store/port.js';
 
 let root: string;
 let logs: string[];
@@ -321,7 +322,7 @@ describe('spool counts', () => {
 describe('failures are counted and set aside', () => {
   const A = '0000000001000-aaaaaaaa';
   const B = '0000000002000-bbbbbbbb';
-  const busyError = (): Error => Object.assign(new Error('database is locked'), { errcode: 5 });
+  const busyError = (): Error => new StoreBusyError('database is locked');
 
   it('a non-busy throw moves a0 to a1, a2, then failed.bad', async () => {
     const body = fs.readFileSync(put(`${A}.a0.json`, 's1'), 'utf8');

@@ -424,13 +424,13 @@ describe('compact-resume books the block it prints', () => {
     const snapshot = saveActiveTaskSnapshot(store, 'default', {
       task: 'add rate limiting',
       summary: 'The handler is done.',
-      next_step: 'Write the limiter tests.',
+      nextStep: 'Write the limiter tests.',
       source: 'pre-compact',
-      session_id: SESSION,
+      sessionId: SESSION,
     });
     const event = appendSessionEvent(store, 'default', {
-      session_id: SESSION,
-      event_type: 'note',
+      sessionId: SESSION,
+      eventType: 'note',
       content: 'chose a token bucket',
     });
     const expected = [
@@ -442,7 +442,7 @@ describe('compact-resume books the block it prints', () => {
       '',
       `- Task: ${snapshot.task}`,
       `- Status: ${snapshot.status}`,
-      `- Updated: ${snapshot.updated_at}`,
+      `- Updated: ${snapshot.updatedAt}`,
       `- Source: ${snapshot.source}`,
       `- Session: ${SESSION}`,
       '',
@@ -450,15 +450,15 @@ describe('compact-resume books the block it prints', () => {
       snapshot.summary,
       '',
       '### Next step',
-      snapshot.next_step,
+      snapshot.nextStep,
       '',
       '## Recent Session Trail',
       '',
       `- Session: ${SESSION}`,
       `- Task: ${event.task ?? 'n/a'}`,
-      `- Updated: ${event.created_at}`,
+      `- Updated: ${event.createdAt}`,
       '',
-      `- [${event.created_at}] (note) chose a token bucket`,
+      `- [${event.createdAt}] (note) chose a token bucket`,
       '',
       '',
     ].join('\n');
@@ -482,9 +482,9 @@ describe('compact-resume books the block it prints', () => {
     saveActiveTaskSnapshot(globalRoot, 'default', {
       task: 'global task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: SESSION,
+      sessionId: SESSION,
     });
     const result = await hippo(['compact-resume'], proj, env, payload);
     expect(result.status).toBe(0);
@@ -515,9 +515,9 @@ describe('compact-resume books the block it prints', () => {
     const snapshot = saveActiveTaskSnapshot(store, 'default', {
       task: 'add rate limiting',
       summary: 'The handler is done.',
-      next_step: 'Write the limiter tests.',
+      nextStep: 'Write the limiter tests.',
       source: 'pre-compact',
-      session_id: SESSION,
+      sessionId: SESSION,
     });
     // A blob, not text, where the trail expects a string.
     withDb(store, (db) =>
@@ -537,7 +537,7 @@ describe('compact-resume books the block it prints', () => {
       '',
       `- Task: ${snapshot.task}`,
       `- Status: ${snapshot.status}`,
-      `- Updated: ${snapshot.updated_at}`,
+      `- Updated: ${snapshot.updatedAt}`,
       `- Source: ${snapshot.source}`,
       `- Session: ${SESSION}`,
       '',
@@ -545,7 +545,7 @@ describe('compact-resume books the block it prints', () => {
       snapshot.summary,
       '',
       '### Next step',
-      snapshot.next_step,
+      snapshot.nextStep,
       '',
       '',
     ].join('\n');
@@ -644,9 +644,9 @@ describe("a sub-agent's hooks", () => {
     saveActiveTaskSnapshot(store, 'default', {
       task: 'parent task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: SESSION,
+      sessionId: SESSION,
     });
     withDb(store, (db) => db.prepare(`UPDATE task_snapshots SET updated_at = ?`).run(iso(Date.now() - 4 * DAY)));
     expect((await hippo(HOOK, proj, env, sub({ prompt: 'hi' }))).stdout).toContain('parent task');
@@ -660,9 +660,9 @@ describe("a sub-agent's hooks", () => {
     saveActiveTaskSnapshot(store, 'default', {
       task: 'parent task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: SESSION,
+      sessionId: SESSION,
     });
     const result = await hippo(['compact-resume'], proj, env, sub({ source: 'compact' }));
     expect(result.status).toBe(0);

@@ -332,13 +332,13 @@ export function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
     id: Number(row.id),
     task: row.task,
     summary: row.summary,
-    next_step: row.next_step,
+    nextStep: row.next_step,
     status: row.status,
     source: row.source,
-    session_id: row.session_id ?? null,
+    sessionId: row.session_id ?? null,
     scope: row.scope ?? null,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -358,13 +358,13 @@ export function rowToMemoryConflict(row: MemoryConflictRow): MemoryConflict {
 export function rowToSessionEvent(row: SessionEventRow): SessionEvent {
   return {
     id: Number(row.id),
-    session_id: row.session_id,
+    sessionId: row.session_id,
     task: row.task ?? null,
-    event_type: row.event_type,
+    eventType: row.event_type,
     content: row.content,
     source: row.source,
     scope: row.scope ?? null,
     metadata: parseJsonObject(row.metadata_json, { table: 'session_events', id: row.id, column: 'metadata_json' }),
-    created_at: row.created_at,
+    createdAt: row.created_at,
   };
 }

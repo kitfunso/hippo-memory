@@ -97,8 +97,8 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'session-end wiring task',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-end-close-me',
+      nextStep: 'n',
+      sessionId: 'sess-end-close-me',
       source: 'pre-compact',
     });
 
@@ -119,8 +119,8 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'byte-order-mark task',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-bom',
+      nextStep: 'n',
+      sessionId: 'sess-bom',
       source: 'pre-compact',
     });
 
@@ -138,8 +138,8 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'belongs to session A',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-a-not-ending',
+      nextStep: 'n',
+      sessionId: 'sess-a-not-ending',
       source: 'pre-compact',
     });
 
@@ -156,7 +156,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.status).toBe('active');
-    expect(snapshot!.session_id).toBe('sess-a-not-ending');
+    expect(snapshot!.sessionId).toBe('sess-a-not-ending');
   });
 
   it('no session_id in the SessionEnd payload -> worker no-ops the close (snapshot stays active) and logs one skip line', async () => {
@@ -164,8 +164,8 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'no-session-id-in-payload task',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-should-survive',
+      nextStep: 'n',
+      sessionId: 'sess-should-survive',
       source: 'pre-compact',
     });
 
@@ -245,8 +245,8 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'from the snapshot',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-own',
+      nextStep: 'n',
+      sessionId: 'sess-own',
       source: 'pre-compact',
     });
     // A tail with nothing to read is the one read that leaves a log line; the slot flip itself cannot be timed from a test.

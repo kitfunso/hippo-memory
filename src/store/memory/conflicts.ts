@@ -13,7 +13,7 @@ import type {
   MemoryConflict,
 } from '../port/conflicts.js';
 import type { Conflicts } from '../port-groups.js';
-import { byBytes, sqliteNow } from './rows.js';
+import { byBytes } from './rows.js';
 import { keepTombstone } from './rejections.js';
 import { archiveRow, markParentDirty, stage, type Tx } from './staged.js';
 import type { MemoryTables } from './tables.js';
@@ -90,8 +90,7 @@ function removeRow(t: MemoryTables, tx: Tx, row: MemoryEntry, r: ConflictResolut
 function rejectLoser(t: MemoryTables, tx: Tx, loser: MemoryEntry, r: ConflictResolution, ownScope: string | null) {
   const digest = rejectionDigest(loser.content);
   const normalizedChars = normalizeValueForRejection(loser.content).length;
-  const rejectedAt = new Date().toISOString();
-  const tombstone = { tenantId: loser.tenantId, digest, reason: r.reason, rejectedBy: r.actor, rejectedAt };
+  const tombstone = { tenantId: loser.tenantId, digest, reason: r.reason, rejectedBy: r.actor, rejectedAt: r.at };
   keepTombstone(t, { ...tombstone, sourceMemoryId: r.loser.id, normalizedChars });
   // Every live same-tenant row holding the value goes, as `hippo reject` does; `keep` stays because the human chose it.
   const dups = [...tx.rows.values()].filter(
@@ -143,7 +142,7 @@ function resolveIn(t: MemoryTables, tenantId: string, r: ConflictResolution): bo
       rejectedDigest: out.digest,
     };
     tx.audit.push({ tenantId, actor: r.actor, op: 'conflict_resolve', targetId: r.keep.id, metadata });
-    t.conflicts[t.conflicts.indexOf(conflict)] = { ...conflict, status: 'resolved', updated_at: sqliteNow() };
+    t.conflicts[t.conflicts.indexOf(conflict)] = { ...conflict, status: 'resolved', updated_at: r.at };
     return true;
   });
 }

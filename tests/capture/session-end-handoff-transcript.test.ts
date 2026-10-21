@@ -22,7 +22,7 @@ const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
 const state = {
   task: 'add rate limiting to the webhook',
   summary: 'handler wired, limiter next',
-  next_step: 'write the limiter test',
+  nextStep: 'write the limiter test',
 };
 
 const made: string[] = [];
@@ -166,7 +166,7 @@ describe('writeSessionEndHandoff from transcript state', () => {
     ).toMatchObject({
       taskId: state.task,
       summary: state.summary,
-      nextAction: state.next_step,
+      nextAction: state.nextStep,
     });
     expect(loadLatestHandoff(root, 'default', 'sess-new')?.taskId).toBe(state.task);
   });
@@ -176,15 +176,15 @@ describe('writeSessionEndHandoff from transcript state', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'other work',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-other',
+      nextStep: 'n',
+      sessionId: 'sess-other',
     });
 
     expect(
       writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-new', evidence: null, derived: state })
         ?.taskId,
     ).toBe(state.task);
-    expect(loadActiveTaskSnapshot(root, 'default')?.session_id).toBe('sess-other');
+    expect(loadActiveTaskSnapshot(root, 'default')?.sessionId).toBe('sess-other');
   });
 
   it('keeps a handoff the session already wrote', () => {
@@ -207,8 +207,8 @@ describe('writeSessionEndHandoff from transcript state', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'from the snapshot',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-new',
+      nextStep: 'n',
+      sessionId: 'sess-new',
     });
 
     expect(
@@ -220,12 +220,12 @@ describe('writeSessionEndHandoff from transcript state', () => {
   it("replaces the handoff read at a resumed session's earlier exit", () => {
     const root = store();
     writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-new', evidence: null, derived: state });
-    const later = { ...state, next_step: 'write the retry queue test' };
+    const later = { ...state, nextStep: 'write the retry queue test' };
 
     expect(
       writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-new', evidence: null, derived: later })
         ?.nextAction,
-    ).toBe(later.next_step);
+    ).toBe(later.nextStep);
     expect(loadLatestHandoff(root, 'default', 'sess-new')?.evidence?.derivedFrom).toBe('transcript');
   });
 
@@ -238,7 +238,7 @@ describe('writeSessionEndHandoff from transcript state', () => {
       derived: state,
       inPlace: true,
     });
-    const later = { ...state, next_step: 'write the retry queue test' };
+    const later = { ...state, nextStep: 'write the retry queue test' };
 
     expect(
       writeSessionEndHandoff(root, {
@@ -248,7 +248,7 @@ describe('writeSessionEndHandoff from transcript state', () => {
         derived: later,
         inPlace: true,
       })?.nextAction,
-    ).toBe(later.next_step);
+    ).toBe(later.nextStep);
     expect(handoffCount(root, 'sess-new')).toBe(1);
     expect(loadLatestHandoff(root, 'default', 'sess-new')?.evidence?.derivedFrom).toBe('transcript');
   });
@@ -275,7 +275,7 @@ describe('writeSessionEndHandoff from transcript state', () => {
         tenantId: 'default',
         sessionId: 'sess-new',
         evidence: null,
-        derived: { ...state, next_step: 'newer' },
+        derived: { ...state, nextStep: 'newer' },
         inPlace: true,
       }),
     ).toBeNull();
@@ -309,7 +309,7 @@ describe('writeSessionEndHandoff from transcript state', () => {
         tenantId: 'default',
         sessionId: 'sess-new',
         evidence: null,
-        derived: { ...state, next_step: 'newer' },
+        derived: { ...state, nextStep: 'newer' },
         inPlace: true,
       }),
     ).toBeNull();
@@ -329,25 +329,25 @@ describe('writeSessionEndHandoff from transcript state', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'compacted',
       summary: 's',
-      next_step: 'from the snapshot',
-      session_id: 'sess-new',
+      nextStep: 'from the snapshot',
+      sessionId: 'sess-new',
       source: 'pre-compact',
     });
 
-    for (const next_step of ['first reply after compaction', 'second reply after compaction']) {
+    for (const nextStep of ['first reply after compaction', 'second reply after compaction']) {
       expect(
         writeSessionEndHandoff(root, {
           tenantId: 'default',
           sessionId: 'sess-new',
           evidence: null,
-          derived: { ...state, next_step },
+          derived: { ...state, nextStep },
           inPlace: true,
         })?.nextAction,
-      ).toBe(next_step);
-      expect(loadLatestHandoff(root, 'default', 'sess-new')?.nextAction).toBe(next_step);
+      ).toBe(nextStep);
+      expect(loadLatestHandoff(root, 'default', 'sess-new')?.nextAction).toBe(nextStep);
     }
     expect(handoffCount(root, 'sess-new')).toBe(1);
-    expect(loadActiveTaskSnapshot(root, 'default')?.session_id).toBe('sess-new');
+    expect(loadActiveTaskSnapshot(root, 'default')?.sessionId).toBe('sess-new');
   });
 
   it('keeps a handoff written with hippo handoff create over a later transcript read', () => {
@@ -375,7 +375,7 @@ describe('writeSessionEndHandoff from transcript state', () => {
       sessionId: 'sess-new',
       taskId: state.task,
       summary: state.summary,
-      nextAction: state.next_step,
+      nextAction: state.nextStep,
       artifacts: [],
       evidence: unmarked,
     });
@@ -385,9 +385,9 @@ describe('writeSessionEndHandoff from transcript state', () => {
         tenantId: 'default',
         sessionId: 'sess-new',
         evidence: null,
-        derived: { ...state, next_step: 'newer' },
+        derived: { ...state, nextStep: 'newer' },
       }),
     ).toBeNull();
-    expect(loadLatestHandoff(root, 'default', 'sess-new')?.nextAction).toBe(state.next_step);
+    expect(loadLatestHandoff(root, 'default', 'sess-new')?.nextAction).toBe(state.nextStep);
   });
 });

@@ -123,8 +123,8 @@ describe('scope filter — generic *:private:* default-deny', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'GitHub private repo task',
       summary: 'private repo work',
-      next_step: 'do thing',
-      session_id: 'sess-private',
+      nextStep: 'do thing',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'github:private:acme/secret-repo',
     });
@@ -137,8 +137,8 @@ describe('scope filter — generic *:private:* default-deny', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'ACME private task',
       summary: 'private',
-      next_step: 'do',
-      session_id: 'sess-acme',
+      nextStep: 'do',
+      sessionId: 'sess-acme',
       source: 'test',
       scope: 'acme:private:demo',
     });
@@ -151,8 +151,8 @@ describe('scope filter — generic *:private:* default-deny', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'ACME private task',
       summary: 'private',
-      next_step: 'do',
-      session_id: 'sess-acme',
+      nextStep: 'do',
+      sessionId: 'sess-acme',
       source: 'test',
       scope: 'acme:private:demo',
     });
@@ -201,8 +201,8 @@ describe('scope filter — generic *:private:* default-deny', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'mcp acme private task',
       summary: 'private',
-      next_step: 'do',
-      session_id: 'sess-mcp-acme',
+      nextStep: 'do',
+      sessionId: 'sess-mcp-acme',
       source: 'test',
       scope: 'acme:private:demo',
     });

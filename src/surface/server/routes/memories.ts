@@ -4,6 +4,7 @@ import { rawArchive, forget, outcome, promote, remember, supersede } from '../..
 import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/memory.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import { restClientKey } from '../client-key.js';
+import type { ContextWith } from '../../../api/types.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import {
   getCallerProject,
@@ -87,7 +88,10 @@ export async function handleSupersedeMemory({ req, res, ctx }: AuthedRouteReques
   return;
 }
 
-export async function handlePromoteMemory({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handlePromoteMemory(
+  { res, ctx }: AuthedRouteRequest & { ctx: ContextWith<'folderFiles'> },
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   const result = await promote(ctx, id);
   sendJson(res, 200, result);

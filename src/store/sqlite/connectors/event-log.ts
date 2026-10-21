@@ -1,7 +1,7 @@
 // The event-log statements both connectors share; each connector names its table, key column and extra columns.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
-import { placeholders } from '../../../base/util/sql.js';
+import { placeholders } from '../../../db/sql.js';
 import type { ConnectorEventRecord } from '../../port/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 

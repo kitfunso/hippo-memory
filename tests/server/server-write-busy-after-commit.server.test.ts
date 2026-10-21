@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from 'vites
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { portError } from '../../src/store/sqlite/port-errors.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import {
   openHippoDb,
@@ -222,7 +223,8 @@ describe('routed writes under a busy store', () => {
   });
 
   it('MCP: a busy store answers with a retry message, not the generic internal error', () => {
-    expect(mcpErrorResponse(7, busyErr)).toEqual({
+    // The adapter hands a driver busy code to every layer above it as the port's error.
+    expect(mcpErrorResponse(7, portError(busyErr))).toEqual({
       jsonrpc: '2.0',
       id: 7,
       error: { code: -32603, message: expect.stringMatching(/store busy.*retry/) },

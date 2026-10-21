@@ -15,7 +15,7 @@ const FOLDER_NEEDS: ReadonlySet<string> = new Set(FOLDER_GROUPS);
 export function localFileRoutes(): string[] {
   return V1_ROWS.filter(
     ({ route }) =>
-      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) || route.sqliteOnly !== undefined,
+      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) || route.hippoDbOnly !== undefined,
   ).map(({ key }) => requestLine(key));
 }
 

@@ -72,8 +72,8 @@ function snapshotFor(sessionId: string): void {
   saveActiveTaskSnapshot(store(proj), 'default', {
     task: 'ship',
     summary: 'half done',
-    next_step: 'run tests',
-    session_id: sessionId,
+    nextStep: 'run tests',
+    sessionId: sessionId,
   });
 }
 
@@ -272,8 +272,8 @@ describe('the per-prompt hook', () => {
     saveActiveTaskSnapshot(globalRoot, 'default', {
       task: 'ship',
       summary: 'half done',
-      next_step: 'run tests',
-      session_id: 'gs1',
+      nextStep: 'run tests',
+      sessionId: 'gs1',
     });
     await run(HOOK_ARGS, prompt('gs1'), bare);
     expect(arms(globalRoot).map((a) => a.block_hash)).toEqual(['holdout']);
@@ -286,8 +286,8 @@ describe('compact-resume', () => {
     saveActiveTaskSnapshot(store(proj), 'default', {
       task: 'ship',
       summary: 'half done',
-      next_step: 'run tests',
-      session_id: sessionId,
+      nextStep: 'run tests',
+      sessionId: sessionId,
     });
   };
 

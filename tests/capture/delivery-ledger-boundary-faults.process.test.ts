@@ -112,8 +112,8 @@ function scenario(proj: Project): Observed {
     snapshot: [
       snap?.task ?? null,
       snap?.summary ?? null,
-      snap?.next_step ?? null,
-      snap?.session_id ?? null,
+      snap?.nextStep ?? null,
+      snap?.sessionId ?? null,
       snap?.source ?? null,
     ],
     compactions: tableRows(
@@ -206,7 +206,7 @@ describe('B11 and U1', () => {
       expect(log).toContain('boundary callback failed: boom');
       expect(log).toContain('snapshot saved');
       expect(loadActiveTaskSnapshot(p.hippoRoot, 'default')).toMatchObject({
-        session_id: 'copilot-sess-1',
+        sessionId: 'copilot-sess-1',
         source: 'pre-compact',
       });
     } finally {

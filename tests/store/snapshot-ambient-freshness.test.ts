@@ -46,8 +46,8 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'orphaned /compact task',
       summary: 'live incident: 2026-08-15 snapshot, session f235ebd3',
-      next_step: 'n/a',
-      session_id: 'session-A',
+      nextStep: 'n/a',
+      sessionId: 'session-A',
       source: 'test',
     });
     backdateSnapshot(tmpDir, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -71,8 +71,8 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'owner still working on this',
       summary: 's',
-      next_step: 'n',
-      session_id: 'session-A',
+      nextStep: 'n',
+      sessionId: 'session-A',
       source: 'test',
     });
     backdateSnapshot(tmpDir, saved.id, isoAgo(SEVEN_DAYS_MS));
@@ -80,7 +80,7 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const result = loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-A' });
     expect(result).not.toBeNull();
     expect(result!.task).toBe('owner still working on this');
-    expect(result!.session_id).toBe('session-A');
+    expect(result!.sessionId).toBe('session-A');
   });
 
   it('2b. null/empty/absent session ids never count as an owner match; every combo falls through to the age check', () => {
@@ -90,8 +90,8 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const nullOwner = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'null-owner',
       summary: 's',
-      next_step: 'n',
-      session_id: null,
+      nextStep: 'n',
+      sessionId: null,
       source: 'test',
     });
     backdateSnapshot(tmpDir, nullOwner.id, isoAgo(SEVEN_DAYS_MS));
@@ -103,8 +103,8 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const emptyOwner = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'empty-owner',
       summary: 's',
-      next_step: 'n',
-      session_id: '',
+      nextStep: 'n',
+      sessionId: '',
       source: 'test',
     });
     backdateSnapshot(tmpDir, emptyOwner.id, isoAgo(SEVEN_DAYS_MS));
@@ -114,8 +114,8 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const realOwner = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'real-owner',
       summary: 's',
-      next_step: 'n',
-      session_id: 'session-real',
+      nextStep: 'n',
+      sessionId: 'session-real',
       source: 'test',
     });
     backdateSnapshot(tmpDir, realOwner.id, isoAgo(SEVEN_DAYS_MS));
@@ -128,8 +128,8 @@ describe('loadFreshActiveTaskSnapshot', () => {
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'still fresh',
       summary: 's',
-      next_step: 'n',
-      session_id: 'session-A',
+      nextStep: 'n',
+      sessionId: 'session-A',
       source: 'test',
     });
     backdateSnapshot(tmpDir, saved.id, isoAgo(60 * 60 * 1000));
@@ -147,8 +147,8 @@ describe('loadFreshActiveTaskSnapshot', () => {
       const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
         task: 'boundary case',
         summary: 's',
-        next_step: 'n',
-        session_id: 'session-A',
+        nextStep: 'n',
+        sessionId: 'session-A',
         source: 'test',
       });
 
@@ -171,18 +171,18 @@ describe('closeTaskSnapshotsForSession', () => {
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'owned by session A',
       summary: 's',
-      next_step: 'n',
-      session_id: 'session-A',
+      nextStep: 'n',
+      sessionId: 'session-A',
       source: 'test',
     });
-    const beforeUpdatedAt = saved.updated_at;
+    const beforeUpdatedAt = saved.updatedAt;
 
     const closedByB = closeTaskSnapshotsForSession(tmpDir, TENANT, 'session-B');
     expect(closedByB).toBe(0);
     const stillActive = loadActiveTaskSnapshot(tmpDir, TENANT);
     expect(stillActive).not.toBeNull();
     expect(stillActive!.status).toBe('active');
-    expect(stillActive!.session_id).toBe('session-A');
+    expect(stillActive!.sessionId).toBe('session-A');
 
     const closedByA = closeTaskSnapshotsForSession(tmpDir, TENANT, 'session-A');
     expect(closedByA).toBe(1);

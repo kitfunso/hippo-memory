@@ -9,7 +9,7 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { StoreFiles } from './open.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_ROW_COLUMNS } from './rows.js';
-import { placeholders, rowsPerStatement, valuesRows } from '../../base/util/sql.js';
+import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {

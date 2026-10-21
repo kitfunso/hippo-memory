@@ -1,7 +1,8 @@
 import type { Context } from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { hasGroup, type HippoStore, type StoreGroup } from '../../store/index.js';
+import { hasGroup, type HippoStore, type OptionalGroup, type StoreGroup } from '../../store/index.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import {
   HttpError,
@@ -45,13 +46,32 @@ import { SKILL_ROUTES } from './routes/skills.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './routes/recall.js';
 import { handleNearestVectors } from './routes/vectors.js';
 import { parseJsonBody } from './validation.js';
-import type { AuthedRouteRequest, ResolvedServeOptions, Route, RouteRequest, RouteEndpoint } from './types.js';
+import type {
+  AuthedRouteRequest,
+  ResolvedServeOptions,
+  Route,
+  RouteEndpoint,
+  RouteParams,
+  RouteRequest,
+} from './types.js';
 
 function webhook(
   handle: (r: WebhookRequest, store: HippoStore, config: HippoConfig) => Promise<void>,
 ): (r: RouteRequest) => Promise<void> {
   return async ({ req, res, opts }) => {
     await handle({ req, res, opts }, opts.store, opts.configAt(opts.hippoRoot));
+  };
+}
+
+/** A handler that takes a context typed with the row's storeReady `group`, which the gate's 501 has already proved. */
+function withGroup<G extends OptionalGroup>(
+  group: G,
+  handler: (r: AuthedRouteRequest & { ctx: ContextWith<G> }, params: RouteParams) => Promise<void>,
+): (r: AuthedRouteRequest, params: RouteParams) => Promise<void> {
+  return async (r, params) => {
+    const { store } = r.ctx;
+    if (!hasGroup(store, group)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+    await handler({ ...r, ctx: { ...r.ctx, store } }, params);
   };
 }
 
@@ -106,7 +126,7 @@ export const V1_ROUTES: readonly Route[] = [
     auth: 'caller',
     // The copy names its source folder and goes to the operator's global store, which only a folder store reaches.
     storeReady: 'folderFiles',
-    handler: handlePromoteMemory,
+    handler: withGroup('folderFiles', handlePromoteMemory),
   },
   {
     method: 'DELETE',
@@ -263,7 +283,7 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
   if (match === null) return false;
   const { route, run } = match;
   noteAccess(r.req, { route: routeLabel(route) });
-  // Only a store with worker threads has moved the route's SQLite work; under any other the handler still opens
+  // Only a store with worker threads has moved the route's hippo.db work; under any other the handler still opens
   // hippo.db itself.
   await r.opts.offLoop(() => run(r));
   return true;
@@ -331,9 +351,9 @@ export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: str
 /** What a route needs of its store: a group, or hippo.db itself. */
 type StoreNeed = StoreGroup | 'hippoDb';
 
-/** What a row needs: a sqliteOnly row needs hippo.db, a row naming none runs on any store. */
+/** What a row needs: a hippoDbOnly row needs hippo.db, a row naming none runs on any store. */
 function routeGroup(route: Route): StoreNeed | undefined {
-  return route.sqliteOnly === undefined ? route.storeReady : 'hippoDb';
+  return route.hippoDbOnly === undefined ? route.storeReady : 'hippoDb';
 }
 
 /** A route answers 501 without running when the store lacks what it needs. */

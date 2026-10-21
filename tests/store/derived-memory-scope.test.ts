@@ -12,7 +12,7 @@ import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.
 import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
 import { saveProjectBrief, briefFromReceipts } from '../../src/domain/objects/project-briefs.js';
 import { derivationScope, commonDerivationScope } from '../../src/base/scope/recall-scope.js';
-import { placeholders } from '../../src/base/util/sql.js';
+import { placeholders } from '../../src/db/sql.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -136,15 +136,15 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
     const home = makeRoot('derived-scope');
     const sid = 'sess-private-uniform';
     appendSessionEvent(home, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'read the private doc',
       source: 'agent',
       scope: 'slack:private:C1',
     });
     appendSessionEvent(home, 'default', {
-      session_id: sid,
-      event_type: 'session_complete',
+      sessionId: sid,
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
       scope: 'slack:private:C1',
@@ -164,22 +164,22 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
     const home = makeRoot('derived-scope');
     const sid = 'sess-mixed';
     appendSessionEvent(home, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'read the private doc',
       source: 'agent',
       scope: 'slack:private:C1',
     });
     appendSessionEvent(home, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'post the public update',
       source: 'agent',
       scope: null,
     });
     appendSessionEvent(home, 'default', {
-      session_id: sid,
-      event_type: 'session_complete',
+      sessionId: sid,
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
       metadata: { summary: 'mixed session' },

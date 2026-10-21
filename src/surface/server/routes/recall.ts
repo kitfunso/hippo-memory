@@ -12,6 +12,7 @@ import {
   retrieve,
 } from '../../../api/index.js';
 import { RECALL_RECORDING } from '../../../api/recall/finish.js';
+import { continuityJson, sessionEventJson, snapshotJson } from '../../../api/continuity-json.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../../api/recall/request.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
@@ -39,7 +40,7 @@ export async function handleRecallMemories({ req, res, ctx, query }: AuthedRoute
   if (recallOpts.window.includeContinuity) {
     res.setHeader('Cache-Control', 'no-store');
   }
-  sendJson(res, 200, result);
+  sendJson(res, 200, result.continuity ? { ...result, continuity: continuityJson(result.continuity) } : result);
   return;
 }
 
@@ -131,6 +132,10 @@ export async function handleGetContext({ req, res, ctx, query, opts }: AuthedRou
     result.entries.map((r) => r.entry.id),
   );
   await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
-  sendJson(res, 200, result);
+  sendJson(res, 200, {
+    ...result,
+    activeSnapshot: result.activeSnapshot && snapshotJson(result.activeSnapshot),
+    recentEvents: result.recentEvents?.map(sessionEventJson),
+  });
   return;
 }

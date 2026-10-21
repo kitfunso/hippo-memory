@@ -214,13 +214,13 @@ describe('MCP hippo_recall ranking', () => {
     saveActiveTaskSnapshot(s.home, 'default', {
       task: 'Ship the deploy pipeline',
       summary: 'blue green rollout in flight',
-      next_step: 'flip traffic',
-      session_id: 'sess-x',
+      nextStep: 'flip traffic',
+      sessionId: 'sess-x',
       source: 'test',
     });
     appendSessionEvent(s.home, 'default', {
-      session_id: 'sess-x',
-      event_type: 'note',
+      sessionId: 'sess-x',
+      eventType: 'note',
       content: 'rollout paused at 50 percent',
       source: 'test',
     });

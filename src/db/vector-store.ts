@@ -9,7 +9,7 @@ import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { chunked } from '../base/util/chunked.js';
-import { placeholders } from '../base/util/sql.js';
+import { placeholders } from './sql.js';
 import { tryParseJson } from '../base/util/json.js';
 import { cachedStatement } from './statement-cache.js';
 

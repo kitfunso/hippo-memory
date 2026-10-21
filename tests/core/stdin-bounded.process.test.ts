@@ -161,9 +161,9 @@ function seedPreCompactPayload(dir: string, sessionId: string) {
 function expectRowFor(dir: string, sessionId: string): void {
   const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
   expect(snapshot).not.toBeNull();
-  expect(snapshot!.session_id).toBe(sessionId);
+  expect(snapshot!.sessionId).toBe(sessionId);
   expect(snapshot!.task).toContain('Investigate');
-  expect(snapshot!.next_step).toContain('Fixed');
+  expect(snapshot!.nextStep).toContain('Fixed');
 }
 
 describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-idle-hang)', () => {
@@ -289,7 +289,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(result.status).toBe(0);
     let snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot).not.toBeNull();
-    expect(snapshot!.session_id).toBe('session-A');
+    expect(snapshot!.sessionId).toBe('session-A');
 
     // b. Decoy sits where auto-discovery actually looks (capture.ts:742-765).
     const decoyDir = path.join(dir, '.claude', 'projects', 'other-project');
@@ -340,10 +340,10 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
 
     snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot).not.toBeNull();
-    expect(snapshot!.session_id).toBe('session-A');
+    expect(snapshot!.sessionId).toBe('session-A');
     expect(snapshot!.task).toBe(SESSION_A_TASK);
     expect(snapshot!.summary).toBe(SESSION_A_SUMMARY);
-    expect(snapshot!.next_step).toBe(SESSION_A_NEXT_STEP);
+    expect(snapshot!.nextStep).toBe(SESSION_A_NEXT_STEP);
     expect(snapshot!.summary).not.toContain('DECOY SESSION');
 
     // 7. The skip must be visible in the log, not silent.

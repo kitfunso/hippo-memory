@@ -27,7 +27,7 @@ import type { MemoryTables } from './tables.js';
 const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
 /** julianday's reading of a stamp: a zoneless one is UTC. */
-function sqliteMs(text: string | null): number | null {
+function stampMs(text: string | null): number | null {
   if (text === null) return null;
   const iso = text.replace(' ', 'T');
   const ms = Date.parse(/(?:Z|[+-]\d\d:\d\d)$/i.test(iso) ? iso : `${iso}Z`);
@@ -49,7 +49,7 @@ function inEnvelope(e: MemoryEntry, tenantId: string, filter: Omit<ContextCandid
 
 /** The context read's rank key: decay worn so far with the reward factor, null for a row with no half life. */
 function decayKey(e: MemoryEntry, nowMs: number): number | null {
-  const last = sqliteMs(e.lastRetrieved);
+  const last = stampMs(e.lastRetrieved);
   if (!(e.halfLifeDays > 0) || last === null) return null;
   const pos = e.outcomePositive;
   const neg = e.outcomeNegative;
@@ -82,7 +82,7 @@ function secretAdmitted(e: MemoryEntry, currentProject: readonly string[]): bool
 // tallyAmbientEntries parses dates with Date, which reads a zoneless one as local time where julianday reads UTC.
 function utcDates(e: MemoryEntry): MemoryEntry {
   const iso = (text: string): string => {
-    const ms = sqliteMs(text);
+    const ms = stampMs(text);
     return ms === null ? text : new Date(ms).toISOString();
   };
   return { ...e, created: iso(e.created), lastRetrieved: iso(e.lastRetrieved) };
@@ -163,7 +163,7 @@ function ambientIn(t: MemoryTables, tenantId: string, request: AmbientCandidateR
   return { entries, recall: found, refused };
 }
 
-/** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as SQLite's LIMIT reads it. */
+/** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as hippo.db's LIMIT reads it. */
 function newestIn(t: MemoryTables, tenantId: string, limit: number): MemoryEntry[] {
   const newest = [...t.entries.values()]
     .filter((e) => e.tenantId === tenantId)

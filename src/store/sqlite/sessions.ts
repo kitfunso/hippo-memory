@@ -8,7 +8,7 @@ import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from '
 import type { TaskSnapshot, SessionEvent, SessionEventInput, WorkingMemoryItem } from '../port/sessions.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
-import type { ContinuityKey } from '../port/types.js';
+import { continuityStamp, type ContinuityKey } from '../port/types.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
@@ -24,7 +24,6 @@ import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import {
   assertKeyedOnSharedStore,
-  continuityStamp,
   continuityWhere,
   loadActiveTaskSnapshotAt,
   saveActiveTaskSnapshotAt,
@@ -104,9 +103,9 @@ function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: Se
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
-    event.session_id,
+    event.sessionId,
     event.task ?? null,
-    event.event_type,
+    event.eventType,
     event.content,
     event.source ?? 'cli',
     event.scope ?? null,
@@ -164,7 +163,7 @@ export function appendSessionEventAt(
   // Scope is stored as given, since reads deny by default.
   // api.recall and printRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
   const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
-  const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
+  const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.sessionId, 20);
   writeRecentSessionMirror(hippoRoot, tenantId, recent);
   return loaded;
 }

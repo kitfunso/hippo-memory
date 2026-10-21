@@ -60,5 +60,6 @@ export function resolveConflictKeeping(
     fate: conflictLoserFate({}, loser, null),
     actor: CLI_ACTOR,
     reason: '',
+    at: new Date().toISOString(),
   });
 }
