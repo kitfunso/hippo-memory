@@ -21,6 +21,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { search } from '../../src/domain/search/bm25-search.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // ---------------------------------------------------------------------------
 // Load trap definitions

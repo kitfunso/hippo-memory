@@ -21,6 +21,9 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // Every sync asks git for each folder's layout in a child process.
 vi.setConfig({ testTimeout: 20_000 });

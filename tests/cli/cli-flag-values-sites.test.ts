@@ -1,6 +1,6 @@
 // A text flag with no value (`--summary` and nothing after it) exits 1; before, parseArgs's `true` was stored as the text "true".
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handoffLatest, sessionEventList, snapshotLoad, workingMemoryRead } from '../../src/api/continuity.js';
 import { memoryList } from '../../src/api/memories/memories.js';
@@ -17,6 +17,9 @@ import { handleCapture } from '../../src/surface/cli/session-hooks.js';
 import { handleExport, handleImport } from '../../src/surface/cli/transfer.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const STEPS = JSON.stringify([{ action: 'ran the build', observation: 'it passed' }]);
 
@@ -43,7 +46,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 type Row = readonly [label: string, flag: string, run: () => void | Promise<void>];

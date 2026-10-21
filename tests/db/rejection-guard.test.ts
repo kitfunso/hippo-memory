@@ -9,6 +9,9 @@ import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, applyRebuildResult, writeEntry, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function reject(home: string, text: string, reason: string): string {
   const digest = rejectionDigest(text);

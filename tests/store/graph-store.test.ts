@@ -8,7 +8,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb, withWriteScope } from '../../src/db/index.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
@@ -25,14 +24,10 @@ import {
   loadEntities,
   loadRelations,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 /** Write a memory and force its kind (default writes are 'distilled'). Setting kind
  *  to 'raw' is allowed (the append-only trigger is BEFORE DELETE, not UPDATE). */
 function addMemory(home: string, tenant: string, kind: 'distilled' | 'superseded' | 'raw'): string {
@@ -70,7 +65,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
   beforeEach(() => {
     home = makeRoot('graph');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('insertEntity from a distilled / superseded memory sets source_kind; insertRelation links them', () => {
     const md = addMemory(home, 'default', 'distilled');

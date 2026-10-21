@@ -13,6 +13,9 @@ import {
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // The instruction Claude Code hands the summarizer; pinned word for word.
 const INSTRUCTION =

@@ -23,6 +23,9 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -84,7 +87,7 @@ describe('transcript mining', () => {
       expect(contents.some((c) => c.includes('deploy token [REDACTED]'))).toBe(true);
       expect(contents.join('\n')).not.toContain(token);
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      removeAfterRequest(dir);
     }
   });
 
@@ -148,7 +151,7 @@ describe('transcript mining', () => {
       expect(snapshot!.task).not.toMatch(/restart the server|local commands|Never mind this output/i);
       expect(snapshot!.summary).not.toMatch(/restart the server|local commands|Never mind this output/i);
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      removeAfterRequest(dir);
     }
   });
 
@@ -220,7 +223,7 @@ describe('transcript mining', () => {
         '',
       );
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      removeAfterRequest(dir);
     }
   });
 
@@ -260,7 +263,7 @@ describe('transcript mining', () => {
       );
       expect(resume.stdout).toContain('Fix the flaky login test');
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      removeAfterRequest(dir);
     }
   });
 
@@ -384,7 +387,7 @@ describe('failed-tool capture', () => {
       expect(rows[0]!.confidence).toBe('observed');
       expect(failureSignature('line 12 at 0xdeadbeef')).toBe(failureSignature('line 40 at 0x1234567'));
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      removeAfterRequest(dir);
     }
   });
 
@@ -414,7 +417,7 @@ describe('failed-tool capture', () => {
       expect(r.status).toBe(0);
       expect(r.stderr).toMatch(/\[hippo\] warn: failure capture skipped: \S/);
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      removeAfterRequest(dir);
     }
   });
 });
@@ -427,7 +430,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     vi.stubEnv('USERPROFILE', dir);
   });
   afterEach(() => {
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeAfterRequest(dir);
   });
 
   it('hippo hook install adds PreCompact and PostToolUseFailure, idempotently', () => {

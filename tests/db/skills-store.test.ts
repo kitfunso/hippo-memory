@@ -11,22 +11,16 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeObject, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { SKILL, skillsMarkdown } from '../../src/domain/objects/skills.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
 
 function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
   // SAFETY: every call site below passes a SELECT whose column list is
@@ -52,7 +46,7 @@ describe('skills store (executable/exportable first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('skills');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', async () => {
     const s = await cliSave(home, 'default', SKILL, {

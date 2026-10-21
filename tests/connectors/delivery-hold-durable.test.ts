@@ -1,9 +1,11 @@
 // A hold on a signed delivery lives in hippo.db, so it survives a restart and a second handle, and expired holds do not pile up.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const TTL = 1000;
 let root: string;
@@ -13,7 +15,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 const claimOn = (store: ReturnType<typeof sqliteSyncStore>, key: string, nowMs: number) =>

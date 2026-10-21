@@ -1,12 +1,14 @@
 // Pins every `hippo card` subcommand's stdout, stderr and exit code, in process, so a reshuffle of handleCard
 // that changes a byte or an exit path fails here. Ids and timestamps are masked; their order is kept.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleCard } from '../../src/surface/cli/card.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root = '';
 
@@ -19,7 +21,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 /** Replaces each distinct card id with its first-seen order and every ISO timestamp with <ts>. */

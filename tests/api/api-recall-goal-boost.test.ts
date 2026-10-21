@@ -16,6 +16,9 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): number {
   const row = db.prepare(sql).get(...params);

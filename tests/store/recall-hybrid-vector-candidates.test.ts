@@ -2,7 +2,7 @@
 // Ids are random per seed, so rows are named by label.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { createMemory, type CreateMemoryOptions } from '../../src/base/memory/memory.js';
@@ -18,6 +18,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -103,7 +106,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', undefined);
     vi.stubEnv('OPENAI_API_KEY', undefined);
     vi.unstubAllGlobals();
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) removeAfterRequest(d);
   });
 
   it('searchBothHybrid default recall', async () => {

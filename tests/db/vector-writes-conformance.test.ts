@@ -26,6 +26,9 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const MODEL = embeddingIndexIdentity('test:vec-3');
 const OLD = embeddingIndexIdentity('test:old-3');

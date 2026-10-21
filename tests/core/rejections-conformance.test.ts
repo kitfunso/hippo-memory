@@ -22,6 +22,9 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'api_key:caller';

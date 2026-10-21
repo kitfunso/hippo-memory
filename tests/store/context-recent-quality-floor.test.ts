@@ -27,6 +27,9 @@ import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function tmpHome() {
   const home = makeRoot('df3');
@@ -38,7 +41,7 @@ function tmpHome() {
   return {
     home,
     restore: () => {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
       rmSync(globalTmp, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
         vi.stubEnv('HIPPO_HOME', origHippoHome);
@@ -515,7 +518,7 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
     if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
     else vi.stubEnv('HIPPO_HOME', undefined);
   });

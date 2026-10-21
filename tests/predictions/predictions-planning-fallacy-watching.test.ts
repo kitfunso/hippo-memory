@@ -20,7 +20,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../../src/domain/predictions/planning-fallacy.js';
@@ -29,14 +28,10 @@ import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'test:j32-watch', role: 'admin' });
 }
@@ -63,7 +58,7 @@ describe('PlanningFallacyWatching', () => {
   beforeEach(() => {
     root = makeRoot('j32-watch');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('Output.watching set with reason=tiebreak when >=2 classes tied at best overlap', async () => {
     // Seed predictions in TWO classes that share NO query tokens between

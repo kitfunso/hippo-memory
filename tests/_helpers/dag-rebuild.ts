@@ -1,6 +1,6 @@
 // Fetchers, dirty-summary setters and entry builders the DAG rebuild tests share.
 import { vi } from 'vitest';
-import { openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
@@ -44,7 +44,7 @@ export function forceMarkDirty(hippoRoot: string, summaryId: string): void {
   try {
     db.prepare(`UPDATE memories SET summary_dirty = 1 WHERE id = ?`).run(summaryId);
   } finally {
-    db.close();
+    closeHippoDb(db);
   }
 }
 
@@ -64,7 +64,7 @@ export function rejectValue(hippoRoot: string, tenantId: string, content: string
       normalizedChars: normalizeValueForRejection(content).length,
     });
   } finally {
-    db.close();
+    closeHippoDb(db);
   }
 }
 

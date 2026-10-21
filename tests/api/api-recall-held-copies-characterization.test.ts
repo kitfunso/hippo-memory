@@ -2,12 +2,14 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'test:held', role: 'admin' });
@@ -28,7 +30,7 @@ describe('recall held-copy drop', () => {
   beforeEach(() => {
     root = makeRoot('held-copies');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  afterEach(() => removeAfterRequest(root));
 
   it('returns one row per text and counts the hidden copy as dropped before ranking', async () => {
     writeEntry(root, raw('quokka habitat notes'));

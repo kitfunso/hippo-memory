@@ -23,6 +23,9 @@ import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, appendSessionEvent } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 describe('merge pass partitions by tenant before clustering', () => {
   it('two tenants with byte-identical overlapping episodic content produce two separate merged rows, each in its own source tenant, never mixed into one', async () => {

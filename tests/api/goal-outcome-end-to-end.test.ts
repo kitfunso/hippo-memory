@@ -3,7 +3,6 @@
 // after the recall; the decay case starts from 1.0 and is visible as-is.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
 import { runCli } from '../../src/cli.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -11,6 +10,9 @@ import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { pushGoal, completeGoal } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const savedCwd = process.cwd();
 
@@ -64,7 +66,7 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   afterEach(() => {
     process.chdir(savedCwd);
     vi.unstubAllEnvs();
-    rmSync(env.cwd, { recursive: true, force: true });
+    removeAfterRequest(env.cwd);
   });
 
   it('positive outcome boosts strength of memories actually recalled during goal life, and only once', async () => {

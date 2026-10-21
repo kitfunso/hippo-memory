@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { remember } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
@@ -8,6 +8,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 describe('api.remember', () => {
   it('persists a memory and returns its envelope', async () => {
@@ -22,7 +25,7 @@ describe('api.remember', () => {
     const stored = readEntry(home, result.id);
     expect(stored?.content).toBe('api-canary-remember-77');
     expect(stored?.tenantId).toBe('default');
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('emits an audit event with the supplied actor', async () => {
@@ -38,7 +41,7 @@ describe('api.remember', () => {
     expect(events.length).toBe(1);
     expect(events[0]!.actor).toBe('api_key:hk_test');
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 });
 
@@ -47,7 +50,7 @@ describe("api.remember stamps the caller's project", () => {
   beforeEach(() => {
     tmp = makeRoot('api-rem-proj', { init: false });
     return () => {
-      rmSync(tmp, { recursive: true, force: true });
+      removeAfterRequest(tmp);
     };
   });
 

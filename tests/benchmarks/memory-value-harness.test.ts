@@ -62,10 +62,14 @@ import {
   clearAblationEnv,
   QUESTIONS,
   QUESTION_C,
+  benchmarkStores,
   cleanupScratch,
   runPipeline,
   TEST_SIM_ROUNDS,
 } from './memory-value-fixtures.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest(benchmarkStores);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -144,12 +148,26 @@ describe('split determinism', () => {
 // Full-mechanism tests (real SQLite scratch stores)
 // ---------------------------------------------------------------------------
 
+type PipelineRun = Awaited<ReturnType<typeof runPipeline>>;
+
+async function runEachQuestion(): Promise<Map<string, PipelineRun>> {
+  cleanupScratch();
+  const runs = new Map<string, PipelineRun>();
+  for (const q of QUESTIONS) runs.set(q.question_id, await runPipeline(q));
+  return runs;
+}
+
 describe('memory-value harness (real stores)', () => {
-  beforeEach(cleanupScratch);
+  // (b) to (d) only read what the pipeline wrote, so the first of them to run makes one run per question for all.
+  let shared: Promise<Map<string, PipelineRun>> | undefined;
+  async function runOf(q: (typeof QUESTIONS)[number]): Promise<PipelineRun> {
+    shared ??= runEachQuestion();
+    return (await shared).get(q.question_id)!;
+  }
 
   it('(b) features.jsonl rows == ingested memories; >=6 non-constant post-simulation', async () => {
     for (const q of QUESTIONS) {
-      const { ingestResult, extractResult } = await runPipeline(q);
+      const { ingestResult, extractResult } = await runOf(q);
       expect(extractResult.rows).toBe(ingestResult.memoryCount);
       expect(ingestResult.memoryCount).toBe(10); // fixture is exactly 10 turns/question, none empty
 
@@ -178,7 +196,7 @@ describe('memory-value harness (real stores)', () => {
     // store), which is the property that actually matters — a false
     // "it varies" assertion would not have been true and is not asserted.
     for (const q of QUESTIONS) {
-      await runPipeline(q);
+      await runOf(q);
       const rows = jsonlRows<{ memory_id: string; features: { schema_fit: number } }>(featuresPathFor(q.question_id));
       const rowById = new Map(rows.map((r) => [r.memory_id, r]));
       const gold = jsonFile<{ memories: Array<{ id: string }> }>(goldPathFor(q.question_id));
@@ -210,7 +228,7 @@ describe('memory-value harness (real stores)', () => {
 
   it('(c) recency retention is exact for the hand-computable case', async () => {
     for (const q of QUESTIONS) {
-      await runPipeline(q);
+      await runOf(q);
     }
     const result = evaluateAll(
       QUESTIONS.map((q) => ({ questionId: q.question_id, split: 'train' as const })),
@@ -233,7 +251,7 @@ describe('memory-value harness (real stores)', () => {
 
   it('(d) no NaN anywhere in extracted features', async () => {
     for (const q of QUESTIONS) {
-      await runPipeline(q);
+      await runOf(q);
       const rows = jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id));
       for (const row of rows) {
         for (const [name, value] of Object.entries(row.features)) {
@@ -266,8 +284,11 @@ describe('memory-value harness (real stores)', () => {
       return { rowCounts, goldCounts, recency };
     }
 
-    const run1 = await runOnceAndScore();
+    // (e) starts from an empty scratch root, which also drops the run (b) to (d) shared.
     cleanupScratch();
+    shared = undefined;
+    const run1 = await runOnceAndScore();
+    for (const q of QUESTIONS) removeAfterRequest(questionDir(q.question_id), benchmarkStores);
     const run2 = await runOnceAndScore();
 
     expect(run2.rowCounts).toEqual(run1.rowCounts);
@@ -323,7 +344,7 @@ describe('causal clock clamp', () => {
       expect(s0Rows.length).toBe(3);
       for (const row of s0Rows) expect(row.features.age_days).toBe(10);
     } finally {
-      fs.rmSync(questionDir(QUESTION_C.question_id), { recursive: true, force: true });
+      removeAfterRequest(questionDir(QUESTION_C.question_id), benchmarkStores);
     }
   });
 });
@@ -361,7 +382,7 @@ describe('--skip-simulate variance-gate exemption', () => {
       expect(CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE).toBe(3);
       expect(skipSimulateGate.passed).toBe(true);
     } finally {
-      for (const q of QUESTIONS) fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
+      for (const q of QUESTIONS) removeAfterRequest(questionDir(q.question_id), benchmarkStores);
     }
   });
 });

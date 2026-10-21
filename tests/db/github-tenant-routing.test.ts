@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { resolveTenantForGitHub, type GitHubFallback } from '../../src/surface/connectors/github/tenant-routing.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { envTenant } from '../../src/base/util/env.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): GitHubFallback => ({ hostTenant: envTenant(), allowUnknown });
@@ -44,7 +46,7 @@ describe('resolveTenantForGitHub', () => {
   });
 
   afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    removeAfterRequest(root);
   });
 
   it('rule 1: installation_id matches a row -> returns mapped tenant', async () => {

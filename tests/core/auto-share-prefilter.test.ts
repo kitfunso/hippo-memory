@@ -15,6 +15,9 @@ import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

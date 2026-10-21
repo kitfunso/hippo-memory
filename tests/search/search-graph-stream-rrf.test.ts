@@ -14,7 +14,6 @@
  * seedCount; the CLI/library default (10) targets realistic large pools.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
@@ -23,14 +22,10 @@ import { selectGraphSeeds, graphRankStream } from '../../src/domain/graph/stream
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 function mem(home: string, tenant: string, text: string): MemoryEntry {
   const m = createMemory(text, {
     tags: [],
@@ -63,7 +58,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
   beforeEach(() => {
     home = makeRoot('gstream-rrf');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('Gate-(b) dry-run: a lexically-weak, graph-adjacent answer (rank>5 in 2-list) enters top-5 under the 3-list fusion', async () => {
     // 8-entry pool. strong=0 is a top lexical hit; weak=7 is the answer: lexically last

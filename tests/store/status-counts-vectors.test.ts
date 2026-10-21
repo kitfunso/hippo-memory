@@ -27,6 +27,9 @@ import {
   saveStoredVectors,
   storedVectorSummary,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 type Walk = (this: Float32Array) => IterableIterator<number>;
 let home: string;

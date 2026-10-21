@@ -8,6 +8,9 @@ import { makeStore } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { createCallerState } from '../../src/api/callers.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 

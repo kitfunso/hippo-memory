@@ -1,7 +1,6 @@
 // Pins `hippo context` stdout, stderr and exit code across its three formats and the per-prompt hook path,
 // in process, so a split of renderContext that changes a byte fails here. Ids and timestamps are masked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { handleContext } from '../../src/surface/cli/context.js';
@@ -10,6 +9,9 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root = '';
 let store = '';
@@ -45,7 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 function mask(text: string): string {

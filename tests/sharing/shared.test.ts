@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
@@ -8,6 +7,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -24,7 +26,7 @@ function makeTmpStore(): string {
 
 function cleanUp(...dirs: string[]): void {
   for (const d of dirs) {
-    fs.rmSync(d, { recursive: true, force: true });
+    removeAfterRequest(d);
   }
 }
 

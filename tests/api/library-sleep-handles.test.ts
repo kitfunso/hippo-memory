@@ -7,6 +7,9 @@ import { DatabaseSync, type DatabaseSyncLike } from '../../src/db/sqlite.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 /** Distinct connections that ran a statement while `run` ran. */
 async function connectionsDuring(run: () => Promise<object>): Promise<number> {

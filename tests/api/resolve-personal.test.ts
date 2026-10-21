@@ -1,7 +1,6 @@
 // Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { adminActor, remember, type Actor } from '../../src/api/index.js';
 import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
 import { resolveOpenConflict } from '../../src/surface/dashboard/dashboard-actions.js';
@@ -12,6 +11,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const A_TEXT = 'always run the deploy script with --dry-run first';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -83,7 +85,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 describe('resolving conflicts next to personal rows', () => {

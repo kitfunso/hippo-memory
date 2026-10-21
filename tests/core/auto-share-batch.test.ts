@@ -1,6 +1,6 @@
 // autoShare writes every candidate to the global store in one transaction, from the rows it already holds.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
@@ -11,6 +11,9 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
 
@@ -26,7 +29,7 @@ describe('autoShare batching', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(tmp, { recursive: true, force: true });
+    removeAfterRequest(tmp);
   });
 
   async function shareFrom(topics: readonly string[]) {

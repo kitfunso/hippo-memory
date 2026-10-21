@@ -1,12 +1,12 @@
 // Each binary floor must name the first release that ships its schema (v53 expiring keys, v54 task owners), or an older binary can open a store it misreads.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-expiring-keys-floor.mjs');
-const roots: string[] = [];
+const repos = new Map<string, string>();
 
 interface Floors {
   expiring: string;
@@ -41,18 +41,23 @@ function writeTree(root: string, version: string, floors: Floors, schema: number
   writeFileSync(join(root, 'src', 'db', 'migrations', 'index.ts'), `export const MIGRATIONS = [${list}];\n`);
 }
 
-/** A git repo at `version` with schema v54 in its tree; `tag` first commits a release shipping `schema` under that name. */
+/** A git repo at `version` with schema v54 in its tree; `tag` first commits a release shipping `schema` under that name.
+ *  The gate reads only the working tree and each tag's migration list, so tests tagging the same release share a repo. */
 function makeRepo(version: string, floors: Floors, tag?: { name: string; schema: number }): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-floor-gate-'));
-  roots.push(root);
-  mkdirSync(join(root, 'src', 'db', 'migrations'), { recursive: true });
-  mkdirSync(join(root, 'src', 'base', 'util'), { recursive: true });
-  git(root, 'init', '-q');
-  if (tag) {
-    writeTree(root, tag.name, floors, tag.schema);
-    git(root, 'add', '.');
-    git(root, 'commit', '-q', '-m', 'release');
-    git(root, 'tag', `v${tag.name}`);
+  const key = tag ? `${tag.name}@${tag.schema}` : 'untagged';
+  let root = repos.get(key);
+  if (root === undefined) {
+    root = mkdtempSync(join(tmpdir(), 'hippo-floor-gate-'));
+    repos.set(key, root);
+    mkdirSync(join(root, 'src', 'db', 'migrations'), { recursive: true });
+    mkdirSync(join(root, 'src', 'base', 'util'), { recursive: true });
+    git(root, 'init', '-q');
+    if (tag) {
+      writeTree(root, tag.name, floors, tag.schema);
+      git(root, 'add', '.');
+      git(root, 'commit', '-q', '-m', 'release');
+      git(root, 'tag', `v${tag.name}`);
+    }
   }
   writeTree(root, version, floors, 54);
   return root;
@@ -62,8 +67,8 @@ function runGate(root: string): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf-8' });
 }
 
-afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+afterAll(() => {
+  for (const root of repos.values()) rmSync(root, { recursive: true, force: true });
 });
 
 describe('check-expiring-keys-floor.mjs', () => {

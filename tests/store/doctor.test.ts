@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -20,12 +20,16 @@ import {
   openHippoDb,
   openHippoDbReadOnly,
   closeHippoDb,
+  currentRequestStores,
   getSchemaVersion,
   getCurrentSchemaVersion,
   setMeta,
 } from '../../src/db/index.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -37,7 +41,7 @@ function sha256(file: string): string {
 
 const dirs: string[] = [];
 afterEach(() => {
-  while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+  while (dirs.length) removeAfterRequest(dirs.pop()!);
 });
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -379,11 +383,17 @@ describe('hippo doctor', () => {
     setMeta(seed, 'schema_version', String(older));
     seed.exec(`PRAGMA user_version = ${older}`);
     closeHippoDb(seed);
+    // Doctor runs as a request of its own, and the last close checkpoints the WAL into hippo.db, the hash target.
+    currentRequestStores()?.close();
 
     const before = sha256(join(global, 'hippo.db'));
     const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'projects')?.status).toBe('pass');
+    currentRequestStores()?.close();
     expect(sha256(join(global, 'hippo.db'))).toBe(before);
+    const check = openHippoDbReadOnly(global);
+    expect(getSchemaVersion(check)).toBe(older);
+    closeHippoDb(check);
   });
 
   it('flags a bare .hippo folder and creates nothing', async () => {

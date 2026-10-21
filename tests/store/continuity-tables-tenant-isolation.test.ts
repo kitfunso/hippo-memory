@@ -9,6 +9,9 @@ import {
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let tmpDir: string;
 beforeEach(() => {

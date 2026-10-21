@@ -21,6 +21,9 @@ import {
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -46,7 +49,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  removeAfterRequest(tmpRoot);
 });
 
 describe('getHippoRoot ancestor walk', () => {

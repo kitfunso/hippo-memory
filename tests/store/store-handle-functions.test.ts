@@ -14,6 +14,9 @@ import type { Sync } from '../../src/store/sqlite/served.js';
 import { captureExtractedItems } from '../../src/surface/capture/command.js';
 import type { ExtractedItem } from '../../src/surface/capture/extract.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 

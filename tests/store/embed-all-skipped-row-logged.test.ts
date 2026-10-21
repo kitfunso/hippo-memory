@@ -6,6 +6,9 @@ import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 /** Embeds every text except the ones marked unembeddable, which get the `[]` a local provider returns on a per-item failure. */
 function partialProvider(): EmbeddingProvider {

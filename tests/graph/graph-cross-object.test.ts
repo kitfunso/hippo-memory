@@ -7,7 +7,6 @@
  * ambiguity-guarded, self-skipped, per-source capped, supersedes-pair-skipped). Real DB.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
@@ -19,6 +18,9 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { deleteEntry, loadEntities, loadRelations } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const T = 'default';
 /** All `references` edges in a tenant's graph. */
@@ -36,7 +38,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
   });
   afterEach(() => {
     try {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     } catch {
       /* ignore */
     }

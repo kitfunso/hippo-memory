@@ -8,21 +8,13 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
-
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:recall-sub', role: 'admin' });
@@ -58,10 +50,10 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
 
 describe('DAG-aware recall substitution', () => {
   let root: string;
+  oneRequestPerTest();
   beforeEach(() => {
     root = makeRoot('dag-sub');
   });
-  afterEach(() => safeRmSync(root));
 
   it('1. no DAG, no substitution', async () => {
     // 30 leaves, no parent summary. limit=10 should return 10 with no isSummary marker.

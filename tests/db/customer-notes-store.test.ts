@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -18,14 +17,10 @@ import { CUSTOMER_NOTE, saveCustomerNote, loadCustomerNotes } from '../../src/do
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 function memTags(home: string, memoryId: string): string[] {
   const db = openHippoDb(home);
   try {
@@ -45,7 +40,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('customer-notes');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('saveCustomerNote creates memory + row + customer_note_create audit; v1', async () => {
     const n = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

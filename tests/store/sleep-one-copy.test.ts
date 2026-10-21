@@ -1,7 +1,6 @@
 // Sleep keeps no deep copy of the store: the "as loaded" copy of a row is rebuilt from the row that was read.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { computeAmbientState } from '../../src/base/memory/ambient.js';
@@ -10,6 +9,9 @@ import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 /** loadAllEntries' statement with no tenant: every full row of the store. */
 // An every-tenant page reads each tenant on its own index; these stores hold one tenant.
@@ -28,7 +30,7 @@ const ctxFor = (hippoRoot: string): FullContext =>
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 describe('sleep after consolidation', () => {

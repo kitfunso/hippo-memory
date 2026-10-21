@@ -9,6 +9,9 @@ import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const DROP_ENV = ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TENANT', 'HIPPO_HOME'];

@@ -6,6 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/memory.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';
+import { removeAfterRequest } from './one-request-per-test.js';
 const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 
 export interface Scratch {
@@ -29,7 +30,7 @@ export function scratch(): Scratch {
 }
 
 export function removeScratch(s: Scratch): void {
-  fs.rmSync(s.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  removeAfterRequest(s.dir);
 }
 
 export function runHippo(

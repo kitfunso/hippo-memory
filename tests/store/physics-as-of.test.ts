@@ -1,6 +1,5 @@
 // Physics ranking under asOf on a real store: no row, and no physics state, from after the cut may reach the results.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { makeRoot } from '../_helpers/make-root.js';
 import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
@@ -14,6 +13,9 @@ import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipelin
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -75,7 +77,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.stubEnv('OPENAI_API_KEY', undefined);
-  rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 const ids = (results: SearchResult[]): string[] => results.map((r) => r.entry.id);

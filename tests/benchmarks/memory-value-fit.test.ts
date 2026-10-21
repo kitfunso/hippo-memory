@@ -37,7 +37,10 @@ import {
   initVectorForRestart,
 } from '../../benchmarks/memory-value/fit.mjs';
 
-import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
+import { benchmarkStores, clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest(benchmarkStores);
 
 afterEach(() => {
   vi.unstubAllEnvs();

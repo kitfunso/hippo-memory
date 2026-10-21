@@ -15,6 +15,9 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -48,7 +51,7 @@ describe('`hippo context` prints the ambient summary contextGet computed', () =>
     } finally {
       process.chdir(saved);
       vi.unstubAllEnvs();
-      fs.rmSync(dir, { recursive: true, force: true });
+      removeAfterRequest(dir);
     }
   });
 });

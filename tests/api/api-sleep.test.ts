@@ -19,12 +19,14 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember, sleep, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -45,7 +47,7 @@ function tmpHome() {
   return {
     home,
     restore: () => {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
       if (origHippoHome !== undefined) {
         vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {

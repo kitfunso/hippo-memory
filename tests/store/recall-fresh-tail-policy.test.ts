@@ -14,7 +14,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve, RecallContractError } from '../../src/api/index.js';
@@ -22,18 +21,14 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
 // The settings a root reads per request, so each case's stubbed variable reaches recall as it does in production.
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   const ctx = apiCtx(root, tenantId, { subject: 'test:f5-policy', role: 'admin' });
@@ -59,7 +54,7 @@ describe('fresh-tail policy', () => {
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', undefined);
   });
   afterEach(() => {
-    safeRmSync(root);
+    removeAfterRequest(root);
   });
 
   it('back-compat: env unset, freshTailCount > 0, no sessionId → tenant-wide rows, no throw', async () => {

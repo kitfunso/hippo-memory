@@ -3,6 +3,9 @@ import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 describe('slack DLQ', () => {
   let root: string;

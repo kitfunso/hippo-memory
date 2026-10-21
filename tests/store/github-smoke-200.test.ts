@@ -13,7 +13,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember, retrieve } from '../../src/api/index.js';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
@@ -34,6 +33,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): GitHubFallback => ({ hostTenant: envTenant(), allowUnknown });
@@ -242,7 +244,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     root = makeRoot('gh-smoke-200');
   });
   afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    removeAfterRequest(root);
   });
 
   // Ingests 200 webhook events and replays them, each its own write to a real store.

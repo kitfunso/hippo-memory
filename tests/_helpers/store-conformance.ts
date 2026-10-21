@@ -1,6 +1,6 @@
 // Runs one store group's calls on hippo.db's store and on another store, each over its own copy of a two-tenant fixture,
 // and returns each side's answers and audit rows so a test can assert the two equal.
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
@@ -11,6 +11,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { initTestStore } from './store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { removeAfterRequest } from './one-request-per-test.js';
 
 export const TENANT_A = 'acme';
 export const TENANT_B = 'globex';
@@ -137,6 +138,6 @@ export async function onBothStores<G extends RequiredGroup, R>(
     const other = await runSide(otherSide, group, calls, (fn) => withSqliteBlocked(otherSide.store.kind, fn));
     return { sqlite, other };
   } finally {
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   }
 }

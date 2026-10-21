@@ -13,7 +13,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { sleep, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -23,6 +22,9 @@ import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -55,7 +57,7 @@ function newCtx() {
     ctx,
     tmpDir,
     restore: () => {
-      rmSync(tmpDir, { recursive: true, force: true });
+      removeAfterRequest(tmpDir);
       if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
       else vi.stubEnv('HIPPO_HOME', undefined);
     },

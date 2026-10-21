@@ -2,7 +2,6 @@
 // A prediction outlives its mirror memory, so forgetting the mirrors leaves the class resolvable with nothing to recall.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { forget } from '../../src/api/index.js';
@@ -11,6 +10,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const QUERY = 'the migration effort will take 3 days';
 const DETECTED = '[detected: "will take 3 days"]';
@@ -63,7 +65,7 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(root, { recursive: true, force: true });
+    removeAfterRequest(root);
   });
 
   it('--json returns no results and still carries planningFallacyHint', async () => {

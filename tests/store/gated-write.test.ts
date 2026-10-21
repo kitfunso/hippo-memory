@@ -13,6 +13,9 @@ import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let s: Scratch;
 

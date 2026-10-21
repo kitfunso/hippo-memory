@@ -11,7 +11,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -23,15 +22,10 @@ import {
 } from '../../src/domain/objects/processes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
 
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
@@ -48,7 +42,7 @@ describe('processes store (first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('processes');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('saveProcess creates both memory and processes row + process_create audit, version 1', async () => {
     const proc = await cliSave(home, 'default', PROCESS, {

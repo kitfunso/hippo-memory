@@ -10,11 +10,14 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { markSummaryDirtyInTx } from '../../src/store/sqlite/summary-dirty.js';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
 function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
@@ -27,7 +30,7 @@ function markDirty(root: string, summaryId: string, tenantId: string, actor: str
   try {
     markSummaryDirtyInTx(db, summaryId, tenantId, actor);
   } finally {
-    db.close();
+    closeHippoDb(db);
   }
 }
 
@@ -58,13 +61,13 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
           row: db.prepare('SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?').get(summary.id),
         };
       } finally {
-        db.close();
+        closeHippoDb(db);
       }
     };
     const first = inspect();
     const db = openHippoDb(hippoRoot);
     db.prepare('UPDATE memories SET summary_dirty = 1, rebuild_count = 7 WHERE id = ?').run(summary.id);
-    db.close();
+    closeHippoDb(db);
     const second = inspect();
     for (const column of columns) expect(second.names.filter((n) => n === column)).toHaveLength(1);
     expect(second.version).toBe(first.version);
@@ -90,7 +93,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
       rebuild_count: number;
       dag_level_3_built_at: string | null;
     };
-    db.close();
+    closeHippoDb(db);
     expect(row.summary_dirty).toBe(0);
     expect(row.last_rebuilt_at).toBeNull();
     expect(row.rebuild_count).toBe(0);
@@ -115,7 +118,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     writeEntry(hippoRoot, summaryB);
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
-    db.close();
+    closeHippoDb(db);
     markDirty(hippoRoot, summaryA.id, 'default', 'test-actor');
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toEqual([summaryA.id]);
     expect(dirtyFor(hippoRoot, 'tenant2').map((m) => m.id)).toEqual([]);
@@ -138,7 +141,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(summary.id) as {
       summary_dirty: number;
     };
-    db.close();
+    closeHippoDb(db);
     expect(auditRows).toHaveLength(1);
     expect(row.summary_dirty).toBe(1);
   });
@@ -154,7 +157,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
     const auditRows = db.prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`).all();
-    db.close();
+    closeHippoDb(db);
     expect(auditRows).toEqual([]);
   });
 
@@ -163,7 +166,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
     const auditRows = db.prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`).all();
-    db.close();
+    closeHippoDb(db);
     expect(auditRows).toEqual([]);
   });
 
@@ -182,7 +185,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     writeEntry(hippoRoot, summaryB);
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
-    db.close();
+    closeHippoDb(db);
     // Attack: mark dirty using the WRONG tenant.
     markDirty(hippoRoot, summaryB.id, 'default', 'attacker');
     // Verify: tenant2 still sees no dirty rows, no audit row written.
@@ -192,7 +195,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     const auditRows = db2
       .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
       .all(summaryB.id);
-    db2.close();
+    closeHippoDb(db2);
     expect(auditRows).toEqual([]);
   });
 
@@ -216,7 +219,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
       expect(events[0]!.actor).toBe('test-actor');
       expect(events[0]!.metadata).toMatchObject({ dag_level: 2, source: 'E2' });
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 });

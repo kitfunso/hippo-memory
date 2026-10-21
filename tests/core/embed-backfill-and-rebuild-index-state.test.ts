@@ -4,7 +4,8 @@ import { cpSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, getMeta, openHippoDb, withSharedStoreHandles, withWriteScope } from '../../src/db/index.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
@@ -23,14 +24,12 @@ import {
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  loadEveryTenantEntries,
-  resetStoredParticles,
-  writeEntry,
-  loadEmbeddingIndex,
-} from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, resetStoredParticles, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/store/port.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
@@ -91,6 +90,17 @@ function row(i: number): MemoryEntry {
   };
 }
 
+/** The rows in one transaction on hippo.db alone: no test here reads a markdown mirror, and each copy below would copy
+ *  one file per mirror. */
+function writeRows(root: string, entries: readonly MemoryEntry[]): void {
+  const db = openHippoDb(root);
+  try {
+    withWriteScope(db, 'seed_rows', () => entries.forEach((entry) => writeEntryDbOnly(db, entry)));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 function copyOf(from: string): string {
   const root = join(home, `copy-${++n}`);
   cpSync(from, root, { recursive: true });
@@ -149,35 +159,41 @@ function rebuiltState(root: string, providerId: string, vectorOf: (entry: Memory
   };
 }
 
-// 300 rows written one commit at a time, then embedded twice, so the runner's disk sets the time.
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   home = makeRoot('embed-index-state', { init: false });
   partly = join(home, 'partly');
   initTestStore(partly);
   const rows = Array.from({ length: ROWS }, (_, i) => row(i));
-  rows.forEach((entry, i) => {
-    if (!isLate(i)) writeEntry(partly, entry);
-  });
-  await embedAll(localIndex(partly), undefined, fake('fake-old'));
-  rows.forEach((entry, i) => {
-    if (isLate(i)) writeEntry(partly, entry);
+  // Each request ends before its store is copied, so the copy carries no write-ahead log.
+  await withSharedStoreHandles(async () => {
+    writeRows(
+      partly,
+      rows.filter((_, i) => !isLate(i)),
+    );
+    await embedAll(localIndex(partly), undefined, fake('fake-old'));
+    writeRows(
+      partly,
+      rows.filter((_, i) => isLate(i)),
+    );
   });
 
   indexedOld = copyOf(partly);
-  await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
-  const db = openHippoDb(indexedOld);
-  try {
-    savePhysicsState(
-      db,
-      loadEveryTenantEntries(indexedOld).map((e) =>
-        initializeParticle(e, fakeVector('fake-old', e), {}, new Date(SEEDED_AT)),
-      ),
-    );
-  } finally {
-    closeHippoDb(db);
-  }
-}, 120_000);
+  await withSharedStoreHandles(async () => {
+    await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
+    const db = openHippoDb(indexedOld);
+    try {
+      savePhysicsState(
+        db,
+        loadEveryTenantEntries(indexedOld).map((e) =>
+          initializeParticle(e, fakeVector('fake-old', e), {}, new Date(SEEDED_AT)),
+        ),
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+});
 
 afterAll(async () => {
   await embeddings.close();

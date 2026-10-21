@@ -1,6 +1,6 @@
 // DAG E3 rebuild regressions: born-dirty buildDag, tenant partitioning, race-loser no-op, cap clamp and tombstone counts.
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { rebuildDirtySummaries, buildDag } from '../../src/domain/consolidate/dag.js';
 import * as dagModule from '../../src/domain/consolidate/dag.js';
@@ -11,6 +11,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
 import { makeOkFetcher, getRow, forceMarkDirty, rejectValue, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -77,7 +80,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       const meta = JSON.parse(auditRows[0].metadata_json);
       expect(meta.source).toBe('buildDag-clean');
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
 
     // Now run rebuildDirtySummaries — must report attempted=0
@@ -164,7 +167,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         }
       }
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -206,7 +209,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         .get(summary.id) as { n: number };
       expect(auditRow.n).toBe(0);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -313,7 +316,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         .get(summary.id) as { n: number };
       expect(refusalAudit.n).toBe(1);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 

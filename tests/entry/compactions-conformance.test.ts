@@ -17,6 +17,9 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const SEEDED = '2026-03-01T11:58:00.000Z';
 const NOW = '2026-03-01T12:00:00.000Z';

@@ -21,6 +21,9 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 interface ScoredRow {
   entry: MemoryEntry;
@@ -168,7 +171,7 @@ describe('the session goal boost policy branches', () => {
     root = makeRoot('goal-policy-branches');
   });
   afterEach(() => {
-    fs.rmSync(root, { recursive: true, force: true });
+    removeAfterRequest(root);
   });
 
   function stored(content: string, tags: string[], schemaFit?: number): MemoryEntry {

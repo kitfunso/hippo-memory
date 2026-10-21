@@ -28,6 +28,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // Test 2 builds six fresh stores, one per ingest order, which can pass the unit budget on a Windows runner.
 vi.setConfig({ testTimeout: 15_000 });

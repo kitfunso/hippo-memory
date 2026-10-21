@@ -21,6 +21,9 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { log as hippoLog } from '../../src/base/util/log.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const MINUTE = 60_000;
 const ITEMS = [
