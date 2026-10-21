@@ -9,7 +9,7 @@ import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { githubEventRecord, slackEventRecord } from '../_helpers/root-forms.js';
+import { githubEventRecord, loadAllEntries, slackEventRecord } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -34,6 +34,12 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
     ]);
     const seen = { seen: true, memoryId: null };
     expect([githubEventRecord(root, 'k1'), slackEventRecord(root, 'Ev1')]).toEqual([seen, seen]);
+  });
+
+  it('ingest stores a short low-salience text: the connector path runs no salience gate', async () => {
+    const result = await rememberWithEventLog(ctx, gh, { content: 'yes', tags: [] });
+    expect(result.status).toBe('ingested');
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['yes']);
   });
 
   it('each DLQ reads one row and bumps its retry count the same way', async () => {
