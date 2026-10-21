@@ -30,4 +30,4 @@ export {
   closeHippoDb,
 } from './open.js';
 export { RequestStores, runWithRequestStores, currentRequestStores, outsideRequestStores } from './request-stores.js';
-export { OtherStoreFolderError, SqliteBlockedError } from '../base/util/sqlite-blocked.js';
+export { OtherStoreFolderError, SqliteBlockedError } from './sqlite-blocked.js';

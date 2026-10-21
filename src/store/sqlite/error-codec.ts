@@ -2,13 +2,13 @@
 // mappers test `instanceof`, `errcode` and fields.
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { IncompatibleBinaryError } from '../../db/index.js';
+import { IncompatibleBinaryError, OtherStoreFolderError, SqliteBlockedError } from '../../db/index.js';
 import { StoreBusyError } from '../port.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../base/util/http-util.js';
 import { errorMessage, log } from '../../base/util/log.js';
 import { ScopeForbiddenError } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../base/util/sqlite-blocked.js';
+import { StoreNotPortedError } from '../../base/util/store-blocked.js';
 
 type FieldValue = string | number | boolean | null | readonly string[];
 

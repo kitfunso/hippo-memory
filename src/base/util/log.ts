@@ -130,10 +130,16 @@ function causeChain(err: Error): string | undefined {
   return links.length > 0 ? links.join(' <- ') : undefined;
 }
 
-/** The class name, stack and cause chain of a thrown value, as log fields; a non-Error throw has no stack. */
-export function errorFields<E>(err: E): LogFields {
+/** The class name, stack and cause chain of a thrown value, as log fields; a non-Error throw has no stack. Both texts
+ * repeat the message, so `scrub` runs over them where the message is redacted. */
+export function errorFields<E>(err: E, scrub: (text: string) => string = (text) => text): LogFields {
   if (!(err instanceof Error)) return { errorClass: 'NonError' };
-  return { errorClass: err.constructor.name, stack: err.stack, cause: causeChain(err) };
+  const cause = causeChain(err);
+  return {
+    errorClass: err.constructor.name,
+    stack: err.stack === undefined ? undefined : scrub(err.stack),
+    cause: cause === undefined ? undefined : scrub(cause),
+  };
 }
 
 /** The class and errno name of a thrown value without its text, for a line that must not carry caller data. */

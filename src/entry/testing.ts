@@ -6,11 +6,11 @@ import {
   upsertEntryRow,
   writeEntry,
   type WriteEntryOptions,
-} from '../store/sqlite/fixtures.js';
+} from '../surface/open-store.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
 export { ambientSecretAdmit } from '../base/scope/read-admission.js';
-export { initStore, loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/fixtures.js';
-export type { WriteEntryOptions } from '../store/sqlite/fixtures.js';
+export { initStore, loadAllEntries, loadEmbeddingIndex, writeEntry } from '../surface/open-store.js';
+export type { WriteEntryOptions } from '../surface/open-store.js';
 export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
 // Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these forms.
 export type { MemoryWire } from '../base/memory/memory-wire.js';
@@ -35,7 +35,7 @@ export {
   writeDeliveryEventOnHandle,
   writeEntryDbOnly,
   writeIndexMirror,
-} from '../store/sqlite/fixtures.js';
+} from '../surface/open-store.js';
 
 // The wire forms that read or write hippo.db live here, at the root, so wire-kit.ts stays off the SQLite adapter.
 export function loadAllEntriesWire(hippoRoot: string): MemoryWire[] {

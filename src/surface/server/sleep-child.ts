@@ -4,7 +4,7 @@ import { sleep } from '../../api/sleep/sleep.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { isStoreBusy } from '../../store/port.js';
 import { configReader } from '../../base/config/config.js';
-import { runSqliteRequest, sqliteReach, sqliteStore } from '../../store/sqlite/index.js';
+import { defaultReach, defaultStore, runStoreRequest } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
@@ -15,7 +15,7 @@ import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 type JobResult = SleepResult | ConsolidationResult;
 
 const loadConfig = configReader(envRuntimeSettings);
-const storeAt = (root: string) => sqliteStore(root, { lossAversionRatio: envLossAversionRatio() });
+const storeAt = (root: string) => defaultStore(root, { lossAversionRatio: envLossAversionRatio() });
 
 function failed<E>(err: E): SleepReply<never> {
   return {
@@ -29,7 +29,7 @@ function failed<E>(err: E): SleepReply<never> {
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
 function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
   const store = storeAt(hippoRoot);
-  const reach = contextReach(sqliteReach(hippoRoot, store, undefined, storeAt), loadConfig);
+  const reach = contextReach(defaultReach(hippoRoot, store, undefined, storeAt), loadConfig);
   const config = loadConfig(hippoRoot);
   return sleep({ tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
 }
@@ -55,7 +55,7 @@ process.once('message', (message) => {
         })
       : sleepJob(job);
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
-  runSqliteRequest(work, 'server')
+  runStoreRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)
     // Exit only once the reply is written, or the parent could see the process end first.
     .then(sendReply)
