@@ -1,7 +1,6 @@
 // Each store method the op table places on a reader thread answers as the in-process store does and never waits for the write lock; each write this file names leaves what the in-process one leaves.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { setTimeout as delay } from 'node:timers/promises';
 import { inspect } from 'node:util';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
@@ -21,6 +20,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 type Served = LocalStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
@@ -601,16 +601,19 @@ describe('a read the op table places on a reader thread', () => {
     const blocked = store.bumpRecallStats(1);
     await sent('base.bumpRecallStats', 2);
 
-    const late: string[] = [];
     for (const { name, run } of READS) {
-      // A read sent to the writer thread waits behind the blocked write for as long as the lock is held.
-      const first = await Promise.race([run(store, seed), delay(2_000, 'late', { ref: false })]);
-      if (first === 'late') late.push(name);
+      let answered = false;
+      const answer = run(store, seed);
+      const settle = (): void => {
+        answered = true;
+      };
+      void answer.then(settle, settle);
+      // A read sent to the writer thread waits behind the blocked write until the lock is let go, which is only below.
+      await waitFor(() => answered, { what: `${name} to answer with the write lock held` });
+      await answer;
     }
     lock.release();
     await blocked;
-
-    expect(late).toEqual([]);
   });
 });
 

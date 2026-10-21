@@ -7,16 +7,31 @@ import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../sr
 import type { HippoStore } from '../../src/store/port.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
-const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+type StoreName = 'local' | 'global';
 
-function slowed(store: HippoStore, name: string, delayMs: number, events: string[]): HippoStore {
+interface Gate {
+  readonly opened: Promise<void>;
+  readonly open: () => void;
+}
+
+function gate(): Gate {
+  let open = (): void => undefined;
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { opened, open };
+}
+
+/** The store with its recall read held at the start until `released`, so the test, not a timer, orders the reads. */
+function held(store: HippoStore, name: StoreName, released: Promise<void>, events: string[]): HippoStore {
   const search = store.searchRecallEntries.bind(store);
   // SAFETY: Object.create keeps every other store method; only the read under test is replaced.
   const wrapped = Object.create(store) as HippoStore;
   wrapped.searchRecallEntries = async (...args: Parameters<HippoStore['searchRecallEntries']>) => {
     events.push(`${name}:start`);
-    await wait(delayMs);
+    await released;
     const out = await search(...args);
     events.push(`${name}:end`);
     return out;
@@ -45,33 +60,43 @@ function options(root: string): RankRecallOptions {
   };
 }
 
-async function run(localMs: number, globalMs: number): Promise<{ ids: string[]; events: string[] }> {
+/** One recall with both reads held until both have started, then let go one at a time in `order`. */
+async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: string[]; events: string[] }> {
   const { root: local } = makeStore('recall-concurrent-local');
   const { root: global } = makeStore('recall-concurrent-global');
   writeEntry(local, { ...createMemory('deploy pipeline uses blue green rollout'), id: 'mem_local_a', strength: 1 });
   writeEntry(local, { ...createMemory('deploy gate waits for the smoke run'), id: 'mem_local_b', strength: 1 });
   writeEntry(global, { ...createMemory('deploy tokens rotate every quarter'), id: 'mem_global_a', strength: 1 });
   const events: string[] = [];
+  const gates = { local: gate(), global: gate() };
   const ctx: RankRecallCtx = {
-    store: slowed(sqliteStore(local), 'local', localMs, events),
+    store: held(sqliteStore(local), 'local', gates.local.opened, events),
     config: loadConfig(local),
-    global: { store: slowed(sqliteStore(global), 'global', globalMs, events), config: loadConfig(global) },
+    global: { store: held(sqliteStore(global), 'global', gates.global.opened, events), config: loadConfig(global) },
     tenantId: 'default',
   };
-  const result = await rankRecall(ctx, options(local));
+  const ranked = rankRecall(ctx, options(local));
+  // Neither read may end yet, so a recall that ran them one after the other never starts the second.
+  await waitFor(() => events.length === 2, { what: 'both store reads to start before either ends', timeoutMs: 4_000 });
+  for (const name of order) {
+    gates[name].open();
+    await waitFor(() => events.includes(`${name}:end`), { what: `the ${name} read to end`, timeoutMs: 4_000 });
+  }
+  const result = await ranked;
   return { ids: result.results.map((r) => r.entry.id), events };
 }
 
 describe('rankRecall reads both stores at once', () => {
   it('starts the global read before the local read ends', async () => {
-    const { events } = await run(30, 5);
-    expect(events.indexOf('global:start')).toBeLessThan(events.indexOf('local:end'));
+    const { events } = await run(['local', 'global']);
+    expect(events).toEqual(['local:start', 'global:start', 'local:end', 'global:end']);
   });
 
   it('returns the same merged ranking whichever store answers first', async () => {
-    const localFirst = await run(1, 40);
-    const globalFirst = await run(40, 1);
-    expect(localFirst.ids.length).toBeGreaterThanOrEqual(3);
+    const localFirst = await run(['local', 'global']);
+    const globalFirst = await run(['global', 'local']);
+    expect(globalFirst.events.slice(2)).toEqual(['global:end', 'local:end']);
+    expect([...localFirst.ids].sort()).toEqual(['mem_global_a', 'mem_local_a', 'mem_local_b']);
     expect(globalFirst.ids).toEqual(localFirst.ids);
   });
 });

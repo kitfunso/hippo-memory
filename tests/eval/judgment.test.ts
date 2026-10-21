@@ -172,8 +172,7 @@ describe('judge', () => {
       const fetcher: typeof fetch = async () => new Response(body, { status: 401 });
       expect(await judgeOne('abc', { apiKey: 'k', fetcher })).toBeNull();
       const line = write.mock.calls.map((c) => String(c[0])).find((m) => m.includes('non-2xx'));
-      expect(line).toBeDefined();
-      expect(line!.length).toBeLessThan(400);
+      expect(line).toMatch(/^\[hippo\] warn: judge: non-2xx reply ts=\S+ status=401 body=x{200}\n$/);
     } finally {
       write.mockRestore();
     }
@@ -205,10 +204,16 @@ describe('judge', () => {
 
 describe('judgeAll', () => {
   it('preserves input order under concurrency and isolates per-item failure', async () => {
+    let fastAnswered = (): void => undefined;
+    const fastDone = new Promise<void>((resolve) => {
+      fastAnswered = resolve;
+    });
     const fetcher: typeof fetch = async (_input, init) => {
       const state = sentBody(init).state;
       if (state === 'bad') return new Response('', { status: 500 });
-      await new Promise((r) => setTimeout(r, state === 'slow' ? 20 : 0));
+      // The first item answers only after the last has, so the answers arrive out of input order.
+      if (state === 'slow') await fastDone;
+      else fastAnswered();
       return new Response(
         JSON.stringify({
           answers: {

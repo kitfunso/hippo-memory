@@ -266,9 +266,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     const r = await extractGraph(sqliteStore(home), 'default'); // must not throw
     expect(r.byType.decision).toBe(2);
     const ents = loadEntities(home, 'default', { limit: 100 });
-    const longEnt = ents.find((e) => e.name.startsWith('Dxxx'))!;
-    expect(longEnt).toBeDefined();
-    expect(longEnt.name.length).toBeLessThanOrEqual(512);
+    expect(ents.find((e) => e.name.startsWith('Dxxx'))?.name).toBe(longText.slice(0, 512));
     // re-run still works (not bricked)
     await extractGraph(sqliteStore(home), 'default');
     expect(loadEntities(home, 'default', { limit: 100 }).length).toBe(2);
@@ -471,7 +469,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       { busyWaitMs: 250 },
     );
 
-    expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);
     expect(r.entities).toBe(11);
   });

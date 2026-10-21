@@ -361,7 +361,6 @@ describe('chunked consolidation flush', () => {
       busyWaitMs: 250,
     });
 
-    expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);
     expect(result.semanticCreated).toBe(4);
   });

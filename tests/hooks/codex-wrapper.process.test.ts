@@ -31,10 +31,8 @@ function setCodexHome(value: string | undefined): void {
   else vi.stubEnv('CODEX_HOME', value);
 }
 
+// The file's afterEach vi.unstubAllEnvs puts HOME, USERPROFILE and PATH back.
 function withFakeHome() {
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
-  const prevPath = process.env.PATH;
   const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-codex-wrapper-test-'));
   vi.stubEnv('HOME', fake);
   vi.stubEnv('USERPROFILE', fake);
@@ -42,9 +40,6 @@ function withFakeHome() {
   return {
     home: fake,
     cleanup: () => {
-      vi.stubEnv('HOME', prevHome);
-      vi.stubEnv('USERPROFILE', prevUserProfile);
-      vi.stubEnv('PATH', prevPath);
       // Tests wait for the worker's last write; retries cover Windows releasing an exited worker's handles late.
       fs.rmSync(fake, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
@@ -231,7 +226,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     expect(isCodexWrapperInstalled()).toBe(true);
   });
 
-  it('codex-run launches a cmd launcher and passes every argument through intact', () => {
+  it('codex-run launches a cmd launcher and passes every argument through intact', async () => {
     const realBin = path.join(env.home, 'real bin');
     const realCodex = path.join(realBin, 'codex.cmd');
     const argvOut = path.join(env.home, 'argv.json');
@@ -262,13 +257,10 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
 
     // codex-run leaves a detached session-end worker; let it finish before cleanup removes its folder.
     const workerLog = resolveCodexWrapperPaths().logFile;
-    const deadline = Date.now() + 15_000;
-    while (
-      Date.now() < deadline &&
-      !(fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'))
-    ) {
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    }
+    await waitFor(() => fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'), {
+      what: 'the session-end worker to log its skip',
+      timeoutMs: 15_000,
+    });
     expect(fs.readFileSync(workerLog, 'utf8')).toContain('skip: no hippo store');
   });
 });

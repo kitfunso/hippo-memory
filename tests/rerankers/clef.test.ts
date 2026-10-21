@@ -316,19 +316,14 @@ describe('clef rerankers', () => {
   });
 
   it.each(['15s', '-1', '1.5', '999999999999'])(
-    'uses the default timeout for HIPPO_CLEF_TIMEOUT_MS=%s',
+    'uses the default 15000 ms timeout for HIPPO_CLEF_TIMEOUT_MS=%s',
     async (value) => {
       vi.stubEnv('HIPPO_CLEF_TIMEOUT_MS', value);
-      // An answer 60 ms in beats the 15 s default; a misread value (15 ms, 1 ms, out of range) would lose to it and keep the native order.
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (_url, init) =>
-          new Promise((resolve, reject) => {
-            init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-            setTimeout(() => resolve(workersReply([0.1, 0.2, 0.3])), 60);
-          }),
-      );
+      // An abort ends the call at once, and the fallback names the budget it ran under, so no reply races a clock.
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new DOMException('aborted', 'AbortError'));
       const out = await clefUnderEnv('clef-flash')('q', inputs());
-      expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
+      expect(contents(out)).toEqual(NATIVE);
+      expect(out[0].rerankProvenance?.fallbackReason).toBe('no answer within 15000 ms');
     },
   );
 

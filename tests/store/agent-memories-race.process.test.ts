@@ -1,5 +1,5 @@
 // Two first imports at once give one row: 4 child processes x 40 notes, sized as store-stats-concurrency.process.test.ts sizes its race.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
@@ -58,7 +58,10 @@ let w: World;
 beforeEach(() => {
   w = openWorld();
 });
-afterEach(() => closeWorld(w));
+afterEach(() => {
+  closeWorld(w);
+  vi.unstubAllEnvs();
+});
 
 function runWorker(args: readonly string[]): Promise<Finished> {
   return new Promise((resolve, fail) => {
