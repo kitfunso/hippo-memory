@@ -82,7 +82,10 @@ export function reachesChildProcess(file) {
   for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
     const { child, deps } = importsOf(next);
     if (child) return true;
-    for (const dep of deps) if (!seen.has(dep)) (seen.add(dep), queue.push(dep));
+    for (const dep of deps.filter((d) => !seen.has(d))) {
+      seen.add(dep);
+      queue.push(dep);
+    }
   }
   return false;
 }

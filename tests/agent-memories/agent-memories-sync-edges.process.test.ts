@@ -34,7 +34,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-
 const A = 'Run the schema check before this service deploys.';
 const B = 'Run the schema check and the smoke test before each deploy.';
 const TAG = 'claude-code-memory';

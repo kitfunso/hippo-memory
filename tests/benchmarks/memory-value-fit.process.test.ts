@@ -46,7 +46,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-
 type GateOptions = {
   splitRegistered?: object;
   registeredResults?: object;

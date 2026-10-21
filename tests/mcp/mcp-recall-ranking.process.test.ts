@@ -29,7 +29,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
 const QUERY = 'deploy pipeline';

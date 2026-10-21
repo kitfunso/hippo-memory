@@ -25,7 +25,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-
 const HELD = 'Run the schema check before this service deploys.';
 const MERGED = 'Pin the node version in the CI workflow file.';
 const OTHER_TENANT = 'Rotate the deploy key every ninety days.';

@@ -22,6 +22,7 @@ function filters(command: string): string[] {
 }
 
 describe('package.json test:* scripts', () => {
+  // SAFETY: package.json is this repo's own file and always has a scripts table of strings.
   const scripts = (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> })
     .scripts;
   const all = testFiles(join(ROOT, 'tests'));

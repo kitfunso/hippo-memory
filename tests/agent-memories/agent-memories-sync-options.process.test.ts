@@ -36,7 +36,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-
 const A = 'Run the schema check before this service deploys.';
 const B = 'The staging database moved to the eu-central region.';
 const USER_NOTE = 'Prefers short replies with the command first.';

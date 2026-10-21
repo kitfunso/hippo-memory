@@ -4,12 +4,13 @@
 // tests/_helpers/ may own env for a child process. An env object built for a spawn is a read, not a write.
 // A vi.stubEnv made once (beforeAll, a describe body, module scope) under an afterEach unstub is gone after the first test.
 // Also fails a test whose name puts it in another vitest project than what it starts needs (scripts/lib/test-classes.mjs),
-// and a secret, endpoint or path that src/base/util/env.ts reads but ENV_SCRUBBED_IN_TESTS (which vitest.config.ts blanks) lacks.
+// and a secret, endpoint or path that src/base/util/env.ts reads but scripts/lib/test-env-scrub.mjs (which vitest.config.ts blanks) lacks.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import { ENV_SCRUBBED_IN_TESTS } from './lib/test-env-scrub.mjs';
 import {
   EVAL_TESTS,
   RAISES_OWN_TIMEOUT,
@@ -244,7 +245,7 @@ export function misnamedTests(dir) {
   return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
 }
 
-/** The variable names a reader in env.ts is built from, and the ENV_SCRUBBED_IN_TESTS list in the same source. */
+/** The variable names a reader in env.ts is built from. */
 const READER = /\b(?:raw|text|trimmedText|posInt|nonNegInt|strictPosInt)\('([A-Z][A-Z0-9_]*)'/g;
 // HIPPO_HOME, HOME and USERPROFILE get isolated directories in vitest.config.ts rather than a blank.
 const SET_BY_VITEST = new Set(['HIPPO_HOME', 'HOME', 'USERPROFILE']);
@@ -253,11 +254,11 @@ const SENSITIVE = /KEY|TOKEN|SECRET|PASSWORD|ENDPOINT|ACCOUNT_ID|_URL$|_CERT$|_C
 /**
  * Returns the variable names env.ts reads that look like a secret, endpoint or path and are not in ENV_SCRUBBED_IN_TESTS.
  * @param {string} envSource the text of src/base/util/env.ts
+ * @param {readonly string[]} [scrubbedNames] defaults to the list vitest.config.ts blanks
  * @returns {string[]}
  */
-export function unscrubbedEnvReads(envSource) {
-  const list = /ENV_SCRUBBED_IN_TESTS\s*=\s*Object\.freeze\(\[([^\]]*)\]/.exec(envSource)?.[1] ?? '';
-  const scrubbed = new Set([...list.matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1]));
+export function unscrubbedEnvReads(envSource, scrubbedNames = ENV_SCRUBBED_IN_TESTS) {
+  const scrubbed = new Set(scrubbedNames);
   const read = new Set([...envSource.matchAll(READER)].map((m) => m[1]));
   return [...read].filter((n) => SENSITIVE.test(n) && !SET_BY_VITEST.has(n) && !scrubbed.has(n)).sort();
 }
@@ -286,6 +287,10 @@ function report(dir, hits, misnamed, unscrubbed) {
       '\nThe unit project gives a test 5 s; one that waits on another process or thread needs the 30 s project.' +
         "\nRename the test's __snapshots__/<name>.snap with it, or CI finds no snapshot.\n",
     );
+  }
+  if (unscrubbed.length > 0) {
+    console.error(`\nsrc/base/util/env.ts reads these but ENV_SCRUBBED_IN_TESTS lacks them: ${unscrubbed.join(', ')}`);
+    console.error('Add each name to ENV_SCRUBBED_IN_TESTS there, so vitest.config.ts blanks it for every test.\n');
   }
 }
 

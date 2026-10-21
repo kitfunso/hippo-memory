@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { earlyUnstubs, envWrites, misnamedTests, onceStubs, unscrubbedEnvReads } from '../../scripts/check-test-env.mjs';
+import {
+  earlyUnstubs,
+  envWrites,
+  misnamedTests,
+  onceStubs,
+  unscrubbedEnvReads,
+} from '../../scripts/check-test-env.mjs';
 
 const lines = (text: string): number[] => envWrites(text).map((hit) => hit.line);
 
@@ -149,14 +155,13 @@ describe('misnamedTests', () => {
 
   it('flags a secret-looking env.ts read missing from ENV_SCRUBBED_IN_TESTS', () => {
     const source = [
-      "export const ENV_SCRUBBED_IN_TESTS = Object.freeze(['A_API_KEY']);",
       "export const a = text('A_API_KEY');",
       "export const b = text('B_TOKEN');",
       "export const c = trimmedText('HIPPO_TLS_CERT');",
       "export const d = posInt('HIPPO_PORT_MS');",
       "export const e = raw('HIPPO_HOME');",
     ].join(String.fromCharCode(10));
-    expect(unscrubbedEnvReads(source)).toEqual(['B_TOKEN', 'HIPPO_TLS_CERT']);
+    expect(unscrubbedEnvReads(source, ['A_API_KEY'])).toEqual(['B_TOKEN', 'HIPPO_TLS_CERT']);
   });
 
   it('passes the real env.ts', () => {

@@ -25,7 +25,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const DAY = 86_400_000;
 const TENANTS = ['default', 'acme', 'globex'] as const;

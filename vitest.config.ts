@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
-import { ENV_SCRUBBED_IN_TESTS } from './src/base/util/env.js';
+import { ENV_SCRUBBED_IN_TESTS } from './scripts/lib/test-env-scrub.mjs';
 import { EVAL_TESTS, PROCESS_GLOBS, SERVER_GLOBS } from './scripts/lib/test-classes.mjs';
 
 // Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
@@ -27,15 +27,29 @@ process.env.USERPROFILE = isolatedUserHome;
 const isolatedAppData = join(isolatedUserHome, 'AppData', 'Roaming');
 process.env.APPDATA = isolatedAppData;
 const AGENT_HOME_KEYS = [
-  'XDG_CONFIG_HOME', 'CODEX_HOME', 'COPILOT_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_PROJECT_DIR_NAME', 'VSCODE_PORTABLE', 'VSCODE_APPDATA',
-  'GEMINI_CLI_HOME', 'QWEN_HOME', 'QWEN_RUNTIME_DIR', 'QWEN_CODE_MEMORY_BASE_DIR', 'QWEN_CODE_MEMORY_LOCAL', 'QWEN_CODE_MEMORY_PROJECT_SCOPE',
-  'OPENCLAW_WORKSPACE_DIR', 'OPENCLAW_STATE_DIR', 'OPENCLAW_HOME', 'OPENCLAW_PROFILE',
+  'XDG_CONFIG_HOME',
+  'CODEX_HOME',
+  'COPILOT_HOME',
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_CODE_PROJECT_DIR_NAME',
+  'VSCODE_PORTABLE',
+  'VSCODE_APPDATA',
+  'GEMINI_CLI_HOME',
+  'QWEN_HOME',
+  'QWEN_RUNTIME_DIR',
+  'QWEN_CODE_MEMORY_BASE_DIR',
+  'QWEN_CODE_MEMORY_LOCAL',
+  'QWEN_CODE_MEMORY_PROJECT_SCOPE',
+  'OPENCLAW_WORKSPACE_DIR',
+  'OPENCLAW_STATE_DIR',
+  'OPENCLAW_HOME',
+  'OPENCLAW_PROFILE',
 ];
 for (const k of AGENT_HOME_KEYS) delete process.env[k];
 delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
 // This shell may itself be a Claude Code session; the var would leak into every spawned CLI child and falsify null-session_id trace assertions.
 delete process.env.CLAUDE_CODE_SESSION_ID;
-// env.ts names every secret, endpoint and path it reads; check-test-env.mjs fails a read that is not listed.
+// check-test-env.mjs fails a secret, endpoint or path that src/base/util/env.ts reads and this list lacks.
 const SCRUBBED_ENV_KEYS = ENV_SCRUBBED_IN_TESTS;
 for (const k of SCRUBBED_ENV_KEYS) delete process.env[k];
 // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
@@ -57,15 +71,48 @@ export default defineConfig({
     // Its name says which (*.process.test.ts, *.server.test.ts); scripts/check-test-env.mjs fails a name that does not match.
     // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
     projects: [
-      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS], globalSetup: SETUP, testTimeout: UNIT_MS, hookTimeout: Math.max(UNIT_MS, 10_000) } },
-      { extends: true, test: { name: 'process', include: PROCESS_GLOBS, exclude: SKIPPED, globalSetup: WITH_BUILD, testTimeout: 30_000, hookTimeout: 30_000 } },
-      { extends: true, test: { name: 'server', include: SERVER_GLOBS, exclude: SKIPPED, globalSetup: WITH_BUILD, testTimeout: 30_000, hookTimeout: 30_000 } },
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: TEST_GLOBS,
+          exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS],
+          globalSetup: SETUP,
+          testTimeout: UNIT_MS,
+          hookTimeout: Math.max(UNIT_MS, 10_000),
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'process',
+          include: PROCESS_GLOBS,
+          exclude: SKIPPED,
+          globalSetup: WITH_BUILD,
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'server',
+          include: SERVER_GLOBS,
+          exclude: SKIPPED,
+          globalSetup: WITH_BUILD,
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
+        },
+      },
     ],
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
-      HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
+      HIPPO_HOME: isolatedHippoHome,
+      HOME: isolatedUserHome,
+      USERPROFILE: isolatedUserHome,
+      APPDATA: isolatedAppData,
       HIPPO_SKIP_SCHEDULE: '1',
       ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
