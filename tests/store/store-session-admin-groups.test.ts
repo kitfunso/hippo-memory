@@ -5,6 +5,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { sqliteSyncStore, sqliteStore } from '../../src/store/sqlite/store.js';
 import type { ConflictListQuery } from '../../src/store/port/conflicts.js';
+import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
@@ -114,7 +115,7 @@ describe('conflicts group', () => {
       conflictId: open!.conflict.id,
       keep,
       loser,
-      fate: { kind: 'weaken' } as const,
+      fate: conflictLoserFate({}, loser, null),
       actor: 'test',
       reason: '',
     };

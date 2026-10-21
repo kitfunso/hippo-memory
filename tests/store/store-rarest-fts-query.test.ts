@@ -2,7 +2,7 @@
 // Real SQLite store in a tmp dir, no mocks.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { loadRecallEntriesAt, pickRarestFtsQuery } from '../../src/store/sqlite/search-rows.js';
-import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
+import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';

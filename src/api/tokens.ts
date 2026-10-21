@@ -1,6 +1,6 @@
 // Token-use and failure reports.
 
-import { rethrowIfSqliteBlocked } from '../base/util/sqlite-blocked.js';
+import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
 import type { TokenSummary, TokenSurface } from '../store/port/token-ledger.js';
 import type { FailureSummary } from '../store/port/failure-log.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
@@ -24,7 +24,7 @@ export async function recordTokens(
       tokens: use.tokens,
     });
   } catch (err) {
-    rethrowIfSqliteBlocked(err);
+    rethrowIfStoreBlocked(err);
     log.warnThenDebug(
       'api-token-ledger',
       `token ledger write failed; the reply is unaffected: ${errorMessage(err)}`,

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OTHER_STORE_MARKER, withUnmigratedDb } from '../../src/db/open.js';
-import { OtherStoreFolderError } from '../../src/base/util/sqlite-blocked.js';
+import { OtherStoreFolderError } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
 

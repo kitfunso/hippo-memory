@@ -8,7 +8,7 @@ import {
   INTERNAL_ERROR_MESSAGE,
   STORE_NOT_PORTED_MESSAGE,
 } from '../base/util/http-util.js';
-import { SqliteBlockedError } from '../base/util/sqlite-blocked.js';
+import { StoreBlockedError } from '../base/util/store-blocked.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../store/port.js';
 
 /** The status and client-facing message for one failed request. */
@@ -22,7 +22,7 @@ export interface ApiErrorReply {
  * log.
  */
 export function mapApiError<E>(err: E): ApiErrorReply {
-  // A held lock is a retryable 503 in every store, so the surfaces need not know SQLite's busy codes.
+  // A held lock is a retryable 503 in every store, so the surfaces need not know any store's busy codes.
   if (isStoreBusy(err)) return { status: 503, message: STORE_BUSY_MESSAGE };
   // An add-on can build an HttpError from any number, and writeHead throws on one outside 100-999.
   if (err instanceof HttpError && !(Number.isInteger(err.status) && err.status >= 100 && err.status <= 999)) {
@@ -31,6 +31,6 @@ export function mapApiError<E>(err: E): ApiErrorReply {
   if (err instanceof HttpError || err instanceof ApiError) return { status: err.status, message: err.message };
   if (err instanceof BodyTooLargeError) return { status: 413, message: err.message };
   if (err instanceof BodyTimeoutError) return { status: 408, message: err.message };
-  if (err instanceof SqliteBlockedError) return { status: 501, message: STORE_NOT_PORTED_MESSAGE };
+  if (err instanceof StoreBlockedError) return { status: 501, message: STORE_NOT_PORTED_MESSAGE };
   return { status: 500, message: INTERNAL_ERROR_MESSAGE };
 }
