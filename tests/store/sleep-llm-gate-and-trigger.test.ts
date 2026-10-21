@@ -7,6 +7,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { consolidate } from '../../src/index.js';
 import { remember } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -137,20 +138,20 @@ describe('the auto-sleep trigger', () => {
     const root = newRoot();
     writeEntry(root, createMemory('first memory about the release train schedule'));
     writeEntry(root, createMemory('second memory about the staging cluster restarts'));
-    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(2);
+    expect(sqliteSyncStore(handlesOf(root)).reports.createdSinceLastSleep('default', new Date())).toBe(2);
 
     await consolidate(root);
-    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(0);
+    expect(sqliteSyncStore(handlesOf(root)).reports.createdSinceLastSleep('default', new Date())).toBe(0);
 
     writeEntry(root, createMemory('third memory about invoices exported as csv'));
-    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(1);
+    expect(sqliteSyncStore(handlesOf(root)).reports.createdSinceLastSleep('default', new Date())).toBe(1);
   });
 
   it('never counts memories older than 24 hours', () => {
     const root = newRoot();
     const old = createMemory('an old memory about the quarterly budget review');
     writeEntry(root, { ...old, created: new Date(Date.now() - 2 * DAY).toISOString() });
-    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(0);
+    expect(sqliteSyncStore(handlesOf(root)).reports.createdSinceLastSleep('default', new Date())).toBe(0);
   });
 });
 

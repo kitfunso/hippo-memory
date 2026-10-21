@@ -1,26 +1,29 @@
-// The store groups for sessions, cards, goals, conflicts, dormant memories and reports; type-only, apart from port.ts
-// so that file stays under the size gate.
+// The required groups for sessions, cards, goals, conflicts, dormant memories and reports, with the request shapes only
+// they take; port.ts names them among StoreGroups.
 import type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
 import type { TenantId } from '../base/util/tenant.js';
+import type { DormantRevival } from '../base/memory/dormant-revival.js';
+import type { JsonObject } from '../base/util/json.js';
 import type { CardDetail } from './port/cards.js';
-import type { CorrectionLink, RawProvenance, StatusCounts, StrengthTallies } from './port/reports.js';
+import type { CorrectionLink, LegacyStats, RawProvenance, StatusCounts, StrengthTallies } from './port/reports.js';
 import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './port/dormant.js';
-import type { FailureSummary } from './port/failure-log.js';
+import type { FailureLog, FailureSummary } from './port/failure-log.js';
 import type { CompleteGoalOpts, PushGoalOpts } from './port/goals.js';
-import type { HandoffFilter, SessionEndHandoffRequest } from './port/sessions.js';
-import type { FailureLog } from './port/failure-log.js';
+import type {
+  HandoffFilter,
+  SessionEndHandoffRequest,
+  SessionEvent,
+  SessionEventInput,
+  SnapshotInput,
+  TaskSnapshot,
+  WorkingMemoryItem,
+} from './port/sessions.js';
 import type { Compactions } from './port/compactions.js';
 import type { Rejections } from './port/rejections.js';
 import type { ConflictListQuery, ConflictResolution, ConflictRow, ConflictRowPage } from './port/conflicts.js';
-import type { LegacyStats } from './port/reports.js';
-import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
-import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
 import type { TokenSummary } from './port/token-ledger.js';
-import type { WorkingMemoryItem } from './port/sessions.js';
-import type { DormantRevival } from '../base/memory/dormant-revival.js';
 import type { Goal, ContinuityKey, EntryCursor, EntryPage } from './port/types.js';
-import type { JsonObject } from '../base/util/json.js';
 
 export interface WorkingMemoryFilter {
   readonly scope?: string;

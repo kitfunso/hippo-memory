@@ -56,48 +56,25 @@ import { sqliteKeyAudit, sqliteKeyGrants, sqliteKeyWrites } from './keys.js';
 import type { Handles, OnHandle, StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
 import { bound, boundWithFiles, skipEmpty, type Bodies, type FileBodies } from './bound.js';
-import {
-  type AuditLog,
-  type AuditMaintenance,
-  type ConnectorEvents,
-  type ConnectorWrites,
-  type ContextReads,
-  type ContinuityBlock,
-  type DagReads,
-  type EmbeddingIndex,
-  type EntryWrites,
-  type FolderFiles,
-  type GraphReads,
-  type HippoStore,
-  type KeyAudit,
-  type KeyGrants,
-  type KeyWrites,
-  type LastRecall,
-  type Ledger,
-  type LessonWrites,
-  type Objects,
-  type Predictions,
-  type Promotion,
-  type Quarantine,
-  type Readiness,
-  type Sharing,
-  type StoreGroups,
-  type StoreReach,
-  type VectorViews,
-  type VectorWrites,
+import type {
+  AuditLog,
+  BaseMethods,
+  CaptureGroups,
+  ContextReads,
+  ContinuityBlock,
+  FolderGroups,
+  HippoStore,
+  MaintenanceGroups,
+  Readiness,
+  SleepGroups,
+  StoreGroups,
+  StoreReach,
+  VectorViews,
+  VectorWrites,
 } from '../port.js';
 import type { Sync } from './served.js';
-import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
-import type { Rejections } from '../port/rejections.js';
-import type { FailureLog } from '../port/failure-log.js';
-import type { Compactions } from '../port/compactions.js';
-import type { Learning } from '../port/learning.js';
-import type { Captures } from '../port/captures.js';
-import type { CompactionHooks } from '../port/compaction-hooks.js';
 import type { ProjectTags } from '../port/project-tags.js';
 import type { Diagnostics } from '../port/diagnostics.js';
-import type { GraphRebuild } from '../port/graph-rebuild.js';
-import type { AgentImport } from '../port/agent-import.js';
 import { served } from './served.js';
 import { asHippoDb, isHippoDbStore } from './hippo-db-stores.js';
 import { isSharedStore } from '../../base/config/config.js';
@@ -107,28 +84,20 @@ import { loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
 
-/** Not on the synchronous store: the nearest-row scan yields to the event loop, so this group answers only through
- * Promises. */
-type AsyncOnly = 'vectors';
+/** Served apart from the generic wrap: the nearest-row scan yields to the event loop, so `vectors` has no synchronous
+ * form, and consolidation keeps its chunked flush async. */
+type ServedApart = 'vectors' | 'consolidation';
 
-/**
- * The port as hippo.db answers it: each call runs to its end and returns the value, so no write scope spans an await.
+/** The port as hippo.db answers it: each call runs to its end and returns the value, so no write scope spans an await.
  */
-export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'consolidation'>> & {
+export type SqliteSyncStore = Sync<Omit<HippoStore & StoreGroups, ServedApart>> & {
   readonly consolidation: SqliteConsolidation;
 };
 
-/** The folder groups `served` wraps whole; consolidation keeps its chunked flush async, so it is served apart. */
-type LocalGroup =
-  | 'learning'
-  | 'graphRebuild'
-  | 'captures'
-  | 'compactionHooks'
-  | 'projectTags'
-  | 'diagnostics'
-  | 'agentImport';
-
-type LocalGroups = Sync<Pick<StoreGroups, LocalGroup>> & { readonly consolidation: SqliteConsolidation };
+/** hippo.db's own files beside its rows; consolidation keeps its chunked flush async, so it is served apart. */
+type LocalGroups = Sync<Omit<SleepGroups, 'consolidation'> & CaptureGroups & MaintenanceGroups> & {
+  readonly consolidation: SqliteConsolidation;
+};
 
 /** The groups that read and write hippo.db's own files beside its rows. */
 function sqliteLocalGroups(handles: Handles): LocalGroups {
@@ -145,18 +114,14 @@ function sqliteLocalGroups(handles: Handles): LocalGroups {
   };
 }
 
-/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles. */
-export function sqliteSyncStore(
-  hippoRoot: string,
-  rules: LossAversion = {},
-): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'consolidation'>> {
-  const handles = handlesOf(hippoRoot, rules);
-  const { on } = handles;
+/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles. The
+ * caller passes the handles, so a store built over this one opens a single set. */
+export function sqliteSyncStore(handles: Handles): SqliteSyncStore {
+  const { on, files } = handles;
   return {
     kind: 'sqlite',
     ...sqliteLocalGroups(handles),
-    ...sqliteBaseReads(on),
-    ...sqliteRecallWrites(on),
+    ...sqliteBaseMethods(on),
     keyAudit: sqliteKeyAudit(on),
     keyWrites: sqliteKeyWrites(on),
     keyGrants: sqliteKeyGrants(on),
@@ -172,7 +137,7 @@ export function sqliteSyncStore(
     connectorWrites: sqliteConnectorWrites(on),
     connectorEvents: sqliteConnectorEvents(on),
     objects: sqliteObjects(on),
-    readiness: sqliteReadiness(hippoRoot, on),
+    readiness: sqliteReadiness(files.hippoRoot, on),
     lastRecall: sqliteLastRecall(handles),
     auditMaintenance: sqliteAuditMaintenance(handles),
     lessonWrites: sqliteLessonWrites(handles),
@@ -187,12 +152,10 @@ export function sqliteSyncStore(
     compactions: sqliteCompactions(on),
     ...sqliteFolderGroups(handles),
     close() {
-      flushHeldMirrors(hippoRoot);
+      flushHeldMirrors(files.hippoRoot);
     },
   };
 }
-
-type FolderGroups = Pick<StoreGroups, 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing'>;
 
 /** The groups only a store kept as files in a folder serves: its ledger, own index, promote copies and sharing. */
 function sqliteFolderGroups(handles: Handles): Sync<FolderGroups> {
@@ -205,65 +168,44 @@ function sqliteFolderGroups(handles: Handles): Sync<FolderGroups> {
   };
 }
 
-type SqliteBaseReads = Pick<
-  SqliteSyncStore,
-  | 'findApiKey'
-  | 'searchRecallEntries'
-  | 'entriesByIds'
-  | 'activeGoals'
-  | 'freshRawEntries'
-  | 'continuity'
-  | 'planningFallacyEvidence'
->;
-
-const baseReadsAt: Bodies<Pick<HippoStore, 'findApiKey' | 'activeGoals' | 'planningFallacyEvidence'>> = {
+const baseReadsAt: Bodies<Pick<BaseMethods, 'findApiKey' | 'activeGoals' | 'planningFallacyEvidence'>> = {
   findApiKey: readApiKeyRecord,
   activeGoals: activeGoalsWithPoliciesAt,
   planningFallacyEvidence: planningFallacyEvidenceAt,
 };
 
-const entryReadsAt: Bodies<Pick<HippoStore, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>> = {
+const entryReadsAt: Bodies<Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>> = {
   searchRecallEntries: loadRecallEntriesAt,
   entriesByIds: loadEntriesByIdsAt,
   freshRawEntries: loadFreshRawMemoriesAt,
 };
 
-function sqliteBaseReads(on: OnHandle): SqliteBaseReads {
-  return {
-    ...bound(on, baseReadsAt),
-    ...bound(on, entryReadsAt, openStore),
-    ...boundWithFiles<Pick<HippoStore, 'continuity'>>(on, { continuity: continuityAt }, openStore),
-  };
-}
+const storeFilesAt: FileBodies<Pick<BaseMethods, 'continuity' | 'bumpRecallStats'>> = {
+  continuity: continuityAt,
+  bumpRecallStats: (db, files, recalled) => updateStatsAt(db, files, { recalled }),
+};
 
-type SqliteRecallWrites = Pick<
-  SqliteSyncStore,
-  'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
->;
-
-const recallWritesAt: Bodies<Pick<HippoStore, 'appendAuditEvents' | 'recordTokens'>> = {
+const recallWritesAt: Bodies<Pick<BaseMethods, 'appendAuditEvents' | 'recordTokens'>> = {
   appendAuditEvents: appendAuditEventsAt,
   recordTokens: recordTokenUse,
 };
 
 // It strengthens, so it takes the store's loss-aversion rules beside the handle.
-const recallFinishAt: FileBodies<Pick<HippoStore, 'finishRecall'>> = {
+const recallFinishAt: FileBodies<Pick<BaseMethods, 'finishRecall'>> = {
   finishRecall: (db, files, recall) => {
     finishRecallAt(db, files, recall);
   },
 };
 
-function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
+function sqliteBaseMethods(on: OnHandle): Sync<BaseMethods> {
   const writes = bound(on, recallWritesAt);
   return {
+    ...bound(on, baseReadsAt),
+    ...bound(on, entryReadsAt, openStore),
+    ...boundWithFiles(on, storeFilesAt, openStore),
     ...writes,
     appendAuditEvents: skipEmpty(writes.appendAuditEvents, () => undefined),
     ...boundWithFiles(on, recallFinishAt),
-    ...boundWithFiles<Pick<HippoStore, 'bumpRecallStats'>>(
-      on,
-      { bumpRecallStats: (db, files, recalled) => updateStatsAt(db, files, { recalled }) },
-      openStore,
-    ),
   };
 }
 
@@ -329,100 +271,12 @@ export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'di
  * another store's would. */
 export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): HippoStore & StoreGroups {
   const handles = handlesOf(hippoRoot, rules);
-  const sync = sqliteSyncStore(hippoRoot, rules);
+  const { consolidation, ...sync } = sqliteSyncStore(handles);
   return asHippoDb({
-    ...served<ServedBaseMethods>(baseMethodsOf(sync)),
+    ...served<Omit<HippoStore & StoreGroups, ServedApart>>(sync),
     vectors: sqliteVectorReads(handles),
-    vectorViews: served<VectorViews>(sync.vectorViews),
-    keyAudit: served<KeyAudit>(sync.keyAudit),
-    keyWrites: served<KeyWrites>(sync.keyWrites),
-    keyGrants: served<KeyGrants>(sync.keyGrants),
-    vectorWrites: served<VectorWrites>(sync.vectorWrites),
-    entryWrites: served<EntryWrites>(sync.entryWrites),
-    contextReads: served<ContextReads>(sync.contextReads),
-    predictions: served<Predictions>(sync.predictions),
-    dagReads: served<DagReads>(sync.dagReads),
-    auditLog: served<AuditLog>(sync.auditLog),
-    quarantine: served<Quarantine>(sync.quarantine),
-    graphReads: served<GraphReads>(sync.graphReads),
-    connectorWrites: served<ConnectorWrites>(sync.connectorWrites),
-    connectorEvents: served<ConnectorEvents>(sync.connectorEvents),
-    objects: served<Objects>(sqliteObjects(handles.on)),
-    readiness: served<Readiness>(sync.readiness),
-    lastRecall: served<LastRecall>(sync.lastRecall),
-    auditMaintenance: served<AuditMaintenance>(sync.auditMaintenance),
-    lessonWrites: served<LessonWrites>(sync.lessonWrites),
-    sessions: served<Sessions>(sync.sessions),
-    cards: served<Cards>(sync.cards),
-    goals: served<Goals>(sync.goals),
-    conflicts: served<Conflicts>(sync.conflicts),
-    dormant: served<Dormant>(sync.dormant),
-    reports: served<Reports>(sync.reports),
-    rejections: served<Rejections>(sync.rejections),
-    failureLog: served<FailureLog>(sync.failureLog),
-    compactions: served<Compactions>(sync.compactions),
-    ledger: served<Ledger>(sync.ledger),
-    embeddingIndex: served<EmbeddingIndex>(sync.embeddingIndex),
-    promotion: served<Promotion>(sync.promotion),
-    folderFiles: served<FolderFiles>(sync.folderFiles),
-    sharing: served<Sharing>(sync.sharing),
-    consolidation: servedConsolidation(sync.consolidation),
-    learning: served<Learning>(sync.learning),
-    captures: served<Captures>(sync.captures),
-    compactionHooks: served<CompactionHooks>(sync.compactionHooks),
-    projectTags: served<ProjectTags>(sync.projectTags),
-    diagnostics: served<Diagnostics>(sync.diagnostics),
-    graphRebuild: served<GraphRebuild>(sync.graphRebuild),
-    agentImport: served<AgentImport>(sync.agentImport),
-    close: async () => sync.close(),
+    consolidation: servedConsolidation(consolidation),
   });
-}
-
-type ServedBaseMethods = Pick<
-  HippoStore,
-  | 'kind'
-  | 'findApiKey'
-  | 'searchRecallEntries'
-  | 'entriesByIds'
-  | 'activeGoals'
-  | 'freshRawEntries'
-  | 'continuity'
-  | 'planningFallacyEvidence'
-  | 'appendAuditEvents'
-  | 'finishRecall'
-  | 'bumpRecallStats'
-  | 'recordTokens'
->;
-
-function baseMethodsOf(sync: SqliteSyncStore): Sync<ServedBaseMethods> {
-  const {
-    kind,
-    findApiKey,
-    searchRecallEntries,
-    entriesByIds,
-    activeGoals,
-    freshRawEntries,
-    continuity,
-    planningFallacyEvidence,
-    appendAuditEvents,
-    finishRecall,
-    bumpRecallStats,
-    recordTokens,
-  } = sync;
-  return {
-    kind,
-    findApiKey,
-    searchRecallEntries,
-    entriesByIds,
-    activeGoals,
-    freshRawEntries,
-    continuity,
-    planningFallacyEvidence,
-    appendAuditEvents,
-    finishRecall,
-    bumpRecallStats,
-    recordTokens,
-  };
 }
 
 const contextReadsAt: Bodies<Omit<ContextReads, 'ambientTallies'>> = {

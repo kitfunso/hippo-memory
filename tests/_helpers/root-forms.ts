@@ -197,16 +197,16 @@ export function createCard(
   tenantId: string,
   input: { title: string; repo?: string; contract?: string; budget?: number; dependsOn?: string[] },
 ): Card {
-  return sqliteSyncStore(hippoRoot).cards.create(tenantId, input);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.create(tenantId, input);
 }
 
 export function loadCard(hippoRoot: string, tenantId: string, id: string): Card | null {
-  return sqliteSyncStore(hippoRoot).cards.load(tenantId, id);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.load(tenantId, id);
 }
 
 export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): CardRun[] {
   assertTenantId('loadCardRuns', tenantId);
-  return sqliteSyncStore(hippoRoot).cards.runs(tenantId, id);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.runs(tenantId, id);
 }
 
 export function claimCard(
@@ -216,11 +216,11 @@ export function claimCard(
   runtime: string,
   sessionId?: string,
 ): (Card & { runId: number }) | null {
-  return sqliteSyncStore(hippoRoot).cards.claim(tenantId, id, runtime, sessionId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.claim(tenantId, id, runtime, sessionId);
 }
 
 export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, runId: number): Card | null {
-  return sqliteSyncStore(hippoRoot).cards.heartbeat(tenantId, id, runId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.heartbeat(tenantId, id, runId);
 }
 
 export function blockCard(
@@ -230,11 +230,11 @@ export function blockCard(
   reason: string,
   runId?: number,
 ): Card | null {
-  return sqliteSyncStore(hippoRoot).cards.block(tenantId, id, reason, runId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.block(tenantId, id, reason, runId);
 }
 
 export function reviewCard(hippoRoot: string, tenantId: string, id: string, runId?: number): Card | null {
-  return sqliteSyncStore(hippoRoot).cards.review(tenantId, id, runId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.review(tenantId, id, runId);
 }
 
 export function completeCard(
@@ -244,11 +244,11 @@ export function completeCard(
   outcome: HandoffOutcome,
   runId?: number,
 ): { card: Card; promotedChildren: string[] } | null {
-  return sqliteSyncStore(hippoRoot).cards.complete(tenantId, id, outcome, runId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.complete(tenantId, id, outcome, runId);
 }
 
 export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string[] {
-  return sqliteSyncStore(hippoRoot).cards.reclaimExpired(tenantId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.reclaimExpired(tenantId);
 }
 
 export function addCardComment(
@@ -258,7 +258,7 @@ export function addCardComment(
   author: string,
   body: string,
 ): CardComment {
-  return sqliteSyncStore(hippoRoot).cards.comment(tenantId, cardId, author, body);
+  return sqliteSyncStore(handlesOf(hippoRoot)).cards.comment(tenantId, cardId, author, body);
 }
 
 export function replaceDetectedConflicts(
@@ -275,7 +275,7 @@ export function listMemoryConflicts(
   status: string = 'open',
   tenantId: TenantId = ALL_TENANTS,
 ): MemoryConflict[] {
-  const { conflicts } = sqliteSyncStore(hippoRoot);
+  const { conflicts } = sqliteSyncStore(handlesOf(hippoRoot));
   const out: MemoryConflict[] = [];
   let after: KeysetPosition | undefined;
   do {
@@ -294,7 +294,7 @@ export function resolveConflictKeeping(
   conflictId: number,
   keepId: string,
 ): boolean {
-  const conflicts = sqliteSyncStore(hippoRoot).conflicts;
+  const conflicts = sqliteSyncStore(handlesOf(hippoRoot)).conflicts;
   const row = conflicts.get(tenantId, conflictId);
   if (!row) return false;
   const a = { id: row.conflict.memory_a_id, scope: row.a?.scope ?? null };
@@ -415,7 +415,7 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
 }
 
 export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
-  return sqliteSyncStore(hippoRoot).goals.push(opts.tenantId, opts);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.push(opts.tenantId, opts);
 }
 
 export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
@@ -423,15 +423,15 @@ export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsO
 }
 
 export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
-  return sqliteSyncStore(hippoRoot).goals.complete(resolveTenantId({}), goalId, opts);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.complete(resolveTenantId({}), goalId, opts);
 }
 
 export function suspendGoal(hippoRoot: string, goalId: string): void {
-  return sqliteSyncStore(hippoRoot).goals.suspend(resolveTenantId({}), goalId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.suspend(resolveTenantId({}), goalId);
 }
 
 export function resumeGoal(hippoRoot: string, goalId: string): void {
-  return sqliteSyncStore(hippoRoot).goals.resume(resolveTenantId({}), goalId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).goals.resume(resolveTenantId({}), goalId);
 }
 
 export function markPendingProcessedUpTo(hippoRoot: string, tenantId: string, maxId: number): number {
@@ -443,7 +443,7 @@ export function loadPendingExtractionTenants(hippoRoot: string): { tenantId: str
 }
 
 export function loadEntitiesByMemoryId(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): Entity[] {
-  return sqliteSyncStore(hippoRoot).graphReads.entitiesForMemories(tenantId, memoryIds);
+  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.entitiesForMemories(tenantId, memoryIds);
 }
 
 export function loadLatestHandoff(
@@ -507,11 +507,11 @@ export function closePrediction(
   close: PredictionClose,
   actor: string = CLI_ACTOR,
 ): Prediction {
-  return sqliteSyncStore(hippoRoot).predictions.closePrediction(tenantId, id, close, actor);
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.closePrediction(tenantId, id, close, actor);
 }
 
 export function loadPredictionById(hippoRoot: string, tenantId: string, id: number): Prediction | null {
-  return sqliteSyncStore(hippoRoot).predictions.predictionById(tenantId, id);
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.predictionById(tenantId, id);
 }
 
 export function loadPredictionsByClass(
@@ -522,7 +522,7 @@ export function loadPredictionsByClass(
 ): Prediction[] {
   const { closureState, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return sqliteSyncStore(hippoRoot).predictions.listPredictions(
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.listPredictions(
     tenantId,
     closureState === undefined ? { classTag, limit, after } : { classTag, closureState, limit, after },
   );
@@ -533,7 +533,7 @@ export function loadAllPredictions(
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
-  return sqliteSyncStore(hippoRoot).predictions.listPredictions(tenantId, {
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.listPredictions(tenantId, {
     limit: opts.limit ?? DEFAULT_LIST_LIMIT,
     after: opts.after,
   });
@@ -556,7 +556,7 @@ export function loadOpenPredictions(
 ): Prediction[] {
   const { classTag, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return sqliteSyncStore(hippoRoot).predictions.listPredictions(tenantId, {
+  return sqliteSyncStore(handlesOf(hippoRoot)).predictions.listPredictions(tenantId, {
     classTag,
     closureState: 'open',
     limit,
@@ -594,7 +594,7 @@ export function clearActiveTaskSnapshot(
   tenantId: string,
   clearedStatus: string = 'cleared',
 ): boolean {
-  return sqliteSyncStore(hippoRoot).sessions.clearSnapshot(tenantId, clearedStatus);
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.clearSnapshot(tenantId, clearedStatus);
 }
 
 export function closeTaskSnapshotsForSession(
@@ -604,7 +604,7 @@ export function closeTaskSnapshotsForSession(
   status: string = 'session-ended',
   key?: ContinuityKey,
 ): number {
-  return sqliteSyncStore(hippoRoot).sessions.closeSessionSnapshots(tenantId, sessionId, status, key ?? null);
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.closeSessionSnapshots(tenantId, sessionId, status, key ?? null);
 }
 
 export function listSessionEvents(
@@ -624,19 +624,19 @@ export function findPromotableSessions(
 }
 
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).consolidation.unprofiledTopicSummaries();
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.unprofiledTopicSummaries();
 }
 
 export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
 }
 
 export function loadChildrenOfSummary(hippoRoot: string, summaryId: string, tenantId: string): MemoryEntry[] {
-  return sqliteSyncStore(hippoRoot).consolidation.childrenOfSummary(summaryId, tenantId);
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.childrenOfSummary(summaryId, tenantId);
 }
 
 export function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
-  return sqliteSyncStore(hippoRoot).consolidation.applyRebuild(summary, patch);
+  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.applyRebuild(summary, patch);
 }
 
 export function recordRereads(
@@ -693,7 +693,7 @@ export function wmPush(
     tenantId?: string;
   },
 ): number {
-  return sqliteSyncStore(hippoRoot).sessions.pushWorkingMemory(opts.tenantId ?? resolveTenantId({}), opts);
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.pushWorkingMemory(opts.tenantId ?? resolveTenantId({}), opts);
 }
 
 export function wmRead(
@@ -705,7 +705,10 @@ export function wmRead(
     tenantId?: string;
   },
 ): WorkingMemoryItem[] {
-  return sqliteSyncStore(hippoRoot).sessions.readWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.readWorkingMemory(
+    opts?.tenantId ?? resolveTenantId({}),
+    opts ?? {},
+  );
 }
 
 export function wmClear(
@@ -716,11 +719,14 @@ export function wmClear(
     tenantId?: string;
   },
 ): number {
-  return sqliteSyncStore(hippoRoot).sessions.clearWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
+  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.clearWorkingMemory(
+    opts?.tenantId ?? resolveTenantId({}),
+    opts ?? {},
+  );
 }
 
 export function auditHighId(hippoRoot: string): number {
-  return sqliteSyncStore(hippoRoot).keyAudit.auditHighId();
+  return sqliteSyncStore(handlesOf(hippoRoot)).keyAudit.auditHighId();
 }
 
 export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
@@ -763,7 +769,7 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
 }
 
 export function loadEntitiesByIds(hippoRoot: string, tenantId: string, ids: readonly number[]): Entity[] {
-  return sqliteSyncStore(hippoRoot).graphReads.entitiesByIds(tenantId, ids);
+  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.entitiesByIds(tenantId, ids);
 }
 
 export function loadNeighborRelations(
@@ -772,7 +778,9 @@ export function loadNeighborRelations(
   entityIds: readonly number[],
   opts: { limit?: number } = {},
 ): Relation[] {
-  return sqliteSyncStore(hippoRoot).graphReads.neighborRelations(tenantId, entityIds, { limit: opts.limit ?? 1000 });
+  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.neighborRelations(tenantId, entityIds, {
+    limit: opts.limit ?? 1000,
+  });
 }
 
 export function loadVectorCandidateEntries(
@@ -832,7 +840,7 @@ export function repairAutomaticMemories(
   files: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
 ): QualityRepairResult {
-  return sqliteSyncStore(files.hippoRoot).auditMaintenance.repairQuality(
+  return sqliteSyncStore(handlesOf(files.hippoRoot)).auditMaintenance.repairQuality(
     opts.tenantId,
     opts.apply ?? false,
     opts.protect,
@@ -844,5 +852,5 @@ export function repairQualityOnce(
   tenantId: string,
   protect: RepairProtection,
 ): QualityRepairResult | null {
-  return sqliteSyncStore(files.hippoRoot).auditMaintenance.repairQualityOnce(tenantId, protect);
+  return sqliteSyncStore(handlesOf(files.hippoRoot)).auditMaintenance.repairQualityOnce(tenantId, protect);
 }

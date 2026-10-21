@@ -7,6 +7,7 @@ import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { storedTextKeys } from '../../src/base/util/same-text.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -151,7 +152,7 @@ describe('rejections.apply', () => {
     await seed(5);
     const target = createMemory('the deploy window is friday afternoon', { tenantId: 'default' });
     writeEntry(root, target);
-    const { rejections } = sqliteSyncStore(root);
+    const { rejections } = sqliteSyncStore(handlesOf(root));
     const { result, statements } = recordStatements(() =>
       rejections.apply({
         tenantId: 'default',
