@@ -4,10 +4,14 @@ import { folderIndex as targetOf, type ConfiguredFolder, type EmbedTarget } from
 import { judgeAll as judgeOver, type JudgeOptions, type Judgment } from '../domain/eval/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
+import { realRerankers } from '../infra/rerankers.js';
 
 // The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
 export { embedAll } from '../domain/search/embed-memories.js';
-export { getReranker } from '../infra/rerankers.js';
+
+/** The script's reranker registry: an entry is a root, so it builds one for the process and keeps it. */
+const scriptRerankers = realRerankers();
+export { scriptRerankers as getReranker };
 
 /** A folder's embedding target, embedding with the real provider its config names. */
 export function folderIndex(folder: Omit<ConfiguredFolder, 'embedderFor'>): EmbedTarget {

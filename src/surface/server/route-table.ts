@@ -1,4 +1,5 @@
 import type { Context } from '../../api/index.js';
+import type { InfraPorts } from '../../base/ports/infra.js';
 import type { ContextWith } from '../../api/types.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
@@ -56,10 +57,10 @@ import type {
 } from './types.js';
 
 function webhook(
-  handle: (r: WebhookRequest, store: HippoStore, config: HippoConfig) => Promise<void>,
+  handle: (r: WebhookRequest, store: HippoStore, config: HippoConfig, infra: InfraPorts) => Promise<void>,
 ): (r: RouteRequest) => Promise<void> {
   return async ({ req, res, opts }) => {
-    await handle({ req, res, opts }, opts.store, opts.configAt(opts.hippoRoot));
+    await handle({ req, res, opts }, opts.store, opts.configAt(opts.hippoRoot), opts.infra());
   };
 }
 

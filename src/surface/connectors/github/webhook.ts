@@ -37,6 +37,7 @@ import {
   type WebhookRequest,
 } from '../../../base/util/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
+import type { InfraPorts } from '../../../base/ports/infra.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ replay alike. */
 export function githubPreviousSecret(): string | undefined {
@@ -68,6 +69,7 @@ export async function handleGitHubEventsWebhook(
   request: WebhookRequest,
   store: HippoStore,
   config: HippoConfig,
+  infra: InfraPorts,
 ): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
@@ -101,6 +103,7 @@ export async function handleGitHubEventsWebhook(
       hippoRoot: opts.hippoRoot,
       store,
       config,
+      infra,
       res,
       rawBody,
       eventName,
@@ -132,6 +135,7 @@ interface SignedDelivery {
   hippoRoot: string;
   store: HippoStore;
   config: HippoConfig;
+  infra: InfraPorts;
   res: ServerResponse;
   rawBody: string;
   eventName: string | null;
@@ -192,6 +196,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     actor: { subject: 'connector:github', role: 'admin' },
     store: d.store,
     config: d.config,
+    infra: d.infra,
   };
   if (await dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
 

@@ -100,7 +100,7 @@ type AuthOptions = Pick<
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 type ContextOptions = AuthOptions &
-  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb'> &
+  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
   Partial<Pick<ResolvedServeOptions, 'callers'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
@@ -339,9 +339,10 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   // The reader keys on the file's stamp, so each request still sees an edit made while the server runs.
   const config = opts.configAt(opts.hippoRoot);
   const callers = opts.callers;
+  const infra = opts.infra();
   if (id !== null) {
     const actor = bearerActor(id);
-    return { tenantId: id.tenantId, actor, store: opts.store, reach, config, callers };
+    return { tenantId: id.tenantId, actor, store: opts.store, reach, config, callers, infra };
   }
   return {
     tenantId: envTenant(),
@@ -350,6 +351,7 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
     reach,
     config,
     callers,
+    infra,
   };
 }
 

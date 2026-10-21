@@ -22,6 +22,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { defaultReach } from './surface/open-store.js';
 import { loadConfig } from './base/config/config.js';
 import { resolveEmbeddingProvider } from './infra/embedding-provider.js';
+import { withEntryInfra } from './surface/entry-infra.js';
 
 export { serve } from './surface/server/boot.js';
 
@@ -30,7 +31,8 @@ async function promptHookContext(
   req: PromptHookRequest,
   opts?: PromptHookOptions,
 ): ReturnType<typeof renderPromptHook> {
-  return renderPromptHook({ ...ctx, reach: ctx.reach ?? (await folderReach(ctx.store, opts)) }, req, opts);
+  const reach = ctx.reach ?? (await folderReach(ctx.store, opts));
+  return renderPromptHook(withEntryInfra({ ...ctx, reach }), req, opts);
 }
 
 /** The reach every root probes for a store kept in a folder, from the folder its port names; a store without

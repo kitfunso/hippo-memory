@@ -6,5 +6,12 @@ import { processEnv } from '../base/util/env.js';
 import { processGit } from './git-runner.js';
 
 export function currentMachine(): Machine {
-  return { home: os.homedir(), env: processEnv(), platform: process.platform, files: diskAgentFiles, git: processGit };
+  return {
+    home: os.homedir(),
+    env: processEnv(),
+    platform: process.platform,
+    files: diskAgentFiles,
+    git: processGit,
+    cwd: process.cwd(),
+  };
 }

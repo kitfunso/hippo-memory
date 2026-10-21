@@ -15,6 +15,7 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import { truncateCodePointSafe } from '../../base/util/transcript-tail.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';
 import type { CallerHookOutput } from './pre-compact-caller.js';
+import { withEntryInfra } from '../entry-infra.js';
 
 export interface CallerCompactResumeRequest {
   readonly sessionId: string;
@@ -23,7 +24,11 @@ export interface CallerCompactResumeRequest {
   readonly source: string;
 }
 
-export async function compactResumeForCaller(ctx: Context, req: CallerCompactResumeRequest): Promise<CallerHookOutput> {
+export async function compactResumeForCaller(
+  given: Context,
+  req: CallerCompactResumeRequest,
+): Promise<CallerHookOutput> {
+  const ctx = withEntryInfra(given);
   const key = await bindCaller(ctx, req.sessionId, req.project);
   if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) return { stdout: '' };
   const { sessions } = ctx.store;

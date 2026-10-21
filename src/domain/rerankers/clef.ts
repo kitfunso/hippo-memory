@@ -1,7 +1,7 @@
 import type { ClefSettings } from '../../base/config/config.js';
 import type { Http } from '../../base/ports/http.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
-import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
+import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from '../../base/ports/reranker.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';

@@ -1,5 +1,5 @@
 import { createOutageWarning } from './outage-warning.js';
-import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
+import type { RerankerFn, RerankResult, RerankerOptions } from '../../base/ports/reranker.js';
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { CrossEncoderFn, CrossEncoderLoad } from '../../base/ports/cross-encoder.js';

@@ -53,6 +53,8 @@ export interface HybridSearchOptions extends SearchOptions {
   scope?: string | null;
   /** The root's environment settings: scope, summary deboost and query-embedding budget, when the call sets none. */
   runtime?: RuntimeSettings;
+  /** The folder the caller runs in, whose path segments boost a memory in both stores; absent, no path boost. */
+  cwd?: string;
   /** Include superseded memories in results. Default false. */
   includeSuperseded?: boolean;
   /** Filter to memories current at this ISO date string. */
@@ -217,6 +219,7 @@ export async function rankBothStores(
     summaryDeboost,
     summaryFreshness,
     runtime: options.runtime,
+    cwd: options.cwd,
     vectorCandidates,
     queryEmbedDeadline: startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs),
   };

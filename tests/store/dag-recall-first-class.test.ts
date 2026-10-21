@@ -18,7 +18,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import type { RerankerOptions, RerankResult } from '../../src/domain/rerankers/types.js';
+import type { RerankerOptions, RerankResult } from '../../src/base/ports/reranker.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';

@@ -186,6 +186,7 @@ function endStore(ctx: Context): Context | null {
     actor: ctx.actor,
     store: global.store,
     config: global.config,
+    infra: ctx.infra,
   };
 }
 

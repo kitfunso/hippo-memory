@@ -29,6 +29,7 @@ import {
   type WebhookRequest,
 } from '../../../base/util/http-util.js';
 import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/json.js';
+import type { InfraPorts } from '../../../base/ports/infra.js';
 
 export function warnSlackPreviousSecretOpen(): void {
   warnIfOpenEnded(SLACK_PREVIOUS, envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
@@ -41,6 +42,7 @@ export async function handleSlackEventsWebhook(
   request: WebhookRequest,
   store: HippoStore,
   config: HippoConfig,
+  infra: InfraPorts,
 ): Promise<void> {
   const { req, res, opts } = request;
   // Secret and well-formed headers before the body, so a caller with neither cannot make the server buffer one.
@@ -80,6 +82,7 @@ export async function handleSlackEventsWebhook(
     hippoRoot: opts.hippoRoot,
     store,
     config,
+    infra,
     res,
     rawBody: rawBytes.toString('utf8'),
     signature: sigStr,
@@ -120,6 +123,7 @@ interface SignedSlackRequest {
   hippoRoot: string;
   store: HippoStore;
   config: HippoConfig;
+  infra: InfraPorts;
   res: ServerResponse;
   rawBody: string;
   signature: string;
@@ -196,6 +200,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     actor: { subject: 'connector:slack', role: 'admin' },
     store: d.store,
     config: d.config,
+    infra: d.infra,
   };
   if (!isSlackEventEnvelope(body)) {
     await parkAndAck(d, {

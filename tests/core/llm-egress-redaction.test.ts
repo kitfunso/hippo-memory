@@ -8,13 +8,15 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
 import { extractFacts } from '../../src/domain/learn/extract.js';
-import { getReranker } from '../../src/infra/rerankers.js';
+import { realRerankers } from '../../src/infra/rerankers.js';
 import { createJevReranker } from '../../src/domain/rerankers/jev.js';
 import { processHttp } from '../../src/infra/http.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { refineOne } from '../_helpers/refine-one.js';
+
+const getReranker = realRerankers();
 
 afterEach(() => {
   vi.unstubAllEnvs();

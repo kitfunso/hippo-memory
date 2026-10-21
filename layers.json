@@ -25,6 +25,12 @@
     "server.ts": "surface",
     "support-bundle.ts": "surface"
   },
+  "apart": {
+    "api": ["infra"]
+  },
+  "barrels": {
+    "index.ts": "entry"
+  },
   "dbReach": {
     "layer": "db",
     "through": "store",

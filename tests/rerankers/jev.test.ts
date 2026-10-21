@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { getReranker } from '../../src/infra/rerankers.js';
+import { realRerankers } from '../../src/infra/rerankers.js';
 import { createJevReranker } from '../../src/domain/rerankers/jev.js';
 import { processHttp } from '../../src/infra/http.js';
-import type { RerankerFn } from '../../src/domain/rerankers/types.js';
+import type { RerankerFn } from '../../src/base/ports/reranker.js';
+
+const getReranker = realRerankers();
 
 afterEach(() => {
   vi.unstubAllEnvs();

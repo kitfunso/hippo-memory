@@ -28,7 +28,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import type { RerankerFn } from '../../domain/rerankers/index.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
-import { anthropicLlmFromEnv } from '../../infra/ports.js';
+import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { serverNearestAsk } from './server-nearest.js';
 
@@ -36,10 +36,13 @@ import { serverNearestAsk } from './server-nearest.js';
  * config.json once. */
 export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
+/** The CLI process's outside services: one reranker registry for every command and stdio MCP call it runs. */
+export const cliInfra = rootInfra();
+
 /** A registry reranker with the CLEF transport this process's environment names, for a script that reranks outside a
  * recall. */
 export function cliReranker(name: string | null | undefined): RerankerFn | null {
-  return rerankerWithClef(name, envClefSettings());
+  return rerankerWithClef({ infra: cliInfra() }, name, envClefSettings());
 }
 
 /** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never names the adapter. A
@@ -117,7 +120,7 @@ export function cliApiContext(
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = cliConfig(hippoRoot);
   const reach = cliReach(hippoRoot, store);
-  return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach, config, callers };
+  return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach, config, callers, infra: cliInfra() };
 }
 
 /** A second store a CLI read searches beside its own, with that store's config. */
@@ -168,6 +171,7 @@ export function cliStdioHost(): McpHost {
         config: cliConfig(hippoRoot),
         reach: cliReach(hippoRoot, store),
         callers: callersAt(hippoRoot),
+        infra: cliInfra(),
       };
     },
     runRequest: cliRequest,

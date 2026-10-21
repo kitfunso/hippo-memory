@@ -21,6 +21,7 @@ import type { StoreWith } from '../../store/port.js';
 import type { ConfiguredFolder } from '../../domain/search/embed-memories.js';
 import type { SharingStore } from '../../domain/sharing/text-keys.js';
 import type { CallerState } from '../../api/callers.js';
+import type { InfraPorts } from '../../base/ports/infra.js';
 
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are the test seam. */
 export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string | null {
@@ -86,6 +87,8 @@ export interface McpContext {
   reach?: ContextReach;
   /** The transport root's per-caller state; without it no session ring, last-shown list or auto-sleep is kept. */
   callers?: CallerState;
+  /** The outside services the transport's root built; every tool call's api Context carries them. */
+  infra: InfraPorts;
   /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP
    * (built in src/surface/server/mcp-http.ts); defaults to `${tenantId}:default`. */
   clientKey?: string;
@@ -115,6 +118,7 @@ export function mcpApiContext(ctx: McpContext): ApiContext {
     reach: ctx.reach,
     config: ctx.config,
     callers: ctx.callers,
+    infra: ctx.infra,
   };
 }
 
