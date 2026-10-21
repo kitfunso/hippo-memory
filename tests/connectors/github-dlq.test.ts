@@ -35,7 +35,7 @@ describe('github DLQ', () => {
       repoFullName: 'octo/repo',
     });
     expect(id).toBe(1);
-    const item = await sqliteStore(root).connectorEvents.deadLetter('github', id);
+    const item = await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id);
     expect(item).not.toBeNull();
     expect(item!.tenantId).toBe('default');
     expect(item!.rawPayload).toBe('{"action":"opened"}');
@@ -58,7 +58,7 @@ describe('github DLQ', () => {
       error: 'no tenant',
       bucket: 'unroutable',
     });
-    const item = await sqliteStore(root).connectorEvents.deadLetter('github', id);
+    const item = await sqliteStore(root).connectorEvents.deadLetter('github', '__unroutable__', id);
     expect(item!.tenantId).toBe('__unroutable__');
     expect(item!.bucket).toBe('unroutable');
     const listed = await listDlq(githubDlq, sqliteStore(root), { tenantId: '__unroutable__' });
@@ -114,10 +114,18 @@ describe('github DLQ', () => {
       rawPayload: '{}',
       error: 'boom',
     });
-    const found = await sqliteStore(root).connectorEvents.deadLetter('github', id);
+    const found = await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id);
     expect(found).not.toBeNull();
     expect(found!.id).toBe(id);
-    expect(await sqliteStore(root).connectorEvents.deadLetter('github', 9999)).toBeNull();
+    expect(await sqliteStore(root).connectorEvents.deadLetter('github', 'default', 9999)).toBeNull();
+  });
+
+  it("reads and counts a retry on the caller's own rows only, so another tenant's id answers absent and stays unmarked", async () => {
+    const events = sqliteStore(root).connectorEvents;
+    const id = await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'boom' });
+    expect(await events.deadLetter('github', 'other-tenant', id)).toBeNull();
+    await events.markDeadLetterRetried('github', 'other-tenant', id);
+    expect((await events.deadLetter('github', 'default', id))?.retryCount).toBe(0);
   });
 
   it('replayDlqEntry returns not_found for unknown ids', async () => {
@@ -141,7 +149,7 @@ describe('github DLQ', () => {
     expect(result.status).toBe('parse_error');
     expect(result.retryCount).toBe(1);
 
-    const after = await sqliteStore(root).connectorEvents.deadLetter('github', id);
+    const after = await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id);
     expect(after!.retryCount).toBe(1);
     expect(after!.retriedAt).not.toBeNull();
   });
