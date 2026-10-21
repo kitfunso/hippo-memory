@@ -1,7 +1,6 @@
 import type { HippoStore } from '../../store/index.js';
 import type { StoreWith } from '../../store/port.js';
 import type { Learning } from '../../store/port/learning.js';
-import { chunked } from '../../base/util/chunked.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/memory.js';
@@ -145,11 +144,7 @@ export async function invalidateMatchingAmong(
 ): Promise<InvalidationResult> {
   const seen = weakenMatches(live, target, { dryRun: true }).result;
   const ids = [...seen.targets, ...seen.skippedPinned];
-  const fresh = new Map<string, MemoryEntry>();
-  // The port reads at most ID_CHUNK ids a call.
-  for (const chunk of chunked(ids)) {
-    for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
-  }
+  const fresh = new Map((await store.entriesByIds(ids, tenantId)).map((entry) => [entry.id, entry]));
   const { result, weakened } = weakenMatches(
     ids.flatMap((id) => fresh.get(id) ?? []),
     target,

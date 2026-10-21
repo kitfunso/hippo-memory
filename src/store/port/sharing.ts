@@ -25,7 +25,7 @@ export interface Sharing {
   textsHolding(tenantId: TenantId, words: readonly string[], opts: TextsHoldingOptions): Promise<HeldText[]>;
   /** The ids among `ids` that a memory of any tenant holds. */
   takenIds(ids: readonly string[]): Promise<string[]>;
-  /** The memories with these ids, in any tenant; at most 500 ids a call. */
+  /** The memories with these ids, in any tenant. */
   entriesByIds(ids: readonly string[]): Promise<MemoryEntry[]>;
   /** How many memories of `tenantId` each source holds. */
   sourceTallies(tenantId: TenantId): Promise<SourceTally[]>;

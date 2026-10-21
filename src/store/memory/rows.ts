@@ -4,6 +4,7 @@ import type { JsonObject, JsonValue } from '../../base/util/json.js';
 import { parseStoredObject, type StoredJsonSite } from '../../base/util/stored-json.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
+import { byIdOrder } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 
 /** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic plane. */
@@ -76,11 +77,8 @@ export function bumpCounter(t: MemoryTables, name: Counter, by: number): void {
   t.meta.set(name, String(counter(t, name) + by));
 }
 
-/** The tenant's rows among `ids` (the first 500), every tenant's under ALL_TENANTS, by created, content then id. */
+/** The tenant's rows among `ids`, every tenant's under ALL_TENANTS, in the by-id read's order. */
 export function rowsByIds(rows: Iterable<MemoryEntry>, ids: readonly string[], tenantOk: (t: string) => boolean) {
-  const wanted = new Set(ids.slice(0, 500));
-  const found = [...rows].filter((e) => wanted.has(e.id) && tenantOk(e.tenantId));
-  return structuredClone(
-    found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),
-  );
+  const wanted = new Set(ids);
+  return structuredClone([...rows].filter((e) => wanted.has(e.id) && tenantOk(e.tenantId)).sort(byIdOrder));
 }

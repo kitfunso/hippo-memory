@@ -4,7 +4,8 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } fro
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
-import { chunked, ID_CHUNK } from '../../base/util/chunked.js';
+import { chunked } from '../../base/util/chunked.js';
+import { byIdOrder } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { duplicateKey, longestWord } from '../../base/util/same-text.js';
@@ -89,18 +90,9 @@ export function selectChildrenByParent(
   return byParent;
 }
 
-/** Batched lookup, capped at ID_CHUNK ids per call to keep IN(?,?,...) within SQLite limits. */
+/** The rows of every id in `ids`, in the by-id read's order; the rows of one chunk alone cannot be sorted in SQL. */
 export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
-  if (ids.length === 0) return [];
-  const capped = ids.slice(0, ID_CHUNK);
-  const tenant = tenantAnd(tenantId, TENANT_IS);
-  // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
-  const rows = cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))${tenant.sql} ` +
-      `ORDER BY created ASC, content ASC, id ASC`,
-  ).all(JSON.stringify(capped), ...tenant.args) as MemoryRow[];
-  return rows.map(rowToEntry);
+  return [...selectEntriesByIds(db, ids, tenantId).values()].sort(byIdOrder);
 }
 
 const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';

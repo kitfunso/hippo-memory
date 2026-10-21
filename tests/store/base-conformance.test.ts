@@ -3,6 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import type { RecallSearchArgs } from '../../src/store/port/recall-writes.js';
 import type { ContinuityKey } from '../../src/store/port/types.js';
@@ -119,6 +120,16 @@ describe('HippoStore base reads', () => {
       value: ['raw: a user-global note', 'raw: standup in the other project', 'raw: standup said the deploy slipped'],
     });
     expect(outcomes[15]).toEqual({ value: ['raw: a user-global note', 'raw: standup said the deploy slipped'] });
+  });
+});
+
+describe('HippoStore by-id read', () => {
+  it('reads every id of a list longer than one SQL chunk, in the by-id order', async () => {
+    const gap = Array.from({ length: ID_CHUNK }, (_, i) => `mem_gap_${i}`);
+    const { outcomes } = await conforms([
+      (s) => s.entriesByIds([...gap, id('cache'), id('pipeline')], TENANT_A).then((found) => found.map((e) => e.id)),
+    ]);
+    expect(outcomes[0]).toEqual({ value: [id('pipeline'), id('cache')] });
   });
 });
 

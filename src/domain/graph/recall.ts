@@ -9,7 +9,6 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { chunked } from '../../base/util/chunked.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity } from '../../store/port/graph-reads.js';
 import type { HippoStore } from '../../store/index.js';
@@ -58,14 +57,6 @@ export interface GraphExpandOpts {
    * (passesScopeFilterForRecall).
    */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
-}
-
-/** Load memories by id in ID_CHUNK-sized chunks, as entriesByIds caps each call there. */
-async function loadByIdsChunked(store: GraphStore, tenantId: string, ids: string[]): Promise<MemoryEntry[]> {
-  if (ids.length === 0) return [];
-  const out: MemoryEntry[] = [];
-  for (const chunk of chunked(ids)) out.push(...(await store.entriesByIds(chunk, tenantId)));
-  return out;
 }
 
 type HitOptions = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
@@ -222,8 +213,8 @@ function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number, isG
   };
 }
 
-// Reached entities -> source memory ids -> load by id (chunked). A mirror-less entity (memoryId === null) has no memory
-// to surface, so drop its null id before it reaches loadByIdsChunked.
+// Reached entities -> source memory ids -> load by id. A mirror-less entity (memoryId === null) has no memory to
+// surface, so drop its null id before the read.
 async function loadReachedMemories(
   store: GraphStore,
   tenantId: string,
@@ -235,7 +226,7 @@ async function loadReachedMemories(
       reachedEntities.map((e) => e.memoryId).filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
     ),
   ];
-  return new Map((await loadByIdsChunked(store, tenantId, needLoad)).map((m) => [m.id, m]));
+  return new Map((await store.entriesByIds(needLoad, tenantId)).map((m) => [m.id, m]));
 }
 
 // For the bi-temporal as-of rule on a superseded reached row we need its successor's valid_from. Batch-load the
@@ -248,7 +239,7 @@ async function loadSuccessorValidFrom(
 ): Promise<Map<string, string>> {
   if (!asOfDate) return new Map<string, string>();
   const succIds = [...new Set([...loadedById.values()].map((m) => m.supersededBy).filter((id): id is string => !!id))];
-  return new Map((await loadByIdsChunked(store, tenantId, succIds)).map((m) => [m.id, m.validFrom]));
+  return new Map((await store.entriesByIds(succIds, tenantId)).map((m) => [m.id, m.validFrom]));
 }
 
 /**
