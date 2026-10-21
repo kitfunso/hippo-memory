@@ -3,6 +3,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
 import { type DatabaseSyncLike, ftsRowCounts, isFtsAvailable, repairFtsDrift, setFtsInSync } from '../../db/index.js';
 import { fallbackOrigin, originFromSource } from '../../base/scope/project-identity.js';
+import { ConflictError } from '../../base/errors/api-errors.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { StoreFiles } from './open.js';
@@ -23,12 +24,25 @@ export function upsertEntryRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
+/** An id another tenant holds: the upsert would move that tenant's row into the writer's. */
+export class CrossTenantIdError extends ConflictError {
+  constructor(id: string) {
+    super(`Memory ${id} belongs to another tenant`);
+  }
+}
+
 /** The row alone, with no rejection guard or full-text row, for `upsertEntryRow` and for `batchWriteAndDelete`, which
- * probes tombstones and indexes per batch. Returns whether the row is new. */
+ * probes tombstones and indexes per batch. Throws CrossTenantIdError before writing when another tenant holds the id
+ * (the existence probe reads the holder, so the hot path pays no extra read). Returns whether the row is new. */
 export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boolean {
-  const isNewRow = db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(entry.id) === undefined;
+  const holder = db.prepare(`SELECT tenant_id FROM memories WHERE id = ?`).get(entry.id) as
+    | { tenant_id: string }
+    | undefined;
+  if (holder !== undefined && holder.tenant_id !== (entry.tenantId ?? DEFAULT_TENANT_ID)) {
+    throw new CrossTenantIdError(entry.id);
+  }
   db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
-  return isNewRow;
+  return holder === undefined;
 }
 
 const UPDATED_COLUMNS = MEMORY_ROW_COLUMNS.slice(1);
