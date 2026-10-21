@@ -93,3 +93,11 @@ describe('hippo_remember personal over HTTP MCP', () => {
     }
   });
 });
+
+describe('hippo_remember is not salience-gated', () => {
+  it('stores a short low-salience text that POST /v1/memories would skip', async () => {
+    const reply = await callTool(keyA, 'hippo_remember', { text: 'yes' });
+    expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['yes']);
+  });
+});

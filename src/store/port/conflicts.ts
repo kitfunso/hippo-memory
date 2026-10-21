@@ -39,10 +39,10 @@ export interface ConflictSide {
   readonly scope: string | null;
 }
 
-/** What the api decided for the loser. `reject` also tombstones its value and removes the tenant's other rows holding
- * it in a scope `ownScopeTouches(ownScope, scope)` admits, checked inside the store's write. */
+/** The domain's decision, applied as given: `weaken` scales the half-life by `halfLifeFactor`, never under
+ * `minHalfLifeDays`; `reject` also tombstones the value and sweeps rows `ownScopeTouches(ownScope, scope)` admits. */
 export type LoserFate =
-  | { readonly kind: 'weaken' }
+  | { readonly kind: 'weaken'; readonly halfLifeFactor: number; readonly minHalfLifeDays: number }
   | { readonly kind: 'remove' }
   | { readonly kind: 'reject'; readonly ownScope: string | null };
 

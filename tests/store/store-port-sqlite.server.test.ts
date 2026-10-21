@@ -27,7 +27,7 @@ import {
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
 import { loadLatestHandoffAt } from '../../src/store/sqlite/handoffs.js';
-import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
+import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
 import { listSessionEventsAt } from '../../src/store/sqlite/sessions.js';
 import { loadActiveTaskSnapshotAt } from '../../src/store/sqlite/task-snapshots.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';

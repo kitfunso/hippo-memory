@@ -5,7 +5,7 @@
  * native fetch failure.
  */
 
-import type { GatedRememberOptions, RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
+import type { RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
 import { fetchWithRetry } from '../../base/util/http-retry.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
@@ -111,20 +111,21 @@ async function readReply<T>(
   return reply as T;
 }
 
+/** The server gates every write, so a reply may be a skip; `force: true` stores it anyway. */
 export async function remember(
   serverUrl: string,
   apiKey: string | undefined,
-  opts: GatedRememberOptions,
-): Promise<RememberResult | RememberSkipped>;
-export async function remember(
-  serverUrl: string,
-  apiKey: string | undefined,
-  opts: RememberOptions,
+  opts: RememberOptions & { force: true },
 ): Promise<RememberResult>;
 export async function remember(
   serverUrl: string,
   apiKey: string | undefined,
-  opts: RememberOptions | GatedRememberOptions,
+  opts: RememberOptions,
+): Promise<RememberResult | RememberSkipped>;
+export async function remember(
+  serverUrl: string,
+  apiKey: string | undefined,
+  opts: RememberOptions & { force?: boolean },
 ): Promise<RememberResult | RememberSkipped> {
   const res = await sendWrite(`${serverUrl}/v1/memories`, {
     method: 'POST',

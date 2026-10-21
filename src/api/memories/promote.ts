@@ -19,7 +19,7 @@ export async function promote(ctx: Context, id: string): Promise<PromoteResult> 
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
   if (!entry || !canReadScope(ctx.actor, entry.scope ?? null)) throw new NotFoundError(`memory not found: ${id}`);
-  // sqliteReach sets it beside hippo.db's files, so only a context built without a reach lacks it.
+  // A root's reach sets it for a store kept in a folder, so only a context built without a reach lacks it.
   const target = ctx.reach?.globalTarget;
   if (target === undefined) throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
   // The route gates on the group, so only an api caller with another store reaches this.

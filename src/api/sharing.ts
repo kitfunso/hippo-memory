@@ -16,7 +16,7 @@ export interface SharePeer {
   readonly latest: string;
 }
 
-// sqliteReach sets it beside hippo.db's files, so only a context built without a reach lacks it.
+// A root's reach sets it for a store kept in a folder, so only a context built without a reach lacks it.
 function globalTargetOf(ctx: Context, action: string): NonNullable<ContextReach['globalTarget']> {
   const target = ctx.reach?.globalTarget;
   if (target === undefined) throw new Error(`${action} needs ctx.reach.globalTarget, the global store`);

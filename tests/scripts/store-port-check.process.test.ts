@@ -634,12 +634,11 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  const EXCEPTION =
+  const FOLDER_FORM =
     'export function loadRecallSearchEntries(hippoRoot: string) {\n  return onHandle(hippoRoot, () => []);\n}\n';
 
   it('folderFormsAboveAdapter fails on an exported src/store function that opens hippo.db from a folder, through a helper or a default too', () => {
     const files = {
-      'src/store/search-rows.ts': EXCEPTION,
       'src/store/reads.ts': [
         "import { openStore as open } from './sqlite/handles.js';",
         'const viaHelper = (root: string) => open(root);',
@@ -655,32 +654,31 @@ describe('check-store-port.mjs', () => {
     withFixture(files, null, ({ run }) => {
       const l = list(run);
       const sites = Object.entries(l).filter(([, v]) => v === 'folderFormsAboveAdapter');
-      expect(sites.map(([k]) => k).sort()).toEqual([
-        'src/store/reads.ts:3 readAll',
-        'src/store/reads.ts:4 byDefault',
-        'src/store/search-rows.ts:1 loadRecallSearchEntries',
-      ]);
+      expect(sites.map(([k]) => k).sort()).toEqual(['src/store/reads.ts:3 readAll', 'src/store/reads.ts:4 byDefault']);
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('Folder forms above src/store/sqlite: 3, at most 1 allowed');
+      expect(r.stderr).toContain('Folder forms above src/store/sqlite: 2, none allowed');
       expect(r.stderr).toContain('src/store/reads.ts:3 readAll');
-      expect(r.stderr).not.toContain('loadRecallSearchEntries');
     });
   });
 
-  it('folderFormsAboveAdapter passes when the named exception is the only folder form', () => {
-    withFixture({ 'src/store/search-rows.ts': EXCEPTION }, null, ({ run }) => {
+  it('folderFormsAboveAdapter keeps no exception: the eval kit form passes in src/store/sqlite and fails above it', () => {
+    withFixture({ 'src/store/sqlite/folder-forms.ts': FOLDER_FORM }, null, ({ run }) => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
     });
+    withFixture({ 'src/store/port/rows.ts': FOLDER_FORM }, null, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('  src/store/port/rows.ts:1 loadRecallSearchEntries');
+    });
   });
 
-  it('fails and names a file directly in src/store besides the port, its entry and search-rows.ts', () => {
+  it('fails and names a file directly in src/store besides the port and its entry', () => {
     const kept = {
       'src/store/port.ts': 'export type A = 1;\n',
       'src/store/port-groups.ts': 'export type B = 2;\n',
       'src/store/index.ts': 'export type C = 3;\n',
-      'src/store/search-rows.ts': EXCEPTION,
       'src/store/port/g.ts': 'export type E = 4;\n',
       'src/store/sqlite/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
     };

@@ -11,7 +11,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
-import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
+import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import {

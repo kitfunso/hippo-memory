@@ -51,7 +51,7 @@ describe('api.remember with salienceGate', () => {
   });
 });
 
-describe('POST /v1/memories salienceGate', () => {
+describe('POST /v1/memories gate and force', () => {
   let ctx: FullContext;
   let handle: ServerHandle;
   let key: string;
@@ -77,20 +77,27 @@ describe('POST /v1/memories salienceGate', () => {
       body: body && JSON.stringify(body),
     });
 
-  it('skips a repeat when asked and stores it when the field is absent', async () => {
-    expect((await call('POST', '/v1/memories', { content: TEXT, salienceGate: true })).status).toBe(200);
-    const skipped = await call('POST', '/v1/memories', { content: TEXT, salienceGate: true });
+  it('skips a repeat, and stores it when force is true', async () => {
+    expect((await call('POST', '/v1/memories', { content: TEXT })).status).toBe(200);
+    const skipped = await call('POST', '/v1/memories', { content: TEXT });
     expect(skipped.status).toBe(200);
     expect(await skipped.json()).toMatchObject({ skipped: { score: 0.1 } });
     expect(rowCount(ctx)).toBe(1);
-    const stored = await call('POST', '/v1/memories', { content: TEXT });
-    expect(await stored.json()).toMatchObject({ kind: 'distilled' });
+    const forced = await call('POST', '/v1/memories', { content: TEXT, force: true });
+    expect(await forced.json()).toMatchObject({ kind: 'distilled' });
     expect(rowCount(ctx)).toBe(2);
   });
 
-  it('refuses a salienceGate that is not a boolean', async () => {
-    const res = await call('POST', '/v1/memories', { content: TEXT, salienceGate: 'yes' });
-    expect([res.status, await res.json()]).toEqual([400, { error: 'salienceGate must be a boolean' }]);
+  it('skips a short low-salience text unless force is true', async () => {
+    expect(await (await call('POST', '/v1/memories', { content: 'yes' })).json()).toHaveProperty('skipped');
+    expect(rowCount(ctx)).toBe(0);
+    expect(await (await call('POST', '/v1/memories', { content: 'yes', force: true })).json()).toHaveProperty('id');
+    expect(rowCount(ctx)).toBe(1);
+  });
+
+  it('refuses a force that is not a boolean', async () => {
+    const res = await call('POST', '/v1/memories', { content: TEXT, force: 'yes' });
+    expect([res.status, await res.json()]).toEqual([400, { error: 'force must be a boolean' }]);
   });
 
   it('names the allowed kinds for a bad kind and does not echo the value', async () => {

@@ -6,6 +6,8 @@ import { CONFLICT_STOPWORDS } from '../../base/util/stopwords.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { DECAY_THRESHOLD } from './decay.js';
 import type { DetectedConflict } from '../../store/port/consolidation.js';
+import type { ConflictSide, LoserFate } from '../../store/port/conflicts.js';
+import { BadRequestError } from '../../base/errors/api-errors.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
 // on stopword-filtered tokens only applies after a polarity signal, so it filters drive-by topic similarity, not
@@ -261,4 +263,31 @@ function inferConflictPolarity(text: string): ConflictPolarity {
 
 function containsAny(text: string, needles: string[]): boolean {
   return needles.some((needle) => text.includes(needle));
+}
+
+/** A weakened loser keeps this share of its half-life, so it fades faster than the kept side. */
+export const WEAKEN_HALF_LIFE_FACTOR = 0.5;
+/** A weakened loser's half-life never drops under this, so repeated resolves cannot drive it to zero. */
+export const WEAKEN_MIN_HALF_LIFE_DAYS = 1;
+
+/** What the caller asked for the loser: forget deletes it, rejectLoser also tombstones its value. */
+export interface LoserChoice {
+  readonly forget?: boolean;
+  readonly rejectLoser?: boolean;
+}
+
+/** The loser's fate, every number in it: a store applies it as given. A rejection is a tenant-wide tombstone, so it
+ * may not carry a personal row's value, and its sweep stays within `ownScope`, what the caller may touch. */
+export function conflictLoserFate(choice: LoserChoice, loser: ConflictSide, ownScope: string | null): LoserFate {
+  if (choice.rejectLoser !== true) {
+    if (choice.forget === true) return { kind: 'remove' };
+    return { kind: 'weaken', halfLifeFactor: WEAKEN_HALF_LIFE_FACTOR, minHalfLifeDays: WEAKEN_MIN_HALF_LIFE_DAYS };
+  }
+  if (isPersonalScope(loser.scope)) {
+    throw new BadRequestError(
+      `cannot reject the value of personal memory ${loser.id}: a rejection reaches the whole tenant, ` +
+        `so its reason would show to everyone; resolve with forget instead`,
+    );
+  }
+  return { kind: 'reject', ownScope };
 }
