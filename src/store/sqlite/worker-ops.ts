@@ -263,6 +263,7 @@ export const WORKER_OPS = {
     pendingIds: 'read',
     resetParticles: 'write',
     seedParticle: 'write',
+    lockKey: 'read',
     tryLock: 'write',
     unlock: 'write',
   },

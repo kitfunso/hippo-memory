@@ -401,6 +401,7 @@ function sleepCounts(o: { decayed: number; dormant: number; extractionCandidates
     ...IDLE_STEPS,
     ...o,
     dryRun: false,
+    phaseFailures: [],
     removed: 6,
     removedIds: [...BY_NAME.map((t) => idOf(t, 10)), ...RETIRED.map((t) => idOf(t, 15))],
     merged: 6,

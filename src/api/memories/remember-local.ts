@@ -5,7 +5,7 @@
 
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
 import { embedMemory, folderIndex, type EmbedOutcome } from '../../domain/search/embed-memories.js';
-import { errorMessage, log } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, ContextWith } from '../types.js';
@@ -148,6 +148,7 @@ export async function extractRememberedFacts(
       facts = found.length;
     }
   } catch (cause) {
+    log.debug('remember: a fact step failed', errorFields(cause));
     failures.push(errorMessage(cause));
   }
   return { status: 'ran', facts, failures };

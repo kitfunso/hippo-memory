@@ -38,4 +38,22 @@ describe('corrupt workspace registry', () => {
     registerWorkspace(globalRoot, path.join(globalRoot, 'repo-b'));
     expect(fs.readFileSync(path.join(globalRoot, asides[0]), 'utf8')).toBe(corrupt);
   });
+
+  it('skips entries that are not paths with one warning and keeps the paths', () => {
+    fs.writeFileSync(
+      workspaceRegistryPath(globalRoot),
+      JSON.stringify({ version: 1, workspaces: ['/repo/a', 7, null, {}] }),
+    );
+
+    expect(listRegisteredWorkspaces(globalRoot)).toEqual([path.resolve('/repo/a').replace(/\\/g, '/')]);
+
+    const warnings = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('are not paths'));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('3 entries');
+  });
+
+  it('reads a registry that is not an object as empty', () => {
+    fs.writeFileSync(workspaceRegistryPath(globalRoot), '["/repo/a"]');
+    expect(listRegisteredWorkspaces(globalRoot)).toEqual([]);
+  });
 });
