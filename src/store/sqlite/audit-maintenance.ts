@@ -22,7 +22,7 @@ import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, Handles } from './open.js';
-import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit-maintenance.js';
+import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, skipEmpty } from './bound.js';
 import type { AuditMaintenance } from '../port.js';

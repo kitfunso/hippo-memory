@@ -8,7 +8,7 @@ import {
   type GraphViewQuery,
   type Relation,
   type StoredGraph,
-} from '../port/graph-reads.js';
+} from '../port/graph.js';
 import { newestFirst } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 

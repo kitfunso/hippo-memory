@@ -9,8 +9,7 @@ import {
 import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { DAY_MS } from '../../base/util/time.js';
-import type { Reports } from '../port-groups.js';
-import type { CorrectionLink, RawProvenance, StatusCounts, StrengthTallies } from '../port/reports.js';
+import type { Reports, CorrectionLink, RawProvenance, StatusCounts, StrengthTallies } from '../port/reports.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 import { openConflictsIn } from './conflicts.js';
 import { failureSummary } from './failure-log.js';

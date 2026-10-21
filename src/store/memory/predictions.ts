@@ -7,7 +7,7 @@ import {
   type PredictionListQuery,
   type PredictionSave,
   type Predictions,
-} from '../port/predictions.js';
+} from '../port/objects.js';
 import type { PredictionBaserate } from '../port/types.js';
 import { byBytes, newestFirst } from '../rules/order.js';
 import { appendAudit, nextId, peekId } from './rows.js';

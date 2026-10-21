@@ -4,12 +4,11 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 import type { ObjectByKind, ObjectKind } from '../../base/records/object-types.js';
 import type { ConnectorDeadLetter, ConnectorEvent, SlackWorkspace, StoredCursors } from '../port/connectors.js';
-import type { Entity, Relation } from '../port/graph-reads.js';
-import type { NewApiKey } from '../port/key-writes.js';
-import type { FailureOutcome, RoutineRule } from '../port/failure-log.js';
-import type { Prediction } from '../port/predictions.js';
+import type { Entity, Relation } from '../port/graph.js';
+import type { NewApiKey } from '../port/keys.js';
+import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../port/rejections.js';
+import type { Prediction } from '../port/objects.js';
 import type { QuarantineRow } from '../port/quarantine.js';
-import type { RejectedValueRow } from '../port/rejections.js';
 import type { AuditEvent } from '../port/types.js';
 import { emptySessionTables, type SessionTables } from './session-tables.js';
 

@@ -4,7 +4,7 @@ import { envApiKey } from '../../base/util/env.js';
 import type { JsonValue } from '../../base/util/json.js';
 import { errorFields, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { NearestIdsAsk, VectorCandidateSpec } from '../../store/port/vector-reads.js';
+import type { NearestIdsAsk, VectorCandidateSpec } from '../../store/port/vectors.js';
 import { detectServer } from '../server/server-detect.js';
 import { nearestIds } from './client.js';
 

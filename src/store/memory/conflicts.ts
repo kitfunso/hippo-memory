@@ -11,8 +11,8 @@ import type {
   ConflictRow,
   ConflictRowPage,
   MemoryConflict,
+  Conflicts,
 } from '../port/conflicts.js';
-import type { Conflicts } from '../port-groups.js';
 import { isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
 import { keepTombstone } from './rejections.js';
 import { archiveRow, markParentDirty, stage, type Tx } from './staged.js';

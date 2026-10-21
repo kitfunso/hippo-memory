@@ -1,6 +1,6 @@
 // The in-memory FailureLog group, and the failure totals the Reports group reads from the same rows.
 import { ConflictError } from '../../base/errors/api-errors.js';
-import type { FailureEvent, FailureLog, FailureSummary } from '../port/failure-log.js';
+import type { FailureEvent, FailureLog, FailureSummary } from '../port/rejections.js';
 import { failureRow, failureTotals, RATED_OUTCOMES, retentionCutoff, sameStoredSession } from '../rules/failure-log.js';
 import { byBytes } from '../rules/order.js';
 import { nextId } from './rows.js';

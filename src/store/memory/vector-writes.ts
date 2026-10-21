@@ -5,7 +5,7 @@ import { replacesIndex } from '../../base/embeddings/index-identity.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { bufferToFloat32, float32ToBuffer } from '../../base/util/vector-codec.js';
 import { EMBEDDING_MODEL_META_KEY, encodeVector } from '../../db/vector-store.js';
-import type { VectorBackfillQuery, VectorWrite, VectorWriteResult, VectorWrites } from '../port/vector-writes.js';
+import type { VectorBackfillQuery, VectorWrite, VectorWriteResult, VectorWrites } from '../port/vectors.js';
 import { byBytes } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 import { indexState } from './vectors.js';

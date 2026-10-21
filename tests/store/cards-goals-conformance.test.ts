@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import { CARD_LEASE_MS, type CardStatus } from '../../src/base/records/card.js';
 import type { HandoffOutcome } from '../../src/base/session/handoff.js';
 import type { HippoStore } from '../../src/store/index.js';
-import type { CardCreate } from '../../src/store/port-groups.js';
+import type { CardCreate } from '../../src/store/port/cards.js';
 import type { PushGoalOpts } from '../../src/store/port/goals.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {

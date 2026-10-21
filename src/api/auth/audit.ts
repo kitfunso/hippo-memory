@@ -8,7 +8,7 @@ import type { Context } from '../types.js';
 import { memoryPages } from '../memories/memories.js';
 import type { AuditEvent } from '../../store/port/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { QualityRepairResult } from '../../store/port/audit-maintenance.js';
+import type { QualityRepairResult } from '../../store/port/audit.js';
 
 export interface AuditListOptions {
   op?: AuditOp;

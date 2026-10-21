@@ -5,7 +5,7 @@ import type { SessionHandoffRow } from '../../base/session/handoff.js';
 import type { MemoryConflict } from '../port/conflicts.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { SessionEvent, TaskSnapshot, WorkingMemoryItem } from '../port/sessions.js';
-import type { TokenEvent, TokenSurface } from '../port/token-ledger.js';
+import type { TokenEvent, TokenSurface } from '../port/ledger.js';
 import type { DormantSnapshot, Goal, RetrievalPolicy } from '../port/types.js';
 
 /** A row and the tenant it was written under; `row` is replaced whole on an update. */

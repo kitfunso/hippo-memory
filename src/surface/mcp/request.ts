@@ -4,7 +4,7 @@ import { currentSignal } from '../../base/util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
 import type { HippoStore } from '../../store/index.js';
 import { hasGroup } from '../../store/index.js';
-import type { TokenSurface } from '../../store/port/token-ledger.js';
+import type { TokenSurface } from '../../store/port/ledger.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';

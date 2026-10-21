@@ -5,7 +5,7 @@ import { passesScopeFilterForRecall, type RecallScopeFilter } from '../../base/s
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows } from '../../db/vector-store.js';
-import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec, type VectorReads } from '../port/vector-reads.js';
+import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec, type VectorReads } from '../port/vectors.js';
 import type { MemoryTables } from './tables.js';
 
 function passesScope(scope: string | null, filter: RecallScopeFilter | undefined): boolean {

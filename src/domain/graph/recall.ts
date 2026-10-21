@@ -10,7 +10,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
-import type { Entity } from '../../store/port/graph-reads.js';
+import type { Entity } from '../../store/port/graph.js';
 import type { HippoStore } from '../../store/index.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 

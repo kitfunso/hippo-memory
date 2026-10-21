@@ -8,7 +8,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memo
 import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { serve } from '../../src/server.js';
-import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
+import type { VectorCandidateSpec } from '../../src/store/port/vectors.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { localIndex } from '../_helpers/cli-stores.js';

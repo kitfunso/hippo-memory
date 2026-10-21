@@ -5,7 +5,7 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import { orderSql, STORE_ORDER } from '../rules/order.js';
 import type { EntryCursor } from '../port/types.js';
-import type { IdPage } from '../port/embedding-index.js';
+import type { IdPage } from '../port/vectors.js';
 
 /** An ` AND ...` WHERE fragment, or empty, and the arguments it binds. */
 export interface SqlAnd {

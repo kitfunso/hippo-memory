@@ -16,7 +16,7 @@ import { RECALL_DEFAULT_DENY_SCOPES } from '../../base/scope/recall-scope.js';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { itemWords, restates, writableItemRows } from '../../base/util/compaction-items.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import type { CallerItems, CallerItemsSaved, CompactionStart, Compactions } from '../port/compactions.js';
+import type { CallerItems, CallerItemsSaved, CompactionStart, Compactions } from '../port/capture.js';
 import { tenantKey } from './rows.js';
 import { stage, type Tx } from './staged.js';
 import type { CompactionRecord, MemoryTables } from './tables.js';

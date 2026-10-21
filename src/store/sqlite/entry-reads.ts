@@ -21,11 +21,10 @@ import {
   type SqlAnd,
 } from './keyset.js';
 import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '../port/consolidation.js';
-import type { IdPage, IdPageRequest } from '../port/embedding-index.js';
-import type { RawRefRow } from '../port/context-reads.js';
+import type { IdPage, IdPageRequest } from '../port/vectors.js';
+import type { RawRefRow, SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../port/project-tags.js';
 import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
-import type { SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/dag-reads.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 
 const MAX_FRESH_RAW = 200;

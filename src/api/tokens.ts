@@ -1,8 +1,8 @@
 // Token-use and failure reports.
 
 import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
-import type { TokenSummary, TokenSurface } from '../store/port/token-ledger.js';
-import type { FailureSummary } from '../store/port/failure-log.js';
+import type { TokenSummary, TokenSurface } from '../store/port/ledger.js';
+import type { FailureSummary } from '../store/port/rejections.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
 import type { Context } from './types.js';
 import { DAY_MS } from '../base/util/time.js';

@@ -13,7 +13,7 @@ import { escapeLike } from '../../base/util/escape.js';
 import { placeholders } from '../../db/sql.js';
 import type { OriginFilter } from '../port/types.js';
 import type { RecallSearchEntriesOptions } from '../port/sharing.js';
-import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec } from '../port/vector-reads.js';
+import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec } from '../port/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 

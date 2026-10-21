@@ -7,7 +7,7 @@ import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import type { RecallSearchArgs } from '../../src/store/port/recall-writes.js';
 import type { ContinuityKey } from '../../src/store/port/types.js';
-import type { PredictionSave } from '../../src/store/port/predictions.js';
+import type { PredictionSave } from '../../src/store/port/objects.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   onBothStores,

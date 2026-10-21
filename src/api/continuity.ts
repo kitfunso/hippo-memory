@@ -1,10 +1,14 @@
 // Where-you-left-off ops: task snapshot, session events, handoffs and working memory.
 
 import type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
-import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
-import type { SessionEventInput, SnapshotInput } from '../store/port/sessions.js';
-import type { Sessions } from '../store/port-groups.js';
-import type { WorkingMemoryItem } from '../store/port/sessions.js';
+import type {
+  SessionEvent,
+  TaskSnapshot,
+  SessionEventInput,
+  SnapshotInput,
+  Sessions,
+  WorkingMemoryItem,
+} from '../store/port/sessions.js';
 import type { Context } from './types.js';
 
 /** What a snapshot save carries. */

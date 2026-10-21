@@ -17,7 +17,7 @@ import { DECISION, saveDecision } from '../../src/domain/objects/decisions.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
-import type { Entity } from '../../src/store/port/graph-reads.js';
+import type { Entity } from '../../src/store/port/graph.js';
 import { extractGraph, extractGraphChunked } from '../../src/domain/graph/extract.js';
 import {
   openHippoDb,

@@ -9,7 +9,7 @@ import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../port/types.js';
-import type { ScopeGrantChange } from '../port/key-grants.js';
+import type { ScopeGrantChange } from '../port/keys.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {

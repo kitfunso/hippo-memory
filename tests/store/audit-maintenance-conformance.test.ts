@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { PROTECTED_ROWS } from '../../src/base/memory/memory-audit.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
-import type { QualityRepairResult } from '../../src/store/port/audit-maintenance.js';
+import type { QualityRepairResult } from '../../src/store/port/audit.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

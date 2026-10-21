@@ -1,7 +1,43 @@
+// Capture and compaction: `hippo capture`'s rows, the compaction hooks' record work and the Compactions group.
+import type { HeldText } from './types.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { TenantId } from '../../base/util/tenant.js';
+
+// `hippo capture`'s reads and writes: each row is mirrored beside the folder, and the caller embeds what was captured.
+export interface Captures {
+  /** Each entry stamped, through the write gate and mirrored, in order in one transaction; one outcome per entry. The
+   * caller leaves out texts its dedup read found and repeats within the batch; the write reads `opts.dedup` again in
+   * its transaction and skips an entry whose text a row holds by then, so two captures never store one text twice. */
+  write(entries: readonly MemoryEntry[], opts: CaptureWriteOptions): Promise<CapturedOutcome[]>;
+  /** The rows holding any of `words`, for the dedup before a write; a row equal to a text apart from spacing holds its
+   * every word. `project` keeps rows carrying one of those names plus user-global rows, `everyScope` lifts the
+   * team-visible filter for a reader that sees the whole store. */
+  textsHolding(
+    tenantId: TenantId,
+    words: readonly string[],
+    opts?: { readonly project?: readonly string[]; readonly everyScope?: boolean },
+  ): Promise<HeldText[]>;
+}
+
+export type CapturedOutcome = 'captured' | 'skipped' | 'rejected';
+
+export interface CaptureWriteOptions {
+  readonly actor?: string;
+  /** No stats, as in a server process. */
+  readonly lean: boolean;
+  /** The rows the caller's dedup read: textsHolding's tenant and filter. */
+  readonly dedup: CaptureDedup;
+}
+
+/** Which rows count as holding a capture's text, as `textsHolding` takes them. */
+export interface CaptureDedup {
+  readonly tenantId: TenantId;
+  readonly project?: readonly string[];
+  readonly everyScope?: boolean;
+}
+
 // The local compaction hooks' record work, as data: the spool and the transcript a replay reads stay with the surface,
 // and each line a step would log comes back as a note for the surface's own log.
-import type { CompactionStart } from './compactions.js';
-
 /** Each method opens hippo.db with the hook's wait, so a busy store costs the hook a bounded delay. */
 export interface CompactionHooks {
   /** PreCompact's `started` record; its id. */
@@ -115,4 +151,44 @@ export interface FillOutcome {
   /** True when the record took the summary and its items were written. */
   saved: boolean;
   notes: string[];
+}
+
+// The Compactions group, kept apart from port.ts: the record and items of a compaction a caller on another machine
+// sends, under the caller's tenant and project, never the server's folder or environment.
+export interface Compactions {
+  /** A `started` record; its id. */
+  start(tenantId: string, start: CompactionStart): Promise<string>;
+  /** Marks the record as having its snapshot saved; an id the tenant does not hold changes nothing. */
+  markSnapshotSaved(tenantId: string, recordId: string): Promise<void>;
+  /** The items under the request's record, all in one transaction, so two sessions never both write one text; a request
+   * id another session holds rejects with ConflictError. */
+  saveCallerItems(tenantId: string, req: CallerItems): Promise<CallerItemsSaved>;
+}
+
+export interface CallerItemsSaved {
+  /** Memories written; a retry of a finished request answers with the first count. */
+  readonly written: number;
+  /** One line per kind of item left out, and why. */
+  readonly notes: readonly string[];
+}
+
+export interface CompactionStart {
+  sessionId: string;
+  originProject: string;
+  trigger: string | null;
+  cwd: string | null;
+  transcriptPath: string | null;
+}
+
+export interface CallerItems {
+  readonly sessionId: string;
+  readonly trigger: string | null;
+  readonly requestId: string;
+  readonly project: string;
+  readonly items: readonly string[];
+  /** The caller's audit actor and its project's names. */
+  readonly owner: string;
+  readonly origins: readonly string[];
+  /** The config default the caller's items start on. */
+  readonly baseHalfLifeDays: number;
 }

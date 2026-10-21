@@ -42,7 +42,7 @@ import type {
   SpooledSummary,
   StalledOptions,
   StalledSaved,
-} from '../port/compaction-hooks.js';
+} from '../port/capture.js';
 
 const noteTo =
   (notes: string[]): Log =>

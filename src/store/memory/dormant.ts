@@ -11,7 +11,7 @@ import {
   type DormantRestoreOutcome,
   type ListDormantOpts,
 } from '../port/dormant.js';
-import type { Dormant, DormantRestoreRequest } from '../port-groups.js';
+import type { Dormant, DormantRestoreRequest } from '../port/dormant.js';
 import type { DormantSnapshot } from '../port/types.js';
 import { comparing, DORMANT_ORDER } from '../rules/order.js';
 import { appendAudit, asciiFolded, bumpCounter, tenantKey } from './rows.js';

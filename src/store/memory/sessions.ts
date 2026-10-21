@@ -1,7 +1,6 @@
 // The in-memory Sessions group: snapshots, events and handoffs from their own files, with working memory and the
 // session-owner binding here.
-import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../port-groups.js';
-import type { WorkingMemoryItem } from '../port/sessions.js';
+import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush, WorkingMemoryItem } from '../port/sessions.js';
 import { handoffByIdIn, latestHandoffIn, saveHandoffIn, stampOutcomeIn, writeSessionEndIn } from './handoffs.js';
 import { byBytes } from '../rules/order.js';
 import { nextId, storedObject, tenantKey } from './rows.js';

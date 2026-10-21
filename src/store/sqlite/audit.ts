@@ -4,8 +4,8 @@ import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import { auditRowsRead, type QueryAuditOptions } from '../port/audit-log.js';
-import type { AuditPrune } from '../port/audit-maintenance.js';
+import { auditRowsRead, type QueryAuditOptions } from '../port/audit.js';
+import type { AuditPrune } from '../port/audit.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 // node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a

@@ -3,9 +3,8 @@
 import { closeHippoDb, openHippoDb, withSqliteAllowed, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import type { SessionHandoffRow } from '../../src/base/session/handoff.js';
-import type { FailureOutcome, RoutineRule } from '../../src/store/port/failure-log.js';
+import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../../src/store/port/rejections.js';
 import type { QuarantineRow, QuarantineStatus } from '../../src/store/port/quarantine.js';
-import type { RejectedValueRow } from '../../src/store/port/rejections.js';
 import type { SlackWorkspace } from '../../src/store/port/connectors.js';
 import { auditRowsOn } from './audit-rows.js';
 import { readApiKeyRecord } from '../../src/store/sqlite/auth.js';

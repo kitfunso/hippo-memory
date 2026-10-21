@@ -20,7 +20,7 @@ import {
   type StoredEntity,
   type StoredGraph,
   type StoredRelation,
-} from '../port/graph-reads.js';
+} from '../port/graph.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
 import type { Sync } from './served.js';

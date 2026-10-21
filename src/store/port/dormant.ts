@@ -1,5 +1,6 @@
 // The dormant-memory shapes the Dormant group takes and returns.
 import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { DormantRevival } from '../../base/memory/dormant-revival.js';
 
 /** A dormant memory as listed to a user. */
 export interface DormantMemory {
@@ -39,3 +40,23 @@ export type DormantRestoreOutcome =
   | { readonly status: 'restored'; readonly entry: MemoryEntry }
   | { readonly status: 'missing' }
   | { readonly status: 'active' };
+
+export interface DormantRestoreRequest {
+  readonly id: string;
+  readonly actor: string;
+  /** The caller's personal scope: another person's personal row reads as missing. */
+  readonly ownScope: string | null;
+  /** How the revived row is scored, inside the store's write. */
+  readonly revival: DormantRevival;
+}
+
+/** `ownScope` is the caller's personal scope; the store builds its own scope test, so no predicate crosses the port. */
+export interface Dormant {
+  list(tenantId: string, ownScope: string | null, opts: ListDormantOpts): Promise<DormantMemory[]>;
+  holds(tenantId: string, ownScope: string | null, id: string): Promise<boolean>;
+  /** Revives inside the store's write, so a refused row changes nothing; its entry's origin is filled as writeEntry
+   * fills one. */
+  restore(tenantId: string, request: DormantRestoreRequest): Promise<DormantRestoreOutcome>;
+  /** Deletes for good, writes the `forget` audit row and counts it; false when no row in reach. */
+  forget(tenantId: string, ownScope: string | null, id: string, actor: string): Promise<boolean>;
+}

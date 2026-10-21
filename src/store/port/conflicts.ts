@@ -69,3 +69,13 @@ export interface MemoryConflict {
   detected_at: string;
   updated_at: string;
 }
+
+export interface Conflicts {
+  /** One page, newest change first, each conflict with both members' columns from the same read. */
+  list(query: ConflictListQuery): Promise<ConflictRowPage>;
+  /** Conflict `conflictId`, any status, when both its members are in the tenant; else null. */
+  get(tenantId: string, conflictId: number): Promise<ConflictRow | null>;
+  /** Writes what the api decided, in one transaction, while the conflict is still open and each side still holds the
+   * scope in `resolution`; false, with nothing written, otherwise. */
+  resolve(tenantId: string, resolution: ConflictResolution): Promise<boolean>;
+}

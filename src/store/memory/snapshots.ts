@@ -1,9 +1,8 @@
 // The in-memory task snapshots and session events, with the continuity key that scopes the snapshots and handoffs.
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
+import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot, Sessions } from '../port/sessions.js';
 import { continuityStamp, type ContinuityKey } from '../port/types.js';
-import type { Sessions } from '../port-groups.js';
 import { newestFirst } from '../rules/order.js';
 import { nextId, storedObject } from './rows.js';
 import type { Owned, Tenanted } from './session-tables.js';

@@ -2,7 +2,7 @@
 // of its own.
 import { ConflictError } from '../../base/errors/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/failure-log.js';
+import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/rejections.js';
 import type { RatedFailure } from '../../base/records/failure-repeats.js';
 import { failureRow, failureTotals, RATED_OUTCOMES, retentionCutoff, sameStoredSession } from '../rules/failure-log.js';
 import type { OnHandle } from './open.js';

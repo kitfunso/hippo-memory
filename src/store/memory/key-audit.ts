@@ -1,6 +1,6 @@
 // The in-memory KeyAudit group: key revokes.
 import { NotFoundError } from '../../base/errors/api-errors.js';
-import type { KeyAudit, KeyRevoke } from '../port/key-audit.js';
+import type { KeyAudit, KeyRevoke } from '../port/keys.js';
 import { appendAudit } from './rows.js';
 import type { MemoryTables } from './tables.js';
 

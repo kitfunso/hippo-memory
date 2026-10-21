@@ -1,6 +1,6 @@
 // The in-memory KeyGrants group: the CLI's auth grant and ungrant.
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { KeyGrants, ScopeGrantChange } from '../port/key-grants.js';
+import type { KeyGrants, ScopeGrantChange } from '../port/keys.js';
 import { byBytes } from '../rules/order.js';
 import { appendAudit } from './rows.js';
 import type { MemoryTables } from './tables.js';

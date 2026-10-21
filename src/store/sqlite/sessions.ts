@@ -5,7 +5,15 @@ import { raiseMinBinary } from '../../db/meta.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
-import type { TaskSnapshot, SessionEvent, SessionEventInput, WorkingMemoryItem } from '../port/sessions.js';
+import type {
+  TaskSnapshot,
+  SessionEvent,
+  SessionEventInput,
+  WorkingMemoryItem,
+  Sessions,
+  WorkingMemoryFilter,
+  WorkingMemoryPush,
+} from '../port/sessions.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { continuityStamp, type ContinuityKey } from '../port/types.js';
@@ -18,7 +26,6 @@ import {
   stampHandoffOutcomeAt,
   writeSessionEndHandoffAt,
 } from './handoffs.js';
-import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../port-groups.js';
 import type { Sync } from './served.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';

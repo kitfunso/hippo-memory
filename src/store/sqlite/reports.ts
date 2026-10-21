@@ -4,7 +4,7 @@ import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { summarizeTokenUse } from './token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
-import type { CorrectionLink, RawProvenance, StrengthTallies } from '../port/reports.js';
+import type { CorrectionLink, RawProvenance, StrengthTallies, Reports } from '../port/reports.js';
 import { statusCountsAt, strengthTalliesAt } from './candidates.js';
 import { countOpenConflictsAt } from './conflicts.js';
 import { countAllEntriesAt, loadEntriesPageAt } from './entry-reads.js';
@@ -13,7 +13,6 @@ import { buildStatsFromDb } from './mirrors.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
-import type { Reports } from '../port-groups.js';
 import type { Sync } from './served.js';
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.

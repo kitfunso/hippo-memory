@@ -9,7 +9,7 @@ import {
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../../src/store/sqlite/connectors/slack.js';
 import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { listApiKeyRows } from '../../../src/store/sqlite/auth.js';
-import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/store/port/key-writes.js';
+import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/store/port/keys.js';
 import type { AppendAuditOpts } from '../../../src/store/port/types.js';
 import type { ConnectorEventRecord } from '../../../src/store/port/connectors.js';
 

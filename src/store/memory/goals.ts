@@ -1,8 +1,7 @@
 // The in-memory Goals group and the base activeGoals read: hippo.db's goal stack, its depth cap and the strength a
 // completed goal passes to the memories recalled under it.
 import { generateId } from '../../base/memory/memory.js';
-import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
-import type { Goals } from '../port-groups.js';
+import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../port/goals.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { ActiveGoals, GetActiveGoalsOpts, Goal, RetrievalPolicy } from '../port/types.js';
 import { byBytes } from '../rules/order.js';

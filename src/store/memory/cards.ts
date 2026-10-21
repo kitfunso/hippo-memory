@@ -4,8 +4,7 @@ import { assertCardTransition, CARD_LEASE_MS, type Card, type CardStatus } from 
 import type { CardComment, CardRun } from '../../base/records/card.js';
 import { isHandoffOutcome, rowToSessionHandoff, type HandoffOutcome } from '../../base/session/handoff.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { CardDetail } from '../port/cards.js';
-import type { CardCreate, Cards } from '../port-groups.js';
+import type { CardDetail, CardCreate, Cards } from '../port/cards.js';
 import { byBytes, newestFirst } from '../rules/order.js';
 import { nextId } from './rows.js';
 import type { MemoryTables } from './tables.js';

@@ -2,7 +2,7 @@
 // the caller's own recall could not.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import { assertScopeRequestAllowed, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
-import type { VectorCandidateSpec } from '../../store/port/vector-reads.js';
+import type { VectorCandidateSpec } from '../../store/port/vectors.js';
 import { sharedStoreOf, type Context } from '../types.js';
 
 /** The ids of the rows nearest `vector` that pass `spec`, nearest first. Refuses a spec for another tenant, a scope the

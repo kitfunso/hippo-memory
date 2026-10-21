@@ -2,7 +2,7 @@ import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { assertTenantId } from '../../src/base/scope/tenant-id.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
-import type { Prediction, SavePredictionOptions } from '../../src/store/port/predictions.js';
+import type { Prediction, SavePredictionOptions } from '../../src/store/port/objects.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 

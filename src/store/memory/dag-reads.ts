@@ -2,7 +2,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';
-import type { DagReads, DescendantWalk, SessionRawQuery, SummaryDescendants } from '../port/dag-reads.js';
+import type { DagReads, DescendantWalk, SessionRawQuery, SummaryDescendants } from '../port/context-reads.js';
 import { oldestFirst } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 
