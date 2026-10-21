@@ -1,5 +1,5 @@
 // Bounds on the scrypt work a bearer key check may start: how many derive at once, how many of those one key id holds,
-// and how many one address starts for one key id.
+// how many one address holds, and how many one address starts for one key id.
 import { HttpError } from '../../base/util/http-util.js';
 import { createRateLimiter } from './rate-limit.js';
 
@@ -11,6 +11,8 @@ const MAX_WAITING = 8;
 // A proved key's concurrent checks share one derivation, so its own first use never needs a second slot.
 const KEY_MAX_IN_FLIGHT = 1;
 const KEY_MAX_WAITING = 2;
+// Many addresses on a few known key ids could fill the queue key by key; one address holds at most two slots.
+const ADDRESS_MAX_HELD = 2;
 // Room for a mistyped or rotated secret; a secret is 160 random bits, so this bounds CPU, not guessing.
 const KEY_ADDRESS_BURST = 5;
 // One more try every 12 s: past its burst, an address starts at most five derivations a minute for one key id.
@@ -18,11 +20,12 @@ const KEY_ADDRESS_TRIES_PER_SEC = 5 / 60;
 
 export interface KeyCheckBounds {
   /** Throws the 429 a refused key check answers, before any derivation: no room left to wait, or `keyId` already holds
-   * its share of the queue (Retry-After 1), or `address` has spent its tries on `keyId` (Retry-After 12). */
+   * its share of the queue, or `address` already holds two slots (Retry-After 1), or `address` has spent its tries on
+   * `keyId` (Retry-After 12). */
   admit(keyId: string, address: string): void;
-  /** Runs `derive` for `keyId` now or once a slot frees that the key may take; `admit` in the same tick keeps the queue
-   * within its caps. */
-  run<T>(keyId: string, derive: () => Promise<T>): Promise<T>;
+  /** Runs `derive` for `keyId` now or once a slot frees that the key may take, counting the slot to `address`; `admit`
+   * in the same tick keeps the queue within its caps. */
+  run<T>(keyId: string, address: string, derive: () => Promise<T>): Promise<T>;
 }
 
 interface Waiter {
@@ -77,23 +80,38 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
     maxKeys,
   });
   const queue = fairQueue();
+  const heldByAddress = new Map<string, number>();
+  const hold = (address: string, by: number): void => {
+    const next = (heldByAddress.get(address) ?? 0) + by;
+    if (next === 0) heldByAddress.delete(address);
+    else heldByAddress.set(address, next);
+  };
   return {
     admit(keyId, address) {
-      // Each answers in the words an existing limit uses: the request limit's for a full queue or a key past its share,
-      // the address's scrypt bucket's for spent tries.
-      if (queue.full() || queue.held(keyId) >= KEY_MAX_IN_FLIGHT + KEY_MAX_WAITING) {
+      // Each answers in the words an existing limit uses: the request limit's for a full queue or a key or address past
+      // its share, the address's scrypt bucket's for spent tries.
+      if (
+        queue.full() ||
+        queue.held(keyId) >= KEY_MAX_IN_FLIGHT + KEY_MAX_WAITING ||
+        (heldByAddress.get(address) ?? 0) >= ADDRESS_MAX_HELD
+      ) {
         throw new HttpError(429, 'rate limit exceeded', 1);
       }
       if (!perKeyAddress.check(`${keyId}\u0000${address}`)) {
         throw new HttpError(429, 'too many key checks from this address', perKeyAddress.retryAfterSec);
       }
     },
-    async run(keyId, derive) {
-      await queue.enter(keyId);
+    async run(keyId, address, derive) {
+      hold(address, 1);
       try {
-        return await derive();
+        await queue.enter(keyId);
+        try {
+          return await derive();
+        } finally {
+          queue.leave(keyId);
+        }
       } finally {
-        queue.leave(keyId);
+        hold(address, -1);
       }
     },
   };

@@ -98,9 +98,9 @@ export function dashboardOf(hippoRoot: string, now: () => number, cacheClock?: (
 export const DASHBOARD_TOKEN = 'test-dashboard-token';
 
 /** The `Cookie` header a browser holds after opening the dashboard on `port` with `token`. */
-export function sessionCookie(port: number, token: string = DASHBOARD_TOKEN): string {
-  const session = createHmac('sha256', token).update(`hippo-dashboard-session:${port}`).digest('hex');
-  return `hippo_dashboard_${port}=${session}`;
+export function sessionCookie(port: number, token: string = DASHBOARD_TOKEN, issuedAtMs: number = Date.now()): string {
+  const mac = createHmac('sha256', token).update(`hippo-dashboard-session:${port}:${issuedAtMs}`).digest('hex');
+  return `hippo_dashboard_${port}=${issuedAtMs}.${mac}`;
 }
 
 export interface RunningDashboard {

@@ -20,7 +20,6 @@ import {
 import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
-import { createReplayWindow } from '../replay-window.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
@@ -36,6 +35,7 @@ import {
 } from '../../../base/util/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
 import type { WebhookPorts } from '../ingest.js';
+import { errorFields, log } from '../../../base/util/log.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ replay alike. */
 export function githubPreviousSecret(): string | undefined {
@@ -87,10 +87,8 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: 
   const rawBody = await readSignedBody(request, secret, sigStr);
 
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human can replay later.
-  const replayKey = deliveryId === null ? null : `${opts.hippoRoot}\n${deliveryId}`;
-  if (replayKey !== null && !seenDeliveries.claim(replayKey, Date.now())) {
-    throw new HttpError(409, 'duplicate X-GitHub-Delivery');
-  }
+  const replayKey = deliveryId ?? sigStr;
+  await claimOrRefuse(ports.store, replayKey);
   try {
     await routeSignedDelivery({
       hippoRoot: opts.hippoRoot,
@@ -103,14 +101,25 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: 
     });
   } catch (err) {
     // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get through.
-    if (replayKey !== null) seenDeliveries.release(replayKey);
+    await freeHold(ports.store, replayKey);
     throw err;
   }
 }
 
-// GitHub signs no timestamp, so a captured delivery verifies forever; this window is what refuses its replay. The
-// durable dedupe is the event log's content-derived idempotency key (ingest.ts, and the deletion key below).
-const seenDeliveries = createReplayWindow(DAY_MS, 10_000);
+// GitHub signs no timestamp, so a captured delivery verifies forever; a hold in the store refuses its replay and
+// survives a restart. The event log's content-derived idempotency key (ingest.ts, the deletion key below) backs it.
+const REPLAY_HOLD_MS = DAY_MS;
+
+async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
+  const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
+  if (!(await store.connectorEvents.claimDelivery(claim))) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+}
+
+async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
+  await store.connectorEvents.releaseDelivery('github', key).catch((err) => {
+    log.warn('github webhook: could not free the replay hold of a failed delivery', errorFields(err));
+  });
+}
 
 const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
   'issues',

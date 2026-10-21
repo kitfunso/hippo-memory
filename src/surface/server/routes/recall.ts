@@ -35,11 +35,6 @@ export async function handleRecallMemories({ req, res, ctx, query }: AuthedRoute
     result.results.map((r) => r.id),
   );
 
-  // Continuity payloads should never be cached. The caller is asking for session-state-aware data; intermediaries must
-  // not reuse it across users.
-  if (recallOpts.window.includeContinuity) {
-    res.setHeader('Cache-Control', 'no-store');
-  }
   sendJson(res, 200, result.continuity ? { ...result, continuity: continuityJson(result.continuity) } : result);
   return;
 }

@@ -123,12 +123,11 @@ export function isReservedActor(subject: string): boolean {
   return RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`));
 }
 
+// C0, DEL, Unicode format characters (zero-width, bidi) and the line and paragraph separators all hide in a log line.
+const HIDDEN_CHAR = /[\p{Cc}\p{Cf}\u2028\u2029]/u;
+
 function hasControlChar(s: string): boolean {
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if (c < 0x20 || c === 0x7f) return true;
-  }
-  return false;
+  return HIDDEN_CHAR.test(s);
 }
 
 // Ample for a member of hundreds of private channels, one scope each; past it the answer is refused, never cut short.
@@ -208,8 +207,8 @@ interface BearerIdentity extends ResolvedBearer {
 
 const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 
-/** Runs only before scrypt, so junk, unknown, revoked and expired tokens and a proven key's re-check never spend a
- * colleague's budget. */
+/** Runs before scrypt and for an unknown, revoked or expired key id; a proven key's re-check and a malformed token
+ * never spend a colleague's budget. */
 function chargeScryptRun(req: IncomingMessage, opts: AuthOptions): void {
   const limiter = opts.failedAuthLimiter;
   // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
@@ -235,13 +234,19 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpti
     // A resolver vouches for a person, never names one.
     return { ...clean, viaAuthResolver: true, owner: clean.subject };
   }
-  const key = await verifyApiKeyCached(token, opts.store, (keyId, derive) => {
-    // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the address's budget to
-    // the callers who share it.
-    keyChecks.admit(keyId, clientLimitKey(req));
-    chargeScryptRun(req, opts);
-    return keyChecks.run(keyId, derive);
-  });
+  const address = clientLimitKey(req);
+  const key = await verifyApiKeyCached(
+    token,
+    opts.store,
+    (keyId, derive) => {
+      // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the address's budget to
+      // the callers who share it.
+      keyChecks.admit(keyId, address);
+      chargeScryptRun(req, opts);
+      return keyChecks.run(keyId, address, derive);
+    },
+    () => chargeScryptRun(req, opts),
+  );
   if (!key) throw new HttpError(401, 'invalid api key');
   const id: BearerIdentity = {
     tenantId: key.tenantId,
