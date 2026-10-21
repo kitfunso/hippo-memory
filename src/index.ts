@@ -8,7 +8,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from './base/memory/memory.js';
-import { sqliteStore, withSharedStoreHandles } from './store/sqlite/index.js';
+import { defaultStore, withSharedStoreHandles } from './surface/open-store.js';
 import type { SleepStore } from './store/port.js';
 import { runConsolidation, type ConsolidateOptions } from './domain/consolidate/sleep.js';
 import { anthropicLlmFromEnv } from './infra/ports.js';
@@ -84,7 +84,7 @@ export async function consolidate(
   target: string | SleepStore,
   options: PublishedConsolidateOptions = {},
 ): Promise<ConsolidationResult> {
-  const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
+  const [store, root] = isFolder(target) ? [defaultStore(target), target] : [target, ''];
   const { fetcher, ...rest } = options;
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;

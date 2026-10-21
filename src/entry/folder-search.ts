@@ -4,9 +4,8 @@
 
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
-import { sqliteStore } from '../store/sqlite/index.js';
 import type { OriginFilter } from '../store/port/types.js';
-import { loadRecallSearchEntries as loadRecallByOptions } from '../store/search-rows.js';
+import { defaultStore, loadRecallSearchEntries as loadRecallByOptions } from '../surface/open-store.js';
 import type { TenantId } from '../base/util/tenant.js';
 import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
@@ -24,7 +23,7 @@ export function folderVectorSource({
   if (!hippoRoot) return undefined;
   const config = { embeddings: embeddings ?? loadConfig(hippoRoot).embeddings };
   return vectorSourceOf({
-    store: store ?? sqliteStore(hippoRoot),
+    store: store ?? defaultStore(hippoRoot),
     config,
     onHippoDb: true,
     embedderFor: resolveEmbeddingProvider,
@@ -45,7 +44,7 @@ export async function hybridSearch(
   return rankHybrid(query, entries, {
     ...options,
     source: options.source ?? folderVectorSource(options),
-    graphGlobal: globalRoot && globalRoot !== options.hippoRoot ? sqliteStore(globalRoot) : undefined,
+    graphGlobal: globalRoot && globalRoot !== options.hippoRoot ? defaultStore(globalRoot) : undefined,
   });
 }
 
@@ -64,7 +63,7 @@ export async function physicsSearch(
 
 /** The eval kit's folder form of embedMemory, for frozen scripts written against it. */
 export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const store = sqliteStore(hippoRoot);
+  const store = defaultStore(hippoRoot);
   try {
     return await embedInto(folderIndex({ store, config: loadConfig(hippoRoot) }), entry);
   } finally {

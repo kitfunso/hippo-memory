@@ -3,10 +3,5 @@
     "file": "cli.ts",
     "target": "store/port.ts",
     "why": "STORE_BUSY_MESSAGE, the exit message for a busy store; a constant, not a store read"
-  },
-  {
-    "file": "surface/cli/api-context.ts",
-    "target": "store/sqlite/index.ts",
-    "why": "the CLI composition root builds the SQLite store each api call runs on, through the adapter's door"
   }
 ]
