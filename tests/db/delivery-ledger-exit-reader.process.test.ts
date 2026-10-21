@@ -28,7 +28,7 @@ import {
 useExitReaderStore();
 
 describe('every ledger value, on rows from the real writer', () => {
-  it('R1 every stage and every reject reason on a rejected row is copied verbatim', () => {
+  it('every stage and every reject reason on a rejected row is copied verbatim', () => {
     const cases = STAGES.flatMap((stage) => REASONS.map((reason) => ({ stage, reason })));
     cases.forEach(({ stage, reason }, i) => {
       write(
@@ -46,7 +46,7 @@ describe('every ledger value, on rows from the real writer', () => {
     });
   });
 
-  it('R2 every block state maps per the table', () => {
+  it('every block state maps per the table', () => {
     const m = present();
     write(event('r2-sent', { candidates: [row(m.id)] }));
     write(event('r2-reused', { blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }));
@@ -66,7 +66,7 @@ describe('every ledger value, on rows from the real writer', () => {
     ]);
   });
 
-  it('R3 a context row with no target row is indeterminate context-surface, and a rejected one is rejected', () => {
+  it('a context row with no target row is indeterminate context-surface, and a rejected one is rejected', () => {
     const m = present();
     write(event('r3', { eventType: 'context', surface: 'context', promptHash: null, candidates: [] }));
     expect(read('r3', m.id)).toMatchObject({ class: 'indeterminate', reason: 'context-surface' });
@@ -85,7 +85,7 @@ describe('every ledger value, on rows from the real writer', () => {
 });
 
 describe('defensive reuse arms', () => {
-  it('R4 a compaction row between a send and a reuse leaves the reuse unconfirmed compacted-since-send', () => {
+  it('a compaction row between a send and a reuse leaves the reuse unconfirmed compacted-since-send', () => {
     const m = present();
     const first = write(event('r4', { emittedHash: blockHash('the block'), candidates: [row(m.id)] }));
     write(
@@ -101,7 +101,7 @@ describe('defensive reuse arms', () => {
     ]);
   });
 
-  it('R5 a numbered reused row whose duplicate was sent and emitted the target is confirmed through the duplicate', () => {
+  it('a numbered reused row whose duplicate was sent and emitted the target is confirmed through the duplicate', () => {
     const m = present();
     const block = 'the block both parallel fires carried';
     const promptHash = blockHash('one prompt fired twice');
@@ -133,7 +133,7 @@ describe('defensive reuse arms', () => {
     expect([v.class, v.turns[0].duplicates, v.turns[0].delivery]).toEqual(['application-unknown', [b], 'confirmed']);
   });
 
-  it('R17 a recall-only attachment does not confirm a pin whose duplicate row printed the full block', () => {
+  it('a recall-only attachment does not confirm a pin whose duplicate row printed the full block', () => {
     const m = present();
     const promptHash = blockHash('one prompt fired twice');
     const t = Date.parse('2026-10-02T00:00:00.000Z');
@@ -172,7 +172,7 @@ describe('defensive reuse arms', () => {
     ]);
   });
 
-  it('R6 a reused turn whose latest send had another static hash has no original', () => {
+  it('a reused turn whose latest send had another static hash has no original', () => {
     const m = present();
     write(
       event('r6', { staticHash: 'bbbbbbbbbbbbbbbb', emittedHash: blockHash('old block'), candidates: [row(m.id)] }),
@@ -184,7 +184,7 @@ describe('defensive reuse arms', () => {
 });
 
 describe('fold edge cases', () => {
-  it('R7 only range turns fold to indeterminate, and a valid label on them is unused', () => {
+  it('only range turns fold to indeterminate, and a valid label on them is unused', () => {
     const m = present();
     write(event('r7', { candidates: [], selectedCount: 0, emittedCount: 0, rejectedCount: 3, rejectedUnlisted: 3 }));
     const label = {
@@ -198,7 +198,7 @@ describe('fold edge cases', () => {
     expect([v.class, v.reason, v.notes]).toEqual(['indeterminate', 'undecided', ['label-unused']]);
   });
 
-  it('R8 a store without the ledger table is indeterminate no-ledger-table', () => {
+  it('a store without the ledger table is indeterminate no-ledger-table', () => {
     const bare = path.join(dir, 'bare');
     fs.mkdirSync(bare);
     const db = new DatabaseSync(path.join(bare, 'hippo.db'));
@@ -208,7 +208,7 @@ describe('fold edge cases', () => {
     expect([v.class, v.reason, v.memory_id]).toEqual(['indeterminate', 'no-ledger-table', 'mem_x']);
   });
 
-  it('R9 a key two memories hold is indeterminate key-ambiguous', () => {
+  it('a key two memories hold is indeterminate key-ambiguous', () => {
     seed(dir, 'the shared phrase appears in the first lesson', { created: CREATED });
     seed(dir, 'the shared phrase appears in the second lesson', { created: CREATED });
     write(event('r9', { candidates: [] }));
@@ -216,7 +216,7 @@ describe('fold edge cases', () => {
     expect([v.class, v.reason, v.memory_id]).toEqual(['indeterminate', 'key-ambiguous', null]);
   });
 
-  it('R10 a memory forgotten after the first turn is indeterminate forgotten', () => {
+  it('a memory forgotten after the first turn is indeterminate forgotten', () => {
     const m = present();
     write(event('r10', { candidates: [], selectedCount: 0, emittedCount: 0 }));
     expect(deleteEntry(dir, m.id)).toBe(true);
@@ -224,21 +224,21 @@ describe('fold edge cases', () => {
     expect([v.class, v.reason]).toEqual(['indeterminate', 'forgotten']);
   });
 
-  it('R10b a memory forgotten in a session with no rows is indeterminate forgotten, not not-written', () => {
+  it('a memory forgotten in a session with no rows is indeterminate forgotten, not not-written', () => {
     const m = present();
     expect(deleteEntry(dir, m.id)).toBe(true);
     const v = read('r10b', m.id);
     expect([v.class, v.reason, v.turn]).toEqual(['indeterminate', 'forgotten', null]);
   });
 
-  it('R19 a memory with no row, no forget row and a trace in another session is indeterminate forgotten', () => {
+  it('a memory with no row, no forget row and a trace in another session is indeterminate forgotten', () => {
     write(event('r19-other', { candidates: [row('mem_gone')] }));
     write(event('r19', { candidates: [], selectedCount: 0, emittedCount: 0 }));
     const v = read('r19', 'mem_gone');
     expect([v.class, v.reason]).toEqual(['indeterminate', 'forgotten']);
   });
 
-  it('R24 a disabled turn before the lesson was written is not-written, and after it is rejected', () => {
+  it('a disabled turn before the lesson was written is not-written, and after it is rejected', () => {
     const ts = new Date('2026-10-02T00:00:00.000Z');
     const id = write(
       event('r24', {
@@ -261,7 +261,7 @@ describe('fold edge cases', () => {
     expect([before.class, before.reason, before.turns[0].event_id]).toEqual(['rejected', 'block-disabled', id]);
   });
 
-  it('R30 a shared copy with no remember row has no presence time, so a turn with no candidate row is indeterminate presence-unknown', () => {
+  it('a shared copy with no remember row has no presence time, so a turn with no candidate row is indeterminate presence-unknown', () => {
     const copy = {
       ...createMemory('a lesson copied in without an audit row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       created: CREATED,
@@ -282,7 +282,7 @@ describe('fold edge cases', () => {
     ]);
   });
 
-  it('R31 a lesson in no store and no candidate row is indeterminate global-unread when the global store was skipped, and not-written when it was read', () => {
+  it('a lesson in no store and no candidate row is indeterminate global-unread when the global store was skipped, and not-written when it was read', () => {
     write(event('r31', { candidates: [], selectedCount: 0, emittedCount: 0 }));
     expect(read('r31', 'mem_nowhere', { global: false })).toMatchObject({
       class: 'indeterminate',
@@ -294,7 +294,7 @@ describe('fold edge cases', () => {
     expect(read('r31', 'mem_nowhere', { global: g })).toMatchObject({ class: 'not-written', reason: 'no-row' });
   });
 
-  it('R25 a reuse after a group whose sent row was a duplicate is confirmed through that group', () => {
+  it('a reuse after a group whose sent row was a duplicate is confirmed through that group', () => {
     const m = present();
     const block = 'the block the duplicate row sent';
     const promptHash = blockHash('prompt a');
@@ -342,7 +342,7 @@ describe('fold edge cases', () => {
     ]);
   });
 
-  it('R20 a valid label on a not-written or key-ambiguous read is noted, not applied', () => {
+  it('a valid label on a not-written or key-ambiguous read is noted, not applied', () => {
     const label = {
       session_id: 'r20',
       memory_id: 'mem_never',
@@ -368,7 +368,7 @@ describe('fold edge cases', () => {
     expect([amb.class, amb.reason, amb.notes]).toEqual(['indeterminate', 'key-ambiguous', ['label-unused']]);
   });
 
-  it('R21 a row from another store and its duplicate are both noted as dropped', () => {
+  it('a row from another store and its duplicate are both noted as dropped', () => {
     const m = present();
     const promptHash = blockHash('one prompt fired twice');
     const t = Date.parse('2026-10-02T00:00:00.000Z');
@@ -392,7 +392,7 @@ describe('fold edge cases', () => {
     expect(v.notes).toEqual([`foreign-store:${a}`, `orphan-duplicate:${b}`]);
   });
 
-  it('R23 a duplicate of a row that is not a main row is noted (the writer cannot produce the pair, so one UPDATE unnumbers the original)', () => {
+  it('a duplicate of a row that is not a main row is noted (the writer cannot produce the pair, so one UPDATE unnumbers the original)', () => {
     const m = present();
     const promptHash = blockHash('one prompt fired twice');
     const t = Date.parse('2026-10-02T00:00:00.000Z');
@@ -417,7 +417,7 @@ describe('fold edge cases', () => {
     expect(read('r23', m.id).notes).toEqual([`unnumbered:${a}`, `orphan-duplicate:${b}`]);
   });
 
-  it('R11 label validation: bad fields, other sessions and duplicates', () => {
+  it('label validation: bad fields, other sessions and duplicates', () => {
     const m = present();
     const block = 'the block that was sent';
     write(event('r11', { emittedHash: blockHash(block), promptHash: blockHash('a prompt'), candidates: [row(m.id)] }));

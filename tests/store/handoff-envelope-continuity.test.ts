@@ -22,7 +22,7 @@ beforeEach(() => {
   root = makeRoot('w1-handoff', { init: false });
 });
 
-describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
+describe('IC-SMDP fixture, ambient handoff pop-off', () => {
   it('surfaces the newest unfinished handoff, then the next one after each stamp', async () => {
     initTestStore(root);
     const ctx = apiCtx(root, 'default', adminActor('test'));
@@ -58,7 +58,7 @@ describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
   });
 });
 
-describe('test 8: scope filtering on the continuity read paths', () => {
+describe('scope filtering on the continuity read paths', () => {
   it('8a: ambient fallback does not surface a private-scoped unfinished handoff', async () => {
     initTestStore(root);
     saveSessionHandoff(root, 'default', {

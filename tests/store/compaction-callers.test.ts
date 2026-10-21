@@ -184,13 +184,13 @@ describe('preCompactForCaller', () => {
     });
   });
 
-  it('a busy store at startCompaction still returns the instruction (F8)', async () => {
+  it('a busy store at startCompaction still returns the instruction', async () => {
     await bindSessionOwner(owned('alice'), 'sA');
     expect(await whileLocked(() => preCompact(owned('alice')))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     expect(rowCounts()).toMatchObject({ compactions: 0, task_snapshots: 0 });
   });
 
-  it('snapshot_saved = 1 on the ctx.tenantId record, whatever the environment names (F9)', async () => {
+  it('snapshot_saved = 1 on the ctx.tenantId record, whatever the environment names', async () => {
     vi.stubEnv('HIPPO_TENANT', 'env-tenant');
     await preCompact(owned('alice'));
     withDb((db) => {

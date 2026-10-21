@@ -1,12 +1,11 @@
 // The package's sleep and consolidate run on one handle per store, as `hippo sleep` does: a pass that opened its own
 // would make each close SQLite's last, which checkpoints and deletes the WAL.
 import { describe, expect, it, vi } from 'vitest';
-import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate, sleep } from '../../src/index.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../../src/db/sqlite.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { seedRows } from '../_helpers/seed-rows.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -29,7 +28,7 @@ async function connectionsDuring(run: () => Promise<object>): Promise<number> {
 
 function seeded(label: string, rows: number): string {
   const root = makeRoot(label);
-  for (let i = 0; i < rows; i++) writeEntry(root, createMemory(`release note ${i} about the ${i % 4} build lane`));
+  seedRows(root, rows, (i) => `release note ${i} about the ${i % 4} build lane`);
   return root;
 }
 

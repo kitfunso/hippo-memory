@@ -26,7 +26,7 @@ describe('a lesson copied to the global store', () => {
   let p: Project;
   afterEach(() => dispose(p));
 
-  it('R29 a lesson shared after the turn keeps its old created time, and the copy still reads not-written written-after', () => {
+  it('a lesson shared after the turn keeps its old created time, and the copy still reads not-written written-after', () => {
     p = project();
     const note = 'office note: the coffee machine schedule changes for team lunch on friday';
     const target = seed(p.hippoRoot, `${note} oldest`, { created: '2026-05-01T00:00:00.000Z' });
@@ -51,7 +51,7 @@ describe('a lesson copied to the global store', () => {
 });
 
 describe('pairing', () => {
-  it('R18 transcript lines of another session are skipped and counted, and lines of this session pair', () => {
+  it('transcript lines of another session are skipped and counted, and lines of this session pair', () => {
     const m = present();
     const block = 'the block that was sent';
     write(event('r18', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
@@ -83,7 +83,7 @@ ${hook}
     expect([own.class, own.notes, own.turns[0].delivery]).toEqual(['application-unknown', [], 'confirmed']);
   });
 
-  it('R22 torn and non-object transcript lines are skipped and noted, and a torn attachment reads unconfirmed', () => {
+  it('torn and non-object transcript lines are skipped and noted, and a torn attachment reads unconfirmed', () => {
     const m = present();
     const block = 'the block that was sent';
     write(event('r22', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
@@ -114,7 +114,7 @@ ${hook}
     expect(torn.notes).toContain('transcript-skipped-lines:1');
   });
 
-  it('R15 a sent turn whose prompt hash and attachment match no transcript prompt is delivery-unconfirmed no-paired-prompt', () => {
+  it('a sent turn whose prompt hash and attachment match no transcript prompt is delivery-unconfirmed no-paired-prompt', () => {
     const m = present();
     const block = 'the block that was sent';
     const id = write(
@@ -140,7 +140,7 @@ ${hook}
 });
 
 describe('the transcript parser', () => {
-  it('R12 every candidate kind, an image prompt, tool results, meta, summary and a compaction line', () => {
+  it('every candidate kind, an image prompt, tool results, meta, summary and a compaction line', () => {
     const user = (content: string | Json[], extra: Json = {}) =>
       JSON.stringify({ type: 'user', message: { role: 'user', content }, ...extra });
     const hook = (text: string, extra: Json = {}) =>
@@ -206,7 +206,7 @@ describe('the transcript parser', () => {
     expect(parsed.candidates.map((c: { queued: boolean }) => c.queued)).toEqual(Array(10).fill(false));
   });
 
-  it('R16 a queued_command attachment is a candidate kinded by its text, and the hooks under it are its own', () => {
+  it('a queued_command attachment is a candidate kinded by its text, and the hooks under it are its own', () => {
     const attach = (a: Json) => JSON.stringify({ type: 'attachment', attachment: a });
     const queued = (prompt: string | Json[], extra: Json = {}) =>
       attach({ type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, ...extra });

@@ -56,7 +56,7 @@ function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
   return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
 
-describe('test 6: concurrent claim', () => {
+describe('concurrent claim', () => {
   it('a claim held open in another connection blocks claimCard, which then sees 0 rows once released', async () => {
     const card = createCard(root, 'default', { title: 'Contested' });
     const dbPath = join(root, 'hippo.db');
@@ -82,7 +82,7 @@ describe('test 6: concurrent claim', () => {
   });
 });
 
-describe('test 7: completeCard promotes only children whose parents are all done', () => {
+describe('completeCard promotes only children whose parents are all done', () => {
   it('promotes B, leaves C in backlog, closes the open run', async () => {
     const a = createCard(root, 'default', { title: 'A' });
     const d = createCard(root, 'default', { title: 'D' });
@@ -107,7 +107,7 @@ describe('test 7: completeCard promotes only children whose parents are all done
   });
 });
 
-describe('test 7b: claim -> block -> reclaim -> review -> complete closes exactly the live run', () => {
+describe('claim -> block -> reclaim -> review -> complete closes exactly the live run', () => {
   it('the blocked run keeps outcome blocked; the reclaimed run gets the final outcome', async () => {
     const card = createCard(root, 'default', { title: 'Reclaimed' });
     claimCard(root, 'default', card.id, 'r1');
@@ -142,15 +142,18 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
     db.exec('PRAGMA busy_timeout = 5000');
     db.exec('BEGIN IMMEDIATE');
     parentPort.postMessage('locked');
-    setTimeout(() => {
+    parentPort.once('message', () => setTimeout(() => {
       db.prepare("UPDATE cards SET status = 'done', updated_at = ? WHERE id = ? AND tenant_id = ?")
         .run(new Date().toISOString(), workerData.parentId, 'default');
+      Atomics.store(workerData.holdEnded, 0, 1);
       db.exec('COMMIT');
       db.close();
       parentPort.postMessage('released');
-    }, workerData.holdMs);
+    }, workerData.holdMs));
   `;
-  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, parentId, holdMs } });
+  // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
+  const holdEnded = new Int32Array(new SharedArrayBuffer(4));
+  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, parentId, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
     worker.once('message', (msg) => {
       if (msg === 'locked') resolve();
@@ -164,28 +167,34 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
       }
     });
   });
-  return { locked, released };
+  // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
+  const startHold = (): void => worker.postMessage('hold');
+  return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
 
-describe('test 7c: a parent completing while createCard waits for the write lock still yields a ready child', () => {
+describe('a parent completing while createCard waits for the write lock still yields a ready child', () => {
   it('createCard blocks on BEGIN IMMEDIATE, then reads the parent as done once the lock is released', async () => {
     const parent = createCard(root, 'default', { title: 'Parent' });
     claimCard(root, 'default', parent.id, 'codex');
-    reviewCard(root, 'default', parent.id); // in review, not done yet: the pre-fix read would see this.
+    reviewCard(root, 'default', parent.id); // in review, not done yet: a read before the commit would see this.
 
     const dbPath = join(root, 'hippo.db');
-    const { locked, released } = holdLockThenCompleteParent(dbPath, parent.id, 300);
+    const { locked, released, startHold, holdHadEnded } = holdLockThenCompleteParent(dbPath, parent.id, 300);
     await locked;
 
+    startHold();
     const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
+    const endedByReturn = holdHadEnded();
 
+    // A createCard that did not wait would return while the lock is still held, before the hold ends.
+    expect(endedByReturn).toBe(true);
     expect(child.status).toBe('ready');
     expect(loadCard(root, 'default', child.id)?.status).toBe('ready');
     await released;
   });
 });
 
-describe('test 8: completeCard from a non-review status returns null and touches nothing', () => {
+describe('completeCard from a non-review status returns null and touches nothing', () => {
   it('leaves card_deps and card_runs untouched', async () => {
     const parent = createCard(root, 'default', { title: 'Still backlog' });
     const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
@@ -201,7 +210,7 @@ describe('test 8: completeCard from a non-review status returns null and touches
   });
 });
 
-describe('Fix A: completeCard shelves a non-success outcome and releases no children', () => {
+describe('completeCard shelves a non-success outcome and releases no children', () => {
   it('failure leaves the card shelved, the child in backlog, and closes the run with outcome failure', async () => {
     const a = createCard(root, 'default', { title: 'A' });
     const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
@@ -265,7 +274,7 @@ describe('Fix A: completeCard shelves a non-success outcome and releases no chil
   });
 });
 
-describe('test 9: the latest handoff filed against a card', () => {
+describe('the latest handoff filed against a card', () => {
   it('round-trips a handoff saved with a matching cardId and ignores others', async () => {
     const card = createCard(root, 'default', { title: 'Handoff target' });
     saveSessionHandoff(root, 'default', {
