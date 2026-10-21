@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/base/config/config.js';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { maskEmails } from '../../src/base/util/secret-detect.js';
 import { recordSessionDigest } from '../../src/surface/capture/session-digest.js';
@@ -72,7 +72,7 @@ describe('no stored text holds an email address', () => {
   });
 
   it('in capture from a transcript', async () => {
-    await cmdCapture(captureTarget(hippoRoot), {
+    await runCapture(captureTarget(hippoRoot), {
       tenantId: 'default',
       source: 'last-session',
       transcriptPath: transcript(),

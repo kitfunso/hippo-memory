@@ -287,7 +287,7 @@ export interface PreCompactOptions {
 /** PreCompact hook entry point. Exit code 2 BLOCKS compaction, so every path (bad stdin, missing transcript, store
  * error) must exit 0 as a logged no-op. Callers must not wrap this in anything that turns a caught-and-logged failure
  * into a non-zero exit. */
-export async function cmdPreCompact(
+export async function preCompactHook(
   hippoRoot: string,
   store: CompactionStore,
   options: PreCompactOptions,
@@ -317,7 +317,7 @@ const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
 
 /** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show.
  * Never throws, so the hook exits 0. */
-export async function cmdPostCompact(
+export async function postCompactHook(
   hippoRoot: string,
   store: CompactionStore,
   options: PostCompactOptions,

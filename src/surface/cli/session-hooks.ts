@@ -18,8 +18,8 @@ import {
   type ProjectRef,
   resolveGlobalRootDir,
 } from '../../base/scope/project-identity.js';
-import { cmdCapture, type CaptureOptions, type CaptureTarget } from '../capture/command.js';
-import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
+import { runCapture, type CaptureOptions, type CaptureTarget } from '../capture/command.js';
+import { preCompactHook, postCompactHook } from '../capture/compact.js';
 import { snapshotFields, transcriptWorkingState } from '../capture/working-state.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import { type SessionTurn } from '../capture/transcript.js';
@@ -64,7 +64,14 @@ import {
   cliSyncOptions,
   cliConfig,
 } from './api-context.js';
-import { type CliFlags, type CommandContext, boolFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
+import {
+  type CliFlags,
+  type CommandContext,
+  boolFlag,
+  parseCountFlag,
+  stringFlag,
+  stringFlagOrExit,
+} from './flag-values.js';
 import {
   logSessionEndImport,
   appendSessionEndCloseLog,
@@ -367,7 +374,7 @@ async function captureEndedSession(
 ): Promise<boolean> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
-    await cmdCapture(captureTarget(store), {
+    await runCapture(captureTarget(store), {
       source: 'last-session',
       transcriptPath,
       logFile,
@@ -559,8 +566,8 @@ async function captureCodexTranscript(
   try {
     const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
     const historyPath = stringFlag(flags, 'history-path') ?? path.join(codexHome, 'history.jsonl');
-    const startOffsetBytes = parseInt(stringFlag(flags, 'start-offset') ?? '', 10) || 0;
-    const startedAtMs = parseInt(stringFlag(flags, 'started-at') ?? '', 10) || Date.now();
+    const startOffsetBytes = parseCountFlag(flags, 'start-offset');
+    const startedAtMs = parseCountFlag(flags, 'started-at') || Date.now();
     const transcriptPath =
       resolveCodexSessionTranscript({
         codexHome,
@@ -587,7 +594,7 @@ async function captureCodexTranscript(
       sessionTurns: scan?.turns,
     };
     try {
-      await cmdCapture(captureTarget(store), captureOpts);
+      await runCapture(captureTarget(store), captureOpts);
     } catch (err) {
       reportSessionEndFailure(logFile, 'codex session-end: capture', err);
     }
@@ -618,7 +625,7 @@ export async function handlePreCompact({ hippoRoot, tenantId, flags }: CommandCo
     // Started at the boundary, so the row lands then; awaited after, as the boundary callback cannot wait.
     let flushed: Promise<void> | undefined;
     try {
-      await cmdPreCompact(storeRoot, cliStore(storeRoot), {
+      await preCompactHook(storeRoot, cliStore(storeRoot), {
         tenantId,
         stdinText,
         stdinTimedOut,
@@ -641,7 +648,7 @@ export async function handlePostCompact({ hippoRoot, tenantId, flags }: CommandC
   const { text, timedOut } = await readHookStdin();
   const store = hookStoreRoot(hippoRoot);
   const line = await cliHookRequest(() =>
-    cmdPostCompact(store, cliStore(store), {
+    postCompactHook(store, cliStore(store), {
       tenantId,
       stdinText: text,
       stdinTimedOut: timedOut,
@@ -728,7 +735,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     captureSource === 'last-session' && !transcriptPath ? await readHookStdin() : { text: undefined, timedOut: false };
 
   const useGlobal = boolFlag(flags, 'global');
-  await cmdCapture(captureTarget(useGlobal ? resolveGlobalRootDir() : hippoRoot), {
+  await runCapture(captureTarget(useGlobal ? resolveGlobalRootDir() : hippoRoot), {
     source: captureSource,
     filePath: captureFile,
     transcriptPath,

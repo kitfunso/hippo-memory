@@ -31,6 +31,10 @@ export const MAX_LIST_LIMIT = 1000;
 
 export const MAX_AUDIT_LIMIT = 10_000;
 
+// Cap on a reply body read from a peer (LLM API, hippo server, reranker); honest replies are a few KB, and 1 MiB
+// leaves room for a verbose envelope.
+export const MAX_REPLY_BYTES = 1024 * 1024;
+
 /** The one list-limit rule: absent means the default; a positive integer up to the ceiling passes.
  * Anything else returns undefined, so each surface words its own error. */
 export function resolveListLimit(

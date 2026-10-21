@@ -8,6 +8,7 @@
 import type { RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
 import { fetchWithRetry } from '../../infra/http-retry.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
+import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isObjectLike } from '../../base/session/capture-contract.js';
@@ -20,12 +21,6 @@ const SERVER_TIMEOUT_MS = 30_000;
  * with 503.
  */
 const STORE_BUSY_ATTEMPTS = 5;
-
-/**
- * Every routed write answers with a few short fields; the pidfile's port may now be another process, so cap what it
- * sends.
- */
-const MAX_REPLY_BYTES = 1024 * 1024;
 
 /**
  * The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the auth-provider 503 has none.

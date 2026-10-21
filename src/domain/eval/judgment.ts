@@ -6,6 +6,7 @@ import { ConfidenceLevel, EmotionalValence } from '../../base/memory/memory.js';
 import type { Http } from '../../base/ports/http.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { readCappedJson, readCappedText } from '../../base/util/capped-json.js';
+import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../../base/util/json.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
@@ -33,8 +34,6 @@ export interface JudgeOptions {
   concurrency?: number;
 }
 
-// An honest reply is three short answers, a few hundred bytes; 1 MiB leaves room for a verbose envelope.
-const JUDGE_MAX_REPLY_BYTES = 1024 * 1024;
 const JUDGE_MAX_ERROR_BYTES = 4096;
 
 /**
@@ -142,7 +141,7 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
 
   let data: JsonValue;
   try {
-    data = await readCappedJson(res, JUDGE_MAX_REPLY_BYTES);
+    data = await readCappedJson(res, MAX_REPLY_BYTES);
   } catch (err) {
     log.warnThenDebug('judge-unreadable', `judge: unreadable response: ${errorMessage(err)}`, errorFields(err));
     return null;
