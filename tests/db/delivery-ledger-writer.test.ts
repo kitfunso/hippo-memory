@@ -106,6 +106,19 @@ afterEach(() => {
 });
 
 describe('writeDeliveryEventOnHandle', () => {
+  it('prepares the candidate insert once for repeated writes', () => {
+    writeDeliveryEventOnHandle(db, event({ promptHash: 'p0' }));
+    const prepare = vi.spyOn(Object.getPrototypeOf(db), 'prepare');
+    db.prepare('SELECT 1');
+    expect(prepare).toHaveBeenCalledTimes(1);
+    prepare.mockClear();
+    writeDeliveryEventOnHandle(db, event({ promptHash: 'p1', ts: at(5000) }));
+    writeDeliveryEventOnHandle(db, event({ promptHash: 'p2', ts: at(9000) }));
+    expect(prepare.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO delivery_candidates'))).toHaveLength(
+      0,
+    );
+  });
+
   it('writes the event and its candidates, and numbers turns per session', () => {
     const first = writeDeliveryEventOnHandle(db, event({ promptHash: 'p1' }));
     const second = writeDeliveryEventOnHandle(db, event({ promptHash: 'p2', ts: at(5000) }));
