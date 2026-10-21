@@ -1,6 +1,8 @@
 // Root-keyed vectors and graph forms tests call; production code goes through the store port or the At forms.
 
 import type { MemoryEntry } from '../../../src/base/memory/memory.js';
+import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
+import type { EntryCursor } from '../../../src/store/port/types.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
 import type { PhysicsParticle } from '../../../src/base/rank/physics.js';
 import { getMeta } from '../../../src/db/index.js';
@@ -44,7 +46,10 @@ export function loadEntitiesByMemoryId(hippoRoot: string, tenantId: string, memo
 }
 
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.unprofiledTopicSummaries();
+  const { consolidation } = sqliteSyncStore(handlesOf(hippoRoot));
+  return Array.from(
+    rowsInPages((after?: EntryCursor) => consolidation.unprofiledTopicSummaries({ limit: READ_PAGE_ROWS, after })),
+  );
 }
 
 export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {

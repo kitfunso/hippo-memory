@@ -90,8 +90,8 @@ export interface Consolidation {
   applyRebuild(summary: MemoryEntry, patch: RebuildPatch): Promise<{ changed: boolean; refused: boolean }>;
   /** Clears the dirty mark a fresh summary got from its own child links. */
   clearSummaryDirty(summaryId: string, tenantId: string, actor: string, source?: string): Promise<void>;
-  /** The L2 topic summaries with no L3 profile above them. */
-  unprofiledTopicSummaries(): Promise<MemoryEntry[]>;
+  /** Up to `page.limit` of the L2 topic summaries with no L3 profile above them, oldest first, after `page.after`. */
+  unprofiledTopicSummaries(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryPage>;
 }
 
 export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };

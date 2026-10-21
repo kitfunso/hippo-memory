@@ -177,7 +177,9 @@ export function loadFreshRawMemoriesAt(
 
 /** Every entry of one tenant. A caller that surfaces rows to a user passes the resolved tenant. */
 export function loadAllEntriesAt(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
-  return selectAllRows(db, tenantId).map(rowToEntry);
+  return Array.from(
+    rowsInPages((after?: EntryCursor) => loadEntriesPageAt(db, tenantId, { limit: READ_PAGE_ROWS, after })),
+  );
 }
 
 /** Up to `page.limit` of the tenant's memory ids in loadAllEntries' order, after `page.after`. */
@@ -353,13 +355,6 @@ interface EntryTextKeyPageRow {
 /** Every tenant's rows in loadAllEntries' order, so the caller holds one page at a time. */
 export function iterateEveryTenantEntriesAt(db: DatabaseSyncLike): Generator<MemoryEntry> {
   return rowsInPages((after?: EntryCursor) => loadEntriesPageAt(db, ALL_TENANTS, { limit: READ_PAGE_ROWS, after }));
-}
-
-function selectAllRows(db: DatabaseSyncLike, tenantId: string): MemoryRow[] {
-  return cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
-  ).all(tenantId) as MemoryRow[];
 }
 
 /** Up to `limit` rows in loadAllEntries' order, starting after `after`. */

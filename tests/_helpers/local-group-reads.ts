@@ -172,7 +172,11 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     (s) => s.consolidation.childrenOfSummaries([{ id: 'mem_x_summary', tenantId: TENANT }]),
     'mem_x_child1',
   ),
-  read('consolidation.unprofiledTopicSummaries', (s) => s.consolidation.unprofiledTopicSummaries(), 'mem_x_summary'),
+  read(
+    'consolidation.unprofiledTopicSummaries',
+    (s) => s.consolidation.unprofiledTopicSummaries({ limit: 10 }),
+    'mem_x_summary',
+  ),
   read('diagnostics.health', (s) => s.diagnostics.health(CUTOFFS), /started: 2/),
   read('diagnostics.inventory', (s) => s.diagnostics.inventory(), /compactions: 2/),
   read(

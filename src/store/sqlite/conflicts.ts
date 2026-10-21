@@ -223,6 +223,8 @@ function writeConflictRefresh(
   });
 }
 
+const STALE_PAGE = 500;
+
 function resolveStaleOpenConflicts(
   db: DatabaseSyncLike,
   canonicalDetected: DetectedConflict[],
@@ -231,22 +233,27 @@ function resolveStaleOpenConflicts(
 ): void {
   const detectedKeys = new Set(canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`));
 
-  const openRows = db
-    .prepare(`
-    SELECT ${MEMORY_CONFLICT_COLUMNS}
-    FROM memory_conflicts
-    WHERE status = 'open'
-  `)
-    .all() as MemoryConflictRow[];
-
-  const resolve = db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ?`);
-  for (const row of openRows) {
-    const key = `${row.memory_a_id}::${row.memory_b_id}`;
-    const stale = !detectedKeys.has(key);
+  let after = 0;
+  for (;;) {
+    // SAFETY: id is the keyset cursor; the two member ids decide whether the row is stale.
+    const page = cachedStatement(
+      db,
+      `SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'open' AND id > ? ORDER BY id LIMIT ?`,
+    ).all(after, STALE_PAGE) as Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
     // Auto-resolve any open cross-tenant row: the insert loop and refMap rebuild skip those pairs, so re-detected ones
     // would linger as 'open'.
-    const crossTenant = !sameTenant(row.memory_a_id, row.memory_b_id);
-    if (stale || crossTenant) resolve.run(detectedAt, row.id);
+    const resolved = page.filter(
+      (row) =>
+        !detectedKeys.has(`${row.memory_a_id}::${row.memory_b_id}`) || !sameTenant(row.memory_a_id, row.memory_b_id),
+    );
+    if (resolved.length > 0) {
+      cachedStatement(
+        db,
+        `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id IN (SELECT value FROM json_each(?))`,
+      ).run(detectedAt, JSON.stringify(resolved.map((row) => row.id)));
+    }
+    if (page.length < STALE_PAGE) return;
+    after = page[page.length - 1].id;
   }
 }
 

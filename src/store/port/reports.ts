@@ -51,6 +51,23 @@ export interface CorrectionLink {
   sourceCreated: string | null;
 }
 
+/** What a paged report read asks for: up to `limit` rows after `after`, in the report's created-then-id order. */
+export interface ReportPage {
+  readonly limit: number;
+  readonly after?: EntryCursor;
+}
+
+/** One page of correction links and where the next page starts (null after the last). */
+export interface CorrectionLinkPage {
+  links: CorrectionLink[];
+  next: EntryCursor | null;
+}
+
+/** One page of provenance gaps; `total` is the raw count on the same snapshot. */
+export interface RawProvenancePage extends RawProvenance {
+  next: EntryCursor | null;
+}
+
 /** How many kind='raw' rows the store holds, and each one missing an owner or an artifact ref. */
 export interface RawProvenance {
   total: number;
@@ -71,10 +88,10 @@ export interface Reports {
   stats(): Promise<LegacyStats>;
   /** What `hippo status` counts over every row of every tenant, superseded ones too: host admin. */
   statusCounts(now: Date, atRiskBelow: number): Promise<StatusCounts>;
-  /** Each superseded row with its successor, by the superseded row's created then id: host admin. */
-  correctionLinks(): Promise<CorrectionLink[]>;
-  /** The kind='raw' count and the raw rows missing provenance, by created then id: host admin. */
-  rawProvenance(): Promise<RawProvenance>;
+  /** A page of superseded rows with their successors, by the superseded row's created then id: host admin. */
+  correctionLinks(page: ReportPage): Promise<CorrectionLinkPage>;
+  /** The kind='raw' count and a page of the raw rows missing provenance, by created then id: host admin. */
+  rawProvenance(page: ReportPage): Promise<RawProvenancePage>;
   /** Rows the tenant created since the last sleep of the store, looking back at most a day from `now`. */
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }
