@@ -188,6 +188,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
 const FOLDER_GROUP_READS: readonly Read[] = [
   read('embeddingIndex.requiresReindex', (s) => s.embeddingIndex.requiresReindex('another-provider'), /^true$/),
   read('embeddingIndex.entryCount', (s) => s.embeddingIndex.entryCount(), /^[1-9]\d*$/),
+  read('embeddingIndex.lockKey', (s) => s.embeddingIndex.lockKey(), /\S/),
   read('embeddingIndex.entryIdsPage', (s) => s.embeddingIndex.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
   read('embeddingIndex.entriesByIds', (s) => s.embeddingIndex.entriesByIds(['mem_p_plain', 'mem_missing']), PLAIN),
   read('embeddingIndex.summary', (s) => s.embeddingIndex.summary(), /vectors: [1-9]/),

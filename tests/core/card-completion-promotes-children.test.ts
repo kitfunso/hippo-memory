@@ -76,7 +76,7 @@ function seedFamily(children: number): Family {
 }
 
 // Each case writes a family of up to 100 cards and their dependency rows to a real store, one statement at a time.
-describe('completeCard child promotion', { timeout: 60_000 }, () => {
+describe('completeCard child promotion', () => {
   it.each([1, 10, 100])(
     'promotes the unblocked backlog children of a parent with %i children, in card_deps order',
     async (children) => {
@@ -156,7 +156,7 @@ describe('statements one completion prepares and runs', () => {
       expect(countMatching(run, 'FROM card_deps')).toBe(1);
       expect(countMatching(run, 'UPDATE cards SET status')).toBe(2);
     }
-  }, 60_000);
+  });
 
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents = Array.from({ length: 20 }, (_, i) => createCard(root, TENANT, { title: `parent ${i}` }).id);

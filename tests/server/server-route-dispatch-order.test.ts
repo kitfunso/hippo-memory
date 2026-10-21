@@ -16,7 +16,7 @@ function samplePath(route: (typeof V1_ROUTES)[number]): string {
   return routeLabel(route).replace(/:[A-Za-z]+/g, '42');
 }
 
-describe('V1 route lookup', () => {
+describe('route lookup', () => {
   it('picks the same row as the whole-table walk for every row, under every method', () => {
     for (const route of V1_ROUTES) {
       const path = samplePath(route);
@@ -58,7 +58,7 @@ function outcome(find: () => Route | null): Route | null | string {
   }
 }
 
-describe('V1 route lookup by method', () => {
+describe('route lookup by method', () => {
   /** A lookup over the live table that records every row the matcher is asked about. */
   function recordingLookup() {
     const tested: Route[] = [];

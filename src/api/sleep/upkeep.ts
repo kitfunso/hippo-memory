@@ -7,6 +7,7 @@ import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import type { StoreWith } from '../../store/port.js';
 
 export type { DedupResult };
+export { logPhaseFailures } from '../../domain/consolidate/run.js';
 
 /** A full consolidation pass on `store`, its trace rows written as `tenantId`; its LLM phases call `llm` when set. */
 export function consolidateStore(

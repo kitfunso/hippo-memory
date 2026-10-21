@@ -9,7 +9,7 @@ import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
 import { type JsonValue, isJsonObjectLiteral, parseJson, type JsonObject } from '../../base/util/json.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
 const SECTION = 'gemini added memories';
 
@@ -61,6 +61,7 @@ function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, war
   try {
     projects = parseIndex(read.text);
   } catch (err) {
+    log.debug(`gemini: ${index} not read`, errorFields(err));
     warnings.push(`${index}: ${errorMessage(err)}`);
     return null;
   }

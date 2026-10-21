@@ -14,6 +14,7 @@ import {
 import { vecAdd, vecClampMagnitude } from '../_helpers/physics-vec.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { FALLBACK_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { mulberry32 } from '../_helpers/property.js';
 
 function netForce(i: number, particles: PhysicsParticle[], ctx: ForceContext): number[] {
   const pi = particles[i];
@@ -53,22 +54,14 @@ function simulateAllocating(particles: PhysicsParticle[], ctx: ForceContext): vo
   }
 }
 
-/** A seeded linear congruential generator, so the fixture is the same on every run. */
-function seeded(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state * 1664525 + 1013904223) % 4294967296;
-    return state / 4294967296 - 0.5;
-  };
-}
-
 interface Fixture {
   particles: PhysicsParticle[];
   ctx: ForceContext;
 }
 
 function fixture(): Fixture {
-  const rand = seeded(42);
+  const draw = mulberry32(42);
+  const rand = (): number => draw() - 0.5;
   const particles: PhysicsParticle[] = Array.from({ length: 12 }, (_, i) => ({
     memoryId: `m${i}`,
     position: vecNormalize(Array.from({ length: 8 }, rand)),

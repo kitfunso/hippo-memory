@@ -90,7 +90,7 @@ describe('saveCompactionItemsForCaller', () => {
     expect(rowCounts()).toMatchObject({ compactions: 0, memories: 0 });
   });
 
-  it('a repeat request_id writes nothing and returns the earlier result (F10)', async () => {
+  it('a repeat request_id writes nothing and returns the earlier result', async () => {
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     expect(rowCounts()).toMatchObject({ compactions: 1, memories: 2 });
@@ -184,7 +184,7 @@ describe('captureFailureForCaller', () => {
     ).toBe('stored');
   });
 
-  it('a repeat request_id writes nothing and returns the earlier result (F10)', async () => {
+  it('a repeat request_id writes nothing and returns the earlier result', async () => {
     expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
     expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
     expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 1 });
@@ -199,7 +199,7 @@ describe('captureFailureForCaller', () => {
     withDb((db) => expect(failureRows(db).map((r) => r.outcome)).toEqual(['stored']));
   });
 
-  it('detail_hash equals what logFailure stores for the same payload (F13)', async () => {
+  it('detail_hash equals what logFailure stores for the same payload', async () => {
     const payload = {
       session_id: 'local-s',
       tool_name: 'Bash',

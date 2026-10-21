@@ -265,7 +265,7 @@ describe('controls', () => {
   });
 });
 
-describe('invariance I4 and the command line', () => {
+describe('invariance and the command line', () => {
   const A = { tool_use_id: 'toolu_a' };
   const B = { tool_use_id: 'toolu_b' };
   const CALLS = {

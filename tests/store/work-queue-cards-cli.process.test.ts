@@ -72,7 +72,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     return { home, env };
   }
 
-  it('test 10: hippo card show --json contains the handoff created against that card id', async () => {
+  it('hippo card show --json contains the handoff created against that card id', async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = runCliSpawned(home, env, 'card', 'create', '--title', 't');
@@ -92,7 +92,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('test 12: an unknown --depends-on id exits 1 with the missing-parent message on stderr', async () => {
+  it('an unknown --depends-on id exits 1 with the missing-parent message on stderr', async () => {
     const home = makeRoot('w2a-cli', { init: false });
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     try {
@@ -171,7 +171,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix A CLI: card complete --outcome failure prints status shelved and no Promoted line', async () => {
+  it('card complete --outcome failure prints status shelved and no Promoted line', async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
@@ -201,7 +201,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix B CLI: card claim on an unknown id exits 1 with the unknown-id message', async () => {
+  it('card claim on an unknown id exits 1 with the unknown-id message', async () => {
     const { home, env } = await setupCliHome();
     try {
       const claim = await runCli(home, env, 'card', 'claim', 'card_000000000000', '--runtime', 'r1');
@@ -212,7 +212,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix C CLI: card create --budget 0 exits 1 and creates no card', async () => {
+  it('card create --budget 0 exits 1 and creates no card', async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't', '--budget', '0');
@@ -226,7 +226,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix D CLI: an unrecognized flag, a wrong name, or a glued --flag=value with a bad value, exits 1 and creates no card', async () => {
+  it('an unrecognized flag, a wrong name, or a glued --flag=value with a bad value, exits 1 and creates no card', async () => {
     const { home, env } = await setupCliHome();
     try {
       // --depends-on=nope is a real flag now, so it fails on the parent lookup instead of on parsing.
@@ -252,7 +252,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix D CLI: every subcommand still accepts each flag it legitimately reads', async () => {
+  it('every subcommand still accepts each flag it legitimately reads', async () => {
     const { home, env } = await setupCliHome();
     try {
       const parent = await runCli(home, env, 'card', 'create', '--title', 'parent');
@@ -296,7 +296,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   });
 });
 
-describe('test 11: the card verb is wired through the flag parser and the command table', () => {
+describe('the card verb is wired through the flag parser and the command table', () => {
   it('`card create` with a repeated --depends-on reaches the card verb and records every parent', async () => {
     initTestStore(root);
     const a = createCard(root, 'default', { title: 'A' });
