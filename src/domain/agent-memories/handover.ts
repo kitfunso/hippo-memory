@@ -12,7 +12,7 @@ import type { ContainerApply, ImportStep, MirrorFailure } from '../../store/port
 import type { ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
 import { toolReport, type ImportReport } from './report.js';
-import { containerId, containerPrefix, splitSource } from './source.js';
+import { containerId, containerPrefix, splitSource, type ContainerMachine } from './source.js';
 import type { SyncOptions } from './sync.js';
 import type { ImportStore } from './types.js';
 
@@ -32,7 +32,7 @@ export async function handOver(
     const names = projectNames(resolveProjectIdentity(projectRoot));
     const folded = await namesFoldedInto(store.projectTags, opts.tenantId, names);
     const origins = [...new Set([...names, ...folded, ''])];
-    const at = { origins, tenantId: opts.tenantId, platform: opts.machine.platform, report };
+    const at = { origins, tenantId: opts.tenantId, machine: opts.machine, report };
     for (const work of synced) await handOverContainer(store, work, at);
   } catch (err) {
     log.debug('handover: global copies not handed over', errorFields(err));
@@ -52,14 +52,14 @@ export function warnUnpurged(unpurged: readonly MirrorFailure[], report: ImportR
 interface HandOverContainerOptions {
   readonly origins: readonly string[];
   readonly tenantId: string;
-  readonly platform: NodeJS.Platform;
+  readonly machine: ContainerMachine;
   readonly report: ImportReport;
 }
 
 /** The container's tagged global rows set aside in one transaction, planned once more if they changed meanwhile. */
 async function handOverContainer(store: ImportStore, work: ContainerWork, at: HandOverContainerOptions): Promise<void> {
   const prefixes = at.origins.map((origin) =>
-    containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, at.platform, origin)),
+    containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, at.machine, origin)),
   );
   for (let round = 0; round < 2; round++) {
     const applied = await store.agentImport.applyContainer(await handOverPlan(store, work, at.tenantId, prefixes));

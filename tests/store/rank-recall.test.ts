@@ -8,7 +8,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
-import type { RerankerFn } from '../../src/domain/rerankers/types.js';
+import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';

@@ -10,6 +10,7 @@ import * as sources from '../surface/importers/sources.js';
 import { importMarkdown as importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVault as importVaultInto } from '../surface/importers/vault.js';
 import { defaultImportFiles, defaultStore, runStoreBatch, runStoreRequest } from '../surface/open-store.js';
+import { entryInfra } from '../surface/entry-infra.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
@@ -47,5 +48,6 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
  * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
   const batch = <T>(run: () => Promise<T>): Promise<T> => runStoreRequest(run, 'cli');
-  return importVaultInto(folderPath, options, { store: defaultStore(options.hippoRoot), batch });
+  return importVaultInto(folderPath, options, { store: defaultStore(options.hippoRoot), batch, infra: entryInfra() });
 }
+export type { ImportResult, ImportOptions } from '../surface/importers/core.js';

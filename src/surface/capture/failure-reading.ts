@@ -3,7 +3,7 @@
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../../base/util/token-text.js';
-import { truncateCodePointSafe } from '../../base/util/transcript-tail.js';
+import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { type JsonValue, isJsonObjectLiteral, isJsonString } from '../../base/util/json.js';
 import type { CaptureErrorOutcome, RoutineRule } from '../../store/port/rejections.js';
 

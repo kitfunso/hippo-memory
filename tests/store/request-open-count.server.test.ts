@@ -13,6 +13,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -167,6 +168,7 @@ describe('stdio MCP tool calls', () => {
       hostAdmin: true as const,
       store: sqliteStore(root),
       config: loadConfig(root),
+      infra: testInfra(),
     };
     const reply = (id: number, query: string) =>
       cliStdioHost().runRequest(() =>

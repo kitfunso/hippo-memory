@@ -19,6 +19,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { countSessionRawMemories, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { testInfra } from '../_helpers/infra.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -185,6 +186,7 @@ describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     // SAFETY: tools/list's MCP result envelope always carries result.tools

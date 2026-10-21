@@ -9,18 +9,16 @@ import {
   createMemory,
   estimateTokens,
   generateId,
-  hybridSearch,
-  search,
   sleep,
   textOverlap,
   tokenize,
   type MemoryEntry,
-  type SearchResult,
   type SleepOpts,
   type SleepContext,
   type SleepResult,
   type SleepStore,
 } from '../../src/index.js';
+import { hybridSearch, search, type SearchResult } from '../../src/entry/search.js';
 import type { Context } from '../../src/api/types.js';
 import type {
   RecallBoostOptions,

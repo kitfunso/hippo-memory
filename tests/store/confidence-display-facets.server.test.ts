@@ -23,6 +23,7 @@ import { makeStore } from '../_helpers/make-root.js';
 import { sessionCookie } from '../_helpers/dashboard-fixture.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -318,6 +319,7 @@ describe('confidence facets', () => {
         hostAdmin: true,
         store: sqliteStore(hippoRoot),
         config: loadConfig(hippoRoot),
+        infra: testInfra(),
       },
     );
     expect(JSON.stringify(res)).toContain('[stale]');

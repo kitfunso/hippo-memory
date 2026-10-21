@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { buildSupportBundle } from '../../src/support-bundle.js';
+import { buildSupportBundle } from '../../src/surface/cli/support-bundle.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import {
   openHippoDb,

@@ -59,6 +59,8 @@ export interface PhysicsSearchOptions {
   store?: HippoStore;
   /** The root's environment settings, as hybridSearch takes them. */
   runtime?: RuntimeSettings;
+  /** The folder whose path segments boost a memory, as hybridSearch takes it. */
+  cwd?: string;
 }
 
 /** physicsSearch's options once the caller names its store; the folder fields belong to the published wrapper. */

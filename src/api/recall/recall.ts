@@ -173,6 +173,7 @@ function rankByEngine(
   });
   return searchByEngine(source, opts.query, pool, physicsFor(ctx, opts), {
     runtime: ctx.config.runtime,
+    cwd: infraOf(ctx).machine.cwd,
     ...searchOpts,
   });
 }

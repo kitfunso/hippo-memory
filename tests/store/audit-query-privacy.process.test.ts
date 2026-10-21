@@ -13,6 +13,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { testInfra } from '../_helpers/infra.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -148,6 +149,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       hostAdmin: true,
       store: sqliteStore(localRoot),
       config: loadConfig(localRoot),
+      infra: testInfra(),
     };
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },

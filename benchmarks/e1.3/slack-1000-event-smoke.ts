@@ -14,7 +14,7 @@
  * spy never poisons later tests.
  */
 
-import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
+import { ingestMessage } from '../../src/entry/eval-scripts.js';
 import { loadTenantEntries as loadAllEntries } from '../../src/store/sqlite/folder-forms.js';
 import { adminActor } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

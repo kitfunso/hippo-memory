@@ -223,6 +223,7 @@ export async function retrieveWithCliCore(
       global: rankGlobal(ctx, core.sources),
       tenantId: ctx.tenantId,
       embedderFor: infraOf(ctx).embedderFor,
+      cwd: infraOf(ctx).machine.cwd,
       note: core.note,
     },
     { ...core.rank, query: opts.query, boost: opts.boost },

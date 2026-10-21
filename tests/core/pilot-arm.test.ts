@@ -16,7 +16,7 @@ import { sqliteLedger } from '../../src/store/sqlite/ledger.js';
 import { firstPilotArmHash } from '../../src/store/sqlite/token-ledger-rows.js';
 import { hashArm, type PilotArm } from '../../src/base/session/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
-import { runDoctor } from '../../src/doctor.js';
+import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsAt, ledgerAt } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';

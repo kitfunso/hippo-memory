@@ -6,6 +6,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -32,7 +33,14 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot), config: loadConfig(ctx.hippoRoot) },
+    {
+      ...ctx,
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(ctx.hippoRoot),
+      config: loadConfig(ctx.hippoRoot),
+      infra: testInfra(),
+    },
   );
 }
 

@@ -15,6 +15,7 @@ import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkd
 import { realpathOrResolve } from '../../base/util/real-path.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import type { RawRefRow } from '../../store/port/context-reads.js';
+import type { InfraPorts } from '../../base/ports/infra.js';
 
 // K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
 // (src/surface/connectors/slack|github). A changed note appends a new raw row after rawArchive of the old one; NEVER
@@ -26,6 +27,7 @@ type VaultRow = RawRefRow;
 export interface VaultTarget {
   readonly store: HippoStore;
   readonly batch: <T>(run: () => Promise<T>) => Promise<T>;
+  readonly infra: InfraPorts;
 }
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on the in-memory
@@ -54,7 +56,7 @@ export async function importVault(
   return syncVaultFolder(folderPath, options, target, identity);
 }
 
-function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): Context {
+function vaultContext(hippoRoot: string, tenantId: string, { store, infra }: VaultTarget): Context {
   return {
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not a bearer-authed request. rawArchive /
@@ -62,13 +64,14 @@ function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): C
     actor: { subject: 'connector:vault', role: 'admin' },
     store,
     config: loadConfig(hippoRoot),
+    infra,
   };
 }
 
 async function syncVaultFolder(
   folderPath: string,
   options: ImportOptions,
-  { store, batch }: VaultTarget,
+  target: VaultTarget,
   { vaultName, scope }: VaultIdentity,
 ): Promise<ImportResult> {
   const hippoRoot = options.hippoRoot;
@@ -76,7 +79,8 @@ async function syncVaultFolder(
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
 
-  const ctx = vaultContext(hippoRoot, tenantId, store);
+  const { batch } = target;
+  const ctx = vaultContext(hippoRoot, tenantId, target);
   const existing = await loadVaultRows(ctx, vaultName);
   const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
   const tally: VaultTally = { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, redacted: 0, entries: [] };

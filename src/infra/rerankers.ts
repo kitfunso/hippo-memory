@@ -1,10 +1,9 @@
-// The process's reranker registry over the real services: fetch for the hosted rerankers, Transformers.js for the
-// cross-encoder. Built once, so each reranker's outage warning and model last the process.
+// The reranker registry over the real services: fetch for the hosted rerankers, Transformers.js for the cross-encoder.
 import { rerankerRegistry, type RerankerLookup } from '../domain/rerankers/index.js';
 import { transformersCrossEncoder } from './cross-encoder.js';
 import { processHttp } from './http.js';
 
-export const getReranker: RerankerLookup = rerankerRegistry({
-  http: processHttp,
-  crossEncoder: transformersCrossEncoder(),
-});
+/** A new registry with its own cross-encoder: a root builds one and keeps it, so each model loads once. */
+export function realRerankers(): RerankerLookup {
+  return rerankerRegistry({ http: processHttp, crossEncoder: transformersCrossEncoder() });
+}

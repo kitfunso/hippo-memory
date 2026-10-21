@@ -12,7 +12,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { hybridSearch } from '../../dist/index.js';
+import { hybridSearch } from '../../dist/entry/search.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
 import { buildCorpus } from '../../dist/domain/search/bm25.js';
 import { loadConfig } from '../../dist/base/config/config.js';

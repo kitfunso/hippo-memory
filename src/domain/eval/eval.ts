@@ -65,6 +65,8 @@ export interface RunEvalOptions {
   now?: Date;
   /** The root's environment settings, which ranking reads as recall does. */
   runtime?: RuntimeSettings;
+  /** The folder whose path segments boost a memory, as recall's are. */
+  cwd?: string;
 }
 
 /** Mean Reciprocal Rank for a single ranking given expected ids. */
@@ -161,6 +163,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
         mmrLambda: options.mmrLambda,
         localBump: options.localBump,
         runtime: options.runtime,
+        cwd: options.cwd,
       })
     : hybridSearch(query, entries, {
         budget,
@@ -170,6 +173,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
         mmr: options.mmr,
         mmrLambda: options.mmrLambda,
         runtime: options.runtime,
+        cwd: options.cwd,
       });
 }
 

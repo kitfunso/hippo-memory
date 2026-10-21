@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../../src/index.js';
 import { strengthTieKey } from '../../src/domain/consolidate/dedupe.js';
@@ -52,8 +52,11 @@ describe('package entry re-exports strengthBucket', () => {
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
     // The published d.ts text is what consumers compile against, so text is the contract.
-    const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export \{ strengthTieKey as strengthBucket \} from '\.\/domain\/consolidate\/dedupe\.js';$/m);
+    expect(rootDts()).toMatch(/\bstrengthBucket,[^}]*\} from '\.\/entry\/sleep\.js';$/m);
+    const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'entry', 'sleep.d.ts'), 'utf-8');
+    expect(dts).toMatch(
+      /^export \{ strengthTieKey as strengthBucket \} from '\.\.\/domain\/consolidate\/dedupe\.js';$/m,
+    );
   });
 });
 
@@ -90,8 +93,9 @@ describe('package entry re-exports sleep', () => {
     expect(out.type).toBe('function');
     expect(out.admin).toBe(false);
     // The published d.ts text is what consumers compile against, so text is the contract.
-    const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
+    expect(rootDts()).toMatch(/\bsleep,[^}]*\} from '\.\/entry\/sleep\.js';$/m);
+    const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'entry', 'sleep.d.ts'), 'utf-8');
+    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\.\/api\/sleep\/sleep\.js';$/m);
     // The published signature takes a Context whose store sets the sleep groups, so the compiler checks them.
     expect(dts).toMatch(
       /^export declare function sleep\(ctx: SleepContext, opts\?: SleepOpts\): Promise<SleepResult>;$/m,
@@ -162,12 +166,30 @@ function runtimeReexports(source: string): string[] {
   return modules;
 }
 
+/** The published d.ts text of the package root, which names each barrel it re-exports from. */
+function rootDts(): string {
+  return readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
+}
+
+/** The modules src/index.ts re-exports values from, through each ./entry/ barrel, as paths from src. */
+function rootReexports(): string[] {
+  const src = resolve(REPO_ROOT, 'src');
+  const fromSrc = (file: string, module: string): string =>
+    `./${relative(src, resolve(dirname(file), module)).replace(/\\/g, '/')}`;
+  const index = resolve(src, 'index.ts');
+  return runtimeReexports(readFileSync(index, 'utf-8')).flatMap((module) => {
+    if (!module.startsWith('./entry/')) return [module];
+    const barrel = resolve(src, module.replace(/\.js$/, '.ts'));
+    return runtimeReexports(readFileSync(barrel, 'utf-8')).map((m) => fromSrc(barrel, m));
+  });
+}
+
 // A root export of a ./store/ or ./db/ function hands add-ons a folder-taking call that skips the tenant, actor and audit checks every api function applies.
 describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
-    const modules = runtimeReexports(readFileSync(resolve(REPO_ROOT, 'src', 'index.ts'), 'utf-8'));
-    // src/index.ts, not this test, sets the list; these two prove the scan reads a multi-line block and a mixed line.
-    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './domain/graph/recall.js']));
+    const modules = rootReexports();
+    // src/index.ts and its barrels, not this test, set the list; these two prove the scan reads a multi-line block and a mixed line.
+    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './base/memory/memory.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
 
@@ -202,85 +224,95 @@ describe('published runtime exports', () => {
     const names = importBuiltEntry<Record<string, string[]>>(script);
     expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)])))
       .toMatchInlineSnapshot(`
-      {
-        ".": "CARD_LEASE_MS CARD_TRANSITIONS
-      DEFAULT_MAX_NEIGHBORS
-      Layer
-      MAX_HOPS
-      applyOutcome
-      buildSyntheticCorpus
-      calculateStrength captureError computeAmbientState computeSalience computeSchemaFit computeTemporalRange confidenceFacets consolidate createMemory
-      detectRegressions detectTemporalDirection
-      estimateTokens explainMatch extractLessons
-      formatAmbientVector formatResult
-      generateId getEmbedding getGlobalRoot graphExpandRecall
-      hybridSearch
-      importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault isCardStatus isEmbeddingAvailable isHandoffOutcome
-      markRetrieved multihopSearch
-      partitionLessons
-      renderAmbientSummary resolveConfidence resultToBaseline runFeatureEval
-      search sleep strengthBucket
-      temporalBoost textOverlap tokenize transferScore",
-        "./json-hooks": "installJsonHooks
-      readJsonFile resolveJsonHookPaths
-      uninstallJsonHooks
-      writeSettingsFile",
-        "./project-identity": "MAX_PROJECT_ALIASES MCP_PROJECT_SCOPED_HEADER
-      resolveProjectIdentity",
-        "./server": "BadRequestError
-      ConflictError
-      ForbiddenError
-      HttpError
-      LOOPBACK_HOST_HEADER
-      NotFoundError
-      authCreate authCreateSelf authRevoke
-      bindSessionOwner bindSessionOwnerOn
-      captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
-      isCrossSite isLoopback isReservedActor
-      ownerOrSubject
-      preCompactForCaller promptHookContext
-      saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
-        "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
-      WORKING_STATE_CAPS
-      collectHandoffEvidence collectSessionTurns compactSummaryBody
-      failureReport
-      lessonFromFailure
-      parseCompactionItems
-      scrubForSharing sessionTail
-      transcriptWorkingState",
-        "./store-kit": "ALL_TENANTS
-      EMBEDDING_MODEL_META_KEY
-      OTHER_STORE_MARKER
-      PROTECTED_ROWS
-      RECALL_DEFAULT_DENY_SCOPES RejectedValueError
-      SECRET_TAGS StoreBusyError
-      ambientRefusal
-      bufferToFloat32
-      decodeVector descendantAdmits
-      encodeVector entryAfterOutcome
-      float32ToBuffer ftsTermParts
-      hasGroup heldTexts
-      isSharedStore
-      loadConfig
-      normalizeValueForRejection
-      ownScopeTouches
-      passesScopeFilterForRecall physicsSearch
-      rankVectorRows rarestFtsQuery readerReaches rejectionDigest repairKeeps replacesIndex requireGroup
-      sqliteStore
-      tallyAmbientEntries targetReader",
-        "./testing": "ambientSecretAdmit ambientSecretAdmitWire
-      batchWriteAndDeleteWire buildIndexFromDb
-      calculateStrengthWire createMemoryWire
-      embedMemory embedMemoryWire
-      hybridSearchWire
-      initStore isWorthSurfacingWire
-      loadAllEntries loadAllEntriesWire loadEmbeddingIndex loadRecallSearchEntries loadVectorCandidateEntriesAt
-      memoryStore
-      recordTokenUse resolveTenantId
-      tokensBySession
-      upsertEntryRow upsertEntryRowWire
-      writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeEntryWire writeIndexMirror",
-      }
-    `);
+        {
+          ".": "CARD_LEASE_MS CARD_TRANSITIONS
+        Layer
+        applyOutcome
+        calculateStrength captureError computeAmbientState computeSalience computeSchemaFit confidenceFacets consolidate createMemory
+        estimateTokens extractLessons
+        formatAmbientVector
+        generateId getEmbedding getGlobalRoot
+        isCardStatus isEmbeddingAvailable isHandoffOutcome
+        markRetrieved
+        partitionLessons
+        renderAmbientSummary resolveConfidence
+        sleep strengthBucket
+        textOverlap tokenize transferScore",
+          "./eval": "buildSyntheticCorpus
+        detectRegressions
+        formatResult
+        resultToBaseline runFeatureEval",
+          "./importers": "importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault",
+          "./json-hooks": "installJsonHooks
+        readJsonFile resolveJsonHookPaths
+        uninstallJsonHooks
+        writeSettingsFile",
+          "./project-identity": "MAX_PROJECT_ALIASES MCP_PROJECT_SCOPED_HEADER
+        resolveProjectIdentity",
+          "./search": "DEFAULT_MAX_NEIGHBORS
+        MAX_HOPS
+        computeTemporalRange
+        detectTemporalDirection
+        explainMatch
+        graphExpandRecall
+        hybridSearch
+        multihopSearch
+        search
+        temporalBoost",
+          "./server": "BadRequestError
+        ConflictError
+        ForbiddenError
+        HttpError
+        LOOPBACK_HOST_HEADER
+        NotFoundError
+        authCreate authCreateSelf authRevoke
+        bindSessionOwner bindSessionOwnerOn
+        captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
+        isCrossSite isLoopback isReservedActor
+        ownerOrSubject
+        preCompactForCaller promptHookContext
+        saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
+          "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
+        WORKING_STATE_CAPS
+        collectHandoffEvidence collectSessionTurns compactSummaryBody
+        failureReport
+        lessonFromFailure
+        parseCompactionItems
+        scrubForSharing sessionTail
+        transcriptWorkingState",
+          "./store-kit": "ALL_TENANTS
+        EMBEDDING_MODEL_META_KEY
+        OTHER_STORE_MARKER
+        PROTECTED_ROWS
+        RECALL_DEFAULT_DENY_SCOPES RejectedValueError
+        SECRET_TAGS StoreBusyError
+        ambientRefusal
+        bufferToFloat32
+        decodeVector descendantAdmits
+        encodeVector entryAfterOutcome
+        float32ToBuffer ftsTermParts
+        hasGroup heldTexts
+        isSharedStore
+        loadConfig
+        normalizeValueForRejection
+        ownScopeTouches
+        passesScopeFilterForRecall physicsSearch
+        rankVectorRows rarestFtsQuery readerReaches rejectionDigest repairKeeps replacesIndex requireGroup
+        sqliteStore
+        tallyAmbientEntries targetReader",
+          "./testing": "ambientSecretAdmit ambientSecretAdmitWire
+        batchWriteAndDeleteWire buildIndexFromDb
+        calculateStrengthWire createMemoryWire
+        embedMemory embedMemoryWire
+        hybridSearchWire
+        initStore isWorthSurfacingWire
+        loadAllEntries loadAllEntriesWire loadEmbeddingIndex loadRecallSearchEntries loadVectorCandidateEntriesAt
+        memoryStore
+        recordTokenUse resolveTenantId
+        tokensBySession
+        upsertEntryRow upsertEntryRowWire
+        writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeEntryWire writeIndexMirror",
+        }
+      `);
   });
 });

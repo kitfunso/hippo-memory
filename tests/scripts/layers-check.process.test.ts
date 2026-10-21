@@ -94,6 +94,20 @@ const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/s
 const FIXTURES_IMPORT = "import { seed } from '../store/sqlite/fixtures.js';\nexport const z = seed;\n";
 const ENTRY_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, entry: 'high' } };
 const SURFACE_SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../../store/sqlite/store.js';\n";
+const APART_MAP = {
+  order: ['low', 'high'],
+  folders: { sub: 'high', api: 'high', infra: 'low', entry: 'high' },
+  rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+  apart: { api: ['infra'] },
+  barrels: { 'b.ts': 'entry' },
+};
+const APART_BASE = {
+  'src/a.ts': '',
+  'src/b.ts': "export { e } from './entry/e.js';\n",
+  'src/api/keep.ts': '',
+  'src/entry/e.ts': 'export const e = 1;\n',
+  'src/infra/i.ts': 'export const i = 1;\nexport type I = 1;\n',
+};
 const DASHBOARD_MAP = {
   order: ['low', 'high'],
   folders: { sub: 'high', api: 'high', surface: 'high', store: 'low' },
@@ -542,6 +556,34 @@ const rows: Row[] = [
       'src/surface/dashboard/a.ts': "import { read } from '../../api/read.js';\nexport const a = read;\n",
     },
     map: DASHBOARD_MAP,
+    status: 0,
+    output: ['Layer order OK'],
+  },
+  {
+    name: 'a folder importing one apart lists fails with file:line, type-only too',
+    files: { ...APART_BASE, 'src/api/x.ts': "import type { I } from '../infra/i.js';\nexport type X = I;\n" },
+    map: APART_MAP,
+    status: 1,
+    output: ['src/api/x.ts:1 imports src/infra/i.ts'],
+  },
+  {
+    name: 'a barrel root file re-exporting from outside its folder fails',
+    files: { ...APART_BASE, 'src/b.ts': "export { i } from './infra/i.js';\n" },
+    map: APART_MAP,
+    status: 1,
+    output: ['src/b.ts:1 reaches infra/i.ts; re-export it from a src/entry barrel'],
+  },
+  {
+    name: 'a barrel layers.json names that is gone fails',
+    files: APART_BASE,
+    map: { ...APART_MAP, barrels: { 'gone.ts': 'entry' } },
+    status: 1,
+    output: ['layers.json barrels: src/gone.ts does not exist'],
+  },
+  {
+    name: 'an api file that reads no infra and a barrel that re-exports only its folder pass',
+    files: { ...APART_BASE, 'src/api/x.ts': "import { e } from '../entry/e.js';\nexport const x = e;\n" },
+    map: APART_MAP,
     status: 0,
     output: ['Layer order OK'],
   },

@@ -6,7 +6,8 @@ import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.j
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { errorMessage } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
-import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } from '../../base/util/transcript-tail.js';
+import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
+import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail } from '../../infra/transcript-tail.js';
 import { humanUserText, summariseTranscript } from './transcript.js';
 import { copilotTurn } from './copilot-transcript.js';
 

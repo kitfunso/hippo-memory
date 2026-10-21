@@ -22,6 +22,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -322,6 +323,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     // The tool's text holds the note itself inside headings whose wording the formatter owns.

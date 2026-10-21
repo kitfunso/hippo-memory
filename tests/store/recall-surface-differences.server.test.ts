@@ -33,6 +33,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
+import { testInfra } from '../_helpers/infra.js';
 
 // Each case is one process: its CLI commands and MCP calls share one CallerState, whose rings keep surfaces apart.
 let callers: CallerState;
@@ -93,6 +94,7 @@ function callTool(root: string, name: string, args: ToolArgs): Promise<McpRespon
       hostAdmin: true,
       store: sqliteStore(root),
       config: loadConfig(root),
+      infra: testInfra(),
       callers,
     },
   );
@@ -680,6 +682,7 @@ describe('shared store recall, MCP vs HTTP', () => {
             project: { name: 'acme', legacyName: 'acme' },
             store: sqliteStore(root),
             config: loadConfig(root),
+            infra: testInfra(),
           },
         ),
       );

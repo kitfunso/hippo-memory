@@ -16,6 +16,7 @@ import { answerDashboard, type DashboardServing } from './dashboard-routes.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { createListener } from './tls.js';
 import type { ServerHandle } from './types.js';
+import { rootInfra } from '../../infra/ports.js';
 
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
@@ -55,10 +56,18 @@ function servingFor(opts: DashboardOpts, { store, offLoop }: ServerRuntime): Das
   const { hippoRoot, tenantId } = opts;
   const now = opts.now ?? ((): number => evalNow().getTime());
   const configAt = configReader(envRuntimeSettings);
+  const infra = rootInfra();
   return {
     access: { token: opts.token, port: opts.port },
     reader: startDashboardReader({ hippoRoot, tenantId }, { now, cacheClock: opts.cacheClock ?? Date.now }),
-    context: () => ({ hippoRoot, tenantId, actor: adminActor(DASHBOARD_ACTOR), store, config: configAt(hippoRoot) }),
+    context: () => ({
+      hippoRoot,
+      tenantId,
+      actor: adminActor(DASHBOARD_ACTOR),
+      store,
+      config: configAt(hippoRoot),
+      infra: infra(),
+    }),
     bodyDeadlineMs: bodyDeadlineMs(opts.bodyDeadlineMs),
     staticRoot: builtStaticRoot(),
     offLoop,

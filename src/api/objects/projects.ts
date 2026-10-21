@@ -3,6 +3,7 @@
 import {
   listProjects,
   mergeProjects,
+  planProjectRepair,
   repairOnceOnSleep,
   repairProjects,
   type MergeResult,
@@ -10,7 +11,8 @@ import {
   type RepairResult,
   type StoreFolder,
 } from '../../domain/sharing/project-merge.js';
-import type { ProjectTagScope } from '../../store/port/project-tags.js';
+import type { ProjectTags, ProjectTagScope } from '../../store/port/project-tags.js';
+import type { Machine } from '../../base/util/agent-homes.js';
 import { sharedStoreOf, type ContextWith } from '../types.js';
 import { infraOf } from '../infra.js';
 
@@ -64,4 +66,13 @@ export async function projectNameRepair(ctx: RepairContext, opts: { dryRun: bool
 /** The repair sleep runs once per store; null when it already ran. */
 export async function projectNameRepairOnce(ctx: RepairContext): Promise<RepairResult | null> {
   return repairOnceOnSleep(ctx.store.projectTags, scopeOf(ctx), await folderOf(ctx));
+}
+
+/** What a repair of the global store would change, read only so doctor takes no write lock. */
+export function globalProjectRepairPlan(
+  tags: ProjectTags,
+  tenantId: string,
+  machine: Machine,
+): Promise<Omit<RepairResult, 'backup'>> {
+  return planProjectRepair(tags, tenantId, { isGlobal: true, machine });
 }
