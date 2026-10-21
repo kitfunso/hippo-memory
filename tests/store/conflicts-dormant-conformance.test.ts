@@ -25,6 +25,8 @@ oneRequestPerTest();
 
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const DETECTED_AT = '2026-01-01T00:00:00.000Z';
+// Apart from the faked clock, so the stamp can only come from the resolution's own time.
+const RESOLVED_AT = '2026-02-02T02:02:02.000Z';
 const ALICE = 'personal:private:alice';
 // A factor and a floor apart from the domain's, so the store is seen to apply the fate as given.
 const WEAKEN = { kind: 'weaken', halfLifeFactor: 0.25, minHalfLifeDays: 3 } as const;
@@ -101,7 +103,7 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-// hippo.db stamps a resolution with SQL datetime('now'), which reads the real clock, so its value is named by format.
+// Each store stamps a write's memory rows with its own clock in SQL's datetime form, so that value is named by format.
 function stamped<T>(value: T): T {
   return JSON.parse(JSON.stringify(value).replace(/"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d"/g, '"stamped"'));
 }
@@ -127,6 +129,7 @@ function resolution(conflict: string, keep: string, loser: string, fate: Conflic
     fate,
     actor: 'me',
     reason: 'wrong',
+    at: RESOLVED_AT,
   };
 }
 
@@ -190,7 +193,7 @@ describe('Conflicts', () => {
       [conflictIds.reject, 1],
       [conflictIds.weaken, 0],
     ]);
-    expect(outcomes[17]).toMatchObject({ value: { conflict: { status: 'resolved', updated_at: 'stamped' } } });
+    expect(outcomes[17]).toMatchObject({ value: { conflict: { status: 'resolved', updated_at: RESOLVED_AT } } });
   });
 });
 

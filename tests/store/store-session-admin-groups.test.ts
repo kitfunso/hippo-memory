@@ -119,6 +119,7 @@ describe('conflicts group', () => {
       fate: conflictLoserFate({}, loser, null),
       actor: 'test',
       reason: '',
+      at: '2026-02-02T02:02:02.000Z',
     };
     expect(await served.resolve(T, resolution)).toBe(true);
     expect(await served.resolve(T, resolution)).toBe(false);

@@ -22,6 +22,7 @@ const createMemory7 = (content: string, options: Parameters<typeof createMemory>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 let tmpDir: string;
+const RESOLVED_AT = '2026-02-02T02:02:02.000Z';
 
 beforeEach(() => {
   tmpDir = makeRoot('resolve');
@@ -139,6 +140,7 @@ describe('resolveConflict', () => {
       fate: { kind: 'remove' },
       actor: 'cli',
       reason: 'scope moved',
+      at: RESOLVED_AT,
     });
     expect(resolved).toBe(false);
     expect(readEntry(tmpDir, bId)).not.toBeNull();
@@ -162,6 +164,7 @@ describe('resolveConflict', () => {
       fate: { kind: 'reject', ownScope: 'personal:private:alice' },
       actor: 'cli',
       reason: 'wrong',
+      at: RESOLVED_AT,
     });
     expect(resolved).toBe(true);
     expect([bId, team, mine].map((id) => readEntry(tmpDir, id))).toEqual([null, null, null]);
@@ -185,6 +188,7 @@ describe('resolveConflict', () => {
       fate,
       actor: 'cli',
       reason: 'wrong',
+      at: RESOLVED_AT,
     };
     expect(sqliteSyncStore(handlesOf(tmpDir)).conflicts.resolve('default', resolution)).toBe(true);
     expect(readEntry(tmpDir, bId)).toBeNull();
