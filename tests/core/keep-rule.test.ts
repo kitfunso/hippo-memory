@@ -33,6 +33,9 @@ import {
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -318,7 +321,7 @@ describe('a memory saved from a compaction fades like any other', () => {
     const faded = compactionRow('the release train leaves on thursdays');
     writeEntry(root, faded);
 
-    await consolidate(root, { now: new Date() });
+    await consolidate(root, { now: FIXED_NOW });
     expect(readEntry(root, faded.id)).not.toBeNull();
 
     await consolidate(root, { now: sixtyDaysOn() });
@@ -407,7 +410,7 @@ describe('kept rows are not merged and not sent to extraction', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', FAKE_KEY);
     const fetcher = okFetcher();
 
-    const result = await consolidate(root, { now: new Date(), fetcher });
+    const result = await consolidate(root, { now: FIXED_NOW, fetcher });
 
     expect(fetcher).toHaveBeenCalled();
     expect(result.extractionCandidates).toBe(3);
@@ -422,7 +425,7 @@ describe('kept rows are not merged and not sent to extraction', () => {
       throw new Error('a kept row reached the LLM');
     });
 
-    const result = await consolidate(root, { now: new Date(), fetcher });
+    const result = await consolidate(root, { now: FIXED_NOW, fetcher });
 
     expect(fetcher).not.toHaveBeenCalled();
     expect(result.extractionCandidates).toBe(0);
@@ -445,7 +448,7 @@ describe('kept rows are not merged and not sent to extraction', () => {
       createMemory7('The feature flag is disabled for production users', { tags: ['feature-flag', 'prod'] }),
     );
 
-    await consolidate(root, { now: new Date() });
+    await consolidate(root, { now: FIXED_NOW });
 
     expect(listMemoryConflicts(root)).toHaveLength(1);
   });

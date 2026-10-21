@@ -35,6 +35,9 @@ import {
 import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';
@@ -306,7 +309,7 @@ describe('agent memory sync', () => {
       .sort();
     expect(before).toHaveLength(3);
 
-    const result = await consolidate(w.local, { dryRun: false, now: new Date() });
+    const result = await consolidate(w.local, { dryRun: false, now: FIXED_NOW });
     expect(result).toMatchObject({ merged: 0, extractionCandidates: 0 });
     expect(
       liveRows(w.local)

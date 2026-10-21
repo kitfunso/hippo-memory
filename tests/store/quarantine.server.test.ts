@@ -20,6 +20,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { copyToGlobal, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -321,7 +324,7 @@ describe('consolidation conflicts', () => {
       });
       writeEntry(home, visible);
       writeEntry(home, { ...poisoned, scope: 'quarantine:private:unscoped' });
-      await consolidate(home, { now: new Date() });
+      await consolidate(home, { now: FIXED_NOW });
       expect(listMemoryConflicts(home)).toHaveLength(0);
       expect(readEntry(home, visible.id)?.conflictsWith ?? []).not.toContain(poisoned.id);
     } finally {

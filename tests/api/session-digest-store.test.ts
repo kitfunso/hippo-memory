@@ -20,6 +20,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -222,7 +225,7 @@ describe('consolidation leaves digests alone', () => {
   it.each([true, false])('merge pass, digest rows: %s', async (digest) => {
     const rows = [base, `${base} again today`, `${base} once more`].map((c) => row(c, digest));
     for (const r of rows) writeEntry(hippoRoot, r);
-    const result = await consolidate(hippoRoot, { dryRun: false, now: new Date() });
+    const result = await consolidate(hippoRoot, { dryRun: false, now: FIXED_NOW });
     const semantic = loadAllEntries(hippoRoot, 'default').filter((e) => e.layer === Layer.Semantic);
     if (digest) {
       expect(result.merged).toBe(0);
@@ -236,7 +239,7 @@ describe('consolidation leaves digests alone', () => {
   it.each([true, false])('conflict pass, digest rows: %s', async (digest) => {
     writeEntry(hippoRoot, row('always use port 3000 for the dev server', digest));
     writeEntry(hippoRoot, row('never use port 3000 for the dev server', digest));
-    await consolidate(hippoRoot, { dryRun: false, now: new Date() });
+    await consolidate(hippoRoot, { dryRun: false, now: FIXED_NOW });
     expect(listMemoryConflicts(hippoRoot).length > 0).toBe(!digest);
   });
 });

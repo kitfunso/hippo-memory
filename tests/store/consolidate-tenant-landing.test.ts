@@ -24,6 +24,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -119,7 +122,7 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
       metadata: { summary: 'rotated the deploy key' },
     });
 
-    const firstResult = await consolidate(home, { now: new Date(), tenantId: 'tenant-x' });
+    const firstResult = await consolidate(home, { now: FIXED_NOW, tenantId: 'tenant-x' });
     expect(firstResult.promotedTraces).toBe(1);
 
     const allAfterFirst = loadEveryTenantEntries(home);
@@ -134,7 +137,7 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
     // under consolidationTenant ('tenant-x'). Before the fix the trace
     // itself lived in 'default', so that check never matched under a
     // non-default tenant and every sleep regenerated a duplicate trace.
-    const secondResult = await consolidate(home, { now: new Date(), tenantId: 'tenant-x' });
+    const secondResult = await consolidate(home, { now: FIXED_NOW, tenantId: 'tenant-x' });
     expect(secondResult.promotedTraces).toBe(0);
 
     const allAfterSecond = loadEveryTenantEntries(home);

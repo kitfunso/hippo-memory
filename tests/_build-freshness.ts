@@ -1,4 +1,4 @@
-// vitest globalSetup: many tests spawn the CLI or import workers from dist, so a build older than src would test old code.
+// vitest globalSetup for the process and server projects only: they spawn the CLI or import workers from dist, so a build older than src would test old code.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
@@ -40,12 +40,6 @@ export function staleSources(srcDir: string, distDir: string): string[] {
 }
 
 export function setup(): void {
-  const drift = staleDependencies(REPO);
-  if (drift.length > 0) {
-    throw new Error(
-      `node_modules does not match package-lock.json (${drift.join('; ')}). Run \`npm ci\`, or link node_modules to an install of this lockfile.`,
-    );
-  }
   const stale = staleSources(join(REPO, 'src'), join(REPO, 'dist'));
   if (stale.length === 0) return;
   const more = stale.length > 1 ? ` and ${stale.length - 1} more` : '';
