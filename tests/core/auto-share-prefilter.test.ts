@@ -32,20 +32,13 @@ const WHOLE_READ = new RegExp(
 
 let tmp: string;
 let root: string;
-let origHippoHome: string | undefined;
 
 beforeEach(() => {
   tmp = makeRoot('autoshare-prefilter', { init: false });
-  origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
   initTestStore(getGlobalRoot());
   root = join(tmp, 'proj', '.hippo');
   initTestStore(root);
-});
-
-afterEach(() => {
-  if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
-  else vi.stubEnv('HIPPO_HOME', undefined);
 });
 
 function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [], tenantId = 'default'): string {

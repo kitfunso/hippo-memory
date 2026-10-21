@@ -25,7 +25,10 @@ let env: FakeHomeHandle;
 beforeEach(() => {
   env = withFakeHome('hippo-ownership-');
 });
-afterEach(() => env.cleanup());
+afterEach(() => {
+  env.cleanup();
+  vi.unstubAllEnvs();
+});
 
 function seed(settings: JsonValue): string {
   const { settings: file } = resolveJsonHookPaths('claude-code');

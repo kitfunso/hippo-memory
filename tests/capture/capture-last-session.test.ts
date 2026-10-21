@@ -180,20 +180,14 @@ describe('summariseTranscript', () => {
 
 describe('resolveLastSessionTranscript', () => {
   let tmp: { dir: string; cleanup: () => void };
-  let prevHome: string | undefined;
-  let prevUserProfile: string | undefined;
 
   beforeEach(() => {
     tmp = withTmpDir();
-    prevHome = process.env.HOME;
-    prevUserProfile = process.env.USERPROFILE;
     vi.stubEnv('HOME', tmp.dir);
     vi.stubEnv('USERPROFILE', tmp.dir);
   });
 
   afterEach(() => {
-    vi.stubEnv('HOME', prevHome);
-    vi.stubEnv('USERPROFILE', prevUserProfile);
     tmp.cleanup();
   });
 

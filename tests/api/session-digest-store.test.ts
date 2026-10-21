@@ -32,20 +32,13 @@ const REPLY = 'Retry `upload()` with backoff because the storage token expires m
 let tmp: string;
 let repo: string;
 let hippoRoot: string;
-let origHippoHome: string | undefined;
 
 beforeEach(() => {
   tmp = makeRoot('digest-store', { init: false });
   repo = path.join(tmp, 'repo');
   hippoRoot = path.join(repo, '.hippo');
   initTestStore(hippoRoot);
-  origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-});
-
-afterEach(() => {
-  if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
-  else vi.stubEnv('HIPPO_HOME', undefined);
 });
 
 function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {

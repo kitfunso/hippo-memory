@@ -53,7 +53,6 @@ function storedContents(hippoRoot: string = root): string[] {
 function expectRedacted(contents: string[], token: string, keptPhrase: string): void {
   expect(contents.some((c) => c.includes(token))).toBe(false);
   const row = contents.find((c) => c.includes(keptPhrase));
-  expect(row).toBeDefined();
   expect(row).toContain('[REDACTED]');
 }
 
@@ -67,8 +66,6 @@ describe('connector webhooks', () => {
   });
 
   afterEach(async () => {
-    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
     await handle.stop();
   });
 

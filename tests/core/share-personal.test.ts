@@ -40,24 +40,17 @@ describe('share and promote refuse personal rows', () => {
   let hippoRoot: string;
   let mine: MemoryEntry;
   let team: MemoryEntry;
-  let origHippoHome: string | undefined;
 
   beforeEach(() => {
     tmp = makeRoot('share-personal', { init: false });
     hippoRoot = join(tmp, 'proj', '.hippo');
     initTestStore(hippoRoot);
-    origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     const opts = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'], tenantId: 'default' };
     mine = createMemory(MINE, { ...opts, scope: 'personal:private:alice' });
     team = createMemory(TEAM, opts);
     writeEntry(hippoRoot, mine);
     writeEntry(hippoRoot, team);
-  });
-
-  afterEach(() => {
-    if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
-    else vi.stubEnv('HIPPO_HOME', undefined);
   });
 
   it('promote refuses a personal row with a 400 and the exact text; a team row still promotes', async () => {

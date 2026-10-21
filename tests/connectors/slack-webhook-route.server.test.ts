@@ -28,7 +28,6 @@ describe('POST /v1/connectors/slack/events', () => {
   });
 
   afterEach(async () => {
-    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
     await handle.stop();
   });
 
@@ -95,9 +94,8 @@ describe('POST /v1/connectors/slack/events', () => {
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
     const slackRow = entries.find((e) => e.tags.includes('source:slack') && e.kind === 'raw');
-    expect(slackRow).toBeDefined();
-    expect(slackRow!.owner).toBe('user:U1');
-    expect(slackRow!.artifactRef).toBe('slack://T1/C1/1700000000.000100');
+    expect(slackRow?.owner).toBe('user:U1');
+    expect(slackRow?.artifactRef).toBe('slack://T1/C1/1700000000.000100');
 
     const coverage = buildProvenanceCoverage(rawProvenanceOf(entries));
     expect(coverage.rawTotal).toBe(1);

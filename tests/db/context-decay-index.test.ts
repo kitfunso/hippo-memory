@@ -113,7 +113,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
   removeAfterRequest(home);
 });
 
@@ -182,7 +181,7 @@ describe('loadContextCandidates past the cap', () => {
       loadContextCandidates(home, 'default', { cap: 40, now: new Date(BASE) }),
     );
     const sql = statements.find((s) => SUBSET.test(s));
-    expect(sql).toBeDefined();
+    expect(sql).toMatch(SUBSET);
     const marks = (sql ?? '').match(/\?/g)?.length ?? 0;
     const plan = withDb((db) =>
       // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.

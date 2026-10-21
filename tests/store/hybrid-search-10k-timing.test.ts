@@ -42,7 +42,6 @@ describe('hybrid recall at 10k rows', () => {
   const global = makeRoot('10k-global');
   afterAll(() => {
     vi.unstubAllGlobals();
-    vi.stubEnv('OPENAI_API_KEY', undefined);
   });
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>

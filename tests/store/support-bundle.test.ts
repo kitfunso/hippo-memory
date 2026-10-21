@@ -29,7 +29,6 @@ const dirs: string[] = [];
 
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
-  vi.stubEnv('HIPPO_FAKE', undefined);
 });
 
 function tmp(prefix: string): string {

@@ -1,5 +1,5 @@
 // Real homes are never read: the process's homes and tool variables point at canaries, the injected machine at a clean tree.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -220,7 +220,10 @@ beforeEach(() => {
   note(projectNotes(w, storeless), 'clean.md', CLEAN_STORELESS);
   codexSummary(w, `- ${CLEAN_BULLET}`);
 });
-afterEach(() => closeWorld(w));
+afterEach(() => {
+  closeWorld(w);
+  vi.unstubAllEnvs();
+});
 
 describe('agent memory sync: real homes are never read', () => {
   it('no canary is imported when the process points every home and tool variable at a decoy tree', async () => {

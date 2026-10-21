@@ -33,7 +33,6 @@ afterEach(() => {
 let tmpRoot: string;
 let projA: string;
 let globalStore: string;
-let origHippoHome: string | undefined;
 let ctx: FullContext;
 
 const ALPHA = 'ALPHA-RULE deploykey rotation happens on fridays';
@@ -52,7 +51,6 @@ beforeEach(() => {
   initTestStore(projA);
   globalStore = path.join(tmpRoot, 'globalstore');
   initTestStore(globalStore);
-  origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalStore);
 
   writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
@@ -76,14 +74,6 @@ beforeEach(() => {
   }
 
   ctx = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
-});
-
-afterEach(() => {
-  if (origHippoHome !== undefined) {
-    vi.stubEnv('HIPPO_HOME', origHippoHome);
-  } else {
-    vi.stubEnv('HIPPO_HOME', undefined);
-  }
 });
 
 describe('contextGet origin partition (project A session)', () => {

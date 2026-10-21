@@ -51,10 +51,6 @@ beforeEach(() => {
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
-afterEach(() => {
-  vi.stubEnv('HIPPO_HOME', undefined);
-});
-
 describe('prompt recall reuses the ambient load connection', () => {
   it('runs the pinned-ambient query and the FTS recall query on the same connection, local and global', async () => {
     enablePromptRecall(local);

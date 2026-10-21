@@ -70,10 +70,6 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
     ctx = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
   });
 
-  afterEach(() => {
-    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-  });
-
   it('cross-project row + private-scope row are excluded from ambientState and its rendered summary', async () => {
     const admitted = {
       ...createMemory('ADMITTED-ROW stays visible in the landscape summary', {
@@ -102,8 +98,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
 
     const result = await contextGet(ctx, { currentProject: 'proj-a', budget: 1500 });
 
-    expect(result.ambientState).toBeDefined();
-    expect(result.ambientState!.totalMemories).toBe(1);
+    expect(result.ambientState?.totalMemories).toBe(1);
 
     const expectedState = computeAmbientState([admitted]);
     expect(result.ambientState).toEqual(expectedState);
@@ -113,10 +108,6 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
 
 describe('ambient summary: avgStrength reflects post-retrieval strength, not the pre-mutation snapshot', () => {
   let tmpRoot: string;
-
-  afterEach(() => {
-    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-  });
 
   it('avgStrength matches computeAmbientState over the returned (post-markRetrieved) entries, not the pre-retrieval ones', async () => {
     const AGED_NOW = '2026-01-01T00:00:00.000Z';
@@ -141,7 +132,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     const result = await contextGet(ctx, { currentProject: 'proj-a', budget: 5000 });
 
     expect(result.entries.length).toBe(1);
-    expect(result.ambientState).toBeDefined();
+    expect(result.ambientState?.totalMemories).toBe(1);
 
     // What the pre-fix code computed: the admitted entry BEFORE markRetrieved ran.
     const preRetrievalState = computeAmbientState([aged], new Date(FAKE_NOW));

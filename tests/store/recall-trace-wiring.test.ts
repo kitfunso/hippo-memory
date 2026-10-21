@@ -31,6 +31,10 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 
 oneRequestPerTest();
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const INIT = ['init', '--no-hooks', '--no-schedule', '--no-learn'];
 
 /** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test as execFileSync threw. */
@@ -53,17 +57,11 @@ function disableEmbeddings(storeDir: string) {
 
 function tmpHome() {
   const home = makeRoot('recall-trace-wiring');
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       removeAfterRequest(home);
-      if (origHippoHome !== undefined) {
-        vi.stubEnv('HIPPO_HOME', origHippoHome);
-      } else {
-        vi.stubEnv('HIPPO_HOME', undefined);
-      }
     },
   };
 }
@@ -367,8 +365,7 @@ describe('CLI printRecall — trace wiring', () => {
     const traces = traceRows(localStore, 'cli');
     expect(traces).toHaveLength(2);
     const zeroTrace = traces.find((t) => t.id !== baselineTraceId);
-    expect(zeroTrace).toBeDefined();
-    expect(zeroTrace!.result_count).toBe(0);
+    expect(zeroTrace?.result_count).toBe(0);
 
     // SAFETY: recall_traces.id is an INTEGER PRIMARY KEY; node:sqlite
     // returns it as a JS number for values within safe-integer range.

@@ -66,25 +66,19 @@ describe('package entry re-exports sleep', () => {
 
   it('runs a Context on the hippo.db its store reads', async () => {
     const home = makeRoot('entry-sleep', { init: false });
-    const origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', home);
-    try {
-      initTestStore(home);
-      const result = await entry.sleep(
-        {
-          store: sqliteStore(home),
-          config: loadConfig(home),
-          tenantId: 'default',
-          actor: { subject: 'test', role: 'admin' },
-        },
-        { dryRun: true },
-      );
-      expect(result.dryRun).toBe(true);
-      expect(result.active).toBe(0);
-    } finally {
-      if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
-      else vi.stubEnv('HIPPO_HOME', undefined);
-    }
+    initTestStore(home);
+    const result = await entry.sleep(
+      {
+        store: sqliteStore(home),
+        config: loadConfig(home),
+        tenantId: 'default',
+        actor: { subject: 'test', role: 'admin' },
+      },
+      { dryRun: true },
+    );
+    expect(result.dryRun).toBe(true);
+    expect(result.active).toBe(0);
   });
 
   it('the built package resolves sleep by name and ships its option and result types', () => {

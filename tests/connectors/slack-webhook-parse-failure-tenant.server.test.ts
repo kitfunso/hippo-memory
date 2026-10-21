@@ -40,8 +40,6 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
   });
 
   afterEach(async () => {
-    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
-    vi.stubEnv('HIPPO_TENANT', undefined);
     await handle.stop();
   });
 

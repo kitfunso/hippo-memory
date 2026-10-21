@@ -42,17 +42,11 @@ function tmpHome() {
   // api.sleep's auto-share phase promotes memories to the GLOBAL store
   // (resolved via HIPPO_HOME). Without per-test override, those writes
   // leak into the shared baseline HIPPO_HOME and fail the isolation guard.
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       removeAfterRequest(home);
-      if (origHippoHome !== undefined) {
-        vi.stubEnv('HIPPO_HOME', origHippoHome);
-      } else {
-        vi.stubEnv('HIPPO_HOME', undefined);
-      }
     },
   };
 }
@@ -144,7 +138,6 @@ describe('api.sleep', () => {
       // SAFETY: see the AuditMetadataValue comment above -- consolidate metadata is
       // always a flat scalar object.
       const meta = rows[0]?.metadata as Record<string, AuditMetadataValue>;
-      expect(meta).toBeDefined();
       expect(meta).toHaveProperty('consolidationCount');
       expect(meta).toHaveProperty('dedupCount');
       expect(meta).toHaveProperty('auditDeletedCount');

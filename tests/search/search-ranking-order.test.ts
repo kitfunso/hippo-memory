@@ -99,7 +99,7 @@ function expectRanked(results: readonly SearchResult[], order: readonly string[]
 
 function breakdownOf(results: readonly SearchResult[], id: string): ScoreBreakdown {
   const found = results.find((r) => r.entry.id === id)?.breakdown;
-  expect(found, `${id} has a breakdown`).toBeDefined();
+  expect(found?.final, `${id} has a breakdown`).toBeGreaterThanOrEqual(0);
   return found!;
 }
 
@@ -260,7 +260,6 @@ describe('hybrid and physics with a store', () => {
   });
 
   afterAll(() => {
-    vi.stubEnv('OPENAI_API_KEY', undefined);
     rmSync(root, { recursive: true, force: true });
   });
 

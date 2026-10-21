@@ -67,16 +67,9 @@ function findResult(results: SearchResult[], id: string): SearchResult | undefin
 
 describe('first-class DAG recall (scoring layer)', () => {
   let hippoRoot: string;
-  let savedDeboost: string | undefined;
 
   beforeEach(() => {
     hippoRoot = makeRoot('dag-e4');
-    savedDeboost = process.env.HIPPO_SUMMARY_DEBOOST;
-  });
-
-  afterEach(() => {
-    if (savedDeboost !== undefined) vi.stubEnv('HIPPO_SUMMARY_DEBOOST', savedDeboost);
-    else vi.stubEnv('HIPPO_SUMMARY_DEBOOST', undefined);
   });
 
   it('test #1: default deboost (0.85) applies to L2 summary, NOT to L1 fact', async () => {
@@ -212,7 +205,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     const br = results[0]?.breakdown;
     expect(br?.dagLevel).toBe(2);
     expect(br?.descendantCount).toBe(5);
-    expect(br?.lastRebuiltAt).toBeTruthy();
+    expect(br?.lastRebuiltAt).toBe(summary.lastRebuiltAt);
     expect(br?.rebuildCount).toBe(3);
     expect(br?.summaryDeboost).toBeCloseTo(0.85);
     expect(br?.summaryFreshnessBoost).toBeCloseTo(1.05);
@@ -284,7 +277,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(recordingReranker).toHaveBeenCalled();
     expect(recordedInputs).not.toBeNull();
     const rerankerSawSummary = recordedInputs!.find((r) => r.entry.id === summary.id);
-    expect(rerankerSawSummary).toBeTruthy();
+    expect(rerankerSawSummary?.entry.id).toBe(summary.id);
     // The summary the reranker SAW had its score multiplied by 0.85
     expect(rerankerSawSummary!.score).toBeCloseTo(summaryBaseScore * 0.85, 5);
   });

@@ -54,12 +54,6 @@ describe('jev reranker', () => {
     vi.stubEnv('HIPPO_JEV_MODEL', undefined);
   });
 
-  afterEach(() => {
-    vi.stubEnv('TYPESAFE_API_KEY', undefined);
-    vi.stubEnv('HIPPO_JEV_TIMEOUT_MS', undefined);
-    vi.stubEnv('HIPPO_JEV_MODEL', undefined);
-  });
-
   it('orders candidates by the returned probabilities, in one batched request', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
     const out = await freshReranker()('which one', inputs());

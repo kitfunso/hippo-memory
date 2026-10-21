@@ -10,13 +10,17 @@
  *
  * Convention: real FS, no mocks. HOME isolated via tests/_helpers/with-fake-home.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { withFakeHome } from '../_helpers/with-fake-home.js';
 import { HIPPO_OPENCODE_PLUGIN_MARKER, resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
 import { installOpencodePlugin, uninstallOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /** The plugin text installOpencodePlugin writes into the current (fake) home. */
 function installedSource(): string {

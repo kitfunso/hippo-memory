@@ -14,7 +14,6 @@ describe('SSE heartbeat when its tick throws', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await handle?.stop().catch(() => {});
-    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', undefined);
   });
 
   it('keeps ticking after a tick rejects', async () => {

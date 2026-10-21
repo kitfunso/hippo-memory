@@ -24,7 +24,6 @@ const BEARER = 'b'.repeat(24);
 const JWT = `eyJ${'h'.repeat(12)}.eyJ${'p'.repeat(12)}.sig`;
 const TEXT = `the deploy key is ${SECRET} for prod, header Bearer ${BEARER}, session ${JWT}`;
 const ENV = ['HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'TYPESAFE_API_KEY', 'OPENAI_API_KEY'];
-const saved: Record<string, string | undefined> = {};
 let bodies: string[];
 let root: string;
 
@@ -51,18 +50,11 @@ function expectScrubbed(requests: number): void {
 
 beforeEach(() => {
   bodies = [];
-  for (const k of ENV) {
-    saved[k] = process.env[k];
-    vi.stubEnv(k, undefined);
-  }
+  for (const k of ENV) vi.stubEnv(k, undefined);
   root = mkdtempSync(join(tmpdir(), 'hippo-egress-'));
 });
 
 afterEach(() => {
-  for (const k of ENV) {
-    if (saved[k] === undefined) vi.stubEnv(k, undefined);
-    else vi.stubEnv(k, saved[k]);
-  }
   vi.unstubAllGlobals();
   rmSync(root, { recursive: true, force: true });
 });

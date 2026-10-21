@@ -49,10 +49,6 @@ beforeEach(() => {
   globalPin = seedPin(globalRoot, 'a global pin that only a reach to the global store brings');
 });
 
-afterEach(() => {
-  vi.stubEnv('HIPPO_HOME', undefined);
-});
-
 const OPTS = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT } as const;
 
 describe('contextGet without a reach', () => {

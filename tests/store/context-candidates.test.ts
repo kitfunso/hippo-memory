@@ -119,7 +119,6 @@ describe('loadContextCandidates reward factor', () => {
   });
 
   afterEach(() => {
-    vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
     removeAfterRequest(join(root, '..'));
   });
 

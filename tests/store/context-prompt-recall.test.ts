@@ -73,10 +73,6 @@ beforeEach(() => {
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
-afterEach(() => {
-  vi.stubEnv('HIPPO_HOME', undefined);
-});
-
 describe('contextGet prompt recall (api-level)', () => {
   it('admits a relevant unpinned memory and marks it, excludes a newer irrelevant one', async () => {
     enablePromptRecall(local);
@@ -95,8 +91,7 @@ describe('contextGet prompt recall (api-level)', () => {
     });
 
     const hit = result.entries.find((e) => e.entry.id === relevant.id);
-    expect(hit).toBeDefined();
-    expect(hit!.promptRecall).toBe(true);
+    expect(hit?.promptRecall).toBe(true);
   });
 
   it('recalls from a store with no pins and no include-recent', async () => {
@@ -262,8 +257,7 @@ describe('contextGet prompt recall (api-level)', () => {
     });
 
     const hit = result.entries.find((e) => e.entry.id === relevant.id);
-    expect(hit).toBeDefined();
-    expect(hit!.promptRecall).toBe(true);
+    expect(hit?.promptRecall).toBe(true);
   });
 
   it('skips an over-budget candidate without blocking a smaller one behind it (skip-not-break)', async () => {
