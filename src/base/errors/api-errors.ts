@@ -47,6 +47,13 @@ export class ConflictError extends ApiError {
   }
 }
 
+/** A write carried an id another tenant holds; the store refuses it rather than move that tenant's row. */
+export class CrossTenantIdError extends ConflictError {
+  constructor(id: string) {
+    super(`Memory ${id} belongs to another tenant`);
+  }
+}
+
 /**
  * Thrown by the write-path guard (checkRejectionGuard, via upsertEntryRow) when a write would introduce a tombstoned
  * value; carries what the transaction-owner catch blocks (writeEntry, api.supersede) need to write the post-rollback
