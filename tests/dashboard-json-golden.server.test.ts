@@ -120,18 +120,35 @@ const WRITES: ReadonlyArray<readonly [string, Json]> = [
   ['/api/memory/mem_g_strong/pin', {}],
 ];
 
+const mask = masker();
+
+/** The status and the parsed body, so a failure diffs the field that changed; a body that is not JSON stays text. */
+function pinned(path: string, reply: Reply): { status: number; body: unknown } {
+  const text = mask(path, reply.body);
+  try {
+    return { status: reply.status, body: JSON.parse(text) };
+  } catch {
+    return { status: reply.status, body: text };
+  }
+}
+
+// The reads run first, then the writes in order: each write changes what the later reads see.
 describe('dashboard JSON bodies', () => {
-  it('answers each read and write with the pinned status and body', async () => {
-    const mask = masker();
-    const line = (method: string, path: string, reply: Reply): string =>
-      mask(path, `${method} ${path} -> ${reply.status} ${reply.body}`);
-    const transcript: string[] = [];
-    for (const path of READS) transcript.push(line('GET', path, await get(dash.port, path)));
+  it.each(READS)('GET %s', async (path) => {
+    expect(pinned(path, await get(dash.port, path))).toMatchSnapshot();
+  });
+
+  it('GET the first card by id', async () => {
     const cardId = /"id":"(card_[A-Za-z0-9]+)"/.exec((await get(dash.port, '/api/cards')).body)?.[1];
-    const cardPath = `/api/cards/${cardId}`;
-    transcript.push(line('GET', cardPath, await get(dash.port, cardPath)));
-    for (const [path, body] of WRITES) transcript.push(line('POST', path, await postJson(dash.port, path, body)));
-    transcript.push(line('GET', '/api/overview', await get(dash.port, '/api/overview')));
-    expect(transcript).toMatchSnapshot();
+    const path = `/api/cards/${cardId}`;
+    expect(pinned(path, await get(dash.port, path))).toMatchSnapshot();
+  });
+
+  it.each(WRITES)('POST %s %j', async (path, body) => {
+    expect(pinned(path, await postJson(dash.port, path, body))).toMatchSnapshot();
+  });
+
+  it('GET /api/overview after the writes', async () => {
+    expect(pinned('/api/overview', await get(dash.port, '/api/overview'))).toMatchSnapshot();
   });
 });
