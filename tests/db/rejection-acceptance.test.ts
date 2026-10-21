@@ -41,6 +41,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -530,7 +533,7 @@ describe('auto-promoted trace tombstone check', () => {
       metadata: { summary: 'rotated the deploy key' },
     });
 
-    const firstResult = await consolidate(home, { now: new Date() });
+    const firstResult = await consolidate(home, { now: FIXED_NOW });
     expect(firstResult.promotedTraces).toBe(1);
 
     const traceBefore = loadEveryTenantEntries(home).find((e) => e.layer === Layer.Trace);
@@ -540,7 +543,7 @@ describe('auto-promoted trace tombstone check', () => {
     expect(readEntry(home, traceBefore!.id)).toBeNull();
 
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const secondResult = await consolidate(home, { now: new Date() });
+    const secondResult = await consolidate(home, { now: FIXED_NOW });
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skipped 1 auto-promoted trace'));
     errorSpy.mockRestore();
 

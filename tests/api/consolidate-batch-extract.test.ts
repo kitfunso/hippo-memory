@@ -4,6 +4,9 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memo
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 let tmpDir: string;
 
@@ -26,7 +29,7 @@ describe('Batch extraction during consolidation', () => {
     writeEntry(tmpDir, ep1);
     writeEntry(tmpDir, ep2);
 
-    const result = await consolidate(tmpDir, { dryRun: false, now: new Date() });
+    const result = await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
 
     expect(result.extractionCandidates).toBe(2);
     expect(result.extracted).toBe(0);
@@ -49,7 +52,7 @@ describe('Batch extraction during consolidation', () => {
     });
     writeEntry(tmpDir, fact);
 
-    const result = await consolidate(tmpDir, { dryRun: false, now: new Date() });
+    const result = await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
 
     expect(result.extractionCandidates).toBe(0);
   });

@@ -4,7 +4,7 @@
  *
  * Real scratch stores throughout (house rule). FILE-UNIQUE scratch root:
  * parallel vitest workers collide on a SHARED root (hard-learned — see
- * tests/benchmarks/memory-value-fit.test.ts's FIT_SCRATCH_ROOT comment), so this file
+ * tests/benchmarks/memory-value-fit.process.test.ts's FIT_SCRATCH_ROOT comment), so this file
  * gets its own uniquely-named root, distinct from every other harness test
  * file's root name.
  */
