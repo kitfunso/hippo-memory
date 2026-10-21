@@ -198,12 +198,16 @@ export function rankNonPinnedByTenant(
   validateWeights(weights, digest);
   const byId = new Map(entries.map((e) => [e.id, e]));
   const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now, strengthOptionsOf(undefined)));
-  return rankCandidates(
-    candidates,
-    () => true,
-    (ids) => [ids.map((id) => byId.get(id)!)],
-    weights,
-  );
+  const result = new Map<string, MvRankInfo>();
+  for (const group of tieGroups(candidates, () => true, weights)) {
+    const held = group.tied.map((id) => identityOf(byId.get(id)!)).sort(compareEntryIdentity);
+    placeTie(
+      result,
+      group,
+      held.map((row, at) => [at, row.id] as const),
+    );
+  }
+  return result;
 }
 
 /** A non-pinned row's id, tenant and features: all the ranking keeps of a row. */
@@ -223,21 +227,49 @@ export function mvCandidate(entry: MemoryEntry, now: Date, rules: StrengthOption
   };
 }
 
+/** Pages of rows, read now or a page at a time from the store. */
+type TiePages = Iterable<readonly EntryIdentity[]> | AsyncIterable<readonly EntryIdentity[]>;
+
 /** rankNonPinnedByTenant over compact candidates, for the `wanted` ids and every non-finite one; `read` returns the
  * rows of a score tie, which the shared tie-break orders by content. */
-export function rankCandidates(
+export async function rankCandidates(
   candidates: readonly MvCandidate[],
   wanted: (id: string) => boolean,
-  read: (ids: readonly string[]) => Iterable<readonly EntryIdentity[]>,
+  read: (ids: readonly string[]) => TiePages,
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
-): Map<string, MvRankInfo> {
+): Promise<Map<string, MvRankInfo>> {
+  const result = new Map<string, MvRankInfo>();
+  for (const group of tieGroups(candidates, wanted, weights)) {
+    placeTie(result, group, await tiePlaces(group.tied, group.want, read));
+  }
+  return result;
+}
+
+/** One run of equal scores within a tenant's ranking, holding at least one wanted id. */
+interface TieGroup {
+  readonly tenantId: string;
+  readonly score: number;
+  /** 0-based place of the run's first row in the tenant's ranking. */
+  readonly start: number;
+  readonly tied: readonly string[];
+  readonly total: number;
+  readonly keepN: number;
+  readonly want: (id: string) => boolean;
+}
+
+/** Every tenant's score ties that hold a wanted id, so the sync and paged rankings share one scoring and order. */
+function tieGroups(
+  candidates: readonly MvCandidate[],
+  wanted: (id: string) => boolean,
+  weights: Readonly<Record<string, number>>,
+): TieGroup[] {
   const byTenant = new Map<string, MvFeatures[]>();
   for (const c of candidates) {
     const list = byTenant.get(c.tenantId);
     if (list) list.push([c.id, c.features]);
     else byTenant.set(c.tenantId, [[c.id, c.features]]);
   }
-  const result = new Map<string, MvRankInfo>();
+  const groups: TieGroup[] = [];
   for (const [tenantId, group] of byTenant) {
     const scores = scoreFeatures(group, weights);
     const ids = group.map(([id]) => id).sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
@@ -247,31 +279,40 @@ export function rankCandidates(
       const score = scores.get(ids[start])!;
       while (end < ids.length && scores.get(ids[end]) === score) end++;
       // A non-finite row is always wanted: the caller names every one in a warning, in rank order.
-      const want = (id: string) => wanted(id) || score === -Infinity;
-      for (const [at, id] of tiePlaces(ids.slice(start, end), want, read)) {
-        result.set(id, { tenantId, score, rank: start + at + 1, totalNonPinned: ids.length, keepN });
-      }
+      const want = (id: string): boolean => wanted(id) || score === -Infinity;
+      const tied = ids.slice(start, end);
+      if (tied.some(want)) groups.push({ tenantId, score, start, tied, total: ids.length, keepN, want });
     }
   }
-  return result;
+  return groups;
+}
+
+function placeTie(
+  result: Map<string, MvRankInfo>,
+  { tenantId, score, start, total, keepN }: TieGroup,
+  places: ReadonlyArray<readonly [number, string]>,
+): void {
+  for (const [at, id] of places) {
+    result.set(id, { tenantId, score, rank: start + at + 1, totalNonPinned: total, keepN });
+  }
 }
 
 /** The place of each wanted id among `tied` by compareEntryIdentity, the shared tie-break of every score-primary sort
  * (src/base/rank/compare.ts); only the wanted rows are held, the rest are counted a page at a time. */
-function tiePlaces(
+async function tiePlaces(
   tied: readonly string[],
   wanted: (id: string) => boolean,
-  read: (ids: readonly string[]) => Iterable<readonly EntryIdentity[]>,
-): Array<readonly [number, string]> {
+  read: (ids: readonly string[]) => TiePages,
+): Promise<Array<readonly [number, string]>> {
   const mine = tied.filter(wanted);
   if (mine.length === 0) return [];
   if (tied.length === 1) return [[0, tied[0]]];
   const held: EntryIdentity[] = [];
-  for (const page of read(mine)) for (const row of page) held.push(identityOf(row));
+  for await (const page of read(mine)) for (const row of page) held.push(identityOf(row));
   held.sort(compareEntryIdentity);
   const own = new Set(mine);
   const below = Array.from({ length: held.length + 1 }, () => 0);
-  for (const page of read(tied.filter((id) => !own.has(id)))) {
+  for await (const page of read(tied.filter((id) => !own.has(id)))) {
     for (const row of page) below[heldBelow(held, row)]++;
   }
   let others = 0;

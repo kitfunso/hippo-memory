@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { contextGet } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -61,7 +62,7 @@ describe('contextGet without a reach', () => {
 
   it('reads a store of another kind as one project with no global store', async () => {
     const { reach: _reach, ...bare } = apiCtx(local);
-    const other = { ...sqliteStore(local), localFiles: undefined };
+    const other = { ...withoutFolderGroups(sqliteStore(local)), kind: 'other' };
     expect(idsOf(await contextGet({ ...bare, store: other }, OPTS))).toEqual([localPin]);
   });
 

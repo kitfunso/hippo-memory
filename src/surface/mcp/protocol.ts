@@ -6,10 +6,13 @@ import { mapApiError } from '../../api/error-reply.js';
 import { INTERNAL_ERROR_MESSAGE } from '../../base/util/http-util.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { currentRequestId } from '../../base/util/request-scope.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../../api/index.js';
-import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../../base/scope/project-identity.js';
+import {
+  findHippoStoreDir,
+  resolveGlobalRootDir,
+  type ResolveProjectIdentityOpts,
+} from '../../base/scope/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
@@ -24,7 +27,7 @@ export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProject
   const local = findHippoStoreDir(cwd, opts);
   if (local !== null) return local;
   // Global fallback (respects $HIPPO_HOME / $XDG_DATA_HOME)
-  const global = getGlobalRoot();
+  const global = resolveGlobalRootDir();
   return fs.existsSync(global) ? global : null;
 }
 

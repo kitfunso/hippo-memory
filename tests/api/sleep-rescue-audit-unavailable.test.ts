@@ -7,7 +7,7 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { calculateStrength, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
@@ -60,7 +60,7 @@ describe('sleep rescue audit', () => {
 
     // A handle per store call, outside the shared one of `hippo sleep` and the package's consolidate, so the audit
     // opens its own and that open can refuse.
-    const result = await runConsolidation(sqliteSyncStore(root).localFiles, {
+    const result = await runConsolidation(sqliteStore(root), {
       now: NOW,
       config: loadConfig(root),
       tenantId: 'default',

@@ -1,11 +1,10 @@
 import { MemoryEntry, type DecayOptions } from '../../base/memory/memory.js';
-import type { Learning } from '../../store/local/learning.js';
-import type { TombstoneChecks } from '../../store/local/consolidation.js';
 import { loadConfig } from '../../base/config/config.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
-import type { DormantMove, StrengthRefresh } from '../../store/local/consolidation.js';
+import type { DormantMove, StrengthRefresh } from '../../store/port/consolidation.js';
+import type { StoreWith } from '../../store/port.js';
 import type { SleepRows, Survivors } from './survivors.js';
-import type { Consolidation } from '../../store/local/index.js';
+import type { TombstoneChecks } from './tombstones.js';
 
 export interface ConsolidationResult {
   decayed: number;
@@ -49,14 +48,21 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
 }
 
 /** Re-syncs the full-text index with `memories`; a store open that is already current no longer counts the two. */
-export function syncFtsIndex(store: Consolidation, dryRun: boolean, result: ConsolidationResult): void {
-  const counts = store.ftsDrift(!dryRun);
+export async function syncFtsIndex(
+  store: StoreWith<'consolidation'>,
+  dryRun: boolean,
+  result: ConsolidationResult,
+): Promise<void> {
+  const counts = await store.consolidation.ftsDrift(!dryRun);
   if (counts === null) return;
   result.details.push(
     `  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ` +
       `${counts.memories} memories)`,
   );
 }
+
+/** The store a consolidation runs on: its own group, and the learning group extraction writes through. */
+export type ConsolidationStore = StoreWith<'consolidation' | 'learning'>;
 
 /**
  * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one
@@ -65,8 +71,7 @@ export function syncFtsIndex(store: Consolidation, dryRun: boolean, result: Cons
 export interface SleepRun {
   /** The caller's tenant, whose completed sessions become traces. */
   tenantId: string;
-  learning: Learning;
-  store: Consolidation;
+  store: ConsolidationStore;
   now: Date;
   dryRun: boolean;
   config: ReturnType<typeof loadConfig>;

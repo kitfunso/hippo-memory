@@ -6,10 +6,10 @@ import type { ImportReport } from '../../src/domain/agent-memories/report.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { setFtsInSync } from '../../src/db/index.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { mergedText } from '../../src/base/util/same-text.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   closeWorld,
@@ -69,37 +69,37 @@ function seed(): void {
   ]);
 }
 
-const sync = (dryRun: boolean): ImportReport =>
+const sync = (dryRun: boolean): Promise<ImportReport> =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport({}),
+    stores: sqliteImportStores({}),
     machine: w.machine,
     dryRun,
   });
 
 describe('agent memory sync duplicate check', () => {
-  it.each([true, false])('skips exactly the texts another path holds, index in sync: %s', (inSync) => {
+  it.each([true, false])('skips exactly the texts another path holds, index in sync: %s', async (inSync) => {
     seed();
     withDb(w.local, (db) => setFtsInSync(db, inSync));
 
-    const { result, statements } = recordStatements(() => sync(false));
+    const { result, statements } = await recordStatementsAsync(() => sync(false));
 
     expect(countMatching(statements, 'memories_fts MATCH') > 0).toBe(inSync);
     expect(toolTally(result, 'claude-code')).toMatchObject({ imported: 3, duplicate: 2 });
     expect(liveTexts(w.local)).toEqual([NEW, OTHER_TENANT, SUPERSEDED].sort());
   });
 
-  it('reads no more rows with 500 stored rows that hold none of the notes', () => {
-    const rowsRead = (inSync: boolean): number => {
+  it('reads no more rows with 500 stored rows that hold none of the notes', async () => {
+    const rowsRead = async (inSync: boolean): Promise<number> => {
       withDb(w.local, (db) => setFtsInSync(db, inSync));
-      return recordStatements(() => sync(true)).rowsRead;
+      return (await recordStatementsAsync(() => sync(true))).rowsRead;
     };
     seed();
-    const before = [rowsRead(true), rowsRead(false)];
+    const before = [await rowsRead(true), await rowsRead(false)];
 
     write(Array.from({ length: 500 }, (_, k) => row(`xyzzy plugh ${k}`)));
 
-    expect([rowsRead(true), rowsRead(false)]).toEqual(before);
+    expect([await rowsRead(true), await rowsRead(false)]).toEqual(before);
   });
 });

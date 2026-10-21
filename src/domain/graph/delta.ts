@@ -7,7 +7,7 @@ import type {
   DesiredRelation,
   GraphOp,
   NaturalKey,
-} from '../../store/local/graph-rebuild.js';
+} from '../../store/port/graph-rebuild.js';
 import type { StoredEntity, StoredGraph, StoredRelation } from '../../store/port/graph-reads.js';
 
 export type { DesiredEntity, DesiredGraph, DesiredRelation, GraphOp, NaturalKey };
@@ -35,7 +35,7 @@ function provenanceOf(memoryId: string | null, kinds: MemoryKinds): string {
   return kind === undefined ? '|distilled' : `${memoryId}|${kind}`;
 }
 
-export function memoryIdsOf(desired: DesiredGraph): string[] {
+function memoryIdsOf(desired: DesiredGraph): string[] {
   const ids = new Set<string>();
   for (const row of [...desired.entities, ...desired.relations]) if (row.memoryId !== null) ids.add(row.memoryId);
   return [...ids];
@@ -116,7 +116,7 @@ function diffRelations(
 }
 
 /** The diff itself: pure, so the store reads the rows and this decides the ops. */
-export function diffGraph(stored: StoredGraph, desired: DesiredGraph): GraphOp[] {
+function diffGraph(stored: StoredGraph, desired: DesiredGraph): GraphOp[] {
   const entityDelta = diffEntities(stored.entities, desired.entities, stored.kinds);
   return [
     ...entityDelta.ops,

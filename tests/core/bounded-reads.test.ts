@@ -1,18 +1,16 @@
 // Invalidation, the dirty-summary queue and the store count read only the rows they need: counted in rows, never timed.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
-import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { memoryCountAll } from '../../src/api/memories/memories.js';
 import { adminActor } from '../../src/api/types.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntriesTogether, loadAllDirtySummaries, loadAllEntries } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -52,13 +50,13 @@ describe('invalidateMatching without onlyId', () => {
     return { root, hits };
   }
 
-  it('weakens the same rows a pass over every row would, in the same order', () => {
+  it('weakens the same rows a pass over every row would, in the same order', async () => {
     const { root, hits } = seeded(50);
     const expected = new Set([hits.half.id, hits.tagOnly.id]);
     const order = loadAllEntries(root, 'default')
       .map((e) => e.id)
       .filter((id) => expected.has(id));
-    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default');
+    const result = await invalidateMatching(sqliteStore(root), target, 'default');
     expect(result.targets).toEqual(order);
     expect(result.skippedPinned).toEqual([hits.pinned.id]);
     const after = loadAllEntries(root, 'default')
@@ -68,27 +66,28 @@ describe('invalidateMatching without onlyId', () => {
     expect(after).toEqual([...expected].sort());
   });
 
-  it('still finds content whose lowercase only reaches ASCII outside SQLite folding', () => {
+  it('still finds content whose lowercase only reaches ASCII outside SQLite folding', async () => {
     const root = newRoot('bounded-invalidate-fold');
     const kelvin = memory('Kappa value drifted');
     writeEntriesTogether(root, [...padding(5), kelvin]);
     expect(
-      invalidateMatching(
-        sqliteSyncStore(root).localFiles.learning,
-        { from: 'kappa', to: null, type: 'removal' },
-        'default',
-        { dryRun: true },
+      (
+        await invalidateMatching(sqliteStore(root), { from: 'kappa', to: null, type: 'removal' }, 'default', {
+          dryRun: true,
+        })
       ).targets,
     ).toEqual([kelvin.id]);
   });
 
-  it('reads the same rows however many rows cannot match', () => {
-    const read = [10, 200].map((n) => {
+  it('reads the same rows however many rows cannot match', async () => {
+    const read: number[] = [];
+    for (const n of [10, 200]) {
       const { root } = seeded(n);
-      return recordStatements(() =>
-        invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { dryRun: true }),
-      ).rowsRead;
-    });
+      const { rowsRead } = await recordStatementsAsync(() =>
+        invalidateMatching(sqliteStore(root), target, 'default', { dryRun: true }),
+      );
+      read.push(rowsRead);
+    }
     expect(read[1]).toBe(read[0]);
   });
 });
@@ -125,7 +124,7 @@ describe('rebuildDirtySummaries', () => {
         .map((e) => e.id);
       expect(loadAllDirtySummaries(root, 3).map((e) => e.id)).toEqual(newest);
       const { result, rowsRead } = await recordStatementsAsync(() =>
-        rebuildDirtySummaries(sqliteConsolidation(handlesOf(root)), { apiKey: 'k', fetcher, cap: 2 }),
+        rebuildDirtySummaries(sqliteStore(root), { apiKey: 'k', fetcher, cap: 2 }),
       );
       expect(result).toMatchObject({ attempted: 2, capped: true });
       read.push(rowsRead);

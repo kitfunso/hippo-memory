@@ -5,15 +5,16 @@ import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { Consolidation, LocalFiles } from '../../store/local/index.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
+import type { StoreWith } from '../../store/port.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
 // Facts join a cluster when their tag sets overlap at least this much.
 const CLUSTER_JACCARD_MIN = 0.5;
 
-/** Sleep's store. */
-type DagStore = Pick<LocalFiles, 'consolidation'>;
+/** Sleep's store: the summary reads and writes, and the row writes every store has. */
+type DagStore = StoreWith<'consolidation'>;
 
 /** The summary options plus the config's default half-life, which new summaries start on. */
 export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number };
@@ -117,7 +118,7 @@ function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: 
 
 /** Summarize one eligible cluster, write the summary, then re-parent its members under it. */
 async function summarizeCluster(
-  store: Consolidation,
+  store: DagStore,
   cluster: FactCluster,
   home: PartitionHome,
   opts: DagSummaryOptions,
@@ -134,7 +135,7 @@ async function summarizeCluster(
   // A refused summary skips only this cluster. writeEntry's guard reads tenantId off the entry (home.tenantId), so it
   // already checks this tenant's tombstones: no separate check here.
   try {
-    store.writeEntry(summaryEntry);
+    await store.entryWrites.writeEntry({ entry: summaryEntry, actor: CLI_ACTOR });
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
@@ -145,15 +146,15 @@ async function summarizeCluster(
   }
   result.summariesCreated++;
 
-  result.factsLinked += store.writeTogether(
-    cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id })),
-  );
+  const linked = cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id }));
+  await store.lessonWrites.writeTogether(linked);
+  result.factsLinked += linked.length;
   // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's rebuild pass would
   // re-rebuild every new summary at twice the LLM cost.
-  store.clearSummaryDirty(summaryEntry.id, summaryEntry.tenantId, 'buildDag');
+  await store.consolidation.clearSummaryDirty(summaryEntry.id, summaryEntry.tenantId, 'buildDag');
 }
 
-export async function buildDag(local: DagStore, facts: MemoryEntry[], opts: DagBuildOptions): Promise<DagBuildResult> {
+export async function buildDag(store: DagStore, facts: MemoryEntry[], opts: DagBuildOptions): Promise<DagBuildResult> {
   const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
   const { baseHalfLifeDays } = opts;
 
@@ -173,7 +174,7 @@ export async function buildDag(local: DagStore, facts: MemoryEntry[], opts: DagB
     result.candidateClusters += eligibleClusters.length;
 
     for (const cluster of eligibleClusters) {
-      await summarizeCluster(local.consolidation, cluster, home, opts, result);
+      await summarizeCluster(store, cluster, home, opts, result);
     }
   }
 
@@ -191,7 +192,7 @@ export interface DagRebuildResult {
 
 /** Regenerate one dirty summary from its children and tally the outcome; throws reach the caller's isolation. */
 interface RebuildOneSummaryOptions {
-  store: Consolidation;
+  store: DagStore;
   summary: MemoryEntry;
   opts: DagSummaryOptions;
   result: DagRebuildResult;
@@ -203,11 +204,11 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
   const { store, summary, opts, result, preloaded, queuedIds } = options;
   // A queued child may have been rebuilt earlier in this drain, so its preloaded content is stale: reread then.
   const children = preloaded.some((c) => queuedIds.has(c.id))
-    ? store.childrenOfSummary(summary.id, summary.tenantId)
+    ? await store.consolidation.childrenOfSummary(summary.id, summary.tenantId)
     : preloaded;
 
   if (children.length === 0) {
-    clearZeroChildSummary(store, summary, result);
+    await clearZeroChildSummary(store, summary, result);
     return;
   }
 
@@ -224,7 +225,7 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
   }
 
   const childCreatedAts = children.map((c) => c.created).sort();
-  const { changed, refused } = store.applyRebuild(summary, {
+  const { changed, refused } = await store.consolidation.applyRebuild(summary, {
     content: newContent,
     descendantCount: children.length,
     earliestAt: childCreatedAts[0],
@@ -242,8 +243,8 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
 }
 
 /** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
-function clearZeroChildSummary(store: Consolidation, summary: MemoryEntry, result: DagRebuildResult): void {
-  const { changed } = store.applyRebuild(summary, {
+async function clearZeroChildSummary(store: DagStore, summary: MemoryEntry, result: DagRebuildResult): Promise<void> {
+  const { changed } = await store.consolidation.applyRebuild(summary, {
     content: summary.content,
     descendantCount: 0,
     earliestAt: null,
@@ -269,12 +270,12 @@ function summaryLabel(summary: MemoryEntry): string {
  * sleep's second writer gets changed=false (UPDATE requires summary_dirty=1) and is skipped silently; a tombstone hit
  * counts as `refused`. */
 export async function rebuildDirtySummaries(
-  store: Consolidation,
+  store: DagStore,
   opts: DagSummaryOptions & { cap?: number },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
   // One past the cap tells whether more were waiting without reading the rest.
-  const dirty = store.dirtySummaries(cap + 1);
+  const dirty = await store.consolidation.dirtySummaries(cap + 1);
   const capped = dirty.length > cap;
   const queue = dirty.slice(0, cap);
 
@@ -287,7 +288,7 @@ export async function rebuildDirtySummaries(
     capped,
   };
 
-  const childrenOf = store.childrenOfSummaries(queue);
+  const childrenOf = await store.consolidation.childrenOfSummaries(queue);
   const queuedIds = new Set(queue.map((s) => s.id));
 
   for (const [index, summary] of queue.entries()) {
@@ -297,7 +298,7 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      await rebuildOneSummary({ store, summary, opts, result, preloaded: childrenOf(summary), queuedIds });
+      await rebuildOneSummary({ store, summary, opts, result, preloaded: childrenOf[index] ?? [], queuedIds });
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic failure (SQLite I/O, prepare), since audit()
       // already catches its own.
@@ -346,7 +347,7 @@ function createProfileEntry(summary: string, cluster: FactCluster, home: Partiti
 
 /** Profile one eligible cluster of L2s, write it, then re-link the L2s under it. */
 async function profileCluster(
-  store: Consolidation,
+  store: DagStore,
   cluster: FactCluster,
   home: PartitionHome,
   opts: DagSummaryOptions,
@@ -365,7 +366,7 @@ async function profileCluster(
   const profileEntry = createProfileEntry(summary, cluster, home);
   // A refused profile skips only this cluster; the re-linking below never runs for it.
   try {
-    store.writeEntry(profileEntry);
+    await store.entryWrites.writeEntry({ entry: profileEntry, actor: CLI_ACTOR });
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
@@ -379,18 +380,23 @@ async function profileCluster(
   }
   result.profilesCreated++;
 
-  result.l2sLinked += store.writeTogether(
-    cluster.members.map((member) => ({ ...member, dagParentId: profileEntry.id })),
-  );
+  const linked = cluster.members.map((member) => ({ ...member, dagParentId: profileEntry.id }));
+  await store.lessonWrites.writeTogether(linked);
+  result.l2sLinked += linked.length;
   // Re-linking just marked the fresh L3 dirty; clear it so this cycle's rebuild skips it.
   // The distinct source tags the audit row.
-  store.clearSummaryDirty(profileEntry.id, home.tenantId, 'buildEntityProfiles', 'buildEntityProfiles-clean');
+  await store.consolidation.clearSummaryDirty(
+    profileEntry.id,
+    home.tenantId,
+    'buildEntityProfiles',
+    'buildEntityProfiles-clean',
+  );
 }
 
 /** Build L3 entity profiles by clustering L2 summaries sharing entity tags (2+ L2s per entity).
  * Each L2 link write marks the new L3 dirty, so clear it or the same cycle re-rebuilds it. */
 export async function buildEntityProfiles(
-  local: DagStore,
+  store: DagStore,
   l2Summaries: MemoryEntry[],
   opts: DagBuildOptions,
 ): Promise<EntityProfilesBuildResult> {
@@ -418,7 +424,7 @@ export async function buildEntityProfiles(
     result.candidateClusters += eligible.length;
 
     for (const cluster of eligible) {
-      await profileCluster(local.consolidation, cluster, home, opts, result);
+      await profileCluster(store, cluster, home, opts, result);
     }
   }
 

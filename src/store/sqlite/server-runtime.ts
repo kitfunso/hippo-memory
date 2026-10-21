@@ -3,6 +3,7 @@
 import type { HippoStore, StoreReach } from '../port.js';
 import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
 import { workerCounts } from './executor-counts.js';
+import { isHippoDbStore } from './hippo-db-stores.js';
 import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from './held-connection.js';
 import { sqliteReach } from './store.js';
 import { globalStoresFor, workerSqliteStore } from './worker-store.js';
@@ -15,6 +16,8 @@ export interface ServerRuntimeOptions extends ExecutorOptions {
 /** The served store and what a listener calls around each response; close() ends it all, the held connection last. */
 export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly store: HippoStore;
+  /** The store is hippo.db rather than a caller's own, so its folder's config.json decides shared-ness. */
+  readonly onHippoDb: boolean;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   readonly reachOf: (shared: boolean) => StoreReach;
   /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */
@@ -33,6 +36,7 @@ export function sqliteServerRuntime(hippoRoot: string, opts: ServerRuntimeOption
   const holder = createStoreHolder(hippoRoot, store);
   return {
     store,
+    onHippoDb: isHippoDbStore(store),
     reachOf: (shared) => sqliteReach(hippoRoot, store, shared, globalStores.open),
     offLoop: offLoopFor(store),
     outsideRouteBlock,

@@ -29,11 +29,11 @@ const { importForStore, importAtSessionEnd } = await import(syncUrl);
 const { currentMachine } = await import(new URL('../../base/util/agent-homes.js', syncUrl).href);
 const { homedir } = await import('node:os');
 const { loadConfig } = await import(new URL('../../base/config/config.js', syncUrl).href);
-const { sqliteAgentImport } = await import(new URL('../../store/sqlite/agent-import.js', syncUrl).href);
+const { sqliteImportStores } = await import(new URL('../../store/sqlite/agent-import-stores.js', syncUrl).href);
 const machine = mode === 'negative' ? { ...currentMachine(), home: cleanHome, env: {} }
   : mode === 'env' ? currentMachine() : { ...currentMachine(), home: homedir(), env: {} };
-const warnings = [...importForStore(root, { configAt: loadConfig, tenantId: 'default', agentImport: sqliteAgentImport({}), machine }).warnings];
-if (mode === 'negative') warnings.push(...importAtSessionEnd(storeless, undefined, { configAt: loadConfig, tenantId: 'default', agentImport: sqliteAgentImport({}), machine }).warnings);
+const warnings = [...(await importForStore(root, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine })).warnings];
+if (mode === 'negative') warnings.push(...(await importAtSessionEnd(storeless, undefined, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine })).warnings);
 process.stdout.write(JSON.stringify({ warnings }));
 `;
 const CLEAN_PROJECT = 'Clean project note for the injected machine.';

@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
-import type { CompactionText, Log } from '../../store/local/compaction-hooks.js';
+import type { CompactionText, StepFailure } from '../../store/port/compaction-hooks.js';
 import type { PostCompactPayload } from './compaction-record.js';
 import { isStoreBusy } from '../../store/port.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -37,6 +37,9 @@ const BAD_TMP = /^[\w-]+\.\w+\.bad\.[0-9a-f]{8}\.tmp$/;
 const NEW_STEM = /^(\d{13})-[0-9a-f]{8}$/;
 const LEGACY_STEM_TIME = /-(\d+)$/;
 
+/** Where a compaction step's lines go: the hook's log file, or a sleep's warnings. */
+export type Log = (message: string) => void;
+
 /** Only the fs calls the spool makes, so a test can stand in for one of them. */
 export interface SpoolFs {
   existsSync(file: string): boolean;
@@ -58,9 +61,9 @@ export interface SpooledCompaction {
 
 /**
  * Records one spooled compaction; it calls `recorded` once the store holds the summary, so the file is done even if a
- * later step throws.
+ * later step fails. Answers why a step failed, or null; a throw counts as a failure too.
  */
-export type SpoolImporter = (spooled: SpooledCompaction, recorded: () => void) => void;
+export type SpoolImporter = (spooled: SpooledCompaction, recorded: () => void) => Promise<StepFailure | null>;
 
 type Settled = 'done' | 'gone' | 'busy';
 type BadCause = 'unreadable' | 'failed' | 'interrupted';
@@ -517,13 +520,13 @@ function removeClaim(fsx: SpoolFs, claim: string, name: string, log: Log): void 
 interface ImportFailedOptions {
   readonly text: string;
   readonly recorded: boolean;
-  readonly cause: unknown;
+  readonly failure: StepFailure;
   readonly log: Log;
 }
 
 /**
- * After an importer throw: a busy store stops the run with the count unchanged, any other error counts one try toward
- * .bad.
+ * After an importer failure: a busy store stops the run with the count unchanged, any other error counts one try
+ * toward .bad.
  */
 function importFailed(
   fsx: SpoolFs,
@@ -532,15 +535,15 @@ function importFailed(
   entry: Waiting,
   options: ImportFailedOptions,
 ): FileOutcome {
-  const { text, recorded, cause, log } = options;
+  const { text, recorded, failure, log } = options;
   const { name } = entry;
-  const busy = isStoreBusy(cause);
+  const { busy, message } = failure;
   if (recorded) {
     // The record stays `summarised`, so the stalled-record step of a later replay writes its items.
     log(
       busy
         ? `spool file ${name} saved; its memories wait for the next sleep (store busy)`
-        : `spool file ${name} saved; writing its memories failed: ${errorMessage(cause)}`,
+        : `spool file ${name} saved; writing its memories failed: ${message}`,
     );
     return busy ? 'stop' : 'skipped';
   }
@@ -552,9 +555,9 @@ function importFailed(
   const next = entry.attempt + 1;
   if (next < MAX_ATTEMPTS) {
     putBack({ fsx, dir, claim, stem: entry.stem, attempt: next, log });
-    log(`spool file ${name} failed to import (try ${next} of ${MAX_ATTEMPTS}): ${errorMessage(cause)}`);
+    log(`spool file ${name} failed to import (try ${next} of ${MAX_ATTEMPTS}): ${message}`);
   } else if (moveBad(fsx, dir, claim, { stem: entry.stem, attempt: entry.attempt, cause: 'failed', log, raw: text })) {
-    log(`spool file ${name} set aside as .bad after ${MAX_ATTEMPTS} tries: ${errorMessage(cause)}`);
+    log(`spool file ${name} set aside as .bad after ${MAX_ATTEMPTS} tries: ${message}`);
   }
   return 'skipped';
 }
@@ -569,7 +572,7 @@ interface ImportFileOptions {
 }
 
 /** Claims, reads and imports one waiting file; `stop` ends the run because the store is busy. */
-function importFile(options: ImportFileOptions): FileOutcome {
+async function importFile(options: ImportFileOptions): Promise<FileOutcome> {
   const { fsx, dir, entry, tenantId, log, importOne } = options;
   const { name } = entry;
   const claim = path.join(dir, `${entry.stem}.a${entry.attempt}.claim-${stamp(Date.now())}`);
@@ -600,13 +603,15 @@ function importFile(options: ImportFileOptions): FileOutcome {
     recorded = true;
     removeClaim(fsx, claim, name, log);
   };
+  let failure: StepFailure | null;
   try {
-    importOne(spooled, markRecorded);
-    markRecorded();
-    return 'imported';
+    failure = await importOne(spooled, markRecorded);
   } catch (err) {
-    return importFailed(fsx, dir, claim, entry, { text, recorded, cause: err, log });
+    failure = { busy: isStoreBusy(err), message: errorMessage(err) };
   }
+  if (failure !== null) return importFailed(fsx, dir, claim, entry, { text, recorded, failure, log });
+  markRecorded();
+  return 'imported';
 }
 
 export interface SpoolCounts {
@@ -664,7 +669,7 @@ export interface ImportSpoolOptions {
  * One replayer at a time holds `replay.lock`, so only one process claims a file even where Windows lets two renames of
  * it both land.
  */
-export function importSpool(options: ImportSpoolOptions): number {
+export async function importSpool(options: ImportSpoolOptions): Promise<number> {
   const { hippoRoot, tenantId, log, deadline, importOne, fsx = fs } = options;
   const dir = path.join(hippoRoot, SPOOL_DIR);
   if (!fsx.existsSync(dir)) return 0;
@@ -679,7 +684,7 @@ export function importSpool(options: ImportSpoolOptions): number {
     // Only promotion and recovery add waiting names, so the folder is listed again only after one of them did.
     for (const entry of waitingFiles(promoted || recovered ? fsx.readdirSync(dir) : names)) {
       if (Date.now() > deadline || !ownsLock(fsx, dir, mine.token, log)) break;
-      const outcome = importFile({ fsx, dir, entry, tenantId, log, importOne });
+      const outcome = await importFile({ fsx, dir, entry, tenantId, log, importOne });
       if (outcome === 'imported') finished++;
       if (outcome === 'stop') break;
     }

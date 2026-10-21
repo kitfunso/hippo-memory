@@ -17,9 +17,11 @@ import {
   type MemoryEntry,
   type SearchResult,
   type SleepOpts,
+  type SleepContext,
   type SleepResult,
+  type SleepStore,
 } from '../../src/index.js';
-import type { Context, LocalContext } from '../../src/api/types.js';
+import type { Context } from '../../src/api/types.js';
 import type {
   RecallBoostOptions,
   RecallFilterOptions,
@@ -30,7 +32,6 @@ import type {
 } from '../../src/api/index.js';
 import type { ConsolidationResult } from '../../src/domain/consolidate/run.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';
-import type { LocalStore } from '../../src/store/local/index.js';
 import type { LossAversion } from '../../src/base/memory/memory.js';
 
 // Declared, not callback parameters: typeOnly takes a callback with none, so a parameter would be the error.
@@ -74,17 +75,17 @@ describe('hippo-memory entry types', () => {
     expectTypeOf(textOverlap).toEqualTypeOf<(a: string, b: string) => number>();
   });
 
-  it('consolidate and sleep are async, and take a store with local files', () => {
-    expectTypeOf(consolidate).parameter(0).toEqualTypeOf<string | LocalStore>();
+  it('consolidate and sleep are async, and take a store with the sleep groups', () => {
+    expectTypeOf(consolidate).parameter(0).toEqualTypeOf<string | SleepStore>();
     expectTypeOf(consolidate).returns.toEqualTypeOf<Promise<ConsolidationResult>>();
-    expectTypeOf(sleep).parameter(0).toEqualTypeOf<LocalContext>();
+    expectTypeOf(sleep).parameter(0).toEqualTypeOf<SleepContext>();
     expectTypeOf(sleep).parameter(1).toEqualTypeOf<SleepOpts | undefined>();
     expectTypeOf(sleep).returns.toEqualTypeOf<Promise<SleepResult>>();
     // @ts-expect-error sleep needs a Context, not a root path
     typeOnly(() => sleep('/tmp/root'));
-    // @ts-expect-error a store with no local files has nothing for a sleep pass to work on
+    // @ts-expect-error a store without the sleep groups has nothing for a sleep pass to work on
     typeOnly(() => consolidate(plainStore));
-    // @ts-expect-error the same for a Context whose store has no local files
+    // @ts-expect-error the same for a Context whose store has no sleep groups
     typeOnly(() => sleep(plainCtx));
   });
 });

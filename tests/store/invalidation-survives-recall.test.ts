@@ -8,7 +8,7 @@ import { markRetrieved } from '../../src/base/memory/memory.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { remember, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -29,8 +29,8 @@ describe('a deliberate stale tier survives being read', () => {
   it('a recall through contextGet leaves an invalidated memory invalidated', async () => {
     const { id } = await remember(ctx(), { content: 'deploys go through the legacy pipeline' });
 
-    const result = invalidateMatching(
-      sqliteSyncStore(home).localFiles.learning,
+    const result = await invalidateMatching(
+      sqliteStore(home),
       {
         from: 'legacy pipeline',
         to: null,

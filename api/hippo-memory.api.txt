@@ -264,8 +264,6 @@ index.d.ts: HandoffOutcome re-export
 index.d.ts: ImportOptions re-export
 index.d.ts: ImportResult re-export
 index.d.ts: Layer re-export
-index.d.ts: LocalContext re-export
-index.d.ts: LocalStore re-export
 index.d.ts: MAX_HOPS re-export
 index.d.ts: MatchExplanation re-export
 index.d.ts: MemoryEntry re-export
@@ -274,8 +272,10 @@ index.d.ts: SalienceOptions re-export
 index.d.ts: SalienceResult re-export
 index.d.ts: SearchResult re-export
 index.d.ts: SessionHandoff re-export
+index.d.ts: SleepContext re-export
 index.d.ts: SleepOpts re-export
 index.d.ts: SleepResult re-export
+index.d.ts: SleepStore re-export
 index.d.ts: applyOutcome re-export
 index.d.ts: buildSyntheticCorpus re-export
 index.d.ts: calculateStrength re-export
@@ -344,6 +344,7 @@ server.d.ts: CallerPreCompactRequest re-export
 server.d.ts: CallerProject re-export
 server.d.ts: CallerSessionEndRequest re-export
 server.d.ts: CallerSessionEndResult re-export
+server.d.ts: CaptureContext re-export
 server.d.ts: ConflictError re-export
 server.d.ts: Context re-export
 server.d.ts: ForbiddenError re-export
@@ -351,8 +352,6 @@ server.d.ts: HippoStore re-export
 server.d.ts: HttpError re-export
 server.d.ts: JsonValue re-export
 server.d.ts: LOOPBACK_HOST_HEADER re-export
-server.d.ts: LocalContext re-export
-server.d.ts: LocalStore re-export
 server.d.ts: NotFoundError re-export
 server.d.ts: RateLimitSpec re-export
 server.d.ts: ResolvedBearer re-export
@@ -371,7 +370,6 @@ server.d.ts: captureSessionTexts re-export
 server.d.ts: clientIpForRateLimit re-export
 server.d.ts: compactResumeForCaller re-export
 server.d.ts: isCrossSite re-export
-server.d.ts: isLocalStore re-export
 server.d.ts: isLoopback re-export
 server.d.ts: isReservedActor re-export
 server.d.ts: ownerOrSubject re-export

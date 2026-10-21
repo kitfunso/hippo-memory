@@ -10,9 +10,7 @@ import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { planProjectRepair } from '../../src/domain/sharing/project-merge.js';
 import { projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
-import { projectTagReads } from '../../src/store/sqlite/project-tags.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { resolveProjectIdentity } from '../../src/base/scope/project-identity.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
@@ -29,7 +27,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -41,6 +39,9 @@ const RESYNC_MS = 15_000;
 
 const T = 'default';
 let w: World;
+
+/** The repair's plan, as a dry run reads it. */
+const planAt = (root: string) => projectNameRepair(cliApiContext(root, T), { dryRun: true });
 
 beforeEach(() => {
   w = openWorld();
@@ -90,17 +91,17 @@ const sync = (cwd: string) =>
   importAtSessionEnd(cwd, undefined, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport({}),
+    stores: sqliteImportStores({}),
     machine: w.machine,
   });
 /** The sync and merge a next process runs, over a fresh module graph that has resolved no project yet. */
 async function nextProcess() {
   vi.resetModules();
-  const [syncMod, projects, roots, agentImport, config] = await Promise.all([
+  const [syncMod, projects, roots, importStores, config] = await Promise.all([
     import('../../src/domain/agent-memories/sync.js'),
     import('../../src/api/objects/projects.js'),
     import('../../src/surface/cli/api-context.js'),
-    import('../../src/store/sqlite/agent-import.js'),
+    import('../../src/store/sqlite/agent-import-stores.js'),
     import('../../src/base/config/config.js'),
   ]);
   return {
@@ -108,7 +109,7 @@ async function nextProcess() {
       syncMod.importAtSessionEnd(cwd, undefined, {
         configAt: config.loadConfig,
         tenantId: 'default',
-        agentImport: agentImport.sqliteAgentImport({}),
+        stores: importStores.sqliteImportStores({}),
         machine: w.machine,
       }),
     merge: (from: string, into: string) =>
@@ -147,22 +148,21 @@ describe('two repos named api in one global store', () => {
     }
   });
 
-  it('repair refuses to fold api into either, and doctor names both ids', () => {
+  it('repair refuses to fold api into either, and doctor names both ids', async () => {
     compaction('c-a', 'api', a);
     compaction('c-b', 'api', b);
-    const plan = withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global));
+    const plan = await planAt(w.global);
     expect(plan.folds).toEqual([]);
     expect(plan.collisions).toEqual([{ name: 'api', ids: ['github.com/acme-pay/api', 'github.com/acme-search/api'] }]);
-    const check = runDoctor({ diagnosticsAt, tenantId: 'default', cwd: a, home: w.home, version: 'test' }).checks.find(
-      (c) => c.id === 'projects',
-    );
+    const report = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd: a, home: w.home, version: 'test' });
+    const check = report.checks.find((c) => c.id === 'projects');
     expect(check).toMatchObject({ status: 'warn' });
     expect(check?.detail).toContain('api (github.com/acme-pay/api, github.com/acme-search/api)');
   });
 
-  it('repair folds a name whose folders all resolve to one id', () => {
+  it('repair folds a name whose folders all resolve to one id', async () => {
     compaction('c-a', 'api', a);
-    const plan = withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global));
+    const plan = await planAt(w.global);
     expect(plan.folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
     expect(plan.collisions).toEqual([]);
   });
@@ -228,18 +228,18 @@ describe('the upgrade re-sync', () => {
 
   it(
     'moves folder-named imports and their dormant snapshots under the id, importing nothing twice',
-    () => {
+    async () => {
       const api = checkout('git@github.com:acme/api.git', 'api');
       NOTES.forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
       globalConfig(false);
-      sync(api);
+      await sync(api);
       unlinkSync(join(projectNotes(w, api), 'n2.md'));
-      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
+      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
       const before = liveRows(w.global);
       expect(before.map((e) => e.originProject)).toEqual(['api', 'api']);
 
       globalConfig(true);
-      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
+      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
       const after = liveRows(w.global);
       expect(after.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort());
       for (const e of after) {
@@ -254,26 +254,26 @@ describe('the upgrade re-sync', () => {
         source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
       });
 
-      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
+      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
       note(projectNotes(w, api), 'n2.md', NOTES[2]);
-      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
     },
     RESYNC_MS,
   );
 
   it(
     'moves a dormant-only folder-named import, so a returning note is restored, not imported again',
-    () => {
+    async () => {
       const api = checkout('git@github.com:acme/api.git', 'api');
       note(projectNotes(w, api), 'n0.md', NOTES[0]);
       globalConfig(false);
-      sync(api);
+      await sync(api);
       unlinkSync(join(projectNotes(w, api), 'n0.md'));
-      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
+      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
 
       globalConfig(true);
       note(projectNotes(w, api), 'n0.md', NOTES[0]);
-      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
       expect(liveRows(w.global)).toMatchObject([
         {
           originProject: 'github.com/acme/api',
@@ -286,11 +286,11 @@ describe('the upgrade re-sync', () => {
 
   it(
     'repair keeps folder-named imports in their own session folder, folds the name, and the next sync moves them',
-    () => {
+    async () => {
       const api = checkout('git@github.com:acme/api.git', 'api');
       NOTES.slice(0, 2).forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
       globalConfig(false);
-      sync(api);
+      await sync(api);
       globalConfig(true);
       const transcript = join(dirname(projectNotes(w, api)), 's.jsonl');
       writeFileSync(transcript, `${JSON.stringify({ cwd: api })}\n`);
@@ -302,10 +302,10 @@ describe('the upgrade re-sync', () => {
           .run(T, api, transcript, new Date().toISOString()),
       );
 
-      const r = projectNameRepair(cliApiContext(w.global, T), { dryRun: false });
+      const r = await projectNameRepair(cliApiContext(w.global, T), { dryRun: false });
       expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
-      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
-      expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).copies).toEqual([]);
+      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
+      expect((await planAt(w.global)).copies).toEqual([]);
     },
     RESYNC_MS,
   );
@@ -316,12 +316,12 @@ describe('the upgrade re-sync', () => {
       const svc = checkout('file:///srv/git/svc.git', 'svc');
       note(projectNotes(w, svc), 'a.md', NOTES[0]);
       writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'old-svc' }));
-      sync(svc);
+      await sync(svc);
       writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
       const next = await nextProcess();
-      expect(next.merge('old-svc', 'new-svc').setAside).toEqual([]);
+      expect((await next.merge('old-svc', 'new-svc')).setAside).toEqual([]);
 
-      expect(toolTally(next.sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
+      expect(toolTally(await next.sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
       expect(liveRows(w.global)).toMatchObject([
         { content: NOTES[0], originProject: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
       ]);
@@ -331,20 +331,20 @@ describe('the upgrade re-sync', () => {
 });
 
 describe('a project store with an id', () => {
-  it("repair folds the store's own folder name into its id; nothing runs it unasked", () => {
+  it("repair folds the store's own folder name into its id; nothing runs it unasked", async () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
     initTestStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('svc');
 
-    const r = projectNameRepair(cliApiContext(store, T), { dryRun: false });
+    const r = await projectNameRepair(cliApiContext(store, T), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
     expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('github.com/acme/svc');
-    expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([]);
+    expect((await planAt(store)).folds).toEqual([]);
   });
 
-  it('repair folds the folder name when only a compaction record still carries it', () => {
+  it('repair folds the folder name when only a compaction record still carries it', async () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
     initTestStore(store);
@@ -355,34 +355,30 @@ describe('a project store with an id', () => {
         )
         .run(T, svc, new Date().toISOString()),
     );
-    expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([
-      { from: 'svc', into: 'github.com/acme/svc' },
-    ]);
+    expect((await planAt(store)).folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
   });
 });
 
 describe('repair on sleep', () => {
-  it('folds the folder name of a project store once, then never runs again', () => {
+  it('folds the folder name of a project store once, then never runs again', async () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
     initTestStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
-    const first = projectNameRepairOnce(cliApiContext(store, T));
+    const first = await projectNameRepairOnce(cliApiContext(store, T));
     expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
     expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('github.com/acme/svc');
     pinned(store, 'A later row under the old name.', 'svc');
-    expect(projectNameRepairOnce(cliApiContext(store, T))).toBeNull();
+    expect(await projectNameRepairOnce(cliApiContext(store, T))).toBeNull();
   });
 
-  it('leaves global folds to the manual repair, since a same-named repo may never have compacted', () => {
+  it('leaves global folds to the manual repair, since a same-named repo may never have compacted', async () => {
     initTestStore(w.global);
     const a = checkout('git@github.com:acme-pay/api.git', 'pay', 'api');
     pinned(w.global, 'OLD-API rows under the folder name.', 'api');
     compaction('c-a', 'api', a);
-    expect(projectNameRepairOnce(cliApiContext(w.global, T))).toBeNull();
+    expect(await projectNameRepairOnce(cliApiContext(w.global, T))).toBeNull();
     expect(loadAllEntries(w.global, 'default').map((e) => e.originProject)).toEqual(['api']);
-    expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).folds).toEqual([
-      { from: 'api', into: 'github.com/acme-pay/api' },
-    ]);
+    expect((await planAt(w.global)).folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
   });
 });

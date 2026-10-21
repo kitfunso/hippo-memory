@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { adminActor } from '../../src/api/index.js';
 import { promptHookContext } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -26,7 +27,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     writeEntry(donor, { ...pin, pinned: true, originProject: 'p' });
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
-    const store = { ...sqliteStore(donor), localFiles: undefined };
+    const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other' };
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, {
       sessionId: 's1',

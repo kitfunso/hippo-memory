@@ -530,21 +530,21 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
 });
 
 describe('hippo doctor and Codex', () => {
-  it('says nothing without Codex, warns with the fix before the hooks are in, and passes with the trust reminder after', () => {
+  it('says nothing without Codex, warns with the fix before the hooks are in, and passes with the trust reminder after', async () => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
       const report = () =>
         runDoctor({ diagnosticsAt, tenantId: 'default', cwd: fake.home, home: fake.home, version: 'test' });
-      expect(report().checks.find((c) => c.id === 'codex')).toBeUndefined();
+      expect((await report()).checks.find((c) => c.id === 'codex')).toBeUndefined();
       fs.mkdirSync(path.join(fake.home, '.codex'));
-      const before = report();
+      const before = await report();
       expect(before.checks.find((c) => c.id === 'codex')).toMatchObject({
         status: 'warn',
         detail: "Codex found, but hippo's memory hooks are not installed",
       });
       expect(formatDoctor(before)).toContain('fix: hippo hook install codex   (then trust the hooks once in /hooks)');
       installJsonHooks('codex');
-      expect(formatDoctor(report())).toContain(
+      expect(formatDoctor(await report())).toContain(
         `[ok  ] codex       Codex: hippo memory hooks installed. ${CODEX_TRUST_LINE}`,
       );
     } finally {
@@ -555,11 +555,11 @@ describe('hippo doctor and Codex', () => {
   it.each([
     ['unparseable JSON', '{ "hooks": '],
     ['a top-level list', '[]'],
-  ])('warns that Codex runs no hook from a hooks.json holding %s', (_label, text) => {
+  ])('warns that Codex runs no hook from a hooks.json holding %s', async (_label, text) => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
       writeFile(path.join(fake.home, '.codex', 'hooks.json'), text);
-      const report = runDoctor({
+      const report = await runDoctor({
         diagnosticsAt,
         tenantId: 'default',
         cwd: fake.home,

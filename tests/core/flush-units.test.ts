@@ -9,7 +9,7 @@ import type { WriteBudget } from '../../src/base/util/write-budget.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { commitInChunks, writeEntry } from '../_helpers/root-forms.js';
-import type { FlushComponent } from '../../src/store/local/consolidation.js';
+import type { FlushComponent } from '../../src/store/port/consolidation.js';
 
 // SAFETY: node:sqlite's StatementSync is the class db.ts's prepare returns, and it carries its SQL text.
 const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {

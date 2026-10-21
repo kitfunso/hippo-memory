@@ -70,17 +70,17 @@ function mulberry32(seed: number): () => number {
 
 /** The ids of `count` memories picked for replay in pick order, weighted by `replayPriority`, without replacement;
  * deterministic for a seed. Weighted, not greedy: always taking the top-N overfits. Holds ids, not rows. */
-export function sampleForReplay(
-  survivors: Iterable<MemoryEntry>,
+export async function sampleForReplay(
+  survivors: Iterable<MemoryEntry> | AsyncIterable<MemoryEntry>,
   count: number,
   now: Date,
   seed: number = Date.now() >>> 0,
-): string[] {
+): Promise<string[]> {
   if (count <= 0) return [];
   const outcomeAblated = isOutcomeSlowAblated();
   const ids: string[] = [];
   const weights: number[] = [];
-  for (const entry of survivors) {
+  for await (const entry of survivors) {
     // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats staleness, so derive
     // rather than trust the stored value (it no longer carries the age-out case).
     if (resolveConfidence(entry, now) === 'stale') continue;

@@ -1,4 +1,5 @@
-// What turns a compaction's summary into text the store keeps; the SQL is src/store/compactions-record.ts.
+// What turns a compaction's summary into text the store keeps, and the replay that reads the spool and transcripts
+// for it; the SQL is src/store/sqlite/compactions-record.ts.
 import * as fs from 'fs';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import {
@@ -6,20 +7,21 @@ import {
   compactSummaryBody,
   parseCompactionItems,
 } from '../../base/util/compaction-items.js';
-import { importSpool, spool } from './compaction-spool.js';
+import { importSpool, spool, type Log, type SpooledCompaction } from './compaction-spool.js';
 import type {
+  CompactionHooks,
   CompactionSaveResult,
   CompactionText,
-  Log,
-  ReplayOptions,
-  ReplaySources,
-} from '../../store/local/compaction-hooks.js';
+  ItemsOptions,
+  OpenCompaction,
+  StepFailure,
+} from '../../store/port/compaction-hooks.js';
+import type { StoreGroups } from '../../store/port.js';
 import { loadConfig } from '../../base/config/config.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../../base/util/transcript-tail.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
-import type { FolderFiles } from '../../store/local/index.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
@@ -29,8 +31,10 @@ export const PRE_COMPACT_INSTRUCTION =
   "earlier summary already listed under 'Memories for hippo', and anything this session already saved with " +
   "`hippo remember`. Write '- none' if nothing new remains.";
 
-/** A store folder and the tenant a compaction hook writes as, which the CLI root resolved. */
-export interface CompactionFolder extends FolderFiles {
+/** A store folder, its store and the tenant a compaction hook writes as, which the CLI root resolved. */
+export interface CompactionFolder {
+  readonly root: string;
+  readonly store: Pick<StoreGroups, 'compactionHooks'>;
   readonly tenantId: string;
 }
 
@@ -95,27 +99,36 @@ function spoolSummary(options: SpoolSummaryOptions): void {
   }
 }
 
+function writeNotes(log: Log, notes: readonly string[]): void {
+  for (const note of notes) log(note);
+}
+
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or
  * defers. Never throws. */
-export function saveCompaction(folder: CompactionFolder, payload: PostCompactPayload, log: Log): CompactionSaveResult {
-  const { root, files, tenantId } = folder;
-  if (payload.compactSummary === null) {
+export async function saveCompaction(
+  folder: CompactionFolder,
+  payload: PostCompactPayload,
+  log: Log,
+): Promise<CompactionSaveResult> {
+  const { root, store, tenantId } = folder;
+  const { compactSummary, ...meta } = payload;
+  if (compactSummary === null) {
     log('skip: payload has no compact_summary');
     return { written: null, deferred: false, snapshotSaved: false };
   }
   const at = new Date();
-  const { found, ...text } = readCompactionText(payload.compactSummary);
+  const { found, ...text } = readCompactionText(compactSummary);
   if (!found) log('no memories section');
 
   const { defaultHalfLifeDays } = loadConfig(root);
-  const { result, spoolReason } = files.compactionHooks.save({
+  const { result, spoolReason, notes } = await store.compactionHooks.save({
     tenantId,
-    meta: payload,
+    meta,
     text,
     at,
-    log,
     baseHalfLifeDays: defaultHalfLifeDays,
   });
+  writeNotes(log, notes);
   if (spoolReason !== null) spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
   return result;
 }
@@ -167,27 +180,106 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
   return null;
 }
 
-function replaySources(hippoRoot: string, log: Log): ReplaySources {
-  return {
-    importSpool: (tenantId, deadline, record) => importSpool({ hippoRoot, tenantId, log, deadline, importOne: record }),
-    transcriptExists: (transcriptPath) => fs.existsSync(transcriptPath),
-    transcriptText: (transcriptPath, afterMs, beforeMs) => {
-      const found = transcriptSummary(transcriptPath, afterMs, beforeMs);
-      if (found === null) return null;
-      const { found: listed, ...text } = readCompactionText(found);
-      return { text, listed };
-    },
-  };
+/** How long a replay waits on a locked store, and the Date.now() after which it starts no new record. */
+export interface ReplayOptions {
+  busyWaitMs?: number;
+  deadline?: number;
 }
 
-/** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left, never throws. */
-export function replayCompactions(
-  { root, files, tenantId }: CompactionFolder,
+/** What every replay step reads: the store's hooks, the folder its spool sits in, and the deadline the run works to. */
+interface Replay {
+  readonly hooks: CompactionHooks;
+  readonly root: string;
+  readonly tenantId: string;
+  readonly log: Log;
+  readonly deadline: number;
+  readonly items: ItemsOptions;
+}
+
+async function replayStalled(run: Replay): Promise<number> {
+  const { saved, notes } = await run.hooks.saveStalled(run.tenantId, { ...run.items, deadline: run.deadline });
+  writeNotes(run.log, notes);
+  return saved;
+}
+
+/** Records a spooled summary, then writes its items. */
+async function importSpooled(
+  run: Replay,
+  spooled: SpooledCompaction,
+  recorded: () => void,
+): Promise<StepFailure | null> {
+  const record = await run.hooks.recordSpooled(spooled, run.items);
+  // The record holds the items now, so the file is done even if the write below fails.
+  recorded();
+  const saved = await run.hooks.saveRecordItems(spooled.tenantId, record, run.items);
+  writeNotes(run.log, saved.notes);
+  return saved.failure;
+}
+
+async function replaySpool(run: Replay): Promise<number> {
+  try {
+    return await importSpool({
+      hippoRoot: run.root,
+      tenantId: run.tenantId,
+      log: run.log,
+      deadline: run.deadline,
+      importOne: (spooled, recorded) => importSpooled(run, spooled, recorded),
+    });
+  } catch (err) {
+    run.log(`spool import failed: ${errorMessage(err)}`);
+    return 0;
+  }
+}
+
+/** Fills one open record from its transcript; true when it saved items. */
+async function fillFromTranscript(run: Replay, record: OpenCompaction): Promise<boolean> {
+  if (record.transcriptPath === null || !fs.existsSync(record.transcriptPath)) return false;
+  const before = record.nextStartedAt === null ? Number.POSITIVE_INFINITY : Date.parse(record.nextStartedAt);
+  const found = transcriptSummary(record.transcriptPath, Date.parse(record.startedAt), before);
+  let text: CompactionText | null = null;
+  if (found !== null) {
+    const { found: listed, ...read } = readCompactionText(found);
+    if (!listed) run.log(`no memories section in the transcript summary for ${record.id}`);
+    text = read;
+  }
+  const filled = await run.hooks.fill(run.tenantId, record, text, run.items);
+  writeNotes(run.log, filled.notes);
+  return filled.saved;
+}
+
+/** A record whose fill throws is logged, and the rest still run until the deadline. */
+async function replayOpen(run: Replay): Promise<number> {
+  let saved = 0;
+  for (const record of await run.hooks.openRecords(run.tenantId, run.items)) {
+    if (Date.now() > run.deadline) break;
+    try {
+      if (await fillFromTranscript(run, record)) saved++;
+    } catch (err) {
+      run.log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);
+    }
+  }
+  return saved;
+}
+
+/** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left (`summarised` records, spool
+ * files, and `started` records the transcript can fill), never throws. Returns how many compactions it saved. */
+export async function replayCompactions(
+  { root, store, tenantId }: CompactionFolder,
   log: Log,
-  opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
-): number {
-  return files.compactionHooks.replay(tenantId, replaySources(root, log), log, {
-    ...opts,
-    baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
-  });
+  opts: ReplayOptions = {},
+): Promise<number> {
+  const run: Replay = {
+    hooks: store.compactionHooks,
+    root,
+    tenantId,
+    log,
+    deadline: opts.deadline ?? Number.POSITIVE_INFINITY,
+    items: { busyWaitMs: opts.busyWaitMs, baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays },
+  };
+  try {
+    return (await replayStalled(run)) + (await replaySpool(run)) + (await replayOpen(run));
+  } catch (err) {
+    log(`replay failed: ${errorMessage(err)}`);
+    return 0;
+  }
 }

@@ -1,11 +1,8 @@
 // Each store method the op table places on a reader thread answers as the in-process store does and never waits for the write lock; each write this file names leaves what the in-process one leaves.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { inspect } from 'node:util';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
-import type { StoreGroups } from '../../src/store/index.js';
-import type { LocalStore } from '../../src/store/local/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { packVectors, vectorCopiesOf, vectorViewsOf } from '../../src/store/sqlite/vector-pack.js';
 import { WORKER_OPS } from '../../src/store/sqlite/worker-ops.js';
@@ -20,45 +17,27 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
+import {
+  type Call,
+  LOCAL_GROUP_READS,
+  PLAIN,
+  read,
+  type Read,
+  REFUSED,
+  seedLocalGroups,
+  type Served,
+  shown,
+} from '../_helpers/local-group-reads.js';
 import { waitFor } from '../_helpers/wait-for.js';
-
-type Served = LocalStore & StoreGroups;
-type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
 
 const NOW = new Date(FAKE_NOW);
 const CENTURY_MS = 100 * 365 * 24 * 60 * 60 * 1000;
 const VECTOR_IDS = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
-const PLAIN = 'deploy pipeline uses blue green rollout for the api';
-
-/** A value as text, so a Map, a typed array and an undefined field all take part in the comparison. */
-function shown<T>(value: T): string {
-  const text = inspect(value, {
-    depth: null,
-    maxArrayLength: null,
-    maxStringLength: null,
-    breakLength: Infinity,
-    sorted: true,
-  });
-  // A row from node:sqlite has no prototype and its copy from a thread has Object's; no caller reads the difference.
-  return text.replaceAll('[Object: null prototype] ', '');
-}
-
-interface Read {
-  readonly name: string;
-  readonly run: Call<string>;
-  /** In the answer, so a read that found nothing on both stores cannot pass. */
-  readonly shows: string | RegExp;
-}
-
-function read<T>(name: string, run: Call<T>, shows: string | RegExp): Read {
-  return { name, run: async (store, seed) => shown(await run(store, seed)), shows };
-}
 
 const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
 
 const SLACK_EVENT = { connector: 'slack', eventId: 'Ev-seeded' } as const;
 const REPO = 'acme/demo';
-const REFUSED = 'never deploy on a friday afternoon';
 /** Ids the extra seed makes, read by the rows below once it has run. */
 const made = { handoffId: 0, cardId: '' };
 
@@ -416,6 +395,7 @@ const READS: readonly Read[] = [
   read('readiness.ping', (s) => s.readiness.ping(), /^undefined$/),
   ...SESSION_AND_ADMIN_READS,
   ...FOLDER_GROUP_READS,
+  ...LOCAL_GROUP_READS,
 ];
 
 interface Write {
@@ -565,6 +545,7 @@ describe('a read the op table places on a reader thread', () => {
     });
     writeEntry(root, { ...raw, id: 'mem_z_vault' });
     await seedSessionAndAdmin(root);
+    await seedLocalGroups(root);
     onWorkers = workerSqliteStore(root);
     inProcess = sqliteStore(root);
   });

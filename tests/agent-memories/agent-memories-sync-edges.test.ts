@@ -28,7 +28,7 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -54,11 +54,11 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const sync = (): ImportReport =>
+const sync = (): Promise<ImportReport> =>
   importForStore(w.local, {
     configAt: loadConfig,
     tenantId: 'default',
-    agentImport: sqliteAgentImport({}),
+    stores: sqliteImportStores({}),
     machine: w.machine,
   });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
@@ -68,69 +68,69 @@ const only = (): MemoryEntry => {
   return rows[0];
 };
 
-function importThenDelete(text = A): string {
+async function importThenDelete(text = A): Promise<string> {
   const file = note(dir, 'deploy.md', text);
-  sync();
+  await sync();
   const { id } = only();
   unlinkSync(file);
-  expect(claude(sync()).setAside).toBe(1);
+  expect(claude(await sync()).setAside).toBe(1);
   return id;
 }
 
 describe('agent memory sync: the Added list', () => {
   it('a user-superseded row is left alone while the note is unchanged, then superseded when it changes', async () => {
     note(dir, 'deploy.md', A);
-    sync();
+    await sync();
     const USER = 'Run the schema check, then page the on-call engineer, before deploys.';
     const { newId } = await supersede(ctxFor(w.local), only().id, USER);
 
-    expect(claude(sync())).toMatchObject({ unchanged: 1, imported: 0, replaced: 0 });
+    expect(claude(await sync())).toMatchObject({ unchanged: 1, imported: 0, replaced: 0 });
     expect(only()).toMatchObject({ id: newId, content: USER, tags: [TAG] });
 
     note(dir, 'deploy.md', B);
-    expect(claude(sync()).replaced).toBe(1);
+    expect(claude(await sync()).replaced).toBe(1);
     expect(only().content).toBe(B);
     expect(readEntry(w.local, newId)?.supersededBy).toBe(only().id);
   });
 
-  it('a deleted note that comes back unchanged is restored from dormant with its id', () => {
-    const id = importThenDelete();
+  it('a deleted note that comes back unchanged is restored from dormant with its id', async () => {
+    const id = await importThenDelete();
     note(dir, 'deploy.md', A);
 
-    expect(claude(sync())).toMatchObject({ restored: 1, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ restored: 1, imported: 0 });
     expect(only()).toMatchObject({ id, tags: [TAG] });
     expect(auditCount(w.local, 'agent_memory_restore')).toBe(1);
   });
 
   it('a restored set-aside row is left alone while the note stays gone', async () => {
-    const id = importThenDelete();
+    const id = await importThenDelete();
     await dormantRestore(ctxFor(w.local), id);
 
     for (let i = 0; i < 2; i++) {
-      expect(claude(sync())).toMatchObject({ setAside: 0, untagged: 0, retagged: 0, imported: 0 });
+      expect(claude(await sync())).toMatchObject({ setAside: 0, untagged: 0, retagged: 0, imported: 0 });
       expect(only()).toMatchObject({ id, content: A });
       expect(only().tags).not.toContain(TAG);
     }
   });
 
-  it('A to B to A writes a new row each time, each superseding the last', () => {
+  it('A to B to A writes a new row each time, each superseding the last', async () => {
     note(dir, 'deploy.md', A);
-    sync();
+    await sync();
     const a1 = only();
     note(dir, 'deploy.md', B);
-    expect(claude(sync()).replaced).toBe(1);
+    expect(claude(await sync()).replaced).toBe(1);
     const b = only();
     note(dir, 'deploy.md', A);
-    expect(claude(sync()).replaced).toBe(1);
+    expect(claude(await sync()).replaced).toBe(1);
     const a2 = only();
 
     expect(a2.id).not.toBe(a1.id);
     expect([readEntry(w.local, a1.id)?.supersededBy, readEntry(w.local, b.id)?.supersededBy]).toEqual([b.id, a2.id]);
   });
 
-  it('two tagged rows for one key collapse to the newest', () => {
+  it('two tagged rows for one key collapse to the newest', async () => {
     note(dir, 'deploy.md', A);
-    sync();
+    await sync();
     const newest = only();
     const older = {
       ...newest,
@@ -139,47 +139,47 @@ describe('agent memory sync: the Added list', () => {
     };
     writeEntry(w.local, older);
 
-    expect(claude(sync())).toMatchObject({ collapsed: 1, unchanged: 0, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ collapsed: 1, unchanged: 0, imported: 0 });
     expect(only().id).toBe(newest.id);
     expect(readEntry(w.local, older.id)?.supersededBy).toBe(newest.id);
   });
 
   it('a restore after a rewrite survives two syncs', async () => {
-    const a = importThenDelete();
+    const a = await importThenDelete();
     note(dir, 'deploy.md', B);
-    expect(claude(sync()).imported).toBe(1);
+    expect(claude(await sync()).imported).toBe(1);
     await dormantRestore(ctxFor(w.local), a);
 
     for (let i = 0; i < 2; i++) {
-      expect(claude(sync())).toMatchObject({ unchanged: 1, setAside: 0, replaced: 0, imported: 0 });
+      expect(claude(await sync())).toMatchObject({ unchanged: 1, setAside: 0, replaced: 0, imported: 0 });
       expect(liveTexts(w.local)).toEqual([B, A].sort());
     }
   });
 
-  it('a pinned row loses its tag and stays live when its note goes', () => {
+  it('a pinned row loses its tag and stays live when its note goes', async () => {
     const file = note(dir, 'deploy.md', A);
-    sync();
+    await sync();
     const row = only();
     writeEntry(w.local, { ...row, pinned: true });
     unlinkSync(file);
 
-    expect(claude(sync())).toMatchObject({ untagged: 1, setAside: 0 });
+    expect(claude(await sync())).toMatchObject({ untagged: 1, setAside: 0 });
     expect(only()).toMatchObject({ id: row.id, pinned: true });
     expect(only().tags).not.toContain(TAG);
     expect(dormantRows(w.local)).toEqual([]);
   });
 
-  it('an unread item (over 256 KB, or holding a NUL byte) leaves its row alone', () => {
+  it('an unread item (over 256 KB, or holding a NUL byte) leaves its row alone', async () => {
     note(dir, 'big.md', A);
     note(dir, 'nul.md', B);
-    sync();
+    await sync();
     const before = liveRows(w.local)
       .map((e) => e.id)
       .sort();
     note(dir, 'big.md', `${A} ${'padding line for the size cap\n'.repeat(10_000)}`);
     note(dir, 'nul.md', `${B}\u0000`);
 
-    expect(claude(sync())).toMatchObject({ unread: 2, setAside: 0, replaced: 0, imported: 0 });
+    expect(claude(await sync())).toMatchObject({ unread: 2, setAside: 0, replaced: 0, imported: 0 });
     expect(
       liveRows(w.local)
         .map((e) => e.id)
@@ -187,19 +187,19 @@ describe('agent memory sync: the Added list', () => {
     ).toEqual(before);
   });
 
-  it('an emptied file, as a tool leaves it mid-rewrite, leaves its rows alone', () => {
+  it('an emptied file, as a tool leaves it mid-rewrite, leaves its rows alone', async () => {
     const file = note(dir, 'deploy.md', A);
     const memory = join(w.home, '.openclaw', 'workspace', 'MEMORY.md');
     mkdirSync(dirname(memory), { recursive: true });
     writeFileSync(memory, `- ${B}\n`, 'utf8');
-    sync();
+    await sync();
     const ids = (): string[] => [...liveRows(w.local), ...liveRows(w.global)].map((e) => e.id).sort();
     const before = ids();
     expect(before).toHaveLength(2);
     writeFileSync(file, '');
     writeFileSync(memory, '');
 
-    const report = sync();
+    const report = await sync();
     expect(claude(report)).toMatchObject({ unread: 1, setAside: 0 });
     expect(toolTally(report, 'openclaw')).toMatchObject({ unreadable: 1, setAside: 0 });
     expect(ids()).toEqual(before);
@@ -207,13 +207,13 @@ describe('agent memory sync: the Added list', () => {
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'a note that fails to read leaves its row alone (chmod cannot block a read on Windows or as root)',
-    () => {
+    async () => {
       const file = note(dir, 'deploy.md', A);
-      sync();
+      await sync();
       const { id } = only();
       chmodSync(file, 0o000);
       try {
-        expect(claude(sync())).toMatchObject({ unread: 1, setAside: 0 });
+        expect(claude(await sync())).toMatchObject({ unread: 1, setAside: 0 });
       } finally {
         chmodSync(file, 0o600);
       }
@@ -226,19 +226,26 @@ describe('agent memory sync: the Added list', () => {
     note(dir, 'secret.md', A);
     note(dir, 'short.md', B);
     note(dir, 'rejected.md', 'The release branch is cut on the first Monday.');
-    sync();
+    await sync();
     expect(liveRows(w.local)).toHaveLength(3);
     await reject(ctxFor(w.local), { value: REJECTED, reason: 'wrong cadence' });
 
     note(dir, 'secret.md', `Deploys sign in with ${FAKE_KEY} on the build box.`);
     note(dir, 'short.md', 'tiny note');
     note(dir, 'rejected.md', REJECTED);
-    expect(claude(sync())).toMatchObject({ secret: 1, short: 1, rejected: 1, setAside: 3, imported: 0, replaced: 0 });
+    expect(claude(await sync())).toMatchObject({
+      secret: 1,
+      short: 1,
+      rejected: 1,
+      setAside: 3,
+      imported: 0,
+      replaced: 0,
+    });
     expect(liveRows(w.local)).toEqual([]);
     expect(dormantRows(w.local).map((d) => d.reason)).toEqual(['source-deleted', 'source-deleted', 'source-deleted']);
   });
 
-  it('a note holding a Bearer header or a JWT is refused, and an email address is stored masked', () => {
+  it('a note holding a Bearer header or a JWT is refused, and an email address is stored masked', async () => {
     note(dir, 'bearer.md', 'The staging API takes Authorization: Bearer abcdefghijklmnop123456 on every call.');
     note(
       dir,
@@ -247,7 +254,7 @@ describe('agent memory sync: the Added list', () => {
     );
     note(dir, 'email.md', 'Send the release notes to alice@example.com before tagging.');
 
-    expect(claude(sync())).toMatchObject({ secret: 2, imported: 1 });
+    expect(claude(await sync())).toMatchObject({ secret: 2, imported: 1 });
     expect(liveTexts(w.local)).toEqual(['Send the release notes to [email] before tagging.']);
   });
 
@@ -258,7 +265,7 @@ describe('agent memory sync: the Added list', () => {
 
     for (let i = 0; i < 2; i++) {
       const before = auditTotal(w.local);
-      expect(claude(sync())).toMatchObject({ rejected: 1, imported: 0 });
+      expect(claude(await sync())).toMatchObject({ rejected: 1, imported: 0 });
       expect(auditTotal(w.local)).toBe(before);
     }
     expect(liveRows(w.local)).toEqual([]);
@@ -266,16 +273,16 @@ describe('agent memory sync: the Added list', () => {
 
   it('a forgotten row is imported again while its note exists', async () => {
     note(dir, 'deploy.md', A);
-    sync();
+    await sync();
     const { id } = only();
     await forget(ctxFor(w.local), id);
 
-    expect(claude(sync()).imported).toBe(1);
+    expect(claude(await sync()).imported).toBe(1);
     expect(only().id).not.toBe(id);
   });
 
-  it('a malformed dormant snapshot does not stop the sync', () => {
-    const id = importThenDelete();
+  it('a malformed dormant snapshot does not stop the sync', async () => {
+    const id = await importThenDelete();
     const source = `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(A).slice(0, 16)}`;
     withDb(w.local, (db) => {
       const put = db.prepare(
@@ -286,15 +293,15 @@ describe('agent memory sync: the Added list', () => {
     });
     note(dir, 'deploy.md', A);
 
-    const report = sync();
+    const report = await sync();
     expect(claude(report)).toMatchObject({ restored: 1, imported: 0 });
     expect(report.warnings).toEqual([]);
     expect(only().id).toBe(id);
   });
 
-  it('a superseded dormant snapshot is never restored', () => {
+  it('a superseded dormant snapshot is never restored', async () => {
     note(dir, 'deploy.md', A);
-    sync();
+    await sync();
     const row = only();
     withDb(w.local, (db) => {
       db.exec('BEGIN IMMEDIATE');
@@ -309,16 +316,16 @@ describe('agent memory sync: the Added list', () => {
     });
     removeEntryMirrors(w.local, row.id);
 
-    expect(claude(sync())).toMatchObject({ imported: 1, restored: 0 });
+    expect(claude(await sync())).toMatchObject({ imported: 1, restored: 0 });
     expect(only().id).not.toBe(row.id);
   });
 
-  it('duplicate bullets under one heading get ~2', () => {
+  it('duplicate bullets under one heading get ~2', async () => {
     const file = codexSummary(w, '- Prefers tabs over spaces in Go files.', '- Prefers tabs over spaces in Go files.');
     const text = 'User Profile: Prefers tabs over spaces in Go files.';
     const base = `agent-memory:codex:${expectedContainer(file, 'u')}/user-profile/${sha(text).slice(0, 12)}`;
 
-    expect(toolTally(sync(), 'codex').imported).toBe(2);
+    expect(toolTally(await sync(), 'codex').imported).toBe(2);
     expect(
       liveRows(w.global)
         .map((e) => e.source)
@@ -329,7 +336,7 @@ describe('agent memory sync: the Added list', () => {
       ['v1', '', '## User Profile', '', '- Prefers tabs over spaces in Go files.', ''].join('\n'),
       'utf8',
     );
-    expect(toolTally(sync(), 'codex')).toMatchObject({ unchanged: 1, setAside: 1 });
+    expect(toolTally(await sync(), 'codex')).toMatchObject({ unchanged: 1, setAside: 1 });
     expect(liveRows(w.global).map((e) => e.source)).toEqual([`${base}#${sha(text).slice(0, 16)}`]);
   });
 });

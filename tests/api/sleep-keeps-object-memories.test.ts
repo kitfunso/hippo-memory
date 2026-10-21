@@ -13,7 +13,7 @@ import { openIncident } from '../../src/domain/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
@@ -24,7 +24,6 @@ import {
   readEntry,
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -149,7 +148,7 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
   });
 });
 
-it('control: a plain weaker copy is still removed by dedupe', () => {
+it('control: a plain weaker copy is still removed by dedupe', async () => {
   const root = newRoot();
   const text = 'the build cache lives in /var/cache/hippo on the CI runners';
   const keeper = { ...createMemory(text), strength: 1 };
@@ -157,6 +156,6 @@ it('control: a plain weaker copy is still removed by dedupe', () => {
   writeEntry(root, keeper);
   writeEntry(root, copy);
 
-  expect(deduplicateStore(sqliteConsolidation(handlesOf(root))).removed).toBe(1);
+  expect((await deduplicateStore(sqliteStore(root))).removed).toBe(1);
   expect(readEntry(root, copy.id)).toBeNull();
 });

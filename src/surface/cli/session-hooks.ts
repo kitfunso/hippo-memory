@@ -59,7 +59,6 @@ import {
   cliFolder,
   cliHookRequest,
   cliLedgerReach,
-  cliLocalFiles,
   cliStore,
   cliSyncOptions,
   cliConfig,
@@ -87,12 +86,10 @@ import { parseJson } from '../../base/util/json.js';
 import { ignoringCodes } from '../../base/util/expected-errors.js';
 import { CliExit, fail } from './exit.js';
 
-const captureTarget = (root: string): CaptureTarget => ({
-  root,
-  files: cliLocalFiles(root),
-  config: cliConfig(root),
-  index: folderIndex(cliFolder(root)),
-});
+const captureTarget = (root: string): CaptureTarget => {
+  const folder = cliFolder(root);
+  return { root, store: folder.store, config: folder.config, index: folderIndex(folder) };
+};
 
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories
  * (UserPromptSubmit re-injects them). Every path exits 0: a malformed payload or store read failure degrades to empty
@@ -331,9 +328,10 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
     },
     currentProject: () => resolveProjectIdentity(process.cwd()),
     // The run writes to this folder's own store, else to the global one in its reach.
-    capture: (into, turns, originProject) => {
+    capture: async (into, turns, originProject) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
-      return root !== undefined && captureEndedSession(root, { tenantId, flags, transcriptPath, turns, originProject });
+      if (root === undefined) return false;
+      return captureEndedSession(root, { tenantId, flags, transcriptPath, turns, originProject });
     },
     digest: (scan, key, log) =>
       recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
@@ -366,13 +364,13 @@ interface EndedCapture {
 }
 
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
-function captureEndedSession(
+async function captureEndedSession(
   store: string,
   { tenantId, flags, transcriptPath, turns, originProject }: EndedCapture,
-): boolean {
+): Promise<boolean> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
-    cmdCapture(captureTarget(store), {
+    await cmdCapture(captureTarget(store), {
       source: 'last-session',
       transcriptPath,
       logFile,
@@ -546,7 +544,7 @@ async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFi
     }
   } else {
     appendSessionEndCloseLog(logFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
-    logSessionEndImport(logFile, tenantId, undefined);
+    await logSessionEndImport(logFile, tenantId, undefined);
   }
 }
 
@@ -588,7 +586,7 @@ async function captureCodexTranscript(
       sessionTurns: scan?.turns,
     };
     try {
-      cmdCapture(captureTarget(store), captureOpts);
+      await cmdCapture(captureTarget(store), captureOpts);
     } catch (err) {
       reportSessionEndFailure(logFile, 'codex session-end: capture', err);
     }
@@ -648,9 +646,9 @@ export async function handlePostCompact({ hippoRoot, tenantId, flags }: CommandC
       stdinTimedOut: timedOut,
       logFile: stringFlag(flags, 'log-file'),
       // Passed in, since src/surface/capture/ importing the sync would close an import cycle.
-      afterSave: (transcriptPath, cwd, log) => {
-        const sync = cliSyncOptions(store, tenantId, currentMachine(), { busyWaitMs: COMPACTION_DB_WAIT_MS });
-        const report = importSessionFolder(store, transcriptPath, cwd, sync);
+      afterSave: async (transcriptPath, cwd, log) => {
+        const sync = cliSyncOptions(tenantId, currentMachine(), { busyWaitMs: COMPACTION_DB_WAIT_MS });
+        const report = await importSessionFolder(store, transcriptPath, cwd, sync);
         const summary = summaryLine(report);
         if (summary !== null) log(summary);
         for (const warning of report.warnings) log(`agent memories: ${warning}`);
@@ -729,7 +727,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     captureSource === 'last-session' && !transcriptPath ? await readHookStdin() : { text: undefined, timedOut: false };
 
   const useGlobal = boolFlag(flags, 'global');
-  cmdCapture(captureTarget(useGlobal ? resolveGlobalRootDir() : hippoRoot), {
+  await cmdCapture(captureTarget(useGlobal ? resolveGlobalRootDir() : hippoRoot), {
     source: captureSource,
     filePath: captureFile,
     transcriptPath,

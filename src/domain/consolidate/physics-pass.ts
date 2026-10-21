@@ -9,31 +9,32 @@ const STATS_DECIMALS = 4;
 // they are recalled.
 const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
 
-export function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_MAX_PARTICLES): void {
+export async function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_MAX_PARTICLES): Promise<void> {
   if (run.dryRun) return;
   const { config, result } = run;
   try {
     const physicsEnabled = config.physics.enabled === true || config.physics.enabled === 'auto';
 
-    if (physicsEnabled) simulateStoredParticles(run, maxParticles);
+    if (physicsEnabled) await simulateStoredParticles(run, maxParticles);
   } catch (error) {
     result.details.push(`  ⚠️ physics simulation skipped: ${errorMessage(error)}`);
   }
 }
 
-function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
+async function simulateStoredParticles(run: SleepRun, maxParticles: number): Promise<void> {
   const { result, survivors } = run;
-  const storedIds = run.store.particleIds();
+  const { consolidation } = run.store;
+  const storedIds = await consolidation.particleIds();
   if (storedIds.length === 0) return;
 
-  const ids = particlesToSimulate(storedIds, recallTimes(run, storedIds.length > maxParticles), maxParticles);
-  const particles = run.store.particlesByIds(ids);
+  const recalled = await recallTimes(run, storedIds.length > maxParticles);
+  const particles = await consolidation.particlesByIds(particlesToSimulate(storedIds, recalled, maxParticles));
   // Only the simulated particles' rows: the refresh and every force lookup read no other id.
-  const entryMap = new Map(survivors.get(particles.map((p) => p.memoryId)).map((e) => [e.id, e]));
+  const entryMap = new Map((await survivors.get(particles.map((p) => p.memoryId))).map((e) => [e.id, e]));
   refreshParticleProperties(particles, entryMap, run.now, clockBasisOf(run.decayOpts));
 
   const stats = simulate(particles, survivorForces(run, entryMap));
-  run.store.saveParticles(particles);
+  await consolidation.saveParticles(particles);
 
   result.physicsSimulated = stats.particleCount;
   const capped =
@@ -47,10 +48,10 @@ function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
 }
 
 /** Each survivor's last recall, read only when the cap applies. */
-function recallTimes(run: SleepRun, capped: boolean): Map<string, Pick<MemoryEntry, 'lastRetrieved'>> {
+async function recallTimes(run: SleepRun, capped: boolean): Promise<Map<string, Pick<MemoryEntry, 'lastRetrieved'>>> {
   const times = new Map<string, Pick<MemoryEntry, 'lastRetrieved'>>();
   if (!capped) return times;
-  for (const e of run.survivors.rows()) times.set(e.id, { lastRetrieved: e.lastRetrieved });
+  for await (const e of run.survivors.rows()) times.set(e.id, { lastRetrieved: e.lastRetrieved });
   return times;
 }
 

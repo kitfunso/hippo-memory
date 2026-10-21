@@ -13,12 +13,10 @@ import { saveProjectBrief, briefFromReceipts } from '../../src/domain/objects/pr
 import { derivationScope, commonDerivationScope } from '../../src/base/scope/recall-scope.js';
 import { placeholders } from '../../src/base/util/sql.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -108,7 +106,7 @@ describe('consolidate() merge pass partitions by scope', () => {
 });
 
 describe('dedupe partitions by restricted scope', () => {
-  it('a private near-duplicate never deletes the unrestricted copy', () => {
+  it('a private near-duplicate never deletes the unrestricted copy', async () => {
     const home = makeRoot('derived-scope');
     const text = 'rotate the staging tls certificates before expiry and notify on-call';
     const priv = createMemory(text, {
@@ -120,7 +118,7 @@ describe('dedupe partitions by restricted scope', () => {
     writeEntry(home, { ...priv, strength: 0.9 });
     writeEntry(home, { ...pub, strength: 0.1 });
 
-    expect(deduplicateStore(sqliteConsolidation(handlesOf(home))).removed).toBe(0);
+    expect((await deduplicateStore(sqliteStore(home))).removed).toBe(0);
     expect(
       loadAllEntries(home, 'default')
         .map((e) => e.scope)
@@ -216,7 +214,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     for (const f of [...privFacts, ...pubFacts]) writeEntry(home, f);
 
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-summary');
-    const result = await buildDag(sqliteSyncStore(home).localFiles, [...privFacts, ...pubFacts], {
+    const result = await buildDag(sqliteStore(home), [...privFacts, ...pubFacts], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'test-key',
       fetcher,
@@ -280,7 +278,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     for (const l2 of [...privL2s, ...pubL2s]) writeEntry(home, l2);
 
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-profile');
-    const result = await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...privL2s, ...pubL2s], {
+    const result = await buildEntityProfiles(sqliteStore(home), [...privL2s, ...pubL2s], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'k',
       fetcher,
@@ -315,7 +313,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
 });
 
 describe('extract.ts storeExtractedFacts copies the source scope', () => {
-  it('facts extracted from a private-scope source carry that scope', () => {
+  it('facts extracted from a private-scope source carry that scope', async () => {
     const home = makeRoot('derived-scope');
     const source = createMemory('Alice prefers dark mode and vim keybindings', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -327,12 +325,7 @@ describe('extract.ts storeExtractedFacts copies the source scope', () => {
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = storeExtractedFacts(
-      sqliteSyncStore(home).localFiles.learning,
-      source,
-      facts,
-      DEFAULT_HALF_LIFE_DAYS,
-    );
+    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS);
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.scope).toBe('slack:private:C1');

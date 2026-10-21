@@ -2,23 +2,16 @@
 import { randomBytes, scryptSync } from 'node:crypto';
 import { type McpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../../src/entry/store-kit.js';
-import { withoutLocalFiles } from '../_helpers/port-only-store.js';
+import { FOLDER_GROUPS, withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
 
 /** A V1_ROWS key as a request line, each :param slot filled with 1. */
 export const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 
-// The local files and the groups they became, none of which the stub holds.
-const FOLDER_NEEDS: ReadonlySet<string> = new Set([
-  'localFiles',
-  'ledger',
-  'embeddingIndex',
-  'promotion',
-  'folderFiles',
-  'sharing',
-]);
+// The folder groups, none of which the stub holds.
+const FOLDER_NEEDS: ReadonlySet<string> = new Set(FOLDER_GROUPS);
 
-/** The entries that need hippo.db's local files, which no store but hippo.db's has. */
+/** The entries that need hippo.db's folder groups or hippo.db itself, which no store but hippo.db's has. */
 export function localFileRoutes(): string[] {
   return V1_ROWS.filter(
     ({ route }) =>
@@ -27,10 +20,10 @@ export function localFileRoutes(): string[] {
 }
 
 /** hippo.db's groups, each fenced by serve() for a 'stub' store so a handler reaching one answers 501, without the
- * optional groups or the local files. */
+ * optional groups. */
 export function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
   return {
-    ...withoutLocalFiles(sqliteStore(root)),
+    ...withoutFolderGroups(sqliteStore(root)),
     kind: 'stub',
     vectorViews: undefined,
     readiness: undefined,

@@ -503,7 +503,12 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   await forgetMemory(hippoRoot, tenantId, id, flags);
 }
 
-function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], flags: CommandContext['flags']): void {
+async function invalidateChurn(
+  hippoRoot: string,
+  tenantId: string,
+  args: string[],
+  flags: CommandContext['flags'],
+): Promise<void> {
   if (args[0] || hasFlag(flags, 'id')) {
     printError('Usage: hippo invalidate --churn [--dry-run]');
     fail('--churn takes no pattern or --id.');
@@ -513,7 +518,7 @@ function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], fl
   }
   const churnDryRun = flagIsTrue(flags, 'dry-run');
   let churnFailed = false;
-  for (const { root, result } of runChurnStaleForRepo(hippoRoot, tenantId, churnDryRun)) {
+  for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, churnDryRun)) {
     if (result.error) {
       printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       churnFailed = true;
@@ -538,7 +543,7 @@ function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], fl
   if (churnFailed) throw new CliExit(1);
 }
 
-export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   if (flagIsTrue(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
   const target = args[0];
@@ -560,7 +565,7 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
     to: reason,
     type: 'migration',
   };
-  const result = api.memoryInvalidate(cliApiContext(hippoRoot, tenantId), invTarget, { dryRun, onlyId });
+  const result = await api.memoryInvalidate(cliApiContext(hippoRoot, tenantId), invTarget, { dryRun, onlyId });
   const label = target ? `"${target}"` : `--id ${onlyId}`;
   if (result.dryRun) {
     if (result.invalidated === 0) {

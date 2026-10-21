@@ -8,12 +8,14 @@ import { evalNow } from '../../base/memory/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
-import type { Context, LocalContext } from '../types.js';
+import type { Context, SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { Consolidation, LocalFiles, LocalStore } from '../../store/local/index.js';
+import { failedUnitOf } from '../../base/errors/failed-unit.js';
+import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
+import type { StoreWith } from '../../store/port.js';
 import type { EntryCursor } from '../../store/port/types.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row, or shrink the
@@ -24,8 +26,8 @@ export interface SleepPhases {
   auditMemories: typeof auditMemories;
   autoShare: typeof autoShare;
   computeAmbientState: typeof ambientStateFromTallies;
-  loadPendingExtractionTenants: (store: Consolidation) => DirtyTenantSnapshot['dirtyTenants'];
-  extractGraph: (store: LocalStore, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  loadPendingExtractionTenants: (store: StoreWith<'consolidation'>) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
+  extractGraph: (store: StoreWith<'graphRebuild'>, tenantId: string) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
 }
 
@@ -35,7 +37,7 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   auditMemories,
   autoShare,
   computeAmbientState: ambientStateFromTallies,
-  loadPendingExtractionTenants: (store) => store.dirtyGraphTenants(),
+  loadPendingExtractionTenants: (store) => store.consolidation.dirtyGraphTenants(),
   extractGraph: extractGraphChunked,
   pageSize: 1000,
 };
@@ -49,24 +51,20 @@ interface SleepCounts {
 }
 
 type ConsolidateOutcome = Awaited<ReturnType<SleepPhases['consolidate']>>;
-type DedupOutcome = ReturnType<SleepPhases['deduplicateStore']>;
+type DedupOutcome = Awaited<ReturnType<SleepPhases['deduplicateStore']>>;
 
 interface DirtyTenantSnapshot {
   dirtyTenants: { tenantId: string; maxPendingId: number }[];
   error: string | null;
 }
 
-/** A sleep's context with hippo.db's own files at hand. */
-type SleepContext = LocalContext & { readonly local: LocalFiles };
-
 /** `sleep` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the public
  * `SleepOpts`. */
 export async function runSleep(
-  storeCtx: LocalContext,
+  ctx: SleepContext,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
-  const ctx: SleepContext = { ...storeCtx, local: storeCtx.store.localFiles };
   const dryRun = Boolean(opts.dryRun);
   const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...overrides };
 
@@ -94,21 +92,21 @@ async function runSleepPhases(
   counts: SleepCounts,
 ): Promise<SleepResult> {
   const dryRun = Boolean(opts.dryRun);
-  const snapshot = snapshotDirtyTenants(ctx, phases, dryRun);
+  const snapshot = await snapshotDirtyTenants(ctx, phases, dryRun);
 
   // Phase 1: Consolidation.
-  const { local } = ctx;
-  const consolidateResult = await phases.consolidate(local, { dryRun, config: ctx.config, tenantId: ctx.tenantId });
+  const { store } = ctx;
+  const consolidateResult = await phases.consolidate(store, { dryRun, config: ctx.config, tenantId: ctx.tenantId });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
   // Consolidate's own read predates its writes, so it cannot stand in for these. Dedup, the audit and ambient each page
   // through the store after the phase before them wrote, holding one page at a time.
-  const pages = (): Iterable<MemoryEntry[]> => entryPages(local.consolidation, phases.pageSize);
+  const pages = (): AsyncIterable<MemoryEntry[]> => entryPages(store, phases.pageSize);
 
   // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
   const actor = ctx.actor.subject;
-  const dedupResult = phases.deduplicateStore(local.consolidation, { dryRun, actor, pages: pages() });
+  const dedupResult = await phases.deduplicateStore(store, { dryRun, actor, pages: pages() });
   counts.dedup = dedupResult.removed;
   if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
 
@@ -122,7 +120,7 @@ async function runSleepPhases(
   if (!opts.noShare) await shareOnSleep(ctx, phases, result);
 
   // Phase 5: Post-sleep ambient state summary.
-  counts.ambient = summarizeAmbient(ctx, phases, result, pages);
+  counts.ambient = await summarizeAmbient(ctx, phases, result, pages);
 
   await drainGraphQueue(ctx, phases, snapshot, result);
   return result;
@@ -130,11 +128,15 @@ async function runSleepPhases(
 
 // Taken before any memory-deleting phase: queue rows cascade-delete with their mirror, so a later read would miss
 // tenants dedup touched. Fail-soft: a failed read skips the graph refresh this sleep and never aborts core sleep.
-function snapshotDirtyTenants(ctx: SleepContext, phases: SleepPhases, dryRun: boolean): DirtyTenantSnapshot {
+async function snapshotDirtyTenants(
+  ctx: SleepContext,
+  phases: SleepPhases,
+  dryRun: boolean,
+): Promise<DirtyTenantSnapshot> {
   const snapshot: DirtyTenantSnapshot = { dirtyTenants: [], error: null };
   if (!dryRun) {
     try {
-      snapshot.dirtyTenants = phases.loadPendingExtractionTenants(ctx.local.consolidation);
+      snapshot.dirtyTenants = await phases.loadPendingExtractionTenants(ctx.store);
     } catch (snapErr) {
       snapshot.error = errorMessage(snapErr);
     }
@@ -175,10 +177,10 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 }
 
 /** Every row of every tenant in load order, `limit` per read. */
-function* entryPages(store: Consolidation, limit: number): Generator<MemoryEntry[]> {
+async function* entryPages(store: StoreWith<'consolidation'>, limit: number): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | undefined;
   do {
-    const page = store.entriesPage({ limit, after });
+    const page = await store.consolidation.entriesPage({ limit, after });
     yield page.entries;
     after = page.next ?? undefined;
   } while (after);
@@ -189,7 +191,7 @@ interface QualityAuditOptions {
   readonly consolidateResult: ConsolidateOutcome;
   readonly dedupResult: DedupOutcome;
   readonly result: SleepResult;
-  readonly pages: () => Iterable<MemoryEntry[]>;
+  readonly pages: () => AsyncIterable<MemoryEntry[]>;
 }
 
 /** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so pages need no shared state
@@ -200,9 +202,9 @@ async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: 
   const wouldGo = dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : [];
   const planned = new Set(wouldGo);
   const issues: AuditIssue[] = [];
-  for (const page of pages()) {
+  for await (const page of pages()) {
     const rows = page.filter((e) => !planned.has(e.id));
-    const backing = ctx.local.consolidation.objectBackedAmong(rows.map((e) => e.id));
+    const backing = await ctx.store.consolidation.objectBackedAmong(rows.map((e) => e.id));
     issues.push(...phases.auditMemories(rows, backing).issues);
   }
   if (issues.length === 0) return 0;
@@ -244,18 +246,18 @@ async function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: Slee
 }
 
 /** Returns the ambient total the audit row reports: 0 when ambient is off or no current row is left. */
-function summarizeAmbient(
+async function summarizeAmbient(
   ctx: Context,
   phases: SleepPhases,
   result: SleepResult,
-  pages: () => Iterable<MemoryEntry[]>,
-): number {
+  pages: () => AsyncIterable<MemoryEntry[]>,
+): Promise<number> {
   if (!ctx.config.ambient.enabled) return 0;
   // One running tally at one `now`, so the float sums match one whole read row for row.
   const now = evalNow();
   const tallies = tallyAmbientEntries([], now);
   const rules = strengthOptionsOf(ctx.config.runtime);
-  for (const page of pages()) {
+  for await (const page of pages()) {
     foldAmbientRows(
       tallies,
       page.filter((e) => !e.supersededBy),
@@ -322,7 +324,7 @@ async function rebuildDirtyTenant(
     }
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
     // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
-    ctx.local.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
+    await ctx.store.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
   } catch (tenantErr) {
     result.details = [
       ...(result.details ?? []),
@@ -368,7 +370,7 @@ async function emitSleepAudit(
     if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
     // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can
     // be found.
-    const nextUnitIds = ctx.local.consolidation.failedUnitOf(phaseError);
+    const nextUnitIds = failedUnitOf(phaseError);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([
       {
@@ -380,6 +382,6 @@ async function emitSleepAudit(
     ]);
   } catch (auditErr) {
     // Logged, never thrown: a second failure must not mask the original phaseError.
-    ctx.local.consolidation.reportAuditFailure('consolidate', String(auditErr));
+    reportAuditWriteFailure('consolidate', String(auditErr));
   }
 }

@@ -1,8 +1,7 @@
 import type { Context } from '../../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import type { HippoStore } from '../../store/index.js';
-import { storeMeets, type StoreNeed } from '../../store/local/index.js';
+import { hasGroup, type HippoStore, type StoreGroup } from '../../store/index.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import {
   HttpError,
@@ -130,7 +129,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/sleep',
     auth: 'host-admin-local',
-    storeReady: 'localFiles',
+    storeReady: 'consolidation',
     handler: handleSleep,
   },
   {
@@ -275,7 +274,7 @@ export async function dispatchAddonRoute(
   noteAccess(req, { route: route.path });
   const answer = async (): Promise<void> => {
     const ctx = await buildContextWithAuth(req, opts);
-    assertRoutePorted(opts, route.storeReady ?? 'localFiles');
+    assertRoutePorted(opts, route.storeReady ?? 'hippoDb');
     noteAccess(req, { tenant: ctx.tenantId });
     const body = await parseJsonBody(req, ctx);
     sendJson(res, 200, await route.handler({ ctx, body }));
@@ -322,12 +321,17 @@ export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: str
   return true;
 }
 
-/** What a row needs: a sqliteOnly row needs hippo.db's local files, a row naming none runs on any store. */
+/** What a route needs of its store: a group, or hippo.db itself. */
+type StoreNeed = StoreGroup | 'hippoDb';
+
+/** What a row needs: a sqliteOnly row needs hippo.db, a row naming none runs on any store. */
 function routeGroup(route: Route): StoreNeed | undefined {
-  return route.sqliteOnly === undefined ? route.storeReady : 'localFiles';
+  return route.sqliteOnly === undefined ? route.storeReady : 'hippoDb';
 }
 
 /** A route answers 501 without running when the store lacks what it needs. */
 function assertRoutePorted(opts: ResolvedServeOptions, need: StoreNeed | undefined): void {
-  if (need !== undefined && !storeMeets(opts.store, need)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+  if (need === undefined) return;
+  const meets = need === 'hippoDb' ? opts.onHippoDb : hasGroup(opts.store, need);
+  if (!meets) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }

@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
+import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { handleRemember, handleTrace } from '../../src/surface/cli/remember.js';
 import { cmdCapture } from '../../src/surface/capture/command.js';
@@ -101,9 +101,10 @@ describe('trace lineage', () => {
 });
 
 describe('cmdCapture', () => {
-  it('reads no full row for its copy check and keeps every write on one handle', () => {
-    const counts = SIZES.flatMap((n) =>
-      [1, 10].map((items) => {
+  it('reads no full row for its copy check and keeps every write on one handle', async () => {
+    const counts: number[] = [];
+    for (const n of SIZES) {
+      for (const items of [1, 10]) {
         const root = freshRoot('qc-capture');
         fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
         const held = 'Never deploy service 0 on Fridays because the on-call rota is thin';
@@ -114,7 +115,7 @@ describe('cmdCapture', () => {
         }));
         const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
         try {
-          const { statements } = recordStatements(() =>
+          const { statements } = await recordStatementsAsync(() =>
             cmdCapture(captureTarget(root), {
               source: 'last-session',
               sessionTurns,
@@ -125,12 +126,12 @@ describe('cmdCapture', () => {
           );
           expect(log.mock.calls.at(-1)?.[0]).toContain(`Captured ${items} items (1 skipped as duplicates)`);
           expect(countMatching(statements, ROW_READ)).toBe(0);
-          return countMatching(statements, STORE_OPEN);
+          counts.push(countMatching(statements, STORE_OPEN));
         } finally {
           log.mockRestore();
         }
-      }),
-    );
+      }
+    }
     expect(new Set(counts).size).toBe(1);
   });
 });

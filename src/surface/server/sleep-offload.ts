@@ -6,7 +6,7 @@ import { type Actor, type SleepOpts, type SleepResult, type Context } from '../.
 import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import { StoreBusyError } from '../../store/port.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
-import { HttpError } from '../../base/util/http-util.js';
+import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
@@ -112,8 +112,8 @@ export interface SleepQueue {
   readonly settled: () => Promise<void>;
 }
 
-/** The queue of the server on `hippoRoot`, whose child reopens that folder. */
-export function createSleepQueue(hippoRoot: string): SleepQueue {
+/** The queue of the server on `hippoRoot`, whose child reopens that folder; `onHippoDb` says the served store is it. */
+export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQueue {
   let turn: Promise<void> = Promise.resolve();
   let inLine = 0;
   const inTurn = <R>(job: SleepJob): Promise<R> => {
@@ -142,9 +142,11 @@ export function createSleepQueue(hippoRoot: string): SleepQueue {
     return run;
   };
   return {
-    // The route ran only because its store is hippo.db.
+    // The child sleeps the hippo.db under the folder, so another store that sets the sleep groups gets 501 as before.
     sleep: (ctx, opts) =>
-      inTurn<SleepResult>({ kind: 'sleep', hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts }),
+      onHippoDb
+        ? inTurn<SleepResult>({ kind: 'sleep', hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts })
+        : Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE)),
     consolidate: async () => {
       await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
     },

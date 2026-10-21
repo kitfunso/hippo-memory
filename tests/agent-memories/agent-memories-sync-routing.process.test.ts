@@ -41,7 +41,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -63,7 +63,7 @@ const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 const opts = () => ({
   configAt: loadConfig,
   tenantId: 'default',
-  agentImport: sqliteAgentImport({}),
+  stores: sqliteImportStores({}),
   machine: w.machine,
 });
 
@@ -79,7 +79,7 @@ interface GitRuns<T> {
 }
 
 /** Domain starts git only through Machine.git, so a counting runner sees every git process the pass starts. */
-function gitRunsDuring<T>(run: (machine: Machine) => T): GitRuns<T> {
+async function gitRunsDuring<T>(run: (machine: Machine) => Promise<T>): Promise<GitRuns<T>> {
   let runs = 0;
   const git: GitRunner = {
     run: (args, call) => {
@@ -87,27 +87,30 @@ function gitRunsDuring<T>(run: (machine: Machine) => T): GitRuns<T> {
       return w.machine.git.run(args, call);
     },
   };
-  const result = run({ ...w.machine, git });
+  const result = await run({ ...w.machine, git });
   return { result, runs };
 }
 
 describe('agent memory sync: routing and sharing', () => {
-  it("the handover sets aside the global p- rows the store-less hook path wrote once the project's own store syncs them", () => {
+  it("the handover sets aside the global p- rows the store-less hook path wrote once the project's own store syncs them", async () => {
     const hand = join(w.dir, 'hand');
     mkdirSync(join(hand, '.git'), { recursive: true });
     note(projectNotes(w, hand), 'deploy.md', DEPLOY);
-    importAtSessionEnd(hand, undefined, opts());
+    await importAtSessionEnd(hand, undefined, opts());
     expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY }]);
     expect(liveRows(w.global)[0].source).toMatch(/^agent-memory:claude-code:p-/);
 
     initTestStore(join(hand, '.hippo'));
-    expect(claude(importProjectMemories(join(hand, '.hippo'), opts()))).toMatchObject({ imported: 1, handedOver: 1 });
+    expect(claude(await importProjectMemories(join(hand, '.hippo'), opts()))).toMatchObject({
+      imported: 1,
+      handedOver: 1,
+    });
     expect(liveRows(w.global)).toEqual([]);
     expect(dormantRows(w.global).map((d) => d.reason)).toEqual(['source-deleted']);
     expect(liveTexts(join(hand, '.hippo'))).toEqual([DEPLOY]);
   });
 
-  it('a project Y row with the same text does not hide the note from project X in the global store', () => {
+  it('a project Y row with the same text does not hide the note from project X in the global store', async () => {
     const SHARED = 'Every service logs in UTC with ISO timestamps.';
     initTestStore(w.global);
     plainRow(w.global, DEPLOY, 'projy');
@@ -117,11 +120,11 @@ describe('agent memory sync: routing and sharing', () => {
     note(projectNotes(w, hx), 'deploy.md', DEPLOY);
     note(projectNotes(w, hx), 'utc.md', SHARED);
 
-    expect(claude(importAtSessionEnd(hx, undefined, opts()))).toMatchObject({ imported: 1, duplicate: 1 });
+    expect(claude(await importAtSessionEnd(hx, undefined, opts()))).toMatchObject({ imported: 1, duplicate: 1 });
     expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, originProject: deriveOriginProject(hx) }]);
   });
 
-  it('post-compact reads the session folder only and runs no git call', () => {
+  it('post-compact reads the session folder only and runs no git call', async () => {
     const Q = 'The session folder note says the queue drains at midnight.';
     note(
       projectNotes(w, join(w.dir, 'other')),
@@ -133,7 +136,7 @@ describe('agent memory sync: routing and sharing', () => {
     const transcript = join(dirname(note(projectNotes(w), 'q.md', Q)), '..', 's.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    const compaction = gitRunsDuring((machine) =>
+    const compaction = await gitRunsDuring((machine) =>
       importSessionFolder(w.local, transcript, w.project, { ...opts(), machine }),
     );
     expect(compaction.runs).toBe(0);
@@ -141,45 +144,45 @@ describe('agent memory sync: routing and sharing', () => {
     expect(liveRows(w.local)).toMatchObject([{ content: Q, originProject: 'proj' }]);
     expect(isInitialized(w.global)).toBe(false);
     // Claude Code's folder names ask git once; this world has no Gemini index or Copilot store to ask it again.
-    expect(gitRunsDuring((machine) => importProjectMemories(w.local, { ...opts(), machine })).runs).toBe(1);
+    expect((await gitRunsDuring((machine) => importProjectMemories(w.local, { ...opts(), machine }))).runs).toBe(1);
   });
 
-  it('a session begun above two repos keeps its folder notes user-global, one copy wherever it ends', () => {
+  it('a session begun above two repos keeps its folder notes user-global, one copy wherever it ends', async () => {
     const HOME_NOTE = 'A note the session filed under the folder it began in.';
     const transcript = join(dirname(note(projectNotes(w, w.dir), 'h.md', HOME_NOTE)), '..', 's.jsonl');
     const [a, b] = [join(w.dir, 'repoa'), join(w.dir, 'repob')];
     for (const repo of [a, b]) mkdirSync(join(repo, '.git'), { recursive: true });
 
-    importAtSessionEnd(a, transcript, opts());
-    importAtSessionEnd(b, transcript, opts());
+    await importAtSessionEnd(a, transcript, opts());
+    await importAtSessionEnd(b, transcript, opts());
     expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, originProject: '' }]);
-    expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
+    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
     expect(liveTexts(w.local)).toEqual([]);
   });
 
-  it('a session begun in one repo and compacted in another files its folder notes under the first, in the global store', () => {
+  it('a session begun in one repo and compacted in another files its folder notes under the first, in the global store', async () => {
     const x = join(w.dir, 'repox');
     mkdirSync(join(x, '.git'), { recursive: true });
     const transcript = join(dirname(note(projectNotes(w, x), 'x.md', DEPLOY)), '..', 's.jsonl');
     writeFileSync(transcript, `${JSON.stringify({ type: 'user', cwd: x })}\n`, 'utf8');
 
-    expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(1);
+    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(1);
     expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, originProject: deriveOriginProject(x) }]);
     expect(liveTexts(w.local)).toEqual([]);
   });
 
-  it("a project store that opts out of imports keeps another repo's session notes out of the global store too", () => {
+  it("a project store that opts out of imports keeps another repo's session notes out of the global store too", async () => {
     const x = join(w.dir, 'repox');
     mkdirSync(join(x, '.git'), { recursive: true });
     const transcript = join(dirname(note(projectNotes(w, x), 'x.md', DEPLOY)), '..', 's.jsonl');
     writeFileSync(transcript, `${JSON.stringify({ cwd: x })}\n`, 'utf8');
     writeConfig(w.local, []);
 
-    expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
+    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
     expect(isInitialized(w.global)).toBe(false);
   });
 
-  it('repair sets aside a home note filed under a project and edited since, and the next compaction does not bring it back', () => {
+  it('repair sets aside a home note filed under a project and edited since, and the next compaction does not bring it back', async () => {
     const HOME_NOTE = 'A note the session filed under the folder it began in.';
     const notes = projectNotes(w, w.dir);
     const transcript = join(dirname(note(notes, 'h.md', HOME_NOTE)), '..', 's.jsonl');
@@ -201,17 +204,17 @@ describe('agent memory sync: routing and sharing', () => {
     );
     const repair = (dryRun: boolean) => projectNameRepair(cliApiContext(w.global, 'default'), { dryRun });
 
-    expect(repair(true).copies).toEqual([stray.id]);
+    expect((await repair(true)).copies).toEqual([stray.id]);
     expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);
-    expect(repair(false).copies).toEqual([stray.id]);
-    expect(repair(false).copies).toEqual([]);
+    expect((await repair(false)).copies).toEqual([stray.id]);
+    expect((await repair(false)).copies).toEqual([]);
 
-    importSessionFolder(w.local, transcript, join(w.dir, 'repoa'), opts());
+    await importSessionFolder(w.local, transcript, join(w.dir, 'repoa'), opts());
     expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, originProject: '' }]);
     expect(dormantRows(w.global).map((d) => d.id)).toEqual([stray.id]);
   });
 
-  it('a global-store sleep runs the user pass only', () => {
+  it('a global-store sleep runs the user pass only', async () => {
     note(
       projectNotes(w, dirname(w.global)),
       'home.md',
@@ -219,16 +222,16 @@ describe('agent memory sync: routing and sharing', () => {
     );
     note(userNotes(w), 'u.md', USER_NOTE);
 
-    const report = importForStore(w.global, opts());
+    const report = await importForStore(w.global, opts());
     expect(liveTexts(w.global)).toEqual([USER_NOTE]);
     expect(report.tools.flatMap((t) => t.containers.map((c) => c.scope))).toEqual(['user']);
   });
 
-  it("a user container lands in the global store with origin ''", () => {
+  it("a user container lands in the global store with origin ''", async () => {
     const dir = userNotes(w);
     note(dir, 'u.md', USER_NOTE);
 
-    expect(claude(importForStore(w.local, opts())).imported).toBe(1);
+    expect(claude(await importForStore(w.local, opts())).imported).toBe(1);
     expect(liveRows(w.global)).toMatchObject([{ content: USER_NOTE, originProject: '' }]);
     expect(
       liveRows(w.global)[0].source.startsWith(`agent-memory:claude-code:${expectedContainer(dir, 'u')}/u.md#`),
@@ -241,10 +244,10 @@ describe('agent memory sync: routing and sharing', () => {
     const dir = userNotes(w);
     note(dir, 'u.md', USER_NOTE);
     const gone = note(dir, 'gone.md', 'This user note is deleted, set aside, then restored by hand.');
-    importForStore(w.local, opts());
+    await importForStore(w.local, opts());
     const goneId = liveRows(w.global).find((e) => e.content.startsWith('This user note'))?.id ?? '';
     unlinkSync(gone);
-    importForStore(w.local, opts());
+    await importForStore(w.local, opts());
     await dormantRestore(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
@@ -258,10 +261,10 @@ describe('agent memory sync: routing and sharing', () => {
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);
     const gone = note(dir, 'gone.md', 'This project note is deleted, set aside, then restored by hand.');
-    importForStore(w.local, opts());
+    await importForStore(w.local, opts());
     const goneId = liveRows(w.local).find((e) => e.content.startsWith('This project note'))?.id ?? '';
     unlinkSync(gone);
-    importForStore(w.local, opts());
+    await importForStore(w.local, opts());
     await dormantRestore(ctxFor(w.local), goneId);
     plainRow(w.local, CONTROL, 'proj');
 
@@ -271,43 +274,43 @@ describe('agent memory sync: routing and sharing', () => {
     expect(stats.neverAutoShareSkipped).toBe(2);
   });
 
-  it("a moved project root leaves the old container's rows alone", () => {
+  it("a moved project root leaves the old container's rows alone", async () => {
     note(projectNotes(w), 'deploy.md', DEPLOY);
-    importForStore(w.local, opts());
+    await importForStore(w.local, opts());
     const [old] = liveRows(w.local);
     const moved = join(w.dir, 'moved');
     renameSync(w.project, moved);
     const store = join(moved, '.hippo');
     const copied = note(projectNotes(w, moved), 'deploy.md', DEPLOY);
 
-    expect(claude(importForStore(store, opts()))).toMatchObject({ imported: 1, setAside: 0 });
+    expect(claude(await importForStore(store, opts()))).toMatchObject({ imported: 1, setAside: 0 });
     expect(liveRows(store)).toHaveLength(2);
-    expect(toolTally(importForStore(store, { ...opts(), dryRun: true }), 'claude-code')).toMatchObject({
+    expect(toolTally(await importForStore(store, { ...opts(), dryRun: true }), 'claude-code')).toMatchObject({
       unchanged: 1,
     });
     expect(
-      importForStore(store, { ...opts(), dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted,
+      (await importForStore(store, { ...opts(), dryRun: true })).tools.find((t) => t.tool === 'claude-code')?.unlisted,
     ).toBe(1);
 
     unlinkSync(copied);
-    expect(claude(importForStore(store, opts())).setAside).toBe(1);
+    expect(claude(await importForStore(store, opts())).setAside).toBe(1);
     expect(liveRows(store).map((e) => e.id)).toEqual([old.id]);
   });
 
-  it('a git failure sets nothing aside', () => {
+  it('a git failure sets nothing aside', async () => {
     const repo = join(w.dir, 'repo');
     mkdirSync(repo);
     expect(spawnSync('git', ['init', '-q', repo], { encoding: 'utf8', windowsHide: true }).status).toBe(0);
     const store = join(repo, 'sub', '.hippo');
     initTestStore(store);
     note(projectNotes(w, repo), 'deploy.md', DEPLOY);
-    expect(claude(importForStore(store, opts())).imported).toBe(1);
+    expect(claude(await importForStore(store, opts())).imported).toBe(1);
 
     const noTools = join(w.dir, 'no-tools');
     mkdirSync(noTools);
     vi.stubEnv('PATH', noTools);
     expect(gitLayout(processGit, join(repo, 'sub'))).toBeNull();
-    expect(claude(importForStore(store, opts()))).toMatchObject({ setAside: 0, imported: 0 });
+    expect(claude(await importForStore(store, opts()))).toMatchObject({ setAside: 0, imported: 0 });
     expect(liveTexts(store)).toEqual([DEPLOY]);
   });
 });

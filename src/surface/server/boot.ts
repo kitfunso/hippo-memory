@@ -14,7 +14,6 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../../store/index.js';
 import { isStoreBusy } from '../../store/port.js';
-import { isLocalStore } from '../../store/local/index.js';
 import {
   sqliteServerRuntime,
   tenantOfApiKey,
@@ -528,19 +527,21 @@ function servedOptsFor(
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
   const { store } = runtime;
-  const sleeps = createSleepQueue(opts.hippoRoot);
+  const sleeps = createSleepQueue(opts.hippoRoot, runtime.onHippoDb);
   const counts: ServerCounts = { handlerDeadlines: 0, autoSleeps: 0 };
   const run = (): Promise<void> => {
     counts.autoSleeps += 1;
     return sleeps.consolidate();
   };
-  const sleepsHere = opts.autoSleep !== false && isLocalStore(store);
+  // The auto-sleep child reopens hippo.db by its folder, so another store never starts one.
+  const sleepsHere = opts.autoSleep !== false && runtime.onHippoDb;
   const autoSleep = sleepsHere ? { run, hostTenantId: envTenant() } : undefined;
   return {
     ...opts,
     routes,
     publicJsonBodies,
     store,
+    onHippoDb: runtime.onHippoDb,
     reachOf: runtime.reachOf,
     configAt: configReader(envRuntimeSettings),
     offLoop: runtime.offLoop,

@@ -22,11 +22,11 @@ import { cmdCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { REAL_IO } from '../_helpers/real-io.js';
@@ -174,7 +174,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
         importProjectMemories(root, {
           configAt: loadConfig,
           tenantId: 'default',
-          agentImport: sqliteAgentImport({}),
+          stores: sqliteImportStores({}),
           machine: { home, env: {}, platform: process.platform, ...REAL_IO },
         }),
       );
@@ -220,7 +220,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       const source = seed(root, 'Alice prefers dark mode and vim keybindings');
       return added(root, () =>
         storeExtractedFacts(
-          sqliteSyncStore(root).localFiles.learning,
+          sqliteStore(root),
           source,
           [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }],
           loadConfig(root).defaultHalfLifeDays,
@@ -263,7 +263,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
         seed(root, c, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }),
       );
       return added(root, () =>
-        buildDag(sqliteSyncStore(root).localFiles, facts, {
+        buildDag(sqliteStore(root), facts, {
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
           apiKey: 'test-key',
           fetcher: fetcher('alice files, notes and closes tickets'),
@@ -283,7 +283,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
         }),
       );
       return added(root, () =>
-        buildEntityProfiles(sqliteSyncStore(root).localFiles, l2s, {
+        buildEntityProfiles(sqliteStore(root), l2s, {
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
           apiKey: 'test-key',
           fetcher: fetcher('alice is the typed-python API owner'),

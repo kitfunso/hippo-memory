@@ -1,12 +1,10 @@
-// The graph rebuild's writes: synchronous, because `rebuild` runs its diff inside hippo.db's own write lock.
-import type { StoredGraph } from '../port/graph-reads.js';
-import type { EntityType, RelationType, SourceObjectType } from '../port/graph-reads.js';
+// The graph rebuild's writes: ops a diff of graphReads.storedGraph planned, applied as plain data.
+import type { EntityType, RelationType, SourceObjectType } from './graph-reads.js';
 
 export interface GraphRebuild {
-  /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past `opts.holdMs`. */
-  applyOps(tenantId: string, ops: readonly GraphOp[], opts: ApplyGraphOpsOptions): ApplyGraphOpsResult;
-  /** Diffs the stored graph with `diff` and applies every op under one lock; returns how many ops were stale. */
-  rebuild(tenantId: string, memoryIds: readonly string[], diff: (stored: StoredGraph) => readonly GraphOp[]): number;
+  /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past `opts.holdMs`. Each insert and
+   * update is checked against the rows as they stand, so one a writer made stale since the diff's read is skipped. */
+  applyOps(tenantId: string, ops: readonly GraphOp[], opts: ApplyGraphOpsOptions): Promise<ApplyGraphOpsResult>;
 }
 
 /** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives a mirror forget/prune
@@ -56,5 +54,4 @@ export interface ApplyGraphOpsResult {
 export interface ApplyGraphOpsOptions {
   readonly from: number;
   readonly holdMs: number;
-  readonly clock?: () => number;
 }

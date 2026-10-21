@@ -190,8 +190,8 @@ describe('sharing', () => {
     await write('s1', scan(REPLY));
     const [digest] = digests();
     expect(neverAutoShareTags([digest])).toEqual([SESSION_DIGEST_TAG]);
-    const [fact] = storeExtractedFacts(
-      sqliteStore(hippoRoot).localFiles.learning,
+    const [fact] = await storeExtractedFacts(
+      sqliteStore(hippoRoot),
       digest,
       [
         {

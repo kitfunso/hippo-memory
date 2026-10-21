@@ -228,12 +228,12 @@ describe('automatic quality does not govern manual or trusted import storage', (
     expect(recent.entries.map(({ entry }) => entry.content).sort()).toEqual([...texts].sort());
   });
 
-  it('session capture stores a rule from the turn after one that left a fence open', () => {
+  it('session capture stores a rule from the turn after one that left a fence open', async () => {
     const turns: SessionTurn[] = [
       { role: 'user', text: 'Here is the log:\n```\nError: build failed' },
       { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
     ];
-    cmdCapture(captureTarget(root), {
+    await cmdCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'last-session',
       sessionTurns: turns,

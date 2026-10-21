@@ -5,9 +5,9 @@ import { detectChurnStale } from '../../src/domain/learn/invalidation.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
@@ -55,7 +55,7 @@ function setColumn(root: string, column: 'superseded_by' | 'created', value: str
 }
 
 describe('detectChurnStale candidate read', () => {
-  it('checks and skips the same rows, in store order, with and without a legacy name', () => {
+  it('checks and skips the same rows, in store order, with and without a legacy name', async () => {
     const root = newRoot();
     const checked = new Set<string>();
     const legacyChecked = new Set<string>();
@@ -84,8 +84,8 @@ describe('detectChurnStale candidate read', () => {
     const order = loadAllEntries(root, 'default').map((e) => e.id);
     const inOrder = (ids: Set<string>): string[] => order.filter((id) => ids.has(id));
     for (const legacyName of [undefined, 'legacy', '']) {
-      const result = detectChurnStale(
-        sqliteSyncStore(root).localFiles.learning,
+      const result = await detectChurnStale(
+        sqliteStore(root),
         { root: NO_REFS_REPO, git: processGit },
         {
           tenantId: 'default',
@@ -102,7 +102,7 @@ describe('detectChurnStale candidate read', () => {
     }
   });
 
-  it('reads no row of another project', () => {
+  it('reads no row of another project', async () => {
     const root = newRoot();
     writeEntriesTogether(
       root,
@@ -110,9 +110,9 @@ describe('detectChurnStale candidate read', () => {
     );
     const pinned = put(root, 'pinned', { pinned: true });
     put(root, 'current');
-    const { result, statements, rowsRead } = recordStatements(() =>
+    const { result, statements, rowsRead } = await recordStatementsAsync(() =>
       detectChurnStale(
-        sqliteSyncStore(root).localFiles.learning,
+        sqliteStore(root),
         { root: NO_REFS_REPO, git: processGit },
         {
           tenantId: 'default',

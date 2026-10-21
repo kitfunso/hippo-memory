@@ -70,7 +70,7 @@ describe('the CLI curate verbs go through src/api', () => {
   it('memoryInvalidate weakens only the context tenant', async () => {
     const here = (await remember(cli(), { content: 'we deploy with jenkins pipelines' })).id;
     const there = (await remember(cli('other'), { content: 'we deploy with jenkins pipelines' })).id;
-    const result = memoryInvalidate(cli(), { from: 'jenkins', to: 'github actions', type: 'migration' }, {});
+    const result = await memoryInvalidate(cli(), { from: 'jenkins', to: 'github actions', type: 'migration' }, {});
     expect(result.targets).toEqual([here]);
     expect(readEntry(root, here, 'default')?.confidence).toBe('stale');
     expect(readEntry(root, there, 'other')?.confidence).not.toBe('stale');

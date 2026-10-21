@@ -92,9 +92,9 @@ describe('package entry re-exports sleep', () => {
     // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
-    // The published signature takes a Context whose store has local files, so the compiler checks them.
+    // The published signature takes a Context whose store sets the sleep groups, so the compiler checks them.
     expect(dts).toMatch(
-      /^export declare function sleep\(ctx: LocalContext, opts\?: SleepOpts\): Promise<SleepResult>;$/m,
+      /^export declare function sleep\(ctx: SleepContext, opts\?: SleepOpts\): Promise<SleepResult>;$/m,
     );
     const sleepDts = readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8');
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
@@ -235,7 +235,7 @@ describe('published runtime exports', () => {
       authCreate authCreateSelf authRevoke
       bindSessionOwner bindSessionOwnerOn
       captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
-      isCrossSite isLocalStore isLoopback isReservedActor
+      isCrossSite isLoopback isReservedActor
       ownerOrSubject
       preCompactForCaller promptHookContext
       saveCompactionItemsForCaller serve sessionEndHandoffForCaller",

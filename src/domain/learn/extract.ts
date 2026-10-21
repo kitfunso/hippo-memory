@@ -1,5 +1,6 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../../base/memory/memory.js';
-import type { Learning } from '../../store/local/learning.js';
+import type { StoreWith } from '../../store/port.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import {
@@ -107,12 +108,12 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
-export function storeExtractedFacts(
-  learning: Learning,
+export async function storeExtractedFacts(
+  store: StoreWith<'learning'>,
   source: MemoryEntry,
   facts: ExtractedFact[],
   baseHalfLifeDays: number,
-): MemoryEntry[] {
+): Promise<MemoryEntry[]> {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
     ...neverAutoShareTags([source]),
@@ -132,7 +133,7 @@ export function storeExtractedFacts(
     // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it
     // (reject_refusal), so skip and count.
     try {
-      learning.writeEntry(entry);
+      await store.entryWrites.writeEntry({ entry, actor: CLI_ACTOR });
     } catch (err) {
       if (err instanceof RejectedValueError) {
         rejected++;

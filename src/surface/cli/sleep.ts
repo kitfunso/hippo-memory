@@ -8,7 +8,7 @@ import { importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../base/util/agent-homes.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import * as api from '../../api/index.js';
-import { cliConfig, cliApiContext, cliLocalFiles, cliSyncOptions } from './api-context.js';
+import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { teeStdStreams } from '../../base/util/stream-tee.js';
@@ -51,9 +51,9 @@ function renderSleepResult(result: api.SleepResult): void {
 }
 
 /** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
-function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
+async function repairProjectTagsOnce(hippoRoot: string, tenantId: string): Promise<void> {
   try {
-    const r = api.projectNameRepairOnce(cliApiContext(hippoRoot, tenantId));
+    const r = await api.projectNameRepairOnce(cliApiContext(hippoRoot, tenantId));
     if (r === null) return;
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
@@ -86,13 +86,13 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
 
     // Opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
     if (config.churnStaleness.enabled && isGitRepo(processGit, process.cwd())) {
-      for (const { root, result } of runChurnStaleForRepo(hippoRoot, tenantId, false)) {
+      for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, false)) {
         if (result.marked > 0) console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
         if (result.error) printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       }
     }
 
-    printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, tenantId, currentMachine())), '');
+    printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())), '');
   }
 }
 
@@ -104,11 +104,11 @@ async function runSleep(hippoRoot: string, tenantId: string, flags: CliFlags): P
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
   if (!boolFlag(flags, 'dry-run')) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = replayCompactions({ root: hippoRoot, files: cliLocalFiles(hippoRoot), tenantId }, warn);
+    const finished = await replayCompactions({ root: hippoRoot, store: cliStore(hippoRoot), tenantId }, warn);
     if (finished > 0) {
       console.log(`Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`);
     }
-    repairProjectTagsOnce(hippoRoot, tenantId);
+    await repairProjectTagsOnce(hippoRoot, tenantId);
     await repairQualityOnceAt(hippoRoot, tenantId);
   }
 

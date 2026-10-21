@@ -5,7 +5,7 @@ import { isPersonalScope } from '../../base/scope/recall-scope.js';
 import { CONFLICT_STOPWORDS } from '../../base/util/stopwords.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { DECAY_THRESHOLD } from './decay.js';
-import type { DetectedConflict } from '../../store/local/consolidation.js';
+import type { DetectedConflict } from '../../store/port/consolidation.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
 // on stopword-filtered tokens only applies after a polarity signal, so it filters drive-by topic similarity, not
@@ -19,7 +19,7 @@ const CONFLICT_MIN_RARE_SHARED = 2;
 const POLARITY_WINDOW_WORDS = 40;
 
 /** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
-type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]>;
+type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
 
 export interface DetectConflictsOptions {
   decayOpts?: DecayOptions;
@@ -31,16 +31,16 @@ export interface DetectConflictsOptions {
 
 /** Pairs of live non-semantic memories that contradict each other, in survivor order. With `pagesOf`, the rows are read
  * back one tenant at a time, as a pair never spans tenants, so only that tenant's profiles are held. */
-export function detectConflicts(
-  entries: Iterable<MemoryEntry>,
+export async function detectConflicts(
+  entries: Iterable<MemoryEntry> | AsyncIterable<MemoryEntry>,
   now: Date,
   options: DetectConflictsOptions = {},
-): DetectedConflict[] {
+): Promise<DetectedConflict[]> {
   const { decayOpts = {}, rescuedIds = new Set<string>(), pagesOf } = options;
   const held: MemoryEntry[] = [];
   const byTenant = new Map<string, number[]>();
   const ids: string[] = [];
-  for (const entry of entries) {
+  for await (const entry of entries) {
     const live =
       entry.layer !== Layer.Semantic &&
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
@@ -55,7 +55,7 @@ export function detectConflicts(
   }
   const found: Array<readonly [number, number, DetectedConflict]> = [];
   for (const places of byTenant.values()) {
-    const rows = pagesOf ? readPlaces(places, ids, pagesOf) : places.map((p) => conflictRow(p, held[p]));
+    const rows = pagesOf ? await readPlaces(places, ids, pagesOf) : places.map((p) => conflictRow(p, held[p]));
     found.push(...tenantConflicts(rows));
   }
   return found.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , conflict]) => conflict);
@@ -89,10 +89,10 @@ function conflictRow(place: number, e: MemoryEntry): ConflictRow {
   };
 }
 
-function readPlaces(places: readonly number[], ids: readonly string[], pagesOf: PagesOf): ConflictRow[] {
+async function readPlaces(places: readonly number[], ids: readonly string[], pagesOf: PagesOf): Promise<ConflictRow[]> {
   const placeOf = new Map(places.map((p) => [ids[p], p]));
   const rows: ConflictRow[] = [];
-  for (const page of pagesOf(places.map((p) => ids[p]))) {
+  for await (const page of pagesOf(places.map((p) => ids[p]))) {
     for (const e of page) rows.push(conflictRow(placeOf.get(e.id)!, e));
   }
   return rows;
