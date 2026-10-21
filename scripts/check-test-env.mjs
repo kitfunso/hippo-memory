@@ -3,7 +3,8 @@
 // with vi.unstubAllEnvs in afterEach restores the value vitest.config.ts set, so a test cannot leak env into the next.
 // tests/_helpers/ may own env for a child process. An env object built for a spawn is a read, not a write.
 // A vi.stubEnv made once (beforeAll, a describe body, module scope) under an afterEach unstub is gone after the first test.
-// Also fails a test whose name puts it in another vitest project than what it starts needs (scripts/lib/test-classes.mjs).
+// Also fails a test whose name puts it in another vitest project than what it starts needs (scripts/lib/test-classes.mjs),
+// and a secret, endpoint or path that src/base/util/env.ts reads but ENV_SCRUBBED_IN_TESTS (which vitest.config.ts blanks) lacks.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -228,13 +229,31 @@ export function misnamedTests(dir) {
   return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
 }
 
+/** The variable names a reader in env.ts is built from, and the ENV_SCRUBBED_IN_TESTS list in the same source. */
+const READER = /\b(?:raw|text|trimmedText|posInt|nonNegInt|strictPosInt)\('([A-Z][A-Z0-9_]*)'/g;
+// HIPPO_HOME, HOME and USERPROFILE get isolated directories in vitest.config.ts rather than a blank.
+const SET_BY_VITEST = new Set(['HIPPO_HOME', 'HOME', 'USERPROFILE']);
+const SENSITIVE = /KEY|TOKEN|SECRET|PASSWORD|ENDPOINT|ACCOUNT_ID|_URL$|_CERT$|_CACHE$|_HOME$/;
+
+/**
+ * Returns the variable names env.ts reads that look like a secret, endpoint or path and are not in ENV_SCRUBBED_IN_TESTS.
+ * @param {string} envSource the text of src/base/util/env.ts
+ * @returns {string[]}
+ */
+export function unscrubbedEnvReads(envSource) {
+  const list = /ENV_SCRUBBED_IN_TESTS\s*=\s*Object\.freeze\(\[([^\]]*)\]/.exec(envSource)?.[1] ?? '';
+  const scrubbed = new Set([...list.matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1]));
+  const read = new Set([...envSource.matchAll(READER)].map((m) => m[1]));
+  return [...read].filter((n) => SENSITIVE.test(n) && !SET_BY_VITEST.has(n) && !scrubbed.has(n)).sort();
+}
+
 const RENAME = {
   process: 'starts a child process: name it *.process.test.ts',
   server: 'starts the server or a worker thread and no child: name it *.server.test.ts',
   unit: 'starts no child, server or worker thread: drop .process or .server from its name',
 };
 
-function report(dir, hits, misnamed) {
+function report(dir, hits, misnamed, unscrubbed) {
   if (hits.length > 0) {
     console.error(`\nTests that write or leak process.env in ${dir}/:`);
     for (const h of hits) console.error(`  ${h.file}:${h.line} ${h.write}`);
@@ -260,7 +279,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const dir = process.argv[2] ?? 'tests';
   const hits = findEnvWrites(dir);
   const misnamed = misnamedTests(dir);
-  report(dir, hits, misnamed);
-  if (hits.length > 0 || misnamed.length > 0) process.exit(1);
+  const envFile = join(dirname(dir), 'src/base/util/env.ts');
+  const unscrubbed = existsSync(envFile) ? unscrubbedEnvReads(readFileSync(envFile, 'utf8')) : [];
+  report(dir, hits, misnamed, unscrubbed);
+  if (hits.length > 0 || misnamed.length > 0 || unscrubbed.length > 0) process.exit(1);
   console.log(`No test in ${dir}/ writes process.env by hand, and each test's name matches what it starts. OK.`);
 }

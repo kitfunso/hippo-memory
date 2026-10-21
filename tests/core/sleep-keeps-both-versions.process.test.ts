@@ -78,7 +78,6 @@ function hermeticEnv(): NodeJS.ProcessEnv {
     APPDATA: home,
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   };
-  delete env.ANTHROPIC_API_KEY;
   const pathKey = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
   env[pathKey] = (env[pathKey] ?? '')
     .split(delimiter)
