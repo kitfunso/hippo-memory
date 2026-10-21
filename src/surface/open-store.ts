@@ -1,6 +1,7 @@
 // The one module outside the SQLite adapter that names it: each composition root opens the default store, its request
 // scopes and its server runtime here, so a second adapter changes this file and no root (scripts/check-layers.mjs).
 export {
+  askingNearestFirst,
   runDetachedSqliteRequest as runDetachedStoreRequest,
   runSqliteBatch as runStoreBatch,
   runSqliteHookRequest as runStoreHookRequest,

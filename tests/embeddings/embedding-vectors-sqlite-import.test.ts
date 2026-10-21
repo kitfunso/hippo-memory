@@ -27,6 +27,7 @@ import {
 } from '../../src/db/vector-store.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { SCAN_PAGE_ROWS } from '../_helpers/vector-rows.js';
 import {
   deleteEntry,
   saveEmbeddingIndex,
@@ -192,7 +193,8 @@ describe('memory_vectors upkeep', () => {
   });
 
   it('the nearest-vector scan hands the event loop back part way, and a write on another handle lands meanwhile', async () => {
-    const rows = Array.from({ length: 600 }, (_, i) =>
+    // Past one page, so the scan yields between its two reads.
+    const rows = Array.from({ length: SCAN_PAGE_ROWS + 100 }, (_, i) =>
       createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     );
     batchWriteAndDelete(root, rows, []);

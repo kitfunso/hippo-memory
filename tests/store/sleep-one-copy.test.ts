@@ -10,12 +10,15 @@ import { countMatching, recordStatementsAsync } from '../_helpers/count-statemen
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { escapeRegex } from '../../src/base/util/escape.js';
 
 oneRequestPerTest();
 
 /** loadAllEntries' statement with no tenant: every full row of the store. */
-// An every-tenant page reads each tenant on its own index; these stores hold one tenant.
-const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE 1 AND tenant_id = ? ORDER BY created ASC, id ASC`;
+// An every-tenant page is one statement that picks each tenant's rows off its own index; `(1)` is no filter.
+const HOST_WIDE_READ = new RegExp(
+  `^${escapeRegex(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE rowid IN (WITH RECURSIVE`)}.* AND \\(1\\)`,
+);
 
 const roots: string[] = [];
 

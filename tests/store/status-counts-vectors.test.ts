@@ -78,7 +78,7 @@ afterEach(() => {
 });
 
 describe('storedVectorSummary', () => {
-  it('returns every vector id, orphans included, and the dimension', () => {
+  it('counts every vector, orphans included, and returns the dimension', () => {
     const [a, b] = liveIds(2);
     saveStoredVectors(
       root,
@@ -90,12 +90,12 @@ describe('storedVectorSummary', () => {
       'm',
     );
     const summary = storedVectorSummary(root);
-    expect([...summary.ids].sort()).toEqual([a, b, 'orphan'].sort());
+    expect(summary.vectors).toBe(3);
     expect(summary.dims).toBe(4);
   });
 
-  it('returns an empty set and no dimension on a store without vectors', () => {
-    expect(storedVectorSummary(root)).toEqual({ ids: new Set(), dims: undefined });
+  it('returns no vectors and no dimension on a store without vectors', () => {
+    expect(storedVectorSummary(root)).toEqual({ vectors: 0, dims: undefined });
   });
 });
 

@@ -88,6 +88,9 @@ function noteSkippedEmbedding(id: string): void {
 }
 
 const EMBED_LOCK_WAIT_MS = 10_000;
+// A held lock is usually a whole embed run, so the polls back off rather than wake 200 times in the budget.
+const EMBED_LOCK_FIRST_POLL_MS = 50;
+const EMBED_LOCK_MAX_POLL_MS = 1_000;
 
 // In-process mutex plus the index's own lock, which other processes on the store honour.
 let _embedWriteLock: Promise<void> = Promise.resolve();
@@ -95,11 +98,13 @@ let _embedWriteLock: Promise<void> = Promise.resolve();
 /** Waits up to EMBED_LOCK_WAIT_MS for the index's lock; the token to release it with. */
 async function acquireIndexLock(index: EmbeddingIndex): Promise<string> {
   const deadline = Date.now() + EMBED_LOCK_WAIT_MS;
-  for (;;) {
+  for (let wait = EMBED_LOCK_FIRST_POLL_MS; ; wait = Math.min(wait * 2, EMBED_LOCK_MAX_POLL_MS)) {
     const token = await index.tryLock();
     if (token !== null) return token;
-    if (Date.now() >= deadline) throw new Error('the embedding index is busy: another hippo process holds its lock');
-    await new Promise((r) => setTimeout(r, 50));
+    const left = deadline - Date.now();
+    if (left <= 0) throw new Error('the embedding index is busy: another hippo process holds its lock');
+    // The last poll lands on the deadline, so the wait never runs past the budget.
+    await new Promise((r) => setTimeout(r, Math.min(wait, left)));
   }
 }
 

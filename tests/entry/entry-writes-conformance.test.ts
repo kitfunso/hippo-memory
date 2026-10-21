@@ -251,6 +251,16 @@ describe('EntryWrites.writeEntry', () => {
     expect(side.outcomes[2]).toEqual(side.outcomes[0]);
     expect(added(side)).toEqual([]);
   });
+
+  it('refuses a supersede whose successor carries an id another tenant holds, changing neither row', async () => {
+    const { note, noteB } = seeded;
+    const taken = { ...fresh('acme successor for a globex id'), id: noteB.id };
+    const side = await conforms([supersede(note.id, taken), readBack(TENANT_B, noteB.id), readBack(TENANT_A, note.id)]);
+    expect(side.outcomes[0]).toEqual({ error: `ConflictError: Memory ${noteB.id} belongs to another tenant` });
+    expect(side.outcomes[1]).toMatchObject({ value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }] });
+    expect(side.outcomes[2]).toMatchObject({ value: [{ id: note.id, supersededBy: null }] });
+    expect(added(side)).toEqual([]);
+  });
 });
 
 describe('EntryWrites.applyOutcome', () => {

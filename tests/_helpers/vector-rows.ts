@@ -4,6 +4,10 @@ import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-sto
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { createMemory } from './default-half-life-memory.js';
 
+/** Vectors the nearest-vector scan reads a statement; tests/store/vector-scan-pages.test.ts fails when the scan's own
+ * page differs. */
+export const SCAN_PAGE_ROWS = 1024;
+
 export interface VectorRowSeed {
   readonly id: string;
   readonly tenantId: string;

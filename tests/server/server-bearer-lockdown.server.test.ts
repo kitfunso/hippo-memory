@@ -41,6 +41,11 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'DELETE', pattern: '/v1/memories/:id' },
   { method: 'POST', pattern: '/v1/outcome', body: '{"good":true}' },
   { method: 'GET', pattern: '/v1/context' },
+  {
+    method: 'POST',
+    pattern: '/v1/vectors/nearest',
+    body: '{"vector":[1,0],"spec":{"tenantId":"default","includeSuperseded":false}}',
+  },
   { method: 'POST', pattern: '/v1/sleep' },
   { method: 'POST', pattern: '/v1/auth/keys', body: '{"label":"x"}' },
   { method: 'GET', pattern: '/v1/auth/keys' },

@@ -140,6 +140,11 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     (s) => s.consolidation.rejectedValue(TENANT, rejectionDigest(REFUSED)),
     "reason: 'wrong'",
   ),
+  read(
+    'consolidation.rejectedDigests',
+    (s) => s.consolidation.rejectedDigests(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
+    `Set(1) { '${rejectionDigest(REFUSED)}' }`,
+  ),
   read('consolidation.halfLifeBase', (s) => s.consolidation.halfLifeBase(), /^[1-9]\d*(\.\d+)?$/),
   read('consolidation.promotableSessions', (s) => s.consolidation.promotableSessions(TENANT, 0), TRACE_SESSION),
   read('consolidation.traceExists', (s) => s.consolidation.traceExists(TENANT, TRACE_SESSION), /^true$/),

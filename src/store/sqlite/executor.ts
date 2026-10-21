@@ -53,8 +53,11 @@ export interface ExecutorOptions extends LossAversion {
   readonly queueMax?: number;
   /** How long past its deadline a write may still report its own outcome; defaults to 2000 ms. */
   readonly writeGraceMs?: number;
-  /** Stored vectors a store holds before the pinned reader builds its vector graph; defaults to 20,000. */
+  /** Stored vectors a store holds before the pinned reader builds its vector graph; defaults to
+   * VECTOR_GRAPH_THRESHOLD. */
   readonly vectorGraphThreshold?: number;
+  /** Stored vectors past which the pinned reader keeps no graph; the server passes config vectorGraph.maxVectors. */
+  readonly vectorGraphMaxVectors?: number;
 }
 
 export interface SqliteExecutor {
@@ -133,6 +136,7 @@ class WorkerPool implements SqliteExecutor {
   readonly #queueMax: number;
   readonly #writeGraceMs: number;
   readonly #vectorGraphThreshold: number | undefined;
+  readonly #vectorGraphMaxVectors: number | undefined;
   readonly #lossAversionRatio: number | undefined;
   #nextId = 1;
   #closed = false;
@@ -145,6 +149,7 @@ class WorkerPool implements SqliteExecutor {
     this.#queueMax = opts.queueMax ?? DEFAULT_QUEUE_MAX;
     this.#writeGraceMs = opts.writeGraceMs ?? DEFAULT_WRITE_GRACE_MS;
     this.#vectorGraphThreshold = opts.vectorGraphThreshold;
+    this.#vectorGraphMaxVectors = opts.vectorGraphMaxVectors;
     this.#lossAversionRatio = opts.lossAversionRatio;
   }
 
@@ -364,7 +369,11 @@ class WorkerPool implements SqliteExecutor {
       busyWaitMs: this.#busyWaitMs,
       lossAversionRatio: this.#lossAversionRatio,
       ...(shared && { commitFlag: shared }),
-      ...(lane.pinned && { pinned: true, vectorGraphThreshold: this.#vectorGraphThreshold }),
+      ...(lane.pinned && {
+        pinned: true,
+        vectorGraphThreshold: this.#vectorGraphThreshold,
+        vectorGraphMaxVectors: this.#vectorGraphMaxVectors,
+      }),
     };
     // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of the node:sqlite
     // warning.

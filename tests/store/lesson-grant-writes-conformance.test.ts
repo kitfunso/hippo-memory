@@ -31,6 +31,8 @@ const entry = (content: string, over: Partial<MemoryEntry> = {}): MemoryEntry =>
   ...over,
 });
 
+const heldByB = entry('tenant b deploys on fridays', { tenantId: TENANT_B });
+
 beforeAll(() => {
   fixture = seedTwoTenants();
   const seeded = [
@@ -38,7 +40,7 @@ beforeAll(() => {
     entry('the deploy key rotates monthly', { scope: 'team:ops', source: 'cli' }),
     entry('my deploy alias is dpl', { scope: ALICE }),
     entry('nothing about shipping here'),
-    entry('tenant b deploys on fridays', { tenantId: TENANT_B }),
+    heldByB,
   ];
   for (const row of seeded) writeEntry(fixture.dir, row, { actor: 'cli' });
 });
@@ -104,6 +106,26 @@ describe('LessonWrites', () => {
     expect(
       audit.filter((row) => row.op === 'remember' && row.actor === 'git-learn').map((row) => row.targetId),
     ).toEqual([first.id, second.id]);
+  });
+
+  it('refuses an id another tenant holds: the batch skips it, the all-or-nothing write fails, row B stays', async () => {
+    const taken = { ...entry('acme now owns this row'), id: heldByB.id };
+    const kept = entry('written beside the foreign id');
+    const lost = entry('rolled back with the foreign id');
+    const rowB: GroupCall<'lessonWrites', unknown> = (_g, s) => s.entriesByIds([heldByB.id], TENANT_B);
+    const { outcomes } = await conforms('lessonWrites', [
+      rowB,
+      (g) => g.writeSkippingRejected([taken, kept], 'git-learn'),
+      rowB,
+      (g) => g.writeTogether([lost, taken]),
+      rowB,
+      (_g, s) => s.entriesByIds([kept.id, lost.id], TENANT_A).then((rows) => rows.map((e) => e.content)),
+    ]);
+    expect(outcomes[1]).toEqual({ value: [kept.id] });
+    expect(outcomes[3]).toEqual({ error: `ConflictError: Memory ${heldByB.id} belongs to another tenant` });
+    expect(outcomes[2]).toEqual(outcomes[0]);
+    expect(outcomes[4]).toEqual(outcomes[0]);
+    expect(outcomes[5]).toEqual({ value: [kept.content] });
   });
 });
 

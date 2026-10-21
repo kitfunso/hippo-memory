@@ -16,7 +16,7 @@ export const SIZES = [10, 200] as const;
 export const ROW_READ = MEMORY_SELECT_COLUMNS;
 /** The tenant scan's statement: one page of full rows of one tenant, which holds all of a small tenant. */
 export const TENANT_READ =
-  /FROM memories WHERE 1 AND tenant_id = \?( AND created >= \? AND \(created .*\))? ORDER BY created ASC, id ASC LIMIT \?$/;
+  /FROM memories WHERE \(1\) AND tenant_id = \?( AND created >= \? AND \(created .*\))? ORDER BY created ASC, id ASC LIMIT \?$/;
 const roots: string[] = [];
 
 export function useQueryCountRoots(): void {

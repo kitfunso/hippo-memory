@@ -24,6 +24,20 @@ import type { EntryCursor } from '../../src/store/port/types.js';
 
 const CREATED = ['2026-01-01T00:00:00.000Z', '2026-01-01T00:00:01.000Z', '2026-01-02T00:00:00.000Z'];
 const SORT_OF_ORDER = 'USE TEMP B-TREE FOR ORDER BY';
+const PICKED_ROWS = 'SEARCH memories USING INTEGER PRIMARY KEY (rowid=?)';
+
+/** True unless the plan sorts more than the rows each tenant's own index read picked: an every-tenant page takes at
+ * most a page from each tenant on its index, then sorts only those, so no plan sorts the table. */
+function sortsAtMostPickedRows(detail: string): boolean {
+  if (!detail.includes(SORT_OF_ORDER)) return true;
+  const sorts = detail.split(SORT_OF_ORDER).length - 1;
+  return (
+    sorts === 1 &&
+    detail.startsWith(PICKED_ROWS) &&
+    detail.includes('CORRELATED LIST SUBQUERY') &&
+    !/SCAN memories\b/.test(detail)
+  );
+}
 const SIGNALS = { tags: ['quux'], sourcePrefix: 'cli', minRetrievals: 0, valences: ['neutral'] };
 
 interface IdsPage<C> {
@@ -101,7 +115,7 @@ function plan(db: DatabaseSyncLike, sql: string): string {
 }
 
 describe('a full walk', () => {
-  it('reads every page off an index: no statement sorts the rows for its ORDER BY', () => {
+  it('reads every page off an index: no statement sorts more than the page each tenant picked', () => {
     const root = makeRoot('keyset-walk-plans');
     const rows = Array.from({ length: 10 }, (_, i) => row(i, i % 2 === 0 ? 'default' : 'other', CREATED[i % 3]!));
     seed(root, rows);
@@ -117,7 +131,10 @@ describe('a full walk', () => {
           const { statements } = recordStatements(walk);
           const reads = statements.filter((sql) => /^(SELECT|WITH)\b/.test(sql) && sql.includes('FROM memories'));
           expect(reads.length, name).toBeGreaterThan(0);
-          for (const sql of reads) expect(plan(db, sql), `${name}: ${sql}`).not.toContain(SORT_OF_ORDER);
+          for (const sql of reads) {
+            const detail = plan(db, sql);
+            expect(sortsAtMostPickedRows(detail), `${name}: ${sql}\n${detail}`).toBe(true);
+          }
         }
       }
     } finally {

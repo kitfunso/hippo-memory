@@ -86,6 +86,7 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ['DELETE', '/v1/memories/:m', [401, 'invalid api key'], [404, 'memory not found: mem_parity_missing']],
   ['POST', '/v1/outcome', [401, 'invalid api key'], [400, 'good is required (boolean)']],
   ['GET', '/v1/context', [401, 'invalid api key'], [200]],
+  ['POST', '/v1/vectors/nearest', [401, 'invalid api key'], [400, 'vector must be an array of 1 to 4096 numbers']],
   ['POST', '/v1/sleep', [401, 'invalid api key'], [200]],
   ['POST', '/v1/auth/keys', [401, 'invalid api key'], [200]],
   ['GET', '/v1/auth/keys', [401, 'invalid api key'], [200]],
