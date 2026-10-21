@@ -6,7 +6,7 @@ import type { AuditResult } from '../../base/memory/memory-audit.js';
 import * as api from '../../api/index.js';
 import { parseOlderThanFlag } from './audit-prune.js';
 import { cliApiContext } from './api-context.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, parseListLimit, stringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, parseListLimit, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -93,7 +93,7 @@ async function pruneAuditLog(hippoRoot: string, ctxTenantId: string, flags: CliF
     fail(errorMessage(e));
   }
   const tenantId = stringFlag(flags, 'tenant')?.trim() || ctxTenantId;
-  const dryRun = flagIsTrue(flags, 'dry-run');
+  const dryRun = boolFlag(flags, 'dry-run');
   const asJson = boolFlag(flags, 'json');
 
   const result = await api.auditPrune(cliApiContext(hippoRoot, tenantId), { olderThanDays, dryRun });
@@ -125,7 +125,7 @@ async function printAuditLog(hippoRoot: string, tenantId: string, args: string[]
 }
 
 async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
-  const apply = flagIsTrue(flags, 'apply') && !flagIsTrue(flags, 'dry-run');
+  const apply = boolFlag(flags, 'apply') && !boolFlag(flags, 'dry-run');
   const result = await api.memoryQualityRepair(
     cliApiContext(boolFlag(flags, 'global') ? resolveGlobalRootDir() : hippoRoot, tenantId),
     apply,
@@ -168,7 +168,7 @@ async function fixAuditErrors(
   flags: CliFlags,
 ): Promise<void> {
   const errors = result.issues.filter((i) => i.severity === 'error');
-  if (errors.length > 0 && flagIsTrue(flags, 'dry-run')) {
+  if (errors.length > 0 && boolFlag(flags, 'dry-run')) {
     console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
     console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
   } else if (errors.length > 0) {

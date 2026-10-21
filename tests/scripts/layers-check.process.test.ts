@@ -54,17 +54,27 @@ const DB_FILES = {
   'src/api/keep.ts': '',
 };
 const SCOPE_ONLY = { 'api/y.ts': { names: ['scope'], why: 'the request scope stays in db' } };
+const ADAPTER = {
+  folder: 'store/sqlite',
+  root: 'surface/open-store.ts',
+  doors: ['store/sqlite/index.ts', 'store/sqlite/fixtures.ts'],
+  unnamedIn: ['high'],
+};
 const SQLITE_MAP = {
   order: ['low', 'high'],
   folders: { sub: 'high', api: 'high', surface: 'high', store: 'low' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+  adapter: ADAPTER,
 };
+const ROOT_DOOR = "export { storeFor } from '../store/sqlite/index.js';\n";
+const ROOT_FIXTURES = "export { seed } from '../store/sqlite/fixtures.js';\n";
 const SQLITE_BASE = {
   'src/a.ts': '',
   'src/b.ts': '',
   'src/api/keep.ts': '',
   'src/surface/connectors/keep.ts': '',
   'src/surface/mcp/keep.ts': '',
+  'src/surface/open-store.ts': ROOT_DOOR,
   'src/store/sqlite/store.ts': 'export const storeFor = 1;\nexport type S = 1;\n',
   'src/store/sqlite/index.ts': "export { storeFor } from './store.js';\n",
   'src/store/sqlite/fixtures.ts': 'export const seed = 1;\n',
@@ -81,7 +91,6 @@ const LOCAL_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, domain: 'hi
 const LOCAL_BASE = { ...PORT_BASE, 'src/domain/keep.ts': '' };
 const LOCAL_IMPORT = "import { isLocal } from '../store/local/index.js';\nexport const y = isLocal;\n";
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
-const DOOR_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/index.js';\n";
 const FIXTURES_IMPORT = "import { seed } from '../store/sqlite/fixtures.js';\nexport const z = seed;\n";
 const ENTRY_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, entry: 'high' } };
 const SURFACE_SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../../store/sqlite/store.js';\n";
@@ -316,7 +325,9 @@ const rows: Row[] = [
     files: { ...SQLITE_BASE, 'src/api/y.ts': SQLITE_IMPORT },
     map: SQLITE_MAP,
     status: 1,
-    output: ['src/api/y.ts:2 imports src/store/sqlite/store.ts; take the store from a parameter or the Context'],
+    output: [
+      'src/api/y.ts:2 imports src/store/sqlite/store.ts; take the store from src/surface/open-store.ts or the Context',
+    ],
   },
   {
     name: 'a file in any other folder that imports the adapter fails, type-only, re-export and import() too',
@@ -335,54 +346,76 @@ const rows: Row[] = [
     ],
   },
   {
-    name: 'a composition root may import the adapter through its door, and a store file is not counted',
+    name: 'the root may import the adapter through both doors, and an entry re-exports from the root',
     files: {
       ...SQLITE_BASE,
-      'src/entry/testing.ts': DOOR_IMPORT,
-      'src/store/port.ts': "import type { S } from './sqlite/store.js';\nexport type P = S;\n",
+      'src/surface/open-store.ts': `${ROOT_DOOR}${ROOT_FIXTURES}`,
+      'src/entry/testing.ts': "export { seed } from '../surface/open-store.js';\n",
     },
     map: ENTRY_MAP,
     status: 0,
     output: ['Layer order OK'],
   },
   {
-    name: 'a composition root that imports a module behind the door fails with file:line, type-only too',
+    name: 'a store file outside the adapter, or a package entry, that imports it fails like any other file',
     files: {
       ...SQLITE_BASE,
-      'src/entry/importers.ts': SQLITE_IMPORT,
-      'src/entry/testing.ts': "import type { S } from '../store/sqlite/store.js';\nexport type T = S;\n",
+      'src/store/port.ts': "import type { S } from './sqlite/store.js';\nexport type P = S;\n",
+      'src/entry/testing.ts': FIXTURES_IMPORT,
     },
     map: ENTRY_MAP,
     status: 1,
     output: [
-      "src/entry/importers.ts:2 imports src/store/sqlite/store.ts past the adapter's door; import src/store/sqlite/index.ts",
-      'src/entry/testing.ts:1 imports src/store/sqlite/store.ts past the',
+      'src/entry/testing.ts:1 imports src/store/sqlite/fixtures.ts; take the store from src/surface/open-store.ts',
+      'src/store/port.ts:1 imports src/store/sqlite/store.ts',
     ],
   },
   {
-    name: 'the ./testing root opens the fixtures door, and any other root that does fails',
+    name: 'the root importing a module behind the doors fails with file:line, type-only too',
     files: {
       ...SQLITE_BASE,
-      'src/entry/testing.ts': FIXTURES_IMPORT,
-      'src/entry/importers.ts': FIXTURES_IMPORT,
+      'src/surface/open-store.ts': `${ROOT_DOOR}import type { S } from '../store/sqlite/store.js';\nexport type T = S;\n`,
     },
-    map: ENTRY_MAP,
+    map: SQLITE_MAP,
     status: 1,
-    output: ["src/entry/importers.ts:1 imports src/store/sqlite/fixtures.ts past the adapter's door"],
+    output: ["src/surface/open-store.ts:2 imports src/store/sqlite/store.ts past the adapter's doors in layers.json"],
   },
   {
-    name: 'the ./testing root may import both doors',
-    files: { ...SQLITE_BASE, 'src/entry/testing.ts': `${DOOR_IMPORT}${FIXTURES_IMPORT}` },
-    map: ENTRY_MAP,
+    name: 'a root that no longer imports the adapter, or is gone, fails until layers.json names the right one',
+    files: { ...SQLITE_BASE, 'src/surface/open-store.ts': 'export const t = 1;\n' },
+    map: SQLITE_MAP,
+    status: 1,
+    output: ['layers.json adapter.root: src/surface/open-store.ts no longer imports src/store/sqlite'],
+  },
+  {
+    name: 'a root layers.json names that does not exist fails',
+    files: { ...SQLITE_BASE, 'src/surface/open-store.ts': '' },
+    map: { ...SQLITE_MAP, adapter: { ...ADAPTER, root: 'surface/gone.ts' } },
+    status: 1,
+    output: ['layers.json adapter.root: src/surface/gone.ts does not exist'],
+  },
+  {
+    name: 'an identifier or string naming SQLite in an unnamedIn layer fails, and a comment or a lower layer passes',
+    files: {
+      ...SQLITE_BASE,
+      'src/api/y.ts':
+        "// SQLite in a comment is fine\nexport const sqliteKind = 1;\nexport const say = 'the SQLite store';\n",
+      'src/store/z.ts': 'export const sqliteRows = 1;\n',
+    },
+    map: SQLITE_MAP,
+    status: 1,
+    output: ['src/api/y.ts:2 names sqliteKind', 'src/api/y.ts:3 says SQLite in a string'],
+  },
+  {
+    name: 'the root and the adapter may name SQLite',
+    files: {
+      ...SQLITE_BASE,
+      'src/surface/open-store.ts': "export { storeFor as sqliteStore } from '../store/sqlite/index.js';\n",
+      'src/store/sqlite/store.ts': "export const storeFor = 1;\nexport type S = 1;\nexport const sqliteX = 'SQLite';\n",
+    },
+    map: SQLITE_MAP,
     status: 0,
     output: ['Layer order OK'],
-  },
-  {
-    name: 'a root that no longer imports the adapter fails until its entry goes',
-    files: { ...SQLITE_BASE, 'src/entry/testing.ts': 'export const t = 1;\n' },
-    map: ENTRY_MAP,
-    status: 1,
-    output: ['root: src/entry/testing.ts no longer imports src/store/sqlite/'],
   },
   {
     name: 'naming sqliteSyncStore outside the adapter and the roots fails',

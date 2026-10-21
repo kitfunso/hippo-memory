@@ -6,7 +6,7 @@ import { memoryGet } from '../../api/memories/memories.js';
 import { decisionIdByMemory, decisionMemoryWeaken } from '../../api/objects/object-kinds.js';
 import { objectClose, objectCreate, objectGet, objectList, objectStates } from '../../api/objects/objects.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, type CommandContext, flagValueless, nonEmptyStringFlag, stringFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import type { Context } from '../../api/index.js';
@@ -70,7 +70,7 @@ async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags)
   const context = nonEmptyStringFlag(flags, 'context');
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than silently creating a
   // non-superseding decision.
-  if (flagIsTrue(flags, 'supersedes')) {
+  if (flagValueless(flags, 'supersedes')) {
     fail('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;

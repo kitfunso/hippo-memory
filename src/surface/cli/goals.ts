@@ -7,11 +7,11 @@ import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
+  type CommandContext,
   boolFlag,
-  flagIsTrue,
+  flagValueless,
   stringFlag,
   stringFlagOrExit,
-  type CommandContext,
 } from './flag-values.js';
 import { fail } from './exit.js';
 import type { PolicyType } from '../../store/port/types.js';
@@ -44,7 +44,7 @@ function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
 }
 
 function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined {
-  if (flagIsTrue(flags, 'policy')) {
+  if (flagValueless(flags, 'policy')) {
     fail('--policy requires a value (e.g., --policy error-prioritized)');
   }
   const policyRaw = stringFlag(flags, 'policy');
@@ -56,7 +56,7 @@ function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined
 }
 
 function readGoalLevel(flags: CliFlags): number | undefined {
-  if (flagIsTrue(flags, 'level')) {
+  if (flagValueless(flags, 'level')) {
     fail('--level requires a value (e.g., --level 1)');
   }
   const levelRaw = stringFlag(flags, 'level');
@@ -82,14 +82,14 @@ async function pushGoal(hippoRoot: string, defaultTenantId: string, args: string
 
   const policy = readGoalPolicy(flags);
 
-  if (flagIsTrue(flags, 'success')) {
+  if (flagValueless(flags, 'success')) {
     fail('--success requires a value (e.g., --success "<condition>")');
   }
   const successCondition = stringFlag(flags, 'success');
 
   const level = readGoalLevel(flags);
 
-  if (flagIsTrue(flags, 'parent')) {
+  if (flagValueless(flags, 'parent')) {
     fail('--parent requires a value (e.g., --parent <goalId>)');
   }
   const parentGoalId = stringFlag(flags, 'parent');
@@ -147,7 +147,7 @@ async function completeGoal(hippoRoot: string, tenantId: string, args: string[],
     fail('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
   }
   let outcomeScore: number | undefined;
-  if (flagIsTrue(flags, 'outcome')) {
+  if (flagValueless(flags, 'outcome')) {
     fail('--outcome requires a value (e.g., --outcome 0.9)');
   }
   const outcomeRaw = stringFlag(flags, 'outcome');
@@ -158,7 +158,7 @@ async function completeGoal(hippoRoot: string, tenantId: string, args: string[],
     }
     outcomeScore = parsed;
   }
-  const noPropagate = flagIsTrue(flags, 'no-propagate');
+  const noPropagate = boolFlag(flags, 'no-propagate');
   await api.goalComplete(cliApiContext(hippoRoot, tenantId), id, { outcomeScore, noPropagate });
   console.log('ok');
 }

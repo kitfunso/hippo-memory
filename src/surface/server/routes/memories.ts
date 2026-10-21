@@ -29,11 +29,15 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
   }
   const kindRaw = getString(body, 'kind', MAX_ID_LEN);
   if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
-    throw new HttpError(400, `invalid kind: ${kindRaw}`);
+    throw new HttpError(400, `invalid kind; allowed: ${MEMORY_KINDS.join(', ')}`);
   }
   const personalRaw = body['personal'];
   if (personalRaw !== undefined && !isJsonBoolean(personalRaw)) {
     throw new HttpError(400, 'personal must be a boolean');
+  }
+  const forceRaw = body['force'];
+  if (forceRaw !== undefined && !isJsonBoolean(forceRaw)) {
+    throw new HttpError(400, 'force must be a boolean');
   }
   const result = await remember(ctx, {
     content,
@@ -44,6 +48,7 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
     tags: getStringArray(body, 'tags', MAX_ARRAY_ITEMS, MAX_ID_LEN),
     project: getCallerProject(body),
     personal: personalRaw === true,
+    salienceGate: forceRaw !== true,
   });
   sendJson(res, 200, result);
   return;

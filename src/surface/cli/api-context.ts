@@ -14,16 +14,16 @@ import type { HippoStore, StoreGroups } from '../../store/index.js';
 import type { OptionalGroup } from '../../store/port.js';
 import {
   askingNearestFirst,
-  runDetachedSqliteRequest,
-  runSqliteBatch,
-  runSqliteHookRequest,
-  runSqliteRequest,
-  sqliteDiagnosticsStore,
-  sqliteImportFiles,
-  sqliteImportStores,
-  sqliteReach,
-  sqliteStore,
-} from '../../store/sqlite/index.js';
+  defaultDiagnostics,
+  defaultImportFiles,
+  defaultImportStores,
+  defaultReach,
+  defaultStore,
+  runDetachedStoreRequest,
+  runStoreBatch,
+  runStoreHookRequest,
+  runStoreRequest,
+} from '../open-store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import type { RerankerFn } from '../../domain/rerankers/index.js';
@@ -40,16 +40,16 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
   return rerankerWithClef(name, envClefSettings());
 }
 
-/** The store the CLI and the stdio MCP server open; the adapter is named here so src/surface/mcp never imports it. A
+/** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never names the adapter. A
  * `hippo serve` on the same store answers its nearest-row reads from the graph it holds. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
-  const store = sqliteStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+  const store = defaultStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
   return askingNearestFirst(hippoRoot, store, serverNearestAsk(hippoRoot), cliConfig(hippoRoot).vectorGraph.maxVectors);
 }
 
 /** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found it. */
 export function cliDiagnostics(hippoRoot: string): Pick<StoreGroups, 'diagnostics' | 'projectTags'> {
-  return sqliteDiagnosticsStore(hippoRoot);
+  return defaultDiagnostics(hippoRoot);
 }
 
 /** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */
@@ -59,7 +59,7 @@ export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & Stor
 
 /** The folder's hippo.db as an import reaches it, answering at once: the published importers return their result. */
 export function cliImportFiles(hippoRoot: string): ImportFiles {
-  return sqliteImportFiles(hippoRoot);
+  return defaultImportFiles(hippoRoot);
 }
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
@@ -70,28 +70,28 @@ export function cliInitGlobal(): void {
 /** One handle per store at the hook's lock wait; a store still busy after it skips the hook's work and answers
  * undefined. */
 export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefined> {
-  return runSqliteHookRequest(run);
+  return runStoreHookRequest(run);
 }
 
-/** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the SQLite
- * adapter, scored by this process's loss-aversion ratio as cliStore's stores are. */
+/** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the default
+ * store, scored by this process's loss-aversion ratio as cliStore's stores are. */
 export function cliSyncOptions(
   tenantId: string,
   machine: Machine,
   extra: Pick<SyncOptions, 'dryRun' | 'busyWaitMs'> = {},
 ): SyncOptions {
-  const stores = sqliteImportStores({ lossAversionRatio: envLossAversionRatio() });
+  const stores = defaultImportStores({ lossAversionRatio: envLossAversionRatio() });
   return { tenantId, configAt: cliConfig, machine, stores, ...extra };
 }
 
 /** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other surface opens one. */
 export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
-  return runSqliteRequest(run, 'cli');
+  return runStoreRequest(run, 'cli');
 }
 
 /** One handle per store for a synchronous batch, such as an import's writes, that runs outside any request. */
 export function cliBatch<T>(run: () => T): T {
-  return runSqliteBatch(run);
+  return runStoreBatch(run);
 }
 
 /** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
@@ -100,7 +100,7 @@ export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: stri
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config. */
 function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
-  return contextReach(sqliteReach(hippoRoot, store, undefined, cliStore), cliConfig);
+  return contextReach(defaultReach(hippoRoot, store, undefined, cliStore), cliConfig);
 }
 
 // The one place the CLI names its audit actor and builds its store; root is a parameter because some verbs target the
@@ -140,7 +140,7 @@ export function cliStdioHost(): McpHost {
     let callers = byRoot.get(root);
     if (callers === undefined) {
       const run = (): Promise<void> =>
-        runDetachedSqliteRequest(() =>
+        runDetachedStoreRequest(() =>
           consolidateStore(cliStore(root), { config: cliConfig(root), tenantId: hostTenantId }),
         ).then(() => {});
       callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };

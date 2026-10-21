@@ -43,7 +43,7 @@ describe('thin client under a busy store', () => {
   // Each busy answer ends its connection, so the three requests each open a new one to the fake server.
   it('remember retries two busy 503s and returns the 200', async () => {
     const fake = await startFake(2);
-    const result = await remember(fake.url, undefined, { content: 'held lock clears' });
+    const result = await remember(fake.url, undefined, { content: 'held lock clears', force: true });
     expect(result.id).toBe('m1');
     expect(fake.hits()).toBe(3);
   }, 7_000);

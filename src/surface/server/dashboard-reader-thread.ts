@@ -9,7 +9,7 @@ import { createSnapshotClock } from '../../api/dashboard/snapshot-clock.js';
 import type { Context } from '../../api/types.js';
 import { configReader } from '../../base/config/config.js';
 import { isStoreBusy } from '../../store/port.js';
-import { sqliteDashboardReads, sqliteStore } from '../../store/sqlite/index.js';
+import { defaultDashboardReads, defaultStore } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
@@ -20,8 +20,8 @@ const DASHBOARD_ACTOR = 'dashboard';
 /** The thread is its own root, so it reads the ratio its store and dashboard reads score strength by. */
 function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonly wallMs: number }) {
   const lossAversion = { lossAversionRatio: envLossAversionRatio() };
-  const store = sqliteStore(hippoRoot, lossAversion);
-  const reads = sqliteDashboardReads(hippoRoot, lossAversion);
+  const store = defaultStore(hippoRoot, lossAversion);
+  const reads = defaultDashboardReads(hippoRoot, lossAversion);
   const stamps = createSnapshotClock(
     reads,
     () => clock.nowMs,

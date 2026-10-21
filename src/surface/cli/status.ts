@@ -36,7 +36,7 @@ import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api
 const diagnosticsAt = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
-import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue, boolFlag } from './flag-values.js';
+import { type CommandContext, boolFlag, parseCountFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { isJsonObject } from '../../base/util/json.js';
@@ -352,7 +352,7 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
   if (outFlag === '') {
     fail('--out requires a file path.');
   }
-  const includeLogs = flagIsTrue(flags, 'include-logs');
+  const includeLogs = boolFlag(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
   const now = new Date();
   const bundle = await buildSupportBundle({

@@ -8,7 +8,7 @@ import { assertBinaryCompatible } from './migrate.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
 import { currentRequestStores, isScopedHandle, runWithRequestStores } from './request-stores.js';
-import { OtherStoreFolderError, SqliteBlockedError } from '../base/util/sqlite-blocked.js';
+import { OtherStoreFolderError, SqliteBlockedError } from './sqlite-blocked.js';
 
 export { getHippoDbPath };
 

@@ -10,7 +10,7 @@ import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-ide
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../../base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
-import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
+import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { HippoStore, VectorReads } from '../../store/index.js';
@@ -145,7 +145,7 @@ async function physicsQueryVector(
     const vec = await embedQueryBy(deadline, provider, query);
     return vec && vec.length > 0 ? vec : null;
   } catch (err) {
-    rethrowIfSqliteBlocked(err);
+    rethrowIfStoreBlocked(err);
     log.warn(`physics search: query embed failed, using hybrid: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
@@ -161,7 +161,7 @@ async function withVectorCandidates(
   try {
     return [...entries, ...(await vectorCandidatesOutside(reads, entries, queryVector, spec))];
   } catch (err) {
-    rethrowIfSqliteBlocked(err);
+    rethrowIfStoreBlocked(err);
     log.warn(
       `physics search ranked the lexical pool only; the vector lookup failed: ${errorMessage(err)}`,
       errorFields(err),
@@ -178,7 +178,7 @@ async function loadCandidateParticles(
   try {
     return await reads.physicsParticles(pool.map((e) => e.id));
   } catch (err) {
-    rethrowIfSqliteBlocked(err);
+    rethrowIfStoreBlocked(err);
     log.warn(`physics search: state load failed, using hybrid: ${errorMessage(err)}`, errorFields(err));
     return null;
   }

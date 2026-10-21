@@ -9,7 +9,7 @@ import { markRetrieved, strengthOptionsOf, type MemoryEntry } from '../base/memo
 import { evalNow } from '../base/memory/ablation.js';
 import { dropHeldCopies } from '../base/util/same-text.js';
 import { BadRequestError } from '../base/errors/api-errors.js';
-import { rethrowIfSqliteBlocked } from '../base/util/sqlite-blocked.js';
+import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { classifyOriginProject, projectId, projectNames } from '../base/scope/project-identity.js';
 import { DEFAULT_CONFIG } from '../base/config/config.js';
@@ -23,8 +23,8 @@ import {
 } from '../base/memory/ambient.js';
 import type { HippoStore } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
+import { finiteOr } from '../domain/context/select-policy.js';
 import {
-  finiteOr,
   globalStoreInReach,
   selectBySearch,
   selectPinned,
@@ -559,7 +559,7 @@ async function traceEmptyContext(ctx: Context, opts: ContextOptions, plan: Conte
   try {
     await ctx.store.finishRecall({ goalLog: [], audit: [], trace });
   } catch (error) {
-    rethrowIfSqliteBlocked(error);
+    rethrowIfStoreBlocked(error);
     log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
   }
 }

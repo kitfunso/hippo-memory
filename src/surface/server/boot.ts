@@ -14,12 +14,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../../store/index.js';
 import { isStoreBusy } from '../../store/port.js';
-import {
-  sqliteServerRuntime,
-  tenantOfApiKey,
-  type ResolveOptions,
-  type SqliteServerRuntime,
-} from '../../store/sqlite/index.js';
+import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
 import { configReader, loadConfig } from '../../base/config/config.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -94,7 +89,7 @@ interface HandleRequestOptions {
   readonly streamSlots: Map<string, number>;
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
-  readonly workerCounts: SqliteServerRuntime['workerCounts'];
+  readonly workerCounts: ServerRuntime['workerCounts'];
 }
 
 async function handleRequest(
@@ -470,7 +465,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const runtime = sqliteServerRuntime(opts.hippoRoot, {
+  const runtime = defaultServerRuntime(opts.hippoRoot, {
     store: opts.store,
     queueMax: envStoreQueueMax(),
     lossAversionRatio: envLossAversionRatio(),
@@ -524,7 +519,7 @@ function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeO
 function servedOptsFor(
   opts: ServeOpts,
   { routes, publicJsonBodies, limiters }: BootPlan,
-  runtime: SqliteServerRuntime,
+  runtime: ServerRuntime,
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
   const { store } = runtime;
@@ -557,7 +552,7 @@ function servedOptsFor(
 
 function acceptingServer(
   served: ResolvedServeOptions,
-  runtime: SqliteServerRuntime,
+  runtime: ServerRuntime,
   inflight: Set<ServerResponse>,
   options: HandleRequestOptions,
 ): Server {

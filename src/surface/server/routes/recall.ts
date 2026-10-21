@@ -18,7 +18,7 @@ import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import { restClientKey } from '../client-key.js';
 import { sharedStoreOf, type Context } from '../../../api/types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
-import { parseListLimit, validateIdSegment } from '../validation.js';
+import { parseIntParam, parseListLimit, parseNumberParam, validateIdSegment } from '../validation.js';
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
 export async function handleRecallMemories({ req, res, ctx, query }: AuthedRouteRequest): Promise<void> {
@@ -50,16 +50,8 @@ export async function handleAssembleSession(
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'session id');
-  const budgetRaw = query.get('budget');
-  const budget = budgetRaw === null ? undefined : Number(budgetRaw);
-  if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
-    throw new HttpError(400, 'budget must be a positive number');
-  }
-  const ftRaw = query.get('freshTail');
-  const freshTailCount = ftRaw === null ? undefined : Number(ftRaw);
-  if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
-    throw new HttpError(400, 'freshTail must be a non-negative number');
-  }
+  const budget = parseNumberParam(query.get('budget'), 'budget');
+  const freshTailCount = parseNumberParam(query.get('freshTail'), 'freshTail', true);
   // Same strict-parse convention as summarize_overflow on /v1/memories:
   // ?summarizeOlder=banana is false (matches includeContinuity convention).
   const sumOlderRaw = query.get('summarizeOlder');
@@ -87,28 +79,12 @@ export async function handleAssembleSession(
 export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
   validateIdSegment(id, 'summary id');
   const limitRaw = query.get('limit');
-  const limit = limitRaw === null ? undefined : Number(limitRaw);
-  if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
-    throw new HttpError(400, 'limit must be a positive number');
-  }
+  const limit = parseNumberParam(limitRaw, 'limit');
   // Past the list ceiling the shared parser refuses, so the reply is the one every other list route gives.
   if (limit !== undefined && limit > MAX_LIST_LIMIT) parseListLimit(limitRaw);
-  const budgetRaw = query.get('budget');
-  const budget = budgetRaw === null ? undefined : Number(budgetRaw);
-  if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
-    throw new HttpError(400, 'budget must be a positive number');
-  }
-  // depth query param walks N levels (default 1, hard cap 10).
-  const depthRaw = query.get('depth');
-  let depth: number | undefined;
-  if (depthRaw !== null) {
-    const parsed = Number(depthRaw);
-    // Reject out-of-range explicitly (no silent clamp).
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
-      throw new HttpError(400, 'depth must be a positive integer between 1 and 10');
-    }
-    depth = parsed;
-  }
+  const budget = parseNumberParam(query.get('budget'), 'budget');
+  // depth walks N levels (default 1, hard cap 10).
+  const depth = parseIntParam(query.get('depth'), 'depth', 1, 10);
   const drillExtra: Pick<DrillDownOptions, 'limit' | 'budget' | 'depth'> = {};
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;
