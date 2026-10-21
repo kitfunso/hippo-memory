@@ -425,7 +425,7 @@ describe('POST /v1/connectors/github/events', () => {
     ).toEqual(['github://acme/repo/issue/50', 'github://acme/repo/issue/51']);
   });
 
-  it('14d. the same delivery replayed after a restart, which forgets every claimed id, is a stored duplicate with no new rows', async () => {
+  it('14d. the same delivery replayed after a restart is refused with 409, since the hold lives in the store, and adds no rows', async () => {
     const issueRows = () =>
       loadAllEntries(root, 'default').filter(
         (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/53',
@@ -439,14 +439,14 @@ describe('POST /v1/connectors/github/events', () => {
       ).status,
     ).toBe('ingested');
     await handle.stop();
-    // A fresh module graph is a fresh process's memory: the in-memory claim on d-restart is gone.
+    // A fresh module graph is a fresh process's memory; only the store's hold can still know d-restart.
     vi.resetModules();
     const restarted: typeof import('../../src/server.js') = await import('../../src/server.js');
     handle = await restarted.serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
     const replay = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart'));
-    expect({ status: replay.status, body: await jsonAs<{ status: string }>(replay) }).toMatchObject({
-      status: 200,
-      body: { status: 'duplicate' },
+    expect({ status: replay.status, body: await replay.json() }).toEqual({
+      status: 409,
+      body: { error: 'duplicate X-GitHub-Delivery' },
     });
     expect(issueRows()).toHaveLength(1);
   });

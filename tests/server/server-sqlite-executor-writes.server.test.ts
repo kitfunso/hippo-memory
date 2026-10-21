@@ -602,14 +602,19 @@ describe('a 429 and the store workers', () => {
   });
 
   it('refuses the key checks past two running and eight waiting after their key row reads and no other worker call', async () => {
+    // One address per key, since one address holds only two slots of the queue.
+    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
+    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     const root = newRoot();
     const keys = Array.from({ length: 13 }, () => keyFor(root, 'default'));
     const { executor, ops } = watched(keyReadsTogether(createSqliteExecutor(root), keys.length));
     const server = await start(root, workerSqliteStore(root, executor));
 
     const replies = await Promise.all(
-      keys.map(async (key) => {
-        const res = await get(server, '/v1/audit', key.plaintext);
+      keys.map(async (key, n) => {
+        const res = await fetch(`${server.url}/v1/audit`, {
+          headers: { authorization: `Bearer ${key.plaintext}`, 'x-forwarded-for': `203.0.113.${n + 1}` },
+        });
         return res.ok ? 200 : `${res.status} ${await res.text()}`;
       }),
     );

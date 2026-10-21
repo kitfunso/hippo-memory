@@ -29,7 +29,7 @@ const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream
 // (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to handleMcpRequest as stdio does. Auth matches
-// /v1/* (Bearer via `requireAuth`, loopback fallback); SSE is checked once at stream-open.
+// /v1/* (Bearer via `requireAuth`, loopback fallback); an SSE stream is checked at open and again before every ping.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
