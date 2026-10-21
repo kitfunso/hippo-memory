@@ -6,7 +6,16 @@ import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getCurrentSchemaVersion,
+  getSchemaVersion,
+  openHippoDb,
+  openHippoDbReadOnly,
+  setMeta,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
+import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { projectNameList, projectNameMerge, projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
@@ -279,5 +288,24 @@ describe('hippo projects list', () => {
       imported: 2,
       copiesElsewhere: 1,
     });
+  });
+
+  it('migrates a store at an older schema before it reads, as every other command does', async () => {
+    row('a saved lesson', 'repo-wt-a');
+    const older = getCurrentSchemaVersion() - 1;
+    open();
+    setMeta(db, 'schema_version', String(older));
+    db.exec(`PRAGMA user_version = ${older}`);
+    closeHippoDb(db);
+    // The rows already have the last migration's shape, so only its run is counted.
+    const up = vi.spyOn(MIGRATIONS[MIGRATIONS.length - 1]!, 'up').mockImplementation(() => undefined);
+    try {
+      expect((await projectNameList(ctx())).map((p) => p.origin)).toContain('repo-wt-a');
+      expect(up).toHaveBeenCalledTimes(1);
+    } finally {
+      up.mockRestore();
+    }
+    db = openHippoDbReadOnly(home);
+    expect(getSchemaVersion(db)).toBe(getCurrentSchemaVersion());
   });
 });

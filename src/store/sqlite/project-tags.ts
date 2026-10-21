@@ -1,13 +1,6 @@
-// hippo.db's ProjectTags group: the reads `hippo projects` plans from, on a read-only handle so doctor's check never
-// migrates the store, and the merge and repair, each one transaction backed up first.
-import {
-  getMeta,
-  openHippoDbReadOnly,
-  setMeta,
-  withTrialScope,
-  withWriteScope,
-  type DatabaseSyncLike,
-} from '../../db/index.js';
+// hippo.db's ProjectTags group: the reads `hippo projects` plans from, and the merge and repair, each one transaction
+// backed up first.
+import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { withBackup } from '../../db/backup.js';
 import { calculateStrength, type MemoryEntry } from '../../base/memory/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, isImport, noteKey, toolTag } from '../../base/memory/agent-memory-tools.js';
@@ -39,7 +32,7 @@ import {
   writeEntryMirrors,
 } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { HandleOpener, StoreFiles, OnHandle } from './open.js';
 import { setAsideRow } from './set-aside.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import type { Sync } from './served.js';
@@ -224,9 +217,11 @@ const markAt: Bodies<Pick<ProjectTags, 'markRepairedOnce'>> = {
   markRepairedOnce: (db) => setMeta(db, AUTO_REPAIR_META_KEY, '1'),
 };
 
-export function sqliteProjectTags(on: OnHandle): Sync<ProjectTags> {
+/** `readOpener` opens the reads' handles: hippo.db's own open, which migrates an older schema first, unless a check
+ * that must leave the store as it found it names a read-only one. */
+export function sqliteProjectTags(on: OnHandle, readOpener?: HandleOpener): Sync<ProjectTags> {
   return {
-    ...bound(on, readsAt, openHippoDbReadOnly),
+    ...bound(on, readsAt, readOpener),
     ...boundWithFiles(on, writesAt),
     ...bound(on, markAt),
   };

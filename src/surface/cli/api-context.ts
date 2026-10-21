@@ -17,6 +17,7 @@ import {
   runSqliteBatch,
   runSqliteHookRequest,
   runSqliteRequest,
+  sqliteDiagnosticsStore,
   sqliteImportFiles,
   sqliteImportStores,
   sqliteReach,
@@ -40,6 +41,11 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/surface/mcp never imports it. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   return sqliteStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+}
+
+/** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found it. */
+export function cliDiagnostics(hippoRoot: string): Pick<StoreGroups, 'diagnostics' | 'projectTags'> {
+  return sqliteDiagnosticsStore(hippoRoot);
 }
 
 /** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */

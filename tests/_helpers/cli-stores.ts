@@ -1,7 +1,7 @@
 // The stores the CLI root hands its capture, digest and doctor code, for tests that call that code directly.
 import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
-import { cliStore } from '../../src/surface/cli/api-context.js';
+import { cliDiagnostics, cliStore } from '../../src/surface/cli/api-context.js';
 import { folderIndex, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import type { DoctorStore } from '../../src/doctor.js';
@@ -14,8 +14,7 @@ export function captureTarget(root: string): CaptureTarget {
 }
 
 export function diagnosticsAt(root: string): DoctorStore {
-  const { diagnostics, projectTags } = cliStore(root);
-  return { diagnostics, projectTags };
+  return cliDiagnostics(root);
 }
 
 /** hippo.db's ledger under `root`, with the folder facts its delivery rows name. */

@@ -5,7 +5,7 @@ import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEventsAt, queryAuditEvents } from './audit.js';
-import { getHippoDbPath, type DatabaseSyncLike } from '../../db/index.js';
+import { getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../../db/index.js';
 import { activeGoalsWithPoliciesAt, sqliteGoals } from './goals.js';
 import { planningFallacyEvidenceAt } from './planning-fallacy-evidence.js';
 import { sqlitePredictions } from './predictions.js';
@@ -313,6 +313,16 @@ export function sqliteReach(
   };
   if (!canReadGlobal) return reach;
   return { ...reach, global: { root: globalRoot, store: openGlobal(globalRoot) } };
+}
+
+/** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the project-tag reads on read-only
+ * handles, so a check never creates or migrates the store it inspects. */
+export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'diagnostics' | 'projectTags'> {
+  const { on } = handlesOf(hippoRoot);
+  return {
+    diagnostics: served<Diagnostics>(sqliteDiagnostics(on)),
+    projectTags: served<ProjectTags>(sqliteProjectTags(on, openHippoDbReadOnly)),
+  };
 }
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as

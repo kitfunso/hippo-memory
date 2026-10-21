@@ -369,6 +369,23 @@ describe('hippo doctor', () => {
     closeHippoDb(check);
   });
 
+  it('reads project tags from an older global store and leaves it as it found it', async () => {
+    const cwd = tmp('doctor-readonly-global-');
+    const global = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', global);
+    initTestStore(global);
+    const older = getCurrentSchemaVersion() - 1;
+    const seed = openHippoDb(global);
+    setMeta(seed, 'schema_version', String(older));
+    seed.exec(`PRAGMA user_version = ${older}`);
+    closeHippoDb(seed);
+
+    const before = sha256(join(global, 'hippo.db'));
+    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    expect(r.checks.find((c) => c.id === 'projects')?.status).toBe('pass');
+    expect(sha256(join(global, 'hippo.db'))).toBe(before);
+  });
+
   it('flags a bare .hippo folder and creates nothing', async () => {
     const cwd = tmp('doctor-bare-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));

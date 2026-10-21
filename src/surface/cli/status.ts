@@ -31,9 +31,9 @@ import {
 } from '../../api/status.js';
 import type { StatusCounts } from '../../store/port/reports.js';
 import type { ParticleStats } from '../../store/port.js';
-import { cliConfig, cliApiContext, cliStore, type CliContext } from './api-context.js';
+import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
 
-const diagnosticsAt = (hippoRoot: string): DoctorStore => cliStore(hippoRoot);
+const diagnosticsAt = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue, boolFlag } from './flag-values.js';
