@@ -1,6 +1,6 @@
 // The nearest-vector scan reads the admitted vectors a page at a time and keeps the best k in a heap: its answer is a
 // full sort's, ties across a page edge included, and no one statement hands back more than a page.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { decodeVector, topVectorMatches, type VectorMatch } from '../../src/db/vector-store.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -11,9 +11,17 @@ const DIM = 8;
 const SCAN = 'FROM memory_vectors v CROSS JOIN memories m';
 const IN_T1 = { where: ' AND m.tenant_id = ?', params: ['t1'] };
 
-const opened: DatabaseSyncLike[] = [];
-afterEach(() => {
-  for (const db of opened.splice(0)) closeHippoDb(db);
+const BIG_ROWS = Math.floor(SCAN_PAGE_ROWS * 2.5);
+const SMALL_ROWS = SCAN_PAGE_ROWS + 10;
+let big: ScanStore;
+let small: ScanStore;
+beforeAll(() => {
+  big = seeded(BIG_ROWS);
+  small = seeded(SMALL_ROWS);
+});
+afterAll(() => {
+  closeHippoDb(big.db);
+  closeHippoDb(small.db);
 });
 
 interface ScanStore {
@@ -34,7 +42,6 @@ function seeded(t1Rows: number): ScanStore {
   const root = makeRoot('vector-scan-pages');
   seedVectorRows(root, rows);
   const db = openHippoDb(root);
-  opened.push(db);
   return { db, twin };
 }
 
@@ -63,22 +70,22 @@ function fullSort(db: DatabaseSyncLike, query: readonly number[], k: number): Ve
 
 describe('the paged nearest-vector scan', () => {
   it.each([1, 50, 400])('keeps the full sort top %i over two and a half pages, ties included', async (k) => {
-    const { db, twin } = seeded(Math.floor(SCAN_PAGE_ROWS * 2.5));
+    const { db, twin } = big;
     for (const query of [twin, near(twin, 3), near(twin, 4)]) {
       expect(await topVectorMatches(db, { query, k, ...IN_T1 })).toEqual(fullSort(db, query, k));
     }
   });
 
   it('answers every admitted row, best first, when k is more than the store holds', async () => {
-    const { db, twin } = seeded(SCAN_PAGE_ROWS + 10);
+    const { db, twin } = small;
     const all = await topVectorMatches(db, { query: twin, k: 5_000, ...IN_T1 });
     expect(all).toHaveLength(SCAN_PAGE_ROWS + 10);
     expect(all).toEqual(fullSort(db, twin, 5_000));
   });
 
   it('reads one page per statement, and one statement more per page of admitted rows', async () => {
-    const t1Rows = Math.floor(SCAN_PAGE_ROWS * 2.5);
-    const { db, twin } = seeded(t1Rows);
+    const t1Rows = BIG_ROWS;
+    const { db, twin } = big;
     const { statements, reads } = await recordStatementsAsync(() =>
       topVectorMatches(db, { query: twin, k: 50, ...IN_T1 }),
     );
