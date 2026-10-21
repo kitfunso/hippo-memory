@@ -16,7 +16,13 @@ export { classifyOriginProject } from '../base/scope/project-identity.js';
 export { RecallContractError, adminActor, contextReach, ownerOrSubject, requireHostAdmin } from './types.js';
 export type { Actor, Context, ContextReach, GlobalInReach } from './types.js';
 export { remember } from './memories/remember.js';
-export type { RememberLocal, RememberOptions, RememberResult } from './memories/remember.js';
+export type {
+  GatedRememberOptions,
+  RememberLocal,
+  RememberOptions,
+  RememberResult,
+  RememberSkipped,
+} from './memories/remember.js';
 export { extractRememberedFacts, rememberLocally } from './memories/remember-local.js';
 export type {
   FactExtraction,

@@ -4,7 +4,6 @@
 // what comes back.
 
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
-import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
 import { embedMemory, folderIndex, type EmbedOutcome } from '../../domain/search/embed-memories.js';
 import { errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
@@ -13,11 +12,6 @@ import type { Context, ContextWith } from '../types.js';
 
 // The tags a caller in this process adds from the folder it runs in.
 export { extractPathTags } from '../../domain/search/path-context.js';
-
-const WEAK_HALF_LIFE_FACTOR = 0.5;
-// The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
-// tenant, and a window past this reads more than a duplicate check needs.
-const MAX_SALIENCE_ROWS = 500;
 
 /** One write by a caller in this process, every field already parsed and checked by it. */
 export interface LocalRememberInput {
@@ -59,23 +53,6 @@ export type LocalRememberOutcome =
     }
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
-/** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned or
- * forced. */
-async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise<SalienceResult | null> {
-  const { salience } = ctx.config;
-  if (!salience.enabled || input.pinned || input.force) return null;
-  // computeSalience compares against the last `recentWindow` rows only.
-  const window = Math.trunc(salience.recentWindow);
-  const rows = Number.isSafeInteger(window) && window >= 1 ? Math.min(window, MAX_SALIENCE_ROWS) : MAX_SALIENCE_ROWS;
-  const recent = await ctx.store.contextReads.newestEntries(ctx.tenantId, rows);
-  return computeSalience(input.content, [...input.tags], recent, {
-    recentWindow: salience.recentWindow,
-    overlapThreshold: salience.overlapThreshold,
-    minContentLength: salience.minContentLength,
-    maxRepeatErrors: salience.maxRepeatErrors,
-  });
-}
-
 /**
  * The row `remember` just wrote, as the store holds it: the report, the embedding and the extraction all work on that.
  */
@@ -103,26 +80,24 @@ function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutco
  * refused value throws as `remember` does. */
 export async function rememberLocally(ctx: Context, input: LocalRememberInput): Promise<LocalRememberOutcome> {
   const schemaFit = await ctx.store.contextReads.schemaFit(ctx.tenantId, input.content, input.fitTags ?? input.tags);
-  const verdict = await salienceVerdict(ctx, input);
-  if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
-  const startedWeak =
-    verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
-  const { id, warnings = [] } = await remember(ctx, {
+  const written = await remember(ctx, {
     content: input.content,
     kind: input.kind,
     scope: input.scope,
     owner: input.owner,
     artifactRef: input.artifactRef,
     tags: [...input.tags],
+    salienceGate: input.force !== true,
     local: {
       layer: input.layer,
       pinned: input.pinned,
       source: input.source,
       confidence: input.confidence,
       schemaFit,
-      weaken: startedWeak && { strength: startedWeak.strength, halfLifeFactor: WEAK_HALF_LIFE_FACTOR },
     },
   });
+  if ('skipped' in written) return { status: 'skipped', ...written.skipped };
+  const { id, warnings = [], startedWeak } = written;
   const entry = await storedEntry(ctx, id);
   await ctx.store.lessonWrites.bumpRemembered(1);
   const embedding = indexInBackground(ctx, entry);

@@ -5,7 +5,7 @@
  * native fetch failure.
  */
 
-import type { RememberOptions, RememberResult } from '../../api/index.js';
+import type { GatedRememberOptions, RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
 import { fetchWithRetry } from '../../base/util/http-retry.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
@@ -114,15 +114,25 @@ async function readReply<T>(
 export async function remember(
   serverUrl: string,
   apiKey: string | undefined,
+  opts: GatedRememberOptions,
+): Promise<RememberResult | RememberSkipped>;
+export async function remember(
+  serverUrl: string,
+  apiKey: string | undefined,
   opts: RememberOptions,
-): Promise<RememberResult> {
+): Promise<RememberResult>;
+export async function remember(
+  serverUrl: string,
+  apiKey: string | undefined,
+  opts: RememberOptions | GatedRememberOptions,
+): Promise<RememberResult | RememberSkipped> {
   const res = await sendWrite(`${serverUrl}/v1/memories`, {
     method: 'POST',
     headers: buildHeaders(apiKey, true),
     body: JSON.stringify(opts),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<RememberResult>(res, 'POST /v1/memories');
+  return readReply<RememberResult | RememberSkipped>(res, 'POST /v1/memories');
 }
 
 export async function forget(
