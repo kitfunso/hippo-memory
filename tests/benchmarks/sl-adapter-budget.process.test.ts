@@ -23,7 +23,7 @@ describe('sequential-learning adapter recall budget', () => {
     } finally {
       await hippoAdapter.cleanup();
     }
-  }, 61_000);
+  });
 
   // Starts the built CLI three times: init, the store and the recall.
   it('hippo adapter defaults to 2000 when budget arg is omitted (backward compat)', async () => {
@@ -36,7 +36,7 @@ describe('sequential-learning adapter recall budget', () => {
     } finally {
       await hippoAdapter.cleanup();
     }
-  }, 27_000);
+  });
 
   it('baseline adapter ignores the budget arg cleanly', async () => {
     await baselineAdapter.init();

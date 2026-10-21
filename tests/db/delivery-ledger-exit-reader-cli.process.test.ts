@@ -3,12 +3,14 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { DatabaseSync } from 'node:sqlite';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { realpathOrResolve } from '../../src/base/util/real-path.js';
 import { seed, verdictOf, writeHostTranscript, type Verdict } from '../_helpers/host-transcript.js';
 import { dispose, project, type Project } from '../_helpers/delivery-boundary.js';
 import { fire } from '../_helpers/host-transcript.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import { trySymlink } from '../_helpers/symlink.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {
@@ -26,7 +28,7 @@ import {
 useExitReaderStore();
 
 describe('the command line', () => {
-  it('R13 the script prints the verdict the function returns', () => {
+  it('the script prints the verdict the function returns', () => {
     const m = present();
     const block = 'the block that was sent';
     write(event('r13', { emittedHash: blockHash(block), promptHash: blockHash('a prompt'), candidates: [row(m.id)] }));
@@ -47,7 +49,7 @@ describe('the command line', () => {
     ['neither a memory nor a key', ['--store', 'x', '--session', 's']],
     ['an unknown flag', ['--store', 'x', '--session', 's', '--memory', 'a', '--bogus']],
     ['a flag with no value', ['--store', 'x', '--session', 's', '--memory']],
-  ])('R14 %s exits 2 with usage on stderr', (_name, args) => {
+  ])('%s exits 2 with usage on stderr', (_name, args) => {
     const r = spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
     expect([r.status, r.stdout, r.stderr.includes('usage:')]).toEqual([2, '', true]);
   });
@@ -63,28 +65,27 @@ describe('store paths through a link', () => {
     return trySymlink(target, l, 'junction') ? l : null;
   }
 
-  const rawRows = (root: string) => {
-    const db = new DatabaseSync(path.join(root, 'hippo.db'), { readOnly: true });
+  // The store port only writes delivery events, so the rows come back through the test reader.
+  const rawRows = (root: string, session: string) => {
+    const db = openHippoDb(root);
     try {
-      return db.prepare('SELECT store_hash, write_store FROM delivery_events').all();
+      return readDeliveryEvents(db, 'default', session);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   };
 
-  it('R26 a project reached through a linked folder', (ctx) => {
+  it('a project reached through a linked folder', (ctx) => {
     p = project();
     const L = link(p.proj, path.join(p.dir, 'proj-link'));
     if (L === null) return ctx.skip();
     try {
       const r = fire(p, 'r26', PROMPT, { cwd: L });
-      const rows = rawRows(p.hippoRoot);
+      const rows = rawRows(p.hippoRoot, 'r26');
       const want = blockHash(path.join(realpathOrResolve(p.proj), '.hippo'));
       expect(rows.map((x) => x.store_hash)).toEqual([want]);
       const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r26' });
-      const db = new DatabaseSync(path.join(p.hippoRoot, 'hippo.db'), { readOnly: true });
-      const id = String(db.prepare('SELECT id FROM memories WHERE pinned = 1').get()?.id);
-      db.close();
+      const id = String(loadAllEntries(p.hippoRoot, 'default').find((e) => e.pinned)?.id);
       for (const store of [p.hippoRoot, path.join(L, '.hippo')]) {
         const v = verdictOf({ store, session: 'r26', memory: id, transcript: t });
         expect(v.class).toBe('application-unknown');
@@ -96,7 +97,7 @@ describe('store paths through a link', () => {
     }
   });
 
-  it('R27 the global store through a linked HIPPO_HOME', (ctx) => {
+  it('the global store through a linked HIPPO_HOME', (ctx) => {
     p = project();
     initTestStore(p.globalRoot);
     fs.writeFileSync(
@@ -111,7 +112,7 @@ describe('store paths through a link', () => {
       fs.mkdirSync(bare);
       const r = fire(p, 'r27', PROMPT, { cwd: bare, env: { HIPPO_HOME: G } });
       const want = blockHash(realpathOrResolve(G));
-      expect(rawRows(p.globalRoot).map((x) => [x.store_hash, x.write_store])).toEqual([[want, 'global']]);
+      expect(rawRows(p.globalRoot, 'r27').map((x) => [x.store_hash, x.write_store])).toEqual([[want, 'global']]);
       const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r27' });
       const v = verdictOf({ store: G, global: G, session: 'r27', memory: g.id, transcript: t });
       expect(v.class).toBe('application-unknown');
@@ -122,7 +123,7 @@ describe('store paths through a link', () => {
     }
   });
 
-  it('R28 the command line classifies the global store behind a linked HIPPO_HOME under --no-global, with the link above the store', (ctx) => {
+  it('the command line classifies the global store behind a linked HIPPO_HOME under --no-global, with the link above the store', (ctx) => {
     p = project();
     initTestStore(p.globalRoot);
     fs.writeFileSync(

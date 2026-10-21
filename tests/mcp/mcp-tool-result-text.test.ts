@@ -79,7 +79,7 @@ afterEach(() => {
 });
 
 describe('MCP tool reply text', () => {
-  it('remember, recall, outcome, context and status', async () => {
+  it('hippo_remember refuses empty text and reports the half-life and tags of what it stores', async () => {
     expect(masked(await call('hippo_remember', { text: '' }))).toMatchInlineSnapshot(`"No text provided."`);
     expect(
       masked(
@@ -89,86 +89,130 @@ describe('MCP tool reply text', () => {
     expect(
       masked(await call('hippo_remember', { text: 'release notes are folded from changelog fragments' })),
     ).toMatchInlineSnapshot(`"Remembered [<id>] (half-life: 365d, tags: none)"`);
-
-    expect(await call('hippo_outcome', { good: true })).toMatchInlineSnapshot(
-      `"No recent recalls to apply outcome to."`,
-    );
-    expect(await call('hippo_recall', { query: 'staging lock deploys', budget: 4000 })).toMatchInlineSnapshot(`
-      "Found 1 memories:
-
-      [verified] tags: error, deploy (strength=1.00)
-      the staging lock table blocks deploys
-      "
-    `);
-    expect(await call('hippo_outcome', { good: true })).toMatchInlineSnapshot(
-      `"Applied positive outcome to 1 memories"`,
-    );
-    expect(await call('hippo_recall', { query: 'nothing matches zebra quartz' })).toMatchInlineSnapshot(`
-      "## Cutoff
-      Showing 0 of 2 candidates; 2 not shown (rank, budget or limit).
-
-      ---
-
-      No relevant memories found."
-    `);
-
-    expect(await call('hippo_context', { budget: 0 })).toMatchInlineSnapshot(`"Done."`);
-    expect(await call('hippo_context', { budget: 3 })).toMatchInlineSnapshot(`"Done."`);
-    expect(await call('hippo_context', { budget: 4000 })).toMatchInlineSnapshot(`
-      "Found 2 memories:
-
-      [verified] tags: error, deploy (strength=1.00)
-      the staging lock table blocks deploys
-
-      [verified] (strength=1.00)
-      release notes are folded from changelog fragments
-      "
-    `);
-    expect(await call('hippo_status')).toMatchInlineSnapshot(`
-      "Memories: 2 (0 pinned, 1 errors)
-      Avg strength: 1.00
-      At risk (<0.2): 0
-      Open conflicts: 0
-      Half-life default: 365d"
-    `);
   });
 
-  it('assemble, drill, baserate, conflicts, resolve, share and peers', async () => {
+  describe('on a store holding two remembered rows', () => {
+    beforeEach(async () => {
+      await call('hippo_remember', { text: 'the staging lock table blocks deploys', error: true, tag: 'deploy' });
+      await call('hippo_remember', { text: 'release notes are folded from changelog fragments' });
+    });
+
+    it('hippo_outcome has nothing to apply to before any recall', async () => {
+      expect(await call('hippo_outcome', { good: true })).toMatchInlineSnapshot(
+        `"No recent recalls to apply outcome to."`,
+      );
+    });
+
+    it('hippo_recall lists the matching row, and hippo_outcome then applies to it', async () => {
+      expect(await call('hippo_recall', { query: 'staging lock deploys', budget: 4000 })).toMatchInlineSnapshot(`
+        "Found 1 memories:
+
+        [verified] tags: error, deploy (strength=1.00)
+        the staging lock table blocks deploys
+        "
+      `);
+      expect(await call('hippo_outcome', { good: true })).toMatchInlineSnapshot(
+        `"Applied positive outcome to 1 memories"`,
+      );
+    });
+
+    it('hippo_recall reports the cutoff when nothing matches', async () => {
+      expect(await call('hippo_recall', { query: 'nothing matches zebra quartz' })).toMatchInlineSnapshot(`
+        "## Cutoff
+        Showing 0 of 2 candidates; 2 not shown (rank, budget or limit).
+
+        ---
+
+        No relevant memories found."
+      `);
+    });
+
+    it('hippo_context answers Done for a budget too small to hold a row', async () => {
+      expect(await call('hippo_context', { budget: 0 })).toMatchInlineSnapshot(`"Done."`);
+      expect(await call('hippo_context', { budget: 3 })).toMatchInlineSnapshot(`"Done."`);
+    });
+
+    it('hippo_context lists both rows within a large budget', async () => {
+      expect(await call('hippo_context', { budget: 4000 })).toMatchInlineSnapshot(`
+        "Found 2 memories:
+
+        [verified] tags: error, deploy (strength=1.00)
+        the staging lock table blocks deploys
+
+        [verified] (strength=1.00)
+        release notes are folded from changelog fragments
+        "
+      `);
+    });
+
+    it('hippo_status counts the rows', async () => {
+      expect(await call('hippo_status')).toMatchInlineSnapshot(`
+        "Memories: 2 (0 pinned, 1 errors)
+        Avg strength: 1.00
+        At risk (<0.2): 0
+        Open conflicts: 0
+        Half-life default: 365d"
+      `);
+    });
+
+    it('hippo_recall throws on a scorer_window that is not a number', async () => {
+      expect(await settle('hippo_recall', { query: 'x', scorer_window: 'abc' })).toMatchInlineSnapshot(
+        `"throws: scorerWindow must be a positive integer; got NaN"`,
+      );
+    });
+  });
+
+  it('hippo_assemble needs a session id and reports an unknown session as empty', async () => {
     expect(await call('hippo_assemble', {})).toMatchInlineSnapshot(
       `"isError: Invalid arguments for hippo_assemble: session_id is required"`,
     );
     expect(await call('hippo_assemble', { session_id: 'no-such-session' })).toMatchInlineSnapshot(
       `"Session no-such-session — 0 items, 20 tokens (raw=0, summarized=0, evicted=0)"`,
     );
+  });
+
+  it('hippo_drill needs a summary id and reports an unknown one', async () => {
     expect(await call('hippo_drill', {})).toMatchInlineSnapshot(
       `"isError: Invalid arguments for hippo_drill: summary_id is required"`,
     );
     expect(await call('hippo_drill', { summary_id: 'no-such-summary' })).toMatchInlineSnapshot(
       `"No drillable summary at id=no-such-summary."`,
     );
+  });
+
+  it('hippo_predict_baserate refuses a blank class and reports a class with no closed predictions', async () => {
     expect(await call('hippo_predict_baserate', { class_tag: '  ' })).toMatchInlineSnapshot(
       `"No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort")."`,
     );
     expect(await call('hippo_predict_baserate', { class_tag: 'migration-effort' })).toMatchInlineSnapshot(
       `"No closed predictions in class "migration-effort" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute."`,
     );
+  });
+
+  it('hippo_conflicts reports no open conflicts', async () => {
     expect(await call('hippo_conflicts')).toMatchInlineSnapshot(`"No open conflicts."`);
+  });
+
+  it('hippo_resolve needs keep, and refuses an unknown conflict', async () => {
     expect(await call('hippo_resolve', { conflict_id: 1 })).toMatchInlineSnapshot(
       `"isError: Invalid arguments for hippo_resolve: keep is required"`,
     );
-    expect(await call('hippo_share', {})).toMatchInlineSnapshot(
-      `"isError: Invalid arguments for hippo_share: id is required"`,
-    );
-    expect(await call('hippo_peers')).toMatchInlineSnapshot(`"No peers found."`);
     expect(await settle('hippo_resolve', { conflict_id: 999, keep: 'mem_missing' })).toMatchInlineSnapshot(
       `"Could not resolve. Check the conflict ID and --keep value."`,
+    );
+  });
+
+  it('hippo_share needs an id, and throws for a missing memory', async () => {
+    expect(await call('hippo_share', {})).toMatchInlineSnapshot(
+      `"isError: Invalid arguments for hippo_share: id is required"`,
     );
     expect(await settle('hippo_share', { id: 'mem_missing' })).toMatchInlineSnapshot(
       `"throws: Memory not found: mem_missing"`,
     );
-    expect(await settle('hippo_recall', { query: 'x', scorer_window: 'abc' })).toMatchInlineSnapshot(
-      `"throws: scorerWindow must be a positive integer; got NaN"`,
-    );
+  });
+
+  it('hippo_peers reports no peers', async () => {
+    expect(await call('hippo_peers')).toMatchInlineSnapshot(`"No peers found."`);
   });
 
   it('learn reports its scan line and an unknown tool stays a JSON-RPC error', async () => {

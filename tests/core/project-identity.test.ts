@@ -237,8 +237,14 @@ describe('assertCallerProject', () => {
   });
 
   it('accepts the names the resolver gives: a remote id, a project file id, a folder name', () => {
-    expect(() => assertCallerProject({ name: 'github.com/acme/app', aliases: ['acme-app', 'app'] })).not.toThrow();
-    expect(() => assertCallerProject({ name: 'dev.azure.com/org/proj/repo', aliases: ['repo_1.2'] })).not.toThrow();
-    expect(() => assertCallerProject({ name: 'my app' })).not.toThrow();
+    for (const project of [
+      { name: 'github.com/acme/app', aliases: ['acme-app', 'app'] },
+      { name: 'dev.azure.com/org/proj/repo', aliases: ['repo_1.2'] },
+      { name: 'my app' },
+    ]) {
+      const before = JSON.stringify(project);
+      expect(assertCallerProject(project), before).toBeUndefined();
+      expect(JSON.stringify(project), 'the checked project is left as given').toBe(before);
+    }
   });
 });

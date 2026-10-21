@@ -448,7 +448,7 @@ describe('mcp tenant + client-key isolation', () => {
 
   // ---- Test 7: T2 — ctx.actor threads into audit_log subject ---------------
   // Under HTTP-MCP ctx.actor carries the auth-resolved subject, so it must be the audit_log actor for remember and outcome.
-  it('hippo_remember and hippo_outcome via MCP thread ctx.actor into audit_log subject (T2)', async () => {
+  it('hippo_remember and hippo_outcome via MCP thread ctx.actor into audit_log subject', async () => {
     const ctx = {
       hippoRoot: home,
       tenantId: 'alpha',

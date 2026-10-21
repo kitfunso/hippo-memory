@@ -11,6 +11,7 @@ import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadContextCandidates } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { mulberry32 } from '../_helpers/property.js';
 
 oneRequestPerTest();
 
@@ -29,17 +30,8 @@ const CAPS = [1, 7, 40, 120];
 
 let home: string;
 
-// A fixed-seed generator, so a failing case replays.
-function rng(seed: number): () => number {
-  let s = seed;
-  return () => {
-    s = (Math.imul(s, 1_664_525) + 1_013_904_223) >>> 0;
-    return s / 2 ** 32;
-  };
-}
-
 function seedRows(count: number): MemoryEntry[] {
-  const next = rng(60);
+  const next = mulberry32(60);
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(next() * xs.length)];
   return Array.from({ length: count }, (_, i) => {
     const roll = next();

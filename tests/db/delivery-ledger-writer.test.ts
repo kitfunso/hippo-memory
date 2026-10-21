@@ -177,7 +177,7 @@ describe('writeDeliveryEventOnHandle', () => {
     ]);
   });
 
-  it('W8 numbers two context rows 500 ms apart, since a context row has no prompt or host turn to match', () => {
+  it('numbers two context rows 500 ms apart, since a context row has no prompt or host turn to match', () => {
     const context = (overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
       event({
         eventType: 'context',
@@ -201,7 +201,7 @@ describe('writeDeliveryEventOnHandle', () => {
   ): DeliveryEventInput => event({ eventType, promptHash: null, promptLength: 0, ...overrides });
 
   describe.each(['pre-compact', 'compact-resume', 'session-end'] as const)('%s boundary duplicates', (type) => {
-    it('W1 flags a second prompt-less event 500 ms later as a duplicate of the first', () => {
+    it('flags a second prompt-less event 500 ms later as a duplicate of the first', () => {
       const first = writeDeliveryEventOnHandle(db, boundary(type));
       const second = writeDeliveryEventOnHandle(db, boundary(type, { ts: at(500) }));
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
@@ -210,7 +210,7 @@ describe('writeDeliveryEventOnHandle', () => {
       ]);
     });
 
-    it('W2 numbers the same pair 3000 ms apart as turns 1 and 2', () => {
+    it('numbers the same pair 3000 ms apart as turns 1 and 2', () => {
       writeDeliveryEventOnHandle(db, boundary(type));
       writeDeliveryEventOnHandle(db, boundary(type, { ts: at(3000) }));
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
@@ -219,7 +219,7 @@ describe('writeDeliveryEventOnHandle', () => {
       ]);
     });
 
-    it('W6 with one host turn id, flags 500 ms apart and numbers 3000 ms apart', () => {
+    it('with one host turn id, flags 500 ms apart and numbers 3000 ms apart', () => {
       const first = writeDeliveryEventOnHandle(db, boundary(type, { hostTurnId: 'turn-a' }));
       const near = writeDeliveryEventOnHandle(db, boundary(type, { hostTurnId: 'turn-a', ts: at(500) }));
       const far = writeDeliveryEventOnHandle(db, boundary(type, { hostTurnId: 'turn-a', ts: at(3000) }));
@@ -230,7 +230,7 @@ describe('writeDeliveryEventOnHandle', () => {
       ]);
     });
 
-    it('W7 measures the window from the numbered row, so a third fire 1500 ms after a duplicate is numbered', () => {
+    it('measures the window from the numbered row, so a third fire 1500 ms after a duplicate is numbered', () => {
       const first = writeDeliveryEventOnHandle(db, boundary(type));
       writeDeliveryEventOnHandle(db, boundary(type, { ts: at(1500) }));
       writeDeliveryEventOnHandle(db, boundary(type, { ts: at(3000) }));
@@ -241,7 +241,7 @@ describe('writeDeliveryEventOnHandle', () => {
       ]);
     });
 
-    it('W5 gives a missing-session or sub-agent boundary no number and no duplicate', () => {
+    it('gives a missing-session or sub-agent boundary no number and no duplicate', () => {
       writeDeliveryEventOnHandle(db, boundary(type, { sessionId: null, sessionState: 'missing' }));
       writeDeliveryEventOnHandle(db, boundary(type, { sessionId: null, sessionState: 'missing', ts: at(500) }));
       writeDeliveryEventOnHandle(db, boundary(type, { sessionState: 'subagent' }));
@@ -259,7 +259,7 @@ describe('writeDeliveryEventOnHandle', () => {
     });
   });
 
-  it('W3 keeps numbering a prompt-less prompt-submit pair 500 ms apart', () => {
+  it('keeps numbering a prompt-less prompt-submit pair 500 ms apart', () => {
     writeDeliveryEventOnHandle(db, event({ promptHash: null, promptLength: 0 }));
     writeDeliveryEventOnHandle(db, event({ promptHash: null, promptLength: 0, ts: at(500) }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
@@ -268,7 +268,7 @@ describe('writeDeliveryEventOnHandle', () => {
     ]);
   });
 
-  it('W6 still flags a prompt-submit pair with one turn id 3000 ms apart', () => {
+  it('still flags a prompt-submit pair with one turn id 3000 ms apart', () => {
     const first = writeDeliveryEventOnHandle(db, event({ hostTurnId: 'turn-a' }));
     const repeat = writeDeliveryEventOnHandle(db, event({ hostTurnId: 'turn-a', ts: at(3000) }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
@@ -277,7 +277,7 @@ describe('writeDeliveryEventOnHandle', () => {
     ]);
   });
 
-  it('W4 numbers each event type on its own, and never matches another session', () => {
+  it('numbers each event type on its own, and never matches another session', () => {
     writeDeliveryEventOnHandle(db, event({ promptHash: 'p1' }));
     writeDeliveryEventOnHandle(db, boundary('pre-compact', { ts: at(100) }));
     writeDeliveryEventOnHandle(db, boundary('compact-resume', { ts: at(200) }));
