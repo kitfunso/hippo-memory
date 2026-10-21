@@ -272,7 +272,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `parseRememberEnvelope`: A3 envelope flags
 - `cmdRemember`: A5 stub auth: stamp tenant_id from env (HIPPO_TENANT) so recall isolation can filter on this row. Default tenant 'default' for unauthenticated CLI.
 - `handleRemember`: B2 v1.12.6 — validate --owner on the thin-client path too. Failure on this path exits early so the user gets the same validation experience whether or not a server is up.
-- `handleRemember`: The salience gate is NOT in richFlag and the route does not apply it, so a routed remember stores what a direct one would skip. Measured 2026-09-07, tracked in TODOS.md; do not read this list as covering salience.
+- `handleRemember`: A routed remember meets the same salience gate as a direct one: `POST /v1/memories` always asks `api.remember` for it (#1018, which closed the 2026-09-07 gap). `--force` is a rich flag, so a forced remember takes the direct path and skips the gate there.
 
 ### src/surface/cli/session-hooks.ts
 - `COMPACT_RESUME_EVENT_CONTENT_CAP`: X8: session-event content is capped at print time only — the shared printSessionEvents stays untouched for every other caller.

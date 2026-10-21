@@ -3,6 +3,8 @@ import { graphEntityOf, graphView } from '../../../api/objects/graph.js';
 import { rawArchive, forget, outcome, promote, remember, supersede } from '../../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/memory.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { StoreNotPortedError } from '../../../base/util/store-blocked.js';
+import { hasGroup } from '../../../store/index.js';
 import { restClientKey } from '../client-key.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import {
@@ -89,7 +91,10 @@ export async function handleSupersedeMemory({ req, res, ctx }: AuthedRouteReques
 
 export async function handlePromoteMemory({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
   validateIdSegment(id, 'memory id');
-  const result = await promote(ctx, id);
+  const { store } = ctx;
+  // The row's storeReady gate has already answered 501 for a store without the group, so this only narrows the type.
+  if (!hasGroup(store, 'folderFiles')) throw new StoreNotPortedError(store.kind, 'folderFiles');
+  const result = await promote({ ...ctx, store }, id);
   sendJson(res, 200, result);
   return;
 }
