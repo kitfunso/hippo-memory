@@ -165,7 +165,6 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
     const ents = entityRows(home);
     const decisionEnt = ents.find((e) => e.source_object_type === 'decision')!;
-    expect(decisionEnt).toBeDefined();
     expect(decisionEnt.memory_id).toBeNull(); // mirror gone
     expect(decisionEnt.source_object_id).toBe(decision.id); // anchored to the object
 
@@ -294,7 +293,6 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(() => deleteEntry(home, md)).not.toThrow();
     const ents = entityRows(home);
     const row = ents.find((r) => r.id === e.id)!;
-    expect(row).toBeDefined();
     expect(row.memory_id).toBeNull();
     expect(row.source_object_id).toBeNull(); // all-null, intentionally tolerated post-forget
   });
@@ -330,13 +328,11 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const ref = rels.find((r) => r.rel_type === 'references')!;
 
     // supersedes edge: present, anchored to the successor (policy v2) object, mirror gone.
-    expect(sup).toBeDefined();
     expect(sup.memory_id).toBeNull();
     expect(sup.source_object_type).toBe('policy');
     expect(sup.source_object_id).toBe(v2.id);
 
     // references edge: present, anchored to the decision object, mirror gone.
-    expect(ref).toBeDefined();
     expect(ref.memory_id).toBeNull();
     expect(ref.source_object_type).toBe('decision');
     expect(ref.source_object_id).toBe(decision.id);
@@ -345,7 +341,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const policyEnt = entityRows(home).find(
       (e) => e.source_object_id === policy.id && e.source_object_type === 'policy',
     )!;
-    expect(policyEnt).toBeDefined();
+    expect(policyEnt.memory_id).not.toBeNull();
   });
 
   it('a VALID memory + a BAD source_object is REJECTED (object validated even when memory present)', () => {

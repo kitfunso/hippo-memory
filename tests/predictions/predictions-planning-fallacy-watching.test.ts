@@ -72,7 +72,6 @@ describe('PlanningFallacyWatching', () => {
     seedClosedPredictions(root, 'feature-effort', 1);
     const out = await retrieve(ctxFor(root), { query: 'the migration feature will take 2 days' });
     expect(out.planningFallacyHint).toBeUndefined();
-    expect(out.planningFallacyWatching).toBeDefined();
     expect(out.planningFallacyWatching!.reason).toBe('tiebreak');
     expect(out.planningFallacyWatching!.suggestion).toMatch(/tied|rename|refine/i);
   });
@@ -101,7 +100,6 @@ describe('PlanningFallacyWatching', () => {
       }),
     );
     const result = await retrieve(ctxFor(root), { query: 'this will take 2 days to finish the project' });
-    expect(result.planningFallacyWatching).toBeDefined();
     expect(result.planningFallacyWatching!.reason).toBe('no_class_match');
     expect(result.planningFallacyWatching!.detectedPhrase).toMatch(/will\s+take\s+2\s+days/i);
     expect(result.planningFallacyWatching!.suggestion).toMatch(/hippo predict --class/i);
@@ -119,7 +117,6 @@ describe('PlanningFallacyWatching', () => {
       }),
     );
     const result = await retrieve(ctxFor(root), { query: 'the next task will take 2 days' });
-    expect(result.planningFallacyHint).toBeDefined();
     expect(result.planningFallacyHint!.classTag).toBe('estimate-task');
     expect(result.planningFallacyWatching).toBeUndefined();
   });

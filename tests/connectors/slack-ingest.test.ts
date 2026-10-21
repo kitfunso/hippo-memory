@@ -22,7 +22,7 @@ describe('ingestMessage', () => {
     };
     const r1 = await ingestMessage(ctx(root), evt);
     expect(r1.status).toBe('ingested');
-    expect(r1.memoryId).toBeDefined();
+    expect(r1.memoryId).toMatch(/^mem_[0-9a-f]+$/);
 
     const r2 = await ingestMessage(ctx(root), evt);
     expect(r2.status).toBe('duplicate');

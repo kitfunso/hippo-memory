@@ -42,7 +42,7 @@ describe('extraction-aware search preference', () => {
     if (factInResults && rawInResults) {
       expect(factInResults.score).toBeGreaterThan(rawInResults.score);
     } else {
-      expect(factInResults).toBeDefined();
+      expect(factInResults?.entry.id).toBe(fact.id);
     }
   });
 

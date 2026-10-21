@@ -28,7 +28,7 @@ describe('goal lifecycle', () => {
         outcome_score: number;
       };
       expect(row.status).toBe('completed');
-      expect(row.completed_at).toBeTruthy();
+      expect(row.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(row.outcome_score).toBe(0.85);
     } finally {
       closeHippoDb(db);

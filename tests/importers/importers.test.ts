@@ -321,12 +321,10 @@ describe('importMarkdown - MEMORY.md format', () => {
     const all = loadAllEntries(tmpDir, 'default');
 
     const pipelineMem = all.find((e) => e.content.includes('FRED cache'));
-    expect(pipelineMem).toBeDefined();
     expect(pipelineMem!.tags).toContain('data-pipeline-cache');
     expect(pipelineMem!.tags).toContain('imported');
 
     const testMem = all.find((e) => e.content.includes('full test suite'));
-    expect(testMem).toBeDefined();
     expect(testMem!.tags).toContain('testing');
 
     for (const e of all) {

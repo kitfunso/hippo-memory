@@ -130,7 +130,6 @@ describe('graph-recall engine', () => {
       budget: 4000,
     });
     const hit = out.find((r) => r.entry.id === other.id)!;
-    expect(hit).toBeDefined();
     expect(hit.graphVia!.direction).toBe('from'); // O is the `from` endpoint reached from seed's `to` side
   });
 
@@ -308,7 +307,7 @@ describe('graph-recall engine', () => {
         includeSuperseded: true,
       });
       expect(out.map((r) => r.entry.id)).toContain(linked.id);
-      expect(out.find((r) => r.entry.id === linked.id)!.graphVia).toBeDefined();
+      expect(out.find((r) => r.entry.id === linked.id)?.graphVia).toMatchObject({ hops: 1, relType: 'supersedes' });
     } finally {
       safeRmSync(glob);
     }

@@ -52,7 +52,6 @@ describe('api.recall continuity flag', () => {
       query: 'deploys',
       window: { includeContinuity: true },
     });
-    expect(result.continuity).toBeDefined();
     expect(result.continuity!.activeSnapshot?.task).toBe('Ship the recall continuity slice');
     expect(result.continuity!.sessionHandoff?.nextAction).toBe('Pick up at Task 3.');
     expect(result.continuity!.recentSessionEvents).toHaveLength(1);
@@ -68,7 +67,6 @@ describe('api.recall continuity flag', () => {
       query: 'lonely',
       window: { includeContinuity: true },
     });
-    expect(result.continuity).toBeDefined();
     expect(result.continuity!.activeSnapshot).toBeNull();
     expect(result.continuity!.sessionHandoff).toBeNull();
     expect(result.continuity!.recentSessionEvents).toEqual([]);

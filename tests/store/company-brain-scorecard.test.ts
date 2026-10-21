@@ -179,7 +179,6 @@ describe('Company Brain continuity scorecard scaffold', () => {
       query: 'continuity',
       window: { includeContinuity: true },
     });
-    expect(onResult.continuity).toBeDefined();
     const block = onResult.continuity!;
 
     // Same six scorecard signals derived from the recall path.

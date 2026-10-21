@@ -116,8 +116,7 @@ describe('cross-ingest determinism', () => {
         const byKeyB = new Map(rowsB.map((r) => [keyOf(r), r]));
         for (const rowA of rowsA) {
           const rowB = byKeyB.get(keyOf(rowA));
-          expect(rowB, `no provenance-matched row for ${keyOf(rowA)} in run B`).toBeDefined();
-          expect(rowB!.gold).toBe(rowA.gold);
+          expect(rowB?.gold, `no provenance-matched row for ${keyOf(rowA)} in run B`).toBe(rowA.gold);
           expect(rowB!.features).toEqual(rowA.features);
           // memory_id is deliberately NOT compared here (see file header).
         }

@@ -66,8 +66,8 @@ describe('scope boost scoring', () => {
     // The scoped memory should rank first (1.5x boost)
     const scopedResult = parsed.results.find((r: { id: string }) => r.id === scoped.id);
     const unscopedResult = parsed.results.find((r: { id: string }) => r.id === unscoped.id);
-    expect(scopedResult).toBeDefined();
-    expect(unscopedResult).toBeDefined();
+    expect(scopedResult?.id).toBe(scoped.id);
+    expect(unscopedResult?.id).toBe(unscoped.id);
     expect(scopedResult.score).toBeGreaterThan(unscopedResult.score);
   });
 
@@ -92,8 +92,8 @@ describe('scope boost scoring', () => {
 
     const scopedResult = parsed.results.find((r: { id: string }) => r.id === scoped.id);
     const unscopedResult = parsed.results.find((r: { id: string }) => r.id === unscoped.id);
-    expect(scopedResult).toBeDefined();
-    expect(unscopedResult).toBeDefined();
+    expect(scopedResult?.id).toBe(scoped.id);
+    expect(unscopedResult?.id).toBe(unscoped.id);
     // Mismatched scope (0.5x) should score lower than neutral (1.0x)
     expect(unscopedResult.score).toBeGreaterThan(scopedResult.score);
   });

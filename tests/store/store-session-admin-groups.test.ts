@@ -182,6 +182,9 @@ describe('reports group', () => {
     expect((await served.entriesPage(ALL_TENANTS, { limit: 10 })).entries).toHaveLength(2);
     expect(await served.countEntries()).toBe(2);
     expect((await served.tokenUse(T, '2020-01-01T00:00:00.000Z')).totalTokens).toBe(0);
-    expect(await served.failures(T, '2020-01-01T00:00:00.000Z')).toBeDefined();
+    expect(await served.failures(T, '2020-01-01T00:00:00.000Z')).toMatchObject({
+      since: '2020-01-01T00:00:00.000Z',
+      total: 0,
+    });
   });
 });

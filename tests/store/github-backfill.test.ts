@@ -413,7 +413,6 @@ describe('backfillRepo', () => {
     });
 
     const issuesCall = capture.calls.find((c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'));
-    expect(issuesCall).toBeDefined();
     expect(issuesCall?.url).toContain(`since=${encodeURIComponent('2026-01-01T00:00:00Z')}`);
   });
 

@@ -102,7 +102,7 @@ describe('mcp tenant + client-key isolation', () => {
         closeHippoDb(db);
       }
     })();
-    expect(before).toBeDefined();
+    expect(before.retrieval_count).toBe(2);
 
     // Client B applies a positive outcome. With per-client keying, this
     // touches B's last-shown list set only; both happen to point at the
@@ -155,7 +155,6 @@ describe('mcp tenant + client-key isolation', () => {
     try {
       const recallEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'recall' });
       const mcpRecall = recallEvents.find((e) => e.actor === 'mcp');
-      expect(mcpRecall).toBeDefined();
       // GDPR Path A: recall audit stores query_hash (sha256/16) instead of
       // truncated query text. Assert hash shape + length, not the original text.
       // SAFETY: the 'recall' op's audit metadata is always written by
@@ -193,7 +192,6 @@ describe('mcp tenant + client-key isolation', () => {
     try {
       const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
       const mcpRemember = rememberEvents.find((e) => e.actor === 'mcp');
-      expect(mcpRemember).toBeDefined();
       expect(mcpRemember!.targetId).toMatch(/^mem_/);
     } finally {
       closeHippoDb(db);
@@ -226,7 +224,6 @@ describe('mcp tenant + client-key isolation', () => {
     try {
       const outcomeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'outcome' });
       const mcpOutcome = outcomeEvents.find((e) => e.actor === 'mcp');
-      expect(mcpOutcome).toBeDefined();
       expect(mcpOutcome!.targetId).toMatch(/^mem_/);
     } finally {
       closeHippoDb(db);
@@ -466,12 +463,11 @@ describe('mcp tenant + client-key isolation', () => {
     try {
       const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
       const aliceRemember = rememberEvents.find((e) => e.actor === 'user:alice');
-      expect(aliceRemember).toBeDefined();
       expect(aliceRemember!.targetId).toMatch(/^mem_/);
 
       const outcomeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'outcome' });
       const aliceOutcome = outcomeEvents.find((e) => e.actor === 'user:alice');
-      expect(aliceOutcome).toBeDefined();
+      expect(aliceOutcome?.targetId).toMatch(/^mem_/);
 
       // A recall's side effects (retrieval persist, anchoring and availability audits) must carry the
       // resolved actor too, so one authenticated recall never spreads audit rows across principals.
@@ -515,7 +511,6 @@ describe('mcp tenant + client-key isolation', () => {
     try {
       const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
       const fallbackRemember = rememberEvents.find((e) => e.actor === 'mcp');
-      expect(fallbackRemember).toBeDefined();
       expect(fallbackRemember!.targetId).toMatch(/^mem_/);
     } finally {
       closeHippoDb(db);

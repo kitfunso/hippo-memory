@@ -179,7 +179,6 @@ describe('global-row-embeddings: awaited batch producers', () => {
     await embedAll(localIndex(localRoot));
 
     const index = loadEmbeddingIndex(localRoot);
-    expect(index[entry.id]).toBeDefined();
     expect(index[entry.id]).toHaveLength(MINILM_DIMENSIONS);
   }, 60_000);
 
@@ -196,7 +195,6 @@ describe('global-row-embeddings: awaited batch producers', () => {
     await embedAll(localIndex(globalRoot));
 
     const index = loadEmbeddingIndex(globalRoot);
-    expect(index[shared[0].id]).toBeDefined();
     expect(index[shared[0].id]).toHaveLength(MINILM_DIMENSIONS);
   }, 60_000);
 });
@@ -271,7 +269,7 @@ describe('global-row-embeddings: the first promote, before any global store exis
 
     const promoted = await promote(ctx, entry.id);
 
-    await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toBeDefined(), {
+    await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toHaveLength(16), {
       timeout: 10_000,
     });
   });
@@ -306,7 +304,7 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
       if (isEmbeddingAvailable()) {
         expect(exitCode).toBe(0);
         const index = loadEmbeddingIndex(globalRoot);
-        expect(index[entry.id]).toBeDefined();
+        expect(index[entry.id]).toHaveLength(MINILM_DIMENSIONS);
       }
     } finally {
       cleanUp(home, cwd);
@@ -373,7 +371,6 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
         await vi.waitFor(
           () => {
             const index = loadEmbeddingIndex(globalRoot);
-            expect(index[globalId]).toBeDefined();
             expect(index[globalId]).toHaveLength(MINILM_DIMENSIONS);
           },
           { timeout: 60_000, interval: 250 },

@@ -46,8 +46,7 @@ describe('handleMessageDeleted', () => {
       const arch = db
         .prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`)
         .get(ingested.memoryId!) as { memory_id: string; reason: string } | undefined;
-      expect(arch).toBeDefined();
-      expect(arch!.reason).toContain('source_deleted');
+      expect(arch?.reason).toContain('source_deleted');
     } finally {
       closeHippoDb(db);
     }

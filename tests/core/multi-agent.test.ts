@@ -105,12 +105,10 @@ describe('listPeers', () => {
     expect(peers.length).toBe(2);
 
     const projectA = peers.find((p) => p.project === 'projectA');
-    expect(projectA).toBeDefined();
-    expect(projectA!.count).toBe(2);
+    expect(projectA?.count).toBe(2);
 
     const projectB = peers.find((p) => p.project === 'projectB');
-    expect(projectB).toBeDefined();
-    expect(projectB!.count).toBe(1);
+    expect(projectB?.count).toBe(1);
   });
 
   it('sorts by count descending', async () => {

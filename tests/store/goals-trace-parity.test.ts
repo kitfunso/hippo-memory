@@ -90,8 +90,7 @@ describe('session goal boost trace parity (side-channel)', () => {
     // The accumulator captured the goal-boost step for the boosted row only,
     // and its scoreBefore/scoreAfter agree with the actual mutation.
     const step = trace.get(goalMatch.id);
-    expect(step).toBeDefined();
-    expect(step!.stage).toBe('goal-boost');
+    expect(step?.stage).toBe('goal-boost');
     expect(step!.scoreBefore).toBe(0.9);
     expect(step!.scoreAfter).toBe(0.9 * step!.multiplier!);
     // The unrelated (non-matching) row got no step.

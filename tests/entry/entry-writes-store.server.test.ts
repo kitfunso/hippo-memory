@@ -228,7 +228,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
       (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;
     const remembered = textOf(await call('hippo_remember', { text: 'deploys go out on tuesdays', tag: 'deploy' }));
     const id = /^Remembered \[(\w+)\] \(half-life: \d+d, tags: deploy\)$/.exec(remembered ?? '')?.[1];
-    expect(id).toBeDefined();
+    expect(id).toMatch(/^mem_[0-9a-f]+$/);
     callers.lastShown.set(resolveClientKey(ctx), [id ?? '']);
     expect(textOf(await call('hippo_outcome', { good: true }))).toBe('Applied positive outcome to 1 memories');
     expect((await memory.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive)).toEqual([1]);

@@ -62,7 +62,6 @@ describe('hippo recall --continuity', () => {
     const r = await runHippo(['recall', 'deploys', '--continuity', '--json']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
-    expect(parsed.continuity).toBeDefined();
     expect(parsed.continuity.activeSnapshot.task).toBe('Wire continuity into recall');
     expect(parsed.continuity.sessionHandoff.nextAction).toBe('Resume on Task 4 step 2.');
     expect(parsed.continuity.recentSessionEvents).toHaveLength(1);
@@ -107,7 +106,6 @@ describe('hippo recall --continuity', () => {
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
     expect(parsed.results).toEqual([]);
-    expect(parsed.continuity).toBeDefined();
     expect(parsed.continuity.activeSnapshot.task).toBe('Wire continuity into recall');
   });
 

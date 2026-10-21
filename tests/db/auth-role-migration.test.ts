@@ -31,8 +31,7 @@ describe('migration v26: api_keys.role', () => {
         notnull: number;
       }>;
       const role = cols.find((c) => c.name === 'role');
-      expect(role).toBeDefined();
-      expect(role!.type).toBe('TEXT');
+      expect(role?.type).toBe('TEXT');
       expect(role!.notnull).toBe(1);
       expect(role!.dflt_value).toBe("'admin'");
     } finally {

@@ -50,7 +50,6 @@ describe('api tenant deny - rawArchive and forget', () => {
         `SELECT tenant_id, kind FROM memories WHERE id = ?`,
         created.id,
       );
-      expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
       expect(row!.kind).toBe('raw');
     } finally {
@@ -74,7 +73,6 @@ describe('api tenant deny - rawArchive and forget', () => {
     const db = openHippoDb(home);
     try {
       const row = selectRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
-      expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
     } finally {
       closeHippoDb(db);

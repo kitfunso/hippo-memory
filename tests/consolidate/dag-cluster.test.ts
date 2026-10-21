@@ -32,7 +32,6 @@ describe('clusterFacts', () => {
     expect(clusters.length).toBeGreaterThanOrEqual(2);
 
     const johnCluster = clusters.find((c) => c.members.some((m) => m.content.includes('John')));
-    expect(johnCluster).toBeDefined();
     expect(johnCluster!.members.length).toBeGreaterThanOrEqual(2);
     expect(johnCluster!.label).toContain('John');
   });

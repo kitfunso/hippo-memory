@@ -34,8 +34,7 @@ describe('schema v3: trace columns', () => {
     });
     writeEntry(tmpDir, t);
     const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === t.id);
-    expect(loaded).toBeDefined();
-    expect(loaded!.traceOutcome).toBe('success');
+    expect(loaded?.traceOutcome).toBe('success');
     expect(loaded!.sourceSessionId).toBe('sess-1');
     expect(loaded!.layer).toBe(Layer.Trace);
   });
@@ -82,8 +81,7 @@ describe('schema v3: trace columns', () => {
     // Now initStore should migrate to v3.
     initStore(tmpDir);
     const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === 'mem_legacy_v2');
-    expect(loaded).toBeDefined();
-    expect(loaded!.content).toContain('pre-migration content body');
+    expect(loaded?.content).toContain('pre-migration content body');
     expect(loaded!.traceOutcome).toBeNull();
     expect(loaded!.sourceSessionId).toBeNull();
   });

@@ -75,7 +75,7 @@ function additionalContext(stdout: string): string {
 
 async function remember(text: string, ...flags: string[]): Promise<string> {
   const id = /Remembered \[([^\]]+)\]/.exec((await hippo(['remember', text, ...flags])).stdout)?.[1];
-  expect(id).toBeTruthy();
+  expect(id).toMatch(/^mem_[0-9a-f]+$/);
   return id ?? '';
 }
 

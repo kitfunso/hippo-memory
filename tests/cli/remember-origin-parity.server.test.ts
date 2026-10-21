@@ -39,7 +39,7 @@ async function directRemember(store: string, text: string): Promise<string> {
     log.mockRestore();
   }
   const row = loadAllEntries(store, 'default').find((e) => e.content === text);
-  expect(row).toBeDefined();
+  expect(row?.id).toMatch(/^mem_[0-9a-f]+$/);
   return row?.id ?? '';
 }
 
@@ -56,7 +56,7 @@ async function thinRemember(store: string, text: string): Promise<string> {
   }
   expect(printed).toMatch(/Remembered \[.*\] \(via http/);
   const row = loadAllEntries(store, 'default').find((e) => e.content === text);
-  expect(row).toBeDefined();
+  expect(row?.id).toMatch(/^mem_[0-9a-f]+$/);
   return row?.id ?? '';
 }
 

@@ -143,7 +143,7 @@ describe('schema v54', () => {
       }>;
       expect(f).toEqual([{ sig_hash: 'abc', owner_subject: null, origin_project: null, request_id: null }]);
       expect(tableExists(db, 'session_owners')).toBe(true);
-      for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) expect(indexSql(db, idx)).toBeDefined();
+      for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) expect(indexSql(db, idx)).toContain(idx);
     });
   });
 
@@ -176,7 +176,7 @@ describe('schema v54', () => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       expect(tableExists(db, 'failure_log')).toBe(false);
       expect(tableColumns(db, 'compactions').has('request_id')).toBe(true);
-      expect(indexSql(db, REQUEST_INDEXES.compactions)).toBeDefined();
+      expect(indexSql(db, REQUEST_INDEXES.compactions)).toContain(REQUEST_INDEXES.compactions);
       for (const t of ['task_snapshots', 'session_handoffs']) {
         expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
       }

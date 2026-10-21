@@ -221,7 +221,7 @@ describe('recallJsonRow and cliRecallReranker', () => {
     expect(recallJsonRow(top, 'deploy', false, false)).not.toHaveProperty('source');
     const why = recallJsonRow(top, 'deploy', true, true);
     expect(why.source).toBe('global');
-    expect(why.reason).toBeTruthy();
+    expect(why.reason).toBe('BM25: matched terms [deploy]');
   });
 
   it('picks no reranker for a blank name and throws for an unknown one', () => {

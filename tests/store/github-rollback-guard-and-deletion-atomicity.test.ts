@@ -213,7 +213,7 @@ describe('deletion atomicity', () => {
       const log = dbAfter
         .prepare(`SELECT idempotency_key, memory_id FROM github_event_log WHERE idempotency_key=?`)
         .get('test-key-multi-archive') as { idempotency_key: string; memory_id: string } | undefined;
-      expect(log).toBeDefined();
+      expect(log).toMatchObject({ idempotency_key: 'test-key-multi-archive' });
     } finally {
       closeHippoDb(dbAfter);
     }

@@ -111,7 +111,7 @@ describe('generated opencode plugin', () => {
       installOpencodePlugin();
       const src = fs.readFileSync(resolveOpencodePluginPath(), 'utf8');
       const exported = /export const (\w+)/.exec(src)?.[1];
-      expect(exported).toBeDefined();
+      expect(exported).toMatch(/^\w+$/);
       const errors: string[] = [];
       const make = new Function('console', `${src.replace('export const', 'const')}; return ${exported};`);
       const plugin = await make({ error: (m: string) => errors.push(m) })({

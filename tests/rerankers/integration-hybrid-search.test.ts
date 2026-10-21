@@ -39,7 +39,7 @@ describe('hybridSearch reranker seam', () => {
     // reranker's input comes out FIRST, proving the reranker's ordering
     // replaces the pre-rerank ordering rather than being merged with it.
     expect(out[0].entry.id).toBe(lastInputId);
-    expect(out[0].rerankScore).toBeDefined();
+    expect(out[0].rerankScore).toBe(3);
     expect(out[0].postRerankRank).toBe(1);
   });
 

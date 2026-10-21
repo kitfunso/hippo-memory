@@ -64,7 +64,6 @@ describe('crossEncoderReranker', () => {
   it('returns rerankScore on every result', async (ctx) => {
     if (!available) ctx.skip();
     const out = await crossEncoderReranker('test', [asResult('test content', 1.0)]);
-    expect(out[0].rerankScore).toBeDefined();
     expect(isNumber(out[0].rerankScore)).toBe(true);
   });
 

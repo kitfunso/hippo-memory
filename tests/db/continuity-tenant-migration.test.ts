@@ -29,11 +29,9 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       );
       const tenant = cols.find((c) => c.name === 'tenant_id');
       const scope = cols.find((c) => c.name === 'scope');
-      expect(tenant).toBeDefined();
-      expect(tenant!.notnull).toBe(1);
+      expect(tenant?.notnull).toBe(1);
       expect(tenant!.dflt_value).toContain('default');
-      expect(scope).toBeDefined();
-      expect(scope!.notnull).toBe(0);
+      expect(scope?.notnull).toBe(0);
     } finally {
       closeHippoDb(db);
     }

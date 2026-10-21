@@ -108,7 +108,7 @@ const CASES: readonly Case[] = [
         'same time, lower id',
         'same time, higher id',
       ]);
-      expect(p.result.ambientState).toBeDefined();
+      expect(p.result.ambientState?.totalMemories).toBeGreaterThan(0);
       expect(p.result.entries.some((e) => e.isGlobal)).toBe(true);
     },
     storeReads: ['continuity', 'contextCandidates', 'ambientTallies'],

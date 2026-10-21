@@ -403,7 +403,7 @@ describe('runIntegrityGate (real fixture)', () => {
     // pipeline run, whose rows always carry `gold` and `features.age_days`.
     const rows = readJsonl(featuresPath) as Array<{ gold: number; features: { age_days: number } }>;
     const target = rows.find((r) => r.gold === 0);
-    expect(target, 'fixture must contain at least one non-gold row').toBeDefined();
+    expect(target?.gold, 'fixture must contain at least one non-gold row').toBe(0);
     target!.features.age_days = 0; // make an old, non-gold row look newest
     writeJsonl(featuresPath, rows);
 

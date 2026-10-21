@@ -74,7 +74,7 @@ describe('every pattern family still extracts', () => {
   for (const [name, text] of cases) {
     it(`${name} extracts without duplication`, () => {
       const got = extractFromTexts([text])[0]?.content ?? null;
-      expect(got, `${name} stopped extracting`).toBeTruthy();
+      expect(got, `${name} stopped extracting`).toMatch(/\S/);
       expect(got!, `${name} duplicated a word`).not.toMatch(DUPLICATED_WORD);
     });
   }

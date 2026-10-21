@@ -80,7 +80,7 @@ describe('ambient pinned query plan', () => {
       expect(pins.map((e) => e.id)).toEqual([seeded[1], seeded[2], seeded[0]]);
       expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeUndefined();
       db.prepare(`UPDATE memories SET created = '2020-01-01' WHERE id = ?`).run(pins[0].id);
-      expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeDefined();
+      expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toMatchObject({ id: pins[0].id });
     } finally {
       closeHippoDb(db);
     }

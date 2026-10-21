@@ -224,8 +224,7 @@ describe('confidence facets', () => {
     );
 
     const row = payload.memories.find((e) => e.content.includes('haddock'));
-    expect(row).toBeDefined();
-    expect(row!.confidence).toBe('observed');
+    expect(row?.confidence).toBe('observed');
     expect(row).not.toHaveProperty('aged_out');
   });
 

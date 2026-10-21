@@ -128,7 +128,7 @@ describe('fresh-tail recall', () => {
     expect(recentHit?.isFreshTail).toBe(true);
     // Both rows surface, both flagged as expected.
     const queryMatchHit = r.results.find((it) => it.id === queryHit.id);
-    expect(queryMatchHit).toBeDefined();
+    expect(queryMatchHit?.id).toBe(queryHit.id);
   });
 
   it("7. fresh-tail drops another project's row a store handed back despite the origins", async () => {

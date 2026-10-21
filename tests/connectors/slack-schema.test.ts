@@ -24,8 +24,7 @@ describe('schema v17 — slack ingestion tables', () => {
       // SAFETY: PRAGMA table_info always returns rows with these six columns.
       const cols = db.prepare(`PRAGMA table_info(slack_event_log)`).all() as TableInfoRow[];
       const eventIdCol = cols.find((c) => c.name === 'event_id');
-      expect(eventIdCol).toBeDefined();
-      expect(eventIdCol!.pk).toBe(1);
+      expect(eventIdCol?.pk).toBe(1);
       // Re-insert same event_id must throw (PK uniqueness).
       db.prepare(`INSERT INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`).run(
         'E1',

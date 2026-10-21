@@ -320,7 +320,7 @@ describe('resolveConflict rejection wiring', () => {
       const row = db.prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`).get(rawLoser.id) as
         | { mirror_cleaned_at: string | null }
         | undefined;
-      expect(row?.mirror_cleaned_at).toBeTruthy();
+      expect(row?.mirror_cleaned_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     } finally {
       closeHippoDb(db);
     }

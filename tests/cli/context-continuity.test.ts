@@ -74,9 +74,7 @@ describe('hippo context continuity assembly', () => {
     const out = await runHippo({ format: 'json', budget: '500' });
     const parsed = JSON.parse(out);
 
-    expect(parsed.activeSnapshot).toBeTruthy();
     expect(parsed.activeSnapshot.session_id).toBe('sess-current');
-    expect(parsed.sessionHandoff).toBeTruthy();
     expect(parsed.sessionHandoff.sessionId).toBe('sess-current');
     expect(parsed.sessionHandoff.nextAction).toBe('Open the PR for the current branch');
     expect(parsed.recentSessionEvents).toHaveLength(1);

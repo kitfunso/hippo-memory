@@ -69,7 +69,6 @@ describe('HTTP /v1/predictions/stats', () => {
     });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
-    expect(body.baserate).toBeDefined();
     expect(body.baserate.classTag).toBe('http-test');
     expect(body.baserate.nClosed).toBe(2);
     expect(body.baserate.nRatioEligible).toBe(2);

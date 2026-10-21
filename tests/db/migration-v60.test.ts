@@ -72,7 +72,7 @@ describe('schema v60', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       const sql = indexSql(db);
-      expect(sql).toBeDefined();
+      expect(sql).toContain(DECAY_KEY_INDEX);
       expect(db.prepare('SELECT id FROM memories').all()).toEqual([{ id: 'mem_v56_row' }]);
       v60.up(db, {});
       expect(indexSql(db)).toBe(sql);

@@ -146,7 +146,7 @@ describe('ingestEvent', () => {
     });
 
     expect(result.status).toBe('ingested');
-    expect(result.memoryId).toBeTruthy();
+    expect(result.memoryId).toMatch(/^mem_[0-9a-f]+$/);
 
     // Memory exists with correct shape.
     const entries = loadAllEntries(root, 'default');
@@ -171,7 +171,6 @@ describe('ingestEvent', () => {
         .get(idempotencyKey) as
         | { idempotency_key: string; delivery_id: string; event_name: string; memory_id: string | null }
         | undefined;
-      expect(row).toBeDefined();
       expect(row?.delivery_id).toBe('d-1');
       expect(row?.event_name).toBe('issues');
       expect(row?.memory_id).toBe(result.memoryId);
@@ -232,7 +231,6 @@ describe('ingestEvent', () => {
       const row = db.prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`).get(key) as
         | { memory_id: string | null }
         | undefined;
-      expect(row).toBeDefined();
       expect(row?.memory_id).toBeNull();
     } finally {
       closeHippoDb(db);

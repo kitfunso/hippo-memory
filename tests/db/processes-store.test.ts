@@ -65,12 +65,11 @@ describe('processes store (first-class object)', () => {
     try {
       // SAFETY: proc.memoryId is the id just returned by saveProcess's memory
       // mirror write; the row may not exist only if that write failed, which
-      // the toBeDefined() assertion below checks before any further access.
+      // the content assertion below checks before any further access.
       const memRow = db.prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`).get(proc.memoryId!) as
         | { content: string; tags_json: string; source: string }
         | undefined;
-      expect(memRow).toBeDefined();
-      expect(memRow!.content).toContain('Release');
+      expect(memRow?.content).toContain('Release');
       expect(memRow!.content).toContain('1. run tests');
       expect(memRow!.content).toContain('Description: the npm release ritual');
       expect(memRow!.source).toBe('process');

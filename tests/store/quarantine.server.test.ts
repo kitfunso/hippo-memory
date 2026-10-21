@@ -338,7 +338,7 @@ describe('fresh store schema', () => {
       const db = openHippoDb(home);
       try {
         const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memory_quarantine'`).get();
-        expect(row).toBeTruthy();
+        expect(row).toEqual({ name: 'memory_quarantine' });
       } finally {
         closeHippoDb(db);
       }

@@ -100,8 +100,8 @@ describe('consolidate() merge pass partitions by scope', () => {
 
     const privateSemantic = semantics.find((s) => s.scope === 'slack:private:C1');
     const nullSemantic = semantics.find((s) => s.scope === null);
-    expect(privateSemantic).toBeDefined();
-    expect(nullSemantic).toBeDefined();
+    expect(privateSemantic?.scope).toBe('slack:private:C1');
+    expect(nullSemantic?.scope).toBeNull();
     expect(privateSemantic!.content).toContain('zzzprivatemarkerzzz');
     expect(nullSemantic!.content).not.toContain('zzzprivatemarkerzzz');
   });
@@ -236,8 +236,8 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       expect(l2s).toHaveLength(2);
       const privateL2 = l2s.find((s) => s.scope === 'slack:private:C1');
       const publicL2 = l2s.find((s) => s.scope === null);
-      expect(privateL2).toBeDefined();
-      expect(publicL2).toBeDefined();
+      expect(privateL2?.scope).toBe('slack:private:C1');
+      expect(publicL2?.scope).toBeNull();
 
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
       const privParents = db
@@ -299,8 +299,8 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       expect(l3s).toHaveLength(2);
       const privateL3 = l3s.find((s) => s.scope === 'slack:private:C1');
       const publicL3 = l3s.find((s) => s.scope === null);
-      expect(privateL3).toBeDefined();
-      expect(publicL3).toBeDefined();
+      expect(privateL3?.scope).toBe('slack:private:C1');
+      expect(publicL3?.scope).toBeNull();
 
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
       const privParents = db

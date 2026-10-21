@@ -95,8 +95,6 @@ describe('RecallResult.suppressionSummary', () => {
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`kappa ${i}`));
     const result = await retrieve(ctxFor(root), { query: 'kappa', window: { limit: 10 } });
     expect(result.suppressionSummary!.droppedByBudget).toBe(0);
-    // suppressionSummary still defined even when no overflow.
-    expect(result.suppressionSummary).toBeDefined();
   });
 
   it('retrieve returns the same ids in the same order and the same summary on a repeat call', async () => {

@@ -82,7 +82,7 @@ describe('confirmedOutcomeTimes', () => {
       sqliteSyncStore(root).localFiles.learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
     );
     const sql = statements.find((s) => s.includes('FROM audit_log') && s.includes('GROUP BY target_id'));
-    expect(sql).toBeDefined();
+    expect(sql).toContain('GROUP BY target_id');
 
     const db = openHippoDb(root);
     try {

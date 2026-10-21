@@ -41,8 +41,6 @@ describe('Extracted fact protection', () => {
     const remaining = loadAllEntries(tmpDir, 'default');
     const f1 = remaining.find((e) => e.id === fact1.id);
     const f2 = remaining.find((e) => e.id === fact2.id);
-    expect(f1).toBeDefined();
-    expect(f2).toBeDefined();
     expect(f1!.content).toBe(fact1.content);
     expect(f2!.content).toBe(fact2.content);
   });

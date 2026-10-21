@@ -116,7 +116,7 @@ describe('archiveRawMemory', () => {
 
       expect(() => archiveRawMemory(db, 'rfail', { reason: 'GDPR delete', who: 'user:7' })).toThrow(/memories_fts/);
 
-      expect(db.prepare(`SELECT id FROM memories WHERE id = 'rfail'`).get()).toBeDefined();
+      expect(db.prepare(`SELECT id FROM memories WHERE id = 'rfail'`).get()).toEqual({ id: 'rfail' });
       expect(db.prepare(`SELECT memory_id FROM raw_archive WHERE memory_id = 'rfail'`).get()).toBeUndefined();
       expect(
         db.prepare(`SELECT 1 AS x FROM audit_log WHERE op = 'archive_raw' AND target_id = 'rfail'`).get(),

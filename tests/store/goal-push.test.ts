@@ -46,7 +46,7 @@ describe('pushGoal + activeGoalsOf', () => {
       goalName: 'with policy',
       policy: { policyType: 'error-prioritized', errorPriority: 2.0 },
     });
-    expect(g.retrievalPolicyId).toBeDefined();
+    expect(g.retrievalPolicyId).toMatch(/^rp_[0-9a-f]{16}$/);
     expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })[0].retrievalPolicyId).toBe(
       g.retrievalPolicyId,
     );

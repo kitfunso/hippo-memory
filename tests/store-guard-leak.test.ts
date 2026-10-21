@@ -34,7 +34,7 @@ describe('real-store guard', () => {
 describe('vitest.config.ts isolation', () => {
   it('gives workers the global store the guard watches', () => {
     vi.unstubAllEnvs();
-    expect(process.env.HIPPO_HOME).toBeTruthy();
+    expect(process.env.HIPPO_HOME).toMatch(/\S/);
     expect(process.env.HIPPO_HOME).toBe(process.env.HIPPO_TEST_TMP_HOME);
   });
 });
