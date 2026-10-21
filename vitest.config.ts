@@ -62,7 +62,7 @@ const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const UNIT_MS = 5_000;
 const SETUP = ['tests/_install-freshness.ts', 'tests/_real-store-guard.ts', 'tests/_store-template.ts'];
 // Only tests that run dist (child processes, the server, workers) need a build, so the unit project starts without one.
-const WITH_BUILD = ['tests/_build-freshness.ts', ...SETUP];
+const BUILD = ['tests/_build-freshness.ts'];
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
 
 export default defineConfig({
@@ -77,7 +77,6 @@ export default defineConfig({
           name: 'unit',
           include: TEST_GLOBS,
           exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS],
-          globalSetup: SETUP,
           testTimeout: UNIT_MS,
           hookTimeout: Math.max(UNIT_MS, 10_000),
         },
@@ -88,7 +87,7 @@ export default defineConfig({
           name: 'process',
           include: PROCESS_GLOBS,
           exclude: SKIPPED,
-          globalSetup: WITH_BUILD,
+          globalSetup: BUILD,
           testTimeout: 30_000,
           hookTimeout: 30_000,
         },
@@ -99,12 +98,14 @@ export default defineConfig({
           name: 'server',
           include: SERVER_GLOBS,
           exclude: SKIPPED,
-          globalSetup: WITH_BUILD,
+          globalSetup: BUILD,
           testTimeout: 30_000,
           hookTimeout: 30_000,
         },
       },
     ],
+    // One run of the guard and the template, however many projects a run selects; only the build check is per project.
+    globalSetup: SETUP,
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);
     // the process.env writes at module scope above cover the main process. Both are required.
