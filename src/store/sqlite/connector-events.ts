@@ -93,9 +93,9 @@ function sqliteConnectorState(on: OnHandle): Omit<Sync<ConnectorEvents>, Deliver
   return {
     deadLetters: (connector, tenantId, limit): DeadLetterRows[DeadLetterConnector][] =>
       on((db) => queueOf(connector).list(db, tenantId, limit)),
-    deadLetter: (connector, id): DeadLetterRows[DeadLetterConnector] | null =>
-      on((db) => queueOf(connector).get(db, id)),
-    markDeadLetterRetried: (connector, id) => on((db) => queueOf(connector).markRetried(db, id)),
+    deadLetter: (connector, tenantId, id): DeadLetterRows[DeadLetterConnector] | null =>
+      on((db) => queueOf(connector).get(db, tenantId, id)),
+    markDeadLetterRetried: (connector, tenantId, id) => on((db) => queueOf(connector).markRetried(db, tenantId, id)),
     ...bound(on, connectorCursorsAt),
   };
 }

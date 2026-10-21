@@ -783,7 +783,7 @@ The command runs with no shell, so each argument reaches the program as written.
 | `hippo wm read --scope <s>` | Read working memory entries |
 | `hippo wm clear --scope <s>` | Clear working memory |
 | `hippo wm flush --scope <s>` | Flush working memory (session end) |
-| `hippo dashboard` | Open web dashboard at localhost:3333 (memory health by project, and the card board); open the URL in the `dashboard.url` file the start line names, which carries a per-start access token |
+| `hippo dashboard` | Open web dashboard at localhost:3333 (memory health by project, and the card board); open the URL in the `dashboard.url` file the start line names (on Windows it sits in the global hippo folder under your profile), which carries a per-start access token |
 | `hippo dashboard --port <n>` | Use custom port |
 | `hippo mcp` | Start MCP server (stdio transport) |
 | `hippo serve` | Start the HTTP API server for this store on `127.0.0.1:6789` (`--port <n>` or `HIPPO_PORT`; `--host <host>`, which off loopback needs `HIPPO_REQUIRE_AUTH=1`). Every request needs an API key (`hippo auth create`, then `Authorization: Bearer <key>`; the hippo CLI reads `HIPPO_API_KEY`). `HIPPO_ALLOW_KEYLESS_LOCAL=1` lets requests from this machine in without one, as a member (sleep and the quarantine routes need an admin key); `HIPPO_REQUIRE_AUTH=1` wins over it. Each caller gets 20 requests a second, burst 40 (`HIPPO_CALLER_RPS`; `0` turns it off). See [Security defaults](docs/UPGRADING-2.0.md#security-defaults) |

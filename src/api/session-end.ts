@@ -255,9 +255,10 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
   ctx: Context,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
-  const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId).catch((err) => [
-    `re-read count failed: ${errorMessage(err)}`,
-  ]);
+  const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId).catch((err) => {
+    log.warn(`session-end: re-read count failed: ${errorMessage(err)}`, errorFields(err));
+    return [`re-read count failed: ${errorMessage(err)}`];
+  });
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process. A
   // flushed log drops its exit listener, so a long-lived host does not gain one per session; it stays only while lines
   // wait.

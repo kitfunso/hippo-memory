@@ -366,9 +366,9 @@ describe('the per-address scrypt bucket', () => {
     const office = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
     expect(await office(dev)).toEqual(OK);
     const before = scryptRuns();
-    // Junk shape, a resolver refusal, an unknown id, a revoked key and an expired key: 63 in all, past the burst.
-    const junk = ['hk_junk', 'not-a-key-$HIPPO_KEY', `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`, revoked, expired];
-    for (let i = 0; i < 63; i++) expect(await office(junk[i % junk.length]!)).toEqual(UNAUTHORISED);
+    // Junk shape, an unknown id, a revoked key and an expired key: 60 in all, past the burst. A resolver refusal is charged.
+    const junk = ['hk_junk', `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`, revoked, expired];
+    for (let i = 0; i < 60; i++) expect(await office(junk[i % junk.length]!)).toEqual(UNAUTHORISED);
     expect(scryptRunsSince(before)).toBe(0);
     // Real-shaped wrong secrets run scrypt, so they spend all 39 tokens the developer's first check left, then meet 429.
     const flood = await replies(wrongSecretsAcross(targets, office), 40);

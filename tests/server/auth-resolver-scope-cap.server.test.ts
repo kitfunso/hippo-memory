@@ -36,3 +36,43 @@ it('refuses 1025 scopes', async () => {
 it('refuses a scope one character past the id cap', async () => {
   expect(await statusWithScopes([scope(0), scope(1, MAX_ID_LEN + 1)])).toBe(401);
 });
+
+const GUESSES = 6;
+
+async function statusesOfWrongTokens(count: number): Promise<number[]> {
+  handle = await serve({
+    hippoRoot: makeRoot('resolver-failed-auth'),
+    host: '127.0.0.1',
+    port: 0,
+    rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.001, burst: GUESSES - 1 } },
+    authResolver: () => null,
+  });
+  const statuses: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: `Bearer wrong.${i}` } });
+    await res.body?.cancel();
+    statuses.push(res.status);
+  }
+  return statuses;
+}
+
+it('answers 429 to wrong resolver tokens once the address spent its failed-auth budget, as it does for wrong keys', async () => {
+  expect(await statusesOfWrongTokens(GUESSES)).toEqual([401, 401, 401, 401, 401, 429]);
+});
+
+it('aborts the signal it hands the resolver when the deadline passes, and answers 503', async () => {
+  let signal: AbortSignal | undefined;
+  handle = await serve({
+    hippoRoot: makeRoot('resolver-abort'),
+    host: '127.0.0.1',
+    port: 0,
+    authResolverTimeoutMs: 50,
+    authResolver: (_token, s) => {
+      signal = s;
+      return new Promise(() => undefined);
+    },
+  });
+  const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: 'Bearer ext.token' } });
+  await res.body?.cancel();
+  expect([res.status, signal?.aborted]).toEqual([503, true]);
+});

@@ -70,6 +70,7 @@ export async function replayDlqEntry(
       },
     },
     ctx.store,
+    ctx.tenantId,
     id,
     opts.force === true,
   );

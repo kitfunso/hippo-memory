@@ -62,22 +62,29 @@ function listDlqRows(
   ).all(tenantId, limit) as DlqRawRow[];
 }
 
-function getDlqRow(db: DatabaseSyncLike, table: DlqTable, selectColumns: string, id: number): DlqRawRow | null {
+function getDlqRow(
+  db: DatabaseSyncLike,
+  table: DlqTable,
+  selectColumns: string,
+  tenantId: string,
+  id: number,
+): DlqRawRow | null {
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
   // SAFETY: the caller's selectColumns names exactly the fields its rowToItem reads.
-  const row = cachedStatement(db, `SELECT ${selectColumns} FROM ${table} WHERE id = ?`).get(id) as
-    | DlqRawRow
-    | undefined;
+  const row = cachedStatement(db, `SELECT ${selectColumns} FROM ${table} WHERE tenant_id = ? AND id = ?`).get(
+    tenantId,
+    id,
+  ) as DlqRawRow | undefined;
   return row ?? null;
 }
 
-function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, id: number): void {
+function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, tenantId: string, id: number): void {
   assertTable(table);
-  cachedStatement(db, `UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`).run(
-    new Date().toISOString(),
-    id,
-  );
+  cachedStatement(
+    db,
+    `UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE tenant_id = ? AND id = ?`,
+  ).run(new Date().toISOString(), tenantId, id);
 }
 
 type DlqKind = 'int' | 'text' | 'nullableText' | 'count' | 'bucket';
@@ -108,8 +115,8 @@ function coerceDlqValue(kind: DlqKind, raw: DlqRawValue | undefined): string | n
 export interface DlqAccess<Item, Insert> {
   insert(db: DatabaseSyncLike, row: Insert): number;
   list(db: DatabaseSyncLike, tenantId: string, limit: number): Item[];
-  get(db: DatabaseSyncLike, id: number): Item | null;
-  markRetried(db: DatabaseSyncLike, id: number): void;
+  get(db: DatabaseSyncLike, tenantId: string, id: number): Item | null;
+  markRetried(db: DatabaseSyncLike, tenantId: string, id: number): void;
 }
 
 /** The four statements and the row mapping of one dead-letter table, driven by its column map. */
@@ -130,10 +137,10 @@ export function dlqAccess<Item, Insert extends object>(
       return insertDlqRow(db, table, pairs);
     },
     list: (db, tenantId, limit) => listDlqRows(db, table, selectColumns, tenantId, limit).map(toItem),
-    get: (db, id) => {
-      const row = getDlqRow(db, table, selectColumns, id);
+    get: (db, tenantId, id) => {
+      const row = getDlqRow(db, table, selectColumns, tenantId, id);
       return row ? toItem(row) : null;
     },
-    markRetried: (db, id) => markDlqRetried(db, table, id),
+    markRetried: (db, tenantId, id) => markDlqRetried(db, table, tenantId, id),
   };
 }
