@@ -155,7 +155,7 @@ describe('writeRecallTrace', () => {
     }
   });
 
-  it('F3 privacy fix: strips note (and any other free-form field) from rerank_json, keeping only stage/multiplier/scoreBefore/scoreAfter', () => {
+  it('privacy fix: strips note (and any other free-form field) from rerank_json, keeping only stage/multiplier/scoreBefore/scoreAfter', () => {
     const { home, restore } = tmpHome();
     try {
       const db = openHippoDb(home);
@@ -292,7 +292,7 @@ describe('recordTraceOutcome', () => {
     }
   });
 
-  it('F4 validation: skips (no row, console.error) when the trace belongs to a DIFFERENT tenant', () => {
+  it('validation: skips (no row, console.error) when the trace belongs to a DIFFERENT tenant', () => {
     const { home, restore } = tmpHome();
     try {
       const db = openHippoDb(home);
@@ -321,7 +321,7 @@ describe('recordTraceOutcome', () => {
     }
   });
 
-  it('F4 validation: skips (no row) when the named trace does not exist', () => {
+  it('validation: skips (no row) when the named trace does not exist', () => {
     const { home, restore } = tmpHome();
     try {
       const db = openHippoDb(home);
@@ -344,7 +344,7 @@ describe('recordTraceOutcome', () => {
     }
   });
 
-  it('F4 validation: records ONLY the intersection when some memoryIds are not members of the trace', () => {
+  it('validation: records ONLY the intersection when some memoryIds are not members of the trace', () => {
     const { home, restore } = tmpHome();
     try {
       const db = openHippoDb(home);
@@ -379,7 +379,7 @@ describe('recordTraceOutcome', () => {
     }
   });
 
-  it('F4 validation: skips entirely (no row) when NONE of memoryIds intersect the trace', () => {
+  it('validation: skips entirely (no row) when NONE of memoryIds intersect the trace', () => {
     const { home, restore } = tmpHome();
     try {
       const db = openHippoDb(home);

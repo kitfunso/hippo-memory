@@ -30,7 +30,7 @@ describe('server-detect', () => {
     }
   });
 
-  it('returns null and unlinks a pidfile whose process is dead (H1 case d)', async () => {
+  it('returns null and unlinks a pidfile whose process is dead', async () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
@@ -95,7 +95,7 @@ describe('server-detect', () => {
     }
   });
 
-  it('returns the info when a live server /health started_at matches (H1 case a)', async () => {
+  it('returns the info when a live server /health started_at matches', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
     try {
@@ -123,7 +123,7 @@ describe('server-detect', () => {
     }
   });
 
-  it('returns null and unlinks when /health started_at does not match (H1 case b)', async () => {
+  it('returns null and unlinks when /health started_at does not match', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
     const pidfile = join(home, 'server.pid');
@@ -143,7 +143,7 @@ describe('server-detect', () => {
     }
   });
 
-  it('returns null and unlinks when /health is unreachable (H1 case c)', async () => {
+  it('returns null and unlinks when /health is unreachable', async () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
@@ -299,7 +299,7 @@ describe('server-detect', () => {
     }
   });
 
-  it('writePidfile stamps schema 1 and the caller-supplied started_at (L3)', () => {
+  it('writePidfile stamps schema 1 and the caller-supplied started_at', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
@@ -316,7 +316,7 @@ describe('server-detect', () => {
     }
   });
 
-  it('detectServer still accepts a legacy pidfile with no schema field (L3)', async () => {
+  it('detectServer still accepts a legacy pidfile with no schema field', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
     const pidfile = join(home, 'server.pid');

@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';
-import { DEFAULT_HALF_LIFE_DAYS, createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { type MemoryEntry } from '../../src/base/memory/memory.js';
 import {
   loadEntriesMentioningAt,
   loadEntryIdsPageAt,
@@ -19,7 +19,7 @@ import { rowsInPages } from '../../src/base/util/pages.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { countMatching, peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { seedRows } from '../_helpers/seed-rows.js';
 import type { EntryCursor } from '../../src/store/port/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -28,13 +28,12 @@ oneRequestPerTest();
 const ID_PAGE_READ = 'SELECT id, created FROM memories';
 
 function seeded(root: string, n: number, extra: (i: number) => Partial<MemoryEntry> = () => ({})): MemoryEntry[] {
-  const rows = Array.from({ length: n }, (_, i) => ({
-    ...createMemory(`row ${i} about the quuxlib client`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
-    ...extra(i),
-  }));
-  for (const row of rows) writeEntry(root, row);
-  return rows;
+  return seedRows(
+    root,
+    n,
+    (i) => `row ${i} about the quuxlib client`,
+    (i) => ({ created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(), ...extra(i) }),
+  );
 }
 
 describe('rows that may mention a target', () => {

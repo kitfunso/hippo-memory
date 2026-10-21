@@ -73,7 +73,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     hippoRoot = makeRoot('dag-e4');
   });
 
-  it('test #1: default deboost (0.85) applies to L2 summary, NOT to L1 fact', async () => {
+  it('default deboost (0.85) applies to L2 summary, NOT to L1 fact', async () => {
     const summary = makeL2Summary('shared rare-token-xyz cluster summary');
     const fact = makeL1Fact('shared rare-token-xyz fact alpha');
     writeEntry(hippoRoot, summary);
@@ -87,14 +87,14 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(fResult?.breakdown?.summaryDeboost).toBeUndefined();
   });
 
-  it('test #2: per-call summaryDeboost=1.0 disables', async () => {
+  it('per-call summaryDeboost=1.0 disables', async () => {
     const summary = makeL2Summary('disable-deboost test summary');
     writeEntry(hippoRoot, summary);
     const results = await hybridSearch('disable-deboost', [summary], { explain: true, summaryDeboost: 1.0 });
     expect(results[0]?.breakdown?.summaryDeboost).toBe(1.0);
   });
 
-  it('test #3: env HIPPO_SUMMARY_DEBOOST respected', async () => {
+  it('env HIPPO_SUMMARY_DEBOOST respected', async () => {
     vi.stubEnv('HIPPO_SUMMARY_DEBOOST', '0.5');
     const summary = makeL2Summary('env-deboost test summary');
     writeEntry(hippoRoot, summary);
@@ -102,7 +102,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.5);
   });
 
-  it('test #4: env out-of-range falls back to 0.85', async () => {
+  it('env out-of-range falls back to 0.85', async () => {
     const summary = makeL2Summary('out-of-range test summary');
     writeEntry(hippoRoot, summary);
 
@@ -113,7 +113,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     }
   });
 
-  it('test #5: per-call option overrides env', async () => {
+  it('per-call option overrides env', async () => {
     vi.stubEnv('HIPPO_SUMMARY_DEBOOST', '0.5');
     const summary = makeL2Summary('override-env summary');
     writeEntry(hippoRoot, summary);
@@ -121,7 +121,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.7);
   });
 
-  it('test #6: freshness boost (1.05) when last_rebuilt_at within 7 days', async () => {
+  it('freshness boost (1.05) when last_rebuilt_at within 7 days', async () => {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const summary = makeL2Summary('fresh summary content', { lastRebuiltAt: oneDayAgo });
     writeEntry(hippoRoot, summary);
@@ -129,14 +129,14 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(results[0]?.breakdown?.summaryFreshnessBoost).toBeCloseTo(1.05);
   });
 
-  it('test #7: no freshness when last_rebuilt_at null', async () => {
+  it('no freshness when last_rebuilt_at null', async () => {
     const summary = makeL2Summary('never-rebuilt summary', { lastRebuiltAt: null });
     writeEntry(hippoRoot, summary);
     const results = await hybridSearch('never-rebuilt', [summary], { explain: true });
     expect(results[0]?.breakdown?.summaryFreshnessBoost).toBe(1.0);
   });
 
-  it('test #8: no freshness when last_rebuilt_at > 7 days old', async () => {
+  it('no freshness when last_rebuilt_at > 7 days old', async () => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const summary = makeL2Summary('stale summary content', { lastRebuiltAt: thirtyDaysAgo });
     writeEntry(hippoRoot, summary);
@@ -144,14 +144,14 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(results[0]?.breakdown?.summaryFreshnessBoost).toBe(1.0);
   });
 
-  it('test #9: no freshness when last_rebuilt_at is garbage string', async () => {
+  it('no freshness when last_rebuilt_at is garbage string', async () => {
     const summary = makeL2Summary('garbage timestamp summary', { lastRebuiltAt: 'not-a-date' });
     writeEntry(hippoRoot, summary);
     const results = await hybridSearch('garbage timestamp', [summary], { explain: true });
     expect(results[0]?.breakdown?.summaryFreshnessBoost).toBe(1.0);
   });
 
-  it('test #10: deboost + freshness compose for fresh summary (0.85 * 1.05)', async () => {
+  it('deboost + freshness compose for fresh summary (0.85 * 1.05)', async () => {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const summary = makeL2Summary('compose-test summary content', { lastRebuiltAt: oneDayAgo });
     writeEntry(hippoRoot, summary);
@@ -162,7 +162,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     // final = composite (pre-deboost) * 0.85 * 1.05 = composite * 0.8925
   });
 
-  it('test #11: physicsSearch physics-particle path applies deboost', async () => {
+  it('physicsSearch physics-particle path applies deboost', async () => {
     const summary = makeL2Summary('physics-particle deboost summary');
     writeEntry(hippoRoot, summary);
 
@@ -195,7 +195,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(br?.dagLevel).toBe(2);
   });
 
-  it('test #12: explain mode populates 6 breakdown fields for L2', async () => {
+  it('explain mode populates 6 breakdown fields for L2', async () => {
     const summary = makeL2Summary('explain-test summary', {
       lastRebuiltAt: new Date().toISOString(),
       rebuildCount: 3,
@@ -212,7 +212,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(br?.summaryFreshnessBoost).toBeCloseTo(1.05);
   });
 
-  it('test #13: MMR-on with deboost-on — observed rank-shift documented', async () => {
+  it('MMR-on with deboost-on: observed rank-shift documented', async () => {
     // Setup: 1 L2 summary + 3 distinct L1 facts, all matching query.
     // Without deboost, summary tends to rank highest (dense, all query terms present).
     // With deboost, summary score is multiplied by 0.85 → MMR's pre-rank input is post-deboost.
@@ -238,7 +238,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(sIdxWith).toBeGreaterThanOrEqual(sIdxWithout);
   });
 
-  it('test #14: reranker receives post-deboost ordering; final order is rerankers prerogative', async () => {
+  it('reranker receives post-deboost ordering; final order is rerankers prerogative', async () => {
     // Mock reranker that RECORDS what it received. Asserts reranker input is
     // post-deboost (the L2 summary in the input has score = pre-deboost * 0.85).
     // We do NOT assert reranker final order; reranker is free to reorder.
@@ -283,7 +283,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(rerankerSawSummary!.score).toBeCloseTo(summaryBaseScore * 0.85, 5);
   });
 
-  it('test #16: shared.searchBothHybrid pass-through composition invariant', async () => {
+  it('shared.searchBothHybrid pass-through composition invariant', async () => {
     // L2 summary in localRoot, last_rebuilt_at=null (avoids freshness factor)
     const summary = makeL2Summary('shared-test summary compose check', { lastRebuiltAt: null });
     writeEntry(hippoRoot, summary);
@@ -311,7 +311,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     }
   });
 
-  it('test #17: physicsSearch hybridSearch-fallback inherits deboost via options spread', async () => {
+  it('physicsSearch hybridSearch-fallback inherits deboost via options spread', async () => {
     // No physics state seeded for L2 summary → physicsSearch falls back to
     // hybridSearch via L685/689/693/707 once it detects no particle for the entry.
     // Actually physicsSearch's fallbacks at L780-789 fire when embedding is

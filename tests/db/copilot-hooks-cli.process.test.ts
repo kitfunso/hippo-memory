@@ -47,7 +47,7 @@ describe('hippo context --format copilot', () => {
   });
 
   // Payloads from docs.github.com/en/copilot/reference/hooks-reference; reply formats from the same page and VS Code's toolCallingLoop.ts.
-  it('answers a camelCase sessionStart with top-level additionalContext from the payload cwd store (critic test 1)', async () => {
+  it('answers a camelCase sessionStart with top-level additionalContext from the payload cwd store', async () => {
     const r = runHippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('sessionStart', s.proj));
     expect(r.status, r.stderr).toBe(0);
     const reply = JSON.parse(r.stdout);
@@ -56,7 +56,7 @@ describe('hippo context --format copilot', () => {
     expect(reply.additionalContext).toContain(GLOBAL_PIN);
   });
 
-  it('answers a snake_case SessionStart from the home folder with the nested reply and the same store (critic test 2)', async () => {
+  it('answers a snake_case SessionStart from the home folder with the nested reply and the same store', async () => {
     const r = await hippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('SessionStart', s.proj));
     expect(r.status, r.stderr).toBe(0);
     const reply = JSON.parse(r.stdout);
@@ -85,7 +85,7 @@ describe('hippo context --format copilot', () => {
     expect(JSON.parse(again.stdout).additionalContext).toBe(JSON.parse(first.stdout).additionalContext);
   });
 
-  it('books the delivery event and the token ledger under the session id with runtime copilot (critic test 3)', async () => {
+  it('books the delivery event and the token ledger under the session id with runtime copilot', async () => {
     enableLedger(s.hippoRoot);
     expect((await hippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('sessionStart', s.proj))).status).toBe(0);
     expect((await hippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('SessionStart', s.proj))).status).toBe(0);
@@ -107,7 +107,7 @@ describe('hippo context --format copilot', () => {
   });
 });
 
-describe('hippo capture-error --runtime copilot (critic test 5)', () => {
+describe('hippo capture-error --runtime copilot', () => {
   // postToolUseFailure payloads from the GH hooks reference; the error strings are synthetic, as neither harness documents them.
   it('stores no memory for a quiet grep or bash failure, and logs both in the payload cwd store', async () => {
     for (const name of ['postToolUseFailureGrep', 'postToolUseFailureBash'] as const) {
@@ -137,7 +137,7 @@ describe('hippo capture-error --runtime copilot (critic test 5)', () => {
   });
 });
 
-describe('hippo session-end --runtime copilot (critic test 6)', () => {
+describe('hippo session-end --runtime copilot', () => {
   // sessionEnd payload from the GH hooks reference: it names no transcript, so the CLI log is found by session id.
   it('with no transcript for the session still sleeps, skips capture and exits 0', async () => {
     const logFile = path.join(s.dir, 'session-end.log');
@@ -179,7 +179,7 @@ describe('hippo session-end --runtime copilot (critic test 6)', () => {
   });
 });
 
-describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
+describe('hippo pre-compact --runtime copilot', () => {
   // preCompact payload from the GH hooks reference, its transcriptPath pointing at the events.jsonl fixture.
   it('saves a working-state snapshot, opens no compaction record and prints nothing', async () => {
     const transcript = writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());

@@ -287,7 +287,7 @@ describe('rejection reasons', () => {
 });
 
 describe('the event type of a recorder', () => {
-  it('R1 takes eventType over a UserPromptSubmit payload', () => {
+  it('takes eventType over a UserPromptSubmit payload', () => {
     const rec = createDeliveryRecorder({
       ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
@@ -299,7 +299,7 @@ describe('the event type of a recorder', () => {
     expect(eventOf(rec).eventType).toBe('pre-compact');
   });
 
-  it('R2 without eventType keeps the payload inference', () => {
+  it('without eventType keeps the payload inference', () => {
     expect(eventOf(recorder()).eventType).toBe('prompt-submit');
     const manual = createDeliveryRecorder({
       ledger: sqliteStore(local).ledger,
@@ -324,14 +324,14 @@ describe('prompt facts on a boundary or context row', () => {
     });
 
   for (const type of ['pre-compact', 'compact-resume', 'session-end', 'context'] as const) {
-    it(`R3 a ${type} row keeps no prompt hash or length although the payload carries a prompt`, () => {
+    it(`a ${type} row keeps no prompt hash or length although the payload carries a prompt`, () => {
       const event = eventOf(withPrompt(type));
       expect([event.eventType, event.promptHash, event.promptLength]).toEqual([type, null, 0]);
       expect(event.surface).toBe(type === 'context' ? 'context' : 'hook');
     });
   }
 
-  it('R5 a context row keeps the hash of the query it was told and the trace id, which no other call reports', () => {
+  it('a context row keeps the hash of the query it was told and the trace id, which no other call reports', () => {
     const rec = withPrompt('context');
     rec.queried('postgres rollback');
     rec.traced(42);
@@ -340,7 +340,7 @@ describe('prompt facts on a boundary or context row', () => {
     expect([eventOf(withPrompt()).queryHash, eventOf(withPrompt()).recallTraceId]).toEqual([null, null]);
   });
 
-  it('R4 a prompt-submit row still carries the prompt hash and length', () => {
+  it('a prompt-submit row still carries the prompt hash and length', () => {
     const event = eventOf(withPrompt());
     expect(event.eventType).toBe('prompt-submit');
     expect(event.promptHash).not.toBeNull();

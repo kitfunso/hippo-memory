@@ -161,7 +161,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     expect(auditRows).toEqual([]);
   });
 
-  it('markSummaryDirtyInTx no-ops on unknown id (R1 MED-3 test gap)', () => {
+  it('markSummaryDirtyInTx no-ops on unknown id', () => {
     markDirty(hippoRoot, 'sem_does_not_exist', 'default', 'actor');
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
@@ -199,7 +199,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     expect(auditRows).toEqual([]);
   });
 
-  it('audit-query round-trip: markSummaryDirtyInTx + queryAuditEvents(op=summary_marked_dirty) returns the row (R2 institutional VALID_AUDIT_OPS lockstep test)', () => {
+  it('audit-query round-trip: markSummaryDirtyInTx + queryAuditEvents(op=summary_marked_dirty) returns the row', () => {
     // Locks the v1.11.5 hardening pass institutional rule: a new AuditOp
     // is useless without VALID_AUDIT_OPS Set extensions in BOTH cli.ts +
     // server.ts. This test exercises the queryAuditEvents path that both

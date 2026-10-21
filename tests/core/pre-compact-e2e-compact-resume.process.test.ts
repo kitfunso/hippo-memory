@@ -59,7 +59,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout).toContain('decided to use PostgreSQL for the backend');
   });
 
-  it('X5: payload session_id present and different from the snapshot session_id -> silent exit 0 (no cross-session restore)', async () => {
+  it('payload session_id present and different from the snapshot session_id -> silent exit 0 (no cross-session restore)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'session-a task',
       summary: 's',
@@ -75,7 +75,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('X5: payload session_id matches the snapshot session_id -> prints', async () => {
+  it('payload session_id matches the snapshot session_id -> prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'session-match task',
       summary: 's',
@@ -91,7 +91,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout).toContain('session-match task');
   });
 
-  it('X5: snapshot has no session_id (manual `snapshot save`) -> payload session_id present still prints', async () => {
+  it('snapshot has no session_id (manual `snapshot save`) -> payload session_id present still prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'no-session-id task',
       summary: 's',
@@ -106,7 +106,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout).toContain('no-session-id task');
   });
 
-  it('DF-Z0: snapshot updated 16 min ago -> silent, even with a matching session id', async () => {
+  it('snapshot updated 16 min ago -> silent, even with a matching session id', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale snapshot task',
@@ -124,7 +124,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('DF-Z0: snapshot updated 14 min ago -> prints', async () => {
+  it('snapshot updated 14 min ago -> prints', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'fresh-enough snapshot task',
@@ -142,7 +142,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout).toContain('fresh-enough snapshot task');
   });
 
-  it('X8: session event content is capped at 400 chars in compact-resume output', async () => {
+  it('session event content is capped at 400 chars in compact-resume output', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 't',
@@ -182,7 +182,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('X13: malformed non-empty stdin -> exit 0, silent (fail closed)', async () => {
+  it('malformed non-empty stdin -> exit 0, silent (fail closed)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'manual-use task',
       summary: 's',
@@ -196,7 +196,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('X13: true manual invocation (no stdin at all) still prints', async () => {
+  it('true manual invocation (no stdin at all) still prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'manual-use task',
       summary: 's',

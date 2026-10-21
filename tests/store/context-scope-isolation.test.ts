@@ -167,7 +167,7 @@ describe('contextGet origin partition (project A session)', () => {
     expect(contents(result.entries)).toContain(DUP);
   });
 
-  it('private-scope rows never ambient-inject even from the local store (S2 parity)', async () => {
+  it('private-scope rows never ambient-inject even from the local store', async () => {
     const secret = 'PRIVATE-SCOPED deploykey row that must not inject';
     writeEntry(projA, {
       ...createMemory(secret, {

@@ -70,7 +70,7 @@ beforeEach(() => {
   root = makeRoot('w1-handoff', { init: false });
 });
 
-describe('test 1: fresh store, single open', () => {
+describe('fresh store, single open', () => {
   it('gets the five columns, the index, and schema_version 42 from one openHippoDb call', () => {
     const db = openHippoDb(root);
     try {
@@ -88,7 +88,7 @@ describe('test 1: fresh store, single open', () => {
   });
 });
 
-describe('test 2: v41 store upgrades to v42', () => {
+describe('v41 store upgrades to v42', () => {
   it('gains the five columns on next open, reads existing rows at empty defaults', () => {
     initTestStore(root);
     const db1 = openHippoDb(root);
@@ -147,7 +147,7 @@ describe('test 2: v41 store upgrades to v42', () => {
   });
 });
 
-describe('test 3: round trip of new fields', () => {
+describe('round trip of new fields', () => {
   it('saveSessionHandoff / loadHandoffById round-trips constraints, evidence, outcome, targetRuntime, cardId', () => {
     initTestStore(root);
     const saved = saveSessionHandoff(root, 'default', {
@@ -242,7 +242,7 @@ describe('test 3: round trip of new fields', () => {
   });
 });
 
-describe('test 4: loadLatestHandoff opts', () => {
+describe('loadLatestHandoff opts', () => {
   it('unfinishedOnly skips success rows; maxAgeMs excludes stale rows; no-opts call is unchanged', () => {
     initTestStore(root);
     saveSessionHandoff(root, 'default', {
@@ -300,7 +300,7 @@ describe('test 4: loadLatestHandoff opts', () => {
   });
 });
 
-describe('test 5: stampHandoffOutcome', () => {
+describe('stampHandoffOutcome', () => {
   it('stamps only the newest null-outcome row for the session; returns 0 when none qualify', () => {
     initTestStore(root);
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-stamp', summary: 'older', artifacts: [] });
@@ -319,7 +319,7 @@ describe('test 5: stampHandoffOutcome', () => {
   });
 });
 
-describe('test 6: writeSessionEndHandoff', () => {
+describe('writeSessionEndHandoff', () => {
   it('6a: writes from an active snapshot owned by the session', () => {
     initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {

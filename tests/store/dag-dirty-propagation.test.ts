@@ -36,7 +36,7 @@ describe('child-write dirty-flag propagation', () => {
     hippoRoot = makeRoot('dag-e2');
   });
 
-  it('test #1: invalidateMatching → writeEntry on fact with dag_parent_id → parent marked dirty', async () => {
+  it('invalidateMatching → writeEntry on fact with dag_parent_id → parent marked dirty', async () => {
     // Setup: summary + child fact whose content matches an invalidation target.
     const summary = createMemory('python deployment runbook', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -67,7 +67,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });
 
-  it('test #2: supersede with dag_parent_id → OLD parent marked dirty + NEW parent marked dirty (same parent, idempotent)', async () => {
+  it('supersede with dag_parent_id → OLD parent marked dirty + NEW parent marked dirty (same parent, idempotent)', async () => {
     const summary = createMemory('test summary 2', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -109,7 +109,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(afterCount - beforeCount).toBe(1); // exactly 1 new transition 0→1 from supersede
   });
 
-  it('test #3: deleteEntry on fact with dag_parent_id → parent marked dirty', () => {
+  it('deleteEntry on fact with dag_parent_id → parent marked dirty', () => {
     const summary = createMemory('test summary 3', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -133,7 +133,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });
 
-  it('test #4: archiveRawMemory on raw row with dag_parent_id → parent marked dirty', () => {
+  it('archiveRawMemory on raw row with dag_parent_id → parent marked dirty', () => {
     const summary = createMemory('test summary 4', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -158,7 +158,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });
 
-  it('test #5: writeEntry on fact WITHOUT dag_parent_id → no parent dirty-mark (early-exit verified)', () => {
+  it('writeEntry on fact WITHOUT dag_parent_id → no parent dirty-mark (early-exit verified)', () => {
     const orphan = createMemory('no parent fact', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
@@ -168,7 +168,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
   });
 
-  it('test #6: cross-tenant safety — child tenant mismatched with parent tenant → no dirty-mark', () => {
+  it('cross-tenant safety: child tenant mismatched with parent tenant → no dirty-mark', () => {
     const summary = createMemory('tenant1 summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -201,7 +201,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(auditRows).toEqual([]);
   });
 
-  it('test #7: idempotency — 5 child writes under same parent → 1 audit row + parent stays dirty', () => {
+  it('idempotency: 5 child writes under same parent → 1 audit row + parent stays dirty', () => {
     const summary = createMemory('summary 7', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -233,7 +233,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(row.summary_dirty).toBe(1);
   });
 
-  it('test #9: batchWriteAndDelete marks parents dirty for writes AND deletes', () => {
+  it('batchWriteAndDelete marks parents dirty for writes AND deletes', () => {
     // Independent-review-critic R1 HIGH catch: consolidate.ts/sleep flushes
     // pendingWrites + pendingDeletes through batchWriteAndDelete every cycle.
     // Without this hook the dominant mutation source bypasses E2 entirely.
@@ -283,7 +283,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(auditRows.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('test #8: orphan child (parent deleted) → markSummaryDirtyInTx no-ops, no exception', () => {
+  it('orphan child (parent deleted) → markSummaryDirtyInTx no-ops, no exception', () => {
     const summary = createMemory('to be deleted parent', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,

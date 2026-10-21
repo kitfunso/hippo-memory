@@ -51,7 +51,7 @@ function countRows(db: DatabaseSyncLike, table: string): number {
 
 useCardsRoot();
 
-describe('test 1: fresh store, single open', () => {
+describe('fresh store, single open', () => {
   useCardsRoot({ init: false });
   it('has all four card tables, the five new indexes, and schema_version 43', async () => {
     const db = openHippoDb(root);
@@ -91,7 +91,7 @@ describe('test 1: fresh store, single open', () => {
   });
 });
 
-describe('test 2: a v42 store migrates to v43 with the four tables present, empty', () => {
+describe('a v42 store migrates to v43 with the four tables present, empty', () => {
   it('gains cards/card_deps/card_runs/card_comments on next open', async () => {
     initTestStore(root);
     const db1 = openHippoDb(root);
@@ -115,7 +115,7 @@ describe('test 2: a v42 store migrates to v43 with the four tables present, empt
   });
 });
 
-describe('test 4: createCard initial status', () => {
+describe('createCard initial status', () => {
   it('no deps -> ready', async () => {
     const card = createCard(root, 'default', { title: 'No deps' });
     expect(card.status).toBe('ready');
@@ -155,7 +155,7 @@ describe('test 4: createCard initial status', () => {
   });
 });
 
-describe('test 5: status-transition matrix', () => {
+describe('status-transition matrix', () => {
   it('every (from, to) pair not in CARD_TRANSITIONS[from] throws; every pair in it does not', async () => {
     for (const from of ALL_STATUSES) {
       for (const to of ALL_STATUSES) {
@@ -181,7 +181,7 @@ describe('test 5: status-transition matrix', () => {
   });
 });
 
-describe('test 12: unknown dependsOn pre-check', () => {
+describe('unknown dependsOn pre-check', () => {
   it('throws and leaves zero rows in cards and card_deps', async () => {
     expect(() => createCard(root, 'default', { title: 'x', dependsOn: ['nope'] })).toThrow(
       'unknown parent card id: nope',
@@ -196,7 +196,7 @@ describe('test 12: unknown dependsOn pre-check', () => {
   });
 });
 
-describe("test 13: addCardComment checks the card belongs to the caller's tenant", () => {
+describe("addCardComment checks the card belongs to the caller's tenant", () => {
   it('throws unknown card id for a foreign-tenant card and for a missing id; happy path still works', async () => {
     const card = createCard(root, 'default', { title: 'Commented' });
 
@@ -212,7 +212,7 @@ describe("test 13: addCardComment checks the card belongs to the caller's tenant
   });
 });
 
-describe('Fix B: claim/block/review/complete throw on an unknown card id, keep null for the wrong state', () => {
+describe('claim/block/review/complete throw on an unknown card id, keep null for the wrong state', () => {
   it('claimCard throws for a nonexistent id and for a card read under another tenant', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     expect(() => claimCard(root, 'default', 'nope', 'r1')).toThrow('unknown card id: nope');
@@ -252,7 +252,7 @@ describe('Fix B: claim/block/review/complete throw on an unknown card id, keep n
   });
 });
 
-describe('Fix C: createCard/claimCard/blockCard/addCardComment validate their inputs', () => {
+describe('createCard/claimCard/blockCard/addCardComment validate their inputs', () => {
   it('createCard throws for an empty or whitespace-only title and commits nothing', async () => {
     const db = openHippoDb(root);
     try {
