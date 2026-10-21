@@ -2,6 +2,7 @@
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { Llm } from '../base/ports/llm.js';
 import { envAnthropicApiKey } from '../base/util/env.js';
+import { resolveEmbeddingProvider } from '../base/embeddings/provider.js';
 import { anthropicLlm } from './anthropic-llm.js';
 import { currentMachine } from './machine.js';
 
@@ -12,5 +13,9 @@ export function anthropicLlmFromEnv(fetcher?: typeof fetch): Llm | undefined {
 }
 
 export function realInfra(): InfraPorts {
-  return { machine: currentMachine(), llm: anthropicLlmFromEnv() };
+  return {
+    machine: currentMachine(),
+    llm: anthropicLlmFromEnv(),
+    embedderFor: (embeddings) => resolveEmbeddingProvider(embeddings),
+  };
 }

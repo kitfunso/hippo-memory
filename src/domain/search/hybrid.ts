@@ -1,6 +1,6 @@
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../../base/config/config.js';
-import { resolveEmbeddingProvider } from '../../base/embeddings/provider.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { evalNow, rankAblation } from '../../base/memory/ablation.js';
 import { extractPathTags } from './path-context.js';
@@ -138,17 +138,19 @@ export async function hybridSearch(
   return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }
 
-/** The vector arm over `store`, embedding queries with the provider `config` names. */
+/** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from `config`. */
 export function vectorSourceOf({
   store,
   config,
   onHippoDb,
+  embedderFor,
 }: {
   store: HippoStore;
   config: Pick<HippoConfig, 'embeddings'>;
   onHippoDb?: boolean;
+  embedderFor: EmbedderFor;
 }): VectorSource {
-  return { store, provider: () => resolveEmbeddingProvider(config.embeddings), onHippoDb };
+  return { store, provider: () => embedderFor(config.embeddings), onHippoDb };
 }
 
 function graphStoresOf(source: VectorSource | undefined, options: HybridRankOptions): FusionInput['graph'] {

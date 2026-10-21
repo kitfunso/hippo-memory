@@ -19,7 +19,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries, readEntry, writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
-import { currentMachine } from '../../src/infra/machine.js';
+import { realInfra } from '../../src/infra/ports.js';
 
 oneRequestPerTest();
 
@@ -233,7 +233,7 @@ describe('extractRememberedFacts', () => {
   /** `ctx` with a model whose network is `fetcher`, or with no model when there is none. */
   const withModel = (ctx: FullContext, fetcher?: typeof fetch): FullContext => ({
     ...ctx,
-    infra: { machine: currentMachine(), llm: fetcher && anthropicLlm({ apiKey: 'no-key', fetcher }) },
+    infra: { ...realInfra(), llm: fetcher && anthropicLlm({ apiKey: 'no-key', fetcher }) },
   });
   const stored = async (ctx: FullContext): Promise<MemoryEntry> =>
     storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));

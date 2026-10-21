@@ -1,5 +1,6 @@
 // The local and global recall reads overlap, and the merged ranking does not depend on which finishes first.
 import { describe, it, expect } from 'vitest';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -74,6 +75,7 @@ async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: strin
     config: loadConfig(local),
     global: { store: held(sqliteStore(global), 'global', gates.global.opened, events), config: loadConfig(global) },
     tenantId: 'default',
+    embedderFor: resolveEmbeddingProvider,
   };
   const ranked = rankRecall(ctx, options(local));
   // Neither read may end yet, so a recall that ran them one after the other never starts the second.

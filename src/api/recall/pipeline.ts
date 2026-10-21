@@ -19,6 +19,7 @@ import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
 import { applyReranker } from '../../domain/search/rerank.js';
 import { searchByEngine } from '../../domain/search/engine.js';
 import type { HippoConfig } from '../../base/config/config.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
 import {
   CONFLICT_PEER_MULTIPLIER,
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
@@ -53,6 +54,8 @@ export interface RankRecallCtx extends RankSource {
    * but walks its graph once. */
   global?: RankSource;
   tenantId: string;
+  /** Builds the provider that embeds the query for each store's vector arm. */
+  embedderFor: EmbedderFor;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
 }
@@ -315,7 +318,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
     // stores again.
     return rankBothStores(
       query,
-      { local: vectorSourceOf(ctx), global: vectorSourceOf(ctx.global) },
+      { local: vectorSourceOf(ctx), global: vectorSourceOf({ ...ctx.global, embedderFor: ctx.embedderFor }) },
       { local: pool.local, global: pool.global },
       vectorCandidates,
       {

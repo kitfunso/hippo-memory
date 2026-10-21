@@ -6,6 +6,7 @@ import { boostByGoals } from '../../domain/search/goal-boost.js';
 import type { RecallSearchArgs, RecallWrites } from '../../store/port.js';
 import { searchByEngine } from '../../domain/search/engine.js';
 import { vectorSourceOf } from '../../domain/search/hybrid.js';
+import { infraOf } from '../infra.js';
 import type { HybridVectorCandidates } from '../../domain/search/vector.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import {
@@ -164,7 +165,12 @@ function rankByEngine(
   pool: MemoryEntry[],
   searchOpts: EngineSearchOptions,
 ): Promise<RankedResults> {
-  const source = vectorSourceOf({ store: ctx.store, config: ctx.config, onHippoDb: ctx.reach?.isHippoDb });
+  const source = vectorSourceOf({
+    store: ctx.store,
+    config: ctx.config,
+    onHippoDb: ctx.reach?.isHippoDb,
+    embedderFor: infraOf(ctx).embedderFor,
+  });
   return searchByEngine(source, opts.query, pool, physicsFor(ctx, opts), {
     runtime: ctx.config.runtime,
     ...searchOpts,

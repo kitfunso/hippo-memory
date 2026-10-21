@@ -111,6 +111,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     const s = track(seed());
     withEmbeddings(s);
     const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), {
+      embedderFor: resolveEmbeddingProvider,
       budget: 100000,
       tenantId: TENANT,
       recallScope: {},
@@ -128,6 +129,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     const s = track(seed());
     withEmbeddings(s);
     const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), {
+      embedderFor: resolveEmbeddingProvider,
       budget: 100000,
       tenantId: TENANT,
       recallScope: { requested: 'team:alpha', additive: true },

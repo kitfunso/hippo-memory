@@ -3,6 +3,7 @@
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { MemoryEntry } from '../../base/memory/memory.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
 import {
   passesScopeFilterForRecall,
   passesCliRecallScopeFilter,
@@ -74,8 +75,9 @@ export interface HybridSearchOptions extends SearchOptions {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-/** `HybridSearchOptions` with the tenant both stores are read as; the eval harness reads every tenant's. */
-export type BothStoresSearch = HybridSearchOptions & { readonly tenantId: TenantId };
+/** `HybridSearchOptions` with the tenant both stores are read as (the eval harness reads every tenant's) and the
+ * embedder each store's vector arm uses. */
+export type BothStoresSearch = HybridSearchOptions & { readonly tenantId: TenantId; readonly embedderFor: EmbedderFor };
 
 /** Hybrid search across both local and global stores, using embeddings when available.
  *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
@@ -85,7 +87,7 @@ export async function searchBothHybrid(
   global: ConfiguredFolder<SharingStore>,
   options: BothStoresSearch,
 ): Promise<SearchResult[]> {
-  const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
+  const { includeSuperseded, asOf, tenantId, entryFilter, recallScope, embedderFor } = options;
 
   // With an admission filter, lift the per-store candidate cap (default 200) to a bounded 5000: excluded rows could
   // otherwise fill the window first.
@@ -126,13 +128,13 @@ export async function searchBothHybrid(
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
-  const sources = { local: folderVectorSource(local), global: folderVectorSource(global) };
+  const sources = { local: folderVectorSource(local, embedderFor), global: folderVectorSource(global, embedderFor) };
   return rankBothStores(query, sources, { local: localEntries, global: globalEntries }, vectorCandidates, options);
 }
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
-function folderVectorSource({ store, config }: ConfiguredFolder): VectorSource {
-  return vectorSourceOf({ store, config, onHippoDb: true });
+function folderVectorSource({ store, config }: ConfiguredFolder, embedderFor: EmbedderFor): VectorSource {
+  return vectorSourceOf({ store, config, onHippoDb: true, embedderFor });
 }
 
 /** Each store prices its rows already tagged, so a price that reads the store origin sees it before the merge. */

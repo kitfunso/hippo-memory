@@ -46,6 +46,7 @@ describe('hybrid recall at 10k rows', () => {
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>
     searchBothHybrid('deploy pipeline', ...sharingStores(store, global), {
+      embedderFor: resolveEmbeddingProvider,
       budget: 4000,
       tenantId: 'default',
       recallScope: {},

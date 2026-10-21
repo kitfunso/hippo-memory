@@ -15,6 +15,7 @@ import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContextOptions } from '../context-types.js';
 import type { Context } from '../types.js';
+import { infraOf } from '../infra.js';
 import { rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
 import {
   callerOf,
@@ -221,6 +222,7 @@ export async function retrieveWithCliCore(
       onHippoDb: ctx.reach?.isHippoDb,
       global: rankGlobal(ctx, core.sources),
       tenantId: ctx.tenantId,
+      embedderFor: infraOf(ctx).embedderFor,
       note: core.note,
     },
     { ...core.rank, query: opts.query, boost: opts.boost },

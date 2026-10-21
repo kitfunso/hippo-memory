@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -292,6 +293,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     try {
       const results = await searchBothHybrid('shared-test', ...sharingStores(hippoRoot, globalRoot), {
         tenantId: ALL_TENANTS,
+        embedderFor: resolveEmbeddingProvider,
         explain: true,
       });
       const sResult = findResult(results, summary.id);

@@ -11,6 +11,7 @@ import type { TenantId } from '../base/util/tenant.js';
 import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
 import { loadConfig } from '../base/config/config.js';
+import { resolveEmbeddingProvider } from '../base/embeddings/provider.js';
 import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';
 
@@ -22,7 +23,12 @@ export function folderVectorSource({
 }: Pick<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings'>): VectorSource | undefined {
   if (!hippoRoot) return undefined;
   const config = { embeddings: embeddings ?? loadConfig(hippoRoot).embeddings };
-  return vectorSourceOf({ store: store ?? sqliteStore(hippoRoot), config, onHippoDb: true });
+  return vectorSourceOf({
+    store: store ?? sqliteStore(hippoRoot),
+    config,
+    onHippoDb: true,
+    embedderFor: resolveEmbeddingProvider,
+  });
 }
 
 /**
