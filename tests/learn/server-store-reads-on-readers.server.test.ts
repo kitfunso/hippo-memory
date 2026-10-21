@@ -171,8 +171,8 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('reports.countEntries', (s) => s.reports.countEntries(), /^[1-9]\d*$/),
   read('reports.stats', (s) => s.reports.stats(), /total_recalled/),
   read('reports.statusCounts', (s) => s.reports.statusCounts(NOW, 0.1), /total/),
-  read('reports.correctionLinks', (s) => s.reports.correctionLinks(), /oldId: 'mem_/),
-  read('reports.rawProvenance', (s) => s.reports.rawProvenance(), /total: [1-9]/),
+  read('reports.correctionLinks', (s) => s.reports.correctionLinks({ limit: 10 }), /oldId: 'mem_/),
+  read('reports.rawProvenance', (s) => s.reports.rawProvenance({ limit: 10 }), /total: [1-9]/),
   read('reports.createdSinceLastSleep', (s) => s.reports.createdSinceLastSleep(TENANT, NOW), /^[1-9]\d*$/),
   read('rejections.list', (s) => s.rejections.list(TENANT), "reason: 'wrong'"),
   read(

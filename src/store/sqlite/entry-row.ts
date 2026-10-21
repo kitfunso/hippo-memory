@@ -1,3 +1,4 @@
+import { cachedStatement } from '../../db/statement-cache.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
@@ -51,7 +52,8 @@ const UPSERT_MEMORY_SQL =
 export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
   const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
   for (const chunk of chunked(entries, rowsPerStatement(MEMORY_ROW_COLUMNS.length))) {
-    db.prepare(
+    cachedStatement(
+      db,
       `WITH v(${MEMORY_ROW_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, MEMORY_ROW_COLUMNS.length)}) ` +
         `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
     ).run(...chunk.flatMap(memoryRowValues));
