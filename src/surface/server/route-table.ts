@@ -324,9 +324,9 @@ export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: str
 /** What a route needs of its store: a group, or hippo.db itself. */
 type StoreNeed = StoreGroup | 'hippoDb';
 
-/** What a row needs: a sqliteOnly row needs hippo.db, a row naming none runs on any store. */
+/** What a row needs: a hippoDbOnly row needs hippo.db, a row naming none runs on any store. */
 function routeGroup(route: Route): StoreNeed | undefined {
-  return route.sqliteOnly === undefined ? route.storeReady : 'hippoDb';
+  return route.hippoDbOnly === undefined ? route.storeReady : 'hippoDb';
 }
 
 /** A route answers 501 without running when the store lacks what it needs. */

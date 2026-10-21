@@ -140,9 +140,9 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
 
-/** A route's store status: the optional group it needs, a `sqliteOnly` reason, or neither for a route that runs on any
+/** A route's store status: the optional group it needs, a `hippoDbOnly` reason, or neither for a route that runs on any
  * store; never both. */
-type StoreStatus = { storeReady?: OptionalGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
+type StoreStatus = { storeReady?: OptionalGroup; hippoDbOnly?: never } | { hippoDbOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for a
  * route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
