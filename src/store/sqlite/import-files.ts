@@ -12,7 +12,7 @@ import { sqliteRefusedAmong } from './rejections.js';
 import type { Sync } from './served.js';
 import { sqliteImportKeys } from './sharing.js';
 
-export type SqliteImportFiles = Sync<
+type SqliteImportFiles = Sync<
   Pick<FolderFiles, 'ensure'> &
     Pick<EntryWrites, 'writeEntry'> &
     Pick<Rejections, 'refusedAmong'> &

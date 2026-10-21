@@ -5,7 +5,7 @@
 
 import type { ScopeActor } from '../../base/scope/recall-scope.js';
 import type { GraphReads, GraphRows } from '../../store/port.js';
-import type { EntityType, RelationType } from '../../store/port/graph-reads.js';
+import type { EntityType, RelationType } from '../../store/port/graph.js';
 
 const DEFAULT_LAYOUT_ITERATIONS = 300;
 

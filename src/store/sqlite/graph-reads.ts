@@ -20,7 +20,7 @@ import {
   type StoredEntity,
   type StoredGraph,
   type StoredRelation,
-} from '../port/graph-reads.js';
+} from '../port/graph.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
 import type { Sync } from './served.js';
@@ -224,7 +224,7 @@ type StoredRelationDbRow = StoredRelation;
 
 /** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write
  * lock. */
-export function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
+function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
   const kinds = memoryKindsOn(db, memoryIds);
   const entities = cachedStatement(
     db,

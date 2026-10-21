@@ -2,11 +2,9 @@
 // of its own.
 import { ConflictError } from '../../base/errors/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { MAX_HOOK_FIELD_LEN } from '../../base/util/limits.js';
-import { DAY_MS } from '../../base/util/time.js';
-import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/failure-log.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
-import { failuresPerSession, type SessionFailures } from '../../base/records/failure-repeats.js';
+import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/rejections.js';
+import type { RatedFailure } from '../../base/records/failure-repeats.js';
+import { failureRow, failureTotals, RATED_OUTCOMES, retentionCutoff, sameStoredSession } from '../rules/failure-log.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import type { Sync } from './served.js';
@@ -14,28 +12,26 @@ import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
 function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
-  // Normalized, because the window and prune compare timestamps as strings.
-  const now = new Date(event.now ?? Date.now()).toISOString();
+  const row = failureRow(event);
   // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
-  const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();
-  cachedStatement(db, `DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
+  cachedStatement(db, `DELETE FROM failure_log WHERE ts < ?`).run(retentionCutoff(row.ts));
   const inserted = cachedStatement(
     db,
     `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, ` +
       `owner_subject, origin_project, request_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
-    now,
-    event.tenantId,
-    event.sessionId?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
-    event.tool?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
-    event.outcome,
-    event.rule ?? null,
-    event.sigHash ?? null,
-    event.detailHash ?? null,
-    event.ownerSubject ?? null,
-    event.originProject ?? null,
-    event.requestId ?? null,
+    row.ts,
+    row.tenantId,
+    row.sessionId,
+    row.tool,
+    row.outcome,
+    row.rule,
+    row.sigHash,
+    row.detailHash,
+    row.ownerSubject,
+    row.originProject,
+    row.requestId,
   );
   return Number(inserted.lastInsertRowid);
 }
@@ -54,7 +50,7 @@ export function requestOutcome(
   ).get(tenantId, requestId) as { outcome: FailureOutcome; session_id: string | null } | undefined;
   if (row === undefined) return null;
   // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
-  if (row.session_id !== sessionId.slice(0, MAX_HOOK_FIELD_LEN)) {
+  if (!sameStoredSession(row.session_id, sessionId)) {
     throw new ConflictError('request id belongs to another session');
   }
   return row.outcome;
@@ -76,17 +72,16 @@ function settleFailureOutcome(
   );
 }
 
-/** The tenant's rated failures per session since `sinceIso`, under the rule in base/records/failure-repeats.ts. */
-function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
+/** The tenant's rated failures in id order, the ones before the window too: they decide which session hit first. */
+function ratedFailures(db: DatabaseSyncLike, tenantId: string): RatedFailure[] {
   const rows = cachedStatement(
     db,
     `SELECT ts, session_id, sig_hash FROM failure_log
      WHERE tenant_id = ? AND session_id IS NOT NULL AND sig_hash IS NOT NULL
-       AND outcome IN ('stored', 'duplicate', 'store-failed')
+       AND outcome IN (SELECT value FROM json_each(?))
      ORDER BY id`,
-  ).all(tenantId) as Array<{ ts: string; session_id: string; sig_hash: string }>;
-  const rated = rows.map((r) => ({ ts: r.ts, sessionId: r.session_id, sigHash: r.sig_hash }));
-  return failuresPerSession(rated, sinceIso);
+  ).all(tenantId, JSON.stringify(RATED_OUTCOMES)) as Array<{ ts: string; session_id: string; sig_hash: string }>;
+  return rows.map((r) => ({ ts: r.ts, sessionId: r.session_id, sigHash: r.sig_hash }));
 }
 
 /** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
@@ -104,23 +99,7 @@ export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceI
     `SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`,
   ).all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;
   const counts = new Map(rows.map((r) => [r.outcome, Number(r.n)] as const));
-  const outcomes = {
-    stored: counts.get('stored') ?? 0,
-    duplicate: counts.get('duplicate') ?? 0,
-    'store-failed': counts.get('store-failed') ?? 0,
-    'skipped-interrupt': counts.get('skipped-interrupt') ?? 0,
-    'skipped-routine': counts.get('skipped-routine') ?? 0,
-    'skipped-invalid': counts.get('skipped-invalid') ?? 0,
-  } satisfies Record<FailureOutcome, number>;
-  const sessions = failuresBySession(db, tenantId, sinceIso);
-  return {
-    since: sinceIso,
-    outcomes,
-    total: Object.values(outcomes).reduce((sum, n) => sum + n, 0),
-    rated: sessions.reduce((sum, s) => sum + s.failures, 0),
-    repeats: sessions.reduce((sum, s) => sum + s.repeats, 0),
-    sessions: sessions.length,
-  };
+  return failureTotals(sinceIso, (outcome) => counts.get(outcome) ?? 0, ratedFailures(db, tenantId));
 }
 
 const failureLogAt: Bodies<FailureLog> = {

@@ -2,8 +2,7 @@
 
 import type { Card, CardComment, CardRun, CardStatus } from '../../base/records/card.js';
 import type { HandoffOutcome } from '../../base/session/handoff.js';
-import type { CardDetail } from '../../store/port/cards.js';
-import type { CardCreate } from '../../store/port-groups.js';
+import type { CardDetail, CardCreate } from '../../store/port/cards.js';
 import type { Context } from '../types.js';
 
 /** Create a card in the caller's tenant. Throws on an empty title or an unknown dependency. */

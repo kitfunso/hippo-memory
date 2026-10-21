@@ -4,41 +4,26 @@ import { StoreNotPortedError } from '../base/util/store-blocked.js';
 import type { SessionAndAdminGroups } from './port-groups.js';
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { TenantId } from '../base/util/tenant.js';
-import type { TokenUse } from './port/token-ledger.js';
+import type { TokenUse, Ledger } from './port/ledger.js';
 import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
-import type { AuditMaintenance } from './port/audit-maintenance.js';
-import type { LessonWrites } from './port/lesson-writes.js';
-import type { VectorReads } from './port/vector-reads.js';
-import type { VectorViews } from './port/vector-views.js';
-import type { KeyAudit } from './port/key-audit.js';
-import type { KeyWrites } from './port/key-writes.js';
-import type { KeyGrants } from './port/key-grants.js';
-import type { VectorWrites } from './port/vector-writes.js';
-import type { EntryWrites } from './port/entry-writes.js';
-import type { ContextReads } from './port/context-reads.js';
-import type { Predictions } from './port/predictions.js';
-import type { DagReads } from './port/dag-reads.js';
-import type { AuditLog } from './port/audit-log.js';
+import type { AuditMaintenance, AuditLog } from './port/audit.js';
+import type { LessonWrites, EntryWrites } from './port/entry-writes.js';
+import type { VectorReads, VectorViews, VectorWrites, EmbeddingIndex } from './port/vectors.js';
+import type { KeyAudit, KeyWrites, KeyGrants } from './port/keys.js';
+import type { ContextReads, DagReads } from './port/context-reads.js';
+import type { Predictions, Objects } from './port/objects.js';
 import type { Quarantine } from './port/quarantine.js';
-import type { GraphReads } from './port/graph-reads.js';
-import type { Objects } from './port/objects.js';
-import type { Readiness } from './port/readiness.js';
-import type { LastRecall } from './port/last-recall.js';
-import type { RecallSearchArgs, RecallWrites } from './port/recall-writes.js';
+import type { GraphReads, GraphRebuild } from './port/graph.js';
+import type { Readiness, Diagnostics } from './port/diagnostics.js';
+import type { LastRecall, RecallSearchArgs, RecallWrites } from './port/recall-writes.js';
 import type { ConnectorEvents, ConnectorWrites } from './port/connectors.js';
-import type { Ledger } from './port/ledger.js';
-import type { EmbeddingIndex } from './port/embedding-index.js';
-import type { Promotion } from './port/promotion.js';
+import type { Promotion, Sharing } from './port/sharing.js';
 import type { FolderFiles } from './port/folder-files.js';
-import type { Sharing } from './port/sharing.js';
 import type { Consolidation } from './port/consolidation.js';
 import type { Learning } from './port/learning.js';
-import type { Captures } from './port/captures.js';
-import type { CompactionHooks } from './port/compaction-hooks.js';
+import type { Captures, CompactionHooks } from './port/capture.js';
 import type { ProjectTags } from './port/project-tags.js';
-import type { Diagnostics } from './port/diagnostics.js';
-import type { GraphRebuild } from './port/graph-rebuild.js';
 import type { AgentImport } from './port/agent-import.js';
 export type { FolderStore, GlobalTargetGroup, StoreReach } from './port/reach.js';
 import type {
@@ -63,7 +48,7 @@ export type SleepGroup = keyof SleepGroups;
 
 /** Groups a store may skip for a fallback: recall scores the plain vectors, GET /ready answers 200 with
  * `store: "unchecked"`, and context writes no last recall for the CLI's no-ids outcome to read. */
-export interface FallbackGroups {
+interface FallbackGroups {
   readonly vectorViews: VectorViews;
   readonly readiness: Readiness;
   readonly lastRecall: LastRecall;
@@ -169,7 +154,7 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
   /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every row in scope. */
   searchRecallEntries(query: string, args: RecallSearchArgs): Promise<MemoryEntry[]>;
-  /** The rows of `tenantId` among the first 500 ids, ordered by created, then content, then id, all ascending; the
+  /** The rows of `tenantId` among `ids`, ordered by created, then content, then id, all ascending; the
    * input order is ignored. */
   entriesByIds(ids: readonly string[], tenantId: TenantId): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
@@ -230,53 +215,30 @@ export type {
   DeadLetterRows,
 } from './port/connectors.js';
 
-export type { RecallSearchArgs, RecallWrites } from './port/recall-writes.js';
-export type { VectorReads } from './port/vector-reads.js';
+export type { RecallSearchArgs, RecallWrites, LastRecallWrites, LastRecall } from './port/recall-writes.js';
 export type {
+  VectorReads,
   VectorRowWrite,
   VectorWrite,
   VectorWriteResult,
   VectorBackfillQuery,
   VectorWrites,
-} from './port/vector-writes.js';
-export type { VectorViews } from './port/vector-views.js';
-export type { KeyRevoke, KeyAudit } from './port/key-audit.js';
+  VectorViews,
+  EmbeddingIndex,
+  IdPage,
+  IdPageRequest,
+  ParticleStats,
+  StoredVectorSummary,
+  VectorCoverage,
+  VectorRow,
+} from './port/vectors.js';
+export type { KeyRevoke, KeyAudit, KeyMint, SelfKeyMint, KeyListQuery, KeyWrites, KeyGrants } from './port/keys.js';
 export type {
   AmbientAdmission,
   AmbientCandidateRequest,
   AmbientCandidates,
   AmbientRefusal,
   ContextReads,
-} from './port/context-reads.js';
-export type {
-  EntryWrite,
-  EntryTarget,
-  OutcomeWrite,
-  SupersedeWrite,
-  EntryRemoval,
-  RawArchive,
-  EntryWrites,
-} from './port/entry-writes.js';
-export type { KeyMint, SelfKeyMint, KeyListQuery, KeyWrites } from './port/key-writes.js';
-export type { KeyGrants } from './port/key-grants.js';
-export type {
-  PredictionSave,
-  PredictionClose,
-  PredictionFilter,
-  PredictionListQuery,
-  Predictions,
-} from './port/predictions.js';
-export type {
-  ObjectListQuery,
-  ObjectClose,
-  ObjectSave,
-  IncidentOpen,
-  IncidentOpenRefusal,
-  IncidentResolve,
-  PoliciesInForceQuery,
-  Objects,
-} from './port/objects.js';
-export type {
   SessionRawQuery,
   SessionRawWindow,
   SessionRawCount,
@@ -286,10 +248,34 @@ export type {
   DescendantWalk,
   SummaryDescendants,
   DagReads,
-} from './port/dag-reads.js';
-export type { AuditLog } from './port/audit-log.js';
-export type { Readiness } from './port/readiness.js';
-export type { LastRecallWrites, LastRecall } from './port/last-recall.js';
+} from './port/context-reads.js';
+export type {
+  EntryWrite,
+  EntryTarget,
+  OutcomeWrite,
+  SupersedeWrite,
+  EntryRemoval,
+  RawArchive,
+  EntryWrites,
+  LessonWrites,
+} from './port/entry-writes.js';
+export type {
+  PredictionSave,
+  PredictionClose,
+  PredictionFilter,
+  PredictionListQuery,
+  Predictions,
+  ObjectListQuery,
+  ObjectClose,
+  ObjectSave,
+  IncidentOpen,
+  IncidentOpenRefusal,
+  IncidentResolve,
+  PoliciesInForceQuery,
+  Objects,
+} from './port/objects.js';
+export type { AuditLog, AuditMaintenance } from './port/audit.js';
+export type { Readiness } from './port/diagnostics.js';
 export type {
   QuarantineListQuery,
   QuarantinedMemory,
@@ -298,22 +284,11 @@ export type {
   QuarantineRejection,
   Quarantine,
 } from './port/quarantine.js';
-export type { GraphViewQuery, GraphRows, GraphReads } from './port/graph-reads.js';
-export type { AuditMaintenance } from './port/audit-maintenance.js';
-export type { LessonWrites } from './port/lesson-writes.js';
+export type { GraphViewQuery, GraphRows, GraphReads } from './port/graph.js';
 export type { Ledger, LedgerTurn, PilotArmOptions } from './port/ledger.js';
 export type {
-  EmbeddingIndex,
-  IdPage,
-  IdPageRequest,
-  ParticleStats,
-  StoredVectorSummary,
-  VectorCoverage,
-  VectorRow,
-} from './port/embedding-index.js';
-export type { PromotedCopy, Promotion } from './port/promotion.js';
-export type { FolderFiles, StoreHome } from './port/folder-files.js';
-export type {
+  PromotedCopy,
+  Promotion,
   EntrySignals,
   EntryTextKey,
   EntryTextKeyPage,
@@ -323,3 +298,4 @@ export type {
   SourceTally,
   TextsHoldingOptions,
 } from './port/sharing.js';
+export type { FolderFiles, StoreHome } from './port/folder-files.js';

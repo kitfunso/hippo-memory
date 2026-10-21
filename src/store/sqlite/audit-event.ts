@@ -6,7 +6,7 @@ import type { JsonValue } from '../../base/util/json.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 
-export interface AuditOptions {
+interface AuditOptions {
   readonly targetId?: string;
   readonly metadata?: Record<string, JsonValue>;
   readonly actor?: string;

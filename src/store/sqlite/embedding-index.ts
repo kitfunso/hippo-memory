@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { countAllEntriesAt, loadEntriesByIdsAt, loadEntryIdsByIdAt } from './entry-reads.js';
-import type { EmbeddingIndex } from '../port/embedding-index.js';
+import type { EmbeddingIndex } from '../port/vectors.js';
 import {
   type VectorRebuild,
   beginVectorRebuildAt,

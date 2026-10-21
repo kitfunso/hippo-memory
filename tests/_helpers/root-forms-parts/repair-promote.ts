@@ -8,7 +8,7 @@ import { handlesOf } from '../../../src/store/sqlite/handles.js';
 import { apiCtx } from '../api-ctx.js';
 import { type StoreFiles } from '../../../src/store/sqlite/open.js';
 import type { RepairProtection } from '../../../src/base/memory/memory-audit.js';
-import type { QualityRepairResult } from '../../../src/store/port/audit-maintenance.js';
+import type { QualityRepairResult } from '../../../src/store/port/audit.js';
 
 export async function copyToGlobal(
   hippoRoot: string,

@@ -8,12 +8,11 @@ import {
   type GraphViewQuery,
   type Relation,
   type StoredGraph,
-} from '../port/graph-reads.js';
-import { byBytes } from './rows.js';
+} from '../port/graph.js';
+import { newestFirst } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 
-const newestFirst = (a: { createdAt: string; id: number }, b: { createdAt: string; id: number }): number =>
-  byBytes(b.createdAt, a.createdAt) || b.id - a.id;
+const newestCreated = newestFirst<{ createdAt: string; id: number }>({ key: (r) => r.createdAt, intId: (r) => r.id });
 const byId = (a: { id: number }, b: { id: number }): number => a.id - b.id;
 
 function batches<T>(items: readonly T[]): T[][] {
@@ -28,7 +27,7 @@ function joinedFrom(relations: readonly Relation[], startIds: readonly number[],
   for (const batch of batches(startIds)) {
     const touching = relations
       .filter((r) => batch.includes(r.fromEntityId) || batch.includes(r.toEntityId))
-      .sort(newestFirst)
+      .sort(newestCreated)
       .slice(0, limit);
     for (const r of touching) if (!joined.includes(r)) joined.push(r);
   }
@@ -61,7 +60,7 @@ function fromName(
   const found = batches([...held]).flatMap((batch) => graph.entities.filter((e) => batch.includes(e.id)).sort(byId));
   const among = graph.relations
     .filter((r) => held.has(r.fromEntityId) && held.has(r.toEntityId))
-    .sort(newestFirst)
+    .sort(newestCreated)
     .slice(0, limit);
   const truncated = named.length >= limit || joined.length >= limit || among.length >= limit || leftOver;
   return { entities: found, relations: among, truncated };
@@ -69,8 +68,8 @@ function fromName(
 
 function wholeGraph(entities: Entity[], relations: Relation[], limit: number): GraphRows {
   const newest = {
-    entities: [...entities].sort(newestFirst).slice(0, limit),
-    relations: [...relations].sort(newestFirst).slice(0, limit),
+    entities: [...entities].sort(newestCreated).slice(0, limit),
+    relations: [...relations].sort(newestCreated).slice(0, limit),
   };
   return { ...newest, truncated: newest.entities.length >= limit || newest.relations.length >= limit };
 }
@@ -142,7 +141,7 @@ export function memoryGraphReads(t: MemoryTables): GraphReads {
         const touching = t.relations.filter(
           (r) => r.tenantId === tenantId && (batch.includes(r.fromEntityId) || batch.includes(r.toEntityId)),
         );
-        for (const r of touching.sort(newestFirst).slice(0, limit)) found.set(r.id, r);
+        for (const r of touching.sort(newestCreated).slice(0, limit)) found.set(r.id, r);
       }
       return structuredClone([...found.values()]);
     },

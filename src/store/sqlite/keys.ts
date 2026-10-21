@@ -1,6 +1,6 @@
 // hippo.db's key groups: KeyWrites, KeyGrants and KeyAudit.
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { appendAuditEvent, listAuditEventsAfter } from './audit.js';
+import { appendAuditEvent } from './audit.js';
 import { grantScope, insertApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeyAudit, KeyGrants, KeyMint, KeyRevoke, KeyWrites, SelfKeyMint } from '../port.js';
@@ -9,8 +9,7 @@ import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../port/types.js';
-import type { ScopeGrantChange } from '../port/key-grants.js';
-import { cachedStatement } from '../../db/statement-cache.js';
+import type { ScopeGrantChange } from '../port/keys.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {
@@ -77,13 +76,6 @@ function revokeKeyAt(db: DatabaseSyncLike, revoke: KeyRevoke): string {
   });
 }
 
-function auditHighIdAt(db: DatabaseSyncLike): number {
-  const row = cachedStatement(db, "SELECT seq FROM sqlite_sequence WHERE name = 'audit_log'").get() as
-    | { seq: number }
-    | undefined;
-  return row?.seq ?? 0;
-}
-
 const keyWritesAt: Bodies<KeyWrites> = {
   createApiKey: createKeyAt,
   createSelfApiKey: createSelfKeyAt,
@@ -92,8 +84,6 @@ const keyWritesAt: Bodies<KeyWrites> = {
 
 const keyAuditAt: Bodies<KeyAudit> = {
   revokeApiKey: revokeKeyAt,
-  auditEventsAfter: listAuditEventsAfter,
-  auditHighId: auditHighIdAt,
 };
 
 export function sqliteKeyWrites(on: OnHandle): Sync<KeyWrites> {

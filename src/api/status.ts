@@ -3,7 +3,7 @@
 import type { LegacyStats } from '../store/port/reports.js';
 import type { CorrectionLink, RawProvenance, ReportPage, StatusCounts } from '../store/port/reports.js';
 import { READ_PAGE_ROWS } from '../base/util/pages.js';
-import type { Reports } from '../store/port-groups.js';
+import type { Reports } from '../store/port/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';

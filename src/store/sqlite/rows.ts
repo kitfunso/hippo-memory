@@ -1,17 +1,11 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
-import {
-  Layer,
-  FALLBACK_HALF_LIFE_DAYS,
-  DEFAULT_SCHEMA_FIT,
-  type MemoryEntry,
-  type ConfidenceLevel,
-  type MemoryKind,
-} from '../../base/memory/memory.js';
+import { Layer, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../../base/memory/memory.js';
 import { log } from '../../base/util/log.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
 import { parseStoredObject, warnDamagedColumn, type StoredJsonSite } from '../../base/util/stored-json.js';
 import type { SessionEvent, TaskSnapshot } from '../port/sessions.js';
 import type { MemoryConflict } from '../port/conflicts.js';
+import { storedEntry, type StoredColumns } from '../rules/stored-entry.js';
 
 export interface IndexEntry {
   id: string;
@@ -185,113 +179,58 @@ export const MEMORY_SEARCH_COLUMNS = [
   ...MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`),
   'bm25(memories_fts) AS bm25_score',
 ].join(', ');
-type RetrievalFields = Pick<
-  MemoryEntry,
-  | 'id'
-  | 'created'
-  | 'lastRetrieved'
-  | 'retrievalCount'
-  | 'strength'
-  | 'halfLifeDays'
-  | 'layer'
-  | 'tags'
-  | 'emotionalValence'
-  | 'schemaFit'
-  | 'source'
-  | 'outcomeScore'
-  | 'outcomePositive'
-  | 'outcomeNegative'
-  | 'conflictsWith'
-  | 'pinned'
-  | 'confidence'
-  | 'content'
-  | 'parents'
-  | 'starred'
-  | 'traceOutcome'
->;
-type PlacementFields = Pick<
-  MemoryEntry,
-  | 'sourceSessionId'
-  | 'validFrom'
-  | 'supersededBy'
-  | 'extractedFrom'
-  | 'dagLevel'
-  | 'dagParentId'
-  | 'kind'
-  | 'scope'
-  | 'owner'
-  | 'artifactRef'
-  | 'tenantId'
-  | 'originProject'
-  | 'descendantCount'
-  | 'earliestAt'
-  | 'latestAt'
-  | 'summaryDirty'
-  | 'lastRebuiltAt'
-  | 'rebuildCount'
-  | 'dagLevel3BuiltAt'
->;
 
-function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
+/** The row in MemoryEntry's names, its JSON lists parsed; storedEntry fills each default. */
+function storedColumnsOf(row: MemoryRow): StoredColumns {
+  const site = (column: string): StoredJsonSite => ({ table: 'memories', id: row.id, column });
   // SAFETY: every `as X` narrows a SQLite column to a MemoryEntry enum/union member; `row` comes from
-  // MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS, the only queries producing MemoryRow, and the DB layer writes these
-  // columns only from the same enums.
+  // MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS, and the DB layer writes these columns only from the same enums.
   return {
     id: row.id,
     created: row.created,
     lastRetrieved: row.last_retrieved,
-    retrievalCount: Number(row.retrieval_count ?? 0),
-    strength: Number(row.strength ?? 1),
-    halfLifeDays: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
+    retrievalCount: row.retrieval_count,
+    strength: row.strength,
+    halfLifeDays: row.half_life_days,
     layer: row.layer as Layer,
-    tags: parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' }),
-    emotionalValence: row.emotional_valence ?? 'neutral',
-    schemaFit: Number(row.schema_fit ?? DEFAULT_SCHEMA_FIT),
-    source: row.source ?? 'cli',
-    outcomeScore: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
-    outcomePositive: Number(row.outcome_positive ?? 0),
-    outcomeNegative: Number(row.outcome_negative ?? 0),
-    conflictsWith: parseJsonArray(row.conflicts_with_json, {
-      table: 'memories',
-      id: row.id,
-      column: 'conflicts_with_json',
-    }),
-    pinned: Boolean(row.pinned),
-    confidence: row.confidence ?? 'observed',
+    tags: parseJsonArray(row.tags_json, site('tags_json')),
+    emotionalValence: row.emotional_valence,
+    schemaFit: row.schema_fit,
+    source: row.source,
+    outcomeScore: row.outcome_score,
+    outcomePositive: row.outcome_positive,
+    outcomeNegative: row.outcome_negative,
+    conflictsWith: parseJsonArray(row.conflicts_with_json, site('conflicts_with_json')),
+    pinned: row.pinned,
+    confidence: row.confidence,
     content: row.content,
-    parents: parseJsonArray(row.parents_json, { table: 'memories', id: row.id, column: 'parents_json' }),
-    starred: Boolean(row.starred),
-    traceOutcome: (row.trace_outcome as MemoryEntry['traceOutcome']) ?? null,
-  };
-}
-
-function rowToPlacementFields(row: MemoryRow): PlacementFields {
-  // SAFETY: the `as MemoryKind` narrows a column the DB layer only writes from that enum.
-  return {
-    sourceSessionId: row.source_session_id ?? null,
-    validFrom: row.valid_from ?? row.created,
-    supersededBy: row.superseded_by ?? null,
-    extractedFrom: row.extracted_from ?? null,
-    dagLevel: Number(row.dag_level ?? 0),
-    dagParentId: row.dag_parent_id ?? null,
-    kind: (row.kind ?? 'distilled') as MemoryKind,
-    scope: row.scope ?? null,
-    owner: row.owner ?? null,
-    artifactRef: row.artifact_ref ?? null,
+    parents: parseJsonArray(row.parents_json, site('parents_json')),
+    starred: row.starred,
+    traceOutcome: row.trace_outcome as MemoryEntry['traceOutcome'],
+    sourceSessionId: row.source_session_id,
+    validFrom: row.valid_from,
+    supersededBy: row.superseded_by,
+    extractedFrom: row.extracted_from,
+    dagLevel: row.dag_level,
+    dagParentId: row.dag_parent_id,
+    kind: row.kind as MemoryKind | null,
+    scope: row.scope,
+    owner: row.owner,
+    artifactRef: row.artifact_ref,
     tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
-    originProject: row.origin_project ?? null,
-    descendantCount: Number(row.descendant_count ?? 0),
-    earliestAt: row.earliest_at ?? null,
-    latestAt: row.latest_at ?? null,
-    summaryDirty: Number(row.summary_dirty) === 1,
-    lastRebuiltAt: row.last_rebuilt_at ?? null,
-    rebuildCount: Number(row.rebuild_count ?? 0),
-    dagLevel3BuiltAt: row.dag_level_3_built_at ?? null,
+    originProject: row.origin_project,
+    descendantCount: row.descendant_count,
+    earliestAt: row.earliest_at,
+    latestAt: row.latest_at,
+    summaryDirty: row.summary_dirty,
+    lastRebuiltAt: row.last_rebuilt_at,
+    rebuildCount: row.rebuild_count,
+    dagLevel3BuiltAt: row.dag_level_3_built_at,
   };
 }
 
 export function rowToEntry(row: MemoryRow): MemoryEntry {
-  const entry: MemoryEntry = { ...rowToRetrievalFields(row), ...rowToPlacementFields(row) };
+  const entry = storedEntry(storedColumnsOf(row));
   // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column (non-FTS path) from a present
   // one.
   if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {

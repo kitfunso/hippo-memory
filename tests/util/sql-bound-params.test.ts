@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
-import { GRAPH_ID_BATCH } from '../../src/store/port/graph-reads.js';
+import { GRAPH_ID_BATCH } from '../../src/store/port/graph.js';
 import { rowsPerStatement } from '../../src/db/sql.js';
 
 // One-mark rows fill a statement exactly, so this is the bound-parameter limit itself.

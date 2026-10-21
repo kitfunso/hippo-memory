@@ -3,8 +3,7 @@
  *  guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
 import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
-import type { SourceObjectRef } from '../../store/port/graph-rebuild.js';
-import type { EntityType, SourceObjectType } from '../../store/port/graph-reads.js';
+import type { SourceObjectRef, EntityType, SourceObjectType } from '../../store/port/graph.js';
 import {
   readGraphDelta,
   type DesiredEntity,

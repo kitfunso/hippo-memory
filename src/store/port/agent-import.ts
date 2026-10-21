@@ -21,7 +21,7 @@ export interface AgentImport {
   applyContainer(plan: ContainerApply): Promise<ContainerApplied>;
 }
 
-export interface HeldRow {
+interface HeldRow {
   readonly id: string;
   readonly content: string;
   readonly source: string;
@@ -56,7 +56,7 @@ export interface AdoptStep {
 }
 
 /** A row under an earlier prefix moves to `to`, and to project `origin` when that is not null. */
-export interface MoveStep {
+interface MoveStep {
   readonly kind: 'move';
   readonly id: string;
   readonly to: string;
@@ -64,27 +64,27 @@ export interface MoveStep {
 }
 
 /** Every dormant snapshot whose source starts with `from` moves under `to` the same way. */
-export interface MoveDormantStep {
+interface MoveDormantStep {
   readonly kind: 'moveDormant';
   readonly from: string;
   readonly to: string;
   readonly origin: string | null;
 }
 
-export interface RetagStep {
+interface RetagStep {
   readonly kind: 'retag';
   readonly id: string;
 }
 
 /** Skipped when another writer superseded the row first. */
-export interface SupersedeStep {
+interface SupersedeStep {
   readonly kind: 'supersede';
   readonly id: string;
   readonly by: string;
 }
 
 /** Stored through the write gate; once written it supersedes each row of `supersedes`. */
-export interface WriteStep {
+interface WriteStep {
   readonly kind: 'write';
   readonly entry: MemoryEntry;
   readonly supersedes: readonly string[];
@@ -98,7 +98,7 @@ export interface RestoreStep {
   readonly fresh: MemoryEntry;
 }
 
-export interface SetAsideStep {
+interface SetAsideStep {
   readonly kind: 'setAside';
   readonly id: string;
   readonly why: SetAsideWhy;

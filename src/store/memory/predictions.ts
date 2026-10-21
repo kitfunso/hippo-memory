@@ -7,13 +7,14 @@ import {
   type PredictionListQuery,
   type PredictionSave,
   type Predictions,
-} from '../port/predictions.js';
+} from '../port/objects.js';
 import type { PredictionBaserate } from '../port/types.js';
-import { appendAudit, byBytes, nextId, peekId } from './rows.js';
+import { byBytes, newestFirst } from '../rules/order.js';
+import { appendAudit, nextId, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
-const newestFirst = (a: Prediction, b: Prediction): number => byBytes(b.createdAt, a.createdAt) || b.id - a.id;
+const newestPrediction = newestFirst<Prediction>({ key: (p) => p.createdAt, intId: (p) => p.id });
 
 function owned(t: MemoryTables, tenantId: string, id: number): Prediction | undefined {
   const row = t.predictions.get(id);
@@ -92,7 +93,7 @@ function listIn(t: MemoryTables, tenantId: string, { classTag, closureState, lim
       (closureState === undefined || row.closureState === closureState) &&
       below(row),
   );
-  return structuredClone(hits.sort(newestFirst).slice(0, limit));
+  return structuredClone(hits.sort(newestPrediction).slice(0, limit));
 }
 
 /** The class's stats over its closed rows in id order, since the float sums differ with row order. */

@@ -36,7 +36,7 @@ import type { SetAsideWhy } from '../port/project-tags.js';
 import type { EntryCursor } from '../port/types.js';
 
 /** What the steps did, and the rows whose mirror files follow the commit. */
-export interface StepsRun {
+interface StepsRun {
   readonly outcomes: StepOutcome[];
   readonly mirror: MemoryEntry[];
   readonly purge: string[];

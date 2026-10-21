@@ -8,7 +8,7 @@ import { handlesOf, openStore } from './handles.js';
 import { bound, boundAsync, skipEmpty, type Bodies } from './bound.js';
 import { served } from './served.js';
 import type { VectorReads } from '../port.js';
-import type { NearestIdsAsk } from '../port/vector-reads.js';
+import type { NearestIdsAsk } from '../port/vectors.js';
 import { entriesInOrderAt, loadVectorCandidateEntriesAt } from './search-rows.js';
 import { loadStoredVectorsAt, storedIndexStateAt } from './vector-index.js';
 

@@ -22,9 +22,9 @@ import type {
   ConflictRow,
   ConflictRowPage,
   LoserFate,
+  Conflicts,
 } from '../port/conflicts.js';
 import { openStore } from './handles.js';
-import type { Conflicts } from '../port-groups.js';
 import type { Sync } from './served.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 

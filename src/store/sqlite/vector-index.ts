@@ -1,7 +1,13 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
 // write of the three.
 import { getMeta, setMeta, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { physicsSpeedSum } from '../../db/physics-state.js';
+import {
+  physicsSpeedSum,
+  loadPhysicsState,
+  resetPhysicsFromSeeds,
+  savePhysicsState,
+  type ParticleSeed,
+} from '../../db/physics-state.js';
 import type { OnHandle } from './open.js';
 import {
   embeddingIndexIdentity,
@@ -11,12 +17,6 @@ import {
 } from '../../base/embeddings/index-identity.js';
 import { strengthOptionsOf, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
-import {
-  loadPhysicsState,
-  resetPhysicsFromSeeds,
-  savePhysicsState,
-  type ParticleSeed,
-} from '../../db/physics-state.js';
 import { initializeParticle } from '../../base/rank/physics.js';
 import { float32ToBuffer } from '../../base/util/vector-codec.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -41,13 +41,7 @@ import { afterIdAnd, idPageOf } from './keyset.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import type {
-  IdPage,
-  IdPageRequest,
-  ParticleStats,
-  StoredVectorSummary,
-  VectorCoverage,
-} from '../port/embedding-index.js';
+import type { IdPage, IdPageRequest, ParticleStats, StoredVectorSummary, VectorCoverage } from '../port/vectors.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';

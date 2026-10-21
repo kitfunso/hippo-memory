@@ -50,7 +50,7 @@ export function githubEventRecordAt(db: DatabaseSyncLike, idempotencyKey: string
   return eventRecordAt(db, GITHUB_LOG, idempotencyKey);
 }
 
-export interface ArtifactDeletion {
+interface ArtifactDeletion {
   tenantId: string;
   artifactRef: string;
   idempotencyKey: string;
@@ -60,7 +60,7 @@ export interface ArtifactDeletion {
   who: string;
 }
 
-export interface ArtifactDeletionOutcome {
+interface ArtifactDeletionOutcome {
   duplicate: boolean;
   archived: number;
 }

@@ -8,7 +8,7 @@ import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
 import { readGraphDelta, entityKey, type GraphOp } from '../../src/domain/graph/delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
-import type { EntityType, SourceObjectType } from '../../src/store/port/graph-reads.js';
+import type { EntityType, SourceObjectType } from '../../src/store/port/graph.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';

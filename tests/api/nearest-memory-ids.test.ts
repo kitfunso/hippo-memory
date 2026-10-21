@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { nearestMemoryIds } from '../../src/api/recall/nearest.js';
 import { BadRequestError, ForbiddenError } from '../../src/base/errors/api-errors.js';
 import { ScopeForbiddenError } from '../../src/base/scope/recall-scope.js';
-import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
+import type { VectorCandidateSpec } from '../../src/store/port/vectors.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedVectorRows } from '../_helpers/vector-rows.js';

@@ -24,13 +24,13 @@ export interface CompactionRow {
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface HeldMemoryRow {
+interface HeldMemoryRow {
   id: string;
   source_session_id: string | null;
   content: string;
 }
 
-export interface StartedCompactionInput {
+interface StartedCompactionInput {
   readonly id: string;
   readonly sessionId: string;
   readonly originProject: string;
@@ -40,18 +40,18 @@ export interface StartedCompactionInput {
   readonly startedAt: string;
 }
 
-export interface SummarizedUpdate {
+interface SummarizedUpdate {
   readonly summary: string;
   readonly itemsJson: string;
   readonly summarizedAt: string;
   readonly requestId?: string;
 }
 
-export interface SummarizedInsert extends SummarizedUpdate {
+interface SummarizedInsert extends SummarizedUpdate {
   readonly id: string;
 }
 
-export type SummarizedInsertMeta = Omit<StartedCompactionInput, 'id'>;
+type SummarizedInsertMeta = Omit<StartedCompactionInput, 'id'>;
 
 const COLUMNS =
   'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, ' +

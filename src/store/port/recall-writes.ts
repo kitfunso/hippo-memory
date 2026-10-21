@@ -1,5 +1,6 @@
 import type { RerankStep } from '../../base/rank/search-types.js';
 import type { OriginFilter, AppendAuditOpts } from './types.js';
+import type { EntryTarget } from './entry-writes.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {
@@ -53,7 +54,7 @@ export interface RecallTraceInput {
 }
 
 /** One ranked result to persist alongside its trace row. */
-export interface RecallTraceResultInput {
+interface RecallTraceResultInput {
   memoryId: string;
   score: number;
   /**
@@ -66,4 +67,17 @@ export interface RecallTraceResultInput {
 export interface StrengthenOptions {
   readonly tenantId: string;
   readonly recallBoostAblated: boolean;
+}
+
+/** A recall's writes when the store keeps it as its last one: `strengthen.ids` are the ids it returned. */
+export type LastRecallWrites = RecallWrites & Required<Pick<RecallWrites, 'strengthen'>>;
+
+/** The last recall a store keeps, so a later outcome can name it, and the outcome linked to a recall trace. */
+export interface LastRecall {
+  /** entryWrites.applyOutcome on the ids of the last recall, then a link from its trace to the ids applied, read
+   * together so an outcome never pairs them with an older trace. */
+  applyOutcomeToLast(target: EntryTarget, good: boolean): Promise<string[]>;
+  /** finishRecall, then the ids this store lacks strengthened under `globalRoot`, then the ids and their trace saved as
+   * the last recall in one write; resolves to the trace id, null when none was asked or its write failed. */
+  finishRecall(writes: LastRecallWrites, globalRoot: string | undefined): Promise<number | null>;
 }

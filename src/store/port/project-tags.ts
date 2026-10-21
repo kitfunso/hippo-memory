@@ -35,7 +35,7 @@ export type SetAsideResult =
   | { readonly kind: 'untagged'; readonly entry: MemoryEntry }
   | { readonly kind: 'dormant'; readonly id: string };
 
-export type ProjectTagOp = 'project_merge' | 'project_repair';
+type ProjectTagOp = 'project_merge' | 'project_repair';
 
 /** Which of a tenant's rows tagged one project name to read. */
 export interface OriginRows {

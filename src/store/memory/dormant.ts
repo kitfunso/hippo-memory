@@ -4,14 +4,19 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { fromWire, toWire } from '../../base/memory/memory-wire.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import { DAY_MS } from '../../base/util/time.js';
-import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../port/dormant.js';
-import type { Dormant, DormantRestoreRequest } from '../port-groups.js';
+import {
+  dormantListCap,
+  dormantTerms,
+  type DormantMemory,
+  type DormantRestoreOutcome,
+  type ListDormantOpts,
+} from '../port/dormant.js';
+import type { Dormant, DormantRestoreRequest } from '../port/dormant.js';
 import type { DormantSnapshot } from '../port/types.js';
-import { appendAudit, asciiFolded, bumpCounter, byBytes, tenantKey } from './rows.js';
+import { comparing, DORMANT_ORDER } from '../rules/order.js';
+import { appendAudit, asciiFolded, bumpCounter, tenantKey } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
-
-const DEFAULT_DORMANT_LIMIT = 20;
 
 /** Sets `entry` aside as hippo.db's dormant row keeps it: the entry as its wire JSON reads back. */
 export function setAside(t: MemoryTables, snapshot: DormantSnapshot): void {
@@ -31,21 +36,15 @@ function listedAs({ entry, reason, strength, dormantAt }: DormantSnapshot): Dorm
 }
 
 function listIn(t: MemoryTables, tenantId: string, ownScope: string | null, opts: ListDormantOpts): DormantMemory[] {
-  const terms = (opts.query ?? '')
-    .trim()
-    .split(/\s+/)
-    .filter((term) => term.length > 0)
-    .map(asciiFolded);
-  const { limit } = opts;
-  const cap = limit !== undefined && Number.isFinite(limit) && limit >= 1 ? Math.floor(limit) : DEFAULT_DORMANT_LIMIT;
+  const terms = dormantTerms(opts).map(asciiFolded);
   const hits = [...t.dormant.values()].filter(
     (s) =>
       s.entry.tenantId === tenantId &&
       ownScopeTouches(ownScope, s.entry.scope ?? null) &&
       terms.every((term) => asciiFolded(s.entry.content).includes(term)),
   );
-  hits.sort((a, b) => byBytes(b.dormantAt, a.dormantAt) || byBytes(a.entry.id, b.entry.id));
-  return hits.slice(0, cap).map(listedAs);
+  hits.sort(comparing(DORMANT_ORDER));
+  return hits.slice(0, dormantListCap(opts)).map(listedAs);
 }
 
 function restoreIn(t: MemoryTables, tenantId: string, request: DormantRestoreRequest): DormantRestoreOutcome {

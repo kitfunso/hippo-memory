@@ -1,6 +1,36 @@
+// The key groups: minting, listing, granting and revoking API keys.
 import type { JsonValue } from '../../base/util/json.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { TenantId } from '../../base/util/tenant.js';
+
+export interface KeyRevoke {
+  readonly tenantId: string;
+  readonly keyId: string;
+  readonly actor: string;
+  readonly at: string;
+}
+
+export interface KeyAudit {
+  /** Sets revoked_at to `at` and appends one auth_revoke row (the key's tenant, `actor`, the key id) in one
+   * transaction, then resolves to `at`. A revoked key resolves to its own revoked_at and writes nothing; a key missing
+   * from `tenantId` rejects with NotFoundError `Unknown key_id: <keyId>`. */
+  revokeApiKey(revoke: KeyRevoke): Promise<string>;
+}
+
+export interface KeyGrants {
+  /** Checks the key under the write lock; the change and its auth_grant or auth_ungrant row commit together. */
+  changeScopeGrant(change: ScopeGrantChange): Promise<void>;
+}
+
+/** One grant or ungrant on a key of `tenantId`, and the actor of its audit row; the api has already refused an open or
+ * personal scope. */
+export interface ScopeGrantChange {
+  readonly tenantId: string;
+  readonly keyId: string;
+  readonly scope: string;
+  readonly op: 'auth_grant' | 'auth_ungrant';
+  readonly actor: string;
+}
 
 /** A key to insert and the actor and metadata of its auth_create row, whose tenant and target are the key's. Neither
  * holds the plaintext. */

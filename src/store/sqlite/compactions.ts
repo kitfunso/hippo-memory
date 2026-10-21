@@ -9,7 +9,7 @@ import {
   startCompaction,
   type Log,
 } from './compactions-record.js';
-import type { CallerItems, CallerItemsSaved, Compactions } from '../port/compactions.js';
+import type { CallerItems, CallerItemsSaved, Compactions } from '../port/capture.js';
 import type { Sync } from './served.js';
 import { bound, boundWithFiles, type Bodies } from './bound.js';
 

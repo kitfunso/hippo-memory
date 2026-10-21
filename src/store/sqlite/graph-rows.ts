@@ -1,7 +1,14 @@
 // The graph's entity, relation and queue rows as hippo.db holds them, and the types every reader and writer of them
 // shares.
-import type { Entity, EntityType, Relation, RelationType, SourceKind, SourceObjectType } from '../port/graph-reads.js';
-import type { SourceObjectRef } from '../port/graph-rebuild.js';
+import type {
+  Entity,
+  EntityType,
+  Relation,
+  RelationType,
+  SourceKind,
+  SourceObjectType,
+  SourceObjectRef,
+} from '../port/graph.js';
 
 export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'person',

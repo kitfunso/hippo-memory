@@ -3,8 +3,7 @@ import { generateId } from '../../base/memory/memory.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
-import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
-import type { Goals } from '../port-groups.js';
+import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../port/goals.js';
 import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
@@ -35,7 +34,7 @@ export interface GoalRow {
   completed_at: string | null;
   outcome_score: number | null;
 }
-export const GOAL_COLUMNS = `id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+const GOAL_COLUMNS = `id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
            success_condition, retrieval_policy_id, created_at, completed_at, outcome_score`;
 
 const MAX_ACTIVE_GOAL_DEPTH = 3;

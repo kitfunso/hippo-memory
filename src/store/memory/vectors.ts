@@ -5,7 +5,7 @@ import { passesScopeFilterForRecall, type RecallScopeFilter } from '../../base/s
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows } from '../../db/vector-store.js';
-import type { VectorCandidateSpec, VectorReads } from '../port/vector-reads.js';
+import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec, type VectorReads } from '../port/vectors.js';
 import type { MemoryTables } from './tables.js';
 
 function passesScope(scope: string | null, filter: RecallScopeFilter | undefined): boolean {
@@ -40,7 +40,7 @@ function nearestIn(t: MemoryTables, queryVector: readonly number[], spec: Vector
     const row = t.entries.get(id);
     return row !== undefined && admitsCandidate(row, spec) ? [{ id, vector: decodeVector(v.bytes) }] : [];
   });
-  return rankVectorRows(queryVector, admitted, spec.limit ?? 50).flatMap((m) => {
+  return rankVectorRows(queryVector, admitted, spec.limit ?? VECTOR_CANDIDATE_LIMIT).flatMap((m) => {
     const entry = t.entries.get(m.id);
     return entry ? [structuredClone(entry)] : [];
   });

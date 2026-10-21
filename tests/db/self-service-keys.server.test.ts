@@ -6,7 +6,8 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
-import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from '../_helpers/audit-rows.js';
+import type { AuditEvent } from '../../src/store/port/types.js';
 import {
   adminActor,
   authCreate,
@@ -92,8 +93,8 @@ function keyRows(): KeyRow[] {
 const liveOwned = (owner: string): KeyRow[] =>
   keyRows().filter((r) => r.owner_subject === owner && r.revoked_at === null);
 
-function auditRows(): ReturnType<typeof listAuditEventsAfter> {
-  return withDb((db) => listAuditEventsAfter(db, { afterId: 0, tenantId: TENANT }));
+function auditRows(): AuditEvent[] {
+  return withDb((db) => auditRowsOn(db, TENANT));
 }
 
 function breakAuditLog(): void {

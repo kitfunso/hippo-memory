@@ -6,13 +6,13 @@ import { rejectedText } from '../../base/records/rejection-text.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import { heldTexts } from '../../base/util/same-text.js';
 import type { AppliedRejection, RejectedValueRow, Rejection, Rejections } from '../port/rejections.js';
-import { appendAudit, byBytes, oldestFirst, tenantKey } from './rows.js';
+import { comparing, oldestFirst, REJECTED_ORDER } from '../rules/order.js';
+import { appendAudit, tenantKey } from './rows.js';
 import { markParentDirty, stage, type Tx } from './staged.js';
 import { asStored } from './stored-entry.js';
 import type { MemoryTables } from './tables.js';
 
-const newestFirst = (a: RejectedValueRow, b: RejectedValueRow): number =>
-  byBytes(b.rejectedAt, a.rejectedAt) || byBytes(a.digest, b.digest);
+const newestFirst = comparing(REJECTED_ORDER);
 
 type Removal = Omit<AppliedRejection, 'digest' | 'content'>;
 

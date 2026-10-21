@@ -9,7 +9,8 @@ import { tableColumns } from '../../db/tables.js';
 import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
-import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../base/memory/memory-audit.js';
+import { isRepairCandidate, previewDefect } from '../../base/memory/memory-audit.js';
+import { repairIssues } from '../rules/repair-issues.js';
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
@@ -21,7 +22,7 @@ import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, Handles } from './open.js';
-import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit-maintenance.js';
+import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, skipEmpty } from './bound.js';
 import type { AuditMaintenance } from '../port.js';
@@ -88,17 +89,7 @@ function judge(
   entries: readonly MemoryEntry[],
   backing: ReadonlySet<string>,
 ): QualityRepairIssue[] {
-  const parents = parentsOf(db, tenantId, entries);
-  return entries.flatMap((entry): QualityRepairIssue[] => {
-    const defect = repairDefect(entry, parents);
-    if (defect === null) return [];
-    const kept = repairKeeps(entry, backing.has(entry.id), protect);
-    return [
-      kept === undefined
-        ? { id: entry.id, ...defect }
-        : { id: entry.id, ...defect, disposition: 'protected', protection: kept },
-    ];
-  });
+  return repairIssues(entries, parentsOf(db, tenantId, entries), backing, protect);
 }
 
 function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {

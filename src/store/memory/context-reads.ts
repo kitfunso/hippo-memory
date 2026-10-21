@@ -1,7 +1,7 @@
 // The in-memory ContextReads group: contextGet's fallback handoff, candidate rows and ambient tallies, read with the
 // same windows and order hippo.db's SQL reads them in.
 import { tallyAmbientEntries } from '../../base/memory/ambient.js';
-import { isoInstant } from '../../base/memory/created-stamp.js';
+import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { computeSchemaFit, type MemoryEntry } from '../../base/memory/memory.js';
 import { rarestFtsQuery } from '../../base/rank/prompt-recall.js';
 import { ambientRefusal } from '../../base/scope/read-admission.js';
@@ -18,10 +18,14 @@ import type {
   RecentOrigins,
 } from '../port/context-reads.js';
 import { latestHandoffIn } from './handoffs.js';
-import { byBytes, oldestFirst } from './rows.js';
+import { byBytes, newestFirst, oldestFirst, type DescendingKeyset } from '../rules/order.js';
 import { rowTerms } from './fts.js';
 import { searchRecallIn } from './search.js';
 import type { MemoryTables } from './tables.js';
+
+const BY_CREATED: DescendingKeyset<MemoryEntry> = { key: (e) => e.created, textId: (e) => e.id };
+// A drifted stamp sorts at the instant Date reads in it, as if written in toISOString form.
+const BY_STAMP: DescendingKeyset<MemoryEntry> = { key: (e) => sortableStamp(e.created), textId: (e) => e.id };
 
 /** schemaFit's window: the tenant's newest rows that move the fit. */
 const SCHEMA_FIT_WINDOW_ROWS = 2000;
@@ -101,10 +105,7 @@ function recentRows(
   origins?: RecentOrigins,
 ) {
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
-  // A drifted stamp sorts at the instant Date reads in it, an unreadable one last, as if written in toISOString form.
-  const at = (e: MemoryEntry): string =>
-    [...e.created].length === 24 && /z$/i.test(e.created) ? e.created : (isoInstant(e.created) ?? '');
-  const newest = [...rows].sort((a, b) => byBytes(at(b), at(a)) || byBytes(b.id, a.id));
+  const newest = [...rows].sort(newestFirst(BY_STAMP));
   // The SQL origin filter differs from inOrigins: a '' name in the list admits '' rows even without userGlobal.
   const own = origins
     ? newest.filter((e) => {
@@ -165,9 +166,7 @@ function ambientIn(t: MemoryTables, tenantId: string, request: AmbientCandidateR
 
 /** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as hippo.db's LIMIT reads it. */
 function newestIn(t: MemoryTables, tenantId: string, limit: number): MemoryEntry[] {
-  const newest = [...t.entries.values()]
-    .filter((e) => e.tenantId === tenantId)
-    .sort((a, b) => byBytes(b.created, a.created) || byBytes(b.id, a.id));
+  const newest = [...t.entries.values()].filter((e) => e.tenantId === tenantId).sort(newestFirst(BY_CREATED));
   return structuredClone((limit < 0 ? newest : newest.slice(0, limit)).reverse());
 }
 

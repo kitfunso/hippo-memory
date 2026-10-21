@@ -5,7 +5,7 @@ import { ownScopeTouches, passesScopeFilterForRecall } from '../../base/scope/re
 import { errorFields, log } from '../../base/util/log.js';
 import { chunked } from '../../base/util/chunked.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import type { LessonWrites } from '../port/lesson-writes.js';
+import type { LessonWrites } from '../port/entry-writes.js';
 import type { HeldText } from '../port/types.js';
 import { contentHoldsPhrase } from './fts.js';
 import { bumpCounter } from './rows.js';

@@ -7,7 +7,7 @@ import type {
   ApplyGraphOpsOptions,
   ApplyGraphOpsResult,
   GraphRebuild,
-} from '../port/graph-rebuild.js';
+} from '../port/graph.js';
 import type { Sync } from './served.js';
 import {
   deleteEntityRow,

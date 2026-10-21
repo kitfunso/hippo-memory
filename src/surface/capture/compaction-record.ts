@@ -15,7 +15,7 @@ import type {
   ItemsOptions,
   OpenCompaction,
   StepFailure,
-} from '../../store/port/compaction-hooks.js';
+} from '../../store/port/capture.js';
 import type { StoreGroups } from '../../store/port.js';
 import { loadConfig } from '../../base/config/config.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';

@@ -12,7 +12,7 @@ import {
   type FailureReading,
 } from './failure-reading.js';
 import type { JsonValue } from '../../base/util/json.js';
-import type { CaptureErrorOutcome, FailureOutcome } from '../../store/port/failure-log.js';
+import type { CaptureErrorOutcome, FailureOutcome } from '../../store/port/rejections.js';
 
 /** The store a failure is logged and its lesson kept in, with that store's config. */
 export type FailureTarget = Pick<Context, 'tenantId' | 'store' | 'config'>;

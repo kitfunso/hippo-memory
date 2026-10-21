@@ -25,7 +25,7 @@ export interface Sharing {
   textsHolding(tenantId: TenantId, words: readonly string[], opts: TextsHoldingOptions): Promise<HeldText[]>;
   /** The ids among `ids` that a memory of any tenant holds. */
   takenIds(ids: readonly string[]): Promise<string[]>;
-  /** The memories with these ids, in any tenant; at most 500 ids a call. */
+  /** The memories with these ids, in any tenant. */
   entriesByIds(ids: readonly string[]): Promise<MemoryEntry[]>;
   /** How many memories of `tenantId` each source holds. */
   sourceTallies(tenantId: TenantId): Promise<SourceTally[]>;
@@ -77,4 +77,18 @@ export interface RecallSearchEntriesOptions {
   readonly includeSuperseded?: boolean;
   readonly originProjects?: OriginFilter;
   readonly ownScope?: string;
+}
+
+// The global write behind `promote`: a promoted copy written into the operator's global store.
+/** How a promoted copy is written: the actor its `remember` row names and the local row it copies. */
+export interface PromotedCopy {
+  readonly actor?: string;
+  readonly sourceId: string;
+  /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own transaction. */
+  readonly auditAs?: { readonly tenantId: string; readonly actor: string };
+}
+
+export interface Promotion {
+  /** Writes `copy` into this store, the global one; the caller has already vetted, labelled and embeds it. */
+  writeCopy(copy: MemoryEntry, opts: PromotedCopy): Promise<void>;
 }

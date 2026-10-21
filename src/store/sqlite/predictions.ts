@@ -17,7 +17,7 @@ import {
   type Prediction,
   type PredictionListQuery,
   type SavePredictionOptions,
-} from '../port/predictions.js';
+} from '../port/objects.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';

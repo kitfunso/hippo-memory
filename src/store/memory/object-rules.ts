@@ -29,7 +29,7 @@ export interface NewRow {
   readonly createdAt: string;
 }
 
-export interface SaveRules<K extends SavableKind> {
+interface SaveRules<K extends SavableKind> {
   readonly row: (fields: ObjectFields[K], row: NewRow) => ObjectByKind[K];
   /** The create row's keys after the id. */
   readonly createKeys: (fields: ObjectFields[K], version: number) => Metadata;

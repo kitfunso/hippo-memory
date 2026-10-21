@@ -3,11 +3,10 @@
 import { closeHippoDb, openHippoDb, withSqliteAllowed, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import type { SessionHandoffRow } from '../../src/base/session/handoff.js';
-import type { FailureOutcome, RoutineRule } from '../../src/store/port/failure-log.js';
+import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../../src/store/port/rejections.js';
 import type { QuarantineRow, QuarantineStatus } from '../../src/store/port/quarantine.js';
-import type { RejectedValueRow } from '../../src/store/port/rejections.js';
 import type { SlackWorkspace } from '../../src/store/port/connectors.js';
-import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from './audit-rows.js';
 import { readApiKeyRecord } from '../../src/store/sqlite/auth.js';
 import { readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { rowToGoal, type GoalRow } from '../../src/store/sqlite/goals.js';
@@ -30,7 +29,6 @@ import {
   type TaskSnapshotRow,
 } from '../../src/store/sqlite/rows.js';
 import type { ObjectKind } from '../../src/base/records/object-types.js';
-import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { emptyTables, type MemoryTables } from '../../src/store/memory/tables.js';
 import type {
   ArchivedRow,
@@ -266,7 +264,7 @@ function copyConnectors(db: DatabaseSyncLike, t: MemoryTables): void {
 }
 
 function copyStoreState(db: DatabaseSyncLike, t: MemoryTables): void {
-  t.audit.push(...listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 }));
+  t.audit.push(...auditRowsOn(db));
   for (const row of rows<{ name: string; seq: number }>(db, 'SELECT name, seq FROM sqlite_sequence')) {
     t.seq.set(row.name, Number(row.seq));
   }

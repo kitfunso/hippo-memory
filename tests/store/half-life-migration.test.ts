@@ -98,6 +98,11 @@ function bulkLegacyStore(n: number): string {
 }
 const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
+/** The base the store's memories are on, as a dry-run move reads it. */
+async function baseOf(root: string): Promise<number> {
+  return (await local(root).consolidation.moveHalfLives(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' })).from;
+}
+
 function byContent(root: string): Map<string, number> {
   return new Map(loadAllEntries(root, 'default').map((e) => [e.content, e.halfLifeDays]));
 }
@@ -105,8 +110,8 @@ function byContent(root: string): Map<string, number> {
 describe('default half-life migration', () => {
   it('a new store starts on the current default and a pre-1.46 store reads as 7 days', async () => {
     expect(DEFAULT_HALF_LIFE_DAYS).toBe(365);
-    expect(await local(store()).consolidation.halfLifeBase()).toBe(365);
-    expect(await local(legacyStore([legacy('the staging deploy needs the VPN')])).consolidation.halfLifeBase()).toBe(7);
+    expect(await baseOf(store())).toBe(365);
+    expect(await baseOf(legacyStore([legacy('the staging deploy needs the VPN')]))).toBe(7);
   });
 
   it('moves only memories still on the old base, once, and logs their ids', async () => {
@@ -126,7 +131,7 @@ describe('default half-life migration', () => {
     expect(hl.get(error.content)).toBe(730);
     expect(hl.get(shortened.content)).toBe(3);
     expect(hl.get(fixed.content)).toBe(90);
-    expect(await local(root).consolidation.halfLifeBase()).toBe(365);
+    expect(await baseOf(root)).toBe(365);
 
     expect((await migrateDefaultHalfLife(local(root), 365)).rescaled).toBe(0);
 
@@ -188,7 +193,7 @@ describe('default half-life migration', () => {
     await migrateDefaultHalfLife(local(root), 365);
     await migrateDefaultHalfLife(local(root), 7);
     expect(byContent(root).get(plain.content)).toBe(7);
-    expect(await local(root).consolidation.halfLifeBase()).toBe(7);
+    expect(await baseOf(root)).toBe(7);
   });
 
   it('a dry run and an unchanged default write nothing', async () => {
@@ -198,7 +203,7 @@ describe('default half-life migration', () => {
       dryRun: true,
     });
     expect([...byContent(root).values()]).toEqual([7]);
-    expect(await local(root).consolidation.halfLifeBase()).toBe(7);
+    expect(await baseOf(root)).toBe(7);
     expect(await migrateDefaultHalfLife(local(root), 7)).toMatchObject({ rescaled: 0 });
   });
 

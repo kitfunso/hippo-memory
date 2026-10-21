@@ -8,7 +8,7 @@ import type { RuntimeSettings } from '../../base/config/config.js';
 import type { HippoStore, VectorReads } from '../../store/index.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
-import type { VectorCandidateSpec } from '../../store/port/vector-reads.js';
+import type { VectorCandidateSpec } from '../../store/port/vectors.js';
 
 /**
  * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry
