@@ -10,7 +10,7 @@ import { ScopeForbiddenError } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../base/util/sqlite-blocked.js';
 
-type FieldValue = string | number | boolean | null;
+type FieldValue = string | number | boolean | null | readonly string[];
 
 /** One error as a thread message can carry it. */
 export interface WireError {
@@ -19,7 +19,8 @@ export interface WireError {
   readonly classes: readonly string[];
   readonly message: string;
   readonly stack: string | undefined;
-  /** Own enumerable fields with a primitive value: `status`, `errcode`, `storeKind`, a `name` its constructor set. */
+  /** Own enumerable fields with a primitive value or a list of strings: `status`, `errcode`, `storeKind`, a `name` its
+   * constructor set, a flush's `failedUnitIds`. */
   readonly fields: Readonly<Record<string, FieldValue>>;
   readonly cause: WireError | undefined;
 }
@@ -59,6 +60,7 @@ const PROTOTYPES: ReadonlyMap<string, Error> = new Map(
 const MAX_CAUSES = 4;
 
 function isFieldValue<V>(value: V): value is V & FieldValue {
+  if (Array.isArray(value)) return value.every((item): item is string => typeof item === 'string');
   return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 }
 

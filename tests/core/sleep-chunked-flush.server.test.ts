@@ -14,6 +14,8 @@ import { consolidate } from '../../src/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import {
@@ -366,7 +368,11 @@ describe('chunked consolidation flush', () => {
     expect(result.semanticCreated).toBe(4);
   });
 
-  it('the partial audit row names the unit that threw, not the first unit of its chunk', async () => {
+  // On a worker the error reaches the sleep as a copy the store's error codec rebuilt, so the ids must ride on it.
+  it.each([
+    ['in process', (root: string) => sqliteStore(root)],
+    ['on a store worker', (root: string) => workerSqliteStore(root)],
+  ])('the partial audit row names the unit that threw, not the first unit of its chunk, %s', async (_, storeAt) => {
     const fx = seed({ clusters: 6, dormant: 0, filler: 0 });
     const bad = fx.clusters[3]!;
     onStore(fx.root, (db) =>
@@ -374,11 +380,16 @@ describe('chunked consolidation flush', () => {
         `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
       ),
     );
-    const ctx: FullContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-    const oneChunk: typeof runConsolidation = (store, opts) =>
-      runConsolidation(store, { ...opts, now: NOW, budget: budget(Infinity) });
+    const store = storeAt(fx.root);
+    const ctx: FullContext = { ...apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' }), store };
+    const oneChunk: typeof runConsolidation = (on, opts) =>
+      runConsolidation(on, { ...opts, now: NOW, budget: budget(Infinity) });
 
-    await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');
+    try {
+      await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');
+    } finally {
+      await store.close();
+    }
 
     const [audit] = onStore(fx.root, (db) => queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
     expect(audit?.metadata).toMatchObject({ partial: true, nextUnitIds: expect.arrayContaining(bad) });
