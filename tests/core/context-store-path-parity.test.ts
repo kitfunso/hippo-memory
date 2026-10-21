@@ -9,7 +9,6 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
-import type { HippoStore } from '../../src/store/index.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
@@ -23,7 +22,6 @@ import {
   seedContextRows,
 } from '../_helpers/context-fixture.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { inMemoryContextStore, type InMemoryContextStore } from '../_helpers/in-memory-context-store.js';
 import { CLEARED_ENV, statsMirror } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
@@ -31,6 +29,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
 import { contextReach } from '../../src/api/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
+import { memoryContextRowsOf } from '../_helpers/memory-recall-rows.js';
 
 oneRequestPerTest();
 
@@ -353,7 +353,7 @@ interface PassConfig {
 async function runPass(
   c: Omit<Case, 'name' | 'expected'>,
   { withGlobal, embedded, prepare }: PassOptions,
-  makeStore?: (root: string) => HippoStore,
+  makeSide?: (root: string) => MemorySide,
 ): Promise<Pass> {
   const home = makeRoot('context-parity', { init: false });
   const root = join(home, 'store');
@@ -369,7 +369,8 @@ async function runPass(
   if (c.shared) config.sharedStore = true;
   if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   prepare?.(root, globalRoot);
-  const store = makeStore?.(root);
+  const side = makeSide?.(root);
+  const store = side?.store;
   const served = store ?? sqliteStore(root);
   // A store of another kind gets no reach: the api reads it as one project with no global store.
   const reach = served.kind === 'sqlite' ? contextReach(sqliteReach(root, served), loadConfig) : undefined;
@@ -389,7 +390,10 @@ async function runPass(
   await store?.close();
   return {
     result,
-    rows: { local: contextRowsOf(root), global: withGlobal ? contextRowsOf(globalRoot) : null },
+    rows: {
+      local: side ? memoryContextRowsOf(side.tables) : contextRowsOf(root),
+      global: withGlobal ? contextRowsOf(globalRoot) : null,
+    },
     lastRecall: lastRecallMeta(root),
     stats: statsMirror(root),
   };
@@ -475,17 +479,14 @@ describe('contextGet on a store held in memory, with hippo.db blocked', () => {
   it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
     const onHippoDb = await runPass(c, { withGlobal: false, embedded: true });
     const before = embeddings.requests();
-    let memory: InMemoryContextStore | undefined;
+    let memory: MemorySide | undefined;
     // The operator's global store sits under HIPPO_HOME here, and a store other than hippo.db must neither read nor write it.
-    const inMemory = await runPass(
-      c,
-      { withGlobal: true, embedded: true },
-      (root) => (memory = inMemoryContextStore(root)).store,
-    );
+    const inMemory = await runPass(c, { withGlobal: true, embedded: true }, (root) => (memory = memorySide(root)));
     expect(rounded(inMemory.result)).toEqual(rounded(onHippoDb.result));
     expect(inMemory.rows.local).toEqual(onHippoDb.rows.local);
     expect(inMemory.rows.global).toEqual(globalRows);
-    expect(inMemory.stats).toBe(onHippoDb.stats);
+    // stats.json is hippo.db's folder mirror; the counters themselves are in rows.local.stats.
+    expect(inMemory.stats).toBeNull();
     // The last-recall ids feed only POST /v1/outcome, which no other store serves, so the store path leaves them as seeded.
     expect(inMemory.lastRecall).toEqual(seededLastRecall);
     expect(memory?.calls).toEqual(expect.arrayContaining([...(c.storeReads ?? [])]));

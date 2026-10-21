@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rawProvenanceOf } from '../_helpers/in-memory-reports-store.js';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { rawProvenanceOf } from '../../src/store/memory/reports.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

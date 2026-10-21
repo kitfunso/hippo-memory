@@ -9,7 +9,6 @@
  * `bot:<bot_id>` instead. This test is the regression guard.
  */
 
-import { rawProvenanceOf } from '../_helpers/in-memory-reports-store.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
@@ -21,6 +20,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { rawProvenanceOf } from '../../src/store/memory/reports.js';
 
 oneRequestPerTest();
 

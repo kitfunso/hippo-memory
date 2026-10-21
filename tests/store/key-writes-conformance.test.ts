@@ -5,13 +5,6 @@ import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../../src/entry/store-kit.js';
 import {
-  inMemoryKeyWritesStore,
-  OWNED_SCOPE,
-  OWNER,
-  seedOwnedKeys,
-  type OwnedKeys,
-} from '../_helpers/in-memory-key-writes-store.js';
-import {
   FIXTURE_REVOKED_AT,
   onBothStores,
   seedTwoTenants,
@@ -20,9 +13,11 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { OWNED_SCOPE, OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js';
 
 oneRequestPerTest();
 
@@ -40,8 +35,8 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'keyWrites', inMemoryKeyWritesStore, calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  const sides = await onBothStores(fixture, 'keyWrites', calls);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

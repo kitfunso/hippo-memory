@@ -15,7 +15,6 @@ import type {
 } from '../../src/entry/store-kit.js';
 import { ALL_TENANTS } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -24,6 +23,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -94,8 +94,8 @@ function seedMemories(dir: string): void {
 }
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'vectorWrites', inMemoryVectorWritesStore, calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  const sides = await onBothStores(fixture, 'vectorWrites', calls);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

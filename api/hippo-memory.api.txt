@@ -206,6 +206,7 @@ entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: sqliteStore re-export
 entry/store-kit.d.ts: tallyAmbientEntries re-export
 entry/store-kit.d.ts: targetReader re-export
+entry/testing.d.ts: MemoryTables re-export
 entry/testing.d.ts: MemoryWire re-export
 entry/testing.d.ts: WireSearchResult re-export
 entry/testing.d.ts: WireStrengthInputs re-export
@@ -226,6 +227,7 @@ entry/testing.d.ts: loadAllEntriesWire function
 entry/testing.d.ts: loadEmbeddingIndex re-export
 entry/testing.d.ts: loadRecallSearchEntries re-export
 entry/testing.d.ts: loadVectorCandidateEntriesAt re-export
+entry/testing.d.ts: memoryStore re-export
 entry/testing.d.ts: recordTokenUse re-export
 entry/testing.d.ts: resolveTenantId re-export
 entry/testing.d.ts: tokensBySession re-export

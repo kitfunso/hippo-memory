@@ -7,7 +7,6 @@ import { reject } from '../../src/api/index.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { AuditEvent, ScopeReader } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -16,6 +15,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -107,8 +107,8 @@ const project = (entries: MemoryEntry[]): Row[] =>
   }));
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'entryWrites', inMemoryEntryWritesStore, calls);
-  expect(sides.other).toEqual(sides.sqlite);
+  const sides = await onBothStores(fixture, 'entryWrites', calls);
+  expectSameOutcomes(sides);
   return sides.sqlite;
 }
 

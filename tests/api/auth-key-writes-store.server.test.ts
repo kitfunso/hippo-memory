@@ -9,16 +9,12 @@ import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore } from '../../src/entry/store-kit.js';
-import {
-  inMemoryKeyWritesStore,
-  OWNER,
-  seedOwnedKeys,
-  type OwnedKeys,
-} from '../_helpers/in-memory-key-writes-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyListItem } from '../../src/store/port/key-writes.js';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { memorySide } from '../_helpers/memory-side.js';
+import { OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js';
 
 let fixture: TwoTenantFixture;
 let owned: OwnedKeys;
@@ -89,7 +85,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
 
   it('mints through keyWrites, creates no hippo.db in hippoRoot, and stores only the hash', async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryKeyWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) };
     const minted = await authCreate(ctx, { label: 'ci', role: 'member' });
     expect(minted).toMatchObject({ tenantId: TENANT_A, role: 'member' });
@@ -118,7 +114,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
 
   it('self-mints through keyWrites, and a key it replaces is refused at once despite the verified-key cache', async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryKeyWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const ctx = {
       hippoRoot,
       tenantId: TENANT_A,
@@ -172,7 +168,7 @@ describe('authListRows with ctx.store', () => {
 
   it.each(callers)('lists what hippo.db lists for %s', async (_name, actorOf, listsAny) => {
     const root = copyOf();
-    const memory = inMemoryKeyWritesStore(root);
+    const memory = memorySide(root);
     const actor = actorOf();
     for (const active of [true, false]) {
       const onHippoDb = await authListRows(apiCtx(root, TENANT_A, actor), { active });
@@ -206,7 +202,7 @@ describe('POST and GET /v1/auth/keys under another store', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     const root = copyOf();
     const before = hippoDbState(root);
-    const memory = inMemoryKeyWritesStore(root);
+    const memory = memorySide(root);
     handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
     const res = await mintVia(handle.url, fixture.tokens.adminA);
     expect(res.status).toBe(200);
