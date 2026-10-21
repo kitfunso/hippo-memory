@@ -3,7 +3,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
 import { type DatabaseSyncLike, ftsRowCounts, isFtsAvailable, repairFtsDrift, setFtsInSync } from '../../db/index.js';
 import { fallbackOrigin, originFromSource } from '../../base/scope/project-identity.js';
-import { ConflictError } from '../../base/errors/api-errors.js';
+import { CrossTenantIdError } from '../../base/errors/api-errors.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { StoreFiles } from './open.js';
@@ -22,13 +22,6 @@ export function upsertEntryRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
   rejectLegacyTenantKey(entry);
   checkRejectionGuard(db, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
-}
-
-/** An id another tenant holds: the upsert would move that tenant's row into the writer's. */
-export class CrossTenantIdError extends ConflictError {
-  constructor(id: string) {
-    super(`Memory ${id} belongs to another tenant`);
-  }
 }
 
 /** The row alone, with no rejection guard or full-text row, for `upsertEntryRow` and for `batchWriteAndDelete`, which

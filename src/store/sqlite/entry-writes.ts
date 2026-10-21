@@ -9,7 +9,7 @@ import {
 } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
 import { chunked } from '../../base/util/chunked.js';
-import { RejectedValueError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import { RejectedValueError, ConflictError, CrossTenantIdError, NotFoundError } from '../../base/errors/api-errors.js';
 import { markSummaryDirtyInTx, markSummariesDirtyInTx, summaryDirtyAuditRow } from './summary-dirty.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
@@ -18,7 +18,6 @@ import { selectEntriesByIds } from './entry-reads.js';
 import {
   stampOriginProject,
   upsertEntryRow,
-  CrossTenantIdError,
   syncFtsRow,
   deleteFtsRow,
   replaceFtsRows,

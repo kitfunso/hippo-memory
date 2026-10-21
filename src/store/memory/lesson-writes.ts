@@ -1,7 +1,8 @@
 // The in-memory LessonWrites group: git learn's word and tag reads and its batch writes.
-import { RejectedValueError } from '../../base/errors/api-errors.js';
+import { CrossTenantIdError, RejectedValueError } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { ownScopeTouches, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
+import { errorFields, log } from '../../base/util/log.js';
 import { chunked } from '../../base/util/chunked.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { LessonWrites } from '../port/lesson-writes.js';
@@ -66,7 +67,7 @@ function contentsWithTagIn(t: MemoryTables, tenantId: string, tag: string, origi
   return tagged.map((e) => e.content);
 }
 
-/** One staged write; a refused value leaves its refusal row in order and the rest of the batch goes on. */
+/** One staged write; a refused value leaves its refusal row in order, a foreign id is skipped, the rest goes on. */
 function writeSkippingIn(
   t: MemoryTables,
   entries: Parameters<LessonWrites['writeSkippingRejected']>[0],
@@ -78,6 +79,10 @@ function writeSkippingIn(
         put(t, tx, entry, actor);
         return [entry.id];
       } catch (err) {
+        if (err instanceof CrossTenantIdError) {
+          log.warn(`${err.message}; row skipped`, errorFields(err));
+          return [];
+        }
         if (!(err instanceof RejectedValueError)) throw err;
         tx.audit.push(refusalEvent(err, actor));
         return [];

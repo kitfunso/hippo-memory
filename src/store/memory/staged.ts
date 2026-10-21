@@ -1,6 +1,11 @@
 // A staged write on the memories: a copy of the rows and the audit rows to append, committed together only when the
 // write returns, as one hippo.db transaction would be; with the rules every memory write applies to a row it puts.
-import { BadRequestError, ConflictError, NotFoundError, RejectedValueError } from '../../base/errors/api-errors.js';
+import {
+  BadRequestError,
+  CrossTenantIdError,
+  NotFoundError,
+  RejectedValueError,
+} from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
@@ -104,7 +109,7 @@ function refusal(t: MemoryTables, stored: MemoryEntry | undefined, entry: Memory
 export function put(t: MemoryTables, tx: Tx, entry: MemoryEntry, actor: string): void {
   const stored = tx.rows.get(entry.id);
   if (stored && stored.tenantId !== entry.tenantId) {
-    throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
+    throw new CrossTenantIdError(entry.id);
   }
   const refused = refusal(t, stored, entry);
   if (refused) throw refused;
