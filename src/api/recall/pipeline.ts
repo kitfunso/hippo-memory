@@ -96,23 +96,18 @@ export interface RecallReranker {
 /** A stage rankRecall can stop before, in pipeline order. */
 export type RankStage = 'expand' | 'rerank' | 'salience' | 'outcome' | 'layer';
 
-/** Everything that shapes one ranking, already parsed and validated. */
-export interface RankRecallOptions {
-  query: string;
-  /** Tokens the engines may spend, priced by `cost`. */
-  budget: number;
-  /** Price of one result, usually the tokens its printed line takes. */
-  cost: ResultCost;
-  window: Required<Pick<RecallWindowOptions, 'limit'>>;
-  /** Record a rerank trace step for each score change. */
-  why?: boolean;
+/** The rows a ranking may return, and the scope its boosts favour. */
+export interface RankRecallFilters {
   includeSuperseded: boolean;
   asOf?: string;
   /** `--scope`: unlocks that envelope scope on top of the default-admitted set. */
   explicitScope: string | null;
   /** Scope used for boosting only, never for filtering. */
   activeScope: string | null;
-  search: RecallSearchOptions;
+}
+
+/** The stages after the search, each off until its flag sets it. */
+export interface RankRecallStages {
   graphHops?: RecallGraphHops;
   evcAdaptive?: boolean;
   filterConflicts?: boolean;
@@ -126,6 +121,19 @@ export interface RankRecallOptions {
   /** The caller rejected a flag this stage reads; ranking stops before it so the notes and goal-log rows produced up to
    *  there match the CLI's error path. */
   haltBefore?: RankStage;
+}
+
+/** Everything that shapes one ranking, already parsed and validated. */
+export interface RankRecallOptions extends RankRecallFilters, RankRecallStages {
+  query: string;
+  /** Tokens the engines may spend, priced by `cost`. */
+  budget: number;
+  /** Price of one result, usually the tokens its printed line takes. */
+  cost: ResultCost;
+  window: Required<Pick<RecallWindowOptions, 'limit'>>;
+  /** Record a rerank trace step for each score change. */
+  why?: boolean;
+  search: RecallSearchOptions;
 }
 
 /** Ranked results and what the caller needs to report and persist them. */
