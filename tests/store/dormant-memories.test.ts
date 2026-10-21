@@ -1,13 +1,9 @@
 /**
- * Dormant memories: what sleep does with a faded memory instead of deleting it.
- *
- * On by default (`"dormant": { "enabled": false }` opts out). The sleep decay
- * pass moves a memory that faded below the threshold out of active memory
- * into the dormant store. Dormant memories never reach recall or context,
- * sit out every later sleep, and can be listed, searched, restored or
- * permanently forgotten. Guardrails: a faded secret is deleted, never kept
- * dormant, and a dormant memory older than `retentionDays` (default 180, 0 =
- * forever) is deleted for good. Real SQLite throughout.
+ * Dormant memories: what sleep does with a faded memory instead of deleting it. On by default
+ * (`"dormant": { "enabled": false }` opts out). The sleep decay pass moves a memory that faded below the threshold
+ * into the dormant store. Dormant memories never reach recall or context, sit out every later sleep, and can be
+ * listed, searched, restored or permanently forgotten. Guardrails: a faded secret is deleted, never kept dormant, and
+ * a dormant memory older than `retentionDays` (default 180, 0 = forever) is deleted for good. Real SQLite throughout.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -66,9 +62,8 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
   };
 }
 
-function ctxFor(home: string, tenantId = 'default'): FullContext {
-  return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
-}
+const ctxFor = (home: string, tenantId = 'default'): FullContext =>
+  apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
 
 function auditRows(home: string, op: AuditOp): AuditEvent[] {
   const db = openHippoDb(home);
