@@ -120,9 +120,9 @@ describe('Reports.statusCounts', () => {
 
 describe('Reports.correctionLinks and rawProvenance', () => {
   it('join each superseded row to a successor that exists and its source, and count the raw rows', async () => {
-    const [links] = await conforms([(r) => r.correctionLinks()]);
-    const [raw] = await conforms([(r) => r.rawProvenance()]);
-    expect('value' in links && links.value.map((l) => [l.correctedAt, l.sourceCreated])).toEqual([
+    const [links] = await conforms([(r) => r.correctionLinks({ limit: 500 })]);
+    const [raw] = await conforms([(r) => r.rawProvenance({ limit: 500 })]);
+    expect('value' in links && links.value.links.map((l) => [l.correctedAt, l.sourceCreated])).toEqual([
       [ago(HOUR), ago(30 * 24 * HOUR)],
     ]);
     expect('value' in raw && raw.value.total).toBe(1);

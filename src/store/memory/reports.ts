@@ -10,7 +10,15 @@ import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { Reports } from '../port-groups.js';
-import type { CorrectionLink, RawProvenance, StatusCounts, StrengthTallies } from '../port/reports.js';
+import type {
+  CorrectionLink,
+  CorrectionLinkPage,
+  RawProvenance,
+  RawProvenancePage,
+  ReportPage,
+  StatusCounts,
+  StrengthTallies,
+} from '../port/reports.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 import { openConflictsIn } from './conflicts.js';
 import { failureSummary } from './failure-log.js';
@@ -98,6 +106,37 @@ export function correctionLinksOf(rows: readonly MemoryEntry[]): CorrectionLink[
   });
 }
 
+/** The `items` whose row sorts after the page's cursor, cut to the page, and the cursor of the page after it. */
+function cutPage<T>(items: readonly T[], rowOf: (item: T) => MemoryEntry, page: ReportPage) {
+  const { after } = page;
+  const later = (e: MemoryEntry): boolean =>
+    after === undefined ||
+    byBytes(e.created, after.created) > 0 ||
+    (e.created === after.created && byBytes(e.id, after.id) > 0);
+  return keysetPage(items.filter((item) => later(rowOf(item))).slice(0, page.limit + 1), page.limit, (item) => {
+    const row = rowOf(item);
+    return { created: row.created, id: row.id };
+  });
+}
+
+function correctionLinksPage(t: MemoryTables, page: ReportPage): CorrectionLinkPage {
+  const rows = inStoreOrder(t);
+  const byId = new Map(rows.map((e) => [e.id, e]));
+  const kept = cutPage(correctionLinksOf(rows), (link) => byId.get(link.oldId)!, page);
+  return { links: kept.rows, next: kept.next };
+}
+
+function rawProvenancePage(t: MemoryTables, page: ReportPage): RawProvenancePage {
+  const rows = inStoreOrder(t);
+  const gaps = rows.filter((e) => e.kind === 'raw' && (!e.owner || !e.artifactRef));
+  const kept = cutPage(gaps, (e) => e, page);
+  return {
+    total: rawProvenanceOf(rows).total,
+    gaps: kept.rows.map((e) => ({ id: e.id, owner: e.owner ?? null, artifactRef: e.artifactRef ?? null })),
+    next: kept.next,
+  };
+}
+
 /** The raw rows of `rows` and those missing an owner or an artifact ref, in `rows` order. */
 export function rawProvenanceOf(rows: readonly MemoryEntry[]): RawProvenance {
   const raw = rows.filter((e) => e.kind === 'raw');
@@ -133,8 +172,8 @@ export function memoryReports(t: MemoryTables, rules: LossAversion): Reports {
       consolidation_runs: t.sleepRuns.slice(-CONSOLIDATION_RUNS_KEPT).map((run) => ({ ...run })),
     }),
     statusCounts: async (now, atRiskBelow) => statusCounts(t, rules, now, atRiskBelow),
-    correctionLinks: async () => correctionLinksOf(inStoreOrder(t)),
-    rawProvenance: async () => rawProvenanceOf(inStoreOrder(t)),
+    correctionLinks: async (page) => correctionLinksPage(t, page),
+    rawProvenance: async (page) => rawProvenancePage(t, page),
     createdSinceLastSleep: async (tenantId, now) => createdSinceLastSleepIn(t, tenantId, now),
   };
 }

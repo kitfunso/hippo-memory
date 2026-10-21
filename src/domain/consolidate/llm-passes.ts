@@ -1,6 +1,8 @@
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import type { EntryCursor } from '../../store/port/types.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { isPermanentFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 
@@ -181,13 +183,24 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   }
 }
 
+/** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a statement need not. */
+async function allUnprofiledTopicSummaries(store: SleepRun['store']['consolidation']): Promise<MemoryEntry[]> {
+  const all: MemoryEntry[] = [];
+  for (let after: EntryCursor | undefined; ;) {
+    const page = await store.unprofiledTopicSummaries({ limit: READ_PAGE_ROWS, after });
+    all.push(...page.entries);
+    if (page.next === null) return all;
+    after = page.next;
+  }
+}
+
 // 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7 was skipped
 // (re-clusters existing L2s every sleep).
 // Reads the stored L2s, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const { buildEntityProfiles } = await import('./dag.js');
-    const l2Summaries = await run.store.consolidation.unprofiledTopicSummaries();
+    const l2Summaries = await allUnprofiledTopicSummaries(run.store.consolidation);
     if (l2Summaries.length >= 2) {
       const profileResult = await buildEntityProfiles(run.store, l2Summaries, {
         ...llmOpts,

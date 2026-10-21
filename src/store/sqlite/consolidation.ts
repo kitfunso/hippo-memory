@@ -9,6 +9,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow, ftsDriftAt } from './entry-row.js';
 import { chunked } from '../../base/util/chunked.js';
+import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -21,6 +22,7 @@ import {
   type HalfLifeRows,
 } from '../../base/memory/half-life-plan.js';
 import type { RebuildPatch, Consolidation } from '../port/consolidation.js';
+import type { EntryCursor, EntryPage } from '../port/types.js';
 import { appendAuditEvent, recordAuditEventsRowByRowAt } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt, replaceDetectedConflictsAt } from './conflicts.js';
 import {
@@ -59,10 +61,15 @@ import { cachedStatement } from '../../db/statement-cache.js';
 // MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
 // orchestrator rebuildDirtySummaries().
 
-/** Host-wide loader for L2 topic summaries without an L3 parent, for consolidate phase 1.9 (buildEntityProfiles);
- * SQL-level filter, since in-memory `survivors` lacks L2s created by phase 1.7. Entries carry tenantId so per-cluster
- * writes stay tenant-scoped. */
-function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
+/** One keyset page of the L2 topic summaries without an L3 parent, across all tenants, for consolidate phase 1.9
+ * (buildEntityProfiles); SQL-level filter, since in-memory `survivors` lacks L2s created by phase 1.7. Entries carry
+ * tenantId so per-cluster writes stay tenant-scoped. */
+function loadL2SummariesPageAt(
+  db: DatabaseSyncLike,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): EntryPage {
+  const { after } = page;
+  const range = after ? 'AND created >= ? AND (created > ? OR id > ?)' : '';
   const rows = cachedStatement(
     db,
     `
@@ -72,16 +79,19 @@ function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
        AND dag_parent_id IS NULL
        AND kind != 'archived'
        AND superseded_by IS NULL
+       ${range}
      ORDER BY created ASC, id ASC
+     LIMIT ?
   `,
-  ).all() as MemoryRow[];
-  return rows.map(rowToEntry);
+  ).all(...(after ? [after.created, after.created, after.id] : []), page.limit + 1) as MemoryRow[];
+  const kept = keysetPage(rows, page.limit, (row) => ({ created: row.created, id: row.id }));
+  return { entries: kept.rows.map(rowToEntry), next: kept.next };
 }
 
-/** Dirty summaries across all tenants, newest change first (latest_at DESC NULLS LAST, id ASC), at most `limit` (all
- * when omitted) so HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later
- * writes stay tenant-scoped. */
-function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit?: number): MemoryEntry[] {
+/** Dirty summaries across all tenants, newest change first (latest_at DESC NULLS LAST, id ASC), at most `limit` so
+ * HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later writes stay
+ * tenant-scoped. */
+function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit: number): MemoryEntry[] {
   const rows = cachedStatement(
     db,
     `
@@ -92,7 +102,7 @@ function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit?: number): MemoryEn
      ORDER BY latest_at DESC NULLS LAST, id ASC
      LIMIT ?
   `,
-  ).all(limit ?? -1) as MemoryRow[];
+  ).all(limit) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -467,7 +477,7 @@ const summariesAt: Bodies<SummaryOps> = {
   childrenOfSummaries: childrenOfSummariesAt,
   applyRebuild: applyRebuildResultAt,
   clearSummaryDirty: clearSummaryDirtyAfterBuildAt,
-  unprofiledTopicSummaries: loadAllL2SummariesAt,
+  unprofiledTopicSummaries: loadL2SummariesPageAt,
 };
 
 /** The chunked writers on the store's own clock and pause, under sleep's own lock wait. */
