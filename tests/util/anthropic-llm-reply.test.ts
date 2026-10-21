@@ -1,24 +1,20 @@
-// sendAnthropicMessage reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
+// The Anthropic Llm reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
 import { describe, expect, it, vi } from 'vitest';
-import {
-  type AnthropicMessageFailure,
-  failureFields,
-  isPermanentFailure,
-  sendAnthropicMessage,
-} from '../../src/base/util/anthropic-messages.js';
+import { isPermanentFailure, llmFailureFields, type LlmFailure, type LlmReply } from '../../src/base/ports/llm.js';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
+
+/** One prompt through an Anthropic Llm whose network is `fetcher`. */
+function sendVia(fetcher: typeof fetch): Promise<LlmReply> {
+  return anthropicLlm({ apiKey: 'k-test', fetcher }).send({ maxTokens: 10, prompt: 'hi' });
+}
 
 const REPLY_CAP_BYTES = 1024 * 1024;
 
-function send(body: string): ReturnType<typeof sendAnthropicMessage> {
-  return sendAnthropicMessage({
-    apiKey: 'k-test',
-    maxTokens: 10,
-    prompt: 'hi',
-    fetcher: async () => new Response(body, { status: 200 }),
-  });
+function send(body: string): Promise<LlmReply> {
+  return sendVia(async () => new Response(body, { status: 200 }));
 }
 
-describe('sendAnthropicMessage reply reading', () => {
+describe('anthropicLlm reply reading', () => {
   it('returns the first text block, trimmed', async () => {
     expect(await send(JSON.stringify({ content: [{ type: 'text', text: '  tea  ' }] }))).toEqual({
       ok: true,
@@ -61,16 +57,11 @@ describe('sendAnthropicMessage reply reading', () => {
   });
 });
 
-describe('sendAnthropicMessage on a non-2xx reply', () => {
+describe('anthropicLlm on a non-2xx reply', () => {
   const LEAKED_KEY = `sk-ant-api03-${'a'.repeat(40)}`;
 
-  function failWith(status: number, body: string): ReturnType<typeof sendAnthropicMessage> {
-    return sendAnthropicMessage({
-      apiKey: 'k-test',
-      maxTokens: 10,
-      prompt: 'hi',
-      fetcher: async () => new Response(body, { status }),
-    });
+  function failWith(status: number, body: string): Promise<LlmReply> {
+    return sendVia(async () => new Response(body, { status }));
   }
 
   it('keeps the start of the error body on one line, capped, with key-shaped text masked', async () => {
@@ -96,12 +87,7 @@ describe('sendAnthropicMessage on a non-2xx reply', () => {
           throw new Error('socket reset');
         },
       });
-      const reply = await sendAnthropicMessage({
-        apiKey: 'k-test',
-        maxTokens: 10,
-        prompt: 'hi',
-        fetcher: async () => new Response(broken, { status: 400 }),
-      });
+      const reply = await sendVia(async () => new Response(broken, { status: 400 }));
       expect(reply).toEqual({ ok: false, failure: { kind: 'http', status: 400, detail: '' } });
       const written = stderr.mock.calls.map((c) => String(c[0])).join('');
       expect(written).toContain('could not read the error body of a 400 reply');
@@ -112,36 +98,38 @@ describe('sendAnthropicMessage on a non-2xx reply', () => {
   });
 });
 
-describe('sendAnthropicMessage on a transport failure', () => {
+describe('anthropicLlm on a transport failure', () => {
   const reset = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
 
   it("keeps a transport failure's error, so the log line has its class, errno name and cause chain", async () => {
-    const reply = await sendAnthropicMessage({
-      apiKey: 'k-test',
-      maxTokens: 10,
-      prompt: 'hi',
-      fetcher: async () => {
-        throw new TypeError('fetch failed', { cause: reset });
-      },
+    const reply = await sendVia(async () => {
+      throw new TypeError('fetch failed', { cause: reset });
     });
     if (reply.ok || reply.failure.kind !== 'request') throw new Error('expected a request failure');
     expect(reply.failure.message).toBe('fetch failed');
-    expect(failureFields(reply.failure)).toMatchObject({
+    expect(llmFailureFields(reply.failure)).toMatchObject({
+      llmFailure: 'request',
       errorClass: 'TypeError',
       errno: 'ECONNRESET',
       cause: 'Error: read ECONNRESET',
     });
   });
 
-  it('gives no fields to a failure with no thrown error behind it', () => {
-    expect(failureFields({ kind: 'http', status: 500, detail: '' })).toEqual({});
-    expect(failureFields({ kind: 'request', message: 'fetch failed' })).toEqual({});
-    expect(failureFields({ kind: 'empty' })).toEqual({});
+  it('names the kind of every failure, and the status of an HTTP one, with no thrown error behind it', () => {
+    expect(llmFailureFields({ kind: 'http', status: 500, detail: 'busy' })).toEqual({
+      llmFailure: 'http',
+      status: 500,
+    });
+    expect(llmFailureFields({ kind: 'request', message: 'fetch failed' })).toEqual({ llmFailure: 'request' });
+    expect(llmFailureFields({ kind: 'unreadable', message: 'reply is not JSON' })).toEqual({
+      llmFailure: 'unreadable',
+    });
+    expect(llmFailureFields({ kind: 'empty' })).toEqual({ llmFailure: 'empty' });
   });
 });
 
 describe('isPermanentFailure', () => {
-  const http = (status: number): AnthropicMessageFailure => ({ kind: 'http', status, detail: '' });
+  const http = (status: number): LlmFailure => ({ kind: 'http', status, detail: '' });
 
   it('is true for a bad key, no credit, no permission and an unknown model', () => {
     for (const status of [401, 402, 403, 404]) expect(isPermanentFailure(http(status))).toBe(true);

@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { describe, it, expect } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
@@ -32,7 +33,7 @@ import {
   seed,
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
-import { processGit } from '../../src/base/util/git-runner.js';
+import { processGit } from '../../src/infra/git-runner.js';
 
 useQueryCountRoots();
 
@@ -306,8 +307,7 @@ describe('buildDag', () => {
       const { result, statements } = await recordStatementsAsync(() =>
         buildDag(sqliteStore(root), facts, {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          apiKey: 'test-key',
-          fetcher,
+          llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
         }),
       );
       expect(result).toMatchObject({ summariesCreated: 1, factsLinked: n });

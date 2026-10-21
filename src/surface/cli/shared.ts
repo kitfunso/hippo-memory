@@ -9,7 +9,7 @@ import { resolveProjectIdentity, isInitialized, resolveGlobalRootDir } from '../
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
-import { processGit } from '../../base/util/git-runner.js';
+import { processGit } from '../../infra/git-runner.js';
 import { cliApiContext, cliInitGlobal, cliStore } from './api-context.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { fail } from './exit.js';

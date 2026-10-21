@@ -12,6 +12,7 @@ import {
 } from '../../domain/sharing/project-merge.js';
 import type { ProjectTagScope } from '../../store/port/project-tags.js';
 import { sharedStoreOf, type ContextWith } from '../types.js';
+import { infraOf } from '../infra.js';
 
 export type {
   MergeResult,
@@ -36,7 +37,7 @@ function scopeOf(ctx: ContextWith<'projectTags'>): ProjectTagScope {
 }
 
 async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
-  if (ctx.reach?.isGlobal) return { isGlobal: true };
+  if (ctx.reach?.isGlobal) return { isGlobal: true, machine: infraOf(ctx).machine };
   const { project } = await ctx.store.folderFiles.home();
   return { isGlobal: false, shared: sharedStoreOf(ctx), project };
 }

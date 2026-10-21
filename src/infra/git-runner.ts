@@ -1,28 +1,7 @@
-// The git port: domain and api build the arguments and read the output, and only this file starts the process.
+// git as a child process: the one GitRunner that starts a process; the roots hand it down.
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
-import { errorMessage } from './log.js';
-
-/** How one git call runs; each caller keeps the timeout and stderr handling its call needs. */
-export interface GitCall {
-  /** The folder git runs in; this process's own when absent. */
-  readonly cwd?: string;
-  readonly timeoutMs: number;
-  /** Bytes of stdout kept before git is stopped; node's default when absent. */
-  readonly maxBuffer?: number;
-  /** `drop` discards git's stderr, `keep` holds it in the error only; absent, it also goes to this process's stderr. */
-  readonly stderr?: 'drop' | 'keep';
-  /** Text written to git's stdin. */
-  readonly input?: string;
-}
-
-/** git's stdout, or why it failed: `status` is the exit code, null when git was killed or never started. */
-export type GitResult =
-  | { readonly ok: true; readonly stdout: string }
-  | { readonly ok: false; readonly status: number | null; readonly error: Error };
-
-export interface GitRunner {
-  run(args: readonly string[], call: GitCall): GitResult;
-}
+import type { GitCall, GitRunner } from '../base/ports/git.js';
+import { errorMessage } from '../base/util/log.js';
 
 const STDIO = { drop: ['ignore', 'pipe', 'ignore'], keep: ['pipe', 'pipe', 'pipe'] } as const;
 

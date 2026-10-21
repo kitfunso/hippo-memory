@@ -2,12 +2,7 @@ import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js'
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
-import {
-  type AnthropicMessageFailure,
-  anthropicApiKey,
-  failureFields,
-  isPermanentFailure,
-} from '../../base/util/anthropic-messages.js';
+import { isPermanentFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 
 // Bounds the LLM calls one sleep spends on extraction.
 const EXTRACTION_BATCH_LIMIT = 20;
@@ -15,26 +10,28 @@ const EXTRACTION_BATCH_LIMIT = 20;
 const MAX_DAG_REBUILD_CAP = 1000;
 const DEFAULT_DAG_REBUILD_CAP = 20;
 
-/** The key, model options and once-per-line error reporter every LLM phase shares. */
-function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
+/** The model, its options and the once-per-line error reporter every LLM phase shares. */
+interface SleepLlm {
+  readonly llmError: (phase: string) => (msg: string, failure?: LlmFailure) => void;
+  readonly llmOpts: { readonly llm: Llm; readonly model?: string };
+}
+
+/** Null when no phase may call a model: none was handed in, or extraction.enabled=false opts every LLM phase out. */
+function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   const { config, result } = run;
-  // extraction.enabled=false is the opt-out for every LLM phase below, key or no key.
-  const apiKey = config.extraction.enabled !== false ? (anthropicApiKey() ?? '') : '';
+  if (llm === undefined || config.extraction.enabled === false) return null;
   const llmErrorsSeen = new Set<string>();
   const llmError =
     (phase: string) =>
-    (msg: string, failure?: AnthropicMessageFailure): void => {
+    (msg: string, failure?: LlmFailure): void => {
       const line = `  ⚠️ ${phase}: ${msg}`;
       if (llmErrorsSeen.has(line)) return;
       llmErrorsSeen.add(line);
       result.details.push(line);
-      log.warn(`consolidate ${phase}: ${msg}`, failure && failureFields(failure));
+      log.warn(`consolidate ${phase}: ${msg}`, failure && llmFailureFields(failure));
     };
-  const llmOpts = { apiKey, model: config.extraction.model, fetcher };
-  return { apiKey, llmError, llmOpts };
+  return { llmError, llmOpts: { llm, model: config.extraction.model } };
 }
-
-type SleepLlm = ReturnType<typeof sleepLlm>;
 
 /** Counts the survivors extraction could read and returns the first `limit` of them, holding no others. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
@@ -58,10 +55,12 @@ async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntr
   return batch;
 }
 
-export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
-  const llm = sleepLlm(run, fetcher);
+export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<void> {
+  const llm = sleepLlm(run, model);
   // 1.6. Batch extraction: extract facts from episodic memories missing them
-  const batch = await extractionBatch(run, llm.apiKey !== '' && !run.dryRun ? EXTRACTION_BATCH_LIMIT : 0);
+  const batch = await extractionBatch(run, llm && !run.dryRun ? EXTRACTION_BATCH_LIMIT : 0);
+  // Every sleep counts the candidates; only one that may call a model goes on.
+  if (llm === null || run.dryRun) return;
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
     // The DAG passes call the same API with the same key and model, so they would fail the same way.
@@ -69,10 +68,8 @@ export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined
   }
 
   await dagBuildPass(run, llm);
-  if (llm.apiKey && !run.dryRun) {
-    await dagRebuildPass(run, llm);
-    await entityProfilePass(run, llm);
-  }
+  await dagRebuildPass(run, llm);
+  await entityProfilePass(run, llm);
 }
 
 /**
@@ -84,7 +81,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
   const report = llm.llmError('extraction');
   let extractedCount = 0;
   let stopped = false;
-  const onError = (msg: string, failure?: AnthropicMessageFailure): void => {
+  const onError = (msg: string, failure?: LlmFailure): void => {
     report(msg, failure);
     if (failure && isPermanentFailure(failure)) stopped = true;
   };
@@ -113,8 +110,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
 }
 
 // 1.7. DAG summarization — cluster extracted facts and generate summaries
-async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepLlm): Promise<void> {
-  if (!(apiKey && !run.dryRun)) return;
+async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   // buildDag clusters only unparented facts, so only those are held; the gate counts every fact as it always did.
   const extractedFacts: MemoryEntry[] = [];
   let facts = 0;
@@ -146,7 +142,7 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   }
 }
 
-// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same apiKey/dryRun gate as
+// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same model/dryRun gate as
 // buildDag.
 // Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default 20, hard ceiling 1000), prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {

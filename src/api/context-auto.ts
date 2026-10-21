@@ -1,4 +1,4 @@
-import type { GitRunner } from '../base/util/git-runner.js';
+import type { GitRunner } from '../base/ports/git.js';
 import { errorFields, log } from '../base/util/log.js';
 import { GIT_PROMPT_TIMEOUT_MS } from '../base/util/time.js';
 

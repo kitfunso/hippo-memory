@@ -10,7 +10,7 @@ import { captureError } from '../../api/repo-learning.js';
 import { DEFAULT_LEARN_DAYS } from '../../base/util/limits.js';
 import { runWatched } from './run-watched.js';
 import { importAtSessionEnd, importForStore } from '../../api/agent-memories.js';
-import { currentMachine } from '../../base/util/agent-homes.js';
+import { currentMachine } from '../../infra/machine.js';
 import { detailLines } from '../../api/agent-memory-report.js';
 import { importChatGPT, importClaude, importCursor, importGenericFile } from '../importers/sources.js';
 import { importMarkdown } from '../importers/markdown.js';

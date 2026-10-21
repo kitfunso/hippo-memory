@@ -14,9 +14,9 @@ import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-id
 import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../../api/repo-learning.js';
-import { processGit } from '../../base/util/git-runner.js';
+import { processGit } from '../../infra/git-runner.js';
 import { importForStore, importProjectMemories, importUserMemories } from '../../api/agent-memories.js';
-import { currentMachine } from '../../base/util/agent-homes.js';
+import { currentMachine } from '../../infra/machine.js';
 import { emptyReport, mergeReports } from '../../api/agent-memory-report.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext, boolFlag } from './flag-values.js';

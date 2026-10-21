@@ -1,5 +1,6 @@
 // Invalidation, the dirty-summary queue and the store count read only the rows they need: counted in rows, never timed.
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
@@ -124,7 +125,7 @@ describe('rebuildDirtySummaries', () => {
         .map((e) => e.id);
       expect(loadAllDirtySummaries(root, 3).map((e) => e.id)).toEqual(newest);
       const { result, rowsRead } = await recordStatementsAsync(() =>
-        rebuildDirtySummaries(sqliteStore(root), { apiKey: 'k', fetcher, cap: 2 }),
+        rebuildDirtySummaries(sqliteStore(root), { llm: anthropicLlm({ apiKey: 'k', fetcher }), cap: 2 }),
       );
       expect(result).toMatchObject({ attempted: 2, capped: true });
       read.push(rowsRead);

@@ -9,7 +9,7 @@ import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { cliLedgerReach, cliSyncOptions } from './api-context.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../../base/util/hook-payload.js';
 import { importAtSessionEnd } from '../../api/agent-memories.js';
-import { currentMachine } from '../../base/util/agent-homes.js';
+import { currentMachine } from '../../infra/machine.js';
 import { summaryLine } from '../../api/agent-memory-report.js';
 import { getHippoRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { sanitizeLogMessage } from '../capture/compact.js';

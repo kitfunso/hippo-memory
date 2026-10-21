@@ -12,7 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initGitRepo, commit, DAY, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
-import { processGit } from '../../src/base/util/git-runner.js';
+import { processGit } from '../../src/infra/git-runner.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)

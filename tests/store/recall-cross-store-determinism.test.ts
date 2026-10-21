@@ -19,6 +19,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import * as os from 'os';
 import * as path from 'path';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
@@ -160,12 +161,14 @@ describe('recall cross-store determinism', () => {
 
     const resultsA = await searchBothHybrid(QUERY, ...sharingStores(storeA, emptyGlobalA), {
       tenantId: ALL_TENANTS,
+      embedderFor: resolveEmbeddingProvider,
       budget: 100_000,
       now: NOW,
       localBump: 1.0, // remove the local-bias multiplier so this mirrors the plain hybridSearch case
     });
     const resultsB = await searchBothHybrid(QUERY, ...sharingStores(storeB, emptyGlobalB), {
       tenantId: ALL_TENANTS,
+      embedderFor: resolveEmbeddingProvider,
       budget: 100_000,
       now: NOW,
       localBump: 1.0,

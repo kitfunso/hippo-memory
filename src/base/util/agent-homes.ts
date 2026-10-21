@@ -3,24 +3,20 @@
 
 import * as os from 'os';
 import * as path from 'path';
-import { diskAgentFiles, type AgentFiles } from './agent-files.js';
+import type { AgentFiles } from './agent-files.js';
 import { envHippoHome, envHomeDir, envXdgDataHome, processEnv } from './env.js';
-import { processGit, type GitRunner } from './git-runner.js';
+import type { GitRunner } from '../ports/git.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-/** Everything the agent-memory adapters may know about the machine, its disk and git included; tests hand in a
- * scratch one. */
+/** Everything the agent-memory adapters may know about the machine, its disk and git included; src/infra/machine.ts
+ * builds the real one and tests hand in a scratch one. */
 export interface Machine {
   readonly home: string;
   readonly env: Env;
   readonly platform: NodeJS.Platform;
   readonly files: AgentFiles;
   readonly git: GitRunner;
-}
-
-export function currentMachine(): Machine {
-  return { home: os.homedir(), env: processEnv(), platform: process.platform, files: diskAgentFiles, git: processGit };
 }
 
 /** The global Hippo store directory: $HIPPO_HOME, else $XDG_DATA_HOME/hippo, else ~/.hippo. */
