@@ -6,7 +6,7 @@ import { evalNow } from '../base/memory/ablation.js';
 import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
-import { errorMessage, log } from '../base/util/log.js';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { MAX_HOOK_FIELD_LEN } from '../base/util/limits.js';
 import type { Ledger } from '../store/port.js';
 import type {
@@ -180,7 +180,7 @@ interface RecorderState {
   queryHash: string | null;
   recallTraceId: number | null;
   failureId: number | null;
-  broken: string | null;
+  broken: { readonly error: unknown; readonly message: string } | null;
   flushed: boolean;
 }
 
@@ -548,7 +548,7 @@ function recorderTake(
     if (state.flushed) return null;
     state.flushed = true;
     if (state.broken !== null) {
-      log.warn(`delivery ledger skipped: recorder failed: ${state.broken}`);
+      log.warn(`delivery ledger skipped: recorder failed: ${state.broken.message}`, errorFields(state.broken.error));
       return null;
     }
     if (fault === 'build') throw new Error('injected build fault');
@@ -565,7 +565,7 @@ function guardFor(state: RecorderState, fault: DeliveryFault | null): Guard {
       if (fault === 'observe') throw new Error('injected observe fault');
       fn();
     } catch (error) {
-      state.broken = errorMessage(error);
+      state.broken = { error, message: errorMessage(error) };
     }
   };
 }
