@@ -9,7 +9,7 @@ import {
 } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
 import { chunked } from '../../base/util/chunked.js';
-import { RejectedValueError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import { RejectedValueError, ConflictError, CrossTenantIdError, NotFoundError } from '../../base/errors/api-errors.js';
 import { markSummaryDirtyInTx, markSummariesDirtyInTx, summaryDirtyAuditRow } from './summary-dirty.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
@@ -116,6 +116,12 @@ export function writeEntriesSkippingRejectedAt(
       try {
         writeEntryDbOnly(db, stamped, { actor });
       } catch (error) {
+        // Skipped like a tombstoned value, so one foreign id cannot abort a sync or share batch; the audit ops are a
+        // published list, so the refusal is logged instead of audited.
+        if (error instanceof CrossTenantIdError) {
+          log.warn(`${error.message}; row skipped`, errorFields(error));
+          return false;
+        }
         if (!(error instanceof RejectedValueError)) throw error;
         auditRejectionRefusal(db, error, actor);
         return false;
@@ -444,16 +450,6 @@ function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): v
   if (reach?.tenantId !== target.tenantId || !readerReaches(targetReader(target), reach.scope)) throw notFound(id);
 }
 
-/**
- * hippo.db's upsert would move the row into the writer's tenant, so a store write refuses an id another tenant holds.
- */
-function assertIdInTenant(db: DatabaseSyncLike, entry: MemoryEntry): void {
-  const holder = selectMemoryReach(db, entry.id)?.tenantId;
-  if (holder !== undefined && holder !== entry.tenantId) {
-    throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
-  }
-}
-
 /** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the aborted one cannot undo. */
 export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: () => T): T {
   try {
@@ -473,7 +469,6 @@ export function writeInOwnTenant(
 ): void {
   auditingRefusal(db, actor, () =>
     withWriteScope(db, 'write_entry_in_tenant', () => {
-      assertIdInTenant(db, entry);
       writeEntryDbOnly(db, entry, { actor, afterWrite });
     }),
   );
@@ -571,7 +566,6 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
       if (!won) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
       // After the CAS, so a lost race marks no parent for rebuild.
       if (won.dag_parent_id) markSummaryDirtyInTx(db, won.dag_parent_id, tenantId, actor);
-      assertIdInTenant(db, successor);
       writeEntryDbOnly(db, successor, { actor });
       appendAuditEvent(db, { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } });
     }),
