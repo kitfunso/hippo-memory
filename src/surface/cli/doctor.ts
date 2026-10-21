@@ -58,7 +58,7 @@ export interface DoctorOptions {
   /** Stands in for the fs the spool check reads; a test makes one call fail. */
   spoolFs?: SpoolFs;
   /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the store. */
-  diagnosticsAt: (hippoRoot: string) => DoctorStore;
+  diagnosticsBodies: (hippoRoot: string) => DoctorStore;
 }
 
 /** What doctor reads of a store: its health and, for the global store, its project tags. */
@@ -492,7 +492,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);
   if (store !== null) {
-    checks.push(...(await databaseChecks(opts.diagnosticsAt(store), store, now, opts.spoolFs)));
+    checks.push(...(await databaseChecks(opts.diagnosticsBodies(store), store, now, opts.spoolFs)));
   }
 
   const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
@@ -505,7 +505,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
         `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }
-  if (hasGlobal) checks.push(await projectsCheck(opts.diagnosticsAt(globalRoot), opts.tenantId));
+  if (hasGlobal) checks.push(await projectsCheck(opts.diagnosticsBodies(globalRoot), opts.tenantId));
 
   checks.push(claudeCodeCheck(home));
 

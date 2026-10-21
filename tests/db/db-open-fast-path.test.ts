@@ -7,7 +7,7 @@ import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { consolidate } from '../../src/index.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
-import { diagnosticsAt } from '../_helpers/cli-stores.js';
+import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -245,13 +245,13 @@ describe('full-text drift repair moved off the open path', () => {
   it('doctor warns on drift and points at sleep', async () => {
     vi.stubEnv('HIPPO_HOME', path.join(cwd, 'global'));
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'fts',
       ),
     ).toMatchObject({ status: 'pass' });
     desyncFts();
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'fts',
       ),
     ).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });

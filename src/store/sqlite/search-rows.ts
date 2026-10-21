@@ -204,7 +204,7 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
 }
 
 /** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. */
-export function loadSearchEntriesAt(
+export function loadSearchEntries(
   db: DatabaseSyncLike,
   query: string,
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
@@ -216,7 +216,7 @@ export function loadSearchEntriesAt(
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
  * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
  * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
-export function loadRecallEntriesAt(
+export function loadRecallEntries(
   db: DatabaseSyncLike,
   query: string,
   options: RecallSearchEntriesOptions,
@@ -235,7 +235,7 @@ export function loadRecallEntriesAt(
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it can. */
-export async function loadVectorCandidateEntriesAt(
+export async function loadVectorCandidateEntries(
   db: DatabaseSyncLike,
   queryVector: readonly number[],
   spec: VectorCandidateSpec,
@@ -252,14 +252,14 @@ export async function loadVectorCandidateEntriesAt(
     params,
     index,
   });
-  return entriesInOrderAt(
+  return entriesInOrder(
     db,
     matches.map((m) => m.id),
   );
 }
 
 /** The rows of `ids` in that order; an id deleted since it was matched is skipped. */
-export function entriesInOrderAt(db: DatabaseSyncLike, ids: readonly string[]): MemoryEntry[] {
+export function entriesInOrder(db: DatabaseSyncLike, ids: readonly string[]): MemoryEntry[] {
   if (ids.length === 0) return [];
   const rows = cachedStatement(
     db,

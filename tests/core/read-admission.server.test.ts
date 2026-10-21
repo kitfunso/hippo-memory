@@ -13,7 +13,7 @@ import {
 import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js';
 import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadAmbientCandidatesAt } from '../../src/store/sqlite/candidates.js';
+import { loadAmbientCandidates } from '../../src/store/sqlite/candidates.js';
 import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -286,7 +286,7 @@ describe('ambient admission as data', () => {
           const refused: AmbientRefusal[] = [];
           const oldAdmit = oldLoaderAdmit(admission, refused);
           const old = onDb((db) =>
-            loadAmbientCandidatesAt(db, tenantId, { recentNeeded, judge: (e) => (oldAdmit(e) ? null : 'admission') }),
+            loadAmbientCandidates(db, tenantId, { recentNeeded, judge: (e) => (oldAdmit(e) ? null : 'admission') }),
           );
           const want = { entries: old.entries.map((e) => e.id), refused };
           for (const store of [inProcess, onWorkers]) {

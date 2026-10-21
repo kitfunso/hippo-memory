@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { chunked } from '../../base/util/chunked.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import {
   deleteDormantRow,
   dormantSnapshotsBySourcePrefix,
@@ -13,13 +13,8 @@ import {
   replaceDormantEntry,
 } from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
-import { entryIdTakenAt, loadEntriesByIdsAt, selectLiveEntriesBySourcePrefix } from './entry-reads.js';
-import {
-  renameEntrySourceAndOriginAt,
-  renameEntrySourceAt,
-  setEntryTagsInTx,
-  supersedeEntryAt,
-} from './entry-writes.js';
+import { entryIdTaken, loadEntriesByIds, selectLiveEntriesBySourcePrefix } from './entry-reads.js';
+import { renameEntrySourceAndOrigin, renameEntrySource, setEntryTagsInTx, supersedeEntry } from './entry-writes.js';
 import { gatedWrite } from './gated-write.js';
 import type { StoreFiles } from './open.js';
 import { setAsideRow } from './set-aside.js';
@@ -69,7 +64,7 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
   }
   const outside = [...new Set(plan.steps.flatMap(namedIds))].filter((id) => !rows.has(id));
   for (const ids of chunked(outside)) {
-    for (const row of loadEntriesByIdsAt(db, ids, plan.tenantId)) rows.set(row.id, row);
+    for (const row of loadEntriesByIds(db, ids, plan.tenantId)) rows.set(row.id, row);
   }
   const adoptable = plan.steps.every(
     (step) => step.kind !== 'adopt' || (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),
@@ -121,13 +116,13 @@ class ContainerSteps {
 
   private adopt(step: AdoptStep): StepOutcome {
     const row = this.row(step.id);
-    renameEntrySourceAt(this.db, row.tenantId, row.id, step.from, step.to);
+    renameEntrySource(this.db, row.tenantId, row.id, step.from, step.to);
     return this.moved({ ...row, source: step.to });
   }
 
   private move(id: string, to: string, origin: string | null): StepOutcome {
     const row = this.row(id);
-    renameEntrySourceAndOriginAt(this.db, row.tenantId, id, { from: row.source, to, origin });
+    renameEntrySourceAndOrigin(this.db, row.tenantId, id, { from: row.source, to, origin });
     return this.moved({ ...row, source: to, originProject: origin ?? row.originProject });
   }
 
@@ -158,15 +153,17 @@ class ContainerSteps {
   /** api.supersede's steps on this transaction; false when the row is gone or another writer superseded it first. */
   private supersede(id: string, by: string): boolean {
     const old = this.rows.get(id);
-    if (old === undefined || !supersedeEntryAt(this.db, old.tenantId, old.id, by)) return false;
+    if (old === undefined || !supersedeEntry(this.db, old.tenantId, old.id, by)) return false;
     if (old.dagParentId) markSummaryDirtyInTx(this.db, old.dagParentId, old.tenantId, SYNC_ACTOR);
-    appendAuditEvent(this.db, {
-      tenantId: old.tenantId,
-      actor: SYNC_ACTOR,
-      op: 'supersede',
-      targetId: old.id,
-      metadata: { newId: by },
-    });
+    appendAuditEvents(this.db, [
+      {
+        tenantId: old.tenantId,
+        actor: SYNC_ACTOR,
+        op: 'supersede',
+        targetId: old.id,
+        metadata: { newId: by },
+      },
+    ]);
     this.mirror.push({ ...old, supersededBy: by });
     return true;
   }
@@ -188,17 +185,19 @@ class ContainerSteps {
   private restore(step: RestoreStep): StepOutcome {
     const tenantId = this.plan.tenantId;
     const snap = readDormantSnapshot(this.db, tenantId, step.dormantId);
-    if (snap === null || entryIdTakenAt(this.db, step.dormantId)) return this.write(step.fresh, []);
+    if (snap === null || entryIdTaken(this.db, step.dormantId)) return this.write(step.fresh, []);
     const result = this.gated(step.revived);
     if (result !== 'written') return result;
     deleteDormantRow(this.db, tenantId, step.dormantId);
-    appendAuditEvent(this.db, {
-      tenantId,
-      actor: SYNC_ACTOR,
-      op: 'agent_memory_restore',
-      targetId: step.dormantId,
-      metadata: { reason: snap.reason, dormantAt: snap.dormantAt },
-    });
+    appendAuditEvents(this.db, [
+      {
+        tenantId,
+        actor: SYNC_ACTOR,
+        op: 'agent_memory_restore',
+        targetId: step.dormantId,
+        metadata: { reason: snap.reason, dormantAt: snap.dormantAt },
+      },
+    ]);
     return 'restored';
   }
 

@@ -1,23 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { appendAuditEvent, appendAuditEventsAt, queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvents, queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { recordAuditEventsRowByRow } from '../_helpers/root-forms.js';
 
 describe('audit log', () => {
-  it('appendAuditEvent persists row with required fields', () => {
+  it('appendAuditEvents persists one row with required fields', () => {
     const home = makeRoot('audit');
     const db = openHippoDb(home);
     try {
-      appendAuditEvent(db, {
-        tenantId: 'default',
-        actor: 'cli',
-        op: 'remember',
-        targetId: 'm1',
-        metadata: { content_len: 42 },
-      });
+      appendAuditEvents(db, [
+        {
+          tenantId: 'default',
+          actor: 'cli',
+          op: 'remember',
+          targetId: 'm1',
+          metadata: { content_len: 42 },
+        },
+      ]);
       const rows = queryAuditEvents(db, { tenantId: 'default' });
       expect(rows.length).toBe(1);
       expect(rows[0]!.op).toBe('remember');
@@ -34,7 +36,7 @@ describe('audit log', () => {
     const db = openHippoDb(home);
     try {
       for (const op of ['remember', 'remember', 'recall', 'forget'] as const) {
-        appendAuditEvent(db, { tenantId: 'default', actor: 'cli', op });
+        appendAuditEvents(db, [{ tenantId: 'default', actor: 'cli', op }]);
       }
       const recalls = queryAuditEvents(db, { tenantId: 'default', op: 'recall' });
       expect(recalls.length).toBe(1);
@@ -49,8 +51,8 @@ describe('audit log', () => {
     const home = makeRoot('audit');
     const db = openHippoDb(home);
     try {
-      appendAuditEvent(db, { tenantId: 'alpha', actor: 'cli', op: 'remember' });
-      appendAuditEvent(db, { tenantId: 'beta', actor: 'cli', op: 'remember' });
+      appendAuditEvents(db, [{ tenantId: 'alpha', actor: 'cli', op: 'remember' }]);
+      appendAuditEvents(db, [{ tenantId: 'beta', actor: 'cli', op: 'remember' }]);
       expect(queryAuditEvents(db, { tenantId: 'alpha' }).length).toBe(1);
       expect(queryAuditEvents(db, { tenantId: 'beta' }).length).toBe(1);
     } finally {
@@ -87,7 +89,7 @@ describe('audit log', () => {
     }
   });
 
-  it('appendAuditEventsAt writes in one statement the rows appendAuditEvent writes one by one', () => {
+  it('appendAuditEvents writes in one statement the rows it writes one call per row', () => {
     const events: AppendAuditOpts[] = [
       { tenantId: 'default', actor: 'cli', op: 'remember', targetId: 'm1', metadata: { n: 1, s: '2', nested: [true] } },
       { tenantId: 'other', actor: 'api_key:hk_1', op: 'recall' },
@@ -108,12 +110,12 @@ describe('audit log', () => {
     };
     let statements: string[] = [];
     const batched = rowsAfter((db) => {
-      statements = recordStatements(() => appendAuditEventsAt(db, events)).statements;
+      statements = recordStatements(() => appendAuditEvents(db, events)).statements;
     });
     expect(statements).toHaveLength(1);
     expect(batched).toEqual(
       rowsAfter((db) => {
-        for (const event of events) appendAuditEvent(db, event);
+        for (const event of events) appendAuditEvents(db, [event]);
       }),
     );
   });
@@ -122,10 +124,11 @@ describe('audit log', () => {
     const db = openHippoDb(makeRoot('audit'));
     const prepare = vi.spyOn(db, 'prepare');
     try {
-      for (let i = 0; i < 3; i++) appendAuditEvent(db, { tenantId: 'default', actor: 'cli', op: 'remember' });
-      for (let i = 0; i < 2; i++) appendAuditEventsAt(db, [{ tenantId: 'default', actor: 'cli', op: 'recall' }]);
+      for (let i = 0; i < 3; i++) appendAuditEvents(db, [{ tenantId: 'default', actor: 'cli', op: 'remember' }]);
+      const recall = { tenantId: 'default', actor: 'cli', op: 'recall' } as const;
+      for (let i = 0; i < 2; i++) appendAuditEvents(db, [recall, recall]);
       expect(prepare.mock.calls.filter(([sql]) => sql.includes('INSERT INTO audit_log'))).toHaveLength(2);
-      expect(queryAuditEvents(db, { tenantId: 'default' })).toHaveLength(5);
+      expect(queryAuditEvents(db, { tenantId: 'default' })).toHaveLength(7);
     } finally {
       prepare.mockRestore();
       closeHippoDb(db);

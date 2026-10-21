@@ -2,7 +2,7 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { isFtsAvailable, withWriteScope } from '../../db/index.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -65,13 +65,15 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
 // row's own tenant_id, not whatever HIPPO_TENANT the calling shell has set.
 function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOptions): void {
   try {
-    appendAuditEvent(db, {
-      tenantId: String(row.tenant_id ?? DEFAULT_TENANT_ID),
-      actor: opts.who || CLI_ACTOR,
-      op: 'archive_raw',
-      targetId: id,
-      metadata: { reason: opts.reason },
-    });
+    appendAuditEvents(db, [
+      {
+        tenantId: String(row.tenant_id ?? DEFAULT_TENANT_ID),
+        actor: opts.who || CLI_ACTOR,
+        op: 'archive_raw',
+        targetId: id,
+        metadata: { reason: opts.reason },
+      },
+    ]);
   } catch (error) {
     // The archive itself has already succeeded; an unwritable audit table must not undo it.
     reportAuditWriteFailure('archive_raw', error, id);

@@ -115,7 +115,7 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
 
 /** The PostCompact store work, on a handle of its own: record the summary, then write its items. Each step is
  * independent. Never throws. */
-function saveCompactionAt(on: OnHandle, save: CompactionSave): CompactionSaveOutcome {
+function saveCompaction(on: OnHandle, save: CompactionSave): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
   const notes: string[] = [];
   const log = noteTo(notes);
@@ -134,7 +134,7 @@ function saveCompactionAt(on: OnHandle, save: CompactionSave): CompactionSaveOut
 }
 
 /** A row that will not map is skipped and a record that throws is noted, so the rest still run until the deadline. */
-function saveStalledAt(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, opts: StalledOptions): StalledSaved {
+function saveStalled(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, opts: StalledOptions): StalledSaved {
   const notes: string[] = [];
   const log = noteTo(notes);
   let saved = 0;
@@ -152,7 +152,7 @@ function saveStalledAt(db: DatabaseSyncLike, files: StoreFiles, tenantId: string
   return { saved, notes };
 }
 
-function recordSpooledAt(db: DatabaseSyncLike, files: StoreFiles, spooled: SpooledSummary): RecordedCompaction {
+function recordSpooled(db: DatabaseSyncLike, files: StoreFiles, spooled: SpooledSummary): RecordedCompaction {
   const { id, sessionId, originProject, cwd, items } = recordSummary(db, files.hippoRoot, spooled.tenantId, {
     meta: spooled.payload,
     text: spooled.text,
@@ -161,7 +161,7 @@ function recordSpooledAt(db: DatabaseSyncLike, files: StoreFiles, spooled: Spool
   return { id, sessionId, originProject, cwd, items };
 }
 
-function saveRecordItemsAt(
+function saveRecordItems(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -178,7 +178,7 @@ function saveRecordItemsAt(
 }
 
 /** Old enough that their PostCompact will not come, young enough that the transcript may still reach back to them. */
-function openRecordsAt(db: DatabaseSyncLike, tenantId: string): OpenCompaction[] {
+function openRecords(db: DatabaseSyncLike, tenantId: string): OpenCompaction[] {
   const now = Date.now();
   const rows = openTranscriptRows(db, tenantId, iso(now - REPLAY_AFTER_MS), iso(now - TRANSCRIPT_FILL_WINDOW_MS));
   return rows.flatMap((row) => {
@@ -221,7 +221,7 @@ interface FillCall {
   readonly opts: ItemsOptions;
 }
 
-function fillAt(db: DatabaseSyncLike, files: StoreFiles, { tenantId, record, text, opts }: FillCall): FillOutcome {
+function fill(db: DatabaseSyncLike, files: StoreFiles, { tenantId, record, text, opts }: FillCall): FillOutcome {
   const notes: string[] = [];
   const log = noteTo(notes);
   try {
@@ -243,15 +243,15 @@ const hookBodies: FileBodies<HookWaited> = {
 export function sqliteCompactionHooks(on: OnHandle): Sync<CompactionHooks> {
   return {
     ...boundWithFiles<HookWaited>(on, hookBodies, waitingOpener(COMPACTION_DB_WAIT_MS)),
-    save: (save) => saveCompactionAt(on, save),
+    save: (save) => saveCompaction(on, save),
     saveStalled: (tenantId, opts) =>
-      on((db, files) => saveStalledAt(db, files, tenantId, opts), waitingOpener(opts.busyWaitMs)),
+      on((db, files) => saveStalled(db, files, tenantId, opts), waitingOpener(opts.busyWaitMs)),
     recordSpooled: (spooled, wait) =>
-      on((db, files) => recordSpooledAt(db, files, spooled), waitingOpener(wait.busyWaitMs)),
+      on((db, files) => recordSpooled(db, files, spooled), waitingOpener(wait.busyWaitMs)),
     saveRecordItems: (tenantId, record, opts) =>
-      on((db, files) => saveRecordItemsAt(db, files, tenantId, record, opts), waitingOpener(opts.busyWaitMs)),
-    openRecords: (tenantId, wait) => on((db) => openRecordsAt(db, tenantId), waitingOpener(wait.busyWaitMs)),
+      on((db, files) => saveRecordItems(db, files, tenantId, record, opts), waitingOpener(opts.busyWaitMs)),
+    openRecords: (tenantId, wait) => on((db) => openRecords(db, tenantId), waitingOpener(wait.busyWaitMs)),
     fill: (tenantId, record, text, opts) =>
-      on((db, files) => fillAt(db, files, { tenantId, record, text, opts }), waitingOpener(opts.busyWaitMs)),
+      on((db, files) => fill(db, files, { tenantId, record, text, opts }), waitingOpener(opts.busyWaitMs)),
   };
 }

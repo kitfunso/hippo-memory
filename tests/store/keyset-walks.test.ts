@@ -4,17 +4,17 @@ import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DEFAULT_HALF_LIFE_DAYS, createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import {
-  loadEntriesMentioningAt,
-  loadEntriesPageAt,
-  loadEntriesWithSignalsAt,
-  loadEntryIdsByIdAt,
-  loadEntryIdsPageAt,
-  loadEntryTextKeysPageAt,
-  selectEntriesFromOriginAt,
+  loadEntriesMentioning,
+  loadEntriesPage,
+  loadEntriesWithSignals,
+  loadEntryIdsById,
+  loadEntryIdsPage,
+  loadEntryTextKeysPage,
+  selectEntriesFromOrigin,
   selectLiveEntriesBySourcePrefix,
   selectTenantTextsPage,
 } from '../../src/store/sqlite/entry-reads.js';
-import { pendingVectorIdsAt, resetStoredParticlesAt } from '../../src/store/sqlite/vector-index.js';
+import { pendingVectorIds, resetStoredParticles } from '../../src/store/sqlite/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { recordStatements } from '../_helpers/count-statements.js';
@@ -67,17 +67,17 @@ function walks(db: DatabaseSyncLike, tenantId: TenantId) {
   const tenant = tenantId === ALL_TENANTS ? 'default' : tenantId;
   const page = (after?: EntryCursor) => ({ limit: 3, after });
   return {
-    entryIds: () => pagesOf((after?: EntryCursor) => loadEntryIdsPageAt(db, tenantId, page(after))),
-    entries: () => pagesOf((after?: EntryCursor) => entryIds(loadEntriesPageAt(db, tenantId, page(after)))),
+    entryIds: () => pagesOf((after?: EntryCursor) => loadEntryIdsPage(db, tenantId, page(after))),
+    entries: () => pagesOf((after?: EntryCursor) => entryIds(loadEntriesPage(db, tenantId, page(after)))),
     textKeys: () =>
       pagesOf((after?: EntryCursor) => {
-        const keys = loadEntryTextKeysPageAt(db, tenantId, page(after));
+        const keys = loadEntryTextKeysPage(db, tenantId, page(after));
         return { ids: keys.keys.map((k) => k.id), next: keys.next };
       }),
     signals: () =>
-      pagesOf((after?: EntryCursor) => entryIds(loadEntriesWithSignalsAt(db, SIGNALS, tenantId, page(after)))),
+      pagesOf((after?: EntryCursor) => entryIds(loadEntriesWithSignals(db, SIGNALS, tenantId, page(after)))),
     mentions: () =>
-      pagesOf((after?: EntryCursor) => entryIds(loadEntriesMentioningAt(db, ['quux'], 'quux', tenantId, page(after)))),
+      pagesOf((after?: EntryCursor) => entryIds(loadEntriesMentioning(db, ['quux'], 'quux', tenantId, page(after)))),
     tenantTexts: () =>
       pagesOf((after?: EntryCursor) => {
         const texts = selectTenantTextsPage(db, tenant, page(after));
@@ -87,11 +87,11 @@ function walks(db: DatabaseSyncLike, tenantId: TenantId) {
       pagesOf((after?: EntryCursor) => entryIds(selectLiveEntriesBySourcePrefix(db, tenant, 'cli', page(after)))),
     origin: () =>
       pagesOf((after?: EntryCursor) =>
-        entryIds(selectEntriesFromOriginAt(db, tenant, { origin: '', live: true }, page(after))),
+        entryIds(selectEntriesFromOrigin(db, tenant, { origin: '', live: true }, page(after))),
       ),
-    idOrder: () => pagesOf((afterId?: string) => loadEntryIdsByIdAt(db, { limit: 3, afterId })),
-    pendingVectors: () => pagesOf((afterId?: string) => pendingVectorIdsAt(db, { limit: 3, afterId })),
-    particleReset: () => [[String(resetStoredParticlesAt(db, {}))]],
+    idOrder: () => pagesOf((afterId?: string) => loadEntryIdsById(db, { limit: 3, afterId })),
+    pendingVectors: () => pagesOf((afterId?: string) => pendingVectorIds(db, { limit: 3, afterId })),
+    particleReset: () => [[String(resetStoredParticles(db, {}))]],
   };
 }
 
@@ -193,13 +193,13 @@ describe('a walk over many ties on created', () => {
       const db = openHippoDb(root);
       try {
         const limit = 1 + Math.floor(next() * 6);
-        const walked = pagesOf((after?: EntryCursor) => loadEntryIdsPageAt(db, ALL_TENANTS, { limit, after }));
+        const walked = pagesOf((after?: EntryCursor) => loadEntryIdsPage(db, ALL_TENANTS, { limit, after }));
         expect(walked, `trial ${trial}`).toEqual(sortedPages(db, limit));
         expect(new Set(walked.flat()).size).toBe(n);
         const tenant = rows[0]!.tenantId;
-        const inTenant = pagesOf((after?: EntryCursor) => entryIds(loadEntriesPageAt(db, tenant, { limit, after })));
+        const inTenant = pagesOf((after?: EntryCursor) => entryIds(loadEntriesPage(db, tenant, { limit, after })));
         expect(inTenant).toEqual(sortedPages(db, limit, tenant));
-        const byId = pagesOf((afterId?: string) => loadEntryIdsByIdAt(db, { limit, afterId })).flat();
+        const byId = pagesOf((afterId?: string) => loadEntryIdsById(db, { limit, afterId })).flat();
         // SAFETY: one TEXT column.
         const ids = db.prepare('SELECT id FROM memories ORDER BY id').all() as Array<{ id: string }>;
         expect(byId).toEqual(ids.map((r) => r.id));

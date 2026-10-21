@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { selectEntriesFromOriginAt } from '../../src/store/sqlite/entry-reads.js';
+import { selectEntriesFromOrigin } from '../../src/store/sqlite/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -85,7 +85,7 @@ describe('schema v61', () => {
     }
     const { statements } = recordStatements(() =>
       withDb((db) =>
-        selectEntriesFromOriginAt(db, 'default', { origin: 'alpha', live: true }, { limit: 2, after: undefined }),
+        selectEntriesFromOrigin(db, 'default', { origin: 'alpha', live: true }, { limit: 2, after: undefined }),
       ),
     );
     const sql = statements.find((s) => s.includes('origin_project = ?') && s.includes('ORDER BY created ASC'));

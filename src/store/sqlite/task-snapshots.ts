@@ -60,7 +60,7 @@ function insertSnapshot(
   return Number(result.lastInsertRowid ?? 0);
 }
 
-export function saveActiveTaskSnapshotAt(
+export function saveActiveTaskSnapshot(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   tenantId: string,
@@ -103,7 +103,7 @@ export function saveActiveTaskSnapshotAt(
   return loaded;
 }
 
-export function loadActiveTaskSnapshotAt(
+export function loadActiveTaskSnapshot(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   tenantId: string,

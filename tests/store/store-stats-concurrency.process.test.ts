@@ -13,7 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 let root: string;
 
-// The workers must exercise the shipped updateStatsAt on the shipped opener, not a copy of them, so they
+// The workers must exercise the shipped updateStats on the shipped opener, not a copy of them, so they
 // import the build output.
 const DIST_STORE = join(import.meta.dirname, '..', '..', 'dist', 'store');
 const STORE_URL = pathToFileURL(join(DIST_STORE, 'sqlite', 'index-and-stats.js')).href;
@@ -21,11 +21,11 @@ const HANDLES_URL = pathToFileURL(join(DIST_STORE, 'sqlite', 'handles.js')).href
 
 function workerScript(hippoRoot: string, field: string, iterations: number): string {
   return `
-    import { updateStatsAt } from ${JSON.stringify(STORE_URL)};
+    import { updateStats } from ${JSON.stringify(STORE_URL)};
     import { onHandle, openStore } from ${JSON.stringify(HANDLES_URL)};
     const hippoRoot = ${JSON.stringify(hippoRoot)};
     for (let i = 0; i < ${iterations}; i++) {
-      onHandle(hippoRoot, (db) => updateStatsAt(db, { hippoRoot }, { ${field}: 1 }), openStore);
+      onHandle(hippoRoot, (db) => updateStats(db, { hippoRoot }, { ${field}: 1 }), openStore);
     }
   `;
 }

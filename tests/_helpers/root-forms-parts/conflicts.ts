@@ -1,10 +1,10 @@
-// Root-keyed conflicts forms tests call; production code goes through the store port or the At forms.
+// Root-keyed conflicts forms tests call; production code goes through the port or the handle-first forms.
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
 import { handlesOf } from '../../../src/store/sqlite/handles.js';
-import { replaceDetectedConflictsAt } from '../../../src/store/sqlite/conflicts.js';
+import * as conflictsSql from '../../../src/store/sqlite/conflicts.js';
 import { onHandle, openStore } from '../../../src/store/sqlite/handles.js';
 import type { MemoryConflict } from '../../../src/store/port/conflicts.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
@@ -17,7 +17,11 @@ export function replaceDetectedConflicts(
   detected: Array<DetectedConflict>,
   detectedAt?: string,
 ): void {
-  onHandle(hippoRoot, (db) => replaceDetectedConflictsAt(db, { hippoRoot }, detected, detectedAt), openStore);
+  onHandle(
+    hippoRoot,
+    (db) => conflictsSql.replaceDetectedConflicts(db, { hippoRoot }, detected, detectedAt),
+    openStore,
+  );
 }
 
 export function listMemoryConflicts(

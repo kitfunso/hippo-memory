@@ -5,11 +5,11 @@ import { ConflictError } from '../../src/base/errors/api-errors.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import {
-  writeEntriesSkippingRejectedAt,
-  writeEntriesTogetherAt,
-  writeEntryAt,
+  writeEntriesSkippingRejected,
+  writeEntriesTogether,
+  writeEntry,
   writeEntryDbOnly,
-  writePromotedEntryAt,
+  writePromotedEntry,
 } from '../../src/store/sqlite/entry-writes.js';
 import { onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import type { StoreFiles } from '../../src/store/sqlite/open.js';
@@ -50,29 +50,29 @@ function withHeldRow(run: (db: DatabaseSyncLike, files: StoreFiles, a: MemoryEnt
 }
 
 describe('a write of an id another tenant holds', () => {
-  it('is refused by writeEntryAt', () => {
-    withHeldRow((db, files, _a, b) => expect(() => writeEntryAt(db, files, b)).toThrow(ConflictError));
+  it('is refused by writeEntry', () => {
+    withHeldRow((db, files, _a, b) => expect(() => writeEntry(db, files, b)).toThrow(ConflictError));
   });
 
-  it('is refused by writePromotedEntryAt', () => {
+  it('is refused by writePromotedEntry', () => {
     withHeldRow((db, files, a, b) =>
-      expect(() => writePromotedEntryAt(db, files, b, { sourceId: a.id })).toThrow(ConflictError),
+      expect(() => writePromotedEntry(db, files, b, { sourceId: a.id })).toThrow(ConflictError),
     );
   });
 
-  it('fails writeEntriesTogetherAt whole, so a clean row beside it does not land', () => {
+  it('fails writeEntriesTogether whole, so a clean row beside it does not land', () => {
     withHeldRow((db, files, _a, b) => {
       const clean = createMemory('clean row', { tenantId: 'tenant-b' });
-      expect(() => writeEntriesTogetherAt(db, files, [clean, b])).toThrow(ConflictError);
+      expect(() => writeEntriesTogether(db, files, [clean, b])).toThrow(ConflictError);
       expect(rowOf(db, clean.id)).toBeUndefined();
     });
   });
 
-  it('is skipped by writeEntriesSkippingRejectedAt while the rest of the batch lands', () => {
+  it('is skipped by writeEntriesSkippingRejected while the rest of the batch lands', () => {
     withHeldRow((db, files, _a, b) => {
       const clean = createMemory('clean row', { tenantId: 'tenant-b' });
       const put: boolean[] = [];
-      const count = writeEntriesSkippingRejectedAt(db, files, (write) => {
+      const count = writeEntriesSkippingRejected(db, files, (write) => {
         put.push(write(b), write(clean));
       });
       expect(put).toEqual([false, true]);

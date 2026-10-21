@@ -20,11 +20,11 @@ import { continuityStamp, type ContinuityKey } from '../port/types.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
-  loadHandoffByIdAt,
-  loadLatestHandoffAt,
-  saveSessionHandoffAt,
-  stampHandoffOutcomeAt,
-  writeSessionEndHandoffAt,
+  loadHandoffById,
+  loadLatestHandoff,
+  saveSessionHandoff,
+  stampHandoffOutcome,
+  writeSessionEndHandoff,
 } from './handoffs.js';
 import type { Sync } from './served.js';
 import { openStore } from './handles.js';
@@ -32,25 +32,25 @@ import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js'
 import {
   assertKeyedOnSharedStore,
   continuityWhere,
-  loadActiveTaskSnapshotAt,
-  saveActiveTaskSnapshotAt,
+  loadActiveTaskSnapshot,
+  saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
  * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
  * age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
-function loadFreshActiveTaskSnapshotAt(
+function loadFreshActiveTaskSnapshot(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
   opts: { maxAgeMs?: number; sessionId?: string | null } = {},
   key?: ContinuityKey | null,
 ): TaskSnapshot | null {
-  return freshActiveSnapshot(loadActiveTaskSnapshotAt(db, files, tenantId, key), opts);
+  return freshActiveSnapshot(loadActiveTaskSnapshot(db, files, tenantId, key), opts);
 }
 
-function clearActiveTaskSnapshotAt(
+function clearActiveTaskSnapshot(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   tenantId: string,
@@ -81,7 +81,7 @@ function clearActiveTaskSnapshotAt(
 
 /** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an
  * ending session can never close a newer session's snapshot. Returns the number of rows closed. */
-function closeTaskSnapshotsForSessionAt(
+function closeTaskSnapshotsForSession(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -158,7 +158,7 @@ function recentSessionEventsOldestFirst(
   return recentRows.map(rowToSessionEvent).reverse();
 }
 
-export function appendSessionEventAt(
+export function appendSessionEvent(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   tenantId: string,
@@ -175,7 +175,7 @@ export function appendSessionEventAt(
   return loaded;
 }
 
-export function listSessionEventsAt(
+export function listSessionEvents(
   db: DatabaseSyncLike,
   tenantId: string,
   options: { session_id?: string; task?: string; limit?: number } = {},
@@ -213,7 +213,7 @@ export function listSessionEventsAt(
 
 /** Session_ids with a `session_complete` event newer than `sinceMs`; bounds the sleep auto-promotion scan to a fixed
  * window. */
-export function findPromotableSessionsAt(
+export function findPromotableSessions(
   db: DatabaseSyncLike,
   tenantId: string,
   sinceMs: number,
@@ -230,7 +230,7 @@ export function findPromotableSessionsAt(
 }
 
 /** Idempotency guard: true if a trace-layer memory with this source_session_id already exists. */
-export function traceExistsForSessionAt(db: DatabaseSyncLike, tenantId: string, session_id: string): boolean {
+export function traceExistsForSession(db: DatabaseSyncLike, tenantId: string, session_id: string): boolean {
   assertTenantId('traceExistsForSession', tenantId);
   const row = cachedStatement(
     db,
@@ -244,7 +244,7 @@ export function traceExistsForSessionAt(db: DatabaseSyncLike, tenantId: string, 
 }
 
 /** The owner a session id is bound to, or null. */
-function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
+function selectSessionOwner(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
   const row = cachedStatement(
     db,
     `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
@@ -253,7 +253,7 @@ function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId:
 }
 
 /** Binds `sessionId` to `owner` unless a binding exists; the count is 1 when this call bound it. */
-function insertSessionOwnerAt(
+function insertOwnerRow(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -269,7 +269,7 @@ function insertSessionOwnerAt(
 
 // SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred thousand rows.
 /** Drops bindings created before `cutoffIso`. */
-function deleteSessionOwnersBeforeAt(db: DatabaseSyncLike, cutoffIso: string): void {
+function deleteSessionOwnersBefore(db: DatabaseSyncLike, cutoffIso: string): void {
   cachedStatement(db, `DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
 }
 
@@ -289,20 +289,20 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     db,
     'bind_session_owner',
     () => {
-      const bound = insertSessionOwnerAt(db, tenantId, sessionId, owner, new Date().toISOString());
+      const bound = insertOwnerRow(db, tenantId, sessionId, owner, new Date().toISOString());
       // An older binary supersedes across owners, so the first binding shuts it out in the same transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
       // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
-      deleteSessionOwnersBeforeAt(db, new Date(Date.now() - retentionMs).toISOString());
+      deleteSessionOwnersBefore(db, new Date(Date.now() - retentionMs).toISOString());
     },
     { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
   );
   // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
-  return selectSessionOwnerAt(db, tenantId, sessionId);
+  return selectSessionOwner(db, tenantId, sessionId);
 }
 
 /** The owner stored for the session id, binding `binding.owner` first when none is stored. */
-function sessionOwnerOrBindAt(
+function sessionOwnerOrBind(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -311,7 +311,7 @@ function sessionOwnerOrBindAt(
 ): string | null {
   // A bound session is the common case after the first prompt, so it must not take the write lock.
   return (
-    selectSessionOwnerAt(db, tenantId, sessionId) ?? insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
+    selectSessionOwner(db, tenantId, sessionId) ?? insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
   );
 }
 
@@ -352,7 +352,7 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
  * the oldest, by created_at then id). Returns the new row ID. */
-function wmPushAt(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
+function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
   const now = new Date().toISOString();
   return withWriteScope(db, 'wm_push', () => {
     const result = cachedStatement(
@@ -425,7 +425,7 @@ function wmWhere(tenantId: string, filter: WorkingMemoryFilter) {
 }
 
 /** Read working memory entries, sorted by importance DESC. */
-function wmReadAt(
+function wmRead(
   db: DatabaseSyncLike,
   tenantId: string,
   filter: WorkingMemoryFilter & { readonly limit?: number },
@@ -447,28 +447,28 @@ function wmReadAt(
 }
 
 /** Clear (delete) working memory entries. Returns the count deleted. */
-function wmClearAt(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFilter): number {
+function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFilter): number {
   const where = wmWhere(tenantId, filter);
   const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(...where.params);
   return Number(result.changes ?? 0);
 }
 
 // These write or read the session's mirror files beside hippo.db as well as its rows.
-const sessionMirrorsAt: FileBodies<
+const sessionMirrorsBodies: FileBodies<
   Pick<
     Sessions,
     'saveSnapshot' | 'loadSnapshot' | 'loadFreshSnapshot' | 'clearSnapshot' | 'appendEvent' | 'writeSessionEndHandoff'
   >
 > = {
-  saveSnapshot: saveActiveTaskSnapshotAt,
-  loadSnapshot: loadActiveTaskSnapshotAt,
-  loadFreshSnapshot: loadFreshActiveTaskSnapshotAt,
-  clearSnapshot: clearActiveTaskSnapshotAt,
-  appendEvent: appendSessionEventAt,
-  writeSessionEndHandoff: writeSessionEndHandoffAt,
+  saveSnapshot: saveActiveTaskSnapshot,
+  loadSnapshot: loadActiveTaskSnapshot,
+  loadFreshSnapshot: loadFreshActiveTaskSnapshot,
+  clearSnapshot: clearActiveTaskSnapshot,
+  appendEvent: appendSessionEvent,
+  writeSessionEndHandoff: writeSessionEndHandoff,
 };
 
-const sessionRowsAt: Bodies<
+const sessionRowsBodies: Bodies<
   Pick<
     Sessions,
     | 'closeSessionSnapshots'
@@ -482,23 +482,23 @@ const sessionRowsAt: Bodies<
     | 'clearWorkingMemory'
   >
 > = {
-  closeSessionSnapshots: closeTaskSnapshotsForSessionAt,
+  closeSessionSnapshots: closeTaskSnapshotsForSession,
   // The port names the session in camelCase; the event rows keep their column's name.
   listEvents: (db, tenantId, { sessionId, task, limit }) =>
-    listSessionEventsAt(db, tenantId, { session_id: sessionId, task, limit }),
-  saveHandoff: saveSessionHandoffAt,
-  latestHandoff: loadLatestHandoffAt,
-  handoffById: loadHandoffByIdAt,
-  stampHandoffOutcome: stampHandoffOutcomeAt,
-  pushWorkingMemory: wmPushAt,
-  readWorkingMemory: wmReadAt,
-  clearWorkingMemory: wmClearAt,
+    listSessionEvents(db, tenantId, { session_id: sessionId, task, limit }),
+  saveHandoff: saveSessionHandoff,
+  latestHandoff: loadLatestHandoff,
+  handoffById: loadHandoffById,
+  stampHandoffOutcome: stampHandoffOutcome,
+  pushWorkingMemory: wmPush,
+  readWorkingMemory: wmRead,
+  clearWorkingMemory: wmClear,
 };
 
 export function sqliteSessions(on: OnHandle): Sync<Sessions> {
   return {
-    ...boundWithFiles(on, sessionMirrorsAt, openStore),
-    ...bound(on, sessionRowsAt, openStore),
-    ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBindAt }),
+    ...boundWithFiles(on, sessionMirrorsBodies, openStore),
+    ...bound(on, sessionRowsBodies, openStore),
+    ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBind }),
   };
 }

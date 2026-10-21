@@ -1,4 +1,4 @@
-// Root-keyed cards forms tests call; production code goes through the store port or the At forms.
+// Root-keyed cards forms tests call; production code goes through the port or the handle-first forms.
 
 import type { Card, CardComment, CardRun } from '../../../src/base/records/card.js';
 import type { HandoffOutcome } from '../../../src/base/session/handoff.js';

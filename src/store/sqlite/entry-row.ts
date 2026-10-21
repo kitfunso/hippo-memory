@@ -190,7 +190,7 @@ export function replaceFtsRows(db: DatabaseSyncLike, rows: readonly MemoryEntry[
 
 /** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when
  * the two agree or there is no index. */
-export function ftsDriftAt(db: DatabaseSyncLike, repair: boolean): { memories: number; fts: number } | null {
+export function ftsDrift(db: DatabaseSyncLike, repair: boolean): { memories: number; fts: number } | null {
   if (!isFtsAvailable(db)) return null;
   const counts = ftsRowCounts(db);
   if (counts === null) return null;

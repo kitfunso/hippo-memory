@@ -23,19 +23,21 @@ function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValue
 const AUDIT_ROW_COLUMNS = 'ts, tenant_id, actor, op, target_id, metadata_json';
 const INSERT_AUDIT_ROW_SQL = `INSERT INTO audit_log (${AUDIT_ROW_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`;
 
-export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
-  cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(new Date().toISOString(), ...auditRowValues(opts));
-}
-
 // Every column is text, so one JSON array binds any number of rows and the statement's text never changes.
 const INSERT_AUDIT_ROWS_SQL =
   `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) ` +
   `SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ` +
   `json_extract(value, '$[3]'), json_extract(value, '$[4]') FROM json_each(?) ORDER BY key`;
 
-/** appendAuditEvent for many rows in one statement, ids in `events` order; a failure writes none of them. */
-export function appendAuditEventsAt(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]): void {
-  if (events.length === 0) return;
+/** Writes `events` in one statement, ids in their order; a failure writes none of them. */
+export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]): void {
+  const [only] = events;
+  if (only === undefined) return;
+  // The plain INSERT for the common single row skips json_each.
+  if (events.length === 1) {
+    cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(new Date().toISOString(), ...auditRowValues(only));
+    return;
+  }
   cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(new Date().toISOString(), JSON.stringify(events.map(auditRowValues)));
 }
 
@@ -88,7 +90,7 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
 
 /** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike queryAuditEvents it has
  * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
-export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
+export function confirmedOutcomeTimes(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
   const rows = cachedStatement(
     db,
     `SELECT target_id, MAX(ts) AS ts FROM audit_log
@@ -139,14 +141,14 @@ export interface FailedAuditEvent {
 
 /** Appends each event as its own write on one handle, so a row that fails drops only itself. Returns the rows that
  * failed, for the caller to report. */
-export function recordAuditEventsRowByRowAt(
+export function recordAuditEventsRowByRow(
   db: DatabaseSyncLike,
   events: readonly AppendAuditOpts[],
 ): FailedAuditEvent[] {
   const failed: FailedAuditEvent[] = [];
   for (const event of events) {
     try {
-      appendAuditEvent(db, event);
+      appendAuditEvents(db, [event]);
     } catch (error) {
       failed.push({ event, error });
     }
@@ -156,18 +158,20 @@ export function recordAuditEventsRowByRowAt(
 
 /** Deletes a tenant's audit rows older than the cutoff and records the prune in the same write scope, so neither lands
  * alone; returns the row count. */
-export function pruneAuditRowsAt(db: DatabaseSyncLike, prune: AuditPrune): number {
+export function pruneAuditRows(db: DatabaseSyncLike, prune: AuditPrune): number {
   const { tenantId, cutoff, actor, olderThanDays } = prune;
   if (prune.dryRun) return countAuditBefore(db, tenantId, cutoff);
   return withWriteScope(db, 'audit_prune', () => {
     const count = deleteAuditBefore(db, tenantId, cutoff);
     // Written after the delete with ts = now, so the cutoff just applied cannot take it.
-    appendAuditEvent(db, {
-      tenantId,
-      actor,
-      op: 'audit_prune',
-      metadata: { cutoff, count, dryRun: false, olderThanDays },
-    });
+    appendAuditEvents(db, [
+      {
+        tenantId,
+        actor,
+        op: 'audit_prune',
+        metadata: { cutoff, count, dryRun: false, olderThanDays },
+      },
+    ]);
     return count;
   });
 }

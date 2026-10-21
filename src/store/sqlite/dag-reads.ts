@@ -5,8 +5,8 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import {
   selectEntriesByIds,
   TENANT_IS,
-  countSessionRawMemoriesAt,
-  loadSessionRawMemoriesAt,
+  countSessionRawMemories,
+  loadSessionRawMemories,
   selectChildrenByParent,
 } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
@@ -188,16 +188,16 @@ export function sqliteDagReads(on: OnHandle): Sync<DagReads> {
   return bound<DagReads>(
     on,
     {
-      sessionRawEntries: loadSessionRawMemoriesAt,
-      sessionRawCount: countSessionRawMemoriesAt,
-      summaryWithDescendants: summaryWithDescendantsAt,
+      sessionRawEntries: loadSessionRawMemories,
+      sessionRawCount: countSessionRawMemories,
+      summaryWithDescendants: summaryWithDescendants,
     },
     openStore,
   );
 }
 
 // dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or walked in a loop.
-function summaryWithDescendantsAt(
+function summaryWithDescendants(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,

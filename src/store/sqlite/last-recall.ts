@@ -1,11 +1,11 @@
 // hippo.db's LastRecall group: the last recall sits in its meta table, and a traced outcome links on the outcome's own
 // handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
-import { appendAuditEvent } from './audit.js';
-import { strengthenRetrievedInOwnTx, applyOutcomeAt } from './entry-writes.js';
+import { appendAuditEvents } from './audit.js';
+import { strengthenRetrievedInOwnTx, applyOutcome } from './entry-writes.js';
 import { strengthenRetrieved } from './folder-forms.js';
 import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
-import { saveIndexAt } from './index-and-stats.js';
+import { saveIndex } from './index-and-stats.js';
 import { readLastRecall } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
 import type { HippoIndex } from './rows.js';
@@ -25,7 +25,7 @@ interface RecallFinish {
 }
 
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecallAt(db: DatabaseSyncLike, rules: LossAversion, writes: RecallWrites): RecallFinish {
+export function finishRecall(db: DatabaseSyncLike, rules: LossAversion, writes: RecallWrites): RecallFinish {
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen
@@ -38,20 +38,20 @@ export function finishRecallAt(db: DatabaseSyncLike, rules: LossAversion, writes
   // alone.
   return withWriteScope(db, 'finish_recall', () => {
     writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
-    for (const event of writes.audit) appendAuditEvent(db, event);
+    for (const event of writes.audit) appendAuditEvents(db, [event]);
     return traceAndStrengthen();
   });
 }
 
 /** The outcome for the last recall's ids, linked to its trace; `[]` when no recall has run. */
-function applyOutcomeToLastAt(db: DatabaseSyncLike, files: StoreFiles, target: EntryTarget, good: boolean): string[] {
+function applyOutcomeToLast(db: DatabaseSyncLike, files: StoreFiles, target: EntryTarget, good: boolean): string[] {
   const { last_retrieval_ids: ids, last_trace_id: trace } = readLastRecall(db);
   if (ids.length === 0) return [];
-  return applyOutcomeAt(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
+  return applyOutcome(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
 }
 
-const outcomesAt: FileBodies<Pick<LastRecall, 'applyOutcomeToLast'>> = {
-  applyOutcomeToLast: applyOutcomeToLastAt,
+const outcomesBodies: FileBodies<Pick<LastRecall, 'applyOutcomeToLast'>> = {
+  applyOutcomeToLast: applyOutcomeToLast,
 };
 
 /** The two writes a finished recall makes here, either side of the global store's strengthen. */
@@ -61,10 +61,10 @@ interface RecallEnds {
 }
 
 export function sqliteLastRecall({ on, files }: Handles): Sync<LastRecall> {
-  const { finish } = boundWithFiles<Pick<RecallEnds, 'finish'>>(on, { finish: finishRecallAt });
-  const { saveIndex } = bound<Pick<RecallEnds, 'saveIndex'>>(on, { saveIndex: saveIndexAt }, openStore);
+  const { finish } = boundWithFiles<Pick<RecallEnds, 'finish'>>(on, { finish: finishRecall });
+  const ends = bound<Pick<RecallEnds, 'saveIndex'>>(on, { saveIndex }, openStore);
   return {
-    ...boundWithFiles(on, outcomesAt, openStore),
+    ...boundWithFiles(on, outcomesBodies, openStore),
     finishRecall(writes, globalRoot) {
       const { ids, opts } = writes.strengthen;
       const { traceId, strengthened } = finish(writes);
@@ -78,7 +78,7 @@ export function sqliteLastRecall({ on, files }: Handles): Sync<LastRecall> {
       }
       // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.
       const index = { last_retrieval_ids: [...ids], last_trace_id: traceId === null ? null : String(traceId) };
-      saveIndex(index);
+      ends.saveIndex(index);
       return traceId;
     },
   };

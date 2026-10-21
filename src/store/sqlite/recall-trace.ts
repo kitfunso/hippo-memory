@@ -40,7 +40,7 @@ const INSERT_TRACE_SQL = `
 const RESULT_ROWS_PER_INSERT = 100;
 
 /** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to
- * stderr and returns null on failure. api.recall/contextGet reach this via `finishRecallAt` on their own handle. */
+ * stderr and returns null on failure. api.recall/contextGet reach this via `finishRecall` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);

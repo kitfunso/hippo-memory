@@ -2,20 +2,20 @@
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { countAllEntriesAt, loadEntriesByIdsAt, loadEntryIdsByIdAt } from './entry-reads.js';
+import { countAllEntries, loadEntriesByIds, loadEntryIdsById } from './entry-reads.js';
 import type { EmbeddingIndex } from '../port/vectors.js';
 import {
   type VectorRebuild,
-  beginVectorRebuildAt,
+  beginVectorRebuild,
   embeddingModelRequiresReindex,
-  particleStatsAt,
-  pendingVectorIdsAt,
-  pruneOrphanVectorsAt,
-  resetStoredParticlesAt,
+  particleStats,
+  pendingVectorIds,
+  pruneOrphanVectors,
+  resetStoredParticles,
   saveStoredEmbeddingModel,
-  seedStoredParticleAt,
-  storedVectorSummaryAt,
-  vectorCoverageAt,
+  seedStoredParticle,
+  storedVectorSummary,
+  vectorCoverage,
 } from './vector-index.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
@@ -29,7 +29,7 @@ import { embedLockKey, releaseEmbedLock, tryEmbedLock } from './embed-lock.js';
 function beginRebuild(open: Handles['open']): VectorRebuild {
   const db = open();
   try {
-    return beginVectorRebuildAt(db, () => {
+    return beginVectorRebuild(db, () => {
       try {
         dropVectorStaging(db);
       } finally {
@@ -42,11 +42,11 @@ function beginRebuild(open: Handles['open']): VectorRebuild {
   }
 }
 
-const entryRowsAt: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsPage' | 'entriesByIds' | 'coverage'>> = {
-  entryCount: countAllEntriesAt,
-  entryIdsPage: loadEntryIdsByIdAt,
-  entriesByIds: (db, ids) => loadEntriesByIdsAt(db, ids, ALL_TENANTS),
-  coverage: vectorCoverageAt,
+const entryRowsBodies: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsPage' | 'entriesByIds' | 'coverage'>> = {
+  entryCount: countAllEntries,
+  entryIdsPage: loadEntryIdsById,
+  entriesByIds: (db, ids) => loadEntriesByIds(db, ids, ALL_TENANTS),
+  coverage: vectorCoverage,
 };
 
 type Particles = 'resetParticles' | 'seedParticle';
@@ -55,18 +55,18 @@ type Rebuilds = 'beginRebuild' | 'stageRebuild' | 'commitRebuild' | 'closeRebuil
 
 type VectorRows = Pick<EmbeddingIndex, 'summary' | 'particleStats' | 'saveVectors' | 'pruneOrphans' | 'pendingIds'>;
 
-const vectorRowsAt: Bodies<VectorRows> = {
-  summary: storedVectorSummaryAt,
-  particleStats: particleStatsAt,
+const vectorRowsBodies: Bodies<VectorRows> = {
+  summary: storedVectorSummary,
+  particleStats: particleStats,
   saveVectors: upsertVectors,
-  pruneOrphans: pruneOrphanVectorsAt,
-  pendingIds: pendingVectorIdsAt,
+  pruneOrphans: pruneOrphanVectors,
+  pendingIds: pendingVectorIds,
 };
 
 // A particle's start strength is scored, so these take the store's loss-aversion rules beside the handle.
-const particlesAt: FileBodies<Pick<EmbeddingIndex, Particles>> = {
-  resetParticles: resetStoredParticlesAt,
-  seedParticle: seedStoredParticleAt,
+const particlesBodies: FileBodies<Pick<EmbeddingIndex, Particles>> = {
+  resetParticles: resetStoredParticles,
+  seedParticle: seedStoredParticle,
 };
 
 /** The open rebuilds by id: each holds its handle across calls, so they stay on the thread that began them. */
@@ -97,9 +97,9 @@ export function sqliteEmbeddingIndex({ on, open, files }: Handles): Sync<Embeddi
   return {
     requiresReindex: (providerId) => embeddingModelRequiresReindex(on, providerId),
     saveModel: (providerId) => saveStoredEmbeddingModel(on, providerId),
-    ...bound(on, entryRowsAt, openStore),
-    ...bound(on, vectorRowsAt),
-    ...boundWithFiles(on, particlesAt),
+    ...bound(on, entryRowsBodies, openStore),
+    ...bound(on, vectorRowsBodies),
+    ...boundWithFiles(on, particlesBodies),
     ...sqliteRebuilds(open),
     lockKey: () => embedLockKey(files.hippoRoot),
     tryLock: () => tryEmbedLock(files.hippoRoot),

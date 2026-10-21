@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadEntriesByIdsAt } from '../../src/store/sqlite/entry-reads.js';
+import { loadEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { pickRarestFtsQuery } from '../../src/store/sqlite/search-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -27,15 +27,15 @@ afterEach(() => {
 });
 
 describe('hot read statements', () => {
-  it('loadEntriesByIdsAt prepares one statement for every id-list length and reuses it', () => {
+  it('loadEntriesByIds prepares one statement for every id-list length and reuses it', () => {
     const ids = ['a', 'b', 'c'].map((id) => {
       const entry = { ...createMemory(`row ${id}`, { baseHalfLifeDays: 30 }), id };
       writeEntryDbOnly(db, entry);
       return entry.id;
     });
 
-    for (let i = 0; i < 4; i++) expect(loadEntriesByIdsAt(db, ids, 'default').map((e) => e.id)).toHaveLength(3);
-    loadEntriesByIdsAt(db, ids.slice(0, 2), 'default');
+    for (let i = 0; i < 4; i++) expect(loadEntriesByIds(db, ids, 'default').map((e) => e.id)).toHaveLength(3);
+    loadEntriesByIds(db, ids.slice(0, 2), 'default');
 
     expect(preparedOf('FROM memories WHERE id IN')).toBe(1);
   });

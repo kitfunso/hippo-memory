@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
-  slackEventSeenAt as hasSeenEvent,
-  markSlackEventSeenAt as markEventSeen,
-  slackEventMemoryAt as lookupMemoryByEvent,
+  slackEventSeen as hasSeenEvent,
+  markSlackEventSeen as markEventSeen,
+  slackEventMemory as lookupMemoryByEvent,
 } from '../../src/store/sqlite/connectors/slack.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

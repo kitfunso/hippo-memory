@@ -53,7 +53,7 @@ async function seed(count: number, tenantId = 'default'): Promise<string[]> {
   return ids;
 }
 
-describe('loadEntryTextKeysPageAt', () => {
+describe('loadEntryTextKeysPage', () => {
   it('pages the same text keys, in the same order, as the whole-row read, for one tenant or all', async () => {
     await seed(5);
     await seed(3, 'acme');

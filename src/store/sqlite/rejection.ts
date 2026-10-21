@@ -47,7 +47,7 @@ export function findRejectedValue(db: DatabaseSyncLike, tenantId: string, digest
 }
 
 /** The tenant's tombstones among `digests`, by digest, in chunked IN lists on the primary key. */
-export function rejectedValuesAt(
+export function rejectedValues(
   db: DatabaseSyncLike,
   tenantId: string,
   digests: readonly string[],
@@ -65,8 +65,8 @@ export function rejectedValuesAt(
 }
 
 /** The digests among `digests` the tenant holds a tombstone for. */
-export function rejectedDigestsAt(db: DatabaseSyncLike, tenantId: string, digests: readonly string[]): Set<string> {
-  return new Set(rejectedValuesAt(db, tenantId, digests).keys());
+export function rejectedDigests(db: DatabaseSyncLike, tenantId: string, digests: readonly string[]): Set<string> {
+  return new Set(rejectedValues(db, tenantId, digests).keys());
 }
 
 /** Insert (or refresh) a tombstone row; the caller owns the transaction (used by the `reject` verb and

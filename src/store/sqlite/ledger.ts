@@ -9,7 +9,7 @@ import {
 } from '../../db/index.js';
 import { errorMessage, expectedErrorText, log, errorFields } from '../../base/util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
-import { recordTokenUse, lastSentState, recordRereadsAt } from './token-ledger.js';
+import { recordTokenUse, lastSentState, recordRereads } from './token-ledger.js';
 import { hashArm, type PilotArm } from '../../base/session/pilot-arm.js';
 import {
   type DeliveryPruneSchedule,
@@ -110,7 +110,7 @@ function noteLedgerRowSkipped<E>(error: E): void {
 }
 
 /** The turn's rows on `db`: each its own attempt with `perRow`, else up to the first that fails. */
-function recordRowsAt(db: DatabaseSyncLike, turn: LedgerTurn): void {
+function recordRows(db: DatabaseSyncLike, turn: LedgerTurn): void {
   try {
     for (const use of turn.uses) {
       if (turn.perRow !== true) {
@@ -129,7 +129,7 @@ function recordRowsAt(db: DatabaseSyncLike, turn: LedgerTurn): void {
 }
 
 /** The delivery event on the rows' own handle, so it costs no second open; a failed write is logged. */
-function recordDeliveryAt(db: DatabaseSyncLike, input: DeliveryEventInput, prune: DeliveryPruneSchedule): void {
+function recordDelivery(db: DatabaseSyncLike, input: DeliveryEventInput, prune: DeliveryPruneSchedule): void {
   try {
     writeDeliveryEventOnHandle(db, input, prune);
   } catch (error) {
@@ -144,8 +144,8 @@ function recordTurnVia(on: OnHandle, turn: LedgerTurn, prune: DeliveryPruneSched
   try {
     on((db) => {
       opened = true;
-      recordRowsAt(db, turn);
-      if (delivery !== undefined) recordDeliveryAt(db, delivery, prune);
+      recordRows(db, turn);
+      if (delivery !== undefined) recordDelivery(db, delivery, prune);
     });
   } catch (error) {
     noteLedgerRowSkipped(error);
@@ -164,7 +164,7 @@ function noting<T>(read: () => T, fallback: () => T): T {
 }
 
 /** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */
-function pilotArmAt(
+function pilotArm(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -184,8 +184,8 @@ export function sqliteLedger(on: OnHandle): Sync<Ledger> {
   const prune = deliveryPruneSchedule();
   const ledgerAt: Bodies<Pick<Ledger, 'lastSent' | 'pilotArm' | 'replaceRereads'>> = {
     lastSent: lastSentState,
-    pilotArm: pilotArmAt,
-    replaceRereads: recordRereadsAt,
+    pilotArm: pilotArm,
+    replaceRereads: recordRereads,
   };
   const reads = bound(on, ledgerAt);
   return {

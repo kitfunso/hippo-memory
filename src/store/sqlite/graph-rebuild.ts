@@ -86,7 +86,7 @@ function applyGraphOpsOn(
 
 /** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary past `opts.holdMs`;
  * returns where the next chunk starts and how many ops were skipped as stale. */
-function applyGraphOpsAt(
+function applyGraphOps(
   db: DatabaseSyncLike,
   tenantId: string,
   ops: readonly GraphOp[],
@@ -99,5 +99,5 @@ function applyGraphOpsAt(
 const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
 export function sqliteGraphRebuild(on: OnHandle): Sync<GraphRebuild> {
-  return bound<GraphRebuild>(on, { applyOps: applyGraphOpsAt }, openForChunk);
+  return bound<GraphRebuild>(on, { applyOps: applyGraphOps }, openForChunk);
 }

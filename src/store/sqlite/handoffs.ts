@@ -11,7 +11,7 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { TaskSnapshot } from '../port/sessions.js';
 import type { StoreFiles } from './open.js';
-import { continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';
+import { continuityWhere, loadActiveTaskSnapshot } from './task-snapshots.js';
 import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -57,7 +57,7 @@ function insertHandoffRow(
 }
 
 /** Save a session handoff record; returns the persisted handoff. */
-export function saveSessionHandoffAt(
+export function saveSessionHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
@@ -128,7 +128,7 @@ function handoffConditions(
 }
 
 /** Load the most recent handoff, optionally filtered by session ID. */
-export function loadLatestHandoffAt(
+export function loadLatestHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId?: string | null,
@@ -152,7 +152,7 @@ export function loadLatestHandoffAt(
 }
 
 /** Load a specific handoff by its row ID. */
-export function loadHandoffByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
+export function loadHandoffById(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
   assertTenantId('loadHandoffById', tenantId);
   const row = cachedStatement(
     db,
@@ -167,7 +167,7 @@ export function loadHandoffByIdAt(db: DatabaseSyncLike, tenantId: string, id: nu
 }
 
 /** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows changed. */
-export function stampHandoffOutcomeAt(
+export function stampHandoffOutcome(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -191,7 +191,7 @@ export function stampHandoffOutcomeAt(
 
 /** Rewrites the session's newest handoff when it is still a transcript read, in one statement so a handoff written
  * meanwhile is never overwritten; null when none was rewritten. */
-function replaceTranscriptHandoffAt(
+function replaceTranscriptHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
@@ -287,7 +287,7 @@ function buildSessionEndHandoff(
 /** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace` rewrites an earlier
  * transcript read instead of adding a revision. Returns null when no source is the session's, a newer handoff covers
  * it, or the latest one is not transcript-derived or already holds `derived`. */
-export function writeSessionEndHandoffAt(
+export function writeSessionEndHandoff(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -296,8 +296,8 @@ export function writeSessionEndHandoffAt(
   const { sessionId, evidence, derived = null, key, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
-  const active = loadActiveTaskSnapshotAt(db, files, tenantId, key);
-  const existing = loadLatestHandoffAt(db, tenantId, sessionId, {}, key);
+  const active = loadActiveTaskSnapshot(db, files, tenantId, key);
+  const existing = loadLatestHandoff(db, tenantId, sessionId, {}, key);
   let snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep' | 'scope'>;
   let handoffEvidence = evidence;
   let fromTranscript = false;
@@ -315,14 +315,14 @@ export function writeSessionEndHandoffAt(
     handoffEvidence = fromDerived.evidence;
     fromTranscript = true;
   }
-  const outcome = sessionOutcomeAt(db, tenantId, sessionId);
+  const outcome = sessionOutcome(db, tenantId, sessionId);
   const handoff = buildSessionEndHandoff(sessionId, snapshot, existing, handoffEvidence, outcome);
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
-  if (fromTranscript && inPlace && existing) return replaceTranscriptHandoffAt(db, tenantId, handoff, key);
-  return saveSessionHandoffAt(db, tenantId, handoff, key);
+  if (fromTranscript && inPlace && existing) return replaceTranscriptHandoff(db, tenantId, handoff, key);
+  return saveSessionHandoff(db, tenantId, handoff, key);
 }
 
-function sessionOutcomeAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): HandoffOutcome | null {
+function sessionOutcome(db: DatabaseSyncLike, tenantId: string, sessionId: string): HandoffOutcome | null {
   const content = (
     cachedStatement(
       db,

@@ -1,9 +1,9 @@
 // hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with their audit rows.
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { keysetAfter } from '../../db/sql.js';
-import { selectEntriesByIds, readEntryAt } from './entry-reads.js';
+import { selectEntriesByIds, readEntry } from './entry-reads.js';
 import type {
   QuarantineApproval,
   QuarantineListQuery,
@@ -105,13 +105,15 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
     `INSERT INTO memory_quarantine (tenant_id, memory_id, original_scope, reason, status, quarantined_at)
      VALUES (?, ?, ?, ?, 'pending', ?)`,
   ).run(opts.tenantId, opts.memoryId, opts.originalScope, opts.reason, new Date().toISOString());
-  appendAuditEvent(db, {
-    tenantId: opts.tenantId,
-    actor: opts.actor,
-    op: 'quarantine',
-    targetId: opts.memoryId,
-    metadata: { reason: opts.reason, originalScope: opts.originalScope },
-  });
+  appendAuditEvents(db, [
+    {
+      tenantId: opts.tenantId,
+      actor: opts.actor,
+      op: 'quarantine',
+      targetId: opts.memoryId,
+      metadata: { reason: opts.reason, originalScope: opts.originalScope },
+    },
+  ]);
 }
 
 function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
@@ -131,7 +133,7 @@ function rejectQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: s
 }
 
 /** A page of the tenant's records, each with its memory's content read in the same query batch. */
-function listQuarantinedAt(
+function listQuarantined(
   db: DatabaseSyncLike,
   tenantId: string,
   { status, limit, after }: QuarantineListQuery,
@@ -154,7 +156,7 @@ function pendingOrRefusal(db: DatabaseSyncLike, tenantId: string, id: string): Q
 }
 
 /** Puts the memory back under its original scope; the scope guard refuses a row moved since it was quarantined. */
-function approveQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineApproval {
+function approveQuarantined(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineApproval {
   return withWriteScopeOr<QuarantineApproval, QuarantineApproval>(db, 'quarantine_approve', (rollback) => {
     const row = pendingOrRefusal(db, tenantId, id);
     if ('outcome' in row) return rollback(row);
@@ -165,24 +167,26 @@ function approveQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id: string
     ).run(row.originalScope, id, tenantId, quarantineScope);
     if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
     approveQuarantineRow(db, tenantId, id, actor);
-    appendAuditEvent(db, {
-      tenantId,
-      actor,
-      op: 'quarantine_approve',
-      targetId: id,
-      metadata: { originalScope: row.originalScope },
-    });
+    appendAuditEvents(db, [
+      {
+        tenantId,
+        actor,
+        op: 'quarantine_approve',
+        targetId: id,
+        metadata: { originalScope: row.originalScope },
+      },
+    ]);
     return { outcome: 'approved' };
   });
 }
 
 /** Marks the record rejected; the memory row is left as stored. */
-function rejectQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineRejection {
+function rejectQuarantined(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineRejection {
   return withWriteScopeOr<QuarantineRejection, QuarantineRejection>(db, 'quarantine_reject', (rollback) => {
     const row = pendingOrRefusal(db, tenantId, id);
     if ('outcome' in row) return rollback(row);
     rejectQuarantineRow(db, tenantId, id, actor);
-    appendAuditEvent(db, { tenantId, actor, op: 'quarantine_reject', targetId: id, metadata: {} });
+    appendAuditEvents(db, [{ tenantId, actor, op: 'quarantine_reject', targetId: id, metadata: {} }]);
     return { outcome: 'rejected' };
   });
 }
@@ -191,7 +195,7 @@ function rejectQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id: string,
  * hides the memory. */
 function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, id: string): void {
   try {
-    const restored = readEntryAt(db, id, tenantId);
+    const restored = readEntry(db, id, tenantId);
     if (restored) writeEntryMirrorsIn(files, restored);
   } catch (err) {
     log.error(`quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`, errorFields(err));
@@ -201,12 +205,12 @@ function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string
 export function sqliteQuarantine(on: OnHandle): Sync<Quarantine> {
   return {
     ...bound<Omit<Quarantine, 'approveQuarantined'>>(on, {
-      listQuarantined: listQuarantinedAt,
-      rejectQuarantined: rejectQuarantinedAt,
+      listQuarantined: listQuarantined,
+      rejectQuarantined: rejectQuarantined,
     }),
     approveQuarantined: (tenantId, id, actor) =>
       on((db, files) => {
-        const result = approveQuarantinedAt(db, tenantId, id, actor);
+        const result = approveQuarantined(db, tenantId, id, actor);
         if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
         return result;
       }, openStore),

@@ -45,7 +45,7 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
 
 /** Whole-store ambient tallies in two aggregate passes, no row loaded. Content-pattern secrets and session-local rows
  *  (own compaction items, a printed handoff's digest) still count: only injection drops them. */
-export function loadAmbientTalliesAt(
+export function loadAmbientTallies(
   db: DatabaseSyncLike,
   rules: LossAversion,
   tenantId: string,

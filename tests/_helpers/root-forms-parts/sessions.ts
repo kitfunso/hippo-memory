@@ -1,4 +1,4 @@
-// Root-keyed sessions forms tests call; production code goes through the store port or the At forms.
+// Root-keyed sessions forms tests call; production code goes through the port or the handle-first forms.
 
 import type { HandoffOutcome, SessionHandoff } from '../../../src/base/session/handoff.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
@@ -11,24 +11,13 @@ import type {
   TaskSnapshot,
   WorkingMemoryItem,
 } from '../../../src/store/port/sessions.js';
-import {
-  loadHandoffByIdAt,
-  loadLatestHandoffAt,
-  stampHandoffOutcomeAt,
-  writeSessionEndHandoffAt,
-} from '../../../src/store/sqlite/handoffs.js';
-import {
-  appendConsolidationRunAt,
-  loadSessionDecayContextAt,
-  saveIndexAt,
-  updateStatsUnlessBusyAt,
-  updateStatsAt,
-} from '../../../src/store/sqlite/index-and-stats.js';
+import * as handoffsSql from '../../../src/store/sqlite/handoffs.js';
+import * as indexAndStatsSql from '../../../src/store/sqlite/index-and-stats.js';
 import { readLastRecall } from '../../../src/store/sqlite/mirrors.js';
 import { onHandle, openStore } from '../../../src/store/sqlite/handles.js';
 import type { HippoIndex } from '../../../src/store/sqlite/rows.js';
-import { findPromotableSessionsAt, listSessionEventsAt } from '../../../src/store/sqlite/sessions.js';
-import { loadActiveTaskSnapshotAt } from '../../../src/store/sqlite/task-snapshots.js';
+import * as sessionsSql from '../../../src/store/sqlite/sessions.js';
+import * as taskSnapshotsSql from '../../../src/store/sqlite/task-snapshots.js';
 import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.js';
 import type { ContinuityKey } from '../../../src/store/port/types.js';
 import type { JsonObject } from '../../../src/base/util/json.js';
@@ -41,11 +30,11 @@ export function loadLatestHandoff(
   opts: HandoffFilter = {},
   key?: ContinuityKey,
 ): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => loadLatestHandoffAt(db, tenantId, sessionId, opts, key), openStore);
+  return onHandle(hippoRoot, (db) => handoffsSql.loadLatestHandoff(db, tenantId, sessionId, opts, key), openStore);
 }
 
 export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => loadHandoffByIdAt(db, tenantId, id), openStore);
+  return onHandle(hippoRoot, (db) => handoffsSql.loadHandoffById(db, tenantId, id), openStore);
 }
 
 export function stampHandoffOutcome(
@@ -54,11 +43,15 @@ export function stampHandoffOutcome(
   sessionId: string,
   outcome: HandoffOutcome,
 ): number {
-  return onHandle(hippoRoot, (db) => stampHandoffOutcomeAt(db, tenantId, sessionId, outcome), openStore);
+  return onHandle(hippoRoot, (db) => handoffsSql.stampHandoffOutcome(db, tenantId, sessionId, outcome), openStore);
 }
 
 export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHandoffRequest): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => writeSessionEndHandoffAt(db, { hippoRoot }, request.tenantId, request), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => handoffsSql.writeSessionEndHandoff(db, { hippoRoot }, request.tenantId, request),
+    openStore,
+  );
 }
 
 export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
@@ -66,30 +59,34 @@ export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrie
 }
 
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
-  return onHandle(hippoRoot, (db) => saveIndexAt(db, index), openStore);
+  return onHandle(hippoRoot, (db) => indexAndStatsSql.saveIndex(db, index), openStore);
 }
 
 export function updateStatsUnlessBusy(
   hippoRoot: string,
-  delta: Parameters<typeof updateStatsUnlessBusyAt>[2],
+  delta: Parameters<typeof indexAndStatsSql.updateStatsUnlessBusy>[2],
   committed: string,
 ): void {
-  onHandle(hippoRoot, (db) => updateStatsUnlessBusyAt(db, { hippoRoot }, delta, committed), openStore);
+  onHandle(hippoRoot, (db) => indexAndStatsSql.updateStatsUnlessBusy(db, { hippoRoot }, delta, committed), openStore);
 }
 
 export function appendConsolidationRun(
   hippoRoot: string,
   run: { timestamp: string; decayed: number; merged: number; removed: number },
 ): void {
-  onHandle(hippoRoot, (db) => appendConsolidationRunAt(db, { hippoRoot }, run), openStore);
+  onHandle(hippoRoot, (db) => indexAndStatsSql.appendConsolidationRun(db, { hippoRoot }, run), openStore);
 }
 
 export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
-  return onHandle(hippoRoot, (db) => loadSessionDecayContextAt(db), openStore);
+  return onHandle(hippoRoot, (db) => indexAndStatsSql.loadSessionDecayContext(db), openStore);
 }
 
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
-  return onHandle(hippoRoot, (db) => loadActiveTaskSnapshotAt(db, { hippoRoot }, tenantId, key), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => taskSnapshotsSql.loadActiveTaskSnapshot(db, { hippoRoot }, tenantId, key),
+    openStore,
+  );
 }
 
 export function loadFreshActiveTaskSnapshot(
@@ -124,7 +121,7 @@ export function listSessionEvents(
   tenantId: string,
   options: { session_id?: string; task?: string; limit?: number } = {},
 ): SessionEvent[] {
-  return onHandle(hippoRoot, (db) => listSessionEventsAt(db, tenantId, options), openStore);
+  return onHandle(hippoRoot, (db) => sessionsSql.listSessionEvents(db, tenantId, options), openStore);
 }
 
 export function findPromotableSessions(
@@ -132,7 +129,7 @@ export function findPromotableSessions(
   tenantId: string,
   sinceMs: number,
 ): Array<{ session_id: string }> {
-  return onHandle(hippoRoot, (db) => findPromotableSessionsAt(db, tenantId, sinceMs), openStore);
+  return onHandle(hippoRoot, (db) => sessionsSql.findPromotableSessions(db, tenantId, sinceMs), openStore);
 }
 
 export function wmPush(
@@ -179,6 +176,6 @@ export function wmClear(
   );
 }
 
-export function updateStats(hippoRoot: string, delta: Parameters<typeof updateStatsAt>[2]): void {
-  onHandle(hippoRoot, (db) => updateStatsAt(db, { hippoRoot }, delta), openStore);
+export function updateStats(hippoRoot: string, delta: Parameters<typeof indexAndStatsSql.updateStats>[2]): void {
+  onHandle(hippoRoot, (db) => indexAndStatsSql.updateStats(db, { hippoRoot }, delta), openStore);
 }

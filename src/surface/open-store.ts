@@ -37,7 +37,7 @@ export {
   loadAllEntries,
   loadEmbeddingIndex,
   loadRecallSearchEntries,
-  loadVectorCandidateEntriesAt,
+  loadVectorCandidateEntries,
   recordTokenUse,
   tokensBySession,
   upsertEntryRow,

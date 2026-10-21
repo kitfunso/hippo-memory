@@ -17,7 +17,7 @@ import { firstPilotArmHash } from '../../src/store/sqlite/token-ledger-rows.js';
 import { hashArm, type PilotArm } from '../../src/base/session/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
-import { diagnosticsAt, ledgerAt } from '../_helpers/cli-stores.js';
+import { diagnosticsBodies, ledgerAt } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -296,7 +296,7 @@ describe('ledger readers skip arm rows', () => {
 describe('doctor', () => {
   const pilotCheck = async () => {
     vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-    const report = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd: tmp, home: tmp, version: 'test' });
+    const report = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: tmp, home: tmp, version: 'test' });
     return report.checks.find((c) => c.id === 'pilot');
   };
 

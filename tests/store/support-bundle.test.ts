@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { buildSupportBundle } from '../../src/surface/cli/support-bundle.js';
-import { diagnosticsAt } from '../_helpers/cli-stores.js';
+import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import {
   openHippoDb,
   openHippoDbReadOnly,
@@ -170,7 +170,7 @@ describe('buildSupportBundle', () => {
   it('the default bundle redacts every canary, home form and secret, and keeps what it should', async () => {
     const s = seed();
     const bundle = await buildSupportBundle({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
@@ -237,7 +237,7 @@ describe('buildSupportBundle', () => {
     vi.stubEnv('HIPPO_HOME', aliasGlobal);
     initTestStore(aliasGlobal);
     const bundle = await buildSupportBundle({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
@@ -264,7 +264,7 @@ describe('buildSupportBundle', () => {
     for (const k of Object.keys(saved)) vi.stubEnv(k, join(aliasHome, 'tmp'));
     let bundle: JsonObject;
     bundle = await buildSupportBundle({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
@@ -295,7 +295,7 @@ describe('buildSupportBundle', () => {
     );
 
     const bundle = await buildSupportBundle({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd,
       home,
@@ -318,7 +318,7 @@ describe('buildSupportBundle', () => {
   it('includeLogs adds tails with known secret shapes gone; memory text in a log is not (documented opt-in)', async () => {
     const s = seed();
     const bundle = await buildSupportBundle({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
@@ -373,7 +373,7 @@ describe('buildSupportBundle', () => {
       );
 
       const bundle = await buildSupportBundle({
-        diagnosticsAt,
+        diagnosticsBodies,
         tenantId: 'default',
         cwd: s.cwd,
         home: s.home,
@@ -415,7 +415,7 @@ describe('buildSupportBundle', () => {
       const swapped = async (home: string, input: string[]): Promise<string[]> => {
         writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: input }));
         const bundle = await buildSupportBundle({
-          diagnosticsAt,
+          diagnosticsBodies,
           tenantId: 'default',
           cwd: s.cwd,
           home,
@@ -453,7 +453,7 @@ describe('buildSupportBundle', () => {
     const parsed = JSON.parse(
       JSON.stringify(
         await buildSupportBundle({
-          diagnosticsAt,
+          diagnosticsBodies,
           tenantId: 'default',
           cwd: s.cwd,
           home: s.home,
@@ -479,7 +479,7 @@ describe('buildSupportBundle', () => {
 
     const before = sha256(join(s.hippoRoot, 'hippo.db'));
     await buildSupportBundle({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
@@ -500,7 +500,7 @@ describe('buildSupportBundle', () => {
     const parsed = JSON.parse(
       JSON.stringify(
         await buildSupportBundle({
-          diagnosticsAt,
+          diagnosticsBodies,
           tenantId: 'default',
           cwd: s.cwd,
           home: s.home,
@@ -520,7 +520,7 @@ describe('buildSupportBundle', () => {
     vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
 
     const bundle = await buildSupportBundle({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd,
       home,
@@ -536,7 +536,7 @@ describe('buildSupportBundle', () => {
     const bare = JSON.parse(
       JSON.stringify(
         await buildSupportBundle({
-          diagnosticsAt,
+          diagnosticsBodies,
           tenantId: 'default',
           cwd,
           home,
@@ -560,7 +560,7 @@ describe('buildSupportBundle', () => {
     const parsed = JSON.parse(
       JSON.stringify(
         await buildSupportBundle({
-          diagnosticsAt,
+          diagnosticsBodies,
           tenantId: 'default',
           cwd,
           home,

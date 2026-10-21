@@ -1,5 +1,5 @@
 // The base store's planning-fallacy read: a claim's tokens resolved to one prediction class, and that class's baserate.
-import { computePredictionBaserateAt } from './predictions.js';
+import { computePredictionBaserate } from './predictions.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { PlanningFallacyEvidence, ClassResolution } from '../port/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -48,7 +48,7 @@ function resolveClassFromTokens(
 }
 
 /** Resolves a claim's tokens to one class and reads its baserate, writing no audit row. */
-export function planningFallacyEvidenceAt(
+export function planningFallacyEvidence(
   db: DatabaseSyncLike,
   tenantId: string,
   classQueryTokens: readonly string[],
@@ -56,7 +56,7 @@ export function planningFallacyEvidenceAt(
   const resolution = resolveClassFromTokens(db, tenantId, classQueryTokens);
   // emitAudit=false: the recall_autodebias_hint row carries n_closed and mean_ratio, so predict_baserate stays off.
   const baserate = resolution.classTag
-    ? computePredictionBaserateAt(db, tenantId, resolution.classTag, 'recall', false)
+    ? computePredictionBaserate(db, tenantId, resolution.classTag, 'recall', false)
     : null;
   return { ...resolution, baserate };
 }

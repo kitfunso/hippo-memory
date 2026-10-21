@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { cleanupArchivedMirrors } from '../../src/db/raw-archive-mirror-cleanup.js';
-import { conflictResolveAuditsAt } from '../../src/store/sqlite/conflicts.js';
+import { conflictResolveAudits } from '../../src/store/sqlite/conflicts.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, DAG_LEVEL } from '../../src/base/memory/memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -112,7 +112,7 @@ describe('schema v62', () => {
   it('reads conflict audit rows through the audit index', () => {
     seedLogs();
     withDb((db) => {
-      const { statements } = recordStatements(() => conflictResolveAuditsAt(db));
+      const { statements } = recordStatements(() => conflictResolveAudits(db));
       const sql = statements.find((s) => s.includes('FROM audit_log')) ?? failNoSql();
       expect(plan(db, sql)).toContain(`USING INDEX ${AUDIT}`);
     });

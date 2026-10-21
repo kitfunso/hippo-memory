@@ -1,6 +1,6 @@
 // Takes an imported agent note out of recall on the caller's transaction; the note sync and the project repair both use
 // it.
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import { SYNC_ACTOR } from '../../base/memory/agent-memory-tools.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { insertDormantRow } from './dormant-rows.js';
@@ -19,13 +19,15 @@ export function setAsideRow(
 ): SetAsideResult {
   const untagged: MemoryEntry = { ...row, tags: row.tags.filter((t) => t !== tag) };
   const audit = (metadata: Record<string, string | boolean>): void =>
-    appendAuditEvent(db, {
-      tenantId: row.tenantId,
-      actor: SYNC_ACTOR,
-      op: 'agent_memory_set_aside',
-      targetId: row.id,
-      metadata,
-    });
+    appendAuditEvents(db, [
+      {
+        tenantId: row.tenantId,
+        actor: SYNC_ACTOR,
+        op: 'agent_memory_set_aside',
+        targetId: row.id,
+        metadata,
+      },
+    ]);
   if (row.pinned) {
     setEntryTagsInTx(db, untagged);
     audit({ why, untagged: true });

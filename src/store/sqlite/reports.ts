@@ -7,10 +7,10 @@ import { summarizeFailures } from './failure-log.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import type { SqlFragment } from '../../db/sql.js';
 import type { CorrectionLinkPage, RawProvenancePage, ReportPage, Reports, StrengthTallies } from '../port/reports.js';
-import { statusCountsAt, strengthTalliesAt } from './candidates.js';
-import { countOpenConflictsAt } from './conflicts.js';
-import { countAllEntriesAt, loadEntriesPageAt } from './entry-reads.js';
-import { createdSinceLastSleepAt } from './index-and-stats.js';
+import { statusCounts, strengthTallies } from './candidates.js';
+import { countOpenConflicts } from './conflicts.js';
+import { countAllEntries, loadEntriesPage } from './entry-reads.js';
+import { createdSinceLastSleep } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
@@ -37,7 +37,7 @@ function afterRange(created: string, id: string, after: ReportPage['after']): Sq
 
 /** A page of the superseded rows joined to their successor and that row's extraction source: the pairs the report
  * lists, and no other row. */
-function correctionLinksAt(db: DatabaseSyncLike, page: ReportPage): CorrectionLinkPage {
+function correctionLinks(db: DatabaseSyncLike, page: ReportPage): CorrectionLinkPage {
   const range = afterRange('old.created', 'old.id', page.after);
   const rows = cachedStatement(
     db,
@@ -63,7 +63,7 @@ function correctionLinksAt(db: DatabaseSyncLike, page: ReportPage): CorrectionLi
 const RAW = "kind = 'raw'";
 
 /** The raw count in SQL and a page of the raw rows missing provenance, on one snapshot. */
-function rawProvenanceAt(db: DatabaseSyncLike, page: ReportPage): RawProvenancePage {
+function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePage {
   return withReadSnapshot(db, () => {
     // SAFETY: an aggregate with no GROUP BY always answers one row.
     const { n } = cachedStatement(db, `SELECT COUNT(*) AS n FROM memories WHERE ${RAW}`).get() as { n: number };
@@ -90,7 +90,7 @@ function rawProvenanceAt(db: DatabaseSyncLike, page: ReportPage): RawProvenanceP
 }
 
 /** Strength tallies and the open-conflict count on one snapshot, so they never straddle another process's write. */
-function memoryStatusAt(
+function memoryStatus(
   db: DatabaseSyncLike,
   rules: LossAversion,
   tenantId: string,
@@ -98,13 +98,13 @@ function memoryStatusAt(
   atRiskBelow: number,
 ): StrengthTallies & { openConflicts: number } {
   return withReadSnapshot(db, () => ({
-    ...strengthTalliesAt(db, rules, tenantId, now, atRiskBelow),
-    openConflicts: countOpenConflictsAt(db, tenantId),
+    ...strengthTallies(db, rules, tenantId, now, atRiskBelow),
+    openConflicts: countOpenConflicts(db, tenantId),
   }));
 }
 
 // The two totals read side tables only, so they skip the mirror setup the memory reads open with.
-const reportTotalsAt: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
+const reportTotalsBodies: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
   tokenUse: summarizeTokenUse,
   failures: summarizeFailures,
 };
@@ -112,24 +112,24 @@ const reportTotalsAt: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
 type Scored = 'memoryStatus' | 'statusCounts';
 
 // These two score strength, so they take the store's loss-aversion rules beside the handle.
-const scoredReadsAt: FileBodies<Pick<Reports, Scored>> = {
-  memoryStatus: memoryStatusAt,
-  statusCounts: statusCountsAt,
+const scoredReadsBodies: FileBodies<Pick<Reports, Scored>> = {
+  memoryStatus: memoryStatus,
+  statusCounts: statusCounts,
 };
 
-const reportReadsAt: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
-  entriesPage: loadEntriesPageAt,
-  countEntries: countAllEntriesAt,
+const reportReadsBodies: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
+  entriesPage: loadEntriesPage,
+  countEntries: countAllEntries,
   stats: buildStatsFromDb,
-  correctionLinks: correctionLinksAt,
-  rawProvenance: rawProvenanceAt,
-  createdSinceLastSleep: createdSinceLastSleepAt,
+  correctionLinks: correctionLinks,
+  rawProvenance: rawProvenance,
+  createdSinceLastSleep: createdSinceLastSleep,
 };
 
 export function sqliteReports(on: OnHandle): Sync<Reports> {
   return {
-    ...bound(on, reportTotalsAt),
-    ...bound(on, reportReadsAt, openStore),
-    ...boundWithFiles(on, scoredReadsAt, openStore),
+    ...bound(on, reportTotalsBodies),
+    ...bound(on, reportReadsBodies, openStore),
+    ...boundWithFiles(on, scoredReadsBodies, openStore),
   };
 }

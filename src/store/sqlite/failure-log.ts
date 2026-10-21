@@ -102,12 +102,12 @@ export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceI
   return failureTotals(sinceIso, (outcome) => counts.get(outcome) ?? 0, ratedFailures(db, tenantId));
 }
 
-const failureLogAt: Bodies<FailureLog> = {
+const failureLogBodies: Bodies<FailureLog> = {
   record: recordFailure,
   requestOutcome,
   settleOutcome: settleFailureOutcome,
 };
 
 export function sqliteFailureLog(on: OnHandle): Sync<FailureLog> {
-  return bound(on, failureLogAt);
+  return bound(on, failureLogBodies);
 }

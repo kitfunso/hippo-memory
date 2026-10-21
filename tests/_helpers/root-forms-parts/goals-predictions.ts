@@ -1,12 +1,12 @@
-// Root-keyed goals and predictions forms tests call; production code goes through the store port or the At forms.
+// Root-keyed goals and predictions forms tests call; production code goes through the port or the handle-first forms.
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
 import { handlesOf, onHandle } from '../../../src/store/sqlite/handles.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../../../src/store/port/goals.js';
-import { activeGoalsWithPoliciesAt } from '../../../src/store/sqlite/goals.js';
-import { computePredictionBaserateAt } from '../../../src/store/sqlite/predictions.js';
+import * as goalsSql from '../../../src/store/sqlite/goals.js';
+import * as predictionsSql from '../../../src/store/sqlite/predictions.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
 import type { ActiveGoals, GetActiveGoalsOpts, Goal, PredictionBaserate } from '../../../src/store/port/types.js';
@@ -18,7 +18,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
 }
 
 export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
-  return onHandle(hippoRoot, (db) => activeGoalsWithPoliciesAt(db, opts));
+  return onHandle(hippoRoot, (db) => goalsSql.activeGoalsWithPolicies(db, opts));
 }
 
 export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
@@ -83,7 +83,9 @@ export function computePredictionBaserate(
   actor: string = CLI_ACTOR,
   emitAudit: boolean = true,
 ): PredictionBaserate {
-  return onHandle(hippoRoot, (db) => computePredictionBaserateAt(db, tenantId, classTag, actor, emitAudit));
+  return onHandle(hippoRoot, (db) =>
+    predictionsSql.computePredictionBaserate(db, tenantId, classTag, actor, emitAudit),
+  );
 }
 
 export function loadOpenPredictions(

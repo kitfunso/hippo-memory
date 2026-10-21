@@ -1,4 +1,4 @@
-// Root-keyed vectors and graph forms tests call; production code goes through the store port or the At forms.
+// Root-keyed vectors and graph forms tests call; production code goes through the port or the handle-first forms.
 
 import type { MemoryEntry } from '../../../src/base/memory/memory.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
@@ -13,32 +13,23 @@ import {
   stageVectors,
   upsertVectors,
 } from '../../../src/db/vector-store.js';
-import {
-  loadPendingExtractionTenantsAt,
-  markGraphDirtyAt,
-  markPendingProcessedUpToAt,
-} from '../../../src/store/sqlite/graph-queue.js';
+import * as graphQueueSql from '../../../src/store/sqlite/graph-queue.js';
 import type { Entity, Relation } from '../../../src/store/port/graph.js';
 import { handlesOf, onHandle, openStore } from '../../../src/store/sqlite/handles.js';
-import { loadVectorCandidateEntriesAt } from '../../../src/store/sqlite/search-rows.js';
+import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
-import { recordRereadsAt } from '../../../src/store/sqlite/token-ledger.js';
-import {
-  particleStatsAt,
-  loadStoredVectorsAt,
-  resetStoredParticlesAt,
-  seedStoredParticleAt,
-  storedVectorSummaryAt,
-} from '../../../src/store/sqlite/vector-index.js';
+import * as tokenLedgerSql from '../../../src/store/sqlite/token-ledger.js';
+import { particleStats } from '../../../src/store/sqlite/vector-index.js';
+import * as vectorIndexSql from '../../../src/store/sqlite/vector-index.js';
 import type { RebuildPatch } from '../../../src/store/port/consolidation.js';
 import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/store/port/vectors.js';
 
 export function markPendingProcessedUpTo(hippoRoot: string, tenantId: string, maxId: number): number {
-  return onHandle(hippoRoot, (db) => markPendingProcessedUpToAt(db, tenantId, maxId));
+  return onHandle(hippoRoot, (db) => graphQueueSql.markPendingProcessedUpTo(db, tenantId, maxId));
 }
 
 export function loadPendingExtractionTenants(hippoRoot: string): { tenantId: string; maxPendingId: number }[] {
-  return onHandle(hippoRoot, (db) => loadPendingExtractionTenantsAt(db));
+  return onHandle(hippoRoot, (db) => graphQueueSql.loadPendingExtractionTenants(db));
 }
 
 export function loadEntitiesByMemoryId(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): Entity[] {
@@ -70,11 +61,11 @@ export function recordRereads(
   sessionId: string,
   calls: readonly ApiCall[],
 ): number {
-  return onHandle(hippoRoot, (db) => recordRereadsAt(db, tenantId, sessionId, calls));
+  return onHandle(hippoRoot, (db) => tokenLedgerSql.recordRereads(db, tenantId, sessionId, calls));
 }
 
 export function storedVectorSummary(hippoRoot: string): StoredVectorSummary {
-  return onHandle(hippoRoot, (db) => storedVectorSummaryAt(db));
+  return onHandle(hippoRoot, (db) => vectorIndexSql.storedVectorSummary(db));
 }
 
 export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
@@ -94,19 +85,19 @@ export function saveStoredVectors(
 }
 
 export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
-  return onHandle(hippoRoot, (db) => particleStatsAt(db, Infinity).particles ?? []);
+  return onHandle(hippoRoot, (db) => particleStats(db, Infinity).particles ?? []);
 }
 
 export function resetStoredParticles(hippoRoot: string): number {
-  return onHandle(hippoRoot, (db) => resetStoredParticlesAt(db, {}));
+  return onHandle(hippoRoot, (db) => vectorIndexSql.resetStoredParticles(db, {}));
 }
 
 export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
-  return onHandle(hippoRoot, (db) => seedStoredParticleAt(db, {}, entry, vector));
+  return onHandle(hippoRoot, (db) => vectorIndexSql.seedStoredParticle(db, {}, entry, vector));
 }
 
 export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {
-  onHandle(hippoRoot, (db) => markGraphDirtyAt(db, tenantId, memoryId));
+  onHandle(hippoRoot, (db) => graphQueueSql.markGraphDirty(db, tenantId, memoryId));
 }
 
 export function loadEntitiesByIds(hippoRoot: string, tenantId: string, ids: readonly number[]): Entity[] {
@@ -129,9 +120,12 @@ export function loadVectorCandidateEntries(
   queryVector: readonly number[],
   spec: VectorCandidateSpec,
 ): Promise<MemoryEntry[]> {
-  return handlesOf(hippoRoot).onAsync((db) => loadVectorCandidateEntriesAt(db, queryVector, spec), openStore);
+  return handlesOf(hippoRoot).onAsync(
+    (db) => searchRowsSql.loadVectorCandidateEntries(db, queryVector, spec),
+    openStore,
+  );
 }
 
 export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
-  return onHandle(hippoRoot, (db) => loadStoredVectorsAt(db, ids));
+  return onHandle(hippoRoot, (db) => vectorIndexSql.loadStoredVectors(db, ids));
 }

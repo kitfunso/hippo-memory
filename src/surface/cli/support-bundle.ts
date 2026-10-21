@@ -113,7 +113,7 @@ async function buildStoreEntry(
   if (fs.existsSync(walPath)) files['hippo.db-wal'] = fs.statSync(walPath).size;
 
   try {
-    const { diagnostics } = opts.diagnosticsAt(storeDir);
+    const { diagnostics } = opts.diagnosticsBodies(storeDir);
     const { schemaVersion, minCompatibleBinary, tables } = await diagnostics.inventory();
     const { configFile, config } = readStoreConfig(storeDir);
     return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };

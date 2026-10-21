@@ -4,7 +4,7 @@ import { cpSync, mkdtempSync } from 'node:fs';
 import { expect } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
@@ -37,7 +37,9 @@ export function seedTwoTenants(): TwoTenantFixture {
   try {
     const mint = (tenantId: string, role: 'admin' | 'member'): CreateApiKeyResult => {
       const minted = createApiKey(db, { tenantId, label: `${tenantId}-${role}`, role });
-      appendAuditEvent(db, { tenantId, actor: 'cli', op: 'auth_create', targetId: minted.keyId, metadata: { role } });
+      appendAuditEvents(db, [
+        { tenantId, actor: 'cli', op: 'auth_create', targetId: minted.keyId, metadata: { role } },
+      ]);
       return minted;
     };
     const m = {
@@ -48,12 +50,14 @@ export function seedTwoTenants(): TwoTenantFixture {
     };
     revokeApiKey(db, m.revokedA.keyId, FIXTURE_REVOKED_AT);
     for (let i = 0; i < 7; i++) {
-      appendAuditEvent(db, {
-        tenantId: i % 2 === 0 ? TENANT_A : TENANT_B,
-        actor: 'cli',
-        op: 'remember',
-        targetId: `mem_${i}`,
-      });
+      appendAuditEvents(db, [
+        {
+          tenantId: i % 2 === 0 ? TENANT_A : TENANT_B,
+          actor: 'cli',
+          op: 'remember',
+          targetId: `mem_${i}`,
+        },
+      ]);
     }
     db.prepare('DELETE FROM audit_log WHERE id = (SELECT MAX(id) FROM audit_log)').run();
     const field = (f: 'keyId' | 'plaintext') => ({

@@ -16,10 +16,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
  * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
-export function saveIndexAt(
-  db: DatabaseSyncLike,
-  index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>,
-): void {
+export function saveIndex(db: DatabaseSyncLike, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   withWriteScope(db, 'save_index', () => {
     setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
     setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
@@ -40,7 +37,7 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
 }
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
-export function updateStatsAt(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
+export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
   const total = addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta);
   updateStatsOn(db, files.hippoRoot, total);
   pendingStats.delete(files.hippoRoot);
@@ -70,14 +67,14 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: St
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 
-export function updateStatsUnlessBusyAt(
+export function updateStatsUnlessBusy(
   db: DatabaseSyncLike,
   files: StoreFiles,
   delta: StatsDelta,
   committed: string,
 ): void {
   try {
-    updateStatsAt(db, files, delta);
+    updateStats(db, files, delta);
   } catch (err) {
     if (!isSqliteBusy(err)) throw err;
     pendingStats.set(files.hippoRoot, addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta));
@@ -89,7 +86,7 @@ export function updateStatsUnlessBusyAt(
   }
 }
 
-export function appendConsolidationRunAt(
+export function appendConsolidationRun(
   db: DatabaseSyncLike,
   files: StoreFiles,
   run: { timestamp: string; decayed: number; merged: number; removed: number },
@@ -105,7 +102,7 @@ export function appendConsolidationRunAt(
 }
 
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
-export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, now: Date): number {
+export function createdSinceLastSleep(db: DatabaseSyncLike, tenantId: string, now: Date): number {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
   const row = cachedStatement(
     db,
@@ -116,7 +113,7 @@ export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, 
 }
 
 /** Timestamp of the latest consolidation run, or undefined when there is none. */
-export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
+export function lastConsolidation(db: DatabaseSyncLike): string | undefined {
   const row = cachedStatement(
     db,
     `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`,
@@ -125,7 +122,7 @@ export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
 }
 
 /** Load the session decay context; session intervals come from consolidation_runs timestamps. */
-export function loadSessionDecayContextAt(db: DatabaseSyncLike): SessionDecayContext {
+export function loadSessionDecayContext(db: DatabaseSyncLike): SessionDecayContext {
   // Get recent consolidation timestamps (last 20)
   const rows = cachedStatement(
     db,
@@ -151,7 +148,7 @@ export function loadSessionDecayContextAt(db: DatabaseSyncLike): SessionDecayCon
 }
 
 /** Increment the sleep counter after each consolidation run. */
-export function incrementSleepCountAt(db: DatabaseSyncLike): void {
+export function incrementSleepCount(db: DatabaseSyncLike): void {
   const current = Number(getMeta(db, 'sleep_count', '0')) || 0;
   setMeta(db, 'sleep_count', String(current + 1));
 }

@@ -16,10 +16,10 @@ import {
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
 import { readerReaches, targetReader } from '../../src/base/scope/recall-scope.js';
-import { writeEntriesTogetherAt, writeEntryDbOnly, writeEntryMirrorsIn } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntriesTogether, writeEntryDbOnly, writeEntryMirrorsIn } from '../../src/store/sqlite/entry-writes.js';
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
-import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
-import { applyOutcomeAt, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
+import { applyOutcome, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
 import type { OutcomeWrite } from '../../src/store/port/entry-writes.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
@@ -51,13 +51,15 @@ function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeW
         const updated = entryAfterOutcome(entry, outcome.good);
         writeEntryDbOnly(db, updated, { actor: outcome.actor });
         live.set(id, updated);
-        appendAuditEvent(db, {
-          tenantId: outcome.tenantId,
-          actor: outcome.actor,
-          op: 'outcome',
-          targetId: id,
-          metadata: { good: outcome.good },
-        });
+        appendAuditEvents(db, [
+          {
+            tenantId: outcome.tenantId,
+            actor: outcome.actor,
+            op: 'outcome',
+            targetId: id,
+            metadata: { good: outcome.good },
+          },
+        ]);
         out.push(updated);
       }
       return out;
@@ -97,7 +99,7 @@ function seeded(label: string, entries: readonly MemoryEntry[]) {
   const root = makeRoot(label);
   const db = openStore(root);
   open.push(db);
-  writeEntriesTogetherAt(db, { hippoRoot: root }, entries);
+  writeEntriesTogether(db, { hippoRoot: root }, entries);
   // The seed's own child writes marked every parent; clear all but one so the outcome has flips to make.
   db.prepare('UPDATE memories SET summary_dirty = (id = ?)').run(entries[2]!.id);
   // A stale copy in another layer, which every mirror write removes.
@@ -162,7 +164,7 @@ describe('outcome over 200 ids', () => {
     const before = seeded('outcome-pin-old', entries);
     const after = seeded('outcome-pin-new', entries);
     const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
-    const got = applyOutcomeAt(after.db, { hippoRoot: after.root }, outcomeOf(ids, good));
+    const got = applyOutcome(after.db, { hippoRoot: after.root }, outcomeOf(ids, good));
     flushHeldMirrors(after.root);
     expect(got).toEqual(expected);
     expect(got.length).toBeGreaterThan(190);
@@ -180,7 +182,7 @@ describe('outcome statement count', () => {
       const { entries } = fixture(n);
       const ids = entries.filter((e) => e.tenantId === 'default' && e.scope === null).map((e) => e.id);
       const { root, db } = seeded(`outcome-count-${n}`, entries);
-      const { statements } = recordStatements(() => applyOutcomeAt(db, { hippoRoot: root }, outcomeOf(ids, false)));
+      const { statements } = recordStatements(() => applyOutcome(db, { hippoRoot: root }, outcomeOf(ids, false)));
       return statements.length;
     });
     expect(counts[0]).toBe(counts[1]);
@@ -219,7 +221,7 @@ describe('outcome that fails mid-batch', () => {
   ])('leaves no row, audit row or mirror when %s fails', (_label, trigger) => {
     const { root, db, ids } = failingStore(trigger);
     const before = snapshot(root, db);
-    expect(() => applyOutcomeAt(db, { hippoRoot: root }, outcomeOf(ids, true))).toThrow(/refused/);
+    expect(() => applyOutcome(db, { hippoRoot: root }, outcomeOf(ids, true))).toThrow(/refused/);
     expect(snapshot(root, db)).toEqual(before);
   });
 });

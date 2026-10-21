@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../memory/memory.js';
 
-/** Default candidate-pool size for `loadSearchEntriesAt` when `limit` is undefined; `api.recall` imports it for
+/** Default candidate-pool size for `loadSearchEntries` when `limit` is undefined; `api.recall` imports it for
  * `RecallResult.windowSize` so the two cannot drift. */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 

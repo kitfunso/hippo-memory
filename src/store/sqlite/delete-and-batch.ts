@@ -4,7 +4,7 @@ import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { AUTO_DELETABLE } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { introducesContent, rejectedValuesAt } from './rejection.js';
+import { introducesContent, rejectedValues } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { RejectedValueRow } from '../port/rejections.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
@@ -47,10 +47,10 @@ const AUTOMATIC_DELETE: SqlFragment = {
 
 /** The ids among `ids` that back a first-class object, one statement per chunk, for passes that plan deletes before
  * making them. */
-export function memoriesBackingAmongAt(db: DatabaseSyncLike, ids: readonly string[]): Set<string> {
+export function memoriesBackingAmong(db: DatabaseSyncLike, ids: readonly string[]): Set<string> {
   const backed = new Set<string>();
   if (ids.length === 0) return backed;
-  const tables = backingTablesAt(db);
+  const tables = backingTables(db);
   // The NOT NULL term lets each table's partial memory_id index answer the IN.
   const sql = tables
     .map(
@@ -67,7 +67,7 @@ export function memoriesBackingAmongAt(db: DatabaseSyncLike, ids: readonly strin
 }
 
 // Quality repair opens an older schema unmigrated, which can lack some of the tables.
-function backingTablesAt(db: DatabaseSyncLike): string[] {
+function backingTables(db: DatabaseSyncLike): string[] {
   const rows = cachedStatement(
     db,
     `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${placeholders(MEMORY_BACKED_TABLES.length)})`,
@@ -145,20 +145,20 @@ function deleteTargetRow(
 
 /** deleteEntry with `automatic` for each removal and its own forget row and reason. Returns the ids deleted, in
  * `removals` order; a missing, repeated, pinned, raw or object-backing id is left out. */
-export function deleteEntriesAutomaticallyAt(
+export function deleteEntriesAutomatically(
   db: DatabaseSyncLike,
   files: StoreFiles,
   removals: readonly { id: string; reason: string }[],
   actor: string,
 ): string[] {
-  const went = deleteEntriesInBatchesAt(db, files, removals, { actor, automatic: true });
+  const went = deleteEntriesInBatches(db, files, removals, { actor, automatic: true });
   return removals.filter((_, i) => went[i]).map((removal) => removal.id);
 }
 
 /** Deletes each target with its own forget row and reason, one transaction per chunk after one read of its ids;
  * `true` where the row went, so a repeated id is true once. A host-wide pass: each row's own tenant goes into its
  * DELETE. */
-export function deleteEntriesInBatchesAt(
+export function deleteEntriesInBatches(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   targets: readonly { id: string; reason: string }[],
@@ -213,7 +213,7 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
 /** Writes, deletes and dormant moves in one transaction. With `snapshot`, a write keeps only the fields the caller
  * changed and never resurrects a gone row. Dormant moves (src/store/dormant.ts) leave `memories` like a delete; both
  * skip rows no longer auto-deletable. Returns ids that left `memories`. */
-export function batchWriteAndDeleteAt(
+export function batchWriteAndDelete(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   toWrite: MemoryEntry[],
@@ -525,7 +525,7 @@ function refusedWrites(db: DatabaseSyncLike, planned: readonly PlannedWrite[]): 
   const refused = new Map<string, RejectedValueRow>();
   for (const [tenantId, writes] of byTenant) {
     const digests = writes.map((write) => rejectionDigest(write.row.content));
-    const tombstones = rejectedValuesAt(db, tenantId, digests);
+    const tombstones = rejectedValues(db, tenantId, digests);
     writes.forEach((write, i) => {
       const tombstone = tombstones.get(digests[i]!);
       if (tombstone && introducesContent(write.liveRow, tenantId, digests[i]!)) refused.set(write.row.id, tombstone);
@@ -571,7 +571,7 @@ interface FtsChanges {
 
 /** Commits whole components in transactions of about `budget.holdMs`, letting other writers in between; returns the ids
  * that left `memories`. The snapshot keeps what other writers changed after the caller loaded its rows. */
-export async function commitInChunksAt(
+export async function commitInChunks(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   components: readonly FlushComponent[],

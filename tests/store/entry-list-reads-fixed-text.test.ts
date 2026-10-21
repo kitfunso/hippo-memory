@@ -5,9 +5,9 @@ import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DEFAULT_HALF_LIFE_DAYS, createMemory, type EmotionalValence } from '../../src/base/memory/memory.js';
 import {
-  contentsWithTagAt,
-  loadCurrentEntriesFromOriginsAt,
-  loadEntriesWithSignalsAt,
+  contentsWithTag,
+  loadCurrentEntriesFromOrigins,
+  loadEntriesWithSignals,
 } from '../../src/store/sqlite/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -65,7 +65,7 @@ describe('cached list reads', () => {
       sourcePrefix: 'zzz',
       minRetrievals: 1_000,
     });
-    const r = shortThenLong((long) => loadEntriesWithSignalsAt(db, signals(long), TENANT, { limit: 10 }).entries);
+    const r = shortThenLong((long) => loadEntriesWithSignals(db, signals(long), TENANT, { limit: 10 }).entries);
     expect(r.prepared).toEqual([]);
     expect(contents(r.short)).toEqual(['beta row', 'gamma row']);
     expect(contents(r.long)).toEqual(['alpha row', 'beta row', 'gamma row', 'global row']);
@@ -73,13 +73,13 @@ describe('cached list reads', () => {
 
   it('origin-filtered reads read one statement for one origin and for three', () => {
     const origins = (long: boolean) => (long ? ['p1', 'p2', 'p9'] : ['p1']);
-    const tagged = shortThenLong((long) => contentsWithTagAt(db, TENANT, 'alpha', origins(long)));
+    const tagged = shortThenLong((long) => contentsWithTag(db, TENANT, 'alpha', origins(long)));
     expect(tagged.prepared).toEqual([]);
     expect(tagged.short.sort()).toEqual(['alpha row', 'global row']);
-    const current = shortThenLong((long) => loadCurrentEntriesFromOriginsAt(db, TENANT, origins(long)));
+    const current = shortThenLong((long) => loadCurrentEntriesFromOrigins(db, TENANT, origins(long)));
     expect(current.prepared).toEqual([]);
     expect(contents(current.short)).toEqual(['alpha row']);
     expect(contents(current.long)).toEqual(['alpha row', 'beta row']);
-    expect(loadCurrentEntriesFromOriginsAt(db, TENANT, [])).toEqual([]);
+    expect(loadCurrentEntriesFromOrigins(db, TENANT, [])).toEqual([]);
   });
 });

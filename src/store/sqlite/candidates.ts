@@ -16,7 +16,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { pickRarestFtsQuery, loadRecallEntriesAt } from './search-rows.js';
+import { pickRarestFtsQuery, loadRecallEntries } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
@@ -189,7 +189,7 @@ function pinnedEntries(db: DatabaseSyncLike, tenantId: TenantId): Generator<Memo
 // The pins plus the `recentNeeded` newest rows `judge` keeps, for ambient injection, with each refusal in the order the
 // rows were read. One connection; `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the
 // recent rows past the first window.
-export function loadAmbientCandidatesAt(
+export function loadAmbientCandidates(
   db: DatabaseSyncLike,
   tenantId: string,
   { recentNeeded, judge, recall, origins }: AmbientLoad,
@@ -224,7 +224,7 @@ export function loadAmbientCandidatesAt(
   if (!recall) return { entries, refused };
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
   const recallEntries = ftsQuery
-    ? loadRecallEntriesAt(db, ftsQuery, {
+    ? loadRecallEntries(db, ftsQuery, {
         limit: recall.limit,
         tenantId,
         includeSuperseded: false,
@@ -293,7 +293,7 @@ function decayKeySubsetRows(db: DatabaseSyncLike, rows: SqlFragment, cap: number
 }
 
 /** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
-export function loadContextCandidatesAt(
+export function loadContextCandidates(
   db: DatabaseSyncLike,
   tenantId: string,
   filter: ContextCandidateFilter,
@@ -368,7 +368,7 @@ function heldRows(
  * spacing holds its every word. With `project`, only rows carrying one of those names plus user-global rows, as
  * loadContextCandidates' filter. A row holds a word it has whole between spaces as one of the index's phrase hits, so
  * when the index is in sync it answers for each word it can name. */
-export function loadTextsHoldingWordsAt(
+export function loadTextsHoldingWords(
   db: DatabaseSyncLike,
   tenantId: TenantId,
   words: readonly string[],
@@ -398,7 +398,7 @@ export function loadTextsHoldingWordsAt(
 /**
  * A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it.
  */
-export function newestEntriesAt(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
+export function newestEntries(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
   const rows = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
@@ -410,12 +410,12 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
   for (const row of rows) yield row.content;
 }
 
-/** How many of a tenant's newest rows schemaFitAt reads; older rows no longer move the fit. */
+/** How many of a tenant's newest rows schemaFit reads; older rows no longer move the fit. */
 const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
 /** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate and texts
  * stream one column, so no row is loaded. */
-export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: string, tags: readonly string[]): number {
+export function schemaFit(db: DatabaseSyncLike, tenantId: string, content: string, tags: readonly string[]): number {
   const newest = 'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
   // One read transaction, so the row count and the texts come from the same snapshot.
   return withReadSnapshot(db, () => {
@@ -445,7 +445,7 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
 type SourceTallyDbRow = SourceTally;
 
 /** Row count and newest `created` per source, for peer listings that need no row. */
-export function tallySourcesAt(db: DatabaseSyncLike, tenantId: TenantId): SourceTally[] {
+export function tallySources(db: DatabaseSyncLike, tenantId: TenantId): SourceTally[] {
   const tenant = tenantAnd(tenantId);
   return cachedStatement(
     db,
@@ -461,7 +461,7 @@ export const jsonList = (column: string): string =>
 
 /** calculateStrength over every row of a tenant in one aggregate pass, no row loaded, on a handle the caller holds so
  * it can share a snapshot with other reads. */
-export function strengthTalliesAt(
+export function strengthTallies(
   db: DatabaseSyncLike,
   rules: LossAversion,
   tenantId: string,
@@ -560,12 +560,7 @@ function tallyStatusRows(
 /**
  * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built.
  */
-export function statusCountsAt(
-  db: DatabaseSyncLike,
-  rules: LossAversion,
-  now: Date,
-  atRiskBelow: number,
-): StatusCounts {
+export function statusCounts(db: DatabaseSyncLike, rules: LossAversion, now: Date, atRiskBelow: number): StatusCounts {
   // One read transaction, so the row tallies and the two counts describe the same store.
   return withReadSnapshot(db, () => {
     // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
