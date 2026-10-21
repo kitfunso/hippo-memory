@@ -1,7 +1,8 @@
 // One server for the http-objects tests: the request limits are off and every test makes its own rows.
 import { beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from './store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';

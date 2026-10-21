@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { serve } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

@@ -3,10 +3,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect } from 'node:net';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 /** An admin key, since only an admin passes the mint route's gate to its body read. */
 function adminKey(root: string): string {
@@ -106,7 +107,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   });
 
   // Past the admin gate the key mint still reads under its own 4 KB cap and short deadline.
-  it('POST /v1/auth/keys answers 413 for a body over its 4 KB cap', async () => {
+  it.skipIf(needsHippoDb('db'))('POST /v1/auth/keys answers 413 for a body over its 4 KB cap', async () => {
     const res = await fetch(`${handle.url}/v1/auth/keys`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${adminKey(root)}` },
@@ -115,14 +116,17 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     expect(res.status).toBe(413);
   });
 
-  it('POST /v1/auth/keys answers 408 and drops the socket when an accepted caller never sends the promised body', async () => {
-    await handle.stop();
-    handle = await serve({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
-    const credential = `Authorization: Bearer ${adminKey(root)}\r\n`;
-    expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys', credential)).toBe(
-      'HTTP/1.1 408 Request Timeout',
-    );
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'POST /v1/auth/keys answers 408 and drops the socket when an accepted caller never sends the promised body',
+    async () => {
+      await handle.stop();
+      handle = await serve({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
+      const credential = `Authorization: Bearer ${adminKey(root)}\r\n`;
+      expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys', credential)).toBe(
+        'HTTP/1.1 408 Request Timeout',
+      );
+    },
+  );
 
   // Past auth (a keyless loopback store accepts the caller) every other route reads through one shared reader, so one route stands for all.
   it('POST /mcp answers 408 and drops the socket when an accepted caller never sends the promised body', async () => {

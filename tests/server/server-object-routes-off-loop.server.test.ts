@@ -29,6 +29,7 @@ import {
   undoAll,
 } from '../_helpers/store-worker-server.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 afterEach(undoAll);
 
@@ -333,67 +334,73 @@ const AUDIT = [
 ].map((op) => `${WRITER} ${op}`);
 
 describe('the worker-backed typed-object routes against the in-process store', () => {
-  it('gives every route, refusal and thrown error the same status, headers, body, audit rows, stored rows and mirror files', async () => {
-    const steps = [...routeSteps(objectRoutes()), ...EDGE_STEPS];
-    const inProcess = await runSteps(steps, true);
-    const onWorkers = await runSteps(steps, false);
+  it.skipIf(needsHippoDb('lock'))(
+    'gives every route, refusal and thrown error the same status, headers, body, audit rows, stored rows and mirror files',
+    async () => {
+      const steps = [...routeSteps(objectRoutes()), ...EDGE_STEPS];
+      const inProcess = await runSteps(steps, true);
+      const onWorkers = await runSteps(steps, false);
 
-    expect(onWorkers.replies).toEqual(inProcess.replies);
-    expect(onWorkers.audit).toEqual(inProcess.audit);
-    expect(onWorkers.stored).toEqual(inProcess.stored);
-    expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
-    expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(statuses(steps));
-    expect(objectAudit(onWorkers.audit)).toEqual(AUDIT);
-    const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
-    const created = Object.entries(bodyOf)
-      .filter(([label]) => /^POST \/v1\/[a-z-]+$/.test(label))
-      .map(([, body]) => /^\{"(\w+)":\{"id":1,"memoryId":"<memory>"/.exec(body)?.[1]);
-    expect(created).toEqual(['decision', 'incident', 'process', 'policy', 'skill', 'brief', 'note']);
-    expect(bodyOf['GET /v1/policies/asof']).toContain('roll back within ten minutes');
-    expect(bodyOf['GET /v1/skills/export']).toContain('page the owner, then revert the flag');
-    expect(bodyOf['POST /v1/project-briefs/refresh']).toContain('the canary passed on the second run');
-    expect(bodyOf['read the receipts of a brief']).toContain('"receiptCount":2');
-    expect(bodyOf['list the page after']).toContain('"decisionText":"ship behind a flag"');
-    expect(bodyOf['close the closed decision']).toContain('closed');
-    expect(bodyOf['supersede a missing decision']).toContain('999');
-    expect(bodyOf['open an incident on an unknown memory']).toContain(
-      'linked memory <memory> not found for tenant default',
-    );
-    expect(onWorkers.mirrors.length).toBeGreaterThan(10);
-  });
+      expect(onWorkers.replies).toEqual(inProcess.replies);
+      expect(onWorkers.audit).toEqual(inProcess.audit);
+      expect(onWorkers.stored).toEqual(inProcess.stored);
+      expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
+      expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(statuses(steps));
+      expect(objectAudit(onWorkers.audit)).toEqual(AUDIT);
+      const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
+      const created = Object.entries(bodyOf)
+        .filter(([label]) => /^POST \/v1\/[a-z-]+$/.test(label))
+        .map(([, body]) => /^\{"(\w+)":\{"id":1,"memoryId":"<memory>"/.exec(body)?.[1]);
+      expect(created).toEqual(['decision', 'incident', 'process', 'policy', 'skill', 'brief', 'note']);
+      expect(bodyOf['GET /v1/policies/asof']).toContain('roll back within ten minutes');
+      expect(bodyOf['GET /v1/skills/export']).toContain('page the owner, then revert the flag');
+      expect(bodyOf['POST /v1/project-briefs/refresh']).toContain('the canary passed on the second run');
+      expect(bodyOf['read the receipts of a brief']).toContain('"receiptCount":2');
+      expect(bodyOf['list the page after']).toContain('"decisionText":"ship behind a flag"');
+      expect(bodyOf['close the closed decision']).toContain('closed');
+      expect(bodyOf['supersede a missing decision']).toContain('999');
+      expect(bodyOf['open an incident on an unknown memory']).toContain(
+        'linked memory <memory> not found for tenant default',
+      );
+      expect(onWorkers.mirrors.length).toBeGreaterThan(10);
+    },
+  );
 
-  it('answers an object write behind a held write lock with the same 503 and Retry-After, and an object read with its 200', async () => {
-    const busy: readonly Step[] = [
-      ['create', 'POST /v1/decisions', { body: { text: 'never saved' }, status: 503 }],
-      ['close', 'POST /v1/decisions/:id/close', { status: 503 }],
-      ['open', 'POST /v1/incidents', { body: { text: 'never saved' }, status: 503 }],
-      ['list', 'GET /v1/decisions', { status: 200 }],
-      ['get', 'GET /v1/decisions/:id', { status: 200 }],
-    ];
-    const behindLock = async (store: (root: string) => HippoStore | undefined) => {
-      const root = newRoot('object-routes');
-      const { keyIds, ...seeded } = seedStore(root);
-      const run: Run = { server: await start(root, store(root)), ...seeded, newest: new Map() };
-      expect(
-        (await send(run, ['warm', 'POST /v1/decisions', { body: { text: 'saved before the lock' }, status: 201 }]))
-          .status,
-      ).toBe(201);
-      const before = storedRows(root);
-      const lock = holdWriteLock(root);
-      const replies = [];
-      for (const step of busy) replies.push(await seen(step[0], await send(run, step), keyIds));
-      lock.release();
-      expect(storedRows(root)).toEqual(before);
-      return replies;
-    };
+  it.skipIf(needsHippoDb('lock'))(
+    'answers an object write behind a held write lock with the same 503 and Retry-After, and an object read with its 200',
+    async () => {
+      const busy: readonly Step[] = [
+        ['create', 'POST /v1/decisions', { body: { text: 'never saved' }, status: 503 }],
+        ['close', 'POST /v1/decisions/:id/close', { status: 503 }],
+        ['open', 'POST /v1/incidents', { body: { text: 'never saved' }, status: 503 }],
+        ['list', 'GET /v1/decisions', { status: 200 }],
+        ['get', 'GET /v1/decisions/:id', { status: 200 }],
+      ];
+      const behindLock = async (store: (root: string) => HippoStore | undefined) => {
+        const root = newRoot('object-routes');
+        const { keyIds, ...seeded } = seedStore(root);
+        const run: Run = { server: await start(root, store(root)), ...seeded, newest: new Map() };
+        expect(
+          (await send(run, ['warm', 'POST /v1/decisions', { body: { text: 'saved before the lock' }, status: 201 }]))
+            .status,
+        ).toBe(201);
+        const before = storedRows(root);
+        const lock = holdWriteLock(root);
+        const replies = [];
+        for (const step of busy) replies.push(await seen(step[0], await send(run, step), keyIds));
+        lock.release();
+        expect(storedRows(root)).toEqual(before);
+        return replies;
+      };
 
-    const inProcess = await behindLock(sqliteStore);
-    const onWorkers = await behindLock(() => undefined);
+      const inProcess = await behindLock(sqliteStore);
+      const onWorkers = await behindLock(() => undefined);
 
-    expect(onWorkers).toEqual(inProcess);
-    expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(statuses(busy));
-    expect(onWorkers[0]?.headers).toContainEqual(['retry-after', '1']);
-  });
+      expect(onWorkers).toEqual(inProcess);
+      expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(statuses(busy));
+      expect(onWorkers[0]?.headers).toContainEqual(['retry-after', '1']);
+    },
+  );
 });
 
 describe('the server-thread block of the object routes', () => {
@@ -492,20 +499,23 @@ describe('an object write waiting for the write lock', () => {
 });
 
 describe('what an object save does after its commit, on the writer thread', () => {
-  it("leaves the mirror memory row, its mirror file and a decision's graph mark", async () => {
-    const root = newRoot('object-routes');
-    const run: Run = { ...seedStore(root), server: await start(root), newest: new Map() };
+  it.skipIf(needsHippoDb('lock'))(
+    "leaves the mirror memory row, its mirror file and a decision's graph mark",
+    async () => {
+      const root = newRoot('object-routes');
+      const run: Run = { ...seedStore(root), server: await start(root), newest: new Map() };
 
-    const res = await send(run, ['create', 'POST /v1/decisions', SENDS.get('POST /v1/decisions') ?? { status: 0 }]);
-    const memoryId = /"memoryId":"([^"]+)"/.exec(await res.text())?.[1] ?? '';
+      const res = await send(run, ['create', 'POST /v1/decisions', SENDS.get('POST /v1/decisions') ?? { status: 0 }]);
+      const memoryId = /"memoryId":"([^"]+)"/.exec(await res.text())?.[1] ?? '';
 
-    expect(res.status).toBe(201);
-    expect(onDb(root, (db) => db.prepare('SELECT content, source FROM memories WHERE id = ?').all(memoryId))).toEqual([
-      expect.objectContaining({ content: expect.stringContaining('ship behind a flag') }),
-    ]);
-    expect(entryMirrorFiles(root, memoryId)).toHaveLength(1);
-    expect(loadExtractionQueue(root, 'default').map((item) => [item.memoryId, item.status])).toEqual([
-      [memoryId, 'pending'],
-    ]);
-  });
+      expect(res.status).toBe(201);
+      expect(onDb(root, (db) => db.prepare('SELECT content, source FROM memories WHERE id = ?').all(memoryId))).toEqual(
+        [expect.objectContaining({ content: expect.stringContaining('ship behind a flag') })],
+      );
+      expect(entryMirrorFiles(root, memoryId)).toHaveLength(1);
+      expect(loadExtractionQueue(root, 'default').map((item) => [item.memoryId, item.status])).toEqual([
+        [memoryId, 'pending'],
+      ]);
+    },
+  );
 });

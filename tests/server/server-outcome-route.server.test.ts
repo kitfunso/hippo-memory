@@ -7,11 +7,12 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember } from '../../src/api/index.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadLastRecall, readEntry, saveIndex } from '../_helpers/root-forms.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -64,7 +65,7 @@ describe('POST /v1/outcome', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  it('with ids returns applied:N (200)', async () => {
+  it.skipIf(needsHippoDb('db'))('with ids returns applied:N (200)', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'outcome-target-1' });
     const m2 = await remember(ctx, { content: 'outcome-target-2' });
@@ -79,17 +80,20 @@ describe('POST /v1/outcome', () => {
     expect(body.applied).toBe(2);
   });
 
-  it('without ids applies to what this client last recalled (returns {applied, ids})', async () => {
-    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-    const m1 = await remember(ctx, { content: 'zebrafish feeding schedule one' });
-    const m2 = await remember(ctx, { content: 'zebrafish feeding schedule two' });
-    const shown = await recalledIds(handle.url, 'zebrafish');
-    expect([...shown].sort()).toEqual([m1.id, m2.id].sort());
+  it.skipIf(needsHippoDb('db'))(
+    'without ids applies to what this client last recalled (returns {applied, ids})',
+    async () => {
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+      const m1 = await remember(ctx, { content: 'zebrafish feeding schedule one' });
+      const m2 = await remember(ctx, { content: 'zebrafish feeding schedule two' });
+      const shown = await recalledIds(handle.url, 'zebrafish');
+      expect([...shown].sort()).toEqual([m1.id, m2.id].sort());
 
-    const res = await postOutcome(handle.url, { good: true });
-    expect(res.status).toBe(200);
-    expect(await jsonAs<{ applied: number; ids: string[] }>(res)).toEqual({ applied: 2, ids: shown });
-  });
+      const res = await postOutcome(handle.url, { good: true });
+      expect(res.status).toBe(200);
+      expect(await jsonAs<{ applied: number; ids: string[] }>(res)).toEqual({ applied: 2, ids: shown });
+    },
+  );
 
   it("without ids ignores the store's CLI last recall", async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
@@ -122,7 +126,7 @@ describe('POST /v1/outcome', () => {
     expect(res.status).toBe(400);
   });
 
-  it('emits one audit_log row per applied id (op=outcome)', async () => {
+  it.skipIf(needsHippoDb('db'))('emits one audit_log row per applied id (op=outcome)', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'audit-trail-1' });
     const m2 = await remember(ctx, { content: 'audit-trail-2' });
@@ -212,7 +216,7 @@ describe('POST /v1/outcome', () => {
     expect(body.error).toContain('1000-id cap');
   });
 
-  it('1000 ids at boundary returns 200 (cap-exclusive)', async () => {
+  it.skipIf(needsHippoDb('db'))('1000 ids at boundary returns 200 (cap-exclusive)', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     // Seed 3 real memories so applied > 0 confirms route ran.
     const m1 = await remember(ctx, { content: 'boundary-mem-1' });
@@ -285,7 +289,7 @@ describe('POST /v1/outcome without ids, one client beside another', () => {
     }
   };
 
-  it("lands on the ids each client last recalled, never on another client's", async () => {
+  it.skipIf(needsHippoDb('db'))("lands on the ids each client last recalled, never on another client's", async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     const zebra = await remember(ctx, { content: 'zebrafish feeding schedule' });
     const quokka = await remember(ctx, { content: 'quokka habitat survey' });

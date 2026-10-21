@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { log } from '../../src/base/util/log.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
@@ -17,6 +17,7 @@ import {
 } from '../_helpers/moved-reads-seed.js';
 import { CLEARED_ENV, FAKE_NOW, freshStore, SESSION } from '../_helpers/recall-golden-seed.js';
 import { auditRows, get, holdWriteLock, mirrorFiles, post, seen, undoAll } from '../_helpers/store-worker-server.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 type InProcess = HippoStore & StoreGroups;
 
@@ -168,57 +169,65 @@ afterEach(async () => {
 });
 
 describe('the worker-backed graph, quarantine and recall routes against the in-process store', () => {
-  it('gives every moved route the same status, headers, body, audit rows, stored rows and mirror files', async () => {
-    const inProcess = await runSteps(STEPS, true);
-    const onWorkers = await runSteps(STEPS, false);
+  it.skipIf(needsHippoDb('lock'))(
+    'gives every moved route the same status, headers, body, audit rows, stored rows and mirror files',
+    async () => {
+      const inProcess = await runSteps(STEPS, true);
+      const onWorkers = await runSteps(STEPS, false);
 
-    expect(onWorkers.replies).toEqual(inProcess.replies);
-    expect(onWorkers.audit).toEqual(inProcess.audit);
-    expect(onWorkers.stored).toEqual(inProcess.stored);
-    expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
-    expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(
-      STEPS.map(([label, , status]) => [label, status]),
-    );
-    const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
-    expect(bodyOf['graph from an entity']).toContain('RetryPolicy');
-    expect(bodyOf['graph as the other tenant']).toContain('AcmePolicy');
-    expect(bodyOf['list the approved']).toContain('before every commit');
-    expect(bodyOf['recall the approved memory in its scope']).toContain('before every commit');
-    expect(bodyOf['recall with overflow summaries']).toContain('"isSummary":true');
-    expect(onWorkers.stored.filter((row) => row.startsWith('traces '))).toHaveLength(8);
-  });
+      expect(onWorkers.replies).toEqual(inProcess.replies);
+      expect(onWorkers.audit).toEqual(inProcess.audit);
+      expect(onWorkers.stored).toEqual(inProcess.stored);
+      expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
+      expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(
+        STEPS.map(([label, , status]) => [label, status]),
+      );
+      const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
+      expect(bodyOf['graph from an entity']).toContain('RetryPolicy');
+      expect(bodyOf['graph as the other tenant']).toContain('AcmePolicy');
+      expect(bodyOf['list the approved']).toContain('before every commit');
+      expect(bodyOf['recall the approved memory in its scope']).toContain('before every commit');
+      expect(bodyOf['recall with overflow summaries']).toContain('"isSummary":true');
+      expect(onWorkers.stored.filter((row) => row.startsWith('traces '))).toHaveLength(8);
+    },
+  );
 
-  it('answers a read behind a held write lock with its 200, and a decision and a recall with the same 503 and Retry-After', async () => {
-    const busy: readonly Step[] = [
-      ['graph', graph(''), 200],
-      ['list', held(''), 200],
-      ['approve', decide('approve', (made) => made.held[0]), 503],
-      ['reject', decide('reject', (made) => made.held[1]), 503],
-      ['recall', recall('q=deploy'), 503],
-    ];
-    const behindLock = async (inProcess: boolean) => {
-      const root = copy();
-      const before = left(root);
-      const replies = await onServer(root, inProcess ? sqliteStore(root) : undefined, async (server) => {
-        const lock = holdWriteLock(root);
-        const seenSoFar = [];
-        for (const [label, send] of busy) seenSoFar.push(await seen(label, await send({ server, seed }), seed.keyIds));
-        lock.release();
-        return seenSoFar;
-      });
-      expect(left(root)).toEqual(before);
-      return replies;
-    };
+  it.skipIf(needsHippoDb('lock'))(
+    'answers a read behind a held write lock with its 200, and a decision and a recall with the same 503 and Retry-After',
+    async () => {
+      const busy: readonly Step[] = [
+        ['graph', graph(''), 200],
+        ['list', held(''), 200],
+        ['approve', decide('approve', (made) => made.held[0]), 503],
+        ['reject', decide('reject', (made) => made.held[1]), 503],
+        ['recall', recall('q=deploy'), 503],
+      ];
+      const behindLock = async (inProcess: boolean) => {
+        const root = copy();
+        const before = left(root);
+        const replies = await onServer(root, inProcess ? sqliteStore(root) : undefined, async (server) => {
+          const lock = holdWriteLock(root);
+          const seenSoFar = [];
+          for (const [label, send] of busy) {
+            seenSoFar.push(await seen(label, await send({ server, seed }), seed.keyIds));
+          }
+          lock.release();
+          return seenSoFar;
+        });
+        expect(left(root)).toEqual(before);
+        return replies;
+      };
 
-    const inProcess = await behindLock(true);
-    const onWorkers = await behindLock(false);
+      const inProcess = await behindLock(true);
+      const onWorkers = await behindLock(false);
 
-    expect(onWorkers).toEqual(inProcess);
-    expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(
-      busy.map(([label, , status]) => [label, status]),
-    );
-    expect(onWorkers[2]?.headers).toContainEqual(['retry-after', '1']);
-  });
+      expect(onWorkers).toEqual(inProcess);
+      expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(
+        busy.map(([label, , status]) => [label, status]),
+      );
+      expect(onWorkers[2]?.headers).toContainEqual(['retry-after', '1']);
+    },
+  );
 });
 
 describe("the server-thread block of a `loop: 'off'` route this file covers", () => {

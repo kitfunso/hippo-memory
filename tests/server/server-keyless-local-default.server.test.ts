@@ -6,9 +6,10 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -145,7 +146,7 @@ describe('a request with no key, by default', () => {
     expect(reply.error).toMatch(/^auth required: /);
   });
 
-  it('serves the same request once it carries a key', async () => {
+  it.skipIf(needsHippoDb('db'))('serves the same request once it carries a key', async () => {
     const reply = await remember('keyed-default-canary', { authorization: `Bearer ${apiKey}` });
     expect(reply.status).toBe(200);
     expect(rememberActors()).toEqual([expect.stringMatching(/^api_key:/)]);
@@ -183,7 +184,7 @@ describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
     return Array.isArray(rows) ? rows.length : -1;
   }
 
-  it('is served as a member', async () => {
+  it.skipIf(needsHippoDb('db'))('is served as a member', async () => {
     expect((await remember('keyless-opt-in-canary')).status).toBe(200);
     expect(rememberActors()).toEqual(['localhost:cli']);
     expect(await listedKeyCount()).toBe(0);
@@ -199,21 +200,24 @@ describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
     expect((await call('/mcp/stream')).status).toBe(200);
   });
 
-  it('is still a member when HIPPO_KEYLESS_LOCAL_ROLE=admin is set, which nothing reads any more', async () => {
-    vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', 'admin');
-    expect(await listedKeyCount()).toBe(0);
-    expect(
-      (
-        await call('/v1/sleep', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: '{"dry_run":true}',
-        })
-      ).status,
-    ).toBe(403);
-  });
+  it.skipIf(needsHippoDb('sleep'))(
+    'is still a member when HIPPO_KEYLESS_LOCAL_ROLE=admin is set, which nothing reads any more',
+    async () => {
+      vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', 'admin');
+      expect(await listedKeyCount()).toBe(0);
+      expect(
+        (
+          await call('/v1/sleep', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{"dry_run":true}',
+          })
+        ).status,
+      ).toBe(403);
+    },
+  );
 
-  it('still serves a keyed request as that key', async () => {
+  it.skipIf(needsHippoDb('db'))('still serves a keyed request as that key', async () => {
     expect((await remember('keyed-opt-in-canary', { authorization: `Bearer ${apiKey}` })).status).toBe(200);
     expect(rememberActors()).toEqual([expect.stringMatching(/^api_key:/)]);
   });

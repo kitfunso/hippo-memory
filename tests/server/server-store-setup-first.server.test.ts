@@ -23,6 +23,7 @@ import {
   start,
   undoAll,
 } from '../_helpers/store-worker-server.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -54,47 +55,56 @@ async function recalled(server: ServerHandle, query: string): Promise<string[]> 
 }
 
 describe('a root with no hippo.db', () => {
-  it('answers its first request, a read, from a reader, after the writer recorded what a new store records', async () => {
-    const root = bareRoot();
-    const server = await start(root);
+  it.skipIf(needsHippoDb('lock'))(
+    'answers its first request, a read, from a reader, after the writer recorded what a new store records',
+    async () => {
+      const root = bareRoot();
+      const server = await start(root);
 
-    const graph = await get(server, '/v1/graph');
+      const graph = await get(server, '/v1/graph');
 
-    expect(graph.status).toBe(200);
-    // The graph read writes nothing, so only the setup can have recorded this.
-    expect(halfLifeBase(root)).toBe(String(DEFAULT_HALF_LIFE_DAYS));
-    const rest = [
-      // GET /v1/quarantine is an admin route, and the key can be minted only once the first read made the db.
-      await get(server, '/v1/quarantine', mintAdminKey(root)),
-      await get(server, '/v1/memories?q=deploy'),
-      await get(server, '/v1/sessions/sess-1/assemble'),
-      await post(server, '/v1/memories/mem_000000000000/supersede', { content: 'never saved' }),
-    ];
-    expect(rest.map((res) => res.status)).toEqual([200, 200, 200, 404]);
-  });
+      expect(graph.status).toBe(200);
+      // The graph read writes nothing, so only the setup can have recorded this.
+      expect(halfLifeBase(root)).toBe(String(DEFAULT_HALF_LIFE_DAYS));
+      const rest = [
+        // GET /v1/quarantine is an admin route, and the key can be minted only once the first read made the db.
+        await get(server, '/v1/quarantine', mintAdminKey(root)),
+        await get(server, '/v1/memories?q=deploy'),
+        await get(server, '/v1/sessions/sess-1/assemble'),
+        await post(server, '/v1/memories/mem_000000000000/supersede', { content: 'never saved' }),
+      ];
+      expect(rest.map((res) => res.status)).toEqual([200, 200, 200, 404]);
+    },
+  );
 
-  it('imports the markdown memories of an older store before the first read, which returns them', async () => {
-    const root = bareRoot();
-    legacyMarkdown(root, 'the legacy deploy runbook lives in the wiki');
-    const server = await start(root);
+  it.skipIf(needsHippoDb('lock'))(
+    'imports the markdown memories of an older store before the first read, which returns them',
+    async () => {
+      const root = bareRoot();
+      legacyMarkdown(root, 'the legacy deploy runbook lives in the wiki');
+      const server = await start(root);
 
-    expect(await recalled(server, 'runbook')).toEqual(['the legacy deploy runbook lives in the wiki']);
-  });
+      expect(await recalled(server, 'runbook')).toEqual(['the legacy deploy runbook lives in the wiki']);
+    },
+  );
 });
 
 describe('markdown that appears on a still empty store after the setup', () => {
-  it('is left alone by a reader, which still answers, and is imported by the next write', async () => {
-    const root = newRoot('setup-first');
-    const server = await start(root);
-    expect((await get(server, '/v1/sessions/sess-1/assemble')).status).toBe(200);
-    legacyMarkdown(root, 'a runbook copied in while the server ran');
+  it.skipIf(needsHippoDb('lock'))(
+    'is left alone by a reader, which still answers, and is imported by the next write',
+    async () => {
+      const root = newRoot('setup-first');
+      const server = await start(root);
+      expect((await get(server, '/v1/sessions/sess-1/assemble')).status).toBe(200);
+      legacyMarkdown(root, 'a runbook copied in while the server ran');
 
-    const read = await get(server, '/v1/sessions/sess-1/assemble');
+      const read = await get(server, '/v1/sessions/sess-1/assemble');
 
-    expect(read.status).toBe(200);
-    expect((await post(server, '/v1/memories', { content: 'the first note written here' })).status).toBe(200);
-    expect(await recalled(server, 'runbook')).toEqual(['a runbook copied in while the server ran']);
-  });
+      expect(read.status).toBe(200);
+      expect((await post(server, '/v1/memories', { content: 'the first note written here' })).status).toBe(200);
+      expect(await recalled(server, 'runbook')).toEqual(['a runbook copied in while the server ran']);
+    },
+  );
 });
 
 describe('a setup still waiting for the write lock', () => {

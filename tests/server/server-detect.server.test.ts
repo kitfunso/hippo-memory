@@ -10,7 +10,7 @@ import {
   removePidfileIfOwned,
   ServerUnresponsiveError,
 } from '../../src/surface/server/server-detect.js';
-import { serve } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { boundPort } from '../_helpers/listen.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the

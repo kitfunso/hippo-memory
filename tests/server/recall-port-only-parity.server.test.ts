@@ -2,7 +2,6 @@
 // store that answers only through the port; the replies and the rows written must match.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import type { RecallResult } from '../../src/api/index.js';
@@ -23,6 +22,7 @@ import {
 } from '../_helpers/recall-golden-seed.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -149,7 +149,7 @@ afterAll(() => {
   rmSync(templates.dir, { recursive: true, force: true });
 });
 
-describe('recall over the port matches recall on hippo.db', () => {
+describe.skipIf(needsHippoDb('parity'))('recall over the port matches recall on hippo.db', () => {
   beforeEach(() => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);

@@ -10,11 +10,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -61,23 +62,26 @@ async function jsonAs<T>(res: Response): Promise<T> {
 }
 
 describe('HTTP /v1/memories planningFallacyHint', () => {
-  it('response includes planningFallacyHint with camelCase shape when query matches', async () => {
-    seedBaserate(home);
-    const q = encodeURIComponent('migration effort will take 3 days');
-    const res = await fetch(`${handle.url}/v1/memories?q=${q}`);
-    expect(res.status).toBe(200);
-    const body = await jsonAs<Partial<RecallResult>>(res);
-    const { planningFallacyHint: hint } = body;
-    if (hint === undefined) {
-      throw new Error('planningFallacyHint missing from the response');
-    }
-    // Wire-shape: camelCase fields per _Base.alias_generator=to_camel parity.
-    expect(hint.classTag).toBe('migration-effort');
-    expect(hint.source).toBe('j3.2-auto');
-    expect(hint.nClosed).toBe(3);
-    expect(hint.detectedPhrase).toEqual(expect.any(String));
-    expect(hint.baserateSummary).toEqual(expect.any(String));
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'response includes planningFallacyHint with camelCase shape when query matches',
+    async () => {
+      seedBaserate(home);
+      const q = encodeURIComponent('migration effort will take 3 days');
+      const res = await fetch(`${handle.url}/v1/memories?q=${q}`);
+      expect(res.status).toBe(200);
+      const body = await jsonAs<Partial<RecallResult>>(res);
+      const { planningFallacyHint: hint } = body;
+      if (hint === undefined) {
+        throw new Error('planningFallacyHint missing from the response');
+      }
+      // Wire-shape: camelCase fields per _Base.alias_generator=to_camel parity.
+      expect(hint.classTag).toBe('migration-effort');
+      expect(hint.source).toBe('j3.2-auto');
+      expect(hint.nClosed).toBe(3);
+      expect(hint.detectedPhrase).toEqual(expect.any(String));
+      expect(hint.baserateSummary).toEqual(expect.any(String));
+    },
+  );
 
   it('planningFallacyHint absent when query has no forward-claim phrase', async () => {
     seedBaserate(home);

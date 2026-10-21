@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { remember as apiRemember } from '../../src/api/index.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -114,7 +115,7 @@ function tracedRequest(label: string, url: string, init?: TracedRequestInit): Pr
 // Proves no SQLite locked errors when readers and a writer hammer the
 // server simultaneously. ROADMAP A1 commitment.
 describe('server concurrency — recall + write under single-writer', () => {
-  it('handles 10 readers x 50 GETs + 50 writes with no SQLite locked errors', async () => {
+  it.skipIf(needsHippoDb('db'))('handles 10 readers x 50 GETs + 50 writes with no SQLite locked errors', async () => {
     const home = makeRoot('srv-conc');
 
     // Pre-seed 100 memories spanning a small pool of search terms so

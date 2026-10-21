@@ -10,7 +10,6 @@ import { ServerResponse } from 'node:http';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  serve,
   authRevoke,
   ForbiddenError,
   isReservedActor,
@@ -20,6 +19,7 @@ import {
   type ServeOpts,
   type Context,
 } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js';

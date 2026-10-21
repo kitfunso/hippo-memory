@@ -294,6 +294,7 @@ describe('published runtime exports', () => {
         hasGroup heldTexts
         isSharedStore
         loadConfig
+        memoryStore
         normalizeValueForRejection
         ownScopeTouches
         passesScopeFilterForRecall physicsSearch

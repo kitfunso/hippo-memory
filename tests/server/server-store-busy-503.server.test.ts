@@ -3,13 +3,14 @@ import { afterAll, beforeAll, describe, expect, it, vi, beforeEach, afterEach } 
 import { createRequire } from 'node:module';
 import { MessageChannel } from 'node:worker_threads';
 import { getHippoDbPath, type DatabaseSyncLike } from '../../src/db/index.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { log } from '../../src/base/util/log.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { serveJobs } from '../../src/store/sqlite/worker-jobs.js';
 import type { Job, Reply } from '../../src/store/sqlite/worker-ops.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -41,35 +42,38 @@ describe('server under a held write lock', () => {
     await handle.stop();
   });
 
-  it('returns 503 with Retry-After: 1 well inside the old 5 s wait, logs it as a warning, then succeeds once the lock is gone', async () => {
-    const warn = vi.spyOn(log, 'warn');
-    const error = vi.spyOn(log, 'error');
-    holder.exec('BEGIN IMMEDIATE');
-    const { result: busy, statements } = await recordStatementsAsync(() =>
-      fetch(`${handle.url}/v1/memories`, {
+  it.skipIf(needsHippoDb('lock'))(
+    'returns 503 with Retry-After: 1 well inside the old 5 s wait, logs it as a warning, then succeeds once the lock is gone',
+    async () => {
+      const warn = vi.spyOn(log, 'warn');
+      const error = vi.spyOn(log, 'error');
+      holder.exec('BEGIN IMMEDIATE');
+      const { result: busy, statements } = await recordStatementsAsync(() =>
+        fetch(`${handle.url}/v1/memories`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ content: 'written while another process holds the lock' }),
+        }),
+      );
+      holder.exec('ROLLBACK');
+
+      expect(busy.status).toBe(503);
+      expect(busy.headers.get('retry-after')).toBe('1');
+      expect(await busy.json()).toEqual({ error: expect.stringMatching(/store busy/) });
+      // The write waits on the store's writer thread, so the request opened no connection on this one.
+      expect(countMatching(statements, STORE_OPEN)).toBe(0);
+      const failureLine = (call: unknown[]): boolean => String(call[0]).startsWith('POST /v1/memories failed');
+      expect(warn.mock.calls.filter(failureLine)).toHaveLength(1);
+      expect(error.mock.calls.filter(failureLine)).toHaveLength(0);
+
+      const ok = await fetch(`${handle.url}/v1/memories`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content: 'written while another process holds the lock' }),
-      }),
-    );
-    holder.exec('ROLLBACK');
-
-    expect(busy.status).toBe(503);
-    expect(busy.headers.get('retry-after')).toBe('1');
-    expect(await busy.json()).toEqual({ error: expect.stringMatching(/store busy/) });
-    // The write waits on the store's writer thread, so the request opened no connection on this one.
-    expect(countMatching(statements, STORE_OPEN)).toBe(0);
-    const failureLine = (call: unknown[]): boolean => String(call[0]).startsWith('POST /v1/memories failed');
-    expect(warn.mock.calls.filter(failureLine)).toHaveLength(1);
-    expect(error.mock.calls.filter(failureLine)).toHaveLength(0);
-
-    const ok = await fetch(`${handle.url}/v1/memories`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: 'written after the lock is released' }),
-    });
-    expect(ok.status).toBe(200);
-  });
+        body: JSON.stringify({ content: 'written after the lock is released' }),
+      });
+      expect(ok.status).toBe(200);
+    },
+  );
 
   it("opens a store worker's connection with the wait its executor passed and tries a write behind the lock once", async () => {
     const { port1, port2 } = new MessageChannel();

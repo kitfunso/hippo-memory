@@ -13,13 +13,14 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import type { Prediction } from '../../src/store/port/objects.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -98,24 +99,27 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     expect(body.predictions.every((p) => p.closureState === 'open')).toBe(true);
   });
 
-  it('GET /v1/predictions with no class and no status lists closed predictions too', async () => {
-    const open = savePrediction(home, 'default', { classTag: 'ship', claimText: 'the release ships friday' });
-    const done = savePrediction(home, 'default', {
-      classTag: 'migrate',
-      claimText: 'the migration takes two days',
-      estimateValue: 2,
-    });
-    closePrediction(home, 'default', done.id, { closureState: 'closed', actualValue: 3 });
-    const res = await fetch(`${handle.url}/v1/predictions`, { headers: authHeaders() });
-    expect(res.status).toBe(200);
-    const body = await jsonAs<{ predictions: Prediction[] }>(res);
-    expect(body.predictions.map((p) => [p.id, p.closureState]).sort()).toEqual(
-      [
-        [open.id, 'open'],
-        [done.id, 'closed'],
-      ].sort(),
-    );
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'GET /v1/predictions with no class and no status lists closed predictions too',
+    async () => {
+      const open = savePrediction(home, 'default', { classTag: 'ship', claimText: 'the release ships friday' });
+      const done = savePrediction(home, 'default', {
+        classTag: 'migrate',
+        claimText: 'the migration takes two days',
+        estimateValue: 2,
+      });
+      closePrediction(home, 'default', done.id, { closureState: 'closed', actualValue: 3 });
+      const res = await fetch(`${handle.url}/v1/predictions`, { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      const body = await jsonAs<{ predictions: Prediction[] }>(res);
+      expect(body.predictions.map((p) => [p.id, p.closureState]).sort()).toEqual(
+        [
+          [open.id, 'open'],
+          [done.id, 'closed'],
+        ].sort(),
+      );
+    },
+  );
 
   it('GET /v1/predictions/:id returns single + 404 on missing', async () => {
     const create = await fetch(`${handle.url}/v1/predictions`, {
