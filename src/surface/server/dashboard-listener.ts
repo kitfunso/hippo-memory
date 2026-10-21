@@ -6,7 +6,7 @@ import { adminActor } from '../../api/index.js';
 import { configReader } from '../../base/config/config.js';
 import { evalNow } from '../../base/memory/ablation.js';
 import { builtStaticRoot } from '../dashboard/static-file.js';
-import { sqliteServerRuntime, type SqliteServerRuntime } from '../../store/sqlite/index.js';
+import { defaultServerRuntime, type ServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../../base/util/http-util.js';
@@ -51,7 +51,7 @@ export class DashboardListenError extends Error {
 }
 
 /** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
-function servingFor(opts: DashboardOpts, { store, offLoop }: SqliteServerRuntime): DashboardServing {
+function servingFor(opts: DashboardOpts, { store, offLoop }: ServerRuntime): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const now = opts.now ?? ((): number => evalNow().getTime());
   const configAt = configReader(envRuntimeSettings);
@@ -68,7 +68,7 @@ function servingFor(opts: DashboardOpts, { store, offLoop }: SqliteServerRuntime
 /** Serves the dashboard on 127.0.0.1 behind the per-start `token`; it never claims the API server's pidfile, so both
  * can serve one store. */
 export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle> {
-  const runtime = sqliteServerRuntime(opts.hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+  const runtime = defaultServerRuntime(opts.hippoRoot, { lossAversionRatio: envLossAversionRatio() });
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
   // Its own count: the dashboard serves no /health, so its late handlers never mix into the API server's.

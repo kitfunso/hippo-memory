@@ -4,8 +4,8 @@ import type { AmbientState } from '../../base/memory/ambient.js';
 import type { SleepContext } from '../types.js';
 import { runSleep } from './sleep-run.js';
 
-/** Options for `sleep`, one consolidation cycle on a SQLite store that returns counts; unlike `hippo sleep` it skips
- * the auto-learn step. */
+/** Options for `sleep`, one consolidation cycle on a store with the sleep groups that returns counts; unlike
+ * `hippo sleep` it skips the auto-learn step. */
 export interface SleepOpts {
   /** Report what a sleep would change without applying it; sharing, the ambient summary and the graph refresh are
    * skipped. */
@@ -48,8 +48,8 @@ export interface SleepResult {
   details?: string[];
 }
 
-/** Sleeps the WHOLE hippoRoot, every tenant, so /v1/sleep stays loopback-only; SQLite only; never auto-deletes pinned,
- * raw, kept or object-backing rows. */
+/** Sleeps the WHOLE store, every tenant, so /v1/sleep stays loopback-only; never auto-deletes pinned, raw, kept or
+ * object-backing rows. */
 export async function sleep(ctx: SleepContext, opts: SleepOpts = {}): Promise<SleepResult> {
   return runSleep(ctx, opts);
 }

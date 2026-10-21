@@ -49,7 +49,7 @@ import type {
   VectorCoverage,
 } from '../port/embedding-index.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
-import { rethrowIfSqliteBlocked } from '../../base/util/sqlite-blocked.js';
+import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
 const MAX_BACKFILL_PAGE = 500;
@@ -71,7 +71,7 @@ function loadStoredEmbeddingModel(on: OnHandle): string | null {
   try {
     return on(storedIndexStateAt).storedModel;
   } catch (err) {
-    rethrowIfSqliteBlocked(err);
+    rethrowIfStoreBlocked(err);
     log.debug(`stored embedding model unreadable: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
