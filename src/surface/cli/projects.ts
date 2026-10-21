@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import * as api from '../../api/index.js';
 import { cliApiContext, type CliContext } from './api-context.js';
-import { type CliFlags, flagIsTrue, type CommandContext, boolFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -68,7 +68,7 @@ async function projectsList(ctx: CliContext, flags: CliFlags): Promise<void> {
 }
 
 async function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): Promise<void> {
-  const apply = flagIsTrue(flags, 'apply');
+  const apply = boolFlag(flags, 'apply');
   const [from, into] = [args[1] ?? '', args[2] ?? ''];
   const r = await api.projectNameMerge(ctx, { from, into, dryRun: !apply });
   if (boolFlag(flags, 'json')) {
@@ -96,7 +96,7 @@ async function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): 
 
 async function projectsRepair(ctx: CliContext, flags: CliFlags): Promise<void> {
   const root = ctx.hippoRoot;
-  const apply = flagIsTrue(flags, 'apply');
+  const apply = boolFlag(flags, 'apply');
   const r = await api.projectNameRepair(ctx, { dryRun: !apply });
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(r, null, 2));

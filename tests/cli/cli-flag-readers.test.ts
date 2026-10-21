@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   boolFlag,
-  flagIsTrue,
+  flagValueless,
   hasFlag,
   intFlagInRange,
   numberFlag,
@@ -52,8 +52,8 @@ describe('flag readers', () => {
     expect(cases.map(([, f]) => boolFlag(f, 'x'))).toEqual([false, true, true, false, true]);
   });
 
-  it('flagIsTrue accepts only a bare switch', () => {
-    expect(cases.map(([, f]) => flagIsTrue(f, 'x'))).toEqual([false, true, false, false, false]);
+  it('flagValueless accepts only a bare flag', () => {
+    expect(cases.map(([, f]) => flagValueless(f, 'x'))).toEqual([false, true, false, false, false]);
   });
 
   it('hasFlag is presence, so an empty value counts', () => {

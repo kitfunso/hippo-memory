@@ -37,13 +37,12 @@ import {
   type CliFlags,
   type CommandContext,
   boolFlag,
-  flagIsTrue,
+  hasFlag,
   nonEmptyStringFlag,
   numberFlag,
+  stringFlag,
   stringFlagOrExit,
   stringListFlag,
-  hasFlag,
-  stringFlag,
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
@@ -400,7 +399,7 @@ export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext)
   }
 
   // v39: other-project rows are skipped by default; secrets always are.
-  const includeCrossProject = flagIsTrue(flags, 'cross-project');
+  const includeCrossProject = boolFlag(flags, 'cross-project');
   const count = await api.syncFromGlobal(cliApiContext(hippoRoot, tenantId), { includeCrossProject });
   const skipNote = includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)';
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
@@ -469,7 +468,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
 
 export async function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
-  const allTenants = flagIsTrue(flags, 'all-tenants');
+  const allTenants = boolFlag(flags, 'all-tenants');
   const peers = await api.sharePeers(cliApiContext(hippoRoot, tenantId), { allTenants });
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');

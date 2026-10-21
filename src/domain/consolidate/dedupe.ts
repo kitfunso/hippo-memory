@@ -40,14 +40,10 @@ const STRENGTH_TIE_EPSILON = 0.01;
  * Quantize strength to an integer bucket so ties are a true equivalence relation (equal iff same multiple of
  * `STRENGTH_TIE_EPSILON`).
  * Non-finite input maps to 0: a NaN bucket would make the comparator return NaN and break the total order. */
-export function strengthBucket(strength: number | null | undefined): number {
+export function strengthTieKey(strength: number | null | undefined): number {
   const s = strength ?? 0;
   return Number.isFinite(s) ? Math.round(s / STRENGTH_TIE_EPSILON) : 0;
 }
-
-// finiteCount hardens the retrieval leg like strengthBucket: a NaN would break the total order.
-// Unreachable via the schema (non-nullable INTEGER column); kept for symmetry.
-const finiteCount = (n: number | null | undefined): number => (Number.isFinite(n ?? 0) ? (n ?? 0) : 0);
 
 /** What the survivor order and a pair read of a row: a scan holds these, never the row itself. */
 interface DedupRow {
@@ -69,9 +65,9 @@ function dedupRow(entry: MemoryEntry): DedupRow {
 
 /** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
-  const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
+  const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
   if (bucketDiff !== 0) return bucketDiff;
-  const retrievalDiff = finiteCount(b.retrievalCount) - finiteCount(a.retrievalCount);
+  const retrievalDiff = b.retrievalCount - a.retrievalCount;
   if (retrievalDiff !== 0) return retrievalDiff;
   return compareEntryIdentity(a, b);
 }

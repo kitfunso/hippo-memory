@@ -20,7 +20,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
-import { deduplicateStore, strengthBucket } from '../../src/domain/consolidate/dedupe.js';
+import { deduplicateStore, strengthTieKey } from '../../src/domain/consolidate/dedupe.js';
 import { compareEntryIdentity } from '../../src/base/rank/compare.js';
 import { consolidate } from '../../src/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
@@ -266,14 +266,14 @@ describe('dedupe survivor determinism', () => {
     expect(bases[0]).toBe(`- ${contentAlpha}`);
   });
 
-  it('8. strengthBucket maps non-finite strength to bucket 0 and the assembled comparator chain never returns NaN', () => {
-    expect(strengthBucket(NaN)).toBe(0);
-    expect(strengthBucket(Infinity)).toBe(0);
-    expect(strengthBucket(-Infinity)).toBe(0);
-    expect(strengthBucket(null)).toBe(0);
-    expect(strengthBucket(undefined)).toBe(0);
-    expect(strengthBucket(0)).toBe(0);
-    expect(strengthBucket(1)).toBe(100);
+  it('8. strengthTieKey maps non-finite strength to bucket 0 and the assembled comparator chain never returns NaN', () => {
+    expect(strengthTieKey(NaN)).toBe(0);
+    expect(strengthTieKey(Infinity)).toBe(0);
+    expect(strengthTieKey(-Infinity)).toBe(0);
+    expect(strengthTieKey(null)).toBe(0);
+    expect(strengthTieKey(undefined)).toBe(0);
+    expect(strengthTieKey(0)).toBe(0);
+    expect(strengthTieKey(1)).toBe(100);
 
     // Mirrors dedupe.ts's comparator chain (bucket desc -> retrieval desc ->
     // compareEntryIdentity) using the same two exported building blocks, to
@@ -282,7 +282,7 @@ describe('dedupe survivor determinism', () => {
     const a = { id: 'aaa-nan', content: 'alpha content', strength: NaN, retrievalCount: 0 };
     const b = { id: 'bbb-normal', content: 'beta content', strength: 0.5, retrievalCount: 0 };
 
-    const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
+    const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
     expect(Number.isNaN(bucketDiff)).toBe(false);
 
     const retrievalDiff = (b.retrievalCount ?? 0) - (a.retrievalCount ?? 0);
