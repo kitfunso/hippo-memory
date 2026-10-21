@@ -80,18 +80,21 @@ const OPEN_PAIRS =
   `ON mb.id = mc.memory_b_id WHERE mc.status = 'open' AND ma.tenant_id = :tenant AND mb.tenant_id = :tenant ` +
   `AND ${liveIn('ma.')} AND ${liveIn('mb.')})`;
 
-const noneExcluded = (): ExcludedCounts => ({ superseded: 0, archived: 0, quarantined: 0 });
+const noneExcluded = (): ExcludedCounts => ({
+  superseded: 0,
+  archived: 0,
+  quarantined: 0,
+});
 
 function excludedAt(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
   // SAFETY: `why` is one of the three CASE arms or NULL.
-  const counts = db
-    .prepare(
-      `SELECT CASE WHEN ${quarantinedIn('')} THEN 'quarantined' ` +
-        `WHEN ${supersededIn('')} OR ${kindIn('')} = 'superseded' THEN 'superseded' ` +
-        `WHEN ${kindIn('')} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
-        `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
-    )
-    .all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
+  const counts = cachedStatement(
+    db,
+    `SELECT CASE WHEN ${quarantinedIn('')} THEN 'quarantined' ` +
+      `WHEN ${supersededIn('')} OR ${kindIn('')} = 'superseded' THEN 'superseded' ` +
+      `WHEN ${kindIn('')} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
+      `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
+  ).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
   const excluded = noneExcluded();
   for (const { why, n } of counts) if (why !== null) excluded[why] = Number(n);
   return excluded;
@@ -122,22 +125,22 @@ type TallyRow = { origin: Origin; tally: SqlValue };
 function totalsAt(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, nowMs: number): DashboardTotals {
   return withReadSnapshot(db, () => {
     // SAFETY: one row per origin_project, its tally a BLOB from hippo_project_tally.
-    const rows = db
-      .prepare(
-        `SELECT origin_project AS origin, ${SEEN}, hippo_project_tally(${FACT_COLUMNS}, ${EMBEDDED}, :now) AS tally ` +
-          `FROM memories WHERE tenant_id = :tenant AND ${LIVE} GROUP BY origin_project ORDER BY seen`,
-      )
-      .all({ tenant: tenantId, now: nowMs }) as Array<TallyRow & { seen: string }>;
+    const rows = cachedStatement(
+      db,
+      `SELECT origin_project AS origin, ${SEEN}, hippo_project_tally(${FACT_COLUMNS}, ${EMBEDDED}, :now) AS tally ` +
+        `FROM memories WHERE tenant_id = :tenant AND ${LIVE} GROUP BY origin_project ORDER BY seen`,
+    ).all({ tenant: tenantId, now: nowMs }) as Array<TallyRow & { seen: string }>;
     // SAFETY: one row per origin a conflict touches, each conflict once per origin.
-    const touched = db
-      .prepare(
-        `WITH ${OPEN_PAIRS} SELECT origin, COUNT(*) AS n FROM ` +
-          `(SELECT id, pa AS origin FROM open_pairs UNION SELECT id, pb FROM open_pairs) GROUP BY origin`,
-      )
-      .all({ tenant: tenantId }) as Array<{ origin: Origin; n: number }>;
+    const touched = cachedStatement(
+      db,
+      `WITH ${OPEN_PAIRS} SELECT origin, COUNT(*) AS n FROM ` +
+        `(SELECT id, pa AS origin FROM open_pairs UNION SELECT id, pb FROM open_pairs) GROUP BY origin`,
+    ).all({ tenant: tenantId }) as Array<{ origin: Origin; n: number }>;
     const conflictsOf = new Map(touched.map((row) => [row.origin, Number(row.n)]));
     // SAFETY: an aggregate with no GROUP BY always answers one row.
-    const all = db.prepare(`WITH ${OPEN_PAIRS} SELECT COUNT(*) AS n FROM open_pairs`).get({ tenant: tenantId }) as {
+    const all = cachedStatement(db, `WITH ${OPEN_PAIRS} SELECT COUNT(*) AS n FROM open_pairs`).get({
+      tenant: tenantId,
+    }) as {
       n: number;
     };
     return {
@@ -152,12 +155,16 @@ function scatterAt(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs
   const maxAgeDays = Math.max(1, Math.ceil(tally.maxAgeDays));
   if (tally.live <= SCATTER_POINTS_MAX) {
     // SAFETY: each column is named in the SELECT; layer holds a Layer value.
-    const rows = db
-      .prepare(
-        `SELECT id, layer, hippo_days(created, :now) AS age, hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` +
-          `hippo_band(${FACT_COLUMNS}, :now) AS band FROM memories WHERE ${IN_PROJECT} ORDER BY created, id LIMIT :cap`,
-      )
-      .all({ tenant: tenantId, origin, now: nowMs, cap: SCATTER_POINTS_MAX }) as Array<{
+    const rows = cachedStatement(
+      db,
+      `SELECT id, layer, hippo_days(created, :now) AS age, hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` +
+        `hippo_band(${FACT_COLUMNS}, :now) AS band FROM memories WHERE ${IN_PROJECT} ORDER BY created, id LIMIT :cap`,
+    ).all({
+      tenant: tenantId,
+      origin,
+      now: nowMs,
+      cap: SCATTER_POINTS_MAX,
+    }) as Array<{
       id: string;
       layer: Layer;
       age: number;
@@ -174,9 +181,15 @@ function scatterAt(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs
     return { mode: 'points', maxAgeDays, points } satisfies ScatterRows;
   }
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = db
-    .prepare(`SELECT hippo_scatter_grid(${FACT_COLUMNS}, :now, :span) AS cells FROM memories WHERE ${IN_PROJECT}`)
-    .get({ tenant: tenantId, origin, now: nowMs, span: Math.log10(maxAgeDays + 1) }) as { cells: SqlValue };
+  const row = cachedStatement(
+    db,
+    `SELECT hippo_scatter_grid(${FACT_COLUMNS}, :now, :span) AS cells FROM memories WHERE ${IN_PROJECT}`,
+  ).get({
+    tenant: tenantId,
+    origin,
+    now: nowMs,
+    span: Math.log10(maxAgeDays + 1),
+  }) as { cells: SqlValue };
   const t = tallyOf(row.cells);
   const cells = LAYER_ORDER.map((_, l) => Array.from(t.subarray(l * GRID_CELLS, (l + 1) * GRID_CELLS)));
   return { mode: 'grid', maxAgeDays, cells } satisfies ScatterRows;
@@ -191,17 +204,20 @@ function projectAt(
 ): { tally: ProjectTally; scatter: ScatterRows } | null {
   return withReadSnapshot(db, () => {
     // SAFETY: an aggregate with no GROUP BY always answers one row.
-    const row = db
-      .prepare(
-        `SELECT COUNT(*) AS n, hippo_project_tally(${FACT_COLUMNS}, ${EMBEDDED}, :now) AS tally ` +
-          `FROM memories WHERE ${IN_PROJECT}`,
-      )
-      .get({ tenant: tenantId, origin, now: nowMs }) as { n: number; tally: SqlValue };
+    const row = cachedStatement(
+      db,
+      `SELECT COUNT(*) AS n, hippo_project_tally(${FACT_COLUMNS}, ${EMBEDDED}, :now) AS tally ` +
+        `FROM memories WHERE ${IN_PROJECT}`,
+    ).get({ tenant: tenantId, origin, now: nowMs }) as {
+      n: number;
+      tally: SqlValue;
+    };
     if (Number(row.n) === 0) return null;
     // SAFETY: an aggregate with no GROUP BY always answers one row.
-    const conflicts = db
-      .prepare(`WITH ${OPEN_PAIRS} SELECT COUNT(*) AS n FROM open_pairs WHERE pa IS :origin OR pb IS :origin`)
-      .get({ tenant: tenantId, origin }) as { n: number };
+    const conflicts = cachedStatement(
+      db,
+      `WITH ${OPEN_PAIRS} SELECT COUNT(*) AS n FROM open_pairs WHERE pa IS :origin OR pb IS :origin`,
+    ).get({ tenant: tenantId, origin }) as { n: number };
     const tally = projectTally(origin, row.tally, Number(conflicts.n));
     return { tally, scatter: scatterAt(db, tenantId, origin, nowMs, tally) };
   });
@@ -218,7 +234,7 @@ function keptRows(withHead: boolean): string {
     `id IN (SELECT a FROM open_pairs UNION ALL SELECT b FROM open_pairs) AS in_conflict FROM memories ` +
     `WHERE ${IN_PROJECT} AND layer IN (${LAYER_SLOTS}) ` +
     `AND (:text IS NULL OR hippo_holds_text(id, content, tags_json, :text)) ORDER BY created, id LIMIT -1), ` +
-    `kept AS (SELECT * FROM listed WHERE age >= :minAgeDays AND age <= :maxAgeDays ` +
+    `kept AS MATERIALIZED (SELECT * FROM listed WHERE age >= :minAgeDays AND age <= :maxAgeDays ` +
     `AND strength >= :minStrength AND strength <= :maxStrength)`
   );
 }
@@ -263,30 +279,50 @@ const FACT_OF_M = FACT_COLUMNS.split(', ')
   .map((c) => `m.${c}`)
   .join(', ');
 
-// Keys only go through the sort, so a deep offset sorts ids, never heads; the page then reads its rows by id.
+// Keys only go through the sort, so a deep offset sorts ids, never heads; the page then reads its rows by id. The
+// tally and the page read one materialized `kept`; the LEFT JOIN keeps one row, with a NULL id, on a page past the end.
 function pageSql(sort: DashboardSortKey, descending: boolean): string {
   const dir = descending ? 'DESC' : 'ASC';
   return (
-    `${keptRows(sort === 'content')}, page AS (SELECT id, in_conflict, ${SORT_SQL[sort]} AS sort_key FROM kept ` +
+    `${keptRows(sort === 'content')}, ` +
+    `total AS (SELECT hippo_filter_tally(${FACT_COLUMNS}, in_conflict, :now) AS tally FROM kept), ` +
+    `page AS (SELECT id, in_conflict, ${SORT_SQL[sort]} AS sort_key FROM kept ` +
     `WHERE ${CHIP_SQL} ORDER BY sort_key ${dir}, id ASC LIMIT :limit OFFSET :offset) ` +
-    `SELECT m.id AS id, substr(m.content, 1, ${HEAD_READ}) AS head, ${FACT_OF_M}, m.scope AS scope, ` +
-    `p.in_conflict AS in_conflict FROM page p JOIN memories m ON m.id = p.id ORDER BY p.sort_key ${dir}, p.id ASC`
+    `SELECT total.tally AS tally, r.* FROM total LEFT JOIN (SELECT m.id AS id, substr(m.content, 1, ${HEAD_READ}) AS ` +
+    `head, ${FACT_OF_M}, m.scope AS scope, p.in_conflict AS in_conflict, p.sort_key AS sort_key FROM page p ` +
+    `JOIN memories m ON m.id = p.id) r ON 1 ORDER BY r.sort_key ${dir}, r.id ASC`
   );
 }
 
-type PageRow = FactRow & { id: string; head: string; scope: string | null; in_conflict: number };
+type PageRow = FactRow & {
+  id: string | null;
+  head: string;
+  scope: string | null;
+  in_conflict: number;
+  tally: SqlValue;
+};
 
 function filterTally(tally: SqlValue): FilterTally {
   const t = tallyOf(tally);
   const s = FILTER_SLOTS;
   const three = (at: number): [number, number, number] => [t[at], t[at + 1], t[at + 2]];
   return {
-    counts: { all: t[s.all], risk: t[s.risk], pinned: t[s.pinned], conflict: t[s.conflict] },
-    decay: { now: three(s.now), in7d: three(s.in7d), in30d: three(s.in30d), pinned: t[s.pinned] },
+    counts: {
+      all: t[s.all],
+      risk: t[s.risk],
+      pinned: t[s.pinned],
+      conflict: t[s.conflict],
+    },
+    decay: {
+      now: three(s.now),
+      in7d: three(s.in7d),
+      in30d: three(s.in30d),
+      pinned: t[s.pinned],
+    },
   };
 }
 
-function listedRow(row: PageRow, nowMs: number, rules: LossAversion): ListedRow {
+function listedRow(row: PageRow & { id: string }, nowMs: number, rules: LossAversion): ListedRow {
   const inputs = factInputs(row);
   const { head, truncated } = listHead(row.head);
   return {
@@ -310,31 +346,44 @@ function memoryPageAt(
 ): { tally: FilterTally; rows: ListedRow[] } | null {
   const { origin, chip, limit, offset } = query;
   return withReadSnapshot(db, () => {
-    const any = db
-      .prepare(`SELECT 1 AS hit FROM memories WHERE ${IN_PROJECT} LIMIT 1`)
-      .get({ tenant: tenantId, origin });
+    const any = cachedStatement(db, `SELECT 1 AS hit FROM memories WHERE ${IN_PROJECT} LIMIT 1`).get({
+      tenant: tenantId,
+      origin,
+    });
     if (any === undefined) return null;
-    const filter = filterBinds(tenantId, query, nowMs);
-    // SAFETY: an aggregate with no GROUP BY always answers one row.
-    const total = db
-      .prepare(`${keptRows(false)} SELECT hippo_filter_tally(${FACT_COLUMNS}, in_conflict, :now) AS tally FROM kept`)
-      .get(filter) as { tally: SqlValue };
-    // SAFETY: pageSql names every PageRow column.
-    const rows = db.prepare(pageSql(query.sort, query.descending)).all({ ...filter, chip, limit, offset }) as PageRow[];
-    return { tally: filterTally(total.tally), rows: rows.map((row) => listedRow(row, nowMs, files)) };
+    // SAFETY: the tally rides on every row and the LEFT JOIN answers one row on an empty page.
+    const rows = cachedStatement(db, pageSql(query.sort, query.descending)).all({
+      ...filterBinds(tenantId, query, nowMs),
+      chip,
+      limit,
+      offset,
+    }) as PageRow[];
+    const listed = rows.filter((row): row is PageRow & { id: string } => row.id !== null);
+    return {
+      tally: filterTally(rows[0].tally),
+      rows: listed.map((row) => listedRow(row, nowMs, files)),
+    };
   });
 }
 
 function searchAt(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, needle: string): SearchTally[] {
   // SAFETY: one row per origin_project, each a count and a sum.
-  const rows = db
-    .prepare(
-      `SELECT origin_project AS origin, COUNT(*) AS live, ` +
-        `SUM(hippo_holds_text(id, content, tags_json, :needle)) AS hits, ${SEEN} ` +
-        `FROM memories WHERE tenant_id = :tenant AND ${LIVE} GROUP BY origin_project ORDER BY seen`,
-    )
-    .all({ tenant: tenantId, needle }) as Array<{ origin: Origin; live: number; hits: number; seen: string }>;
-  return rows.map((row) => ({ origin: row.origin, live: Number(row.live), hits: Number(row.hits) }));
+  const rows = cachedStatement(
+    db,
+    `SELECT origin_project AS origin, COUNT(*) AS live, ` +
+      `SUM(hippo_holds_text(id, content, tags_json, :needle)) AS hits, ${SEEN} ` +
+      `FROM memories WHERE tenant_id = :tenant AND ${LIVE} GROUP BY origin_project ORDER BY seen`,
+  ).all({ tenant: tenantId, needle }) as Array<{
+    origin: Origin;
+    live: number;
+    hits: number;
+    seen: string;
+  }>;
+  return rows.map((row) => ({
+    origin: row.origin,
+    live: Number(row.live),
+    hits: Number(row.hits),
+  }));
 }
 
 /** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held reader, so its
@@ -356,7 +405,12 @@ export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}
   type Scans = Pick<DashboardReads, 'totals' | 'project' | 'memoryPage' | 'search'>;
   const scans = boundWithFiles<Scans>(
     on,
-    { totals: totalsAt, project: projectAt, memoryPage: memoryPageAt, search: searchAt },
+    {
+      totals: totalsAt,
+      project: projectAt,
+      memoryPage: memoryPageAt,
+      search: searchAt,
+    },
     open,
   );
   const points = bound<Pick<DashboardReads, 'openConflictsOf'>>(on, { openConflictsOf: openConflictsNamingAt }, open);
