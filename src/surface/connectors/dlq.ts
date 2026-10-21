@@ -98,12 +98,23 @@ function replayFailed(status: ReplayStatus, retryCount: number, reason: string):
 async function failAndBump(
   dlq: ConnectorDlq<DeadLetterConnector, never, never>,
   store: HippoStore,
-  row: { id: number; retryCount: number },
-  status: ReplayStatus,
-  reason: string,
+  row: { id: number; tenantId: string; retryCount: number },
+  failure: { status: ReplayStatus; reason: string },
 ): Promise<ReplayResult> {
-  await store.connectorEvents.markDeadLetterRetried(dlq.connector, row.id);
-  return replayFailed(status, row.retryCount + 1, reason);
+  await store.connectorEvents.markDeadLetterRetried(dlq.connector, row.tenantId, row.id);
+  return replayFailed(failure.status, row.retryCount + 1, failure.reason);
+}
+
+/** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay routes it. Another
+ * tenant's row reads as absent. */
+async function replayableRow<C extends DeadLetterConnector>(
+  store: HippoStore,
+  connector: C,
+  tenantId: string,
+  id: number,
+): Promise<DeadLetterRows[C] | null> {
+  const own = await store.connectorEvents.deadLetter(connector, tenantId, id);
+  return own ?? store.connectorEvents.deadLetter(connector, UNROUTABLE_TENANT, id);
 }
 
 /** A row that cannot pass the signature gate: 'sig_missing' is not counted, since only --force can get it through. */
@@ -114,8 +125,17 @@ export interface SignatureRefusal {
 
 /** What a connector's re-ingest of a parsed envelope reports. */
 export type Reingest =
-  | { readonly ok: true; readonly status: ReplayStatus; readonly memoryId: string | null; readonly reason?: string }
-  | { readonly ok: false; readonly status: ReplayStatus; readonly reason: string };
+  | {
+      readonly ok: true;
+      readonly status: ReplayStatus;
+      readonly memoryId: string | null;
+      readonly reason?: string;
+    }
+  | {
+      readonly ok: false;
+      readonly status: ReplayStatus;
+      readonly reason: string;
+    };
 
 /** The parts of a replay only the connector knows. */
 export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends JsonValue> {
@@ -132,27 +152,35 @@ export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends Jso
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
   steps: ReplaySteps<C, Envelope>,
   store: HippoStore,
+  tenantId: string,
   id: number,
   force: boolean,
 ): Promise<ReplayResult> {
-  const row = await store.connectorEvents.deadLetter(steps.dlq.connector, id);
+  const row = await replayableRow(store, steps.dlq.connector, tenantId, id);
   if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
 
   const refusal = force ? null : steps.refuseSignature(row);
-  if (refusal?.status === 'sig_missing') return replayFailed(refusal.status, row.retryCount, refusal.reason);
-  if (refusal) return failAndBump(steps.dlq, store, row, refusal.status, refusal.reason);
+  if (refusal?.status === 'sig_missing') {
+    return replayFailed(refusal.status, row.retryCount, refusal.reason);
+  }
+  if (refusal) return failAndBump(steps.dlq, store, row, refusal);
 
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
-    return failAndBump(steps.dlq, store, row, 'parse_error', `still unparseable: ${errorMessage(e)}`);
+    return failAndBump(steps.dlq, store, row, {
+      status: 'parse_error',
+      reason: `still unparseable: ${errorMessage(e)}`,
+    });
   }
-  if (!steps.isEnvelope(parsed)) return failAndBump(steps.dlq, store, row, 'unhandled', steps.notEnvelope);
+  if (!steps.isEnvelope(parsed)) {
+    return failAndBump(steps.dlq, store, row, { status: 'unhandled', reason: steps.notEnvelope });
+  }
 
   const outcome = await steps.reingest(row, parsed);
-  if (!outcome.ok) return failAndBump(steps.dlq, store, row, outcome.status, outcome.reason);
-  await store.connectorEvents.markDeadLetterRetried(steps.dlq.connector, row.id);
+  if (!outcome.ok) return failAndBump(steps.dlq, store, row, outcome);
+  await store.connectorEvents.markDeadLetterRetried(steps.dlq.connector, row.tenantId, row.id);
   const result: ReplayResult = {
     ok: true,
     status: outcome.status,

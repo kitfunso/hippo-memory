@@ -2,7 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../../store/port.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { mapApiError } from '../../api/error-reply.js';
 import { HttpError, sendJson } from '../../base/util/http-util.js';
 import { MINUTE_MS } from '../../base/util/time.js';
@@ -26,15 +26,15 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
   const line = `${req.method ?? 'GET'} ${accessRouteOf(req)} failed: ${message}`;
   // A 5xx that tells the caller when to retry is back-pressure too.
   if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) {
-    log.warn(line, { status });
+    log.warn(line, { status, ...errorClassFields(err) });
   } else if (status >= 500 && status !== 501) {
     log.error(line, { status, ...errorFields(err) });
   } else if (status === 401 || status === 403) {
     // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the
     // request scope.
-    log.warn(line, { status });
+    log.warn(line, { status, ...errorClassFields(err) });
   } else {
-    log.info(line, { status });
+    log.info(line, { status, ...errorClassFields(err) });
   }
 }
 

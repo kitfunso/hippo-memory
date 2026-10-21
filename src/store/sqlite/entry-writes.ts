@@ -231,7 +231,7 @@ export function strengthenRetrievedInOwnTx(
 }
 
 export function warnStrengthenFailed<E>(error: E): void {
-  log.warn(`retrieval stats not saved (${errorMessage(error)})`);
+  log.warn(`retrieval stats not saved (${errorMessage(error)})`, errorFields(error));
 }
 
 /** Rows per recall-write statement: five bound values each, far under SQLite's parameter limit. */

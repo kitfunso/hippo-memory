@@ -1,9 +1,10 @@
 // A request scope owns one handle per store; code that outlives the scope, or runs beside it, never gets or closes that handle.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   openHippoDb,
   closeHippoDb,
   noteStoreBusy,
+  RequestStores,
   runWithRequestStores,
   currentRequestStores,
   outsideRequestStores,
@@ -122,5 +123,28 @@ describe('runWithRequestStores', () => {
       );
     expect(await waits(true)).toBe(0);
     expect(await waits(false)).toBe(1000);
+  });
+});
+
+describe('RequestStores.close', () => {
+  it('closes every handle when one refuses, logs each failure with its class, and rethrows the first', () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { root: other } = makeStore('request-stores-second');
+      const stores = new RequestStores();
+      const first = stores.get(root);
+      const second = stores.get(other);
+      const realClose = first.close.bind(first);
+      first.close = () => {
+        realClose();
+        throw new Error('first would not close');
+      };
+      expect(() => stores.close()).toThrow('first would not close');
+      expect(second.isOpen).toBe(false);
+      expect(stores.closed).toBe(true);
+      expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('errorClass=Error');
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });

@@ -1,4 +1,3 @@
-import { errorMessage } from '../../base/util/log.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
@@ -75,7 +74,7 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
     });
   } catch (error) {
     // The archive itself has already succeeded; an unwritable audit table must not undo it.
-    reportAuditWriteFailure('archive_raw', errorMessage(error), id);
+    reportAuditWriteFailure('archive_raw', error, id);
   }
 }
 

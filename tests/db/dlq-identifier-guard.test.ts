@@ -30,16 +30,17 @@ describe('dlq identifier guard', () => {
     const dlq = dlqAccess<Row, Insert>('slack_dlq', COLUMNS);
     const id = dlq.insert(db, { tenantId: 't', rawPayload: '{}', error: 'e' });
     expect(dlq.list(db, 't', 5)).toHaveLength(1);
-    expect(dlq.get(db, id)).not.toBeNull();
-    dlq.markRetried(db, id);
+    expect(dlq.get(db, 't', id)).not.toBeNull();
+    expect(dlq.get(db, 'other', id)).toBeNull();
+    dlq.markRetried(db, 't', id);
   });
 
   it('refuses a table outside the union', () => {
     const dlq = dlqAccess<Row, Insert>(badTable, COLUMNS);
     expect(() => dlq.insert(db, { tenantId: 't' })).toThrow(/Invalid DLQ table/);
     expect(() => dlq.list(db, 't', 1)).toThrow(/Invalid DLQ table/);
-    expect(() => dlq.get(db, 1)).toThrow(/Invalid DLQ table/);
-    expect(() => dlq.markRetried(db, 1)).toThrow(/Invalid DLQ table/);
+    expect(() => dlq.get(db, 't', 1)).toThrow(/Invalid DLQ table/);
+    expect(() => dlq.markRetried(db, 't', 1)).toThrow(/Invalid DLQ table/);
   });
 
   it('refuses a column that is not a plain identifier', () => {
@@ -50,7 +51,7 @@ describe('dlq identifier guard', () => {
     expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('(SELECT 1)')).list(db, 't', 1)).toThrow(
       /Invalid DLQ column/,
     );
-    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('id FROM memories --')).get(db, 1)).toThrow(
+    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('id FROM memories --')).get(db, 't', 1)).toThrow(
       /Invalid DLQ column/,
     );
   });

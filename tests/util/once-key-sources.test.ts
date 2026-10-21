@@ -7,7 +7,18 @@ import { fileURLToPath } from 'node:url';
 
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 // Each `${...}` a key may hold: a value the code or the config fixes.
-const FIXED_PARTS = new Set(['table', 'column', 'problem', 'code', 'file', 'model', 'reason', 'thrown', 'args[0]']);
+const FIXED_PARTS = new Set([
+  'table',
+  'column',
+  'problem',
+  'code',
+  'file',
+  'model',
+  'reason',
+  'thrown',
+  'args[0]',
+  'errorCode(err)',
+]);
 const KEYED_CALL = /\b(?:once|warnThenDebug|warnThenSample)\(\s*`([^`]*)`/g;
 
 function keyTemplates(): { file: string; parts: string[] }[] {

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { mapApiError } from '../../api/error-reply.js';
 import { INTERNAL_ERROR_MESSAGE } from '../../base/util/http-util.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { currentRequestId } from '../../base/util/request-scope.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../../api/index.js';
@@ -48,11 +48,11 @@ export function mcpErrorResponse<E>(
   const where = call === undefined ? '' : ` (${call})`;
   const { status, message } = mapApiError(err);
   if (status === 503) {
-    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId });
+    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
     return errorReply(id, INTERNAL_ERROR, message);
   }
   if (status !== 500) {
-    log.info(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, status });
+    log.info(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, status, ...errorClassFields(err) });
     return errorReply(id, INTERNAL_ERROR, message);
   }
   log.error(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });

@@ -37,9 +37,14 @@ export interface ConnectorEvents {
     tenantId: string,
     limit: number,
   ): Promise<DeadLetterRows[C][]>;
-  deadLetter<C extends DeadLetterConnector>(connector: C, id: number): Promise<DeadLetterRows[C] | null>;
-  /** Adds one to the row's retry count and stamps its retry time. */
-  markDeadLetterRetried(connector: DeadLetterConnector, id: number): Promise<void>;
+  /** The tenant's row by id; another tenant's row reads as absent. */
+  deadLetter<C extends DeadLetterConnector>(
+    connector: C,
+    tenantId: string,
+    id: number,
+  ): Promise<DeadLetterRows[C] | null>;
+  /** Adds one to the tenant's row retry count and stamps its retry time; another tenant's row is left alone. */
+  markDeadLetterRetried(connector: DeadLetterConnector, tenantId: string, id: number): Promise<void>;
   slackCursor(tenantId: string, channelId: string): Promise<string | null>;
   saveSlackCursor(tenantId: string, channelId: string, latestTs: string): Promise<void>;
   githubCursors(tenantId: string, repo: string): Promise<StoredCursors>;

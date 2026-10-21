@@ -51,6 +51,7 @@ export async function replayDlqEntry(
         reingest(ctx, envelope, { hostTenant: ctx.tenantId, allowUnknown: opts.allowUnknownTeamFallback === true }),
     },
     ctx.store,
+    ctx.tenantId,
     id,
     opts.force === true,
   );
