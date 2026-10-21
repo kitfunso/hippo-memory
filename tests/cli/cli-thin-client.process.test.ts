@@ -331,7 +331,7 @@ describe('cli thin-client mode', () => {
     }
   });
 
-  it('errors instead of silently falling back when HIPPO_REQUIRE_SERVER is set (H2)', () => {
+  it('errors instead of silently falling back when HIPPO_REQUIRE_SERVER is set', () => {
     const workspace = makeWorkspace();
     try {
       // No server running. With HIPPO_REQUIRE_SERVER set the CLI must NOT
@@ -348,7 +348,7 @@ describe('cli thin-client mode', () => {
     }
   });
 
-  it('hippo forget --archive routes through HTTP when a server is up (A3)', async () => {
+  it('hippo forget --archive routes through HTTP when a server is up', async () => {
     const workspace = makeWorkspace();
     let server: SpawnedServer | null = null;
     try {

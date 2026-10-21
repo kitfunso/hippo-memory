@@ -142,7 +142,7 @@ describe('normalizeHookPayload leaves other payloads untouched', () => {
   });
 });
 
-describe('every payload reader sees session_id and the copilot runtime (critic test 3)', () => {
+describe('every payload reader sees session_id and the copilot runtime', () => {
   it('the token ledger reads the session id', () => {
     const text = normalizeHookPayload(copilotPayload('sessionStart', CWD));
     expect(hookPayloadSessionId(text)).toBe('copilot-sess-1');

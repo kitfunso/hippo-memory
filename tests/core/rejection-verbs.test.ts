@@ -286,7 +286,7 @@ describe('resolveConflict rejection wiring', () => {
     }
   });
 
-  it('raw loser via PLAIN resolve --forget (no --reject-loser) purges its mirror + stamps mirror_cleaned_at (P1b fix)', async () => {
+  it('raw loser via PLAIN resolve --forget (no --reject-loser) purges its mirror + stamps mirror_cleaned_at', async () => {
     const a = createMemory('keeper content for raw mirror-purge conflict', { tags: ['x'] });
     const rawLoser = createMemory('raw loser content for the mirror-purge test', { tags: ['x'], kind: 'raw' });
     writeEntry(tmpDir, a);

@@ -2,6 +2,7 @@
 // Per-file count of log calls inside a catch block, a `.catch` callback, an 'error' event listener or a function taking
 // the caught error as a parameter that omit errorFields() may fall, never rise, so an operator reading the log sees the error class and stack of every failure.
 // A call that reads one field of errorFields(...) fails anywhere in src, with no baseline: it drops the rest.
+// A catch that only pushes the error's text into a result array, with no log call carrying errorFields(...), fails the same way.
 // Usage: check-caught-error-logs.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -147,6 +148,55 @@ export function partialPickLines(text) {
   return lines;
 }
 
+const APPEND_METHODS = new Set(['push', 'unshift', 'append']);
+
+const isNamed = (n, name) => ts.isIdentifier(n) && n.text === name;
+
+/** True when `root` turns the caught error into text: errorMessage(e), String(e), e.message or a `${e}` span. */
+const usesErrorText = (root, name) =>
+  contains(
+    root,
+    (n) =>
+      (ts.isCallExpression(n) &&
+        ts.isIdentifier(n.expression) &&
+        (n.expression.text === 'errorMessage' || n.expression.text === 'String') &&
+        n.arguments.some((a) => isNamed(a, name))) ||
+      (ts.isPropertyAccessExpression(n) && n.name.text === 'message' && isNamed(n.expression, name)) ||
+      (ts.isTemplateSpan(n) && isNamed(n.expression, name)),
+  );
+
+/**
+ * Returns the 1-based line of every catch whose error only reaches an array push or append, with no log call in the same
+ * catch that hands on errorFields(...).
+ * @param {string} text
+ * @returns {number[]}
+ */
+export function resultOnlyCatchLines(text) {
+  const sf = ts.createSourceFile('x.ts', stripComments(text), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const lines = [];
+  const visit = (node) => {
+    const name =
+      ts.isCatchClause(node) && node.variableDeclaration && ts.isIdentifier(node.variableDeclaration.name)
+        ? node.variableDeclaration.name.text
+        : null;
+    if (name !== null) {
+      const pushesError = contains(
+        node.block,
+        (n) =>
+          ts.isCallExpression(n) &&
+          ts.isPropertyAccessExpression(n.expression) &&
+          APPEND_METHODS.has(n.expression.name.text) &&
+          n.arguments.some((a) => usesErrorText(a, name)),
+      );
+      const logsFields = contains(node.block, (n) => isLogCall(n) && carriesErrorFields(n));
+      if (pushesError && !logsFields) lines.push(sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return lines;
+}
+
 function listSourceFiles(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
@@ -186,6 +236,20 @@ export function findPartialPicks(srcDir) {
     );
 }
 
+/**
+ * Lists `path:line` for every catch that records its error only in a result array.
+ * @param {string} srcDir
+ * @returns {string[]}
+ */
+export function findResultOnlyCatches(srcDir) {
+  const root = resolve(srcDir);
+  return listSourceFiles(root)
+    .sort()
+    .flatMap((p) =>
+      resultOnlyCatchLines(readFileSync(p, 'utf8')).map((line) => `${relative(root, p).replace(/\\/g, '/')}:${line}`),
+    );
+}
+
 /** The committed counts, or none when the file is absent; one read, so no exists-then-read race. */
 function readBaseline() {
   try {
@@ -205,6 +269,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (picks.length > 0) {
     for (const where of picks) console.error(`src/${where}: reads one field of errorFields(...) and drops the rest`);
     console.error('Fix: hand errorFields(err) on whole, or use errorClassFields(err) where the text must stay out.');
+    process.exit(1);
+  }
+  const resultOnly = findResultOnlyCatches('src');
+  if (resultOnly.length > 0) {
+    for (const where of resultOnly) {
+      console.error(`src/${where}: the caught error goes only into a result array, not a log`);
+    }
+    console.error('Fix: log it with errorFields(err) in the same catch, then keep the result line.');
     process.exit(1);
   }
   const risen = Object.entries(counts).filter(([f, n]) => n > (base[f] ?? 0));

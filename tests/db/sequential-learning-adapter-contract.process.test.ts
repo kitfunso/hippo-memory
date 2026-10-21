@@ -128,5 +128,5 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
     } finally {
       await hippoAdapter.cleanup();
     }
-  }, 14_000);
+  });
 });

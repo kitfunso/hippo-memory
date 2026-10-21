@@ -43,7 +43,7 @@ const HOOKS = ['pre-compact', 'compact-resume'];
 const payloadFor = (hook: string, session: string): string =>
   hook === 'pre-compact' ? preCompactPayload(session) : resumePayload(session);
 
-describe('B8: a hook registered twice does not number a compaction twice', () => {
+describe('a hook registered twice does not number a compaction twice', () => {
   it.each(HOOKS)(
     '%s: two fires at one instant make one numbered row and one duplicate; 3 s later is number 2',
     (hook) => {
@@ -128,8 +128,8 @@ function renameLedgerTable(proj: Project): void {
   withDb(proj, (db) => db.exec('ALTER TABLE delivery_events RENAME TO delivery_events_gone'));
 }
 
-describe('B9 and B10: the ledger never changes either hook', () => {
-  it('B9: ledger on and off print the same bytes and save the same rows; on adds exactly the two boundary rows', () => {
+describe('the ledger never changes either hook', () => {
+  it('ledger on and off print the same bytes and save the same rows; on adds exactly the two boundary rows', () => {
     const off = project({ ledger: false });
     try {
       const baseline = scenario(off);
@@ -145,7 +145,7 @@ describe('B9 and B10: the ledger never changes either hook', () => {
     }
   });
 
-  it('B10: with a renamed delivery_events table both hooks print the same bytes and save the same rows, with one ledger line each', () => {
+  it('with a renamed delivery_events table both hooks print the same bytes and save the same rows, with one ledger line each', () => {
     const off = project({ ledger: false });
     try {
       const baseline = scenario(off);
@@ -174,8 +174,8 @@ describe('B9 and B10: the ledger never changes either hook', () => {
   });
 });
 
-describe('B11 and U1', () => {
-  it('B11: no column of a boundary row holds the instruction or the snapshot text', () => {
+describe('boundary row contents and a boundary callback that throws', () => {
+  it('no column of a boundary row holds the instruction or the snapshot text', () => {
     scenario(p);
     const cells = tableRows(p, 'SELECT * FROM delivery_events')
       .flatMap((r) => Object.values(r))
@@ -187,7 +187,7 @@ describe('B11 and U1', () => {
     expect(cells.filter((c) => raw.some((t) => c.includes(t)))).toEqual([]);
   });
 
-  it('U1: a boundary callback that throws leaves the snapshot saved and is logged', async () => {
+  it('a boundary callback that throws leaves the snapshot saved and is logged', async () => {
     // SAFETY: the stub returns instead of exiting, so the hook's tail runs; `never` only satisfies the exit signature.
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     try {

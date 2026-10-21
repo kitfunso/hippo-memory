@@ -101,7 +101,7 @@ describe('dashboard entry', () => {
     server = undefined;
   });
 
-  it('E1: a loopback Host gets 200 with no ACAO, on API and static paths', async () => {
+  it('a loopback Host gets 200 with no ACAO, on API and static paths', async () => {
     const stats = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(stats.status).toBe(200);
     expect(stats.acaoPresent).toBe(false);
@@ -110,7 +110,7 @@ describe('dashboard entry', () => {
     expect(root.acaoPresent).toBe(false);
   });
 
-  it('E2: a foreign Host gets 403, on API, static, pin POST and unrouted paths', async () => {
+  it('a foreign Host gets 403, on API, static, pin POST and unrouted paths', async () => {
     const refused = '{"error":"cross-site or non-local request refused"}';
     for (const [path, method] of [
       ['/api/overview', 'GET'],
@@ -123,7 +123,7 @@ describe('dashboard entry', () => {
     }
   });
 
-  it('E2b: a wrong POST from another site is 403 even with a loopback Host', async () => {
+  it('a wrong POST from another site is 403 even with a loopback Host', async () => {
     const host = `127.0.0.1:${port}`;
     const json = { 'Content-Type': 'application/json' };
     const wrong = (headers: Record<string, string>) =>
@@ -134,7 +134,7 @@ describe('dashboard entry', () => {
     expect((await wrong({})).status).toBe(404);
   });
 
-  it('E3: localhost, LOCALHOST and a portless 127.0.0.1 all get 200', async () => {
+  it('localhost, LOCALHOST and a portless 127.0.0.1 all get 200', async () => {
     const lower = await dashboardRequest(port, '/api/overview', `localhost:${port}`);
     expect(lower.status).toBe(200);
 
@@ -145,7 +145,7 @@ describe('dashboard entry', () => {
     expect(noPort.status).toBe(200);
   });
 
-  it('E4: a Host with a space gets 403, and the server keeps serving', async () => {
+  it('a Host with a space gets 403, and the server keeps serving', async () => {
     const bad = await dashboardRequest(port, '/api/overview', 'a b');
     expect(bad.status).toBe(403);
 
@@ -153,7 +153,7 @@ describe('dashboard entry', () => {
     expect(after.status).toBe(200);
   });
 
-  it('E5: GET // is the 400 any request target the URL parser refuses gets, and the server keeps serving', async () => {
+  it('GET // is the 400 any request target the URL parser refuses gets, and the server keeps serving', async () => {
     const broken = await dashboardRequest(port, '//', `127.0.0.1:${port}`);
     expect(broken.status).toBe(400);
     expect(JSON.parse(broken.body)).toEqual({ error: expect.any(String) });
@@ -162,7 +162,7 @@ describe('dashboard entry', () => {
     expect(after.status).toBe(200);
   });
 
-  it('E6: an HTTP/1.0 request with no Host header is routed as today', async () => {
+  it('an HTTP/1.0 request with no Host header is routed as today', async () => {
     const raw = await rawHttp10Get(port, '/api/overview');
     expect(raw).toMatch(/^HTTP\/1\.[01] 200 /);
   });
@@ -248,7 +248,7 @@ describe('card routes', () => {
     }
   }
 
-  it('R1: GET /api/cards matches the CLI list --json and holds exactly P, C and Q', async () => {
+  it('GET /api/cards matches the CLI list --json and holds exactly P, C and Q', async () => {
     const res = await dashboardRequest(port, '/api/cards', host());
     expect(res.status).toBe(200);
     expect(res.body).toBe(JSON.stringify(JSON.parse(listJson)));
@@ -258,7 +258,7 @@ describe('card routes', () => {
     expect(ids).toEqual([P, C, Q].sort());
   });
 
-  it('R2: GET /api/cards/:id matches the CLI show --json for P and for C', async () => {
+  it('GET /api/cards/:id matches the CLI show --json for P and for C', async () => {
     const resP = await dashboardRequest(port, `/api/cards/${P}`, host());
     expect(resP.status).toBe(200);
     expect(resP.body).toBe(JSON.stringify(JSON.parse(showPJson)));
@@ -279,7 +279,7 @@ describe('card routes', () => {
     expect(detailC.card.status).toBe('ready');
   });
 
-  it('R3: an unknown or malformed card id returns 404', async () => {
+  it('an unknown or malformed card id returns 404', async () => {
     const unknown = await dashboardRequest(port, '/api/cards/card_000000000000', host());
     expect(unknown.status).toBe(404);
     expect(unknown.body).toBe('{"error":"Not found"}');
@@ -289,7 +289,7 @@ describe('card routes', () => {
     expect(malformed.body).toBe('{"error":"Not found"}');
   });
 
-  it('R4: POST /api/cards and POST /api/cards/:id both return 404', async () => {
+  it('POST /api/cards and POST /api/cards/:id both return 404', async () => {
     const listPost = await dashboardRequest(port, '/api/cards', host(), 'POST');
     expect(listPost.status).toBe(404);
 
@@ -297,7 +297,7 @@ describe('card routes', () => {
     expect(showPost.status).toBe(404);
   });
 
-  it('R5: the resolved tenant scopes /api/cards and /api/cards/:id', async () => {
+  it('the resolved tenant scopes /api/cards and /api/cards/:id', async () => {
     await onTenant('tenant_b', async (at, atHost) => {
       const listB = await dashboardRequest(at, '/api/cards', atHost);
       const idsB = JSON.parse(listB.body).cards.map((card: { id: string }) => card.id);
@@ -314,14 +314,14 @@ describe('card routes', () => {
     });
   });
 
-  it('R6: card routes carry no access-control-allow-origin header', async () => {
+  it('card routes carry no access-control-allow-origin header', async () => {
     const list = await dashboardRequest(port, '/api/cards', host());
     expect(list.acaoPresent).toBe(false);
     const show = await dashboardRequest(port, `/api/cards/${P}`, host());
     expect(show.acaoPresent).toBe(false);
   });
 
-  it('R7: a broken tenant answers 500 with the request id, logs the stack, and the server keeps serving', async () => {
+  it('a broken tenant answers 500 with the request id, logs the stack, and the server keeps serving', async () => {
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     await onTenant('sess_x', async (at, atHost) => {
       const broken = await dashboardRequest(at, '/api/cards', atHost);

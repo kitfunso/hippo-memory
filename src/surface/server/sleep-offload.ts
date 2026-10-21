@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOpts, type SleepResult, type Context } from '../../api/index.js';
+import { logPhaseFailures } from '../../api/sleep/upkeep.js';
 import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import { StoreBusyError } from '../../store/port.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
@@ -148,7 +149,7 @@ export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQu
         ? inTurn<SleepResult>({ kind: 'sleep', hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts })
         : Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE)),
     consolidate: async () => {
-      await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
+      logPhaseFailures(await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot }));
     },
     settled: () => turn,
   };

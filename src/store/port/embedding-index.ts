@@ -37,6 +37,9 @@ export interface EmbeddingIndex {
   resetParticles(): Promise<number>;
   /** A first particle for `entry` at `vector`, unless it has one. */
   seedParticle(entry: MemoryEntry, vector: number[]): Promise<void>;
+  /** Names the store's hippo.db, so writers to one file in this process wait on each other and writers to another do
+   * not. */
+  lockKey(): Promise<string>;
   /** Takes the index's write lock, which other processes on the store honour; a token to unlock, or null while a live
    * holder has it. */
   tryLock(): Promise<string | null>;

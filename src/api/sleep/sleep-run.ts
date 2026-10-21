@@ -12,7 +12,7 @@ import type { Context, SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import { globalTargetOf, infraOf } from '../infra.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
@@ -145,6 +145,10 @@ async function snapshotDirtyTenants(
       snapshot.dirtyTenants = await phases.loadPendingExtractionTenants(ctx.store);
     } catch (snapErr) {
       snapshot.error = errorMessage(snapErr);
+      log.warn(
+        `sleep: dirty-tenant snapshot failed, so no graph refresh this sleep: ${snapshot.error}`,
+        errorFields(snapErr),
+      );
     }
   }
   return snapshot;
@@ -301,6 +305,7 @@ async function drainGraphQueue(
       result.graph = rebuilt;
     }
   } catch (graphErr) {
+    log.warn(`sleep: graph drain phase failed: ${errorMessage(graphErr)}`, errorFields(graphErr));
     result.details = [...(result.details ?? []), `graph: drain phase failed (skipped): ${errorMessage(graphErr)}`];
   }
 }
@@ -332,6 +337,10 @@ async function rebuildDirtyTenant(
     // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
     await ctx.store.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
   } catch (tenantErr) {
+    log.warn(
+      `sleep: graph extract failed for tenant ${dirty.tenantId}, left pending: ${errorMessage(tenantErr)}`,
+      errorFields(tenantErr),
+    );
     result.details = [
       ...(result.details ?? []),
       `graph: extract failed for a dirty tenant (left pending): ${errorMessage(tenantErr)}`,

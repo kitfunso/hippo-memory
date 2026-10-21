@@ -82,6 +82,6 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
     const text = firstText(data);
     return text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
   } catch (err) {
-    return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
+    return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err), cause: err } };
   }
 }

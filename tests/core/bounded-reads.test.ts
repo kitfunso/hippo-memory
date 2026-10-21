@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { memoryRows } from '../_helpers/seed-rows.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -33,13 +34,13 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
 }
 
 function padding(n: number): MemoryEntry[] {
-  return Array.from({ length: n }, (_, i) => memory(`unrelated note ${i} about the deploy scripts`));
+  return memoryRows(n, (i) => `unrelated note ${i} about the deploy scripts`);
 }
 
 describe('invalidateMatching without onlyId', () => {
   const target = { from: 'zephyrine cache', to: null, type: 'removal' as const };
 
-  function seeded(n: number) {
+  function seededForInvalidation(n: number) {
     const root = newRoot('bounded-invalidate');
     const hits = {
       half: memory('the Zephyrine layer is slow'),
@@ -52,7 +53,7 @@ describe('invalidateMatching without onlyId', () => {
   }
 
   it('weakens the same rows a pass over every row would, in the same order', async () => {
-    const { root, hits } = seeded(50);
+    const { root, hits } = seededForInvalidation(50);
     const expected = new Set([hits.half.id, hits.tagOnly.id]);
     const order = loadAllEntries(root, 'default')
       .map((e) => e.id)
@@ -83,7 +84,7 @@ describe('invalidateMatching without onlyId', () => {
   it('reads the same rows however many rows cannot match', async () => {
     const read: number[] = [];
     for (const n of [10, 200]) {
-      const { root } = seeded(n);
+      const { root } = seededForInvalidation(n);
       const { rowsRead } = await recordStatementsAsync(() =>
         invalidateMatching(sqliteStore(root), target, 'default', { dryRun: true }),
       );

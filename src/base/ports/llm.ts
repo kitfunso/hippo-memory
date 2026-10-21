@@ -12,7 +12,7 @@ export interface LlmRequest {
 export type LlmFailure =
   | { kind: 'request'; message: string; cause?: unknown }
   | { kind: 'http'; status: number; detail: string }
-  | { kind: 'unreadable'; message: string }
+  | { kind: 'unreadable'; message: string; cause?: unknown }
   | { kind: 'empty' };
 
 export type LlmReply = { ok: true; text: string } | { ok: false; failure: LlmFailure };
@@ -44,10 +44,11 @@ export function llmFailureFields(failure: LlmFailure): LogFields {
   switch (failure.kind) {
     case 'http':
       return { llmFailure: 'http', status: failure.status };
-    case 'request': {
-      if (failure.cause === undefined) return { llmFailure: 'request' };
+    case 'request':
+    case 'unreadable': {
+      if (failure.cause === undefined) return { llmFailure: failure.kind };
       const code = errnoOf(failure.cause);
-      const fields = { llmFailure: 'request', ...errorFields(failure.cause) };
+      const fields = { llmFailure: failure.kind, ...errorFields(failure.cause) };
       return code === '' ? fields : { ...fields, errno: code };
     }
     default:

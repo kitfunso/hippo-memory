@@ -17,6 +17,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
+import { seedRows } from '../_helpers/seed-rows.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -114,8 +115,7 @@ describe('invalidateMatching with onlyId', () => {
 
   function seeded(n: number) {
     const root = makeRoot('batch-invalidate');
-    const rows = Array.from({ length: n }, (_, i) => createMemory(`row ${i} about the zephyrine cache`));
-    writeEntriesTogether(root, rows);
+    const rows = seedRows(root, n, (i) => `row ${i} about the zephyrine cache`);
     return { root, rows };
   }
 

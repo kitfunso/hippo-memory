@@ -1,10 +1,18 @@
 import { MemoryEntry, type DecayOptions } from '../../base/memory/memory.js';
 import { loadConfig } from '../../base/config/config.js';
+import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
 import type { DormantMove, StrengthRefresh } from '../../store/port/consolidation.js';
 import type { StoreWith } from '../../store/port.js';
 import type { SleepRows, Survivors } from './survivors.js';
 import type { TombstoneChecks } from './tombstones.js';
+
+/** A pass that threw and was skipped; the sleep carries on without it. */
+export interface PhaseFailure {
+  phase: string;
+  message: string;
+  fields: LogFields;
+}
 
 export interface ConsolidationResult {
   decayed: number;
@@ -36,6 +44,8 @@ export interface ConsolidationResult {
   entityProfilesCreated: number;
   dryRun: boolean;
   details: string[];
+  /** Passes that failed and were skipped, with the error's log fields, for a caller that drops `details`. */
+  phaseFailures: PhaseFailure[];
   physicsSimulated: number;
   /** Ids the decay pass removes (or would remove, under dryRun). */
   removedIds?: string[];
@@ -117,6 +127,27 @@ export function newConsolidationResult(dryRun: boolean): ConsolidationResult {
     entityProfilesCreated: 0,
     dryRun,
     details: [],
+    phaseFailures: [],
     physicsSimulated: 0,
   };
+}
+
+/** Logs the failure with its stack, keeps it in the result for callers that run the sleep elsewhere, and adds the
+ * `detail` line the sleep report shows. */
+export function recordPhaseFailure<E>(result: ConsolidationResult, phase: string, error: E, detail: string): void {
+  const failure = {
+    phase,
+    message: errorMessage(error),
+    fields: errorFields(error),
+  };
+  result.phaseFailures.push(failure);
+  result.details.push(`${detail}: ${failure.message}`);
+  log.warn(`consolidate: ${phase} pass failed and was skipped: ${failure.message}`, errorFields(error));
+}
+
+/** Logs each phase failure a consolidation result carries, for a caller that ran it out of sight. */
+export function logPhaseFailures(result: ConsolidationResult): void {
+  for (const { phase, message, fields } of result.phaseFailures) {
+    log.warn(`consolidate: ${phase} pass failed and was skipped: ${message}`, fields);
+  }
 }

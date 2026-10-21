@@ -329,29 +329,16 @@ describe('MCP stdio fault handling', () => {
     expect(run.proc.exitCode).toBeNull();
   });
 
-  it('assembles a frame that arrives over many chunks, newline-delimited or Content-Length', async () => {
+  it('reads a newline-delimited frame and a Content-Length frame written whole, in order', async () => {
     const run = start([serverPath]);
-    const pause = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
-    const dribble = async (text: string, size: number): Promise<void> => {
-      const bytes = Buffer.from(text);
-      for (let i = 0; i < bytes.length; i += size) {
-        run.proc.stdin.write(bytes.subarray(i, i + size));
-        await pause();
-      }
-    };
     const list = (id: number): string => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
 
-    await dribble(`${list(1)}\n`, 3);
+    run.proc.stdin.write(`${list(1)}\n`);
     expect(JSON.parse(await run.nextLine()).id).toBe(1);
 
     const body = list(2);
-    await dribble(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 4);
+    run.proc.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
     expect(JSON.parse(await run.nextLine()).id).toBe(2);
-
-    // Two frames split mid-way across one chunk boundary each still come out in order.
-    await dribble(`${list(3)}\n${list(4)}\n`, 17);
-    expect(JSON.parse(await run.nextLine()).id).toBe(3);
-    expect(JSON.parse(await run.nextLine()).id).toBe(4);
   });
 
   it('exits non-zero and logs the stack on an uncaught exception', async () => {

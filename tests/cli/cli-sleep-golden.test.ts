@@ -4,11 +4,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { seeded } from '../_helpers/recall-golden-seed.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -17,25 +18,6 @@ const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const DROP_ENV = ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TENANT', 'HIPPO_HOME'];
 
 let template: string;
-
-function seeded(
-  content: string,
-  id: string,
-  created: string,
-  extra: Partial<MemoryEntry> = {},
-  opts: Partial<Parameters<typeof createMemory>[1]> = {},
-): MemoryEntry {
-  // createMemory decays strength over the real milliseconds it runs, so a fixed value keeps snapshots stable.
-  return {
-    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...opts }),
-    id,
-    created,
-    lastRetrieved: created,
-    validFrom: created,
-    strength: 1,
-    ...extra,
-  };
-}
 
 function seedLocal(hippoRoot: string): void {
   const rows: MemoryEntry[] = [

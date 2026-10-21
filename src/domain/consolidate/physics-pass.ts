@@ -1,8 +1,7 @@
 import { refreshParticleProperties } from '../../base/rank/particle-refresh.js';
 import { simulate, type ForceContext } from '../../base/rank/physics.js';
 import { clockBasisOf, type MemoryEntry } from '../../base/memory/memory.js';
-import type { SleepRun } from './run.js';
-import { errorMessage } from '../../base/util/log.js';
+import { recordPhaseFailure, type SleepRun } from './run.js';
 
 const STATS_DECIMALS = 4;
 // Every substep is all-pairs, so one sleep moves at most this many particles; the rest keep their stored state until
@@ -17,7 +16,7 @@ export async function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PH
 
     if (physicsEnabled) await simulateStoredParticles(run, maxParticles);
   } catch (error) {
-    result.details.push(`  ⚠️ physics simulation skipped: ${errorMessage(error)}`);
+    recordPhaseFailure(result, 'physics', error, '  ⚠️ physics simulation skipped');
   }
 }
 

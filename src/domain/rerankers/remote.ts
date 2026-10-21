@@ -1,5 +1,6 @@
 // The one bounded, retried POST every remote reranker sends, through the Http port its root hands the reranker.
 import type { Http } from '../../base/ports/http.js';
+import { currentSignal } from '../../base/util/request-scope.js';
 
 // A Retry-After longer than this would outlast most budgets, so the answer is handed back and the reranker falls back.
 const RETRY_WAIT_CAP_MS = 2_000;
@@ -10,10 +11,13 @@ const RETRY_WAIT_CAP_MS = 2_000;
 export async function rerankerPost(http: Http, url: string, init: RequestInit, budgetMs: number): Promise<Response> {
   // The budget bounds the whole call, retries included, so recall never waits past the configured timeout.
   const budget = AbortSignal.timeout(budgetMs);
+  // The request's own abort ends the post too, so a client that hung up does not leave retries running.
+  const requestSignal = currentSignal();
+  const signal = requestSignal === undefined ? budget : AbortSignal.any([requestSignal, budget]);
   try {
     return await http.send(
       url,
-      { ...init, method: 'POST', signal: budget },
+      { ...init, method: 'POST', signal },
       {
         timeoutMs: budgetMs,
         retryTransport: true,
@@ -21,6 +25,7 @@ export async function rerankerPost(http: Http, url: string, init: RequestInit, b
       },
     );
   } catch (err) {
+    if (requestSignal?.aborted) throw err;
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       throw new Error(`no answer within ${budgetMs} ms`, { cause: err });
     }

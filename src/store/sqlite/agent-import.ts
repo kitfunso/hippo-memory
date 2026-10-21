@@ -1,6 +1,6 @@
 // AgentImport on hippo.db: reads on a bare handle, and a container's steps in one scope on a handle opened with
 // openStore, whose mirror folders the commit's mirror files need.
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { dormantSnapshotsBySourcePrefix } from './dormant-rows.js';
 import { selectRowsHoldingOutsideSourcePrefixAt } from './entry-reads.js';
@@ -36,6 +36,7 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
       removeEntryMirrors(hippoRoot, id);
     } catch (err) {
       // A legacy-mirror import on an empty store would bring the row back live, and the next sync sets it aside again.
+      log.debug(`agent import: ${id} failed`, errorFields(err));
       failed.push({ id, message: errorMessage(err) });
     }
   }

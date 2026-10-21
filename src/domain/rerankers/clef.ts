@@ -8,7 +8,7 @@ import { rerankerPost } from './remote.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../base/util/json.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage } from '../../base/util/log.js';
 import { parseOutboundUrl } from '../../base/util/net.js';
 
 const RAY_ID_MAX_CHARS = 64;
@@ -180,7 +180,7 @@ export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
       outage.answered();
     } catch (err) {
       const reason = errorMessage(err);
-      outage.failed(reason);
+      outage.failed(reason, errorFields(err));
       return nativeOrder(head, { backend: 'native', requestedModel: model, fallbackReason: reason });
     }
 

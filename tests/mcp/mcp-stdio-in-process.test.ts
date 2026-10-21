@@ -88,4 +88,26 @@ describe('startStdioLoop, in process', () => {
     fire(stdin, 'end');
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
   });
+
+  it('assembles a frame that arrives over many chunks, newline-delimited or Content-Length', async () => {
+    startStdioLoop(cliStdioHost());
+    const list = (id: number): string => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
+    const dribble = (text: string, size: number): void => {
+      const bytes = Buffer.from(text);
+      for (let i = 0; i < bytes.length; i += size) fire(stdin, 'data', bytes.subarray(i, i + size));
+    };
+    const ids = (): Array<Reply['id']> => replies().map((r) => r.id);
+
+    dribble(`${list(1)}\n`, 3);
+    await vi.waitFor(() => expect(ids()).toEqual([1]), { timeout: 15_000 });
+
+    const body = list(2);
+    dribble(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 4);
+    await vi.waitFor(() => expect(ids()).toContain(2), { timeout: 15_000 });
+
+    // Two frames split mid-way across one chunk boundary each still come out in order.
+    dribble(`${list(3)}\n${list(4)}\n`, 17);
+    await vi.waitFor(() => expect(ids()).toContain(4), { timeout: 15_000 });
+    expect(ids().filter((id) => id === 3 || id === 4)).toEqual([3, 4]);
+  });
 });
