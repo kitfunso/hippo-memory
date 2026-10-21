@@ -10,7 +10,7 @@ import { readSessionScan, recordSessionDigest, type SessionScan } from '../captu
 import { captureToolFailure } from '../capture/capture-error.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { importSessionFolder } from '../../api/agent-memories.js';
-import { currentMachine } from '../../base/util/agent-homes.js';
+import { currentMachine } from '../../infra/machine.js';
 import { summaryLine } from '../../api/agent-memory-report.js';
 import {
   resolveProjectIdentity,

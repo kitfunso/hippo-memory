@@ -10,7 +10,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
-import { processGit } from '../../src/base/util/git-runner.js';
+import { processGit } from '../../src/infra/git-runner.js';
 
 const OLD_TARGETS = 200;
 /** Rows the confirmed-outcome statement handed to JavaScript in `reads`. */

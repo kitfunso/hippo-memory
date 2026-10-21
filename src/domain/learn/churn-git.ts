@@ -1,6 +1,6 @@
 /** Git reads for churn-staleness (src/domain/learn/invalidation.ts), through the caller's git runner. */
 
-import type { GitResult, GitRunner } from '../../base/util/git-runner.js';
+import type { GitResult, GitRunner } from '../../base/ports/git.js';
 import { DAY_MS, MINUTE_MS } from '../../base/util/time.js';
 import { errorMessage } from '../../base/util/log.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';

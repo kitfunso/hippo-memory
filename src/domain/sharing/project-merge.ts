@@ -1,12 +1,11 @@
 // `hippo projects`: list the project names a store holds, fold one into another, and repair old tags in one reversible
 // pass. The rules here plan from reads; the store applies each plan in one transaction.
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
 import { foldEdges, foldedInto } from '../agent-memories/project-folds.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, toolSourcePrefix, toolTag } from '../../base/memory/agent-memory-tools.js';
-import { currentMachine } from '../../base/util/agent-homes.js';
+import type { Machine } from '../../base/util/agent-homes.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import { projectNames, resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
@@ -60,10 +59,13 @@ export interface RepairResult {
   readonly backup: string | null;
 }
 
-/** What a plan knows of the store's folder: the global store reads session folders, and a project store folds only its
- * own folder's old name, unless many people share it. */
+/** The machine whose session folders and working folders the global store's compactions name. */
+export type SessionMachine = Pick<Machine, 'platform' | 'env' | 'files'>;
+
+/** What a plan knows of the store's folder: the global store reads session folders on its machine, and a project store
+ * folds only its own folder's old name, unless many people share it. */
 export type StoreFolder =
-  | { readonly isGlobal: true }
+  | { readonly isGlobal: true; readonly machine: SessionMachine }
   | {
       readonly isGlobal: false;
       readonly shared: boolean;
@@ -159,8 +161,7 @@ async function importCopies(r: Reader): Promise<MemoryEntry[]> {
 }
 
 /** Each Claude session folder a compaction recorded, with the names of each project it resolves to. */
-async function sessionOwners(r: Reader): Promise<Map<string, Map<string, string[]>>> {
-  const machine = currentMachine();
+async function sessionOwners(r: Reader, machine: SessionMachine): Promise<Map<string, Map<string, string[]>>> {
   const owners = new Map<string, Map<string, string[]>>();
   for (const { transcript, cwd } of await r.tags.compactionTranscripts(r.tenantId)) {
     const project = transcriptNotesProject(transcript, cwd, machine);
@@ -177,8 +178,8 @@ async function sessionOwners(r: Reader): Promise<Map<string, Map<string, string[
 async function strayImports(r: Reader, folder: StoreFolder): Promise<MemoryEntry[]> {
   const copies = await importCopies(r);
   if (!folder.isGlobal) return copies;
-  const { platform } = currentMachine();
-  const owners = await sessionOwners(r);
+  const { platform } = folder.machine;
+  const owners = await sessionOwners(r, folder.machine);
   const tool = toolSourcePrefix('claude-code');
   const kept = (e: MemoryEntry): boolean => e.kind !== 'raw' && !e.pinned;
   const origins = new Set<string>();
@@ -219,7 +220,7 @@ async function planFolds(
   }
   const today = new Map<string, Set<string>>();
   for (const { origin, cwd } of await r.tags.compactionOriginsWithCwd(r.tenantId)) {
-    if (fs.existsSync(cwd)) {
+    if (folder.machine.files.exists(cwd)) {
       today.set(origin, (today.get(origin) ?? new Set<string>()).add(resolveProjectIdentity(cwd).name));
     }
   }

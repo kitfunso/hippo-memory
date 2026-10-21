@@ -4,6 +4,7 @@
     "db",
     "store",
     "domain",
+    "infra",
     "api",
     "surface"
   ],
@@ -12,6 +13,7 @@
     "db": "db",
     "store": "store",
     "domain": "domain",
+    "infra": "infra",
     "api": "api",
     "surface": "surface",
     "entry": "surface"

@@ -1,7 +1,7 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../../api/index.js';
-import { processGit } from '../../base/util/git-runner.js';
+import { processGit } from '../../infra/git-runner.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
 import { resolveClientKey } from '../../api/recall/last-recalled.js';
 import { DEFAULT_LEARN_DAYS, MAX_CONTENT_LEN, MAX_ID_LEN } from '../../base/util/limits.js';

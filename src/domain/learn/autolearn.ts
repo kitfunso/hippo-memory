@@ -5,7 +5,7 @@ import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import type { GitRunner } from '../../base/util/git-runner.js';
+import type { GitRunner } from '../../base/ports/git.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 
 const AUTOLEARN_TEXT_CHARS = 500;

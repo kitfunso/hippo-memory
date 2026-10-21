@@ -6,7 +6,8 @@ import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { gitLayout } from '../../src/domain/agent-memories/git.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
-import { processGit, type GitRunner } from '../../src/base/util/git-runner.js';
+import type { GitRunner } from '../../src/base/ports/git.js';
+import { processGit } from '../../src/infra/git-runner.js';
 import { containerId, containerPrefix } from '../../src/domain/agent-memories/source.js';
 import {
   importAtSessionEnd,
