@@ -1,5 +1,6 @@
 // DAG E3 rebuild regressions: born-dirty buildDag, tenant partitioning, race-loser no-op, cap clamp and tombstone counts.
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { rebuildDirtySummaries, buildDag } from '../../src/domain/consolidate/dag.js';
@@ -55,8 +56,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Invoke buildDag with injected fetcher
     const buildResult = await buildDag(sqliteStore(hippoRoot), [factA, factB, factC], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'test-key',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
     expect(buildResult.summariesCreated).toBe(1);
 
@@ -85,8 +85,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     // Now run rebuildDirtySummaries — must report attempted=0
     const rebuildResult = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
     expect(rebuildResult.attempted).toBe(0);
@@ -128,8 +127,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // buildDag itself must do the tenant separation, not its caller.
     const result = await buildDag(sqliteStore(hippoRoot), [...aFacts, ...bFacts], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'test-key',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
 
     // Two separate per-tenant clusters, not one 6-member cross-tenant cluster.
@@ -267,8 +265,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // the deterministic-summarization scenario the AT1 P1a fix guards.
     const fetcher = makeOkFetcher(rejectedContent);
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'test-key',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
       cap: 20,
     });
 
@@ -323,8 +320,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const fetcher = makeOkFetcher('fresh-regenerated-summary-content-T4');
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'test-key',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
       cap: 20,
     });
 

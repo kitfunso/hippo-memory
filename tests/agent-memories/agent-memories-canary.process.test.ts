@@ -26,7 +26,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
 const { importForStore, importAtSessionEnd } = await import(syncUrl);
-const { currentMachine } = await import(new URL('../../base/util/agent-homes.js', syncUrl).href);
+const { currentMachine } = await import(new URL('../../infra/machine.js', syncUrl).href);
 const { homedir } = await import('node:os');
 const { loadConfig } = await import(new URL('../../base/config/config.js', syncUrl).href);
 const { sqliteImportStores } = await import(new URL('../../store/sqlite/agent-import-stores.js', syncUrl).href);

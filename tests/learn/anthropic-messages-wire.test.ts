@@ -2,6 +2,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { extractFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
 import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
 import { refineOne } from '../_helpers/refine-one.js';
@@ -127,7 +128,10 @@ const callers: CallerSpec[] = [
     bodySha256: '8a3cca2b99fff9e38016c7e231d5c51515f0a2a1f059ecb4e188e838a3bbfcff',
     contentLength: '806',
     run: (fetcher, messages) =>
-      extractFacts('Alice likes tea', { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
+      extractFacts('Alice likes tea', {
+        llm: anthropicLlm({ apiKey: KEY, fetcher }),
+        onError: (m) => messages.push(m),
+      }),
     expected: {
       ok: { result: [FACT], messages: [], requests: 1 },
       http400: { result: [], messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
@@ -145,7 +149,10 @@ const callers: CallerSpec[] = [
     bodySha256: 'b68db51097ea54c1525e168b4b0bbcd6676799af9a254cacda0da32f68b83f28',
     contentLength: '529',
     run: (fetcher, messages) =>
-      generateDagSummary('tea', ['Alice likes tea'], { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
+      generateDagSummary('tea', ['Alice likes tea'], {
+        llm: anthropicLlm({ apiKey: KEY, fetcher }),
+        onError: (m) => messages.push(m),
+      }),
     expected: {
       ok: { result: DAG_TEXT, messages: [], requests: 1 },
       http400: { result: null, messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
@@ -162,7 +169,7 @@ const callers: CallerSpec[] = [
     maxTokens: 800,
     bodySha256: 'bd388f1ab60a8c682988da6afbd3085737acf6b0de52bedb56e008719dc2daa2',
     contentLength: '851',
-    run: (fetcher) => refineOne('merged tea notes', [], { apiKey: KEY, fetcher }),
+    run: (fetcher) => refineOne('merged tea notes', [], { llm: anthropicLlm({ apiKey: KEY, fetcher }) }),
     expected: {
       ok: { result: REFINE_TEXT, messages: [], requests: 1 },
       http400: {

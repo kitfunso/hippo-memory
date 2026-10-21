@@ -2,6 +2,7 @@
 // half-life, never the compiled one. Real stores and the built CLI; only the LLM fetch is stubbed.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -265,8 +266,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       return added(root, () =>
         buildDag(sqliteStore(root), facts, {
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
-          apiKey: 'test-key',
-          fetcher: fetcher('alice files, notes and closes tickets'),
+          llm: anthropicLlm({ apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }),
         }),
       );
     },
@@ -285,8 +285,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       return added(root, () =>
         buildEntityProfiles(sqliteStore(root), l2s, {
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
-          apiKey: 'test-key',
-          fetcher: fetcher('alice is the typed-python API owner'),
+          llm: anthropicLlm({ apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }),
         }),
       );
     },

@@ -5,6 +5,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
 import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { assessAutomaticMemory } from '../../src/base/memory/memory-quality.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
@@ -88,10 +89,12 @@ describe('quality at automatic derivation boundaries', () => {
   it('refuses incomplete generated summary prose through the shared new/rebuild summary boundary', async () => {
     const errors: string[] = [];
     const result = await generateDagSummary('migration rules', ['a supported source lesson'], {
-      apiKey: 'test',
+      llm: anthropicLlm({
+        apiKey: 'test',
+        fetcher: async () =>
+          new Response(JSON.stringify({ content: [{ text: 'Found local migration files to be' }] }), { status: 200 }),
+      }),
       onError: (message) => errors.push(message),
-      fetcher: async () =>
-        new Response(JSON.stringify({ content: [{ text: 'Found local migration files to be' }] }), { status: 200 }),
     });
     expect(result).toBeNull();
     expect(errors).toEqual([expect.stringContaining('summary quality refused')]);

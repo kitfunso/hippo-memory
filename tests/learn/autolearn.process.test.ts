@@ -17,7 +17,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { processGit } from '../../src/base/util/git-runner.js';
+import { processGit } from '../../src/infra/git-runner.js';
 
 // ---------------------------------------------------------------------------
 // captureError

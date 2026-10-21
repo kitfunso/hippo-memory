@@ -1,6 +1,6 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
-import { envActiveScope, envAnthropicApiKey } from '../../base/util/env.js';
+import { envActiveScope } from '../../base/util/env.js';
 import * as fs from 'fs';
 import { Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import * as api from '../../api/index.js';
@@ -139,7 +139,7 @@ async function writeMemory(hippoRoot: string, tenantId: string, text: string, fl
   if (outcome.startedWeak) printWeakened(outcome.startedWeak);
   printRemembered(outcome.entry, useGlobal, outcome.warnings);
 
-  const request = { requested: boolFlag(flags, 'extract'), apiKey: envAnthropicApiKey() };
+  const request = { requested: boolFlag(flags, 'extract') };
   printExtraction(await api.extractRememberedFacts(ctx, outcome.entry, request));
 }
 

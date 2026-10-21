@@ -12,7 +12,7 @@ import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/ro
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
-import { processGit } from '../../src/base/util/git-runner.js';
+import { processGit } from '../../src/infra/git-runner.js';
 
 /** loadAllEntries' statement: every full row of one tenant. */
 const TENANT_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`;

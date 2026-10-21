@@ -1,6 +1,7 @@
 // The api reads behind `hippo recall`, driven against a real temp store: budget fit, store origin, scoped continuity, JSON rows.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import { join } from 'node:path';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -39,7 +40,7 @@ const setting = (activeScope: string | null, primaryIsGlobal = false): CliRecall
 async function rankDeploy() {
   const config = loadConfig(hippoRoot);
   return rankRecall(
-    { store: sqliteStore(hippoRoot), config, tenantId: 'default' },
+    { store: sqliteStore(hippoRoot), config, tenantId: 'default', embedderFor: resolveEmbeddingProvider },
     {
       query: 'deploy',
       budget: 4000,
@@ -163,7 +164,7 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
     const config = loadConfig(hippoRoot);
     const global = { store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
     const ranked = await rankRecall(
-      { store: sqliteStore(hippoRoot), config, global, tenantId: 'default' },
+      { store: sqliteStore(hippoRoot), config, global, tenantId: 'default', embedderFor: resolveEmbeddingProvider },
       {
         query: 'deploy',
         budget: 4000,

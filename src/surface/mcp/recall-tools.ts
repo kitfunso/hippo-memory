@@ -3,7 +3,7 @@
 import * as path from 'path';
 import { drillDown as apiDrillDown, assemble as apiAssemble, contextGet as apiGetContext } from '../../api/index.js';
 import { autoDetectContext } from '../../api/context-auto.js';
-import { processGit } from '../../base/util/git-runner.js';
+import { processGit } from '../../infra/git-runner.js';
 import { sharedStoreOf } from '../../api/types.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/context-render.js';

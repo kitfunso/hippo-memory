@@ -1,6 +1,6 @@
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../../base/config/config.js';
-import { resolveEmbeddingProvider } from '../../base/embeddings/provider.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { evalNow, rankAblation } from '../../base/memory/ablation.js';
 import { extractPathTags } from './path-context.js';
@@ -29,66 +29,107 @@ import {
 } from '../../base/rank/search-types.js';
 import type { HippoStore } from '../../store/index.js';
 
-export interface HybridSearchOptions {
-  budget?: number;
-  now?: Date;
-  hippoRoot?: string;
-  /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
-  embeddings?: EmbeddingsConfig;
+/** How BM25 and cosine combine, and whether the score breakdown is kept. */
+export interface HybridBlend {
   embeddingWeight?: number;
+  /** 'blend' (weighted sum of BM25 and cosine, default) or 'rrf' (reciprocal rank fusion of their ranks). */
+  scoring?: 'blend' | 'rrf';
+  /**
+   * Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot` or `source`. See
+   * src/domain/graph/stream.ts.
+   */
+  graphStream?: GraphStreamOptions;
   explain?: boolean;
+}
+
+/** The reordering after scoring: MMR, then the optional reranker. */
+export interface HybridOrder {
   /** Disable MMR re-ranking even when embeddings are available. */
   mmr?: boolean;
   /** MMR balance: 1.0 = pure relevance, 0.0 = pure diversity. Default 0.7. */
   mmrLambda?: number;
-  /** 'blend' (weighted sum of BM25 and cosine, default) or 'rrf' (reciprocal rank fusion of their ranks). */
-  scoring?: 'blend' | 'rrf';
-  /**
-   * Corpus from `buildCorpus` over the same `entries` in the same order (content + tags), reused to skip tokenizing.
-   */
-  preparedCorpus?: BM25Corpus;
-  /** Minimum number of results to return regardless of budget. Default 1. */
-  minResults?: number;
-  /** Budget cost per result; the caller that prints passes the cost of its printed text. */
-  cost?: ResultCost;
-  /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
-  scope?: string | null;
-  /** Include superseded memories in results. Default false. */
-  includeSuperseded?: boolean;
-  /** Filter to memories current at this ISO date string. */
-  asOf?: string;
   /** Optional reranker. Runs after MMR, before budget filtering. See src/domain/rerankers/types.ts. */
   reranker?: RerankerFn;
   /** Options passed through to the reranker. */
   rerankerOptions?: RerankerOptions;
+}
+
+/** The scope and summary boosts. */
+export interface HybridBoosts {
+  /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
+  scope?: string | null;
   /**
    * Multiplier on DAG summary scores. Default 0.85 (`runtime.summaryDeboost` overrides; per-call wins). 1.0 disables.
    */
   summaryDeboost?: number;
   /** 1.05 micro-boost for summaries rebuilt within 7 days. Default true. */
   summaryFreshness?: boolean;
+}
+
+/** Which rows may rank. */
+export interface HybridFilters {
+  /** Include superseded memories in results. Default false. */
+  includeSuperseded?: boolean;
+  /** Filter to memories current at this ISO date string. */
+  asOf?: string;
+}
+
+/** How many results come back and what each costs. */
+export interface HybridBudget {
+  budget?: number;
+  /** Minimum number of results to return regardless of budget. Default 1. */
+  minResults?: number;
+  /** Budget cost per result; the caller that prints passes the cost of its printed text. */
+  cost?: ResultCost;
+}
+
+/** What the caller already prepared: the corpus, the vector arm and its deadline. */
+export interface HybridInputs {
   /**
-   * Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot` or `source`. See
-   * src/domain/graph/stream.ts.
+   * Corpus from `buildCorpus` over the same `entries` in the same order (content + tags), reused to skip tokenizing.
    */
-  graphStream?: GraphStreamOptions;
+  preparedCorpus?: BM25Corpus;
   /**
    * Add the rows nearest the query vector, not only rescore `entries`; without it a row no query word matches cannot
    * surface.
    */
   vectorCandidates?: HybridVectorCandidates;
-  /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
-  store?: HippoStore;
   /** Where vectors and the graph are read, in place of `hippoRoot`, `store` and `embeddings`. */
   source?: VectorSource;
   /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
   queryEmbedDeadline?: AbortSignal;
+}
+
+/** The clock and the root's environment settings. */
+export interface HybridSettings {
+  now?: Date;
   /** The root's environment settings: the scope, summary deboost and query-embedding budget a call names none of. */
   runtime?: RuntimeSettings;
 }
 
+/** The published wrapper's folder fields: hippo.db under `hippoRoot` when the caller names no store. */
+export interface HybridFolder {
+  hippoRoot?: string;
+  /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
+  embeddings?: EmbeddingsConfig;
+  /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
+  store?: HippoStore;
+}
+
+/** Every ranking field, flat because the published hybridSearch and the frozen eval scripts pass them that way. */
+type HybridRanking = HybridBlend &
+  HybridOrder &
+  HybridBoosts &
+  HybridFilters &
+  HybridBudget &
+  HybridInputs &
+  HybridSettings;
+
+/** The published hybridSearch's options: the ranking fields and the folder it reads when it names no store. */
+export type HybridSearchOptions = HybridRanking & HybridFolder;
+
 /** hybridSearch's options once the caller names its stores; the folder fields belong to the published wrapper. */
-export type HybridRankOptions = Omit<HybridSearchOptions, 'hippoRoot' | 'embeddings' | 'store'> & {
+export type HybridRankOptions = HybridRanking & {
   /** The global store the graph stream also walks; the published wrapper opens it from `graphStream.globalRoot`. */
   graphGlobal?: HippoStore;
 };
@@ -138,17 +179,19 @@ export async function hybridSearch(
   return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }
 
-/** The vector arm over `store`, embedding queries with the provider `config` names. */
+/** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from `config`. */
 export function vectorSourceOf({
   store,
   config,
   onHippoDb,
+  embedderFor,
 }: {
   store: HippoStore;
   config: Pick<HippoConfig, 'embeddings'>;
   onHippoDb?: boolean;
+  embedderFor: EmbedderFor;
 }): VectorSource {
-  return { store, provider: () => resolveEmbeddingProvider(config.embeddings), onHippoDb };
+  return { store, provider: () => embedderFor(config.embeddings), onHippoDb };
 }
 
 function graphStoresOf(source: VectorSource | undefined, options: HybridRankOptions): FusionInput['graph'] {

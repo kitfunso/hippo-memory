@@ -19,6 +19,8 @@ import { makeRoot, type MakeRootOptions } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries, readEntry, writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
+import { realInfra } from '../../src/infra/ports.js';
 
 oneRequestPerTest();
 
@@ -230,6 +232,11 @@ describe('extractRememberedFacts', () => {
     (text: string, status = 200): typeof fetch =>
     async () =>
       new Response(JSON.stringify({ content: [{ text }] }), { status });
+  /** `ctx` with a model whose network is `fetcher`, or with no model when there is none. */
+  const withModel = (ctx: FullContext, fetcher?: typeof fetch): FullContext => ({
+    ...ctx,
+    infra: { ...realInfra(), llm: fetcher && anthropicLlm({ apiKey: 'no-key', fetcher }) },
+  });
   const stored = async (ctx: FullContext): Promise<MemoryEntry> =>
     storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
   const extracted = (ctx: FullContext, from: MemoryEntry): MemoryEntry[] =>
@@ -238,10 +245,8 @@ describe('extractRememberedFacts', () => {
   it('is off unless the caller or the config asks', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const outcome = await extractRememberedFacts(ctx, entry, {
+    const outcome = await extractRememberedFacts(withModel(ctx, answering(JSON.stringify(FACTS))), entry, {
       requested: false,
-      apiKey: 'no-key',
-      fetcher: answering(JSON.stringify(FACTS)),
     });
     expect(outcome).toEqual({ status: 'off' });
     expect(extracted(ctx, entry)).toHaveLength(0);
@@ -253,17 +258,14 @@ describe('extractRememberedFacts', () => {
   ])('answers no_key when %s and there is no key', async (_label, config, requested) => {
     const ctx = store(config);
     const entry = await stored(ctx);
-    expect(await extractRememberedFacts(ctx, entry, { requested })).toEqual({ status: 'no_key' });
-    expect(await extractRememberedFacts(ctx, entry, { requested, apiKey: '' })).toEqual({ status: 'no_key' });
+    expect(await extractRememberedFacts(withModel(ctx), entry, { requested })).toEqual({ status: 'no_key' });
   });
 
   it('stores the facts the model gives beside the row and counts them', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const outcome = await extractRememberedFacts(ctx, entry, {
+    const outcome = await extractRememberedFacts(withModel(ctx, answering(JSON.stringify(FACTS))), entry, {
       requested: true,
-      apiKey: 'no-key',
-      fetcher: answering(JSON.stringify(FACTS)),
     });
     expect(outcome).toEqual({ status: 'ran', facts: 2, failures: [] });
     expect(extracted(ctx, entry).map((row) => row.content)).toEqual(FACTS.map((fact) => fact.content));
@@ -273,18 +275,10 @@ describe('extractRememberedFacts', () => {
   it('names a failed model call and a thrown one in the result, and stores nothing', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const refused = await extractRememberedFacts(ctx, entry, {
-      requested: true,
-      apiKey: 'no-key',
-      fetcher: answering('ignored', 500),
-    });
+    const refused = await extractRememberedFacts(withModel(ctx, answering('ignored', 500)), entry, { requested: true });
     expect(refused).toMatchObject({ status: 'ran', facts: 0 });
     expect(refused).toHaveProperty('failures.length', 1);
-    const unparseable = await extractRememberedFacts(ctx, entry, {
-      requested: true,
-      apiKey: 'no-key',
-      fetcher: answering('not json'),
-    });
+    const unparseable = await extractRememberedFacts(withModel(ctx, answering('not json')), entry, { requested: true });
     expect(unparseable).toHaveProperty('failures.0', expect.stringMatching(/^unparseable response: /));
     expect(extracted(ctx, entry)).toHaveLength(0);
   });

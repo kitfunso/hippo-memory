@@ -3,11 +3,7 @@ import type { StoreWith } from '../../store/port.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import {
-  type AnthropicMessageFailure,
-  describeMessageFailure,
-  sendAnthropicMessage,
-} from '../../base/util/anthropic-messages.js';
+import { describeLlmFailure, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
@@ -20,14 +16,13 @@ export interface ExtractedFact {
 }
 
 export interface ExtractOptions {
-  apiKey: string;
+  llm: Llm;
   model?: string;
-  fetcher?: typeof fetch;
   /**
-   * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the API call
-   * itself failed.
+   * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the model
+   * call itself failed.
    */
-  onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
+  onError?: (msg: string, failure?: LlmFailure) => void;
 }
 
 const EXTRACTION_PROMPT =
@@ -50,15 +45,13 @@ Input text:
 const EXTRACTION_MAX_TOKENS = 1200;
 
 export async function extractFacts(text: string, opts: ExtractOptions): Promise<ExtractedFact[]> {
-  const reply = await sendAnthropicMessage({
-    apiKey: opts.apiKey,
+  const reply = await opts.llm.send({
     model: opts.model,
     maxTokens: EXTRACTION_MAX_TOKENS,
     prompt: EXTRACTION_PROMPT + redactSecretsStrict(text),
-    fetcher: opts.fetcher,
   });
   if (!reply.ok) {
-    opts.onError?.(describeMessageFailure(reply.failure), reply.failure);
+    opts.onError?.(describeLlmFailure(reply.failure), reply.failure);
     return [];
   }
 

@@ -49,7 +49,7 @@ import {
 } from '../hooks-install/copilot.js';
 import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { importUserMemories } from '../../api/agent-memories.js';
-import { currentMachine } from '../../base/util/agent-homes.js';
+import { currentMachine } from '../../infra/machine.js';
 import { cliStore, cliSyncOptions } from './api-context.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactions } from '../capture/compaction-record.js';

@@ -102,8 +102,8 @@ export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_
         const output = await pipe(prefix ? `${prefix}${text}` : text, { pooling: poolingFor(model), normalize: true });
         return Array.from(output.data);
       } catch (err) {
-        // The caller sees `[]` and names the memory; the first failure per model is told, the repeats go to debug.
-        log.warnThenDebug(
+        // The caller sees `[]` and names the memory; the first failure per model warns, then every 100th repeat.
+        log.warnThenSample(
           `local-embed:${model}`,
           `local embedding with ${model} failed: ${errorMessage(err)}`,
           errorFields(err),

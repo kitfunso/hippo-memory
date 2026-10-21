@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { refineStore } from '../../src/surface/cli/refine-llm.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -29,7 +30,9 @@ function mockFetcher(body: string, ok = true): typeof fetch {
 describe('refining one consolidated entry', () => {
   it('returns the refined text from a successful API response', async () => {
     const fetcher = mockFetcher('Prefer async over sync in production paths.');
-    const result = await refineOne('use async ... use async ... use async', [], { apiKey: 'test', fetcher });
+    const result = await refineOne('use async ... use async ... use async', [], {
+      llm: anthropicLlm({ apiKey: 'test', fetcher }),
+    });
     expect(result).toBe('Prefer async over sync in production paths.');
   });
 
@@ -68,7 +71,7 @@ describe('refining one consolidated entry', () => {
         /empty or too short/,
       ],
     ])('returns null and logs one warning when %s', async (_label, fetcher, pattern) => {
-      const result = await refineOne('merged', [], { apiKey: API_KEY, fetcher });
+      const result = await refineOne('merged', [], { llm: anthropicLlm({ apiKey: API_KEY, fetcher }) });
       expect(result).toBeNull();
       const lines = warnLines();
       expect(lines).toHaveLength(1);
@@ -82,7 +85,7 @@ describe('refining one consolidated entry', () => {
       const fetcher = async (): Promise<Response> => {
         throw new TypeError('fetch failed', { cause: reset });
       };
-      await refineOne('merged', [], { apiKey: API_KEY, fetcher });
+      await refineOne('merged', [], { llm: anthropicLlm({ apiKey: API_KEY, fetcher }) });
       const line = warnLines().join('');
       expect(line).toContain('errorClass=TypeError');
       expect(line).toContain('errno=ECONNRESET');
@@ -102,7 +105,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('Clean refined summary.');
-      const result = await refineStore(dir, { apiKey: 'test', fetcher });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(1);
       expect(result.refined).toBe(1);
@@ -126,7 +129,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('would-be refined');
-      const result = await refineStore(dir, { apiKey: 'test', fetcher });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(1);
       expect(result.refined).toBe(0);
@@ -149,7 +152,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('new refined content');
-      const result = await refineStore(dir, { apiKey: 'test', fetcher, all: true });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }), all: true });
 
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toBe('new refined content');
@@ -167,7 +170,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('would-be new content');
-      const result = await refineStore(dir, { apiKey: 'test', fetcher, dryRun: true });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }), dryRun: true });
 
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toContain('[Consolidated from');
@@ -188,7 +191,7 @@ describe('refineStore', () => {
       writeEntry(dir, plainSemantic);
 
       const fetcher = mockFetcher('nope');
-      const result = await refineStore(dir, { apiKey: 'test', fetcher });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(0);
       expect(result.refined).toBe(0);
@@ -206,7 +209,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('ignored', false); // API error
-      const result = await refineStore(dir, { apiKey: 'test', fetcher });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(1);
       expect(result.refined).toBe(0);

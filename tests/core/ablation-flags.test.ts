@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import * as path from 'path';
 import {
   calculateStrength,
@@ -459,7 +460,7 @@ describe('HIPPO_FAKE_NOW', () => {
     const results = await searchBothHybrid(
       'wrapper clock consistency check',
       ...sharingStores(tmp, path.join(tmp, 'no-global')),
-      { tenantId: ALL_TENANTS, budget: 10000, explain: true },
+      { tenantId: ALL_TENANTS, embedderFor: resolveEmbeddingProvider, budget: 10000, explain: true },
     );
     expect(results).toHaveLength(1);
     expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);

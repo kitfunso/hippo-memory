@@ -26,7 +26,7 @@ import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-worker-server.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { processGit } from '../../src/base/util/git-runner.js';
+import { processGit } from '../../src/infra/git-runner.js';
 
 afterEach(undoAll);
 

@@ -16,6 +16,7 @@ import { CODEX_TRUST_LINE } from './domain/hooks/shared.js';
 import { isCodexPresent } from './surface/hooks-install/detect.js';
 import { claudeConfigDir, codexHomeDir } from './base/util/agent-homes.js';
 import { planProjectRepair } from './domain/sharing/project-merge.js';
+import { currentMachine } from './infra/machine.js';
 import { errorMessage, log } from './base/util/log.js';
 import { tryReadJsonFile, type JsonValue, isJsonObjectLiteral } from './base/util/json.js';
 import { DAY_MS } from './base/util/time.js';
@@ -229,7 +230,7 @@ function compactionsCheck(
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
 async function projectsCheck(global: DoctorStore, tenantId: string): Promise<DoctorCheck> {
   try {
-    const r = await planProjectRepair(global.projectTags, tenantId, { isGlobal: true });
+    const r = await planProjectRepair(global.projectTags, tenantId, { isGlobal: true, machine: currentMachine() });
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0

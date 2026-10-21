@@ -10,7 +10,7 @@ import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js'
 import { createListener } from '../../src/surface/server/tls.js';
 import { parseSteps } from '../../src/domain/consolidate/trace.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { processGit } from '../../src/base/util/git-runner.js';
+import { processGit } from '../../src/infra/git-runner.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

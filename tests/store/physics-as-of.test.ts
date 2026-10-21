@@ -162,7 +162,7 @@ describe('rankRecall in physics mode with asOf', () => {
   const rank = async (explain: boolean, usePhysics: boolean): Promise<string[]> =>
     (
       await rankRecall(
-        { store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT },
+        { store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, embedderFor: resolveEmbeddingProvider },
         opts(explain, usePhysics),
       )
     ).results.map((r) => r.entry.id);

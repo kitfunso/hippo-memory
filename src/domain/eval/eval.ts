@@ -3,6 +3,7 @@
 
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
 import type { VectorSource } from '../search/vector.js';
@@ -56,9 +57,9 @@ export interface RunEvalOptions {
   budget?: number;
   /** Where the vector arm reads when `entries` rank alone; BM25 only when unset. */
   source?: VectorSource;
-  /** When set, eval runs through searchBothHybrid so global memories are in scope. Otherwise only the `entries` list is
-   *  searched. */
-  stores?: { local: ConfiguredFolder<SharingStore>; global: ConfiguredFolder<SharingStore> };
+  /** When set, eval runs through searchBothHybrid so global memories are in scope, each store's query embedded by
+   * `embedderFor`. Otherwise only the `entries` list is searched. */
+  stores?: { local: ConfiguredFolder<SharingStore>; global: ConfiguredFolder<SharingStore>; embedderFor: EmbedderFor };
   /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
   now?: Date;
@@ -152,6 +153,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
   return stores
     ? searchBothHybrid(query, stores.local, stores.global, {
         tenantId: ALL_TENANTS,
+        embedderFor: stores.embedderFor,
         budget,
         now: options.now,
         embeddingWeight: options.embeddingWeight,
