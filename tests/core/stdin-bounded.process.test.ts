@@ -412,7 +412,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(result.stdout).not.toContain('DECOY SESSION');
   });
 
-  it('case 9: a timed-out compact-resume prints nothing, since X5 cannot check a session it never got', async () => {
+  it('a timed-out compact-resume prints nothing, since the session check cannot read a session it never got', async () => {
     const { payloadText } = seedPreCompactPayload(dir, 'sess-case9');
     let result = await spawnBounded(['pre-compact'], dir, env, { mode: 'write', text: payloadText, end: true });
     expect(result.status).toBe(0);

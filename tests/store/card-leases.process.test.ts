@@ -549,7 +549,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   }
 
-  it('C1: card claim prints the run id and lease; card show prints Lease/Heartbeat/run lines', async () => {
+  it('card claim prints the run id and lease; card show prints Lease/Heartbeat/run lines', async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = runCliSpawned(home, env, 'card', 'create', '--title', 't');
@@ -570,7 +570,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it('C2: card heartbeat succeeds with the right run id and is refused with the wrong one, missing or invalid', async () => {
+  it('card heartbeat succeeds with the right run id and is refused with the wrong one, missing or invalid', async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
@@ -608,7 +608,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it("C3, ROADMAP.md:1222 end to end: reclaim returns a crashed claimant's card to ready with its handoff intact", async () => {
+  it("ROADMAP.md:1222 end to end: reclaim returns a crashed claimant's card to ready with its handoff intact", async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
@@ -640,7 +640,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it('C4: card reclaim <id> prints the reclaim usage, exits 1 and reclaims nothing', async () => {
+  it('card reclaim <id> prints the reclaim usage, exits 1 and reclaims nothing', async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
@@ -661,7 +661,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it('C5: block, review and complete refuse a wrong --run and succeed with the right one', async () => {
+  it('block, review and complete refuse a wrong --run and succeed with the right one', async () => {
     const { home, env } = await setupCliHome();
     try {
       const blockCase = await runCli(home, env, 'card', 'create', '--title', 'block me');
@@ -722,7 +722,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it('C6: --run is accepted on heartbeat, block, review and complete; card reclaim --force is refused', async () => {
+  it('--run is accepted on heartbeat, block, review and complete; card reclaim --force is refused', async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
@@ -752,7 +752,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it('C7 adversarial argv: unknown ids, invalid --run and proto-key subcommands all fail cleanly', async () => {
+  it('adversarial argv: unknown ids, invalid --run and proto-key subcommands all fail cleanly', async () => {
     const { home, env } = await setupCliHome();
     try {
       const ctor = await runCli(home, env, 'card', 'heartbeat', 'constructor', '--run', '1');

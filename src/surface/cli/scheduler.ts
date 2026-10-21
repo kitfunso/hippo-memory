@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { writeFileAtomic } from '../../base/util/atomic-write.js';
+import { isJsonObject, isJsonString, parseJson } from '../../base/util/json.js';
 
 export const DAILY_TASK_NAME = 'hippo-daily-runner';
 
@@ -40,13 +41,18 @@ function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
     return defaultRegistry();
   }
   try {
-    const parsed: Partial<WorkspaceRegistry> = JSON.parse(text);
-    const workspaces = Array.isArray(parsed.workspaces)
-      ? [...new Set(parsed.workspaces.map((entry) => normalizeWorkspace(String(entry))).filter(Boolean))].sort()
-      : [];
+    const parsed = parseJson(text);
+    const listed = isJsonObject(parsed) ? parsed['workspaces'] : undefined;
+    const entries = Array.isArray(listed) ? listed : [];
+    const strings = entries.filter(isJsonString);
+    if (strings.length < entries.length) {
+      log.warn(
+        `workspace registry ${registryPath} has ${entries.length - strings.length} entries that are not paths; skipped`,
+      );
+    }
     return {
       version: 1,
-      workspaces,
+      workspaces: [...new Set(strings.map(normalizeWorkspace).filter(Boolean))].sort(),
     };
   } catch (err) {
     // The next registration rewrites the file, so keep the bad copy for the user to recover entries from.

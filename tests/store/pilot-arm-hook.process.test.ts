@@ -231,7 +231,7 @@ describe('the per-prompt hook', () => {
     expect(arms()).toHaveLength(1);
   });
 
-  it('a blank payload session id skips the pilot gate but keeps the X5 cross-restore guard', async () => {
+  it('a blank payload session id skips the pilot gate but keeps the cross-session restore guard', async () => {
     snapshotFor('other-session');
     expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toBe('');
     snapshotFor('  ');

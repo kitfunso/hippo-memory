@@ -6,7 +6,15 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const EMBED_LOCK_FILE = 'embeddings.lock';
+// A breaker file older than this belongs to a waiter that died mid-break.
+const BREAKER_STALE_MS = 5_000;
 const EMBED_LOCK_OWNER = `${process.pid}:${randomUUID()}`;
+
+/** The folder's identity in this process: two handles on one hippo.db share it. */
+export function embedLockKey(hippoRoot: string): string {
+  const resolved = path.resolve(hippoRoot);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
 
 function hasCode<E>(err: E, code: string): boolean {
   return err instanceof Error && 'code' in err && err.code === code;
@@ -44,14 +52,31 @@ export function tryEmbedLock(hippoRoot: string): string | null {
     } catch (err) {
       if (!hasCode(err, 'EEXIST')) throw err;
     }
-    if (holderAlive(lockPath)) return null;
-    // SHORTCUT: two waiters can both break one dead holder's lock; a vector lost that way is backfilled by the next
-    // `hippo embed`.
-    fs.rmSync(lockPath, { force: true });
+    if (holderAlive(lockPath) || !breakStaleLock(lockPath)) return null;
   }
 }
 
-/** After the double-break race above the file can be another writer's lock, so only `token`'s own is removed. */
+/** Only the waiter that creates the breaker file removes the dead holder's lock, and it re-reads the holder first: a
+ * waiter that lost the race sees a lock another waiter has just retaken and leaves it. */
+function breakStaleLock(lockPath: string): boolean {
+  const breaker = `${lockPath}.breaker`;
+  try {
+    fs.writeFileSync(breaker, EMBED_LOCK_OWNER, { flag: 'wx' });
+  } catch (err) {
+    if (!hasCode(err, 'EEXIST')) throw err;
+    const mtimeMs = fs.statSync(breaker, { throwIfNoEntry: false })?.mtimeMs ?? Date.now();
+    if (Date.now() - mtimeMs >= BREAKER_STALE_MS) fs.rmSync(breaker, { force: true });
+    return false;
+  }
+  try {
+    if (!holderAlive(lockPath)) fs.rmSync(lockPath, { force: true });
+  } finally {
+    fs.rmSync(breaker, { force: true });
+  }
+  return true;
+}
+
+/** The file can be another writer's lock by now, so only `token`'s own is removed. */
 export function releaseEmbedLock(hippoRoot: string, token: string): void {
   const lockPath = path.join(hippoRoot, EMBED_LOCK_FILE);
   let raw: string;

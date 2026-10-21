@@ -81,7 +81,7 @@ async function sentTurn(session: string, spec: Partial<TurnSpec> = {}): Promise<
 }
 
 describe('capture: a lesson the store never held at the turn', () => {
-  it('X1 a key for text never written, in a session that has rows, is not-written no-row', async () => {
+  it('a key for text never written, in a session that has rows, is not-written no-row', async () => {
     make();
     // Spawned once so the prompt hook is pinned in a real child here; every other turn runs in process.
     fire(p, 'x1', P1);
@@ -90,7 +90,7 @@ describe('capture: a lesson the store never held at the turn', () => {
     ok(v, 'x1', null, { class: 'not-written', reason: 'no-row', turn: null, stage: null });
   });
 
-  it("X1b a memory written after the session's only turn is not-written written-after", async () => {
+  it("a memory written after the session's only turn is not-written written-after", async () => {
     make();
     await fireIn(p, 'x1b', P1);
     const late = seed(p.hippoRoot, 'a lesson written after the turn: always tag the release branch');
@@ -104,7 +104,7 @@ describe('capture: a lesson the store never held at the turn', () => {
     ok(v, 'x1b', late.id, { class: 'not-written', reason: 'written-after', turn: at(e.id, 1), stage: null });
   });
 
-  it('X1c a memory forgotten before the first turn, read by id, is not-written forgotten-before', async () => {
+  it('a memory forgotten before the first turn, read by id, is not-written forgotten-before', async () => {
     make();
     const gone = seed(p.hippoRoot, 'a lesson that is forgotten before any prompt: always rotate the keys');
     expect((await hippoIn(p, ['forget', gone.id])).status).toBe(0);
@@ -119,7 +119,7 @@ describe('capture: a lesson the store never held at the turn', () => {
 });
 
 describe('budgeted evidence: why a lesson never reached the model', () => {
-  it('X2 a memory the loader refuses (another project) is not-retrieved not-loaded', async () => {
+  it('a memory the loader refuses (another project) is not-retrieved not-loaded', async () => {
     make();
     for (let i = 0; i < 3; i++) seed(p.hippoRoot, `${NOTE} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
     const target = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', {
@@ -133,7 +133,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     ok(v, 'x2', target.id, { class: 'not-retrieved', reason: 'not-loaded', turn: at(e.id, 1), stage: null });
   });
 
-  it('X2b with prompt recall off and a window past five rows, the oldest memory is indeterminate undecided', async () => {
+  it('with prompt recall off and a window past five rows, the oldest memory is indeterminate undecided', async () => {
     make();
     const target = seed(p.hippoRoot, `${NOTE} oldest`, { created: '2026-05-01T00:00:00.000Z' });
     for (let i = 0; i < 6; i++) seed(p.hippoRoot, `${NOTE} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
@@ -147,7 +147,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     ok(v, 'x2b', target.id, { class: 'indeterminate', reason: 'undecided', turn: at(e.id, 1), stage: null });
   });
 
-  it('X3 a weak prompt-recall match under the gate is rejected at gate gate-below-threshold', async () => {
+  it('a weak prompt-recall match under the gate is rejected at gate gate-below-threshold', async () => {
     make({ promptRecall: true, promptRecallMinShared: 2 });
     seed(p.hippoRoot, 'the postgres migration script needs a rollback plan before deploy');
     const weak = seed(p.hippoRoot, 'postgres note 0: the reporting cluster pools its connections through pgbouncer');
@@ -161,7 +161,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     expect(v.cand_reason).toBe('gate-below-threshold');
   });
 
-  it('X4 an oversized pin under --budget 200 is rejected at budget', async () => {
+  it('an oversized pin under --budget 200 is rejected at budget', async () => {
     make();
     const big = seed(p.hippoRoot, BIG, { pinned: true });
     await fireIn(p, 'x4', PROMPT, { args: TIGHT });
@@ -172,7 +172,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     expect(v.cand_reason).toBe('budget');
   });
 
-  it('X5 with 16 listed rejections, an unlisted note is indeterminate unlisted and a listed one is rejected', async () => {
+  it('with 16 listed rejections, an unlisted note is indeterminate unlisted and a listed one is rejected', async () => {
     make({ promptRecall: true, promptRecallMinShared: 2 });
     seed(p.hippoRoot, 'the postgres migration script needs a rollback plan before deploy');
     const notes = Array.from({ length: 20 }, (_, i) =>
@@ -192,7 +192,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     expect(l.cand_reason).toBe('gate-below-threshold');
   });
 
-  it('X5b with promptRecallMaxItems 1, the second strong match is rejected at gate gate-max-items', async () => {
+  it('with promptRecallMaxItems 1, the second strong match is rejected at gate gate-max-items', async () => {
     make({ promptRecall: true, promptRecallMaxItems: 1 });
     seed(p.hippoRoot, 'the postgres migration script needs a rollback plan before deploy');
     seed(p.hippoRoot, 'postgres migration rollback plan review checklist for every deploy');
@@ -207,7 +207,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     expect(v.cand_reason).toBe('gate-max-items');
   });
 
-  it('X5c an unpinned twin of a pin, inside the loaded window, is rejected at load as a duplicate', async () => {
+  it('an unpinned twin of a pin, inside the loaded window, is rejected at load as a duplicate', async () => {
     make();
     const twin = seed(p.hippoRoot, PIN);
     await fireIn(p, 'x5c', P1);
@@ -220,7 +220,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     expect([v.cand_reason, v.turns[0].pool]).toEqual(['duplicate', 'recent']);
   });
 
-  it('X15b a context call with --limit 1 records the cut match as rejected at limit', async () => {
+  it('a context call with --limit 1 records the cut match as rejected at limit', async () => {
     make();
     const a = seed(p.hippoRoot, 'the rollback runbook for postgres migrations lives in the ops wiki');
     const b = seed(p.hippoRoot, 'the postgres migration rollback checklist needs two reviewers');
@@ -242,7 +242,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     expect(v.cand_reason).toBe('limit');
   });
 
-  it('X16 a holdout session records a disabled block, so the pin is rejected block-disabled', async () => {
+  it('a holdout session records a disabled block, so the pin is rejected block-disabled', async () => {
     make({ holdout: true });
     await fireIn(p, 'x16', P1);
     const [e] = events('x16');
@@ -253,7 +253,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
 });
 
 describe('context availability: was the block that carried the lesson delivered', () => {
-  it('X6 a pin emitted with its attachment withheld is delivery-unconfirmed no-attachment', async () => {
+  it('a pin emitted with its attachment withheld is delivery-unconfirmed no-attachment', async () => {
     make();
     const t = await sentTurn('x6', { attach: null });
     const [e] = events('x6');
@@ -263,7 +263,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect(v.turns[0].paired_by).toBe('prompt');
   });
 
-  it('X6b the same without a transcript is delivery-unconfirmed no-transcript', async () => {
+  it('the same without a transcript is delivery-unconfirmed no-transcript', async () => {
     make();
     await fireIn(p, 'x6b', P1);
     const [e] = events('x6b');
@@ -277,7 +277,7 @@ describe('context availability: was the block that carried the lesson delivered'
     });
   });
 
-  it('X7 a pin emitted with its attachment present is application-unknown at turn 1', async () => {
+  it('a pin emitted with its attachment present is application-unknown at turn 1', async () => {
     make();
     const t = await sentTurn('x7');
     const [e] = events('x7');
@@ -288,7 +288,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect(v.store_hash).toMatch(/^[0-9a-f]{16}$/);
   });
 
-  it("X10 an unchanged block on turn 2 is reused and takes turn 1's confirmed delivery", async () => {
+  it("an unchanged block on turn 2 is reused and takes turn 1's confirmed delivery", async () => {
     make();
     const r1 = await fireIn(p, 'x10', P1);
     const r2 = await fireIn(p, 'x10', P2);
@@ -303,7 +303,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect([v.turns[1].delivery, v.turns[1].via_event_id, v.turns[1].event_id]).toEqual(['confirmed', e1.id, e2.id]);
   });
 
-  it('X11 reuse across a compaction the transcript shows but hippo missed is unconfirmed compacted-since-send', async () => {
+  it('reuse across a compaction the transcript shows but hippo missed is unconfirmed compacted-since-send', async () => {
     make();
     const r1 = await fireIn(p, 'x11', P1);
     const r2 = await fireIn(p, 'x11', P2);
@@ -326,7 +326,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect([v.turns[1].delivery, v.turns[1].why]).toEqual(['unconfirmed', 'compacted-since-send']);
   });
 
-  it('X11b a compaction hippo saw resets the block, so turn 2 is sent and confirmed on its own attachment', async () => {
+  it('a compaction hippo saw resets the block, so turn 2 is sent and confirmed on its own attachment', async () => {
     make();
     const r1 = await fireIn(p, 'x11b', P1);
     expect((await hippoIn(p, ['pre-compact'], { input: preCompactPayload('x11b') })).status).toBe(0);
@@ -343,7 +343,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect(v.turns[0].why).toBe('no-attachment');
   });
 
-  it('X12 one payload fired twice inside the duplicate window is one turn with the second row as its duplicate', async () => {
+  it('one payload fired twice inside the duplicate window is one turn with the second row as its duplicate', async () => {
     make();
     const env = { HIPPO_FAKE_NOW: FAKE_NOW };
     const r1 = await fireIn(p, 'x12', P1, { env });
@@ -359,7 +359,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect([v.turns.length, v.turns[0].duplicates]).toEqual([1, [b.id]]);
   });
 
-  it('X13 two interleaved sessions with the same prompt never share event ids', async () => {
+  it('two interleaved sessions with the same prompt never share event ids', async () => {
     make();
     const a1 = await fireIn(p, 'x13a', P1);
     const b1 = await fireIn(p, 'x13b', P1);
@@ -392,7 +392,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect(va.turns.map((t) => t.event_id)).toEqual(ids('x13a'));
   });
 
-  it('X14a a prompt the hook never recorded is a gap, so a rejected pin is indeterminate no-event-row', async () => {
+  it('a prompt the hook never recorded is a gap, so a rejected pin is indeterminate no-event-row', async () => {
     make();
     const big = seed(p.hippoRoot, BIG, { pinned: true });
     const r1 = await fireIn(p, 'x14a', P1, { args: TIGHT });
@@ -405,7 +405,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect(v.notes.includes('gap:1')).toBe(true);
   });
 
-  it('X14b the same gap does not hide a delivery proven at turn 1', async () => {
+  it('the same gap does not hide a delivery proven at turn 1', async () => {
     make();
     const r1 = await fireIn(p, 'x14b', P1);
     const r3 = await fireIn(p, 'x14b', P3);
@@ -428,7 +428,7 @@ describe('context availability: was the block that carried the lesson delivered'
     ]);
   });
 
-  it("X15 an agent's hippo context call returning the lesson is delivery-unconfirmed surface-unjoined", async () => {
+  it("an agent's hippo context call returning the lesson is delivery-unconfirmed surface-unjoined", async () => {
     make();
     const target = seed(p.hippoRoot, 'the rollback runbook for postgres migrations lives in the ops wiki');
     expect(
@@ -451,7 +451,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect(v.turns[0].event_type).toBe('context');
   });
 
-  it("X17 with prompt recall on, a recall block beside a reused static block confirms on turn 2's own attachment", async () => {
+  it("with prompt recall on, a recall block beside a reused static block confirms on turn 2's own attachment", async () => {
     make({ promptRecall: true });
     const recall = seed(p.hippoRoot, 'the postgres migration script needs a rollback plan before deploy');
     const q1 = 'how should the postgres migration rollback work';
@@ -477,7 +477,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect([pv.turns[1].delivery, pv.turns[1].via_event_id]).toEqual(['confirmed', e1.id]);
   });
 
-  it('X18 a pinned call run by hand is delivery-unconfirmed surface-unjoined', async () => {
+  it('a pinned call run by hand is delivery-unconfirmed surface-unjoined', async () => {
     make();
     expect((await hippoIn(p, PROMPT_HOOK, { env: { HIPPO_SESSION_ID: 'x18' } })).status).toBe(0);
     const [e] = events('x18');
@@ -496,7 +496,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect(v.turns[0].event_type).toBe('pinned-manual');
   });
 
-  it('X19a an image prompt whose text differs from the payload pairs by its attachment and confirms', async () => {
+  it('an image prompt whose text differs from the payload pairs by its attachment and confirms', async () => {
     make();
     const r = await fireIn(p, 'x19a', P1);
     const [e] = events('x19a');
@@ -507,7 +507,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect([v.turns[0].paired_by, v.turns[0].delivery]).toEqual(['attachment', 'confirmed']);
   });
 
-  it('X19b a reused turn whose text differs from the payload pairs by position', async () => {
+  it('a reused turn whose text differs from the payload pairs by position', async () => {
     make();
     const r1 = await fireIn(p, 'x19b', P1);
     const r2 = await fireIn(p, 'x19b', P2);
@@ -527,7 +527,7 @@ describe('context availability: was the block that carried the lesson delivered'
     ]);
   });
 
-  it('X20 a pin that lives only in the global store is application-unknown with source_store global', async () => {
+  it('a pin that lives only in the global store is application-unknown with source_store global', async () => {
     make();
     initTestStore(p.globalRoot);
     const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
@@ -541,7 +541,7 @@ describe('context availability: was the block that carried the lesson delivered'
     expect([v.memory_store, v.turns[0].source_store]).toEqual(['global', 'global']);
   });
 
-  it('X22 a queued prompt that was sent confirms on the attachment under its queued line', async () => {
+  it('a queued prompt that was sent confirms on the attachment under its queued line', async () => {
     make();
     const r = await fireIn(p, 'x22', P1);
     const [e] = events('x22');
@@ -561,7 +561,7 @@ describe('application: labels act only on a confirmed delivery', () => {
     evidence: 'the CI run on the release branch',
   });
 
-  it('X8 an observed failed-check label on a delivered pin is applied-but-wrong', async () => {
+  it('an observed failed-check label on a delivered pin is applied-but-wrong', async () => {
     make();
     const t = await sentTurn('x8');
     const [e] = events('x8');
@@ -571,7 +571,7 @@ describe('application: labels act only on a confirmed delivery', () => {
     expect(v.label?.signal).toBe('failed-check');
   });
 
-  it('X9 a judged resolved-check label on a delivered pin is applied-supported', async () => {
+  it('a judged resolved-check label on a delivered pin is applied-supported', async () => {
     make();
     const t = await sentTurn('x9');
     const [e] = events('x9');
@@ -580,7 +580,7 @@ describe('application: labels act only on a confirmed delivery', () => {
     ok(v, 'x9', pinId(), { class: 'applied-supported', reason: null, turn: at(e.id, 1), stage: 'final' });
   });
 
-  it('X9b an observed label with an unknown signal is indeterminate outcome-unknown', async () => {
+  it('an observed label with an unknown signal is indeterminate outcome-unknown', async () => {
     make();
     const t = await sentTurn('x9b');
     const [e] = events('x9b');
@@ -591,7 +591,7 @@ describe('application: labels act only on a confirmed delivery', () => {
 });
 
 describe('boundary evidence', () => {
-  it('X21 a session-end after the turns is a note, not a turn', async () => {
+  it('a session-end after the turns is a note, not a turn', async () => {
     make();
     const t = await sentTurn('x21');
     expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('x21') })).status).toBe(0);
