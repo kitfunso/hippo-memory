@@ -20,6 +20,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -69,7 +72,7 @@ describe('sleep keeps raw receipts instead of aborting on the append-only trigge
     writeEntry(home, receipt);
     writeEntry(home, faded);
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
 
     const ids = loadAllEntries(home, 'default').map((e) => e.id);
     expect(ids).toContain(receipt.id);
@@ -92,7 +95,7 @@ describe('sleep keeps raw receipts instead of aborting on the append-only trigge
       );
     }
 
-    await consolidate(home, { now: new Date() });
+    await consolidate(home, { now: FIXED_NOW });
 
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(receipt.id);
   });

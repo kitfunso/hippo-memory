@@ -20,6 +20,9 @@ import type { JsonValue, JsonObject } from '../../src/base/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -173,7 +176,7 @@ describe('buildSupportBundle', () => {
       home: s.home,
       version: 'test',
       includeLogs: false,
-      now: new Date(),
+      now: FIXED_NOW,
     });
     const text = bundleText(bundle);
 
@@ -240,7 +243,7 @@ describe('buildSupportBundle', () => {
       home: s.home,
       version: 'test',
       includeLogs: false,
-      now: new Date(),
+      now: FIXED_NOW,
     });
     expect(
       bundleText(bundle).filter((t) => t.includes(aliasHome.toLowerCase())),
@@ -267,7 +270,7 @@ describe('buildSupportBundle', () => {
       home: s.home,
       version: 'test',
       includeLogs: true,
-      now: new Date(),
+      now: FIXED_NOW,
     });
     expect(JSON.parse(JSON.stringify(bundle)).logs.tails['alias.log']).toEqual([
       `wrote ${join('~', 'tmp', 'scratch.txt')}`,
@@ -298,7 +301,7 @@ describe('buildSupportBundle', () => {
       home,
       version: 'test',
       includeLogs: true,
-      now: new Date(),
+      now: FIXED_NOW,
     });
     const tail = JSON.parse(JSON.stringify(bundle)).logs.tails['hook.log'];
     expect(tail[0]).toBe(`payload ${JSON.stringify({ cwd: join('~', 'proj') })}`);
@@ -321,7 +324,7 @@ describe('buildSupportBundle', () => {
       home: s.home,
       version: 'test',
       includeLogs: true,
-      now: new Date(),
+      now: FIXED_NOW,
     });
     const parsed = JSON.parse(JSON.stringify(bundle));
     // SAFETY: buildLogsSection always fills tails[name] with the string[] lines returned by tailLogFile.
@@ -376,7 +379,7 @@ describe('buildSupportBundle', () => {
         home: s.home,
         version: 'test',
         includeLogs: true,
-        now: new Date(),
+        now: FIXED_NOW,
       });
       const tail: string[] = JSON.parse(JSON.stringify(bundle)).logs.tails['shell.log'];
       expect(tail.slice(0, 4)).toEqual(['cd ~/proj && npm test', 'ls ~/proj', 'ls ~/proj', 'ls ~/proj']);
@@ -418,7 +421,7 @@ describe('buildSupportBundle', () => {
           home,
           version: 'test',
           includeLogs: false,
-          now: new Date(),
+          now: FIXED_NOW,
         });
         return JSON.parse(JSON.stringify(bundle)).stores[0].config.gitLearnPatterns;
       };
@@ -456,7 +459,7 @@ describe('buildSupportBundle', () => {
           home: s.home,
           version: 'test',
           includeLogs: true,
-          now: new Date(),
+          now: FIXED_NOW,
         }),
       ),
     );
@@ -482,7 +485,7 @@ describe('buildSupportBundle', () => {
       home: s.home,
       version: 'test',
       includeLogs: false,
-      now: new Date(),
+      now: FIXED_NOW,
     });
     expect(sha256(join(s.hippoRoot, 'hippo.db'))).toBe(before);
 
@@ -503,7 +506,7 @@ describe('buildSupportBundle', () => {
           home: s.home,
           version: 'test',
           includeLogs: false,
-          now: new Date(),
+          now: FIXED_NOW,
         }),
       ),
     );
@@ -523,7 +526,7 @@ describe('buildSupportBundle', () => {
       home,
       version: 'test',
       includeLogs: false,
-      now: new Date(),
+      now: FIXED_NOW,
     });
     const parsed = JSON.parse(JSON.stringify(bundle));
     expect(parsed.stores).toEqual([]);
@@ -539,7 +542,7 @@ describe('buildSupportBundle', () => {
           home,
           version: 'test',
           includeLogs: false,
-          now: new Date(),
+          now: FIXED_NOW,
         }),
       ),
     );
@@ -563,7 +566,7 @@ describe('buildSupportBundle', () => {
           home,
           version: 'test',
           includeLogs: false,
-          now: new Date(),
+          now: FIXED_NOW,
         }),
       ),
     );

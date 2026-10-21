@@ -5,6 +5,9 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memo
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -34,7 +37,7 @@ describe('Extracted fact protection', () => {
     writeEntry(tmpDir, fact1);
     writeEntry(tmpDir, fact2);
 
-    const result = await consolidate(tmpDir, { dryRun: false, now: new Date() });
+    const result = await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
 
     expect(result.merged).toBe(0);
 
@@ -60,7 +63,7 @@ describe('Extracted fact protection', () => {
     writeEntry(tmpDir, ep2);
     writeEntry(tmpDir, ep3);
 
-    const result = await consolidate(tmpDir, { dryRun: false, now: new Date() });
+    const result = await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
 
     // Every pair overlaps past the merge threshold, so all three episodes form one cluster.
     expect(result.merged).toBe(3);
@@ -85,7 +88,7 @@ describe('Extracted fact protection', () => {
     writeEntry(tmpDir, fact1);
     writeEntry(tmpDir, fact2);
 
-    await consolidate(tmpDir, { dryRun: false, now: new Date() });
+    await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
 
     const conflicts = listMemoryConflicts(tmpDir);
     expect(conflicts.length).toBe(0);

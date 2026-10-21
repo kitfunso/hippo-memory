@@ -30,6 +30,9 @@ import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.j
 import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { REAL_IO } from '../_helpers/real-io.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 const HIPPO_BIN = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -244,7 +247,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
         source: 'agent',
         metadata: { summary: 'migrated the billing table' },
       });
-      return added(root, () => consolidate(root, { now: new Date() }));
+      return added(root, () => consolidate(root, { now: FIXED_NOW }));
     },
   ],
   [

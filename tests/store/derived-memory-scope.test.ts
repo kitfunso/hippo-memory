@@ -18,6 +18,9 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -147,7 +150,7 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
       metadata: { summary: 'handled the private request' },
     });
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
     expect(result.promotedTraces).toBe(1);
     expect(result.tracesSkippedMixedScope).toBe(0);
 
@@ -181,7 +184,7 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
       metadata: { summary: 'mixed session' },
     });
 
-    const result = await consolidate(home, { now: new Date() });
+    const result = await consolidate(home, { now: FIXED_NOW });
     expect(result.promotedTraces).toBe(0);
     expect(result.tracesSkippedMixedScope).toBe(1);
 
