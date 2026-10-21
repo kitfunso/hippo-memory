@@ -57,7 +57,8 @@ async function expectWaitsUntilReleased(lockPath: string): Promise<void> {
   } finally {
     released = true;
     fs.rmSync(lockPath, { force: true });
-    await vi.advanceTimersByTimeAsync(50);
+    // The polls back off to one a second, so the next one comes within a second of the release.
+    await vi.advanceTimersByTimeAsync(1_000);
     vi.useRealTimers();
   }
   expect(await pending).toBe(1);
