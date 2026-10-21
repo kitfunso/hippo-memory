@@ -134,8 +134,8 @@ function routingOn(t: MemoryTables): Routing {
 type Letters = Pick<ConnectorEvents, 'parkDeadLetter' | 'deadLetters' | 'deadLetter' | 'markDeadLetterRetried'>;
 
 function lettersOn(t: MemoryTables): Letters {
-  const find = (connector: DeadLetterConnector, id: number): ParkedLetter | undefined =>
-    t.deadLetters.find((row) => row.connector === connector && row.id === id);
+  const find = (connector: DeadLetterConnector, tenantId: string, id: number): ParkedLetter | undefined =>
+    t.deadLetters.find((row) => row.connector === connector && row.tenantId === tenantId && row.id === id);
   return {
     async parkDeadLetter(letter) {
       const ids = t.deadLetters.filter((row) => row.connector === letter.connector).map((row) => row.id);
@@ -148,12 +148,12 @@ function lettersOn(t: MemoryTables): Letters {
       const ordered = rows.sort((a, b) => byBytes(a.receivedAt, b.receivedAt) || a.id - b.id);
       return ordered.slice(0, limit).map((row) => rowOf(row));
     },
-    async deadLetter(connector, id) {
-      const row = find(connector, id);
+    async deadLetter(connector, tenantId, id) {
+      const row = find(connector, tenantId, id);
       return row ? rowOf(row) : null;
     },
-    async markDeadLetterRetried(connector, id) {
-      const row = find(connector, id);
+    async markDeadLetterRetried(connector, tenantId, id) {
+      const row = find(connector, tenantId, id);
       if (!row) return;
       const retried = { ...row, retryCount: row.retryCount + 1, retriedAt: new Date().toISOString() };
       t.deadLetters.splice(t.deadLetters.indexOf(row), 1, retried);

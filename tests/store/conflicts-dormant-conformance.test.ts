@@ -25,6 +25,8 @@ oneRequestPerTest();
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const DETECTED_AT = '2026-01-01T00:00:00.000Z';
 const ALICE = 'personal:private:alice';
+// A factor and a floor apart from the domain's, so the store is seen to apply the fate as given.
+const WEAKEN = { kind: 'weaken', halfLifeFactor: 0.25, minHalfLifeDays: 3 } as const;
 
 let fixture: TwoTenantFixture;
 const rows: Record<string, MemoryEntry> = {};
@@ -142,15 +144,15 @@ describe('Conflicts', () => {
       (g) => g.get(TENANT_A, conflictIds.weaken!),
       (g) => g.get(TENANT_B, conflictIds.weaken!),
       (g) => g.get(TENANT_A, 9999),
-      (g) => g.resolve(TENANT_B, resolution('weaken', 'keep', 'lose', { kind: 'weaken' })),
-      (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'redis', { kind: 'weaken' })),
+      (g) => g.resolve(TENANT_B, resolution('weaken', 'keep', 'lose', WEAKEN)),
+      (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'redis', WEAKEN)),
       (g) =>
         g.resolve(TENANT_A, {
-          ...resolution('scoped', 'kafka', 'rabbit', { kind: 'weaken' }),
+          ...resolution('scoped', 'kafka', 'rabbit', WEAKEN),
           keep: { ...side('kafka'), scope: null },
         }),
-      (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'lose', { kind: 'weaken' })),
-      (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'lose', { kind: 'weaken' })),
+      (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'lose', WEAKEN)),
+      (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'lose', WEAKEN)),
       (g) => g.resolve(TENANT_A, resolution('reject', 'redis', 'memcached', { kind: 'reject', ownScope: null })),
       (g) => g.resolve(TENANT_A, resolution('remove', 'keep', 'raw', { kind: 'remove' })),
       (g) => g.list({ tenantId: TENANT_A, status: 'resolved', limit: 10 }).then(ids),

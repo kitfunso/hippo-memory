@@ -1,13 +1,9 @@
 // Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import {
-  canReadScope,
-  isPersonalScope,
-  passesScopeFilterForRecall,
-  personalScopeOf,
-} from '../../base/scope/recall-scope.js';
+import { canReadScope, passesScopeFilterForRecall, personalScopeOf } from '../../base/scope/recall-scope.js';
 import type { MemoryConflict } from '../../store/port/conflicts.js';
-import type { ConflictMember, ConflictRow, ConflictSide, LoserFate } from '../../store/port/conflicts.js';
+import type { ConflictMember, ConflictRow, ConflictSide } from '../../store/port/conflicts.js';
+import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
@@ -32,7 +28,7 @@ export interface ConflictPage {
 export interface ResolveMemoryConflictOptions {
   /** One of the conflict's two memories; the other is the loser. */
   keepId: string;
-  /** Delete the loser instead of halving its half-life. */
+  /** Delete the loser instead of weakening its half-life. */
   forget?: boolean;
   /** Tombstone the loser's value as well, which removes it whatever `forget` says. */
   rejectLoser?: boolean;
@@ -92,7 +88,7 @@ export async function conflictResolve(
     throw new NotFoundError(`conflict ${conflictId} names a memory that is superseded, archived or quarantined`);
   }
   const reason = opts.reason ?? `resolveConflict ${conflictId}: kept ${keep.id}`;
-  const fate = loserFate(ctx.actor, loser, opts);
+  const fate = conflictLoserFate(opts, loser, personalScopeOf(ctx.actor));
   const resolved = await ctx.store.conflicts.resolve(ctx.tenantId, {
     conflictId,
     keep,
@@ -119,19 +115,6 @@ function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
   if (keepId === a.id) return { keep: a, loser: b };
   if (keepId === b.id) return { keep: b, loser: a };
   throw new BadRequestError(`keep must be one of the two memories in conflict ${conflict.id}: ${a.id}, ${b.id}`);
-}
-
-/** A rejection is a tenant-wide tombstone, so it may not carry a personal row's value, and its sweep stays within what
- * the caller may touch. */
-function loserFate(actor: Actor, loser: ConflictSide, opts: ResolveMemoryConflictOptions): LoserFate {
-  if (opts.rejectLoser !== true) return { kind: opts.forget === true ? 'remove' : 'weaken' };
-  if (isPersonalScope(loser.scope)) {
-    throw new BadRequestError(
-      `cannot reject the value of personal memory ${loser.id}: a rejection reaches the whole tenant, ` +
-        `so its reason would show to everyone; resolve with forget instead`,
-    );
-  }
-  return { kind: 'reject', ownScope: personalScopeOf(actor) };
 }
 
 /** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall: its

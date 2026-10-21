@@ -9,11 +9,11 @@ import {
 import * as sources from '../surface/importers/sources.js';
 import { importMarkdown as importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVault as importVaultInto } from '../surface/importers/vault.js';
-import { runSqliteBatch, runSqliteRequest, sqliteImportFiles, sqliteStore } from '../store/sqlite/index.js';
+import { defaultImportFiles, defaultStore, runStoreBatch, runStoreRequest } from '../surface/open-store.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
-  return { ...options, target: { root, files: sqliteImportFiles(root), batch: runSqliteBatch } };
+  return { ...options, target: { root, files: defaultImportFiles(root), batch: runStoreBatch } };
 }
 
 /** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them
@@ -46,6 +46,6 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on the in-memory
  * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
-  const batch = <T>(run: () => Promise<T>): Promise<T> => runSqliteRequest(run, 'cli');
-  return importVaultInto(folderPath, options, { store: sqliteStore(options.hippoRoot), batch });
+  const batch = <T>(run: () => Promise<T>): Promise<T> => runStoreRequest(run, 'cli');
+  return importVaultInto(folderPath, options, { store: defaultStore(options.hippoRoot), batch });
 }

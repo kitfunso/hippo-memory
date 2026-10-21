@@ -8,7 +8,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from './base/memory/memory.js';
-import { sqliteStore, withSharedStoreHandles } from './store/sqlite/index.js';
+import { defaultStore, withSharedStoreHandles } from './surface/open-store.js';
 import type { SleepStore } from './store/port.js';
 import { runConsolidation, type ConsolidateOptions } from './domain/consolidate/sleep.js';
 import { loadConfig } from './base/config/config.js';
@@ -80,7 +80,7 @@ export async function consolidate(
   target: string | SleepStore,
   options: ConsolidateOptions = {},
 ): Promise<ConsolidationResult> {
-  const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
+  const [store, root] = isFolder(target) ? [defaultStore(target), target] : [target, ''];
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   // One handle per store, for the reason `sleep` gives.
@@ -90,7 +90,7 @@ function isFolder(target: string | SleepStore): target is string {
   return typeof target === 'string';
 }
 // The one dedupe.js export that is public; the rest of dedupe.js stays internal.
-export { strengthBucket } from './domain/consolidate/dedupe.js';
+export { strengthTieKey as strengthBucket } from './domain/consolidate/dedupe.js';
 
 // Embedding search
 export { isEmbeddingAvailable, getEmbedding } from './base/embeddings/local.js';

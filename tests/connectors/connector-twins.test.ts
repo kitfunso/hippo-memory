@@ -9,7 +9,7 @@ import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { githubEventRecord, slackEventRecord } from '../_helpers/root-forms.js';
+import { githubEventRecord, loadAllEntries, slackEventRecord } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -36,13 +36,22 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
     expect([githubEventRecord(root, 'k1'), slackEventRecord(root, 'Ev1')]).toEqual([seen, seen]);
   });
 
+  it('ingest stores a short low-salience text: the connector path runs no salience gate', async () => {
+    const result = await rememberWithEventLog(ctx, gh, { content: 'yes', tags: [] });
+    expect(result.status).toBe('ingested');
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['yes']);
+  });
+
   it('each DLQ reads one row and bumps its retry count the same way', async () => {
     const g = await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'e' });
     const s = await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'e' });
     const events = sqliteStore(root).connectorEvents;
-    await events.markDeadLetterRetried('github', g);
-    await events.markDeadLetterRetried('slack', s);
-    for (const row of [await events.deadLetter('github', g), await events.deadLetter('slack', s)]) {
+    await events.markDeadLetterRetried('github', 'default', g);
+    await events.markDeadLetterRetried('slack', 'default', s);
+    for (const row of [
+      await events.deadLetter('github', 'default', g),
+      await events.deadLetter('slack', 'default', s),
+    ]) {
       expect(row?.retryCount).toBe(1);
       expect(row?.retriedAt).not.toBeNull();
     }
@@ -61,20 +70,20 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
       notEnvelope: 'not an object',
       reingest: async () => ({ ok: false as const, status: 'unroutable' as const, reason: 'no tenant' }),
     });
-    expect(await replayParked(steps(false), sqliteStore(root), id, false)).toEqual({
+    expect(await replayParked(steps(false), sqliteStore(root), 'default', id, false)).toEqual({
       ok: false,
       status: 'sig_missing',
       memoryId: null,
       retryCount: 0,
       reason: 'no signature',
     });
-    expect(await replayParked(steps(false), sqliteStore(root), id, true)).toEqual({
+    expect(await replayParked(steps(false), sqliteStore(root), 'default', id, true)).toEqual({
       ok: false,
       status: 'unroutable',
       memoryId: null,
       retryCount: 1,
       reason: 'no tenant',
     });
-    expect((await sqliteStore(root).connectorEvents.deadLetter('github', id))?.retryCount).toBe(1);
+    expect((await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id))?.retryCount).toBe(1);
   });
 });

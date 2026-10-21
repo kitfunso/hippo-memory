@@ -121,7 +121,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     `tenant: '${TENANT}'`,
   ),
   read('connectorEvents.deadLetters', (s) => s.connectorEvents.deadLetters('github', TENANT, 5), 'unroutable payload'),
-  read('connectorEvents.deadLetter', (s) => s.connectorEvents.deadLetter('github', 1), 'unroutable payload'),
+  read('connectorEvents.deadLetter', (s) => s.connectorEvents.deadLetter('github', TENANT, 1), 'unroutable payload'),
   read('connectorEvents.slackCursor', (s) => s.connectorEvents.slackCursor(TENANT, 'C-seeded'), '1700000000.000100'),
   read('connectorEvents.githubCursors', (s) => s.connectorEvents.githubCursors(TENANT, REPO), '2026-01-01T00:00:00Z'),
   read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),

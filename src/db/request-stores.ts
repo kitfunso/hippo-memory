@@ -1,6 +1,7 @@
 // One store handle per store for each request (HTTP call, MCP tool call, scoped CLI command), opened lazily and closed
 // with it.
 import * as path from 'node:path';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
 import {
@@ -99,10 +100,18 @@ export class RequestStores implements RequestScope {
   close(): void {
     this.#closed = true;
     liveScopes.delete(this);
-    for (const db of this.#handles.values()) {
-      if (db.isOpen !== false) db.close();
+    const failures: Error[] = [];
+    for (const [key, db] of this.#handles) {
+      try {
+        if (db.isOpen !== false) db.close();
+      } catch (err) {
+        log.error(`request store ${key} did not close: ${errorMessage(err)}`, errorFields(err));
+        failures.push(err instanceof Error ? err : new Error(errorMessage(err)));
+      }
     }
     this.#handles.clear();
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) throw new AggregateError(failures, `${failures.length} request stores did not close`);
   }
 }
 

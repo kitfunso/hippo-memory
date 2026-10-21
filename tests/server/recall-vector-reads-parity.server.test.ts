@@ -186,8 +186,11 @@ async function runPass(
       lines.push(String(chunk));
       return true;
     });
-    // A once-only warning reaches stderr once per process, so each pass keeps the ones it asked for itself.
+    // A once-only or sampled warning reaches stderr at warn once per process, so each pass keeps the ones it asked for.
     const once = vi.spyOn(hippoLog, 'once').mockImplementation((_key, _level, message) => {
+      lines.push(`${message}\n`);
+    });
+    const sampled = vi.spyOn(hippoLog, 'warnThenSample').mockImplementation((_key, message) => {
       lines.push(`${message}\n`);
     });
     const handle = await serve({ hippoRoot: s.root, port: 0, store });
@@ -201,6 +204,7 @@ async function runPass(
       await store?.close();
       stderr.mockRestore();
       once.mockRestore();
+      sampled.mockRestore();
     }
     const requests = embeddings.requests() - before;
     const rows = memory ? memoryRowsOf(memory.tables) : rowsOf(s.root);
@@ -301,7 +305,9 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
     const onHippoDb = await runPass([http('hybrid')], false, 'workers', staleModel);
     const onMemory = await runPass([http('hybrid')], false, 'memory', staleModel);
     expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed'\n");
-    expect(onMemory.log).toContain("run 'hippo embed' on the SQLite store, then rebuild the 'memory' database from it");
+    expect(onMemory.log).toContain(
+      "run 'hippo embed' on the folder's hippo.db, then rebuild the 'memory' database from it",
+    );
   });
 });
 

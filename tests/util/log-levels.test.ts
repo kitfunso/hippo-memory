@@ -76,34 +76,32 @@ describe('log level filtering', () => {
     expect(lines()).toEqual([`[hippo] warn: first ts=${AT}\n`, `[hippo] warn: third ts=${AT}\n`]);
   });
 
-  it('caps the once-only keys at 1,000: the next new key writes one cap line, and new keys then log at debug unrecorded', async () => {
+  it('caps the once-only keys at 1,000 and forgets the least recently seen, so a new key still logs at its level', async () => {
     const { log } = await freshLog();
     vi.stubEnv('HIPPO_LOG', 'debug');
     for (let i = 0; i < 1_000; i++) log.warnThenDebug(`row-${i}`, `damaged ${i}`);
     expect(lines().filter((line) => line.startsWith('[hippo] warn: damaged '))).toHaveLength(1_000);
-    expect(lines()).toHaveLength(1_000);
+    log.warnThenDebug('row-0', 'damaged 0 again');
     stderrSpy.mockClear();
 
     log.warnThenDebug('row-1000', 'damaged 1000');
-    log.warnThenDebug('row-1001', 'damaged 1001');
     log.once('row-1002', 'warn', 'once past the cap');
     log.once('row-1002', 'warn', 'once past the cap');
+    // row-0 was seen last, so row-1 was the one forgotten and row-0 is still spent.
     log.warnThenDebug('row-0', 'damaged 0');
-    log.once('row-0', 'warn', 'a recorded key');
+    log.warnThenDebug('row-1', 'damaged 1');
     expect(lines()).toEqual([
-      `[hippo] warn: log: 1000 once-only warnings were written; further new ones in this process log at debug ts=${AT}\n`,
-      `[hippo] debug: damaged 1000 ts=${AT}\n`,
-      `[hippo] debug: damaged 1001 ts=${AT}\n`,
-      // The set did not grow: a recorded key would have dropped the second call, as it does for row-0 below.
-      `[hippo] debug: once past the cap ts=${AT}\n`,
-      `[hippo] debug: once past the cap ts=${AT}\n`,
-      `[hippo] debug: damaged 0 ts=${AT}\n`,
+      `[hippo] warn: log: 1000 once-only warnings were written; the least recently seen are now forgotten ts=${AT}
+`,
+      `[hippo] warn: damaged 1000 ts=${AT}
+`,
+      `[hippo] warn: once past the cap ts=${AT}
+`,
+      `[hippo] debug: damaged 0 ts=${AT}
+`,
+      `[hippo] warn: damaged 1 ts=${AT}
+`,
     ]);
-    stderrSpy.mockClear();
-
-    const nextProcess = await freshLog();
-    nextProcess.log.warnThenDebug('row-1000', 'damaged 1000');
-    expect(lines()).toEqual([`[hippo] warn: damaged 1000 ts=${AT}\n`]);
   });
 });
 

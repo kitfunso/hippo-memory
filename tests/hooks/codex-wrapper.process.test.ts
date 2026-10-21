@@ -19,6 +19,7 @@ import { resolveCodexSessionTranscript } from '../../src/surface/capture/codex-s
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { writeNpmPs1Shim } from '../_helpers/npm-ps1-shim.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -392,11 +393,8 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     );
 
     if (process.platform === 'win32') {
-      // Not codex.cmd: spawnRealCodex's cmd.exe quoting cannot launch a .cmd backup (the run reports it as not recognized).
-      const launcher = path.join(dir, 'codex.ps1');
-      const ps = (s: string): string => `'${s.replace(/'/g, "''")}'`;
-      fs.writeFileSync(launcher, `& ${ps(process.execPath)} ${ps(script)} @args\r\n`, 'utf8');
-      return launcher;
+      // An npm .ps1 shim: codex-run starts the script it names with Node, never through PowerShell.
+      return writeNpmPs1Shim(dir, 'codex', fs.readFileSync(script, 'utf8'));
     }
     const launcher = path.join(dir, 'codex');
     fs.writeFileSync(launcher, `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, 'utf8');
@@ -431,12 +429,9 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     installCodexWrapper(standIn);
     const { logFile } = resolveCodexWrapperPaths();
 
-    // The wrapper spawns powershell.exe or cmd.exe by bare name on Windows, so those folders must stay on PATH.
+    // The launcher wrapper starts from sh on Unix and cmd.exe on Windows, so those folders must stay on PATH.
     const system32 = path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32');
-    const systemDirs =
-      process.platform === 'win32'
-        ? [system32, path.join(system32, 'WindowsPowerShell', 'v1.0')]
-        : ['/usr/bin', '/bin'];
+    const systemDirs = process.platform === 'win32' ? [system32] : ['/usr/bin', '/bin'];
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       HIPPO_HOME: globalRoot,

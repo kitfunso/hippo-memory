@@ -14,7 +14,7 @@ const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
  */
 export const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
 // hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
-// \`hippo hook install opencode\` from src/hooks.ts OPENCODE_PLUGIN_SOURCE
+// \`hippo hook install opencode\` from src/domain/hooks/opencode.ts OPENCODE_PLUGIN_SOURCE
 // in https://github.com/kitfunso/hippo-memory. Local changes will be lost.
 
 export const HippoPlugin = async ({ $ }) => {

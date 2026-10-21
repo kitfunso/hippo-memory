@@ -41,7 +41,8 @@ import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../../api/session-end.js';
 import { normalizeHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { cmdShimArgs } from '../../base/util/spawn-argv.js';
+import { exitAfterFlush } from '../../base/util/crash-handlers.js';
+import { cmdShimArgs, npmShimEntry } from '../../base/util/spawn-argv.js';
 import { bookLedgerTurn } from '../../api/ledger-db.js';
 import {
   flushDeliveryRecorder,
@@ -63,14 +64,7 @@ import {
   cliSyncOptions,
   cliConfig,
 } from './api-context.js';
-import {
-  type CliFlags,
-  type CommandContext,
-  boolFlag,
-  flagIsTrue,
-  stringFlag,
-  stringFlagOrExit,
-} from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
 import {
   logSessionEndImport,
   appendSessionEndCloseLog,
@@ -176,7 +170,7 @@ async function restoreCompactSnapshot(
  * sleep then capture, and exit. The child logs to a file that the next SessionStart reads via `hippo last-sleep`. */
 export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
-  const turn = flagIsTrue(flags, 'turn');
+  const turn = boolFlag(flags, 'turn');
   // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes
   // where the hook table used to point.
   const logFile =
@@ -271,10 +265,10 @@ function inlineWorkerFlags(flags: CliFlags, w: SessionEndWorkerInput): CliFlags 
   keep('log-file', w.logFile ?? stringFlag(flags, 'log-file'));
   keep('transcript', w.transcriptPath ?? stringFlag(flags, 'transcript'));
   keep('session-id', w.sessionId ?? stringFlag(flags, 'session-id'));
-  if (flagIsTrue(flags, 'turn')) out['turn'] = true;
-  if (flagIsTrue(flags, 'dry-run')) out['dry-run'] = true;
-  if (flagIsTrue(flags, 'no-learn')) out['no-learn'] = true;
-  if (flagIsTrue(flags, 'no-share')) out['no-share'] = true;
+  if (boolFlag(flags, 'turn')) out['turn'] = true;
+  if (boolFlag(flags, 'dry-run')) out['dry-run'] = true;
+  if (boolFlag(flags, 'no-learn')) out['no-learn'] = true;
+  if (boolFlag(flags, 'no-share')) out['no-share'] = true;
   return out;
 }
 
@@ -303,7 +297,7 @@ function vscodeStopInput(raw: BoundedStdin): CaptureInput | null {
 }
 
 export async function handleSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  await runSessionWorker(stringFlag(flags, 'session-id') ?? null, flagIsTrue(flags, 'turn') ? 'turn' : 'full', (mode) =>
+  await runSessionWorker(stringFlag(flags, 'session-id') ?? null, boolFlag(flags, 'turn') ? 'turn' : 'full', (mode) =>
     sessionEndWork(hippoRoot, tenantId, flags, mode),
   );
 }
@@ -391,11 +385,12 @@ function spawnRealCodex(realCodexPath: string, forwardArgs: string[], cwd: strin
   const ext = path.extname(realCodexPath).toLowerCase();
 
   if (process.platform === 'win32' && ext === '.ps1') {
-    return spawn(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', realCodexPath, ...forwardArgs],
-      { cwd, stdio: 'inherit', windowsHide: false },
-    );
+    // Node runs the shim's script directly: no PowerShell, no execution-policy bypass, no shell parsing the arguments.
+    const entry = npmShimEntry(realCodexPath);
+    if (entry === null) {
+      throw new Error(`${realCodexPath} is not an npm shim whose script hippo can find, so Codex was not started.`);
+    }
+    return spawn(process.execPath, [entry, ...forwardArgs], { cwd, stdio: 'inherit', windowsHide: false });
   }
 
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
@@ -426,7 +421,7 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
   const child = spawnRealCodex(realCodexPath, args, process.cwd());
   child.on('error', (err) => {
     printError(`Failed to launch Codex: ${err.message}`);
-    process.exit(1);
+    exitAfterFlush(1);
   });
 
   child.on('exit', async (code, signal) => {

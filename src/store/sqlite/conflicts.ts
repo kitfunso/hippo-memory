@@ -21,6 +21,7 @@ import type {
   ConflictResolution,
   ConflictRow,
   ConflictRowPage,
+  LoserFate,
 } from '../port/conflicts.js';
 import { openStore } from './handles.js';
 import type { Conflicts } from '../port-groups.js';
@@ -169,14 +170,15 @@ function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedCo
   // rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
-  const rows = db
-    .prepare(`
+  const rows = cachedStatement(
+    db,
+    `
     SELECT id, tenant_id, conflicts_with_json FROM memories
     WHERE conflicts_with_json != '[]'
       OR id IN (SELECT memory_a_id FROM memory_conflicts WHERE status = 'open')
       OR id IN (SELECT memory_b_id FROM memory_conflicts WHERE status = 'open')
-  `)
-    .all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>;
+  `,
+  ).all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>;
   for (const r of rows) {
     tenantById.set(r.id, r.tenant_id);
     if (r.conflicts_with_json !== '[]') storedRefs.set(r.id, r.conflicts_with_json);
@@ -348,9 +350,10 @@ function resolveConflictAt(
 ): boolean {
   const removal = withWriteScope(db, 'resolve_conflict', () => {
     if (!claimConflict(db, tenantId, resolution)) return null;
+    const { fate } = resolution;
     const out =
-      resolution.fate.kind === 'weaken'
-        ? weakenConflictLoser(db, tenantId, resolution)
+      fate.kind === 'weaken'
+        ? weakenConflictLoser(db, tenantId, resolution.loser.id, fate)
         : removeConflictLoser(db, tenantId, resolution);
     stripConflictRefs(db, tenantId, resolution, out.loserRemoved);
     auditConflictResolve(db, tenantId, resolution, out);
@@ -389,12 +392,14 @@ function emptyRemoval(): LoserRemoval {
   };
 }
 
-function weakenConflictLoser(db: DatabaseSyncLike, tenantId: string, r: ConflictResolution): LoserRemoval {
+type WeakenFate = Extract<LoserFate, { kind: 'weaken' }>;
+
+function weakenConflictLoser(db: DatabaseSyncLike, tenantId: string, loserId: string, fate: WeakenFate): LoserRemoval {
   cachedStatement(
     db,
-    `UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') ` +
+    `UPDATE memories SET half_life_days = MAX(?, half_life_days * ?), updated_at = datetime('now') ` +
       `WHERE id = ? AND tenant_id = ?`,
-  ).run(r.loser.id, tenantId);
+  ).run(fate.minHalfLifeDays, fate.halfLifeFactor, loserId, tenantId);
   return emptyRemoval();
 }
 

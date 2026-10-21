@@ -109,7 +109,8 @@ function rejectLoser(t: MemoryTables, tx: Tx, loser: MemoryEntry, r: ConflictRes
 function settleLoser(t: MemoryTables, tx: Tx, tenantId: string, r: ConflictResolution): Removal {
   const loser = tx.rows.get(r.loser.id)!;
   if (r.fate.kind === 'weaken') {
-    tx.rows.set(loser.id, { ...loser, halfLifeDays: Math.max(1, loser.halfLifeDays / 2) });
+    const { halfLifeFactor, minHalfLifeDays } = r.fate;
+    tx.rows.set(loser.id, { ...loser, halfLifeDays: Math.max(minHalfLifeDays, loser.halfLifeDays * halfLifeFactor) });
     return { removed: false, raw: false, extra: [] };
   }
   const rejected = r.fate.kind === 'reject' ? rejectLoser(t, tx, loser, r, r.fate.ownScope) : undefined;

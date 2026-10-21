@@ -12,6 +12,7 @@ import {
 } from '../../src/store/sqlite/connectors/github.js';
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/sqlite/connectors/slack.js';
 import { promote } from '../../src/api/memories/promote.js';
+import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { apiCtx } from './api-ctx.js';
@@ -304,7 +305,7 @@ export function resolveConflictKeeping(
     conflictId,
     keep,
     loser,
-    fate: { kind: 'weaken' },
+    fate: conflictLoserFate({}, loser, null),
     actor: CLI_ACTOR,
     reason: '',
   });

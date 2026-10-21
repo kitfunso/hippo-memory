@@ -254,14 +254,12 @@ async function skipUnchangedStatic(
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
   const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
-  const refreshTurns =
-    Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0 ? injectCfg.refreshTurns : 10;
   // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
   const staticHash = blockHash(staticBlock);
   // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
   const last = await ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
-  if (!shouldSkipUnchanged(last, staticHash, refreshTurns)) return false;
+  if (!shouldSkipUnchanged(last, staticHash, injectCfg.refreshTurns)) return false;
   // With no recall block this turn sends nothing more, so its delivery row says the static block was reused.
   if (!recallBlock.trim()) rec?.delivered({ state: 'reused', staticHash, staticReused: true });
   await bookLedgerTurn(
