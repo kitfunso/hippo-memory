@@ -1,10 +1,9 @@
 // Invalidation, the dirty-summary queue and the store count read only the rows they need: counted in rows, never timed.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { memoryCountAll } from '../../src/api/memories/memories.js';
@@ -14,11 +13,14 @@ import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { writeEntriesTogether, loadAllDirtySummaries, loadAllEntries } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 function newRoot(label: string): string {
@@ -108,7 +110,7 @@ describe('rebuildDirtySummaries', () => {
     try {
       db.prepare('UPDATE memories SET summary_dirty = 1 WHERE dag_level = 2').run();
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
     return root;
   }

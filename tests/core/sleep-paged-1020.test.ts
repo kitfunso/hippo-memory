@@ -1,6 +1,5 @@
 // Sleep's dedup, audit and ambient read the store in keyset pages; a run on small pages must match a run on one page.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -11,13 +10,16 @@ import { deduplicateStore, type DedupPair } from '../../src/domain/consolidate/d
 import { auditMemories, type AuditIssue } from '../../src/base/memory/memory-audit.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
 import { loadEveryTenantEntries, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const PAGE = 4;
 const roots: string[] = [];
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 const ctxFor = (root: string): FullContext => apiCtx(root, 'default', { subject: 'paged-test', role: 'admin' });

@@ -8,6 +8,9 @@ import { hybridSearch } from '../../src/entry/folder-search.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

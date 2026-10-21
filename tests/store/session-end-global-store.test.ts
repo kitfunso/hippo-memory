@@ -12,6 +12,9 @@ import {
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 const RULE = 'Never run npm install in the billing service';
 const USER_TEXT = `We decided to use pnpm for the billing service. ${RULE}; the lockfile is pnpm-lock.yaml.`;
 

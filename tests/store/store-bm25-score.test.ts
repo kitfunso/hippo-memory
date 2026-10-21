@@ -14,7 +14,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { loadRecallEntriesAt } from '../../src/store/sqlite/search-rows.js';
 import { loadSearchEntries, writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -22,18 +21,14 @@ import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
 function makeRaw(text: string): MemoryEntry {
   return createMemory(text, {
     layer: Layer.Buffer,
@@ -48,7 +43,7 @@ describe('loadSearchEntries bm25_score', () => {
   beforeEach(() => {
     root = makeRoot('f1');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('FTS path: every returned entry has finite numeric bm25_score, sorted ascending (best first)', () => {
     writeEntry(root, makeRaw('alpha beta gamma delta epsilon'));

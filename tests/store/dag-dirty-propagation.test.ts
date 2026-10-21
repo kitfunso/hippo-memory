@@ -8,7 +8,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
@@ -17,6 +17,9 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function defaultCtx(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });
@@ -57,7 +60,7 @@ describe('child-write dirty-flag propagation', () => {
     // Clear the flag manually to isolate invalidation's effect.
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
-    db.close();
+    closeHippoDb(db);
     // Act: invalidateMatching writes the fact back through writeEntry (L97).
     invalidateMatching(
       sqliteSyncStore(hippoRoot).localFiles.learning,
@@ -92,7 +95,7 @@ describe('child-write dirty-flag propagation', () => {
         .prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
         .get(summary.id) as { n: number }
     ).n;
-    db.close();
+    closeHippoDb(db);
     // Act: supersede the old fact. createMemory inside supersede passes
     // layer/tags/pinned/source/confidence/tenantId but NOT dag_parent_id,
     // so NEW has dag_parent_id=null and S1 hook early-exits for NEW. Only
@@ -106,7 +109,7 @@ describe('child-write dirty-flag propagation', () => {
         .prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
         .get(summary.id) as { n: number }
     ).n;
-    db2.close();
+    closeHippoDb(db2);
     expect(afterCount - beforeCount).toBe(1); // exactly 1 new transition 0→1 from supersede
   });
 
@@ -127,7 +130,7 @@ describe('child-write dirty-flag propagation', () => {
     // Clear initial flag.
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
-    db.close();
+    closeHippoDb(db);
     // Act: delete the fact.
     expect(deleteEntry(hippoRoot, fact.id, { actor: 'test' })).toBe(true);
     // Assert: parent dirty again.
@@ -154,7 +157,7 @@ describe('child-write dirty-flag propagation', () => {
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
     // Act: archive (inside our own savepoint not needed — archiveRawMemory has its own).
     archiveRawMemory(db, rawChild.id, { reason: 'test-archive', who: 'test-actor' });
-    db.close();
+    closeHippoDb(db);
     // Assert.
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });
@@ -179,7 +182,7 @@ describe('child-write dirty-flag propagation', () => {
     // Manually move summary to tenant1.
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET tenant_id = 'tenant1' WHERE id = ?`).run(summary.id);
-    db.close();
+    closeHippoDb(db);
     // Write a child as default tenant whose dag_parent_id points to tenant1's summary.
     const child = createMemory('default-tenant child', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -198,7 +201,7 @@ describe('child-write dirty-flag propagation', () => {
     const auditRows = db2
       .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
       .all(summary.id);
-    db2.close();
+    closeHippoDb(db2);
     expect(auditRows).toEqual([]);
   });
 
@@ -229,7 +232,7 @@ describe('child-write dirty-flag propagation', () => {
     const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(summary.id) as {
       summary_dirty: number;
     };
-    db.close();
+    closeHippoDb(db);
     expect(auditRows).toHaveLength(1);
     expect(row.summary_dirty).toBe(1);
   });
@@ -247,7 +250,7 @@ describe('child-write dirty-flag propagation', () => {
     // Clear initial dirty flag from the writeEntry above.
     const db0 = openHippoDb(hippoRoot);
     db0.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
-    db0.close();
+    closeHippoDb(db0);
 
     // Write 1 child to delete later.
     const childToDelete = createMemory('child to delete', {
@@ -260,7 +263,7 @@ describe('child-write dirty-flag propagation', () => {
     // Clear the flag again (writeEntry just marked it dirty via S1).
     const db1 = openHippoDb(hippoRoot);
     db1.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
-    db1.close();
+    closeHippoDb(db1);
 
     // Build a new child via batch write + delete the existing one in same batch.
     const newBatchChild = createMemory('batch child', {
@@ -280,7 +283,7 @@ describe('child-write dirty-flag propagation', () => {
     const auditRows = db2
       .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
       .all(summary.id);
-    db2.close();
+    closeHippoDb(db2);
     expect(auditRows.length).toBeGreaterThanOrEqual(1);
   });
 

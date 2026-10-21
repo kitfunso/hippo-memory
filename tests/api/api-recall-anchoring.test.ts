@@ -15,7 +15,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { retrieve } from '../../src/api/index.js';
@@ -23,18 +22,14 @@ import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } fr
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
 function ctxFor(root: string, subject: string = 'cli'): FullContext {
   return apiCtx(root, 'default', { subject, role: 'admin' });
 }
@@ -76,7 +71,7 @@ describe('api.recall anchoringHint', () => {
     vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
   afterEach(() => {
-    safeRmSync(root);
+    removeAfterRequest(root);
     vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
 

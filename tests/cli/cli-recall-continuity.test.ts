@@ -6,6 +6,9 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memo
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let tmpDir: string;
 let hippoDir: string;

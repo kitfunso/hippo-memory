@@ -17,6 +17,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW } from '../_helpers/recall-golden-seed.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const savedCwd = process.cwd();
 let base: string;

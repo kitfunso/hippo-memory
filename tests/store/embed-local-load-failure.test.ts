@@ -9,6 +9,9 @@ import { handleEmbed } from '../../src/surface/cli/maintenance.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -54,7 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   process.exitCode = undefined;
-  fs.rmSync(emptyCache, { recursive: true, force: true });
+  removeAfterRequest(emptyCache);
 });
 
 describe('the local provider with a model that cannot load', () => {

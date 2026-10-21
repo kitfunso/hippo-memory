@@ -1,6 +1,5 @@
 // A failure in the middle of a write scope leaves nothing behind. Real SQLite; a trigger makes the second write refuse.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createPhysicsTable, savePhysicsState } from '../../src/db/physics-state.js';
 import { auditPrune } from '../../src/api/auth/audit.js';
@@ -18,6 +17,9 @@ import {
   saveActiveTaskSnapshot,
   writeEntry,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 
@@ -25,7 +27,7 @@ beforeEach(() => {
   root = makeRoot('write-scope');
 });
 afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 function run(sql: string): void {

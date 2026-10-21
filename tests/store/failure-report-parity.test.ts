@@ -8,6 +8,9 @@ import { failureHash, failureReport, lessonFromFailure } from '../../src/surface
 import type { JsonValue } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 interface LogRow {
   tool: string | null;

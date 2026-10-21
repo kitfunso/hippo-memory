@@ -21,6 +21,9 @@ import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function makeRawMemory(id: string, content: string, tenantId = 'default'): MemoryEntry {
   return {

@@ -1,6 +1,5 @@
 // 3.0 entry shape: camelCase fields in memory, snake_case keys in every stored and exported format.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
@@ -10,6 +9,9 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let root: string;
 
@@ -17,7 +19,7 @@ beforeEach(() => {
   root = makeStore('entry-shape').root;
 });
 
-afterEach(() => rmSync(join(root, '..'), { recursive: true, force: true }));
+afterEach(() => removeAfterRequest(join(root, '..')));
 
 describe('MemoryEntry 3.0 shape', () => {
   it('round-trips tenantId and a boolean summaryDirty', () => {

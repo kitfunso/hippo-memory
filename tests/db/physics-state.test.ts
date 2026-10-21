@@ -14,6 +14,9 @@ import {
   saveStoredVectors,
   seedStoredParticle,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { rmSync } from 'node:fs';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../../src/db/index.js';
 import { v14 } from '../../src/db/migrations/v14.js';
 import { Layer } from '../../src/base/memory/memory.js';
@@ -7,6 +6,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 describe('memory envelope: kind column, delete and update guards, raw_archive, round-trip', () => {
   it('getCurrentSchemaVersion matches the constant in src/db/migrations/index.ts', () => {
@@ -18,7 +20,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const db = openHippoDb(home);
     expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('memories table has kind column with default distilled', () => {
@@ -30,7 +32,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(kind).toBeDefined();
     expect(kind!.dflt_value).toContain('distilled');
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('rejects kind value outside the allowed set', () => {
@@ -44,7 +46,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
         .run(),
     ).toThrow(/invalid kind/i);
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('rejects UPDATE that sets kind to a value outside the allowed set', () => {
@@ -55,7 +57,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     ).run();
     expect(() => db.prepare(`UPDATE memories SET kind='bogus' WHERE id='u1'`).run()).toThrow(/invalid kind/i);
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('CRITICAL REGRESSION: DELETE on kind=raw aborts via trigger', () => {
@@ -68,7 +70,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const row = db.prepare(`SELECT id FROM memories WHERE id='r1'`).get();
     expect(row).toBeDefined();
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('DELETE on kind=distilled proceeds normally', () => {
@@ -81,7 +83,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const row = db.prepare(`SELECT id FROM memories WHERE id='d1'`).get();
     expect(row).toBeUndefined();
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it.each(['scope', 'owner', 'artifact_ref'])('memories table has nullable %s column', (col) => {
@@ -93,7 +95,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(c).toBeDefined();
     expect(c!.notnull).toBe(0);
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('backfills kind=superseded for rows with superseded_by set, kind=distilled otherwise', () => {
@@ -119,7 +121,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(s1.kind).toBe('superseded');
     expect(s2.kind).toBe('distilled');
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('raw_archive table exists with required columns', () => {
@@ -132,7 +134,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
       expect.arrayContaining(['id', 'memory_id', 'archived_at', 'reason', 'archived_by', 'payload_json']),
     );
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('createMemory accepts envelope fields and round-trips through SQLite', () => {
@@ -156,7 +158,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(read!.scope).toBe('team:eng');
     expect(read!.owner).toBe('user:42');
     expect(read!.artifactRef).toBe('slack://team/channel/1700000000.123');
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('createMemory defaults envelope fields when not provided', () => {
@@ -173,7 +175,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     expect(read!.scope).toBeNull();
     expect(read!.owner).toBeNull();
     expect(read!.artifactRef).toBeNull();
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   // v15 hardening: NULL-kind bypass closure + raw_archive uniqueness
@@ -188,7 +190,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
         .run(),
     ).toThrow(/invalid kind/i);
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('v15: rejects UPDATE that sets kind=NULL', () => {
@@ -199,7 +201,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     ).run();
     expect(() => db.prepare(`UPDATE memories SET kind=NULL WHERE id='upd1'`).run()).toThrow(/invalid kind/i);
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('v15: raw_archive (memory_id, archived_at) is unique', () => {
@@ -221,6 +223,6 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
       `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
     ).run('m1', '2026-04-29T13:00:00.000Z', 'second event', 'user:1', '{}');
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 });

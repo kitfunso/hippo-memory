@@ -1,7 +1,6 @@
 // The graph is derived outside the write lock and only its difference is written, so an unchanged
 // object costs no write and a renamed one keeps its entity id and the edges that point at it.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
@@ -12,6 +11,7 @@ import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, SourceObjectType } from '../../src/store/port/graph-reads.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -325,11 +325,9 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
 
 describe('graph delta', () => {
   let home: string;
+  oneRequestPerTest();
   beforeEach(() => {
     home = makeRoot('graph-delta');
-  });
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
   });
 
   it.each(CROSS_OBJECT_FIXTURES)(

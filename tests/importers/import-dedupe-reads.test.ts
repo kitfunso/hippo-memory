@@ -9,6 +9,9 @@ import { mergedText } from '../../src/base/util/same-text.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const LONG = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
 const STORED = [

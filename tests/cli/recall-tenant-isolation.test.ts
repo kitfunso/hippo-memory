@@ -2,6 +2,9 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 /** `hippo <args>` run in this process from `home` as tenant `tenant`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(home: string, tenant: string, ...args: string[]): Promise<string> {

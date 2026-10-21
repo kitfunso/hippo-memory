@@ -34,7 +34,10 @@ import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
 import { evaluateAll } from '../../benchmarks/memory-value/evaluate.mjs';
 import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../../benchmarks/memory-value/common.mjs';
 
-import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
+import { benchmarkStores, clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest(benchmarkStores);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -123,9 +126,9 @@ describe('cross-ingest determinism', () => {
       vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', undefined);
       // Both temp roots are OUTSIDE the default scratch root (scratchRootDir()
       // reads the env var, which is already cleared above), so a plain
-      // fs.rmSync is correct here — safeRemoveScratchDir would refuse them.
-      fs.rmSync(rootA, { recursive: true, force: true });
-      fs.rmSync(rootB, { recursive: true, force: true });
+      // removal is correct here: safeRemoveScratchDir would refuse them.
+      removeAfterRequest(rootA, benchmarkStores);
+      removeAfterRequest(rootB, benchmarkStores);
     }
   }, 90_000);
 });

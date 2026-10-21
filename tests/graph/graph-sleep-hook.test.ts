@@ -12,7 +12,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { DECISION, saveDecision } from '../../src/domain/objects/decisions.js';
@@ -42,6 +41,9 @@ import {
   loadEntities,
   loadRelations,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -66,7 +68,7 @@ function newCtx(): TestCtx {
     hippoRoot,
     ctx,
     restore: () => {
-      rmSync(tmpDir, { recursive: true, force: true });
+      removeAfterRequest(tmpDir);
       if (origHome !== undefined) vi.stubEnv('HIPPO_HOME', origHome);
       else vi.stubEnv('HIPPO_HOME', undefined);
     },

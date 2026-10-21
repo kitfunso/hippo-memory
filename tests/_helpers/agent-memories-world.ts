@@ -1,7 +1,7 @@
 // Scratch homes, projects and stores for the agent memory sync tests; nothing here reads the real home.
 import type { FullContext } from './api-ctx.js';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -19,6 +19,7 @@ import { apiCtx } from './api-ctx.js';
 import { loadDormantMemories, loadAllEntries } from './root-forms.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { initTestStore } from './store-template.js';
+import { removeAfterRequest } from './one-request-per-test.js';
 import { REAL_IO } from './real-io.js';
 
 export interface World {
@@ -55,7 +56,7 @@ export function openWorld(): World {
 export function closeWorld(w: World): void {
   if (w.savedHippoHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = w.savedHippoHome;
-  rmSync(w.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  removeAfterRequest(w.dir);
 }
 
 export function note(dir: string, file: string, body: string, yaml = 'type: feedback'): string {

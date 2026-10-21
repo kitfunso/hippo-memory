@@ -20,6 +20,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const TEXTS = [
   'We decided to use pnpm for the billing service because the lockfile is pnpm-lock.yaml.',

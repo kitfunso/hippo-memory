@@ -15,7 +15,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
@@ -25,6 +24,9 @@ import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -57,7 +59,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('env=1, no session_id, fresh_tail_count > 0 → throws typed RecallContractError to the transport', async () => {
@@ -174,7 +176,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
   });
 
   afterEach(() => {
-    rmSync(shared, { recursive: true, force: true });
+    removeAfterRequest(shared);
   });
 
   it("keeps the tail to the caller's project, with or without a session id", async () => {

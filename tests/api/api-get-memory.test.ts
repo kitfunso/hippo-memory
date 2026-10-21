@@ -1,7 +1,6 @@
 // memoryGet replaces readEntry in CLI verbs, so it must answer exactly what readEntry answers for every kind of row an id can name.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
 import { memoryGet } from '../../src/api/memories/memories.js';
 import { rawArchive } from '../../src/api/memories/promote.js';
 import { adminActor } from '../../src/api/types.js';
@@ -17,12 +16,15 @@ import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const TENANT = 'acme';
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  for (const root of roots.splice(0)) removeAfterRequest(root);
 });
 
 function root(): string {

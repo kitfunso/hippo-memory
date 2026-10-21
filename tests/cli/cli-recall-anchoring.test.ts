@@ -1,7 +1,6 @@
 // `hippo recall` anchoring hint, run through handleRecall in this process. A hippo process starts empty rings for its one
 // command, so each case hands its recalls one CallerState, as a caller running several in one process would.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
@@ -12,6 +11,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // Four phrasings that hash apart and all rank the one seeded memory first.
 const Q = [
@@ -71,7 +73,7 @@ describe('hippo recall anchoring hint', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(root, { recursive: true, force: true });
+    removeAfterRequest(root);
   });
 
   it('prints the anchored_on line above the results on the third distinct query one memory tops, and not again on the fourth', async () => {

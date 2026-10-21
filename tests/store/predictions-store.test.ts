@@ -14,7 +14,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -29,21 +28,16 @@ import {
   loadOpenPredictions,
   writeEntry,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
 
 describe('predictions store (first-class object)', () => {
   let home: string;
   beforeEach(() => {
     home = makeRoot('predictions');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('savePrediction creates both memory and predictions row', () => {
     const pred = savePrediction(home, 'default', {

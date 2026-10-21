@@ -13,7 +13,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -27,14 +26,10 @@ import {
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
@@ -67,7 +62,7 @@ describe('policies store (bi-temporal first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('policies');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('savePolicy creates memory + policies row + policy_create audit; v1; valid_from defaults to creation instant', async () => {
     const before = new Date().toISOString();

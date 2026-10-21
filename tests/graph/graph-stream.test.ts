@@ -15,6 +15,9 @@ import { selectGraphSeeds, graphRankStream, type GraphSeed } from '../../src/dom
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function safeRmSync(p: string): void {
   try {
@@ -82,7 +85,7 @@ describe('graphRankStream (real SQLite)', () => {
   beforeEach(() => {
     home = makeRoot('graphstream');
   });
-  afterEach(() => safeRmSync(home));
+  afterEach(() => removeAfterRequest(home));
 
   it('scores a 1-hop neighbour; excludes the seed and unrelated in-pool entries', async () => {
     const a = mem(home, T, 'alpha cache invalidation decision');

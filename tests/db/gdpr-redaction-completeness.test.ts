@@ -49,8 +49,9 @@ function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 describe('GDPR Path A completeness fixes', () => {
   let root: string;
 
+  // A copy of the run's migrated store: every case here is about the reaper and the audit rows, not a first migration.
   beforeEach(() => {
-    root = makeRoot('v039-completeness', { init: false });
+    root = makeRoot('v039-completeness');
   });
 
   // ---------------------------------------------------------------------------

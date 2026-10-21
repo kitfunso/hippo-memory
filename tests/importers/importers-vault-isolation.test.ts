@@ -6,6 +6,9 @@ import * as os from 'os';
 import { importVault } from '../../src/entry/importers.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 useVaultImport();
 

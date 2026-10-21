@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { calculateStrength, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -8,6 +7,9 @@ import { strengthAblation } from '../../src/base/memory/ablation.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadContextCandidates, tallySources, loadTextsHoldingWords, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -54,7 +56,7 @@ describe('loadContextCandidates over the cap', () => {
     });
   });
 
-  afterEach(() => rmSync(join(root, '..'), { recursive: true, force: true }));
+  afterEach(() => removeAfterRequest(join(root, '..')));
 
   it('keeps pins, then the rows decay has worn least, and returns them oldest first', () => {
     const got = loadContextCandidates(root, 'default', { project: ['proj'], cap: 5, now: NOW });
@@ -118,7 +120,7 @@ describe('loadContextCandidates reward factor', () => {
 
   afterEach(() => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
-    rmSync(join(root, '..'), { recursive: true, force: true });
+    removeAfterRequest(join(root, '..'));
   });
 
   // One row survives a cap of 1; the pair is chosen so a slope other than REWARD_SLOPE flips the winner.

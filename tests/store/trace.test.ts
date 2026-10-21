@@ -6,6 +6,9 @@ import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { listSessionEvents, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let tmpDir: string;
 let hippoDir: string;

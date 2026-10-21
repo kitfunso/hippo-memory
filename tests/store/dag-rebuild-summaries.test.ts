@@ -7,7 +7,7 @@
  * race-loser no-op (E3 MED #5), cap hard-ceiling clamping (E3 R2 must-fix).
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
@@ -15,6 +15,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { makeOkFetcher, getRow, forceMarkDirty, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -99,7 +102,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       const ftsAll = getRow<{ content: string }>(db, `SELECT content FROM memories_fts WHERE id = ?`, summary.id);
       expect(ftsAll?.content).toBe('newly-generated-summary-content-X');
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -136,7 +139,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(row.summary_dirty).toBe(0);
       expect(row.rebuild_count).toBe(1);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -215,7 +218,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Simulate "no live children" by direct SQL: mark child kind='archived'.
     const db0 = openHippoDb(hippoRoot);
     db0.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(child.id);
-    db0.close();
+    closeHippoDb(db0);
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher();
@@ -267,7 +270,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(meta.zero_children).toBe(true);
       expect(meta.descendant_count).toBe(0);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 
@@ -393,7 +396,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(row.rebuild_count).toBe(1);
       expect(row.summary_dirty).toBe(0);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
   });
 

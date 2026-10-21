@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -12,6 +11,9 @@ import {
   appendSessionEvent,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
 vi.setConfig({ testTimeout: 12_000 });
@@ -48,7 +50,7 @@ describe('mcp hippo_context scope filter', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
   });
 
   it('prints the snapshot, handoff and trail, and drops a superseded row', async () => {

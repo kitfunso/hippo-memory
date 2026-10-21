@@ -2,7 +2,6 @@
 // summary must never stand in for its children in recall overflow or assemble.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
@@ -10,6 +9,9 @@ import { assemble, retrieve, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const roots: string[] = [];
 
@@ -23,7 +25,7 @@ const ctxFor = (hippoRoot: string): FullContext =>
   apiCtx(hippoRoot, 'default', { subject: 'superseded-window-test', role: 'admin' });
 
 afterEach(() => {
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 function seedVersions(root: string, oldCreatedFirst: boolean) {

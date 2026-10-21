@@ -8,20 +8,15 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { assemble } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadSessionRawMemories, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:assemble-v161', role: 'admin' });
 }
@@ -44,7 +39,7 @@ describe('loadSessionRawMemories row cap', () => {
   beforeEach(() => {
     root = makeRoot('v161-cap');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('cap=undefined returns every row (legacy behaviour)', () => {
     for (let i = 0; i < 12; i++) {
@@ -61,7 +56,7 @@ describe('totalRaw is post-scope', () => {
   beforeEach(() => {
     root = makeRoot('v161-total');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('all-private session: totalRaw=0, items=[], no false positive', async () => {
     for (let i = 0; i < 4; i++) {
@@ -93,7 +88,7 @@ describe('assemble scope opt parity with recall', () => {
   beforeEach(() => {
     root = makeRoot('v161-scope');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('explicit scope match unlocks a private session', async () => {
     for (let i = 0; i < 3; i++) {

@@ -3,12 +3,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli as runCliEntry } from '../../src/cli.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const savedCwd = process.cwd();
 let home = '';
@@ -31,7 +33,7 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(home, { recursive: true, force: true });
+  removeAfterRequest(home);
 });
 
 describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () => {

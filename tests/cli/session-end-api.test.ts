@@ -1,7 +1,6 @@
 // sessionEndWork runs from the api with no CLI: real store, host steps passed in, store choice and sleep, capture and
 // cursor policy decided by the api.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
 import type { Context } from '../../src/api/types.js';
@@ -9,6 +8,9 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const TENANT = 'default';
 const PROJECT = 'the-session-project';
@@ -26,7 +28,7 @@ beforeEach(() => {
   lines = [];
   steps = [];
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => removeAfterRequest(root));
 
 function work(over: Partial<Work> = {}): Work {
   return {
@@ -132,7 +134,7 @@ describe('sessionEndWork', () => {
       expect(lines).toContain('skip sleep: this folder has no store of its own');
       expect(loadActiveTaskSnapshot(globalRoot, TENANT)).toBeNull();
     } finally {
-      rmSync(globalRoot, { recursive: true, force: true });
+      removeAfterRequest(globalRoot);
     }
   });
 

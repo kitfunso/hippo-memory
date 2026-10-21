@@ -1,6 +1,5 @@
 // The churn pass reads good-outcome times from a ts range, not the tenant's whole audit history, and says so in its plan.
 import { afterEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { detectChurnStale } from '../../src/domain/learn/invalidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -8,6 +7,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 import { processGit } from '../../src/base/util/git-runner.js';
 
 const OLD_TARGETS = 200;
@@ -19,7 +21,7 @@ const outcomeRows = (reads: readonly { sql: string; rows: number }[]): number =>
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 function newRoot(): string {

@@ -11,7 +11,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
@@ -20,6 +19,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 function callTool(
   name: string,
@@ -63,7 +65,7 @@ describe('MCP hippo_recall scorer_window', () => {
     );
   });
 
-  afterEach(() => rmSync(home, { recursive: true, force: true }));
+  afterEach(() => removeAfterRequest(home));
 
   // 'abc' is Number-coerced by the transport so recall() rejects it like HTTP does.
   it.each([0, 'abc'])('scorer_window=%s throws RecallContractError with code=invalid_scorer_window', async (value) => {

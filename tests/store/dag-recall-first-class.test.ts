@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
@@ -26,6 +26,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -184,7 +187,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     try {
       savePhysicsState(db, [particle]);
     } finally {
-      db.close();
+      closeHippoDb(db);
     }
 
     const results = await physicsSearch('physics-particle test', [summary], {
@@ -309,7 +312,7 @@ describe('first-class DAG recall (scoring layer)', () => {
       // time; sourceBump (1.2) is the only post-hybridSearch multiplier.
       expect(br!.final / sResult!.score).toBeCloseTo(1.0, 5);
     } finally {
-      fs.rmSync(globalRoot, { recursive: true, force: true });
+      removeAfterRequest(globalRoot);
     }
   });
 

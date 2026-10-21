@@ -6,6 +6,9 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { pushGoal, completeGoal } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 

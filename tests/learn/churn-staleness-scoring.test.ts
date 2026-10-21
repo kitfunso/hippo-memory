@@ -7,7 +7,7 @@ import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src
 import { search } from '../../src/domain/search/bm25-search.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { churnStaleFactor } from '../../src/domain/search/boosts.js';
-import { openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -15,6 +15,9 @@ import * as api from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // ---------------------------------------------------------------------------
 // api.outcome(): a good outcome clears the churn-stale tag
@@ -28,7 +31,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    removeAfterRequest(hippoRoot);
   });
 
   it('drops the churn-stale tag on good=true', async () => {
@@ -137,7 +140,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       try {
         savePhysicsState(db, [particle(plain.id), particle(stale.id)]);
       } finally {
-        db.close();
+        closeHippoDb(db);
       }
       const results = await physicsSearch('flywheel torque', [stale, plain], {
         hippoRoot,
@@ -147,7 +150,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
       expect(results[1].breakdown!.churnStaleMultiplier).toBe(STALE_FACTOR);
     } finally {
-      fs.rmSync(hippoRoot, { recursive: true, force: true });
+      removeAfterRequest(hippoRoot);
     }
   });
 
@@ -175,7 +178,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
           },
         ]);
       } finally {
-        db.close();
+        closeHippoDb(db);
       }
       const results = await physicsSearch('flywheel torque', [stale, plain], {
         hippoRoot,
@@ -185,7 +188,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       expect(staleScore).toBeCloseTo(STALE_FACTOR, 5);
       expect(results[0].entry.id).toBe(plain.id);
     } finally {
-      fs.rmSync(hippoRoot, { recursive: true, force: true });
+      removeAfterRequest(hippoRoot);
     }
   });
 
@@ -230,7 +233,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       expect(ids).toHaveLength(3);
       expect(ids[0]).not.toBe(stale.id);
     } finally {
-      fs.rmSync(hippoRoot, { recursive: true, force: true });
+      removeAfterRequest(hippoRoot);
     }
   });
 
@@ -256,7 +259,7 @@ describe('config.churnStaleness', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    removeAfterRequest(hippoRoot);
   });
 
   it('defaults to disabled', () => {

@@ -2,7 +2,7 @@
 // also calls) leaves a memory that backs a decision, incident or other object in place: deleting it would null the object's link.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sleep } from '../../src/api/index.js';
 import { auditMemories } from '../../src/base/memory/memory-audit.js';
@@ -25,6 +25,9 @@ import {
   batchWriteAndDelete,
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const roots: string[] = [];
 
@@ -36,7 +39,7 @@ function newRoot(): string {
 }
 
 afterEach(() => {
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+  for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
 const ctxFor = (hippoRoot: string): FullContext =>

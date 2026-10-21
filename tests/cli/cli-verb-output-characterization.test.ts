@@ -6,6 +6,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 const savedCwd = process.cwd();
 let root: string;
@@ -24,7 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  fs.rmSync(root, { recursive: true, force: true });
+  removeAfterRequest(root);
 });
 
 const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));

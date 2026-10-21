@@ -15,20 +15,15 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync } from 'node:fs';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
-function safeRmSync(p: string): void {
-  try {
-    rmSync(p, { recursive: true, force: true });
-  } catch {
-    /* best-effort */
-  }
-}
+oneRequestPerTest();
+
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:f3', role: 'admin' });
 }
@@ -47,7 +42,7 @@ describe('RecallOptions.scorerWindow', () => {
   beforeEach(() => {
     root = makeRoot('f3');
   });
-  afterEach(() => safeRmSync(root));
+  afterEach(() => removeAfterRequest(root));
 
   it('scorerWindow can widen the candidate pool above limit (proves widening)', async () => {
     // Codex diff-pass P2 #4: original assertion `total <= 25 && total > 0`

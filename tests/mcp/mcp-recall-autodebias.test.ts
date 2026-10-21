@@ -11,7 +11,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -19,6 +18,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
 import { cliConfig } from '../../src/surface/cli/api-context.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -74,7 +76,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeAfterRequest(home);
     vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
 

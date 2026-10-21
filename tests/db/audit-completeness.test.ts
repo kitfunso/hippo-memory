@@ -5,6 +5,9 @@ import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {

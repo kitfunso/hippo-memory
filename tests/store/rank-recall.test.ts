@@ -10,6 +10,9 @@ import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../sr
 import type { RerankerFn } from '../../src/domain/rerankers/types.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 let hippoRoot: string;
 

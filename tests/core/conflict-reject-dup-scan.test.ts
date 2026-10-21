@@ -9,6 +9,9 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 interface StatementProto {
   readonly sourceSQL: string;

@@ -20,6 +20,9 @@ import {
   seed,
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
+import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 useQueryCountRoots();
 

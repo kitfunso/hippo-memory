@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { runCli as runCliEntry } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+
+oneRequestPerTest();
 
 // A3: `hippo forget` on a raw (append-only) memory must not dead-end with a
 // misleading "Memory not found" — it reports the append-only nature and points
@@ -64,7 +66,7 @@ describe('cli forget: raw memory archive', () => {
       expect(run.out).toMatch(/append-only/i);
       expect(run.out).toMatch(/--archive/);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     }
   });
 
@@ -83,7 +85,7 @@ describe('cli forget: raw memory archive', () => {
         closeHippoDb(db);
       }
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     }
   });
 
@@ -94,7 +96,7 @@ describe('cli forget: raw memory archive', () => {
       expect(run.status).not.toBe(0);
       expect(run.out).toMatch(/--reason/);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     }
   });
 
@@ -105,7 +107,7 @@ describe('cli forget: raw memory archive', () => {
       expect(run.status).not.toBe(0);
       expect(run.out).toMatch(/not found/i);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     }
   });
 });
@@ -119,7 +121,7 @@ describe('cli forget --dry-run', () => {
       expect(run.out).toMatch(/append-only/i);
       expect(hasRow(home, 'mem_rawdry1')).toBe(true);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     }
   });
 
@@ -137,7 +139,7 @@ describe('cli forget --dry-run', () => {
         closeHippoDb(db);
       }
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     }
   });
 
@@ -152,7 +154,7 @@ describe('cli forget --dry-run', () => {
       expect(missing.status).not.toBe(0);
       expect(missing.out).toMatch(/not found/i);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeAfterRequest(home);
     }
   });
 });
