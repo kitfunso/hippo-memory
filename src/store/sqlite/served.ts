@@ -1,5 +1,5 @@
 // The adapter's synchronous form of the port: private here, since the port itself answers only through Promises.
-import { inPortTerms } from './port-errors.js';
+import { portError } from './port-errors.js';
 
 /** `T` with each method answering its value instead of a Promise of it, groups included: hippo.db's bodies run to their
  * end on one handle, and `served` wraps them back into the port. */
@@ -19,8 +19,16 @@ export function served<T extends object>(sync: NoInfer<Sync<T>>): T {
   for (const key of Object.keys(sync) as (keyof T & keyof Sync<T>)[]) {
     const value = sync[key];
     let wrapped;
-    if (value instanceof Function) wrapped = async (...args: never[]) => inPortTerms(() => value.apply(sync, args));
-    else wrapped = isGroup(value) ? served(value) : value;
+    // Inline, as a helper's two frames would push the caller out of a stack's ten.
+    if (value instanceof Function) {
+      wrapped = async (...args: never[]) => {
+        try {
+          return value.apply(sync, args);
+        } catch (error) {
+          throw portError(error);
+        }
+      };
+    } else wrapped = isGroup(value) ? served(value) : value;
     // SAFETY: Sync<T> maps each member of T to its synchronous twin, so serving that twin gives the T member.
     out[key] = wrapped as T[typeof key];
   }

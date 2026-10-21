@@ -3,7 +3,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { Sync } from './served.js';
 import type { HandleOpener, OnHandle, OnHandleAsync, StoreFiles } from './open.js';
-import { inPortTermsAsync } from './port-errors.js';
+import { rethrowInPortTerms } from './port-errors.js';
 
 // A void method's body returns nothing too: `void` alone would let a value through to callers the port promised none.
 type BodyOf<M, Lead extends unknown[]> = M extends (...args: infer A) => infer R
@@ -30,7 +30,7 @@ export type AsyncBodies<G> = { readonly [K in keyof G]: AsyncBodyOf<G[K], Db> };
 export type AsyncFileBodies<G> = { readonly [K in keyof G]: AsyncBodyOf<G[K], DbAndFiles> };
 
 // The narrowest body both `on` and `onAsync` accept, so one loop binds either kind; each hands the result back as is.
-type Runner = (fn: (db: DatabaseSyncLike, files: StoreFiles) => Promise<never>, open?: HandleOpener) => void;
+type Runner = (fn: (db: DatabaseSyncLike, files: StoreFiles) => Promise<never>, open?: HandleOpener) => Promise<never>;
 
 type AnyBodies<G> = Bodies<G> | FileBodies<G> | AsyncBodies<G> | AsyncFileBodies<G>;
 
@@ -40,8 +40,12 @@ function bind<G, Out>(run: Runner, bodies: AnyBodies<G>, open: HandleOpener | un
   for (const key of Object.keys(bodies) as (keyof G & keyof Out)[]) {
     // Widened for apply: the lead arguments differ between the kinds of body.
     const body: Function = bodies[key];
-    const method = (...args: never[]) =>
-      run((db, files) => body.apply(undefined, withFiles ? [db, files, ...args] : [db, ...args]), open);
+    const method = (...args: never[]) => {
+      const answer = run((db, files) => body.apply(undefined, withFiles ? [db, files, ...args] : [db, ...args]), open);
+      // `on` hands a sync body's value back as is; an async kind answers the port with no `served` wrap, so its
+      // rejection takes the port's terms here, after the call, where the catch adds no frame to the stack.
+      return answer instanceof Promise ? answer.catch(rethrowInPortTerms) : answer;
+    };
     // SAFETY: the body takes the handle (and the files) before the method's own arguments, so this call is G's method.
     group[key] = method as Out[typeof key];
   }
@@ -59,20 +63,14 @@ export function boundWithFiles<G>(on: OnHandle, bodies: FileBodies<G>, open?: Ha
   return bind<G, Sync<G>>(on, bodies, open, true);
 }
 
-// The async kinds answer the port directly, with no `served` wrap, so their throws take the port's terms here.
-const inPort =
-  (onAsync: OnHandleAsync): OnHandleAsync =>
-  (fn, open) =>
-    inPortTermsAsync(() => onAsync(fn, open));
-
 /** `bound` for bodies that yield: each call keeps its handle open until the body's Promise settles. */
 export function boundAsync<G>(onAsync: OnHandleAsync, bodies: AsyncBodies<G>, open?: HandleOpener): G {
-  return bind<G, G>(inPort(onAsync), bodies, open, false);
+  return bind<G, G>(onAsync, bodies, open, false);
 }
 
 /** `boundAsync` for bodies that also take the mirror files. */
 export function boundAsyncWithFiles<G>(onAsync: OnHandleAsync, bodies: AsyncFileBodies<G>, open?: HandleOpener): G {
-  return bind<G, G>(inPort(onAsync), bodies, open, true);
+  return bind<G, G>(onAsync, bodies, open, true);
 }
 
 /** `method`, answered by `none` with no handle opened when its list is empty, so an empty batch never creates the

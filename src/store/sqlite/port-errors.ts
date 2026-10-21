@@ -18,11 +18,7 @@ export function inPortTerms<T>(run: () => T): T {
   }
 }
 
-/** `inPortTerms` for work that settles later. */
-export async function inPortTermsAsync<T>(run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    throw portError(error);
-  }
+/** A promise's catch in the port's terms; it adds no stack frame, so a stack still reaches the caller's own frames. */
+export function rethrowInPortTerms<E>(error: E): never {
+  throw portError(error);
 }

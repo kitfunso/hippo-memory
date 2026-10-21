@@ -10,7 +10,7 @@ import {
 } from '../../db/index.js';
 import { withRequestStoresSync } from '../../db/request-stores.js';
 import { isStoreBusy } from '../port.js';
-import { inPortTerms, inPortTermsAsync } from './port-errors.js';
+import { inPortTerms, rethrowInPortTerms } from './port-errors.js';
 
 export type RequestPreset = 'cli' | 'hook' | 'server';
 
@@ -23,7 +23,7 @@ const PRESETS = {
 
 /** Runs `fn` with one store handle per store, closed with it, at the root's lock wait. */
 export function runSqliteRequest<T>(fn: () => T | Promise<T>, preset: RequestPreset): Promise<T> {
-  return inPortTermsAsync(() => runWithRequestStores(fn, PRESETS[preset]));
+  return runWithRequestStores(fn, PRESETS[preset]).catch(rethrowInPortTerms);
 }
 
 /** The hook preset: a store still busy after the wait skips the hook's work with one warning, undefined and exit 0. */
@@ -45,5 +45,5 @@ export function runSqliteBatch<T>(fn: () => T): T {
 /** A scope of its own: the caller closes a handle the work holds across its pauses; the lock wait carries over. */
 export function runDetachedSqliteRequest<T>(fn: () => T | Promise<T>): Promise<T> {
   const busyWaitMs = scopedBusyWait();
-  return inPortTermsAsync(() => outsideRequestStores(() => runWithRequestStores(fn, { busyWaitMs })));
+  return outsideRequestStores(() => runWithRequestStores(fn, { busyWaitMs })).catch(rethrowInPortTerms);
 }
