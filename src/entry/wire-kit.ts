@@ -3,13 +3,7 @@
 
 import { ambientSecretAdmit } from '../base/scope/read-admission.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
-import {
-  calculateStrength,
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-  type CreateMemoryOptions,
-  type DecayOptions,
-} from '../base/memory/memory.js';
+import { calculateStrength, createMemory, type CreateMemoryOptions, type DecayOptions } from '../base/memory/memory.js';
 import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { SearchResult } from '../base/rank/search-types.js';
@@ -35,9 +29,8 @@ export type WireStrengthInputs = Pick<
 >;
 
 export function createMemoryWire(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryWire {
-  return toWire(
-    createMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS }),
-  );
+  // SAFETY: the one missing field is baseHalfLifeDays, and memory.ts defaults it when absent.
+  return toWire(createMemory(content, options as CreateMemoryOptions));
 }
 
 export function embedMemoryWire(hippoRoot: string, entry: MemoryWire): Promise<EmbedOutcome> {

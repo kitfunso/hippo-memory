@@ -2,12 +2,7 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-import {
-  createMemory as createStoreMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-  type CreateMemoryOptions,
-  type MemoryEntry,
-} from './base/memory/memory.js';
+import { createMemory as createStoreMemory, type CreateMemoryOptions, type MemoryEntry } from './base/memory/memory.js';
 import { defaultStore, withSharedStoreHandles } from './surface/open-store.js';
 import type { SleepStore } from './store/port.js';
 import { runConsolidation, type ConsolidateOptions } from './domain/consolidate/sleep.js';
@@ -36,10 +31,8 @@ export {
  * Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in memory.ts.
  */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
-  return createStoreMemory(content, {
-    ...options,
-    baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
-  });
+  // SAFETY: the one missing field is baseHalfLifeDays, and memory.ts defaults it when absent.
+  return createStoreMemory(content, options as CreateMemoryOptions);
 }
 export { search } from './domain/search/bm25-search.js';
 export { hybridSearch } from './entry/folder-search.js';

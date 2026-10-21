@@ -22,7 +22,7 @@ import { importEntries } from '../../src/entry/importers.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { computeSalience } from '../../src/base/memory/salience.js';
@@ -722,7 +722,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     writeFileSync(file, `${note}\n`);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await cmdCapture(captureTarget(root), {
+    await runCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'file',
       filePath: file,

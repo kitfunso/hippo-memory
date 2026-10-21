@@ -5,8 +5,9 @@ import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
+import { rerankerPost } from './remote.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
+import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonNumber, isJsonObject } from '../../base/util/json.js';
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -95,7 +96,7 @@ async function requestScores(http: Http, query: string, head: SearchResult[]): P
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${requestId ? `, request ${requestId}` : ''}`);
   }
-  const scores = parseScores(await readCappedJson(resp, RERANKER_MAX_REPLY_BYTES), head.length);
+  const scores = parseScores(await readCappedJson(resp, MAX_REPLY_BYTES), head.length);
   if (!scores) throw new Error('incomplete or out-of-range answers');
   return scores;
 }

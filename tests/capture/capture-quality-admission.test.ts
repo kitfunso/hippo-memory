@@ -1,7 +1,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
@@ -233,7 +233,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
       { role: 'user', text: 'Here is the log:\n```\nError: build failed' },
       { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
     ];
-    await cmdCapture(captureTarget(root), {
+    await runCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'last-session',
       sessionTurns: turns,

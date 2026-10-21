@@ -6,6 +6,7 @@
  */
 
 import { HOUR_MS } from '../../base/util/time.js';
+import { mulberry32 } from '../../base/util/prng.js';
 import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { resolveConfidence, type MemoryEntry, type EmotionalValence } from '../../base/memory/memory.js';
 
@@ -52,20 +53,6 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   const strengthFloor = Math.max(STRENGTH_FLOOR, rawStrength);
 
   return rewardSignal * valence * underRehearsed * idleBoost * strengthFloor;
-}
-
-/**
- * Deterministic 32-bit RNG (Mulberry32): same seed, same sequence, so replay is reproducible without a random-number
- * dependency.
- */
-function mulberry32(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    let t = (s += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /** The ids of `count` memories picked for replay in pick order, weighted by `replayPriority`, without replacement;

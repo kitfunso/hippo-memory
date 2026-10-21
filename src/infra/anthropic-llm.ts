@@ -5,14 +5,13 @@ import { envLlmTimeoutMs } from '../base/util/env.js';
 import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
+import { MAX_REPLY_BYTES } from '../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../base/util/json.js';
 import { redactSecretsStrict } from '../base/util/secret-detect.js';
 
 const MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
-// Callers ask for at most 1,200 tokens, a reply of a few KB; 1 MiB leaves room for a verbose envelope.
-const MAX_REPLY_BYTES = 1024 * 1024;
 // The error body names the cause (bad key, no credit, unknown model) in its first line or two.
 const ERROR_SNIPPET_CHARS = 256;
 const UTF8_MAX_BYTES_PER_CHAR = 4;

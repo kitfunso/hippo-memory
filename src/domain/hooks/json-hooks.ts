@@ -384,7 +384,7 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
 
 function appendCompactionHooks(hooks: ClaudeHooks) {
   // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summarizer for a "Memories for
-  // hippo" list and saves a snapshot. The exit-0 contract lives in the verb itself (cmdPreCompact,
+  // hippo" list and saves a snapshot. The exit-0 contract lives in the verb itself (preCompactHook,
   // src/surface/capture/compact.ts), not in this install-time wiring.
   const installedPreCompact = appendHookIfMissing(
     hooks,
