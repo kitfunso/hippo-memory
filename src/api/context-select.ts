@@ -18,19 +18,22 @@ import { scopeBoostFor } from '../domain/search/boosts.js';
 import { type HippoConfig } from '../base/config/config.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { AmbientAdmission } from '../base/scope/read-admission.js';
-import {
-  promptTokens,
-  contentTokens,
-  gatePromptRecall,
-  type PromptRecallMetric,
-  type PromptRecallGate,
-} from '../base/rank/prompt-recall.js';
+import { promptTokens, contentTokens, gatePromptRecall } from '../base/rank/prompt-recall.js';
 import type { DeliveryObserver } from './delivery-recorder.js';
 import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';
 import type { Context, GlobalInReach } from './types.js';
 import type { AmbientLoadResult } from '../store/port/context-reads.js';
 import type { AppendAuditOpts } from '../store/port/types.js';
+
+import {
+  admitWithinBudget,
+  newestWorthSurfacing,
+  promptRecallGateOf,
+  reservePinned,
+  strongestWithin,
+  type Picked,
+} from '../domain/context/select-policy.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
@@ -106,15 +109,6 @@ export function oneCopyPerMemory(
   return [local.filter((e) => kept.has(e)), global.filter((e) => kept.has(e))];
 }
 
-export const finiteOr = (v: number, dflt: number, min: number): number => (Number.isFinite(v) && v >= min ? v : dflt);
-
-/** The pinned-only branch's shared budget: the backfill and the pin loop both spend it. */
-interface Picked {
-  items: ContextResultEntry[];
-  ids: Set<string>;
-  used: number;
-}
-
 interface PromptCandidate {
   id: string;
   tokens: Set<string>;
@@ -151,7 +145,7 @@ export function selectPinned(
     strengthOptionsOf(plan.config.runtime),
   );
   obs?.dropMissing([...localEntries, ...globalEntries], [...localPool, ...globalPool], 'load', 'duplicate');
-  const picked: Picked = { items: [], ids: new Set<string>(), used: 0 };
+  const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
   // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE budget and the recent
   // loop runs first, so pins are ranked here and reserve their share before it can spend.
@@ -169,7 +163,7 @@ export function selectPinned(
     backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
   }
 
-  admitWithinBudget(rankedPinned, picked, effBudget, obs);
+  admitWithinBudget(rankedPinned, picked, effBudget, rejectOverBudget(obs));
   return picked.items;
 }
 
@@ -196,77 +190,33 @@ function rankPinned(
     .sort(compareScoredResults);
 }
 
-// Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving, and dedupes by id
-// because a synced pin sits in both stores. A pin also in the recent slice is counted twice: recents under-fill,
-// safely.
-function reservePinned(rankedPinned: ContextResultEntry[], effBudget: number): number {
-  let pinnedReserve = 0;
-  const reservedIds = new Set<string>();
-  for (const r of rankedPinned) {
-    if (reservedIds.has(r.entry.id)) continue;
-    if (pinnedReserve + r.tokens <= effBudget) {
-      pinnedReserve += r.tokens;
-      reservedIds.add(r.entry.id);
-    }
-  }
-  return pinnedReserve;
-}
-
-/** Skips ids already picked and rows past the budget, so a large row never blocks smaller ones behind it. */
-function admitWithinBudget(
-  rows: ContextResultEntry[],
-  picked: Picked,
-  budget: number,
-  obs: DeliveryObserver | undefined,
-): void {
-  for (const r of rows) {
-    if (picked.ids.has(r.entry.id)) continue;
-    if (picked.used + r.tokens > budget) {
-      obs?.reject(r.entry, 'budget', 'budget', r.score, r.tokens);
-      continue;
-    }
-    picked.items.push(r);
-    picked.ids.add(r.entry.id);
-    picked.used += r.tokens;
-  }
-}
-
 interface BackfillFromPromptOptions {
   readonly pinnedCfg: HippoConfig;
   readonly candidates: () => PromptCandidate[];
-  readonly picked: Picked;
+  readonly picked: Picked<ContextResultEntry>;
   readonly recentBudget: number;
 }
 
-// Overlap a candidate needs with the prompt when the config sets none.
-const DEFAULT_PROMPT_RECALL_THRESHOLD = 0.04;
+function rejectOverBudget(obs: DeliveryObserver | undefined): ((row: ContextResultEntry) => void) | undefined {
+  return obs && ((r) => obs.reject(r.entry, 'budget', 'budget', r.score, r.tokens));
+}
 
 function backfillFromPrompt(opts: ContextOptions, plan: ContextPlan, options: BackfillFromPromptOptions): void {
   const { pinnedCfg, candidates, picked, recentBudget } = options;
-  const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
-  const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';
-  const gate: PromptRecallGate = {
-    metric,
-    threshold: finiteOr(pinnedCfg.pinnedInject.promptRecallThreshold, DEFAULT_PROMPT_RECALL_THRESHOLD, 0),
-    minShared: finiteOr(pinnedCfg.pinnedInject.promptRecallMinShared, 2, 0),
-    maxItems: finiteOr(pinnedCfg.pinnedInject.promptRecallMaxItems, 5, 1),
-  };
+  const gate = promptRecallGateOf(pinnedCfg.pinnedInject);
   const p = promptTokens(opts.prompt ?? '');
   if (p.size === 0) return;
   const candidateItems = candidates();
   const gated = gatePromptRecall(p, candidateItems, gate);
   plan.obs?.gated(p, candidateItems, gate, gated);
-  for (const g of gated) {
-    if (picked.ids.has(g.item.id)) continue;
-    const tokens = plan.price(g.item.entry, g.item.isGlobal, true);
-    if (picked.used + tokens > recentBudget) {
-      plan.obs?.reject(g.item.entry, 'budget', 'budget', g.score, tokens);
-      continue;
-    }
-    picked.items.push({ entry: g.item.entry, score: g.score, tokens, isGlobal: g.item.isGlobal, promptRecall: true });
-    picked.ids.add(g.item.id);
-    picked.used += tokens;
-  }
+  const rows = gated.map((g) => ({
+    entry: g.item.entry,
+    score: g.score,
+    tokens: plan.price(g.item.entry, g.item.isGlobal, true),
+    isGlobal: g.item.isGlobal,
+    promptRecall: true,
+  }));
+  admitWithinBudget(rows, picked, recentBudget, rejectOverBudget(plan.obs));
 }
 
 // Candidates came off the ambient load's own connection (the recall request), not a fresh open.
@@ -334,7 +284,7 @@ function promptCandidateItems(
 interface BackfillRecentOptions {
   readonly localPool: MemoryEntry[];
   readonly globalPool: MemoryEntry[];
-  readonly picked: Picked;
+  readonly picked: Picked<ContextResultEntry>;
   readonly recentBudget: number;
   readonly nowP: Date;
 }
@@ -342,26 +292,17 @@ interface BackfillRecentOptions {
 function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void {
   const { localPool, globalPool, picked, recentBudget, nowP } = options;
   const strength = strengthOptionsOf(plan.config.runtime);
-  const recent = [
+  const candidates = [
     ...localPool.map((entry) => ({ entry, isGlobal: plan.primaryIsGlobal })),
     ...globalPool.map((entry) => ({ entry, isGlobal: true })),
-  ]
-    // Newest first, then id: stable within one store, but same-millisecond rows fall to random ids across ingests.
-    .sort((a, b) => {
-      const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
-      return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
-    })
-    // Filter before slice so a junk row is backfilled past, not counted against N. Pins bypass the floor: a dropped
-    // pin's share of the shared budget would go to a backfilled row, and the pin loop could not win it back.
-    .filter(({ entry }) => entry.pinned || isWorthSurfacing(entry))
-    .slice(0, plan.includeRecent)
-    .map(({ entry, isGlobal }) => ({
-      entry,
-      score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1),
-      tokens: plan.price(entry, isGlobal),
-      isGlobal,
-    }));
-  admitWithinBudget(recent, picked, recentBudget, plan.obs);
+  ];
+  const recent = newestWorthSurfacing(candidates, plan.includeRecent).map(({ entry, isGlobal }) => ({
+    entry,
+    score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1),
+    tokens: plan.price(entry, isGlobal),
+    isGlobal,
+  }));
+  admitWithinBudget(recent, picked, recentBudget, rejectOverBudget(plan.obs));
 }
 
 /** No query: the strongest memories by strength, up to budget. */
@@ -369,34 +310,21 @@ export function selectStrongest(plan: ContextPlan, left: number, pools: ContextP
   const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const strength = strengthOptionsOf(plan.config.runtime);
   const [localPool, globalPool] = oneCopyPerMemory(pools.local.entries, pools.global.entries, now, strength);
-  const localRanked = localPool
-    .map((e) => ({
-      entry: e,
-      score: calculateStrength(e, now, strength),
-      tokens: plan.price(e, plan.primaryIsGlobal),
-      isGlobal: plan.primaryIsGlobal,
-    }))
-    .sort(compareScoredResults);
+  const localRanked = localPool.map((e) => ({
+    entry: e,
+    score: calculateStrength(e, now, strength),
+    tokens: plan.price(e, plan.primaryIsGlobal),
+    isGlobal: plan.primaryIsGlobal,
+  }));
 
-  const globalRanked = globalPool
-    .map((e) => ({
-      entry: e,
-      score: calculateStrength(e, now, strength) * GLOBAL_DISCOUNT,
-      tokens: plan.price(e, true),
-      isGlobal: true,
-    }))
-    .sort(compareScoredResults);
+  const globalRanked = globalPool.map((e) => ({
+    entry: e,
+    score: calculateStrength(e, now, strength) * GLOBAL_DISCOUNT,
+    tokens: plan.price(e, true),
+    isGlobal: true,
+  }));
 
-  const combined = [...localRanked, ...globalRanked].sort(compareScoredResults);
-
-  const selected: ContextResultEntry[] = [];
-  let used = 0;
-  for (const r of combined) {
-    if (used + r.tokens > left) continue;
-    selected.push(r);
-    used += r.tokens;
-  }
-  return selected;
+  return strongestWithin(localRanked, globalRanked, left);
 }
 
 /** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the 'recall' audit row. */

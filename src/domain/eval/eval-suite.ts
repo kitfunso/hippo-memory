@@ -450,9 +450,9 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
   for (const c of cases) {
     let results;
     if (c.category === 'multi-hop') {
-      results = multihopSearch(c.query, entries, { budget: 50000 });
+      results = multihopSearch(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
     } else {
-      results = search(c.query, entries, { budget: 50000 });
+      results = search(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
     }
     const returnedIds = results.map((r) => r.entry.id);
 
@@ -483,6 +483,8 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
 }
 
 const REGRESSION_THRESHOLD = 0.05;
+// Large enough that the token budget never cuts a synthetic case's results, so the metrics see the whole ranking.
+const EVAL_TOKEN_BUDGET = 50000;
 
 export function detectRegressions(baseline: EvalBaseline, current: EvalSuiteResult): RegressionReport {
   const regressions: RegressionReport['regressions'] = [];

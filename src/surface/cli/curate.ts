@@ -13,15 +13,15 @@ import { cliConfig, cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
-  parseCountFlag,
   type CommandContext,
   boolFlag,
-  flagIsTrue,
+  flagValueless,
+  hasFlag,
   nonEmptyStringFlag,
+  parseCountFlag,
   parsePositiveId,
   stringFlag,
   stringFlagOrExit,
-  hasFlag,
 } from './flag-values.js';
 import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
@@ -74,7 +74,7 @@ async function forgetMemory(hippoRoot: string, tenantId: string, id: string, fla
 
   // Raw memories (connector ingestion) are append-only: a BEFORE-DELETE trigger aborts any delete, so rawArchive is the
   // sanctioned removal path and records ctx.actor as the archiver.
-  if (flagIsTrue(flags, 'archive')) {
+  if (boolFlag(flags, 'archive')) {
     await archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
     return;
   }
@@ -473,12 +473,12 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   }
   // Archive has its own HTTP route (POST /v1/memories/:id/archive); route both branches the same way the direct path
   // does.
-  const archive = flagIsTrue(flags, 'archive');
+  const archive = boolFlag(flags, 'archive');
   const reason = stringFlag(flags, 'reason') ?? null;
   if (archive && !reason) {
     fail(ARCHIVE_REASON_REQUIRED);
   }
-  if (flagIsTrue(flags, 'dry-run')) {
+  if (boolFlag(flags, 'dry-run')) {
     await previewForget(hippoRoot, tenantId, id, archive);
     return;
   }
@@ -516,7 +516,7 @@ async function invalidateChurn(
   if (!isGitRepo(processGit, process.cwd())) {
     fail('hippo invalidate --churn must run inside a git repository.');
   }
-  const churnDryRun = flagIsTrue(flags, 'dry-run');
+  const churnDryRun = boolFlag(flags, 'dry-run');
   let churnFailed = false;
   for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, churnDryRun)) {
     if (result.error) {
@@ -545,15 +545,15 @@ async function invalidateChurn(
 
 export async function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  if (flagIsTrue(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
+  if (boolFlag(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
   const target = args[0];
-  if (flagIsTrue(flags, 'id')) {
+  if (flagValueless(flags, 'id')) {
     // Value-less --id must never silently fall through to pattern mode (pattern mode writes broadly; an ignored --id
     // reverses user intent).
     fail('--id requires a memory id');
   }
   const onlyId = stringFlag(flags, 'id');
-  const dryRun = flagIsTrue(flags, 'dry-run');
+  const dryRun = boolFlag(flags, 'dry-run');
   if ((target && onlyId) || (!target && !onlyId)) {
     printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
     printError('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');

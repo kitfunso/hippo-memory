@@ -25,6 +25,8 @@ import type { TenantId } from '../../base/util/tenant.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SharingStore } from './text-keys.js';
 
+const FILTERED_SEARCH_WINDOW = 5000;
+
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 export function logEmbedAllFailure<E>(caller: string, err: E): void {
   log.warn(
@@ -89,9 +91,9 @@ export async function searchBothHybrid(
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope, embedderFor } = options;
 
-  // With an admission filter, lift the per-store candidate cap (default 200) to a bounded 5000: excluded rows could
-  // otherwise fill the window first.
-  const searchWindow = entryFilter ? 5000 : undefined;
+  // With an admission filter, lift the per-store candidate cap (DEFAULT_SEARCH_CANDIDATE_LIMIT) to a bounded window:
+  // excluded rows could otherwise fill it first.
+  const searchWindow = entryFilter ? FILTERED_SEARCH_WINDOW : undefined;
   // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows never enter the
   // candidates, shadow duplicates or use budget.
   // The JS post-filter below is the regex-only `<source>:private:*` half plus defense in depth on exact match.

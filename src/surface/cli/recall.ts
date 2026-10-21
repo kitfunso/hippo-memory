@@ -32,21 +32,21 @@ import {
 import { cliApiContext, cliSecondStore } from './api-context.js';
 import { printError } from './output.js';
 import {
-  failLater,
-  intFlagInRange,
-  parseLimitFlag,
-  parseBudgetFlag,
   type CliFlags,
-  type ParsedFlag,
   type CommandContext,
-  parseAsOfFlag,
-  engineFlags,
+  type ParsedFlag,
   boolFlag,
-  flagIsTrue,
-  numberFlag,
-  stringFlagOrExit,
+  engineFlags,
+  failLater,
+  flagValueless,
   hasFlag,
+  intFlagInRange,
+  numberFlag,
+  parseAsOfFlag,
+  parseBudgetFlag,
+  parseLimitFlag,
   stringFlag,
+  stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { continuityTexts, recallEntryText, recallHeading } from './print.js';
@@ -134,7 +134,7 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
 
 function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
   // A bare --salience-threshold has always read as 1, since Number(true) is 1.
-  const raw = flagIsTrue(flags, 'salience-threshold') ? '1' : stringFlag(flags, 'salience-threshold');
+  const raw = flagValueless(flags, 'salience-threshold') ? '1' : stringFlag(flags, 'salience-threshold');
   if (raw === undefined) return {};
   const threshold = Number(raw);
   if (!Number.isFinite(threshold) || threshold <= 0) {
@@ -237,7 +237,7 @@ function parseRecallOptions(ctx: api.Context, flags: CliFlags) {
   const setting = cliRecallSetting(ctx, explicitScope || envActiveScope());
   const config = ctx.config;
   const minResults = numberFlag(flags, 'min-results');
-  const graphStream = flagIsTrue(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
+  const graphStream = boolFlag(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
   const late = parseRecallLateFlags(flags);
   const goalTag = stringFlagOrExit(flags, 'goal') ?? '';
   const sessionId = (stringFlagOrExit(flags, 'session-id') ?? envHippoSessionId() ?? '').trim();
@@ -294,7 +294,7 @@ function rankOptions(
     activeScope: o.setting.activeScope,
     search: {
       ...engineFlags(flags, o.config),
-      multihop: flagIsTrue(flags, 'multihop') || o.config.multihop.enabled,
+      multihop: boolFlag(flags, 'multihop') || o.config.multihop.enabled,
       graphStream: o.graphStream,
       minResults: o.minResults,
       explain: false,
@@ -353,9 +353,9 @@ interface RecallRenderView {
   readonly entryText: (r: SearchResult) => string;
 }
 
-function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRenderView): string {
-  const { query, showWhy, showPlan, planText, hasContinuity, entryText } = v;
-  const { activeSnapshot, sessionHandoff, recentSessionEvents } = v.continuity;
+function renderRecallBlock(list: SearchResult[], hints: RecallHints, view: RecallRenderView): string {
+  const { query, showWhy, showPlan, planText, hasContinuity, entryText } = view;
+  const { activeSnapshot, sessionHandoff, recentSessionEvents } = view.continuity;
   const continuity = continuityTexts(activeSnapshot, sessionHandoff, recentSessionEvents);
   // The hint still prints when nothing matched, so the agent sees its track record.
   const plan = showPlan && planText !== null ? [planText, ''] : [];
@@ -366,13 +366,13 @@ function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRender
     }
     // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
     const lines = [...continuity];
-    if (h.anchoring) lines.push(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`, '');
-    if (h.availability) {
-      const { recentCount, returnedCount, summary } = h.availability;
+    if (hints.anchoring) lines.push(`[anchored_on: ${hints.anchoring.memoryId}] ${hints.anchoring.summary}`, '');
+    if (hints.availability) {
+      const { recentCount, returnedCount, summary } = hints.availability;
       lines.push(`Availability bias (${recentCount}/${returnedCount} recent): ${summary}`, '');
     }
     lines.push(...plan);
-    const cutoff = showWhy ? cutoffLine(list.length, h.summary) : null;
+    const cutoff = showWhy ? cutoffLine(list.length, hints.summary) : null;
     if (cutoff) lines.push(cutoff, '');
     lines.push(recallHeading(list.length, t, query), ...list.map(entryText));
     return lines.join('\n');

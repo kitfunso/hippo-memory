@@ -182,22 +182,57 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): P
   state.results = await searchPool(ctx, opts, pool);
   // A request past its deadline during the search has no caller left for the later stages.
   currentSignal()?.throwIfAborted();
-  if (opts.haltBefore === 'expand') return done(true);
-  if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
-  applyPfcRerankers(opts, state);
-  if (opts.haltBefore === 'rerank') return done(true);
-  if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
-  await applyGoalBoosts(ctx, opts, state);
-  if (opts.haltBefore === 'salience') return done(true);
-  if (opts.salienceThreshold !== undefined) state.results = applySalience(opts, opts.salienceThreshold, state.results);
-  if (opts.haltBefore === 'outcome') return done(true);
-  if (opts.outcome) dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.traceOutcome === opts.outcome);
-  if (opts.haltBefore === 'layer') return done(true);
-  if (opts.layer) dropUnless(state, (r) => r.entry.layer === opts.layer);
+  for (const stage of RANK_STAGES) {
+    if (opts.haltBefore === stage.name) return done(true);
+    await stage.run(ctx, opts, state);
+  }
   const { limit } = opts.window;
   if (limit < state.results.length) state.results = state.results.slice(0, limit);
   return done(false);
 }
+
+/** The stages after the search, in order; `haltBefore` stops the walk ahead of the stage it names. */
+const RANK_STAGES: readonly {
+  readonly name: RankStage;
+  readonly run: (ctx: RankRecallCtx, opts: RankRecallOptions, state: RankState) => void | Promise<void>;
+}[] = [
+  {
+    name: 'expand',
+    run: async (ctx, opts, state) => {
+      if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
+      reorderResults(opts, state);
+    },
+  },
+  {
+    name: 'rerank',
+    run: async (ctx, opts, state) => {
+      if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
+      await applyGoalBoosts(ctx, opts, state);
+    },
+  },
+  {
+    name: 'salience',
+    run: (_ctx, opts, state) => {
+      if (opts.salienceThreshold !== undefined) {
+        state.results = applySalience(opts, opts.salienceThreshold, state.results);
+      }
+    },
+  },
+  {
+    name: 'outcome',
+    run: (_ctx, opts, state) => {
+      if (opts.outcome) {
+        dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.traceOutcome === opts.outcome);
+      }
+    },
+  },
+  {
+    name: 'layer',
+    run: (_ctx, opts, state) => {
+      if (opts.layer) dropUnless(state, (r) => r.entry.layer === opts.layer);
+    },
+  },
+];
 
 interface PoolScope {
   /** An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half. */
@@ -442,8 +477,8 @@ function applyUtilityRank(opts: RankRecallOptions, state: RankState): void {
   });
 }
 
-function applyPfcRerankers(opts: RankRecallOptions, state: RankState): void {
-  if (opts.evcAdaptive && state.results.length >= 2) state.results = evcAdaptive(opts.query, state.results);
+function reorderResults(opts: RankRecallOptions, state: RankState): void {
+  if (opts.evcAdaptive && state.results.length >= 2) state.results = newestOnTopicFirst(opts.query, state.results);
   if (opts.filterConflicts) {
     dropUnless(state, (r) => !r.entry.supersededBy);
     demoteConflictPeers(opts, state);
@@ -452,7 +487,7 @@ function applyPfcRerankers(opts: RankRecallOptions, state: RankState): void {
   if (opts.rerankUtility) applyUtilityRank(opts, state);
 }
 
-// evcAdaptive acts when the top hits overlap this much; it keeps rows near the best score or covering the query.
+// newestOnTopicFirst acts when the top hits overlap this much; it keeps rows near the best score or covering the query.
 const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
 const SCORE_FLOOR_FRACTION = 0.5;
 const QUERY_COVERAGE_MIN = 0.6;
@@ -462,7 +497,7 @@ const NEAR_DUPLICATE_WINDOW = 3;
 const NEAR_DUPLICATE_POOL_MIN = 9;
 
 /** When the top hits are near-duplicates (same topic, different facts), surface the newest on-topic row first. */
-function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
+function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResult[] {
   const slice = results.slice(0, Math.min(NEAR_DUPLICATE_WINDOW, results.length));
   let pairs = 0;
   let overlapSum = 0;

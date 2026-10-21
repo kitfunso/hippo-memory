@@ -4,7 +4,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../../src/index.js';
-import { strengthBucket } from '../../src/domain/consolidate/dedupe.js';
+import { strengthTieKey } from '../../src/domain/consolidate/dedupe.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -37,7 +37,7 @@ function importBuiltEntry<T>(script: string): T {
 // Announced public in CHANGELOG 1.26.3; guards the entry surface, which no other test imports through.
 describe('package entry re-exports strengthBucket', () => {
   it('src/index.ts exposes the same function dedupe.ts defines', () => {
-    expect(entry.strengthBucket).toBe(strengthBucket);
+    expect(entry.strengthBucket).toBe(strengthTieKey);
     expect(entry.strengthBucket(1)).toBe(100);
   });
 
@@ -53,7 +53,7 @@ describe('package entry re-exports strengthBucket', () => {
     expect(out.one).toBe(100);
     // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/domain\/consolidate\/dedupe\.js';$/m);
+    expect(dts).toMatch(/^export \{ strengthTieKey as strengthBucket \} from '\.\/domain\/consolidate\/dedupe\.js';$/m);
   });
 });
 

@@ -13,7 +13,7 @@ import {
 } from '../../base/util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { flagIsTrue, stringFlagOrExit, type CommandContext, stringFlag, numberFlag } from './flag-values.js';
+import { type CommandContext, boolFlag, numberFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
@@ -101,7 +101,7 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
   const tls = readTlsFiles(flags);
   const { serve } = await import('../../server.js');
   // Unset rather than false without the flag, so HIPPO_ALLOW_CLEARTEXT=1 still applies.
-  const allowCleartext = flagIsTrue(flags, 'allow-cleartext') || undefined;
+  const allowCleartext = boolFlag(flags, 'allow-cleartext') || undefined;
   const handle = await serve({ hippoRoot, port, host, handleSignals: true, tls, allowCleartext });
   console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
   console.log(keyRuleLine());

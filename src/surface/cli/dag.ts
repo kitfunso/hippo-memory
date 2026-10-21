@@ -9,12 +9,11 @@ import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
-  parseBudgetFlag,
   type CommandContext,
-  flagIsTrue,
-  stringFlag,
-  numberFlag,
   boolFlag,
+  numberFlag,
+  parseBudgetFlag,
+  stringFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { CONTENT_PREVIEW_CHARS } from '../../base/util/token-text.js';
@@ -29,7 +28,7 @@ const DAG_CHILD_PREVIEW_CHARS = 100;
 export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const entries = await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
-  const isStats = flagIsTrue(flags, 'stats');
+  const isStats = boolFlag(flags, 'stats');
 
   const byLevel = new Map<number, number>();
   let unlinked = 0;
@@ -122,7 +121,7 @@ async function assembleSession(hippoRoot: string, tenantId: string, sessionId: s
   // Absent stays undefined so the api default applies.
   const budget = parseBudgetFlag(flags, undefined);
   const freshTailCount = numberFlag(flags, 'fresh-tail');
-  const summarizeOlder = !flagIsTrue(flags, 'no-summarize-older');
+  const summarizeOlder = !boolFlag(flags, 'no-summarize-older');
   const scope = stringFlag(flags, 'scope') || undefined;
   const ctx: api.Context = {
     ...cliApiContext(hippoRoot, tenantId),
