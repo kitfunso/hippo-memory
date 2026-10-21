@@ -1,7 +1,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { cosineOf } from '../../base/rank/cosine.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
-import type { EmbeddingProvider } from '../../base/embeddings/provider.js';
+import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import type { RuntimeSettings } from '../../base/config/config.js';

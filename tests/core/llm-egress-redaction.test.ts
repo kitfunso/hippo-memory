@@ -8,9 +8,10 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
 import { extractFacts } from '../../src/domain/learn/extract.js';
-import { getReranker } from '../../src/domain/rerankers/index.js';
+import { getReranker } from '../../src/infra/rerankers.js';
 import { createJevReranker } from '../../src/domain/rerankers/jev.js';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { processHttp } from '../../src/infra/http.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { refineOne } from '../_helpers/refine-one.js';
@@ -83,7 +84,7 @@ describe('secret redaction before memory text leaves the box', () => {
     await getReranker('llm')!(TEXT, [hit(TEXT)]);
     vi.stubEnv('TYPESAFE_API_KEY', 'test-' + 'k'.repeat(8));
     vi.stubGlobal('fetch', capture({ answers: { c1: { noul: 0.5 } } }));
-    await createJevReranker(async () => [])(TEXT, [hit(TEXT)]);
+    await createJevReranker(async () => [], processHttp)(TEXT, [hit(TEXT)]);
     expectScrubbed(2);
   });
 

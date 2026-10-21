@@ -2,7 +2,7 @@
 
 import type { Llm, LlmReply, LlmRequest } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
-import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from '../base/util/http-retry.js';
+import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../base/util/json.js';

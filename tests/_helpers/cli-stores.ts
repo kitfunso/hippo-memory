@@ -4,13 +4,14 @@ import type { CompactionFolder } from '../../src/surface/capture/compaction-reco
 import { cliDiagnostics, cliStore } from '../../src/surface/cli/api-context.js';
 import { folderIndex, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { DoctorStore } from '../../src/doctor.js';
 import type { StoreGroups } from '../../src/store/port.js';
 
 export function captureTarget(root: string): CaptureTarget {
   const config = loadConfig(root);
   const store = cliStore(root);
-  return { root, store, config, index: folderIndex({ store, config }) };
+  return { root, store, config, index: folderIndex({ store, config, embedderFor: resolveEmbeddingProvider }) };
 }
 
 export function diagnosticsAt(root: string): DoctorStore {
@@ -30,7 +31,11 @@ export function compactionFolder(root: string, tenantId = 'default'): Compaction
 
 /** hippo.db's own vector index under `root`, as embedMemory and embedAll take it. */
 export function localIndex(root: string): EmbedTarget {
-  return { embeddingIndex: cliStore(root).embeddingIndex, embeddings: loadConfig(root).embeddings };
+  return {
+    embeddingIndex: cliStore(root).embeddingIndex,
+    embeddings: loadConfig(root).embeddings,
+    embedderFor: resolveEmbeddingProvider,
+  };
 }
 
 /** The store a CLI hook is handed: hippo.db with its local files. */

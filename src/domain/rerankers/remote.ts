@@ -1,5 +1,5 @@
-// The one bounded, retried POST every remote reranker sends.
-import { fetchWithRetry } from '../../base/util/http-retry.js';
+// The one bounded, retried POST every remote reranker sends, through the Http port its root hands the reranker.
+import type { Http } from '../../base/ports/http.js';
 
 // A Retry-After longer than this would outlast most budgets, so the answer is handed back and the reranker falls back.
 const RETRY_WAIT_CAP_MS = 2_000;
@@ -11,11 +11,11 @@ export const RERANKER_MAX_REPLY_BYTES = 1024 * 1024;
 /**
  * POST a scoring request. A dropped connection, 429 or 5xx is retried, since scoring changes nothing on the far side.
  */
-export async function rerankerPost(url: string, init: RequestInit, budgetMs: number): Promise<Response> {
+export async function rerankerPost(http: Http, url: string, init: RequestInit, budgetMs: number): Promise<Response> {
   // The budget bounds the whole call, retries included, so recall never waits past the configured timeout.
   const budget = AbortSignal.timeout(budgetMs);
   try {
-    return await fetchWithRetry(
+    return await http.send(
       url,
       { ...init, method: 'POST', signal: budget },
       {

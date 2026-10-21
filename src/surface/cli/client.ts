@@ -6,7 +6,7 @@
  */
 
 import type { RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
-import { fetchWithRetry } from '../../base/util/http-retry.js';
+import { fetchWithRetry } from '../../infra/http-retry.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';

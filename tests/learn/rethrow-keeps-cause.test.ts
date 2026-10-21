@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { inspect } from 'node:util';
 import { GitReadError, gitLsFilesAtHead } from '../../src/domain/learn/churn-git.js';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createListener } from '../../src/surface/server/tls.js';
 import { parseSteps } from '../../src/domain/consolidate/trace.js';
 import { loadConfig } from '../../src/base/config/config.js';

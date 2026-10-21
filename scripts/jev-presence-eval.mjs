@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { hybridSearch } from '../dist/index.js';
 import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { loadAllEntries } from '../dist/entry/testing.js';
-import { getReranker } from '../dist/domain/rerankers/index.js';
+import { getReranker } from '../dist/entry/eval-scripts.js';
 import { mulberry32 } from './lib/prng.mjs';
 
 const NOW = new Date('2026-09-18T14:31:52.073Z'); // same clock as Lane 15, see rerank-3arm-ab.mjs:15

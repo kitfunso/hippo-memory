@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import { boundPort } from '../_helpers/listen.js';
 import { createLlmReranker } from '../../src/domain/rerankers/llm.js';
-import { getReranker } from '../../src/domain/rerankers/index.js';
+import { processHttp } from '../../src/infra/http.js';
+import { getReranker } from '../../src/infra/rerankers.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 
@@ -89,7 +90,7 @@ describe('llmReranker', () => {
   it('warns once with the status when two calls fail close together, and keeps the input order', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('bad request', { status: 400 }));
-    const rerank = createLlmReranker();
+    const rerank = createLlmReranker(processHttp);
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
 
     const first = await rerank('q', inputs);
@@ -113,7 +114,7 @@ describe('llmReranker', () => {
           init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
         }),
     );
-    await createLlmReranker()('q', [asResult('alpha', 1.0)]);
+    await createLlmReranker(processHttp)('q', [asResult('alpha', 1.0)]);
     vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', undefined);
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('no answer within 5 ms');
   });
@@ -161,7 +162,7 @@ describe('llmReranker against a local endpoint', () => {
   it('reranks when the endpoint drops the first connection and answers the second', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     script = ['reset', 'rank'];
-    expect(order(await createLlmReranker()('q', inputs()))).toEqual(['beta', 'alpha']);
+    expect(order(await createLlmReranker(processHttp)('q', inputs()))).toEqual(['beta', 'alpha']);
     expect(hits).toBe(2);
     expect(lines(stderr)).toEqual([]);
   });
@@ -171,7 +172,7 @@ describe('llmReranker against a local endpoint', () => {
     vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', '100');
     script = ['unavailable'];
     try {
-      expect(order(await createLlmReranker()('q', inputs()))).toEqual(['alpha', 'beta']);
+      expect(order(await createLlmReranker(processHttp)('q', inputs()))).toEqual(['alpha', 'beta']);
     } finally {
       vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', undefined);
     }
@@ -184,7 +185,7 @@ describe('llmReranker against a local endpoint', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     // Only the clock is faked: the endpoint and the request timers stay real.
     vi.useFakeTimers({ toFake: ['Date'] });
-    const rerank = createLlmReranker();
+    const rerank = createLlmReranker(processHttp);
     script = ['refuse'];
 
     await rerank('q', inputs());
@@ -257,7 +258,7 @@ describe('llmReranker reply size cap', () => {
 
   it('keeps the input order, names the cap in its warning and stops reading early', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const out = await createLlmReranker()('q', [asResult('alpha', 1.0), asResult('beta', 0.5)]);
+    const out = await createLlmReranker(processHttp)('q', [asResult('alpha', 1.0), asResult('beta', 0.5)]);
     expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('reply over 1048576 bytes');
     await vi.waitFor(() => expect(closedEarly).toBe(true));

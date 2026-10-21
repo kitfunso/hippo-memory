@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { getReranker } from '../../src/domain/rerankers/index.js';
+import { getReranker } from '../../src/infra/rerankers.js';
 import { createClefReranker, parseClefReply, type ClefModel } from '../../src/domain/rerankers/clef.js';
+import { processHttp } from '../../src/infra/http.js';
 import type { RerankerFn } from '../../src/domain/rerankers/types.js';
 import { cliReranker } from '../../src/surface/cli/api-context.js';
 import { envClefSettings } from '../../src/base/util/env.js';
@@ -10,7 +11,7 @@ import type { JsonValue } from '../../src/base/util/json.js';
 
 /** `model` with the CLEF transport the environment names at each call, as a root reads it into RuntimeSettings. */
 function clefUnderEnv(model: ClefModel): RerankerFn {
-  const rerank = createClefReranker(model);
+  const rerank = createClefReranker(model, processHttp);
   return (query, results, options) => rerank(query, results, { ...options, clef: envClefSettings() });
 }
 
@@ -93,7 +94,7 @@ describe('clef rerankers', () => {
   it('reads its transport from the settings a root hands down, not the environment', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.9, 0.5]));
     const handed = { cloudflareAccountId: 'fedcba9876543210fedcba9876543210', cloudflareApiToken: 'handed-down-token' };
-    await createClefReranker('clef-flash')('q', inputs(), { clef: handed });
+    await createClefReranker('clef-flash', processHttp)('q', inputs(), { clef: handed });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(`/accounts/${handed.cloudflareAccountId}/`);
     expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${handed.cloudflareApiToken}`);
@@ -101,7 +102,7 @@ describe('clef rerankers', () => {
 
   it('makes no network call when no settings are handed down, whatever the environment holds', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
-    expect(contents(await createClefReranker('clef-flash')('q', inputs()))).toEqual(NATIVE);
+    expect(contents(await createClefReranker('clef-flash', processHttp)('q', inputs()))).toEqual(NATIVE);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

@@ -5,10 +5,11 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
-import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { embedAll, embedMemory, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
@@ -65,7 +66,7 @@ interface HippoDbIndex {
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
 function on(hippoRoot: string, store: HippoStore): EmbedTarget {
-  return { store, embeddings: loadConfig(hippoRoot).embeddings, strength: {} };
+  return { store, embeddings: loadConfig(hippoRoot).embeddings, embedderFor: resolveEmbeddingProvider, strength: {} };
 }
 
 function markedFolder(config?: ConfigFile): string {

@@ -1,7 +1,7 @@
 // The api reads behind `hippo recall`, driven against a real temp store: budget fit, store origin, scoped continuity, JSON rows.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { join } from 'node:path';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { loadConfig } from '../../src/base/config/config.js';

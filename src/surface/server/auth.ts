@@ -13,6 +13,7 @@ import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types
 import { isJsonString } from '../../base/util/json.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { isLoopbackAddress } from '../../base/util/net.js';
+import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 
 /** Kept under its old name because src/server.ts publishes it. */
 export const isLoopback = isLoopbackAddress;
@@ -334,7 +335,7 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
   const team = !opts.onHippoDb;
   // Per request, never cached at serve: the global store can be created while the server runs.
-  const reach = contextReach(opts.reachOf(team), opts.configAt);
+  const reach = contextReach(opts.reachOf(team), opts.configAt, resolveEmbeddingProvider);
   // The reader keys on the file's stamp, so each request still sees an edit made while the server runs.
   const config = opts.configAt(opts.hippoRoot);
   const callers = opts.callers;

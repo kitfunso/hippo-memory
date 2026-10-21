@@ -1,4 +1,4 @@
-import { fetchWithRetry, isRetryableStatus } from '../../../base/util/http-retry.js';
+import { fetchWithRetry, isRetryableStatus } from '../../../infra/http-retry.js';
 import type { SlackHistoryFetcher } from './backfill.js';
 import type { SlackMessageEvent } from './types.js';
 import { readCappedJson } from '../../../base/util/capped-json.js';

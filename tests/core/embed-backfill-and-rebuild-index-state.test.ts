@@ -11,10 +11,11 @@ import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { embedAll, embedMemory } from '../../src/domain/search/embed-memories.js';
-import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import {
   peakRowsRead,
   recordStatements,
@@ -302,7 +303,11 @@ describe('a model identity change on hippo.db', () => {
         return index.stageRebuild(id, rows);
       },
     };
-    const target = { embeddingIndex: watched, embeddings: loadConfig(root).embeddings };
+    const target = {
+      embeddingIndex: watched,
+      embeddings: loadConfig(root).embeddings,
+      embedderFor: resolveEmbeddingProvider,
+    };
     expect(await embedAll(target, undefined, fake('fake-new'))).toBe(ROWS);
     expect(staged).toEqual([PAGE, PAGE, PAGE, PAGE, ROWS - 4 * PAGE]);
     expect(liveWhileStaging).toEqual(staged.map(() => before));

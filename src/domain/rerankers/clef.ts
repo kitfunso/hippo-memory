@@ -1,4 +1,5 @@
 import type { ClefSettings } from '../../base/config/config.js';
+import type { Http } from '../../base/ports/http.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
@@ -115,19 +116,23 @@ export function parseClefReply(
   };
 }
 
-async function requestScores(
-  model: ClefModel,
-  query: string,
-  head: SearchResult[],
-  route: ClefRoute,
-  requested: number | undefined,
-): Promise<ClefScores> {
+/** Where one scoring request goes and how: the transport, the model asked for, its route and the call's timeout. */
+interface ClefCall {
+  readonly http: Http;
+  readonly model: ClefModel;
+  readonly route: ClefRoute;
+  readonly requestedTimeoutMs: number | undefined;
+}
+
+async function requestScores(call: ClefCall, query: string, head: SearchResult[]): Promise<ClefScores> {
+  const { http, model, route, requestedTimeoutMs: requested } = call;
   const { state, questions } = buildRelevanceRequest(query, head);
   // Node clamps a delay past 2^31-1 to 1 ms.
   const timeoutMs = requested !== undefined && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const headers = new Headers({ 'content-type': 'application/json' });
   if (route.token) headers.set('authorization', `Bearer ${route.token}`);
-  const resp = await rerankerPost(route.url, { headers, body: JSON.stringify({ state, model, questions }) }, timeoutMs);
+  const request = { headers, body: JSON.stringify({ state, model, questions }) };
+  const resp = await rerankerPost(http, route.url, request, timeoutMs);
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
     const ray = resp.headers
@@ -159,7 +164,7 @@ function nativeOrder(head: SearchResult[], provenance: RerankProvenance): Rerank
  * A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order (never paid Jev) and
  * warns.
  */
-export function createClefReranker(model: ClefModel): RerankerFn {
+export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
   const outage = createOutageWarning(model, 'keeping the native order');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
     const head = results.slice(0, options?.topK ?? JEV_DEFAULT_TOP_K);
@@ -170,7 +175,7 @@ export function createClefReranker(model: ClefModel): RerankerFn {
     try {
       if (head.length > MAX_CANDIDATES) throw new Error(`more than ${MAX_CANDIDATES} candidates`);
       route = resolveClefRoute(model, options?.clef);
-      got = await requestScores(model, query, head, route, options?.clef?.timeoutMs);
+      got = await requestScores({ http, model, route, requestedTimeoutMs: options?.clef?.timeoutMs }, query, head);
       outage.answered();
     } catch (err) {
       const reason = errorMessage(err);

@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../../src/base/config/config.js';
-import type { EmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
+import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
@@ -39,7 +40,11 @@ describe('embedAll waiting on a held embedding index lock', () => {
     };
 
     const run = embedAll(
-      { embeddingIndex: { ...index, tryLock }, embeddings: loadConfig(root).embeddings },
+      {
+        embeddingIndex: { ...index, tryLock },
+        embeddings: loadConfig(root).embeddings,
+        embedderFor: resolveEmbeddingProvider,
+      },
       undefined,
       provider,
     );

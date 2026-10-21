@@ -1,7 +1,7 @@
 // rankRecall in process: what it ranks, what it hands back for the caller to write, where haltBefore stops it, and its re-rank stages.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
