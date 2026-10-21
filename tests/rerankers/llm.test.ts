@@ -3,9 +3,11 @@ import * as http from 'node:http';
 import { boundPort } from '../_helpers/listen.js';
 import { createLlmReranker } from '../../src/domain/rerankers/llm.js';
 import { processHttp } from '../../src/infra/http.js';
-import { getReranker } from '../../src/infra/rerankers.js';
+import { realRerankers } from '../../src/infra/rerankers.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
+
+const getReranker = realRerankers();
 
 afterEach(() => {
   vi.unstubAllEnvs();

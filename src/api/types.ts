@@ -56,7 +56,8 @@ export interface Context {
   /** The root's per-caller state: recall rings, each client's last shown ids, and how a write starts a sleep. Absent, a
    * recall keeps no session history and a write starts no sleep. */
   readonly callers?: CallerState;
-  /** The machine, model and embedder this context reaches past the store; absent, `infraOf` builds the real ones. */
+  /** The machine, model, embedder and rerankers this context reaches past the store; absent, the published entry it is
+   * passed to fills in the real ones. */
   readonly infra?: InfraPorts;
 }
 

@@ -11,6 +11,7 @@ import type { HippoStore } from '../../src/store/index.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -70,6 +71,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:tokenA:1.2.3.4',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     const ctxB = {
@@ -81,6 +83,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:tokenB:5.6.7.8',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
 
@@ -121,6 +124,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:tokenC:never-recalled',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     const cOutcome = await callTool(3, 'hippo_outcome', { good: true }, ctxC);
@@ -147,6 +151,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:t:addr',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     await callTool(1, 'hippo_recall', { query: 'audit-canary', budget: 1500 }, ctx);
@@ -183,6 +188,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:t:addr',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     const res = await callTool(1, 'hippo_remember', { text: 'audit-canary remember actor-mcp shape lock' }, ctx);
@@ -209,6 +215,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:t:addr-outcome',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     // Seed a memory + recall it so last-shown list is populated for clientKey.
@@ -244,6 +251,7 @@ describe('mcp tenant + client-key isolation', () => {
       hostAdmin: true as const,
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
 
@@ -284,6 +292,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: keyA,
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     const ctxB = {
@@ -295,6 +304,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: keyB,
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
 
@@ -325,6 +335,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:shared-key:1.2.3.4',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     const acme: McpContext = { ...base, project: { name: 'acme', legacyName: 'acme' } };
@@ -356,6 +367,7 @@ describe('mcp tenant + client-key isolation', () => {
         project: { name: 'acme', legacyName: 'acme' },
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
         callers,
       };
       await callTool(1, 'hippo_recall', { query: 'client cap canary', budget: 1500 }, acme);
@@ -392,6 +404,7 @@ describe('mcp tenant + client-key isolation', () => {
       store,
       reach,
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
 
@@ -426,6 +439,7 @@ describe('mcp tenant + client-key isolation', () => {
       store,
       reach,
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
     const okRes = await callTool(2, 'hippo_share', { id: a.id, force: true }, ctxA);
@@ -444,6 +458,7 @@ describe('mcp tenant + client-key isolation', () => {
       clientKey: 'http:alice:addr',
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
       callers,
     };
 

@@ -29,6 +29,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -54,6 +55,7 @@ function callMcpTool(home: string, name: string, args: ScopeToolArgs) {
       hostAdmin: true,
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
     },
   );
 }

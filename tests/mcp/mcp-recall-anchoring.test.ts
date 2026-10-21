@@ -21,6 +21,7 @@ import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -93,6 +94,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      infra: testInfra(),
       callers: createCallerState(),
     };
     // Three recalls with DIFFERENT queries on the same session — same top
@@ -121,6 +123,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      infra: testInfra(),
       callers: createCallerState(),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
@@ -137,6 +140,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      infra: testInfra(),
       callers: createCallerState(),
     };
     expect(countAuditOps(home, 'recall_anchor_skipped_no_session')).toBe(0);
@@ -154,6 +158,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      infra: testInfra(),
       callers: createCallerState(),
     };
     // Repeat 3 distinct queries — would normally fire R2.

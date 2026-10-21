@@ -12,6 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -40,6 +41,7 @@ async function callTool(
     role: actor.role,
     store: sqliteStore(root),
     config: loadConfig(root),
+    infra: testInfra(),
   };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);

@@ -822,7 +822,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/domain/rerankers/llm.ts
 - `module header`: Skeleton only — see docs/plans/2026-05-10-f6-reranker-hardening.md Task 8. Full characterisation deferred to a follow-on plan.
 
-### src/domain/rerankers/types.ts
+### src/base/ports/reranker.ts
 - `RerankerFn`: Determinism is required for paired A/B and for the workload-validity gate in docs/evals/2026-05-10-f6-reranker-prereg.md.
 
 ### src/domain/search/rrf.ts

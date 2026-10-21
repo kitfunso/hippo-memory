@@ -1,21 +1,25 @@
 /** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (a store may leave empty -wal and
  * -shm files); never touches memory content. */
-import { envByName, processEnv } from './base/util/env.js';
+import { envByName, processEnv } from '../../base/util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from './base/scope/project-identity.js';
-import { realpathOrResolve } from './base/util/real-path.js';
-import { getGlobalRoot } from './domain/sharing/global-store.js';
+import {
+  findHippoStoreDir,
+  isGlobalStoreRoot,
+  isInitialized,
+  resolveGlobalRootDir,
+} from '../../base/scope/project-identity.js';
+import { realpathOrResolve } from '../../base/util/real-path.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
-import { loadConfig } from './base/config/config.js';
-import { redactSecretsStrict } from './base/util/secret-detect.js';
-import { type JsonValue, isJsonString, isJsonObject, tryReadJsonFile, type JsonObject } from './base/util/json.js';
-import { tryParseUrl } from './base/util/net.js';
-import { ignoringCodes, PATH_UNREADABLE } from './base/util/expected-errors.js';
-import { escapeRegex } from './base/util/escape.js';
-import { errorMessage } from './base/util/log.js';
+import { loadConfig } from '../../base/config/config.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
+import { type JsonValue, isJsonString, isJsonObject, tryReadJsonFile, type JsonObject } from '../../base/util/json.js';
+import { tryParseUrl } from '../../base/util/net.js';
+import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';
+import { escapeRegex } from '../../base/util/escape.js';
+import { errorMessage } from '../../base/util/log.js';
 
 export interface SupportBundleOptions extends DoctorOptions {
   readonly cwd: string;
@@ -123,7 +127,7 @@ async function buildStores(opts: SupportBundleOptions): Promise<JsonValue[]> {
   const projectDir = findHippoStoreDir(opts.cwd, { homeDir: opts.home });
   if (projectDir !== null) stores.push(await buildStoreEntry(opts, 'project', projectDir));
 
-  const globalDir = getGlobalRoot();
+  const globalDir = resolveGlobalRootDir();
   const alreadyListed = projectDir !== null && isGlobalStoreRoot(projectDir);
   if (isInitialized(globalDir) && !alreadyListed) stores.push(await buildStoreEntry(opts, 'global', globalDir));
 
@@ -341,7 +345,7 @@ export async function buildSupportBundle(opts: SupportBundleOptions): Promise<Js
   };
   // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log
   // lines often quote the temp folder, which usually sits under the home.
-  const redacted = redactStrings(bundle, buildHomePattern(opts.home, [getGlobalRoot(), os.tmpdir()]));
+  const redacted = redactStrings(bundle, buildHomePattern(opts.home, [resolveGlobalRootDir(), os.tmpdir()]));
   // SAFETY: the value built above is always a JsonObject; redactStrings preserves object shape.
   return redacted as JsonObject;
 }

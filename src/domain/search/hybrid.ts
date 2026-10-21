@@ -3,9 +3,9 @@ import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../../base/
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { evalNow, rankAblation } from '../../base/memory/ablation.js';
-import { extractPathTags } from './path-context.js';
+import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
-import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
+import type { RerankerFn, RerankerOptions } from '../../base/ports/reranker.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
 import { summaryScoring, type BoostContext } from './boosts.js';
@@ -48,7 +48,7 @@ export interface HybridOrder {
   mmr?: boolean;
   /** MMR balance: 1.0 = pure relevance, 0.0 = pure diversity. Default 0.7. */
   mmrLambda?: number;
-  /** Optional reranker. Runs after MMR, before budget filtering. See src/domain/rerankers/types.ts. */
+  /** Optional reranker. Runs after MMR, before budget filtering. See src/base/ports/reranker.ts. */
   reranker?: RerankerFn;
   /** Options passed through to the reranker. */
   rerankerOptions?: RerankerOptions;
@@ -105,6 +105,8 @@ export interface HybridSettings {
   now?: Date;
   /** The root's environment settings: the scope, summary deboost and query-embedding budget a call names none of. */
   runtime?: RuntimeSettings;
+  /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent, no path boost. */
+  cwd?: string;
 }
 
 /** The published wrapper's folder fields: hippo.db under `hippoRoot` when the caller names no store. */
@@ -201,7 +203,7 @@ function graphStoresOf(source: VectorSource | undefined, options: HybridRankOpti
 function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridRankOptions): BoostContext {
   return {
     now,
-    pathTags: extractPathTags(process.cwd()),
+    pathTags: pathTagsOf(options.cwd),
     scope: options.scope !== undefined ? options.scope : (options.runtime?.activeScope ?? null),
     temporal: temporalContext(query, pool),
     outcome: true,

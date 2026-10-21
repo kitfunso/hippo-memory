@@ -40,6 +40,11 @@ export function extractPathTags(dirPath: string): string[] {
     .map((s) => `path:${s.toLowerCase()}`);
 }
 
+/** The path tags a recall in `cwd` boosts; none when the caller names no folder. */
+export function pathTagsOf(cwd: string | undefined): string[] {
+  return cwd === undefined ? [] : extractPathTags(cwd);
+}
+
 /** Path overlap score in 0..1 (1 = perfect match), normalized by the MORE SPECIFIC side (the larger tag set), so a
  * bare/generic path tag cannot score 1.0 against a deeply nested cwd just because its tiny tag set is contained in the
  * query's.

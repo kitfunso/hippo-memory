@@ -24,7 +24,7 @@ import {
   detectRecallHints,
   suppressionSummary,
   type SuppressionCounts,
-} from './recall-text.js';
+} from '../render/recall-text.js';
 import type { SharedRecallOptions } from '../../api/recall/request.js';
 import {
   formatContinuityBlock,

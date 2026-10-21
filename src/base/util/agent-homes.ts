@@ -17,6 +17,8 @@ export interface Machine {
   readonly platform: NodeJS.Platform;
   readonly files: AgentFiles;
   readonly git: GitRunner;
+  /** The folder the process runs in, whose path segments boost a recall; absent, no path boost. */
+  readonly cwd?: string;
 }
 
 /** The global Hippo store directory: $HIPPO_HOME, else $XDG_DATA_HOME/hippo, else ~/.hippo. */

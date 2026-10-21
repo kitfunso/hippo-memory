@@ -9,6 +9,7 @@ import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -69,6 +70,7 @@ beforeEach(() => {
     store,
     reach: testReach(root, store),
     config: loadConfig(root),
+    infra: testInfra(),
   };
 });
 

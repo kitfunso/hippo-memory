@@ -5,7 +5,7 @@ import { cliDiagnostics, cliStore } from '../../src/surface/cli/api-context.js';
 import { folderIndex, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import type { DoctorStore } from '../../src/doctor.js';
+import type { DoctorStore } from '../../src/surface/cli/doctor.js';
 import type { StoreGroups } from '../../src/store/port.js';
 
 export function captureTarget(root: string): CaptureTarget {

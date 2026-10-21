@@ -8,6 +8,7 @@ import type { StoreReach } from '../../store/port.js';
 import type { ConfigReader } from '../../base/config/config.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
+import type { InfraPorts } from '../../base/ports/infra.js';
 
 export interface ServerHandle {
   port: number;
@@ -123,6 +124,8 @@ export type ResolvedServeOptions = ServeOpts & {
   failedAuthLimiter: RateLimiter;
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
+  /** This server's outside services: one reranker registry for the server's life, the rest per Context. */
+  infra: () => InfraPorts;
   sleeps: SleepQueue;
   counts: ServerCounts;
 };

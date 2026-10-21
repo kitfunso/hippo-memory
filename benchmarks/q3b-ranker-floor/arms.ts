@@ -1,6 +1,6 @@
 // The three arms: one request shape per recall ranker (retrieveWithCliCore, retrieve, retrieveRanking). Each returns the contents it showed, best first.
 
-import { adminActor, retrieve, retrieveRanking, retrieveWithCliCore, type Context } from '../../dist/api/index.js';
+import { adminActor, retrieve, retrieveRanking, retrieveWithCliCore, type Context } from '../../dist/entry/eval-scripts.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/surface/cli/flag-values.js';
 import { loadConfig } from '../../dist/base/config/config.js';

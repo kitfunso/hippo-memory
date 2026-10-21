@@ -2,7 +2,7 @@
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
 import { sleep } from '../../api/sleep/sleep.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import { anthropicLlmFromEnv } from '../../infra/ports.js';
+import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { isStoreBusy } from '../../store/port.js';
 import { configReader } from '../../base/config/config.js';
@@ -18,6 +18,8 @@ type JobResult = SleepResult | ConsolidationResult;
 
 const loadConfig = configReader(envRuntimeSettings);
 const storeAt = (root: string) => defaultStore(root, { lossAversionRatio: envLossAversionRatio() });
+// The child runs one job, so its one root builds the ports once.
+const childInfra = rootInfra();
 
 function failed<E>(err: E): SleepReply<never> {
   return {
@@ -33,7 +35,7 @@ function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): 
   const store = storeAt(hippoRoot);
   const reach = contextReach(defaultReach(hippoRoot, store, undefined, storeAt), loadConfig, resolveEmbeddingProvider);
   const config = loadConfig(hippoRoot);
-  return sleep({ tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
+  return sleep({ tenantId: job.tenantId, actor: job.actor, store, reach, config, infra: childInfra() }, job.opts);
 }
 
 /** Resolves to the exit code once the channel has taken the reply, or failed to. */

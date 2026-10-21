@@ -6,7 +6,7 @@ import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { promote } from '../../src/api/memories/promote.js';
 import { shareToGlobal } from '../../src/api/sharing.js';
 import type { ContextReach } from '../../src/api/types.js';
-import { realInfra } from '../../src/infra/ports.js';
+import { testInfra } from '../_helpers/infra.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -54,7 +54,7 @@ describe('a host-built global target without embedderFor', () => {
     ctx = {
       ...base,
       reach: hostReach(base.reach),
-      infra: { ...realInfra(), embedderFor: () => provider },
+      infra: { ...testInfra(), embedderFor: () => provider },
     };
   });
 

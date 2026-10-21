@@ -12,7 +12,7 @@ import { Layer, strengthOptionsOf, type MemoryEntry } from '../../base/memory/me
 import { multihopSearch } from '../../domain/search/multihop.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import { passesCliRecallScopeFilter, recallScopeFilter } from '../../base/scope/recall-scope.js';
-import type { RerankerFn } from '../../domain/rerankers/types.js';
+import type { RerankerFn } from '../../base/ports/reranker.js';
 import { currentEntries } from '../../domain/search/as-of.js';
 import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
 import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
@@ -56,6 +56,8 @@ export interface RankRecallCtx extends RankSource {
   tenantId: string;
   /** Builds the provider that embeds the query for each store's vector arm. */
   embedderFor: EmbedderFor;
+  /** The folder whose path segments boost a memory; absent, no path boost. */
+  cwd?: string;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
 }
@@ -303,6 +305,7 @@ function graphStreamSearch(
     budget,
     cost,
     runtime: ctx.config.runtime,
+    cwd: ctx.cwd,
     source: vectorSourceOf(ctx),
     mmr,
     mmrLambda,
@@ -336,6 +339,7 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: R
     asOf,
     scope: ctx.config.runtime?.activeScope ?? null,
     runtime: ctx.config.runtime,
+    cwd: ctx.cwd,
   });
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
@@ -374,6 +378,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
         minResults,
         scope,
         runtime: ctx.config.runtime,
+        cwd: ctx.cwd,
         includeSuperseded,
         asOf,
       },
@@ -392,6 +397,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
     cost,
     scope,
     runtime: ctx.config.runtime,
+    cwd: ctx.cwd,
     explain,
     vectorCandidates,
     ...tuning,

@@ -102,6 +102,7 @@ async function runCorpusEval(
     embeddingWeight: numberFlag(flags, 'embedding-weight'),
     localBump,
     runtime: cliConfig(hippoRoot).runtime,
+    cwd: process.cwd(),
   });
 }
 

@@ -178,7 +178,7 @@ async function sessionOwners(r: Reader, machine: SessionMachine): Promise<Map<st
 async function strayImports(r: Reader, folder: StoreFolder): Promise<MemoryEntry[]> {
   const copies = await importCopies(r);
   if (!folder.isGlobal) return copies;
-  const { platform } = folder.machine;
+  const { machine } = folder;
   const owners = await sessionOwners(r, folder.machine);
   const tool = toolSourcePrefix('claude-code');
   const kept = (e: MemoryEntry): boolean => e.kind !== 'raw' && !e.pinned;
@@ -195,7 +195,7 @@ async function strayImports(r: Reader, folder: StoreFolder): Promise<MemoryEntry
     const own = new Set([...names, ...foldedInto(edges, names)]);
     for (const origin of new Set([...origins, ...own])) {
       (own.has(origin) ? right : wrong).add(
-        containerPrefix('claude-code', containerId(dir, 'project', platform, origin)),
+        containerPrefix('claude-code', containerId(dir, 'project', machine, origin)),
       );
     }
   }

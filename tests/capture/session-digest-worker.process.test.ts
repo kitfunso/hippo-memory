@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { sessionDigestId } from '../../src/surface/capture/session-digest.js';
+import { sessionDigestId } from '../../src/base/session/session-digest-row.js';
 import { isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

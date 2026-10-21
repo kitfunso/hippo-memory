@@ -3,7 +3,7 @@ import type { RuntimeSettings } from '../../base/config/config.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { evalNow, rankAblation } from '../../base/memory/ablation.js';
-import { extractPathTags } from './path-context.js';
+import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
 import { currentEntries } from './as-of.js';
@@ -24,6 +24,8 @@ export interface SearchOptions {
   scope?: string | null;
   /** The root's settings; `lossAversionRatio` scales an error memory's strength. */
   runtime?: RuntimeSettings;
+  /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent, no path boost. */
+  cwd?: string;
 }
 
 type Corpus = ReturnType<typeof buildCorpus>;
@@ -53,7 +55,7 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
   const corpus = corpusFor(entries, pool);
   const ctx: BoostContext = {
     now,
-    pathTags: extractPathTags(process.cwd()),
+    pathTags: pathTagsOf(options.cwd),
     scope: options.scope ?? null,
     temporal: temporalContext(query, pool),
     outcome: false,

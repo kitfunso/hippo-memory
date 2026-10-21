@@ -14,6 +14,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 const LESSON = 'fix the retry loop that dropped the last queued webhook delivery';
 
@@ -72,6 +73,7 @@ describe('mcpActor', () => {
         role: 'admin',
         store: sqliteStore('/unused'),
         config: loadConfig('/unused'),
+        infra: testInfra(),
       }).hostAdmin,
     ).toBeUndefined();
     expect(
@@ -83,6 +85,7 @@ describe('mcpActor', () => {
         hostAdmin: true,
         store: sqliteStore('/unused'),
         config: loadConfig('/unused'),
+        infra: testInfra(),
       }).hostAdmin,
     ).toBe(true);
   });
@@ -121,6 +124,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
         role,
         store: sqliteStore(hippoRoot),
         config: loadConfig(hippoRoot),
+        infra: testInfra(),
       };
       await expect(callTool('hippo_learn', { days: 3650 }, ctx)).rejects.toThrow('hippo_learn requires a host admin');
     }
@@ -139,6 +143,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
         stdio: true,
         store: sqliteStore(hippoRoot),
         config: loadConfig(hippoRoot),
+        infra: testInfra(),
       },
       hippoRoot,
       config: loadConfig(hippoRoot),
@@ -182,6 +187,7 @@ describe('hippo_context reads the server git state only for stdio or a host admi
           role: 'member',
           store: sqliteStore(hippoRoot),
           config: loadConfig(hippoRoot),
+          infra: testInfra(),
         },
       ),
     );
@@ -202,6 +208,7 @@ describe('hippo_context reads the server git state only for stdio or a host admi
           hostAdmin: true,
           store: sqliteStore(hippoRoot),
           config: loadConfig(hippoRoot),
+          infra: testInfra(),
         },
       ),
     );

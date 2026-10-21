@@ -11,18 +11,19 @@ import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
 import { handoffText, snapshotText } from '../../src/api/context-render.js';
 import {
-  cliRecallOrigin,
-  cliRecallReranker,
-  cliRecallSetting,
+  recallRowOrigin,
+  recallRerankerPick,
+  recallStoreSetting,
   fitRecallRows,
-  loadCliRecallContinuity,
+  loadScopedContinuity,
   recallJsonRow,
-  type CliRecallSetting,
+  type RecallStoreSetting,
 } from '../../src/api/recall/rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -31,7 +32,7 @@ let hippoRoot: string;
 let globalRoot: string;
 
 const ctx = () => cliApiContext(hippoRoot, 'default');
-const setting = (activeScope: string | null, primaryIsGlobal = false): CliRecallSetting => ({
+const setting = (activeScope: string | null, primaryIsGlobal = false): RecallStoreSetting => ({
   globalRoot,
   primaryIsGlobal,
   activeScope,
@@ -132,26 +133,26 @@ describe('fitRecallRows', () => {
   });
 });
 
-describe('cliRecallSetting and cliRecallOrigin', () => {
+describe('recallStoreSetting and recallRowOrigin', () => {
   it('names the global store and marks a row global only when this store lacks it and the global store is on', () => {
-    const absent = cliRecallSetting(ctx(), 'team-a');
+    const absent = recallStoreSetting(ctx(), 'team-a');
     expect(absent).toEqual({ globalRoot: '', primaryIsGlobal: false, activeScope: 'team-a' });
-    const off = cliRecallOrigin(ctx(), absent);
+    const off = recallRowOrigin(ctx(), absent);
     expect(off.globalOn).toBe(false);
     // SAFETY: the origin reads only the isGlobal tag, so a bare id is enough of a row.
     expect(off.isGlobal({ entry: { id: 'mem_elsewhere' }, isGlobal: true } as SearchResult)).toBe(false);
     // The reach is probed when the context is built, so the global store is seen by a context built after it exists.
     initTestStore(globalRoot);
-    const s = cliRecallSetting(ctx(), 'team-a');
+    const s = recallStoreSetting(ctx(), 'team-a');
     expect(s).toEqual({ globalRoot, primaryIsGlobal: false, activeScope: 'team-a' });
-    const on = cliRecallOrigin(ctx(), s);
+    const on = recallRowOrigin(ctx(), s);
     expect(on.globalOn).toBe(true);
     // SAFETY: the origin reads only the isGlobal tag, so a bare id is enough of a row.
     const row = (isGlobal?: boolean) => ({ entry: { id: 'mem_x' }, isGlobal }) as SearchResult;
     expect(on.isGlobal(row(false))).toBe(false);
     expect(on.isGlobal(row())).toBe(false);
     expect(on.isGlobal(row(true))).toBe(true);
-    expect(cliRecallOrigin(ctx(), { ...s, primaryIsGlobal: true }).isGlobal(row(false))).toBe(true);
+    expect(recallRowOrigin(ctx(), { ...s, primaryIsGlobal: true }).isGlobal(row(false))).toBe(true);
   });
 
   it('tags a ranked row global when it came from the global store and local when it did not', async () => {
@@ -184,17 +185,17 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
         },
       },
     );
-    const origin = cliRecallOrigin(ctx(), cliRecallSetting(ctx(), null));
+    const origin = recallRowOrigin(ctx(), recallStoreSetting(ctx(), null));
     const byId = new Map(ranked.results.map((r) => [r.entry.id, origin.isGlobal(r)]));
     expect(byId.get('mem_glob_0')).toBe(true);
     expect(byId.get('mem_cli_0')).toBe(false);
   });
 });
 
-describe('loadCliRecallContinuity', () => {
+describe('loadScopedContinuity', () => {
   it('returns the snapshot and handoff that render, and drops private trail rows with no scope asked', async () => {
     seedContinuity();
-    const c = await loadCliRecallContinuity(ctx(), setting(null), true);
+    const c = await loadScopedContinuity(ctx(), setting(null), true);
     expect(snapshotText(c.activeSnapshot!)).toContain('Route recall through the api');
     expect(handoffText(c.sessionHandoff!)).toContain('Pick up at the test file.');
     expect(c.recentSessionEvents.map((e) => e.content).sort()).toEqual(['open trail event', 'team trail event']);
@@ -202,7 +203,7 @@ describe('loadCliRecallContinuity', () => {
 
   it('keeps only the rows in the active scope, so a row from another scope drops', async () => {
     seedContinuity();
-    const c = await loadCliRecallContinuity(ctx(), setting('team-a'), true);
+    const c = await loadScopedContinuity(ctx(), setting('team-a'), true);
     expect(c.activeSnapshot).toBeNull();
     expect(c.sessionHandoff).toBeNull();
     expect(c.recentSessionEvents.map((e) => e.content)).toEqual(['team trail event']);
@@ -211,12 +212,12 @@ describe('loadCliRecallContinuity', () => {
   it('reads nothing when continuity is not asked for or the store searched is the global one', async () => {
     seedContinuity();
     const empty = { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
-    expect(await loadCliRecallContinuity(ctx(), setting(null), false)).toEqual(empty);
-    expect(await loadCliRecallContinuity(ctx(), setting(null, true), true)).toEqual(empty);
+    expect(await loadScopedContinuity(ctx(), setting(null), false)).toEqual(empty);
+    expect(await loadScopedContinuity(ctx(), setting(null, true), true)).toEqual(empty);
   });
 });
 
-describe('recallJsonRow and cliRecallReranker', () => {
+describe('recallJsonRow and recallRerankerPick', () => {
   it('adds the --why keys, source included, only when asked', async () => {
     const top = (await rankDeploy()).results[0]!;
     expect(recallJsonRow(top, 'deploy', false, false)).not.toHaveProperty('source');
@@ -226,7 +227,7 @@ describe('recallJsonRow and cliRecallReranker', () => {
   });
 
   it('picks no reranker for a blank name and throws for an unknown one', () => {
-    expect(cliRecallReranker('')).toBeNull();
-    expect(() => cliRecallReranker('no-such-reranker')).toThrow();
+    expect(recallRerankerPick({ infra: testInfra() }, '')).toBeNull();
+    expect(() => recallRerankerPick({ infra: testInfra() }, 'no-such-reranker')).toThrow();
   });
 });

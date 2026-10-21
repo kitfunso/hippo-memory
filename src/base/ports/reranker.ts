@@ -1,5 +1,6 @@
-import type { SearchResult } from '../../base/rank/search-types.js';
-import type { ClefSettings } from '../../base/config/config.js';
+// The reranker port: a recall names a reranker and the registry its root built hands back the function.
+import type { SearchResult } from '../rank/search-types.js';
+import type { ClefSettings } from '../config/config.js';
 
 /**
  * Reorders hybridSearch's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so it sees the full
@@ -8,6 +9,9 @@ import type { ClefSettings } from '../../base/config/config.js';
  * and the validity gate need it.
  */
 export type RerankerFn = (query: string, results: SearchResult[], options?: RerankerOptions) => Promise<RerankResult[]>;
+
+/** A named reranker, or null for no name; an unknown name throws with the names there are. */
+export type RerankerLookup = (name: string | null | undefined) => RerankerFn | null;
 
 /** JSON-serializable value. Per-track reranker config is opaque to the seam but must still be a concrete, serializable
  *  shape rather than `unknown`. */

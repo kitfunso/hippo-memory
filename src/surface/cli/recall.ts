@@ -17,19 +17,19 @@ import type {
   RecallGraphStream,
   RecallReranker,
 } from '../../api/recall/pipeline.js';
-import { availabilityPool, cutoffClauses, detectRecallHints, suppressionSummary } from '../mcp/recall-text.js';
+import { availabilityPool, cutoffClauses, detectRecallHints, suppressionSummary } from '../render/recall-text.js';
 import {
-  cliRecallOrigin,
-  cliRecallReranker,
-  cliRecallSetting,
+  recallRowOrigin,
+  recallRerankerPick,
+  recallStoreSetting,
   DEFAULT_MAX_NEIGHBORS,
   fitRecallRows,
-  loadCliRecallContinuity,
+  loadScopedContinuity,
   MAX_HOPS,
   recallJsonRow,
-  type CliRecallRerankerPick,
+  type RecallRerankerPick,
 } from '../../api/recall/rows.js';
-import { cliApiContext, cliSecondStore } from './api-context.js';
+import { cliApiContext, cliInfra, cliSecondStore } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -114,9 +114,9 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   const nameRaw = stringFlag(flags, 'reranker');
   if (hasFlag(flags, 'reranker') && nameRaw === undefined) return { fail: failLater('--reranker requires a value.') };
   const name = nameRaw?.trim() ?? '';
-  let picked: CliRecallRerankerPick | null;
+  let picked: RecallRerankerPick | null;
   try {
-    picked = cliRecallReranker(name);
+    picked = recallRerankerPick({ infra: cliInfra() }, name);
   } catch (err) {
     // An unknown name throws to the top-level handler, as it did when the lookup sat mid-pipeline.
     return {
@@ -235,7 +235,7 @@ function parseRecallOptions(ctx: api.Context, flags: CliFlags) {
   const asOf = parseAsOfFlag(flags);
   // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
-  const setting = cliRecallSetting(ctx, explicitScope || envActiveScope());
+  const setting = recallStoreSetting(ctx, explicitScope || envActiveScope());
   const config = ctx.config;
   const minResults = numberFlag(flags, 'min-results');
   const graphStream = boolFlag(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
@@ -266,7 +266,7 @@ type RecallOptions = ReturnType<typeof parseRecallOptions>;
 
 /** Each entry priced as the line it prints, with the source marker `--why` shows. */
 function priceRecallEntries(ctx: api.Context, query: string, o: RecallOptions) {
-  const origin = cliRecallOrigin(ctx, o.setting);
+  const origin = recallRowOrigin(ctx, o.setting);
   const isGlobal = origin.isGlobal;
   const entryText = (r: SearchResult): string => recallEntryText(r, query, o.showWhy, isGlobal(r));
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
@@ -476,7 +476,7 @@ async function presentRecall(
   planning: PlanningFallacyOutput,
 ) {
   // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
-  const loaded = await loadCliRecallContinuity(ctx, o.setting, o.includeContinuity);
+  const loaded = await loadScopedContinuity(ctx, o.setting, o.includeContinuity);
   const fit = fitRecallBlock({ ctx, query, recall: o, ranked, loaded, planning });
   const { results, hints } = fit;
   const text = recallOutput(query, o, fit, ranked.isGlobal);

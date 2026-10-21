@@ -11,6 +11,7 @@ import {
   validateFlags,
 } from '../../base/util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../../store/index.js';
 import { isStoreBusy } from '../../store/port.js';
@@ -545,6 +546,7 @@ function servedOptsFor(
     failedAuthLimiter,
     authResolver: runtime.outsideRouteBlock(opts.authResolver),
     callers: createCallerState(autoSleep),
+    infra: rootInfra(),
     sleeps,
     counts,
   };

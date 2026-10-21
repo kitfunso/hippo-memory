@@ -10,6 +10,7 @@ import { scrubForSharing } from './share-scrub.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { folderIndex } from '../../domain/search/embed-memories.js';
 import { extractFromTexts } from './extract.js';
+import { withEntryInfra } from '../entry-infra.js';
 
 /** A context whose store has the captures group, which a session's capture reads and writes. */
 export type CaptureContext = ContextWith<'captures'>;
@@ -48,9 +49,10 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
  * dedup and the write. No console output and no process.exit.
  */
 export async function captureSessionTexts(
-  ctx: CaptureContext,
+  given: CaptureContext,
   req: SessionCaptureRequest,
 ): Promise<SessionCaptureResult> {
+  const ctx = withEntryInfra(given);
   assertSessionCapture(req);
   const extracted = extractFromTexts(req.texts.map(scrubForSharing));
   // The newest items win, since the end of a session states where it landed.

@@ -14,6 +14,7 @@ import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -168,6 +169,7 @@ describe('request-path output on a fixed store', () => {
       store,
       reach: testReach(localRoot, store),
       config: loadConfig(localRoot),
+      infra: testInfra(),
     };
   };
   type ToolArgs = { scope?: string };

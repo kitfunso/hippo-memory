@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { CODEX_TRUST_LINE } from '../../src/domain/hooks/shared.js';
 import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
-import { formatDoctor, runDoctor } from '../../src/doctor.js';
+import { formatDoctor, runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';

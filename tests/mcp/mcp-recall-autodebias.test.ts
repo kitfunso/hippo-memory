@@ -19,6 +19,7 @@ import { closePrediction } from '../_helpers/root-forms.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
 import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -89,6 +90,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      infra: testInfra(),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
@@ -109,6 +111,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      infra: testInfra(),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'show me the auth flow' }, ctx);
     const text = extractText(res);
@@ -126,6 +129,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: cliConfig(home),
+      infra: testInfra(),
     };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);

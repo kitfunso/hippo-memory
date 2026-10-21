@@ -8,6 +8,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -49,6 +50,7 @@ describe('MCP tool argument validation', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     return reply(res);

@@ -16,6 +16,7 @@ import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { memorySide } from '../_helpers/memory-side.js';
+import { testInfra } from '../_helpers/infra.js';
 
 let root: string;
 
@@ -40,6 +41,7 @@ const ctxOn = (kind: string): McpContext => ({
   hostAdmin: true,
   store: storeOfKind(kind),
   config: loadConfig(root),
+  infra: testInfra(),
 });
 
 function listedNames(res: McpResponse | null): string[] {

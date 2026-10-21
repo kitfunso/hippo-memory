@@ -24,8 +24,6 @@ import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import type { Context } from '../../../api/index.js';
-import type { HippoConfig } from '../../../base/config/config.js';
-import type { HippoStore } from '../../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -36,6 +34,7 @@ import {
   type WebhookRequest,
 } from '../../../base/util/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
+import type { WebhookPorts } from '../ingest.js';
 import { errorFields, log } from '../../../base/util/log.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ replay alike. */
@@ -64,11 +63,7 @@ async function readSignedBody(request: WebhookRequest, secret: string, sigStr: s
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
  *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409
  *  on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
-export async function handleGitHubEventsWebhook(
-  request: WebhookRequest,
-  store: HippoStore,
-  config: HippoConfig,
-): Promise<void> {
+export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: WebhookPorts): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGitHubWebhookSecret();
@@ -93,12 +88,11 @@ export async function handleGitHubEventsWebhook(
 
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human can replay later.
   const replayKey = deliveryId ?? sigStr;
-  await claimOrRefuse(store, replayKey);
+  await claimOrRefuse(ports.store, replayKey);
   try {
     await routeSignedDelivery({
       hippoRoot: opts.hippoRoot,
-      store,
-      config,
+      ...ports,
       res,
       rawBody,
       eventName,
@@ -107,7 +101,7 @@ export async function handleGitHubEventsWebhook(
     });
   } catch (err) {
     // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get through.
-    await freeHold(store, replayKey);
+    await freeHold(ports.store, replayKey);
     throw err;
   }
 }
@@ -116,12 +110,12 @@ export async function handleGitHubEventsWebhook(
 // survives a restart. The event log's content-derived idempotency key (ingest.ts, the deletion key below) backs it.
 const REPLAY_HOLD_MS = DAY_MS;
 
-async function claimOrRefuse(store: HippoStore, key: string): Promise<void> {
+async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
   if (!(await store.connectorEvents.claimDelivery(claim))) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
 }
 
-async function freeHold(store: HippoStore, key: string): Promise<void> {
+async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
   await store.connectorEvents.releaseDelivery('github', key).catch((err) => {
     log.warn('github webhook: could not free the replay hold of a failed delivery', errorFields(err));
   });
@@ -137,10 +131,8 @@ const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
 type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
 
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
-interface SignedDelivery {
+interface SignedDelivery extends WebhookPorts {
   hippoRoot: string;
-  store: HippoStore;
-  config: HippoConfig;
   res: ServerResponse;
   rawBody: string;
   eventName: string | null;
@@ -201,6 +193,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     actor: { subject: 'connector:github', role: 'admin' },
     store: d.store,
     config: d.config,
+    infra: d.infra,
   };
   if (await dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
 

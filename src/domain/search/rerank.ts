@@ -1,5 +1,5 @@
 import { cosineOf } from '../../base/rank/cosine.js';
-import type { RerankerFn, RerankerOptions, RerankResult } from '../rerankers/types.js';
+import type { RerankerFn, RerankerOptions, RerankResult } from '../../base/ports/reranker.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 
 export const DEFAULT_RERANK_TOP_K = 50;
