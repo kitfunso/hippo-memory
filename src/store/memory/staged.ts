@@ -23,7 +23,7 @@ export function refusalEvent(err: RejectedValueError, actor: string): AppendAudi
   return { tenantId: err.tenantId, actor, op: 'reject_refusal', targetId: err.entryId, metadata };
 }
 
-/** A row with the columns hippo.db's UPDATEs set without stamping updated_at blanked, so a change to any other shows. */
+/** A row with the columns hippo.db's UPDATEs set without stamping updated_at blanked, so other changes show. */
 const stampedColumns = (e: MemoryEntry): string =>
   JSON.stringify({
     ...e,

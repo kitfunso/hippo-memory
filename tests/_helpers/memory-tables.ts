@@ -10,7 +10,7 @@ import type { SlackWorkspace } from '../../src/store/port/connectors.js';
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { readApiKeyRecord } from '../../src/store/sqlite/auth.js';
 import { readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
-import { GOAL_COLUMNS, rowToGoal, type GoalRow } from '../../src/store/sqlite/goals.js';
+import { rowToGoal, type GoalRow } from '../../src/store/sqlite/goals.js';
 import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation } from '../../src/store/sqlite/graph-rows.js';
 import type { EntityRow, RelationRow } from '../../src/store/sqlite/graph-rows.js';
 import { HANDOFF_COLUMNS } from '../../src/store/sqlite/handoffs.js';
@@ -184,8 +184,8 @@ function copySessions(db: DatabaseSyncLike, t: MemoryTables): void {
     .prepare(`SELECT ${SESSION_EVENT_COLUMNS}, tenant_id FROM session_events ORDER BY id`)
     .all() as (SessionEventRow & { tenant_id: string })[];
   for (const row of events) t.events.push({ tenantId: row.tenant_id, row: rowToSessionEvent(row) });
-  // SAFETY: the SELECT names GOAL_COLUMNS, GoalRow's columns.
-  const goals = db.prepare(`SELECT ${GOAL_COLUMNS} FROM goal_stack ORDER BY rowid`).all() as GoalRow[];
+  // SAFETY: goal_stack's columns are GoalRow's keys, as migration v18 creates the table.
+  const goals = db.prepare('SELECT * FROM goal_stack ORDER BY rowid').all() as GoalRow[];
   t.goals.push(...goals.map(rowToGoal));
   // SAFETY: the SELECT names MEMORY_CONFLICT_COLUMNS, MemoryConflictRow's columns.
   const conflicts = db

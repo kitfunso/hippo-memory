@@ -8,7 +8,7 @@ import type {
   Predictions,
 } from '../port/predictions.js';
 import type { PredictionBaserate } from '../port/types.js';
-import { predictionBaserateOf } from '../sqlite/predictions.js';
+import { plural } from '../../base/util/format.js';
 import { appendAudit, byBytes, nextId, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
@@ -95,6 +95,40 @@ function listIn(t: MemoryTables, tenantId: string, { classTag, closureState, lim
   return structuredClone(hits.sort(newestFirst).slice(0, limit));
 }
 
+type Closed = { estimate: number; actual: number };
+
+const mean = (values: readonly number[]): number => values.reduce((s, x) => s + x, 0) / values.length;
+
+function median(values: readonly number[]): number {
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mid = sorted.length / 2;
+  return sorted.length % 2 === 1 ? sorted[(sorted.length - 1) / 2] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** As hippo.db's predictionBaserateOf, which the adapter may not import; the predictions suite holds them alike. */
+function baserateOf(classTag: string, rows: readonly Closed[]): PredictionBaserate {
+  if (rows.length === 0) {
+    const nulls = { meanEstimate: null, meanActual: null, meanRatio: null, p50Ratio: null, mae: null };
+    return { classTag, nClosed: 0, nRatioEligible: 0, summary: '', ...nulls };
+  }
+  const ratios = rows.filter((r) => r.estimate > 0).map((r) => r.actual / r.estimate);
+  const mae = mean(rows.map((r) => Math.abs(r.actual - r.estimate)));
+  const meanRatio = ratios.length > 0 ? mean(ratios) : null;
+  const ratioPart =
+    meanRatio !== null ? `averaged ${meanRatio.toFixed(2)}x actual` : 'no ratio-eligible rows (all estimates were 0)';
+  return {
+    classTag,
+    nClosed: rows.length,
+    nRatioEligible: ratios.length,
+    meanEstimate: mean(rows.map((r) => r.estimate)),
+    meanActual: mean(rows.map((r) => r.actual)),
+    meanRatio,
+    p50Ratio: ratios.length > 0 ? median(ratios) : null,
+    mae,
+    summary: `Last ${plural(rows.length, 'estimate')} in class ${classTag} ${ratioPart} (MAE ${mae.toFixed(2)}).`,
+  };
+}
+
 /** The class's stats over its closed rows in id order, since the float sums differ with row order. */
 export function baserateIn(t: MemoryTables, tenantId: string, classTag: string): PredictionBaserate {
   const closed = [...t.predictions.values()]
@@ -105,10 +139,10 @@ export function baserateIn(t: MemoryTables, tenantId: string, classTag: string):
       row.closureState === 'closed' &&
       row.estimateValue !== null &&
       row.actualValue !== null
-        ? [{ estimate_value: row.estimateValue, actual_value: row.actualValue }]
+        ? [{ estimate: row.estimateValue, actual: row.actualValue }]
         : [],
     );
-  return predictionBaserateOf(classTag, closed);
+  return baserateOf(classTag, closed);
 }
 
 export function memoryPredictions(t: MemoryTables): Predictions {

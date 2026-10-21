@@ -34,7 +34,7 @@ describe('hippo-memory/testing entry types', () => {
     expectTypeOf(testing.createMemoryWire).returns.toEqualTypeOf<testing.MemoryWire>();
   });
 
-  it('the entry exports the eval kit, its ten snake_case forms and nine handle helpers', () => {
+  it('the entry exports the eval kit, memoryStore, its ten snake_case forms and nine handle helpers', () => {
     expectTypeOf<keyof typeof testing>().toEqualTypeOf<
       | 'ambientSecretAdmit'
       | 'initStore'
@@ -43,6 +43,7 @@ describe('hippo-memory/testing entry types', () => {
       | 'loadEmbeddingIndex'
       | 'loadRecallSearchEntries'
       | 'writeEntry'
+      | 'memoryStore'
       | 'ambientSecretAdmitWire'
       | 'batchWriteAndDeleteWire'
       | 'calculateStrengthWire'
@@ -63,6 +64,6 @@ describe('hippo-memory/testing entry types', () => {
       | 'recordTokenUse'
       | 'tokensBySession'
     >();
-    expect(Object.keys(testing)).toHaveLength(26);
+    expect(Object.keys(testing)).toHaveLength(27);
   });
 });
