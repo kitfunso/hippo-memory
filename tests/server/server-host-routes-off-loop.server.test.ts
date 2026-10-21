@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log } from '../../src/base/util/log.js';
@@ -211,7 +212,7 @@ const CONFLICT = `INSERT INTO memory_conflicts (memory_a_id, memory_b_id, reason
 function copy() {
   const made = freshStore(seed.templates, 'local');
   homes.push(made.home);
-  sqliteSyncStore(made.root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
+  sqliteSyncStore(handlesOf(made.root)).connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
   onDb(made.root, (db) => {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
       '101',

@@ -15,6 +15,7 @@ import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -189,7 +190,7 @@ describe('hippo github CLI', () => {
   const liveRaws = (artifactRef: string) =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
   const retryCountOf = (id: number) =>
-    sqliteSyncStore(hippoRoot)
+    sqliteSyncStore(handlesOf(hippoRoot))
       .connectorEvents.deadLetters('github', 'default', 100)
       .find((row) => row.id === id)?.retryCount;
 

@@ -28,7 +28,7 @@ import {
  *  The two reads that return vectors answer with a pack, which worker-store.ts turns back into the port's Map. */
 function workerOps({ hippoRoot, lossAversionRatio }: WorkerInit, graphs: VectorGraphs | undefined) {
   const handles = handlesOf(hippoRoot, { lossAversionRatio });
-  const sync = sqliteSyncStore(hippoRoot, { lossAversionRatio });
+  const sync = sqliteSyncStore(handles);
   const packed = (ids: readonly string[]) => packVectors(sync.vectorViews.storedVectorViews(ids));
   return {
     ...sync,

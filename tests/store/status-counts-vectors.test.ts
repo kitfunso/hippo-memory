@@ -11,6 +11,7 @@ import {
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
@@ -290,7 +291,7 @@ describe('reports.statusCounts', () => {
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);
     const strengths = entries.map((e) => calculateStrength(e, now));
-    const counts = sqliteSyncStore(root).reports.statusCounts(now, 0.2);
+    const counts = sqliteSyncStore(handlesOf(root)).reports.statusCounts(now, 0.2);
     expect(counts.total).toBe(52);
     expect(counts.avgStrength).toBe(strengths.reduce((sum, x) => sum + x, 0) / entries.length);
     expect(counts.atRisk).toBe(strengths.filter((x) => x < 0.2).length);

@@ -1,5 +1,5 @@
 // What crosses between the server thread and a store worker, and which kind of worker runs each store method.
-import type { HippoStore, StoreGroups } from '../port.js';
+import type { BaseMethods, HippoStore, StoreGroups } from '../port.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
 
@@ -11,8 +11,6 @@ export type OpMode = 'read' | 'write';
 export type OpRoute = OpMode | 'pinned-read';
 
 export type OpPlaces<G> = { readonly [M in keyof G]: OpRoute };
-
-type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 
 /** Every store method but hippo.db's local files, so a served store runs no SQLite on the server thread.
  * Tagged by effect: predictionBaserate (audit row) and bumpRecallStats (stats.json) write; an `openStore` read is a

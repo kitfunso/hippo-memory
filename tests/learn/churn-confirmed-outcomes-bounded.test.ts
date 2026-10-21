@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { detectChurnStale } from '../../src/domain/learn/invalidation.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -61,7 +62,7 @@ describe('confirmedOutcomeTimes', () => {
   it('returns the latest good outcome per target since the bound and reads no older row', () => {
     const root = newRoot();
     seedHistory(root);
-    const learning = sqliteSyncStore(root).learning;
+    const learning = sqliteSyncStore(handlesOf(root)).learning;
 
     const { result, reads } = recordStatements(() =>
       learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
@@ -79,7 +80,7 @@ describe('confirmedOutcomeTimes', () => {
     const root = newRoot();
     seedHistory(root);
     const { statements } = recordStatements(() =>
-      sqliteSyncStore(root).learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
+      sqliteSyncStore(handlesOf(root)).learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
     );
     const sql = statements.find((s) => s.includes('FROM audit_log') && s.includes('GROUP BY target_id'));
     expect(sql).toContain('GROUP BY target_id');

@@ -238,9 +238,9 @@ function printSummary(rows, config, started) {
   console.error(`  first energy:    ${firstEnergy.toFixed(4)}`);
   console.error(`  final energy:    ${totalEnergy.toFixed(4)}`);
   console.error(`  |max energy|:    ${maxEnergyAbs.toFixed(4)}`);
-  console.error(`  max |velocity|:  ${maxVel.toFixed(4)} (config cap: ${config.max_velocity})`);
+  console.error(`  max |velocity|:  ${maxVel.toFixed(4)} (config cap: ${config.maxVelocity})`);
   console.error(
-    `  bounded:         ${Number.isFinite(totalEnergy) && maxVel <= config.max_velocity * 10 ? 'YES' : 'NO'}`,
+    `  bounded:         ${Number.isFinite(totalEnergy) && maxVel <= config.maxVelocity * 10 ? 'YES' : 'NO'}`,
   );
   console.error(`  CSV written to:  ${OUT}`);
 }
@@ -292,7 +292,7 @@ function run() {
   const started = Date.now();
 
   // Record t=0 state before any simulation
-  const e0 = computeSystemEnergy(state.particles, config.G_memory);
+  const e0 = computeSystemEnergy(state.particles, config.gMemory);
   rows.push([0, 0, state.particles.length, e0.kinetic, e0.potential, e0.total, 0, 0, 0]);
 
   for (let tick = 1; tick <= TICKS; tick++) {
@@ -308,7 +308,7 @@ function run() {
     const t0 = Date.now();
     const stats = simulate(state.particles, ctx);
     const tickMs = Date.now() - t0;
-    const energy = computeSystemEnergy(state.particles, config.G_memory);
+    const energy = computeSystemEnergy(state.particles, config.gMemory);
 
     rows.push(tickRow(tick, Date.now() - started, stats, energy));
 
@@ -323,7 +323,7 @@ function run() {
       console.error(`  DIVERGENCE at tick ${tick}: non-finite energy`);
       break;
     }
-    if (stats.maxVelocityMagnitude > 10 * config.max_velocity) {
+    if (stats.maxVelocityMagnitude > 10 * config.maxVelocity) {
       console.error(`  RUNAWAY at tick ${tick}: |v|_max=${stats.maxVelocityMagnitude} exceeds 10x cap`);
       break;
     }

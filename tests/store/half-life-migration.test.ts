@@ -19,6 +19,7 @@ import {
 } from '../../src/base/memory/memory.js';
 import { migrateDefaultHalfLife } from '../../src/domain/consolidate/half-life-migration.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { consolidate } from '../../src/index.js';
@@ -240,7 +241,7 @@ describe('default half-life migration', () => {
     const allocated = (n: number): number => {
       const root = bulkLegacyStore(n);
       // The store's sync body, so the heap count sees the plan and the write in one call.
-      const move = sqliteSyncStore(root).consolidation;
+      const move = sqliteSyncStore(handlesOf(root)).consolidation;
       return allocatedBytes(() => move.moveHalfLives(365, { dryRun: false, actor: 'system' }));
     };
     // The first call compiles the migration onto the heap, a fixed cost that would blunt the ratio.

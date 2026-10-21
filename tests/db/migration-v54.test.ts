@@ -13,6 +13,7 @@ import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { v54 } from '../../src/db/migrations/v54.js';
 import { tableColumns, tableExists } from '../../src/db/tables.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
@@ -104,7 +105,7 @@ describe('schema v54', () => {
       session_id: 's1',
     });
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'half done', nextAction: 'finish' });
-    sqliteSyncStore(home).failureLog.record({
+    sqliteSyncStore(handlesOf(home)).failureLog.record({
       tenantId: 'default',
       sessionId: 's1',
       tool: 'Bash',
