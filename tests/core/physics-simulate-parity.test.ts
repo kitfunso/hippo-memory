@@ -5,14 +5,13 @@ import {
   repulsionForce,
   dragForce,
   simulate,
-  vecAdd,
   vecScale,
   vecNormalize,
-  vecClampMagnitude,
   vecZero,
   type ForceContext,
   type PhysicsParticle,
 } from '../../src/base/rank/physics.js';
+import { vecAdd, vecClampMagnitude } from '../_helpers/physics-vec.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { FALLBACK_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 

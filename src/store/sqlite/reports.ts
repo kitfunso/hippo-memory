@@ -5,6 +5,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { summarizeTokenUse } from './token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
 import { keysetPage } from '../../base/util/keyset.js';
+import type { SqlAnd } from './keyset.js';
 import type { CorrectionLinkPage, RawProvenancePage, ReportPage, StrengthTallies } from '../port/reports.js';
 import { statusCountsAt, strengthTalliesAt } from './candidates.js';
 import { countOpenConflictsAt } from './conflicts.js';
@@ -27,7 +28,7 @@ type CorrectionLinkDbRow = {
 };
 
 /** The ` AND` range that resumes after `after` on the given created and id columns, and the arguments it binds. */
-function afterRange(created: string, id: string, after: ReportPage['after']): { sql: string; args: string[] } {
+function afterRange(created: string, id: string, after: ReportPage['after']): SqlAnd {
   if (!after) return { sql: '', args: [] };
   return {
     sql: ` AND ${created} >= ? AND (${created} > ? OR ${id} > ?)`,
@@ -72,7 +73,8 @@ function rawProvenanceAt(db: DatabaseSyncLike, page: ReportPage): RawProvenanceP
     const gaps = cachedStatement(
       db,
       `SELECT id, owner, artifact_ref, created FROM memories WHERE ${RAW} ` +
-        `AND (COALESCE(owner, '') = '' OR COALESCE(artifact_ref, '') = '')${range.sql} ORDER BY created ASC, id ASC LIMIT ?`,
+        `AND (COALESCE(owner, '') = '' OR COALESCE(artifact_ref, '') = '')${range.sql} ` +
+        `ORDER BY created ASC, id ASC LIMIT ?`,
     ).all(...range.args, page.limit + 1) as Array<{
       id: string;
       owner: string | null;

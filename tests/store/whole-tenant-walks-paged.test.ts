@@ -20,7 +20,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
 });
 
-function seeded(pinned: boolean, extra: Partial<MemoryEntry> = {}): { root: string; ids: string[] } {
+function seeded(pinned: boolean, extra: Partial<MemoryEntry> = {}) {
   const root = makeRoot('tenant-walk');
   roots.push(root);
   const entries = Array.from({ length: ROWS }, (_, i) => ({

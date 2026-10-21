@@ -92,7 +92,7 @@ async function pooled<T>(
   canLaunch: () => boolean,
   call: (index: number) => Promise<T>,
 ): Promise<Array<T | undefined>> {
-  const results: Array<T | undefined> = new Array(count).fill(undefined);
+  const results = Array.from<T | undefined>({ length: count });
   let next = 0;
   const lane = async (): Promise<void> => {
     while (canLaunch() && next < count) {

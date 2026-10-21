@@ -133,8 +133,9 @@ describe('the sleep LLM gate', () => {
 
     function rootWithMany(): string {
       const root = newRoot();
-      for (let i = 0; i < COUNT; i++)
+      for (let i = 0; i < COUNT; i++) {
         writeEntry(root, createMemory(`release note number ${i} about the staging cluster`));
+      }
       return root;
     }
 

@@ -70,18 +70,6 @@ export function vecScale(v: number[], s: number): number[] {
   return out;
 }
 
-export function vecAdd(a: number[], b: number[]): number[] {
-  const out = a.slice();
-  for (let i = 0; i < a.length; i++) out[i] = a[i] + b[i];
-  return out;
-}
-
-export function vecSub(a: number[], b: number[]): number[] {
-  const out = a.slice();
-  for (let i = 0; i < a.length; i++) out[i] = a[i] - b[i];
-  return out;
-}
-
 export function vecZero(dim: number): number[] {
   return Array<number>(dim).fill(0);
 }
@@ -91,13 +79,6 @@ export function vecNormalize(v: number[]): number[] {
   const mag = vecNorm(v);
   if (mag < NEAR_ZERO) return vecZero(v.length);
   return vecScale(v, 1 / mag);
-}
-
-/** Clamp vector magnitude to maxMag. */
-export function vecClampMagnitude(v: number[], maxMag: number): number[] {
-  const mag = vecNorm(v);
-  if (mag <= maxMag) return v;
-  return vecScale(v, maxMag / mag);
 }
 
 const CHARGE_MAP = {
@@ -189,7 +170,9 @@ export function repulsionForce(
   for (let k = 0; k < out.length; k++) diff[k] = pi.position[k] - pj.position[k];
   const norm = vecNorm(diff);
   if (norm < NEAR_ZERO) {
-    for (let k = 0; k < out.length; k++) out[k] += 0 * magnitude;
+    for (let k = 0; k < out.length; k++) {
+      out[k] += 0;
+    }
     return out;
   }
   const inv = 1 / norm;
@@ -283,8 +266,9 @@ function verletStep(
   for (let i = 0; i < particles.length; i++) {
     const { position, velocity } = particles[i];
     // Position update: pos += vel*dt + 0.5*accel*dt^2
-    for (let k = 0; k < position.length; k++)
+    for (let k = 0; k < position.length; k++) {
       position[k] = position[k] + velocity[k] * dt + accelerations[i][k] * halfDt2;
+    }
   }
 
   computeAccelerations(particles, ctx, next, diff);

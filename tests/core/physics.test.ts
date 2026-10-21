@@ -3,11 +3,8 @@ import {
   vecDot,
   vecNorm,
   vecScale,
-  vecAdd,
-  vecSub,
   vecZero,
   vecNormalize,
-  vecClampMagnitude,
   computeMass,
   computeCharge,
   computeTemperature,
@@ -72,18 +69,6 @@ describe('Vector math', () => {
     });
   });
 
-  describe('vecAdd', () => {
-    it('adds two vectors element-wise', () => {
-      expect(vecAdd([1, 2, 3], [4, 5, 6])).toEqual([5, 7, 9]);
-    });
-  });
-
-  describe('vecSub', () => {
-    it('subtracts two vectors element-wise', () => {
-      expect(vecSub([4, 5, 6], [1, 2, 3])).toEqual([3, 3, 3]);
-    });
-  });
-
   describe('vecZero', () => {
     it('creates a zero vector of given dimension', () => {
       expect(vecZero(3)).toEqual([0, 0, 0]);
@@ -105,28 +90,6 @@ describe('Vector math', () => {
     it('returns zero vector for near-zero input', () => {
       const n = vecNormalize([0, 0, 0]);
       expect(n).toEqual([0, 0, 0]);
-    });
-  });
-
-  describe('vecClampMagnitude', () => {
-    it('returns original if magnitude <= maxMag', () => {
-      const v = [1, 0, 0];
-      const clamped = vecClampMagnitude(v, 5);
-      // Should return the same reference since no clamp needed
-      expect(clamped).toBe(v);
-    });
-
-    it('clamps to maxMag and keeps the direction', () => {
-      const clamped = vecClampMagnitude([6, 8, 0], 5);
-      // Direction should be [0.6, 0.8, 0]
-      expect(clamped[0]).toBeCloseTo(3, 10);
-      expect(clamped[1]).toBeCloseTo(4, 10);
-      expect(clamped[2]).toBeCloseTo(0, 10);
-    });
-
-    it('clamp at zero produces zero vector', () => {
-      const clamped = vecClampMagnitude([1, 2, 3], 0);
-      expect(vecNorm(clamped)).toBeCloseTo(0, 10);
     });
   });
 });
