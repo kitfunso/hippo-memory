@@ -76,3 +76,28 @@ it('aborts the signal it hands the resolver when the deadline passes, and answer
   await res.body?.cancel();
   expect([res.status, signal?.aborted]).toEqual([503, true]);
 });
+
+async function statusForSubject(subject: string): Promise<number> {
+  handle = await serve({
+    hippoRoot: makeRoot('resolver-subject'),
+    host: '127.0.0.1',
+    port: 0,
+    authResolver: () => ({ tenantId: 'default', subject, role: 'member' }),
+  });
+  const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: 'Bearer ext.token' } });
+  await res.body?.cancel();
+  await handle.stop();
+  handle = undefined;
+  return res.status;
+}
+
+it.each(['system\u200b', '\u202esystem', 'sys\u2028tem', 'a\u2029b', 'sys\u00adtem'])(
+  'refuses a subject hiding a format or separator character (%j)',
+  async (subject) => {
+    expect(await statusForSubject(subject)).toBe(401);
+  },
+);
+
+it('still takes a plain non-ASCII subject', async () => {
+  expect(await statusForSubject('zoë@例え.example')).toBe(200);
+});
