@@ -67,7 +67,7 @@ export function appendSessionEndCloseLog(
  */
 export function reportSessionEndFailure<E>(logFile: string | null, step: string, err: E): void {
   const line = `${step} failed: ${errorMessage(err)}`;
-  log.warn(line);
+  log.warn(line, errorFields(err));
   appendSessionEndCloseLog(logFile, line);
 }
 

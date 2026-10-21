@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../session/capture-contract.js';
-import { errorMessage, log, errorFields } from '../util/log.js';
+import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 
 /** Where a `.git` file points: its own git dir, and the shared one when that dir names a `commondir` (a linked
  * worktree); null when the file names no git dir. */
@@ -27,10 +27,16 @@ export function gitConfigPath(gitRoot: string): string | null {
     const pointer = gitFilePointer(marker);
     if (pointer === null) return path.join(marker, 'config');
     const dirs = readGitFilePointer(gitRoot, pointer);
-    return dirs === null ? null : path.join(dirs.commonDir ?? dirs.linkDir, 'config');
+    if (dirs === null) {
+      log.warnThenDebug('project-remote:gitdir', `project remote: ${marker} names no gitdir, so it has no remote`);
+      return null;
+    }
+    return path.join(dirs.commonDir ?? dirs.linkDir, 'config');
   } catch (err) {
-    // A folder with no readable .git has no remote to name a project by, so the caller falls back to the folder name.
-    log.debug(`project remote: no git config for ${gitRoot}: ${errorMessage(err)}`, errorFields(err));
+    // The caller falls back to the folder name. A missing .git is the plain case; an unreadable one is told once.
+    const message = `project remote: no git config for ${gitRoot}: ${errorMessage(err)}`;
+    if (errorCode(err) === 'ENOENT') log.debug(message, errorFields(err));
+    else log.warnThenDebug(`project-remote:${errorCode(err)}`, message, errorFields(err));
     return null;
   }
 }

@@ -512,14 +512,14 @@ describe('ConnectorEvents dead-letter reads', () => {
   it("list one queue's rows of the tenant oldest first up to the limit, read one by id, and count a retry on the row named", async () => {
     const side = await conforms([
       ...LETTERS,
-      (g) => g.markDeadLetterRetried('slack', 1),
-      (g) => g.markDeadLetterRetried('github', 9),
+      (g) => g.markDeadLetterRetried('slack', TENANT_A, 1),
+      (g) => g.markDeadLetterRetried('github', TENANT_A, 9),
       (g) => g.deadLetters('slack', TENANT_A, 10),
       (g) => g.deadLetters('slack', TENANT_A, 1),
       (g) => g.deadLetters('github', TENANT_B, 10),
-      (g) => g.deadLetter('github', 1),
-      (g) => g.deadLetter('slack', 2),
-      (g) => g.deadLetter('slack', 9),
+      (g) => g.deadLetter('github', TENANT_A, 1),
+      (g) => g.deadLetter('slack', TENANT_B, 2),
+      (g) => g.deadLetter('slack', TENANT_A, 9),
     ]);
     // SAFETY: calls 6 to 10 are the three lists and two found rows, in that order.
     const [slackA, retried, , github, slackB] = values(side).slice(6) as [Letter[], Letter[], Letter[], Letter, Letter];

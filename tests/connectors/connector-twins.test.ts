@@ -46,9 +46,12 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
     const g = await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'e' });
     const s = await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'e' });
     const events = sqliteStore(root).connectorEvents;
-    await events.markDeadLetterRetried('github', g);
-    await events.markDeadLetterRetried('slack', s);
-    for (const row of [await events.deadLetter('github', g), await events.deadLetter('slack', s)]) {
+    await events.markDeadLetterRetried('github', 'default', g);
+    await events.markDeadLetterRetried('slack', 'default', s);
+    for (const row of [
+      await events.deadLetter('github', 'default', g),
+      await events.deadLetter('slack', 'default', s),
+    ]) {
       expect(row?.retryCount).toBe(1);
       expect(row?.retriedAt).not.toBeNull();
     }
@@ -67,20 +70,20 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
       notEnvelope: 'not an object',
       reingest: async () => ({ ok: false as const, status: 'unroutable' as const, reason: 'no tenant' }),
     });
-    expect(await replayParked(steps(false), sqliteStore(root), id, false)).toEqual({
+    expect(await replayParked(steps(false), sqliteStore(root), 'default', id, false)).toEqual({
       ok: false,
       status: 'sig_missing',
       memoryId: null,
       retryCount: 0,
       reason: 'no signature',
     });
-    expect(await replayParked(steps(false), sqliteStore(root), id, true)).toEqual({
+    expect(await replayParked(steps(false), sqliteStore(root), 'default', id, true)).toEqual({
       ok: false,
       status: 'unroutable',
       memoryId: null,
       retryCount: 1,
       reason: 'no tenant',
     });
-    expect((await sqliteStore(root).connectorEvents.deadLetter('github', id))?.retryCount).toBe(1);
+    expect((await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id))?.retryCount).toBe(1);
   });
 });
