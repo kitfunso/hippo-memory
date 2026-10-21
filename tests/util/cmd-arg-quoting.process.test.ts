@@ -24,6 +24,9 @@ const TRICKY_ARGS = [
   'a&b',
   '"&calc',
   '^%PATH^%',
+  'a b\\',
+  'a\\"b',
+  'C:\\Program Files\\x\\',
   '!PATH!',
   '',
 ];
@@ -37,6 +40,15 @@ describe('quoteCmdArg', () => {
   it.each(['a\nb', 'a\rb', 'x\r\ncalc'])('refuses an argument holding a line break (%j)', (arg) => {
     expect(() => quoteCmdArg(arg)).toThrow(/CR or LF/);
     expect(() => cmdShimArgs('C:/bin/tool.cmd', [arg])).toThrow(/CR or LF/);
+  });
+
+  it('doubles a backslash run before a quote or the closing quote and no other', () => {
+    expect([quoteCmdArg('a b\\'), quoteCmdArg('a\\"b'), quoteCmdArg('C:\\Program Files\\x')]).toEqual([
+      '"a b\\\\"',
+      '"a\\\\""b"',
+      '"C:\\Program Files\\x"',
+    ]);
+    expect(quoteCmdArg('a\\')).toBe('a\\');
   });
 
   it('leaves a plain argument unquoted', () => {

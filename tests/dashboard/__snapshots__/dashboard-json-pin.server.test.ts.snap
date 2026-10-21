@@ -82,6 +82,15 @@ exports[`dashboard JSON on a varied store > answers GET /api/memory/mem_p_a06 wi
 }
 `;
 
+exports[`dashboard JSON on a varied store > answers GET /api/overview with the body the snapshot build gave 1`] = `
+{
+  "body": {
+    "error": "Unauthorized: open the dashboard with the URL \`hippo dashboard\` printed; it carries the access token.",
+  },
+  "status": 401,
+}
+`;
+
 exports[`dashboard JSON on a varied store > answers GET /api/projects/global with the body the snapshot build gave 1`] = `
 {
   "body": {
@@ -4873,6 +4882,15 @@ exports[`dashboard JSON on a varied store > answers GET /api/projects/p%3Aalpha/
     "total": 13,
   },
   "status": 200,
+}
+`;
+
+exports[`dashboard JSON on a varied store > answers GET /api/projects/p%3Abig with the body the snapshot build gave 1`] = `
+{
+  "body": {
+    "error": "Unauthorized: open the dashboard with the URL \`hippo dashboard\` printed; it carries the access token.",
+  },
+  "status": 401,
 }
 `;
 

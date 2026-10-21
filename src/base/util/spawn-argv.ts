@@ -13,7 +13,10 @@ export function quoteCmdArg(arg: string): string {
   if (/[\r\n]/.test(arg)) throw new Error('cmd.exe argument contains a CR or LF, which would start a new command');
   if (arg.length === 0) return '""';
   if (!/[ \t"&()^<>|%!]/.test(arg)) return arg;
-  return `"${arg.replace(/"/g, '""').replace(/%/g, '"^%"')}"`;
+  // MSVCRT reads a backslash run as literal only when no quote follows it, so a run before a quote or the closing
+  // quote is doubled.
+  const quoted = arg.replace(/(\\*)"/g, '$1$1""').replace(/(\\+)$/, '$1$1');
+  return `"${quoted.replace(/%/g, '"^%"')}"`;
 }
 
 /** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument delivered verbatim. */

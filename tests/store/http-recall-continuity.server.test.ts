@@ -29,11 +29,12 @@ afterEach(async () => {
 });
 
 describe('GET /v1/memories continuity + scope', () => {
-  it('default: no continuity, no Cache-Control: no-store', async () => {
+  it('default: no continuity, yet no-store on this reply and on a second /v1 route', async () => {
     writeEntry(home, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     const res = await fetch(`${handle.url}/v1/memories?q=deploys`);
     expect(res.status).toBe(200);
-    expect(res.headers.get('cache-control')).not.toBe('no-store');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect((await fetch(`${handle.url}/v1/graph`)).headers.get('cache-control')).toBe('no-store');
     const body = await jsonAs<{ continuity?: unknown; results: unknown[] }>(res);
     expect(body.continuity).toBeUndefined();
   });

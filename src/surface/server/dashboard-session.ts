@@ -19,7 +19,7 @@ export type DashboardSession = 'token' | 'cookie';
 const UNAUTHORIZED =
   'Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.';
 
-// A browser that restores its session keeps a cookie with no Max-Age for good.
+// The server refuses a cookie older than this too, since a browser that restores its session ignores Max-Age.
 const COOKIE_MAX_AGE_S = DAY_MS / 1000;
 
 function sameSecret(given: string | undefined, secret: string): boolean {
@@ -37,9 +37,20 @@ function cookieValue(header: string | undefined, name: string): string | undefin
   return undefined;
 }
 
-/** The session cookie's value: a MAC of the token, so a read of the browser's cookie store never yields the token. */
-function sessionValue(token: string, port: number): string {
-  return createHmac('sha256', token).update(`hippo-dashboard-session:${port}`).digest('hex');
+/** The session cookie's value: the issue time and a MAC of it with the token, so a read of the browser's cookie store
+ * never yields the token and the server can age the cookie out. */
+function sessionValue(token: string, port: number, issuedAtMs: number): string {
+  const mac = createHmac('sha256', token).update(`hippo-dashboard-session:${port}:${issuedAtMs}`).digest('hex');
+  return `${issuedAtMs}.${mac}`;
+}
+
+/** Whether `given` is a cookie this token issued for this port, within the cookie's Max-Age. */
+function liveSession(given: string | undefined, token: string, port: number, nowMs: number): boolean {
+  const issuedAtMs = Number(given?.split('.', 1)[0]);
+  if (!Number.isSafeInteger(issuedAtMs) || issuedAtMs > nowMs || nowMs - issuedAtMs >= COOKIE_MAX_AGE_S * 1000) {
+    return false;
+  }
+  return sameSecret(given, sessionValue(token, port, issuedAtMs));
 }
 
 /** The dashboard gate: refuses a foreign page (403) before any secret is read, then takes the token, setting the
@@ -49,21 +60,22 @@ export function passDashboardSession(
   res: ServerResponse,
   query: URLSearchParams,
   access: DashboardAccess,
+  now: () => number = Date.now,
 ): DashboardSession {
   if (isForeignPage(req)) throw new HttpError(403, 'cross-site or non-local request refused');
   const port = req.socket.localPort ?? access.port;
   // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate sessions.
   const cookieName = `hippo_dashboard_${port}`;
-  const session = sessionValue(access.token, port);
   if (sameSecret(query.get('token') ?? undefined, access.token)) {
     // A session minted over TLS must never travel over plain HTTP; the plain loopback listener cannot promise Secure.
     const secure = req.socket instanceof TLSSocket ? '; Secure' : '';
+    const value = sessionValue(access.token, port, now());
     res.setHeader(
       'Set-Cookie',
-      `${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_S}${secure}`,
+      `${cookieName}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_S}${secure}`,
     );
     return 'token';
   }
-  if (sameSecret(cookieValue(req.headers.cookie, cookieName), session)) return 'cookie';
+  if (liveSession(cookieValue(req.headers.cookie, cookieName), access.token, port, now())) return 'cookie';
   throw new HttpError(401, UNAUTHORIZED);
 }

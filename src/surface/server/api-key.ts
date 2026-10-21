@@ -93,10 +93,15 @@ export async function verifyApiKeyCached(
   plaintext: string,
   store: HippoStore,
   bound?: DerivationBound,
+  onUnusable?: () => void,
 ): Promise<VerifiedApiKey | null> {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
   const record = await store.findApiKey(keyId);
-  if (!isUsableKey(record, Date.now())) return null;
+  if (!isUsableKey(record, Date.now())) {
+    // The caller charges its failed-auth budget here without a derivation, so probing key ids costs the server nothing.
+    onUnusable?.();
+    return null;
+  }
   return (await secretMatches(keyId, plaintext, record.keyHash, bound)) ? verifiedKeyOf(keyId, record) : null;
 }

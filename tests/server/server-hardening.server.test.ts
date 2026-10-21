@@ -31,7 +31,11 @@ function signSlack(ts: string, body: string): string {
 }
 
 /** The reason of the stream's "event: closed" frame; a stream that never sends one hangs to the test timeout. */
-async function closedReasonOf(reader: ReadableStreamDefaultReader<Uint8Array>, seen: string): Promise<string | null> {
+async function closedReasonOf(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  seen: string,
+  after: string[] = [],
+): Promise<string | null> {
   const decoder = new TextDecoder();
   let buf = seen;
   for (;;) {
@@ -42,7 +46,9 @@ async function closedReasonOf(reader: ReadableStreamDefaultReader<Uint8Array>, s
     }
     const r = await reader.read();
     if (r.done) return null;
-    buf += decoder.decode(r.value);
+    const text = decoder.decode(r.value);
+    after.push(text);
+    buf += text;
   }
 }
 
@@ -135,13 +141,16 @@ describe('server hardening', () => {
         closeHippoDb(db2);
       }
 
-      const closedReason = await closedReasonOf(reader, new TextDecoder().decode(first.value));
+      const afterRevoke: string[] = [];
+      const closedReason = await closedReasonOf(reader, new TextDecoder().decode(first.value), afterRevoke);
       try {
         reader.cancel().catch(() => {});
       } catch {
         /* no-op */
       }
       expect(closedReason).toBe('auth_revoked');
+      // The revoked key's next server-sent message is the close frame, never another ping.
+      expect(afterRevoke.join('')).not.toContain(': ping');
     } finally {
       ac.abort();
     }
