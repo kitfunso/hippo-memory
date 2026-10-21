@@ -5,7 +5,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { summarizeTokenUse } from './token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
 import { keysetPage } from '../../base/util/keyset.js';
-import type { SqlAnd } from './keyset.js';
+import type { SqlFragment } from '../../db/sql.js';
 import type { CorrectionLinkPage, RawProvenancePage, ReportPage, Reports, StrengthTallies } from '../port/reports.js';
 import { statusCountsAt, strengthTalliesAt } from './candidates.js';
 import { countOpenConflictsAt } from './conflicts.js';
@@ -27,11 +27,11 @@ type CorrectionLinkDbRow = {
 };
 
 /** The ` AND` range that resumes after `after` on the given created and id columns, and the arguments it binds. */
-function afterRange(created: string, id: string, after: ReportPage['after']): SqlAnd {
-  if (!after) return { sql: '', args: [] };
+function afterRange(created: string, id: string, after: ReportPage['after']): SqlFragment {
+  if (!after) return { sql: '', params: [] };
   return {
     sql: ` AND ${created} >= ? AND (${created} > ? OR ${id} > ?)`,
-    args: [after.created, after.created, after.id],
+    params: [after.created, after.created, after.id],
   };
 }
 
@@ -47,7 +47,7 @@ function correctionLinksAt(db: DatabaseSyncLike, page: ReportPage): CorrectionLi
      LEFT JOIN memories src ON new.extracted_from <> '' AND src.id = new.extracted_from
      WHERE old.superseded_by IS NOT NULL AND old.superseded_by != ''${range.sql}
      ORDER BY old.created ASC, old.id ASC LIMIT ?`,
-  ).all(...range.args, page.limit + 1) as CorrectionLinkDbRow[];
+  ).all(...range.params, page.limit + 1) as CorrectionLinkDbRow[];
   const kept = keysetPage(rows, page.limit, (r) => ({ created: r.old_created, id: r.old_id }));
   return {
     links: kept.rows.map((r) => ({
@@ -74,7 +74,7 @@ function rawProvenanceAt(db: DatabaseSyncLike, page: ReportPage): RawProvenanceP
       `SELECT id, owner, artifact_ref, created FROM memories WHERE ${RAW} ` +
         `AND (COALESCE(owner, '') = '' OR COALESCE(artifact_ref, '') = '')${range.sql} ` +
         `ORDER BY created ASC, id ASC LIMIT ?`,
-    ).all(...range.args, page.limit + 1) as Array<{
+    ).all(...range.params, page.limit + 1) as Array<{
       id: string;
       owner: string | null;
       artifact_ref: string | null;

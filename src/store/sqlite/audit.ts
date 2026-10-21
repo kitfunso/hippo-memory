@@ -1,5 +1,5 @@
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { keysetAfter } from '../../base/util/keyset.js';
+import { keysetAfter } from '../../db/sql.js';
 import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent } from '../port/types.js';

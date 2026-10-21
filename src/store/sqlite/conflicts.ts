@@ -12,7 +12,8 @@ import { chunked } from '../../base/util/chunked.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { keysetPage, type KeysetClause } from '../../base/util/keyset.js';
+import { keysetPage } from '../../base/util/keyset.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { DetectedConflict } from '../port/consolidation.js';
 import type {
@@ -78,9 +79,9 @@ function toConflictRow(r: ConflictJoinRow): ConflictRow {
 
 /** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no cross-tenant or stale pair
  * surfaces; with none, every conflict comes back with whichever members still exist. */
-function conflictSelect(tenantId: TenantId, filters: readonly KeysetClause[]): KeysetClause {
+function conflictSelect(tenantId: TenantId, filters: readonly SqlFragment[]): SqlFragment {
   const join = tenantId === ALL_TENANTS ? 'LEFT JOIN' : 'JOIN';
-  const where: KeysetClause[] =
+  const where: SqlFragment[] =
     tenantId === ALL_TENANTS
       ? [...filters]
       : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
@@ -98,7 +99,7 @@ export function conflictPageAt(
   db: DatabaseSyncLike,
   { tenantId, status, limit, after }: ConflictListQuery,
 ): ConflictRowPage {
-  const filters: KeysetClause[] = [];
+  const filters: SqlFragment[] = [];
   if (status !== '*') filters.push({ sql: 'mc.status = ?', params: [status] });
   if (after) filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
   const select = conflictSelect(tenantId, filters);

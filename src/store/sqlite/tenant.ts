@@ -2,10 +2,11 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { validateApiKey } from './auth.js';
+import type { SqlFragment } from '../../db/sql.js';
 
 /** ` AND <condition>` and its argument for one tenant; both empty for ALL_TENANTS. */
-export function tenantAnd(tenantId: TenantId, condition: string = 'tenant_id = ?'): { sql: string; args: string[] } {
-  return tenantId === ALL_TENANTS ? { sql: '', args: [] } : { sql: ` AND ${condition}`, args: [tenantId] };
+export function tenantAnd(tenantId: TenantId, condition: string = 'tenant_id = ?'): SqlFragment {
+  return tenantId === ALL_TENANTS ? { sql: '', params: [] } : { sql: ` AND ${condition}`, params: [tenantId] };
 }
 
 export interface ResolveOptions {

@@ -1,7 +1,8 @@
 // hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with their audit rows.
 import { appendAuditEvent } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
-import { keysetAfter, type KeysetPosition } from '../../base/util/keyset.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import { keysetAfter } from '../../db/sql.js';
 import { selectEntriesByIds, readEntryAt } from './entry-reads.js';
 import type {
   QuarantineApproval,

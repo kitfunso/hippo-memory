@@ -1,6 +1,7 @@
 // The built-in store's sharing reads: the existing functions, bound to this store.
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { EVERY_SCOPE, loadTextsHoldingWordsAt, tallySourcesAt } from './candidates.js';
+import { loadTextsHoldingWordsAt, tallySourcesAt } from './candidates.js';
+import { EVERY_SCOPE } from './rule-sql.js';
 import {
   loadEntriesByIdsAt,
   loadEntriesPageAt,

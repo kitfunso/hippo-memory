@@ -156,7 +156,7 @@ export function pendingVectorIdsAt(db: DatabaseSyncLike, page: IdPageRequest): I
     `SELECT id FROM memories
        WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)${after.sql}
        ORDER BY id LIMIT ?`,
-  ).all(...after.args, page.limit + 1) as Array<{ id: string }>;
+  ).all(...after.params, page.limit + 1) as Array<{ id: string }>;
   return idPageOf(rows, page.limit);
 }
 
@@ -169,7 +169,7 @@ export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfi
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenant.sql}
        AND NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id AND v.model = ?)
      ORDER BY id LIMIT ?`,
-  ).all(query.afterId ?? '', ...tenant.args, query.model, limit) as MemoryRow[];
+  ).all(query.afterId ?? '', ...tenant.params, query.model, limit) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 

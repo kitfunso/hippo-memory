@@ -4,7 +4,7 @@ import { SECRET_TAGS } from '../../base/util/secret-detect.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../base/memory/ambient.js';
 import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../base/memory/memory.js';
-import { placeholders } from '../../db/sql.js';
+import { placeholders, type SqlFragment } from '../../db/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../base/util/json.js';
@@ -12,7 +12,7 @@ import { isJsonNumber, isJsonString, parseJson } from '../../base/util/json.js';
 /**
  * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match.
  */
-function secretTaggedSql() {
+function secretTaggedSql(): SqlFragment {
   const tags = [...SECRET_TAGS];
   return {
     sql: `((${tags.map(() => 'tags_json LIKE ?').join(' OR ')})
@@ -51,12 +51,12 @@ export function loadAmbientTalliesAt(
   tenantId: string,
   filter: AmbientStoreFilter,
 ): AmbientTallies {
-  const { where, params } = contextRowsWhere(tenantId, filter, [`COALESCE(kind, '') != 'archived'`]);
+  const rows = contextRowsWhere(tenantId, filter, [`COALESCE(kind, '') != 'archived'`]);
   const secret = secretTaggedSql();
   const freshAfter = new Date(filter.now.getTime() - AMBIENT_FRESH_WINDOW_MS).toISOString();
-  const scope = `${where.join(' AND ')}
+  const scope = `${rows.sql}
       AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`;
-  const scopeParams = [...params, ...filter.currentProject, ...secret.params];
+  const scopeParams = [...rows.params, ...filter.currentProject, ...secret.params];
   const strength = strengthSql(filter.now, rules);
   const args = [...strength.params, freshAfter, HIGH_SCHEMA_FIT, ...scopeParams];
   // A row is an error when one of its tags is `error`, `critical` or starts with `error:`, as isErrorTagged says.

@@ -11,7 +11,7 @@ import {
 } from '../../base/scope/api-key.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
-import { keysetAfter } from '../../base/util/keyset.js';
+import { keysetAfter } from '../../db/sql.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../base/util/version.js';

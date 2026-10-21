@@ -28,7 +28,7 @@ function row(content: string, daysBefore: number, extra: Partial<MemoryEntry> = 
 function literalClockSum(db: DatabaseSyncLike, now: Date): number {
   const { sql, params } = strengthSql(now, {});
   expect(params).toHaveLength(1);
-  const julian = params[0]!;
+  const julian = Number(params[0]);
   const literal = Number.isInteger(julian) ? julian.toFixed(1) : String(julian);
   const text = `SELECT COALESCE(SUM(COALESCE(${sql.replace('?', literal)}, 0)), 0) AS s FROM memories WHERE tenant_id = ?`;
   // SAFETY: an aggregate with no GROUP BY answers one row with the column s.

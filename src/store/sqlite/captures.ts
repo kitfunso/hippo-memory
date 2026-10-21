@@ -9,7 +9,8 @@ import { updateStatsOn } from './index-and-stats.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/capture.js';
 import type { Sync } from './served.js';
-import { EVERY_SCOPE, loadTextsHoldingWordsAt } from './candidates.js';
+import { loadTextsHoldingWordsAt } from './candidates.js';
+import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';
 import { bound, boundWithFiles, skipEmpty, type Bodies } from './bound.js';
 

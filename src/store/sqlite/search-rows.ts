@@ -2,7 +2,8 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
-import { originInSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
+import { originInSql, scopeAdmitSql } from './rule-sql.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../../base/rank/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { topVectorMatches, type VectorIndex } from '../../db/vector-store.js';
@@ -45,12 +46,12 @@ const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
 interface SearchPredicates {
   tenantPredicate: string;
   tenantOnlyPredicate: string;
-  tenantParams: string[];
+  tenantParams: SqlFragment['params'];
   archivedClauseAlias: string;
   archivedClauseTenantOnly: string;
   aliasScope: SqlFragment;
   plainScope: SqlFragment;
-  scopeParams: string[];
+  scopeParams: SqlFragment['params'];
   currentAlias: string;
   currentNoAlias: string;
 }
@@ -100,7 +101,7 @@ function searchPredicates(
   const one = tenantId !== ALL_TENANTS;
   const tenantPredicate = tenantAnd(tenantId, 'm.tenant_id = ?').sql;
   const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
-  const tenantParams = tenantAnd(tenantId).args;
+  const tenantParams = tenantAnd(tenantId).params;
 
   // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only guards against
   // a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
@@ -243,7 +244,7 @@ export async function loadVectorCandidateEntriesAt(
   const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
   const tenant = tenantAnd(spec.tenantId, 'm.tenant_id = ?');
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
-  const params = [...tenant.args, ...scope.params];
+  const params = [...tenant.params, ...scope.params];
   const matches = await topVectorMatches(db, {
     query: queryVector,
     k: spec.limit ?? VECTOR_CANDIDATE_LIMIT,

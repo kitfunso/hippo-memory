@@ -14,7 +14,8 @@ import {
   memoriesBackingAmongAt,
 } from '../../../src/store/sqlite/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../../src/store/port/dormant.js';
-import { EVERY_SCOPE, listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
+import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
+import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
 import {
   countSessionRawMemoriesAt,
   loadEntriesByIdsAt,
@@ -27,7 +28,7 @@ import {
 import { writeEntriesTogetherAt, writePromotedEntryAt } from '../../../src/store/sqlite/entry-writes.js';
 import { waitingOpener } from '../../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore } from '../../../src/store/sqlite/handles.js';
-import type { SqlFragment } from '../../../src/store/sqlite/rule-sql.js';
+import type { SqlFragment } from '../../../src/db/sql.js';
 import { loadRecallEntriesAt, loadSearchEntriesAt } from '../../../src/store/sqlite/search-rows.js';
 import type { HeldText } from '../../../src/store/port/types.js';
 import type {

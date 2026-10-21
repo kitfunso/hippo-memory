@@ -4,7 +4,8 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { fromWire, toWire, type MemoryWire } from '../../base/memory/memory-wire.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import type { JsonValue } from '../../base/util/json.js';
-import type { SqlFragment } from './rule-sql.js';
+import type { SqlFragment } from '../../db/sql.js';
+import { EVERY_SCOPE } from './rule-sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
@@ -110,7 +111,6 @@ function rowToDormantMemory(row: DormantRow): DormantMemory {
 const DORMANT_WITH_SCOPE =
   `(SELECT *, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END ` +
   `AS scope FROM dormant_memories)`;
-export const EVERY_SCOPE: SqlFragment = { sql: '1', params: [] };
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, optionally filtered by search terms. */
 export function listDormantRows(

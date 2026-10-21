@@ -13,7 +13,8 @@ import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WH
 import { type DatabaseSyncLike, isFtsAvailable, isFtsInSync, withReadSnapshot } from '../../db/index.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { originInSql, rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
+import { originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { pickRarestFtsQuery, loadRecallEntriesAt } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
@@ -58,11 +59,6 @@ interface RecentRowsOptions {
 const NEWEST = 'ORDER BY created DESC, id DESC';
 const AFTER = 'AND created <= ? AND (created < ? OR id < ?) ';
 
-interface OwnRows {
-  readonly where: string;
-  readonly params: ReadonlyArray<string | number>;
-}
-
 /** Where a row sorts in a recent read: the instant its `created` names, then its id. */
 interface Position {
   readonly at: string;
@@ -70,7 +66,7 @@ interface Position {
 }
 
 /** Up to `limit` live rows `own` admits, newest first, after `after`. */
-type ReadNewest = (own: OwnRows, limit: number, after?: Position) => MemoryEntry[];
+type ReadNewest = (own: SqlFragment, limit: number, after?: Position) => MemoryEntry[];
 
 // As contextGet sorts a row: a drifted stamp at the instant Date reads in it.
 const positionOf = (e: MemoryEntry): Position => ({ at: sortableStamp(e.created), id: e.id });
@@ -83,12 +79,12 @@ const afterParams = (after: Position | undefined): string[] => (after ? [after.a
 /** Reads in `created` text order, which is time order while every live row of the tenant holds toISOString text. */
 function readByText(run: RunSql): ReadNewest {
   return (own, limit, after) =>
-    run(`${own.where} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [...own.params, ...afterParams(after), limit]);
+    run(`${own.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [...own.params, ...afterParams(after), limit]);
 }
 
 /** Every live drifted row `own` admits, newest first; the drift index holds only these, so it is no tenant scan. */
-function newestDrifted(run: RunSql, own: OwnRows): MemoryEntry[] {
-  return run(`${own.where} AND ${CREATED_DRIFTED}`, [...own.params])
+function newestDrifted(run: RunSql, own: SqlFragment): MemoryEntry[] {
+  return run(`${own.sql} AND ${CREATED_DRIFTED}`, [...own.params])
     .map((entry) => ({ entry, at: positionOf(entry) }))
     .sort((a, b) => newestFirst(a.at, b.at))
     .map(({ entry }) => entry);
@@ -98,9 +94,9 @@ function newestDrifted(run: RunSql, own: OwnRows): MemoryEntry[] {
  * written in toISOString form would read. */
 function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNewest {
   return (own, limit, after) => {
-    let odd = drifted.get(own.where);
-    if (!odd) drifted.set(own.where, (odd = newestDrifted(run, own)));
-    const text = run(`${own.where} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
+    let odd = drifted.get(own.sql);
+    if (!odd) drifted.set(own.sql, (odd = newestDrifted(run, own)));
+    const text = run(`${own.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
       ...own.params,
       ...afterParams(after),
       limit,
@@ -123,11 +119,11 @@ function loadRecentRows(read: ReadNewest, tenantId: string, options: RecentRowsO
   const originSql =
     origins &&
     (origins.userGlobal ? `(origin_project = '' OR ${originInSql(origins.names)})` : originInSql(origins.names));
-  const own: OwnRows = {
-    where: originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED,
+  const own: SqlFragment = {
+    sql: originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED,
     params: [tenantId, ...(origins?.names ?? [])],
   };
-  let rows = read({ where: AMBIENT_SCOPED, params: [tenantId] }, window);
+  let rows = read({ sql: AMBIENT_SCOPED, params: [tenantId] }, window);
   let kept = rows.filter(keep);
   if (kept.length >= needed || rows.length < window) return kept;
   if (origins) {
@@ -142,7 +138,7 @@ function loadRecentRows(read: ReadNewest, tenantId: string, options: RecentRowsO
 // kept.
 function keptPastWindow(
   read: ReadNewest,
-  own: OwnRows,
+  own: SqlFragment,
   rows: readonly MemoryEntry[],
   wanted: number,
   keep: (e: MemoryEntry) => boolean,
@@ -184,7 +180,7 @@ function pinnedEntries(db: DatabaseSyncLike, tenantId: TenantId): Generator<Memo
         cachedStatement(
           db,
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(AMBIENT_PINNED)} ${ENTRY_PAGE_ORDER}`,
-        ).all(...within.args, limit) as MemoryRow[],
+        ).all(...within.params, limit) as MemoryRow[],
     );
     return { entries: rows.map(rowToEntry), next };
   });
@@ -214,7 +210,7 @@ export function loadAmbientCandidatesAt(
   }
 
   if (needed > 0) {
-    const drifted = newestDrifted(run, { where: AMBIENT_SCOPED, params: [tenantId] });
+    const drifted = newestDrifted(run, { sql: AMBIENT_SCOPED, params: [tenantId] });
     const read = drifted.length === 0 ? readByText(run) : readByInstant(run, new Map([[AMBIENT_SCOPED, drifted]]));
     for (const e of loadRecentRows(read, tenantId, { needed, admit, origins })) byId.set(e.id, e);
   }
@@ -247,17 +243,12 @@ const decayRankSql = (): string => `pinned DESC,
   ${decayExponentSql()} ASC NULLS LAST,
   id ASC`;
 
-export interface ContextRowsWhere {
-  where: string[];
-  params: Array<string | number>;
-}
-
 /** The shared WHERE of a context read: live tenant rows, then `extra` predicates, then the scope and origin rules. */
 export function contextRowsWhere(
   tenantId: string,
   filter: Pick<ContextCandidateFilter, 'exactScope' | 'ownScope' | 'project'>,
   extra: readonly string[] = [],
-): ContextRowsWhere {
+): SqlFragment {
   const where = ['tenant_id = ?', `COALESCE(superseded_by, '') = ''`, ...extra];
   const params: Array<string | number> = [tenantId];
   if (filter.exactScope) {
@@ -272,7 +263,7 @@ export function contextRowsWhere(
     where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
     params.push(...filter.project);
   }
-  return { where, params };
+  return { sql: where.join(' AND '), params };
 }
 
 const RANK_COLUMNS = 'id, pinned, half_life_days, last_retrieved, outcome_positive, outcome_negative';
@@ -295,8 +286,8 @@ function decayKeySubsetSql(whereSql: string): string {
     ORDER BY created ASC, id ASC`;
 }
 
-function decayKeySubsetRows(db: DatabaseSyncLike, rows: ContextRowsWhere, cap: number, now: string): MemoryRow[] {
-  const whereSql = rows.where.join(' AND ');
+function decayKeySubsetRows(db: DatabaseSyncLike, rows: SqlFragment, cap: number, now: string): MemoryRow[] {
+  const whereSql = rows.sql;
   const bound = [now, ...rows.params, ...rows.params, now, DECAY_KEY_SLACK_DAYS, cap, cap, DECAY_KEY_HALF_LIVES];
   return cachedStatement(db, decayKeySubsetSql(whereSql)).all(...bound) as MemoryRow[];
 }
@@ -310,7 +301,7 @@ export function loadContextCandidatesAt(
   const rowsWhere = contextRowsWhere(tenantId, filter);
   const { params } = rowsWhere;
   const cap = Math.max(0, Math.trunc(filter.cap));
-  const whereSql = rowsWhere.where.join(' AND ');
+  const whereSql = rowsWhere.sql;
   const now = filter.now.toISOString();
   // Stops one row past the cap, so a large tenant is not walked to be counted.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
@@ -337,9 +328,6 @@ export function loadContextCandidatesAt(
 
 // No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
-
-/** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
-export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 
 interface HeldRowsFilter {
   readonly tenantId: TenantId;
@@ -369,7 +357,7 @@ function heldRows(
       `${originWhere} AND ${admit.sql} AND (${holds})`,
   ).all(
     ...(phrases ? [phrases.join(' OR ')] : []),
-    ...tenant.args,
+    ...tenant.params,
     ...(project ?? []),
     ...admit.params,
     JSON.stringify(words),
@@ -464,7 +452,7 @@ export function tallySourcesAt(db: DatabaseSyncLike, tenantId: TenantId): Source
     `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
       `char(31) || id) AS first
      FROM memories WHERE 1${tenant.sql} GROUP BY COALESCE(source, 'cli')`,
-  ).all(...tenant.args) as SourceTallyDbRow[];
+  ).all(...tenant.params) as SourceTallyDbRow[];
 }
 
 // A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.

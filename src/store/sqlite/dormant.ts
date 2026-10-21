@@ -1,7 +1,8 @@
 // hippo.db's Dormant group: the memories sleep set aside, listed, restored or forgotten for good.
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { StoreFiles, OnHandle } from './open.js';
-import { type SqlFragment, touchableScopeSql } from './rule-sql.js';
+import { touchableScopeSql } from './rule-sql.js';
+import type { SqlFragment } from '../../db/sql.js';
 import type { WriteBudget } from '../../base/util/write-budget.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { reviveDormant } from '../../base/memory/dormant-revival.js';

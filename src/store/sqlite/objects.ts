@@ -2,7 +2,7 @@
 import { appendAuditEvent } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { keysetAfter } from '../../base/util/keyset.js';
+import { keysetAfter } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import {
   calculateStrength,

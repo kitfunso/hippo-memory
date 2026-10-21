@@ -1,7 +1,8 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { type MemoryEntry } from '../../base/memory/memory.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { AUTO_DELETABLE, type SqlFragment } from './rule-sql.js';
+import { AUTO_DELETABLE } from './rule-sql.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { introducesContent, rejectedValuesAt } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
@@ -83,7 +84,7 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
 }
 
 /** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes RawAppendOnlyError. */
-function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, params: readonly string[]): number {
+function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, params: SqlFragment['params']): number {
   try {
     return Number(cachedStatement(db, sql).run(...params).changes ?? 0);
   } catch (cause) {

@@ -3,7 +3,8 @@ import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } 
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
+import { scopeAdmitSql } from './rule-sql.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
@@ -18,7 +19,6 @@ import {
   type EntryPageRequest,
   type EntryRows,
   type EntryRowsRead,
-  type SqlAnd,
 } from './keyset.js';
 import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '../port/consolidation.js';
 import type { IdPage, IdPageRequest } from '../port/vectors.js';
@@ -38,7 +38,7 @@ export function readEntryAt(db: DatabaseSyncLike, id: string, tenantId: TenantId
   const tenant = tenantAnd(tenantId);
   const row = cachedStatement(db, `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?${tenant.sql}`).get(
     id,
-    ...tenant.args,
+    ...tenant.params,
   ) as MemoryRow | undefined;
   return row ? rowToEntry(row) : null;
 }
@@ -57,7 +57,7 @@ export function selectEntriesByIds(
     const rows = cachedStatement(
       db,
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))${tenant.sql}`,
-    ).all(JSON.stringify(chunk), ...tenant.args) as MemoryRow[];
+    ).all(JSON.stringify(chunk), ...tenant.params) as MemoryRow[];
     for (const row of rows) byId.set(row.id, rowToEntry(row));
   }
   return byId;
@@ -76,7 +76,7 @@ export function selectChildrenByParent(
       db,
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
         `WHERE dag_parent_id IN (SELECT value FROM json_each(?))${tenant.sql} ORDER BY created ASC, id ASC`,
-    ).all(JSON.stringify(chunk), ...tenant.args) as MemoryRow[];
+    ).all(JSON.stringify(chunk), ...tenant.params) as MemoryRow[];
     for (const row of rows) {
       const entry = rowToEntry(row);
       const parentId = entry.dagParentId ?? '';
@@ -96,9 +96,9 @@ export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[],
 const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';
 
 // One JSON param for the list keeps a cached statement's text the same however many origins a caller names.
-function originAnd(origins: readonly string[] | null | undefined): SqlAnd {
-  if (origins == null) return { sql: '', args: [] };
-  return { sql: ` AND (origin_project = '' OR ${ORIGIN_IN})`, args: [JSON.stringify(origins)] };
+function originAnd(origins: readonly string[] | null | undefined): SqlFragment {
+  if (origins == null) return { sql: '', params: [] };
+  return { sql: ` AND (origin_project = '' OR ${ORIGIN_IN})`, params: [JSON.stringify(origins)] };
 }
 
 /** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
@@ -110,7 +110,7 @@ function sessionRawWhere({ sessionId, tenantId, origins }: SessionRows<SessionRa
   const origin = originAnd(origins);
   return {
     sql: `kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL${tenant.sql}${origin.sql}`,
-    params: [sessionId, ...tenant.args, ...origin.args],
+    params: [sessionId, ...tenant.params, ...origin.params],
   };
 }
 
@@ -161,14 +161,14 @@ export function loadFreshRawMemoriesAt(
   let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
   const tenant = tenantAnd(tenantId);
   sql += tenant.sql;
-  params.push(...tenant.args);
+  params.push(...tenant.params);
   if (sessionId !== undefined && sessionId !== '') {
     sql += ' AND source_session_id = ?';
     params.push(sessionId);
   }
   const origin = originAnd(origins);
   sql += origin.sql;
-  params.push(...origin.args);
+  params.push(...origin.params);
   sql += ` ORDER BY ${orderSql(FRESH_RAW_ORDER)} LIMIT ?`;
   params.push(capped);
   const rows = cachedStatement(db, sql).all(...params) as MemoryRow[];
@@ -189,7 +189,7 @@ export function loadEntryIdsPageAt(db: DatabaseSyncLike, tenantId: TenantId, pag
     page,
     (within, limit) =>
       cachedStatement(db, `SELECT id, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`).all(
-        ...within.args,
+        ...within.params,
         limit,
       ) as EntryKeyRow[],
   );
@@ -203,7 +203,7 @@ type EntryKeyRow = EntryCursor;
 export function loadEntryIdsByIdAt(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
   const after = afterIdAnd(page.afterId);
   const rows = cachedStatement(db, `SELECT id FROM memories WHERE 1${after.sql} ORDER BY id LIMIT ?`).all(
-    ...after.args,
+    ...after.params,
     page.limit + 1,
   ) as Array<{ id: string }>;
   return idPageOf(rows, page.limit);
@@ -271,7 +271,7 @@ export function loadEntriesMentioningAt(
       cachedStatement(
         db,
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(like.sql)} ${ENTRY_PAGE_ORDER}`,
-      ).all(...like.params, ...within.args, limit) as MemoryRow[],
+      ).all(...like.params, ...within.params, limit) as MemoryRow[],
   );
 }
 
@@ -301,14 +301,14 @@ function ftsMentionRows(db: DatabaseSyncLike, ftsQuery: string, within: EntryRow
   const hits = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(FTS_HITS)} ${ENTRY_PAGE_ORDER}`,
-  ).all(ftsQuery, ...within.args, limit) as MemoryRow[];
+  ).all(ftsQuery, ...within.params, limit) as MemoryRow[];
   const last = hits.length === limit ? hits[limit - 1] : undefined;
-  const upTo = last === undefined ? { sql: '', args: [] } : { sql: ' AND created <= ?', args: [last.created] };
+  const upTo = last === undefined ? { sql: '', params: [] } : { sql: ' AND created <= ?', params: [last.created] };
   const nonAscii = within.match(NON_ASCII_ROWS + upTo.sql);
   const others = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${nonAscii} ${ENTRY_PAGE_ORDER}`,
-  ).all(...upTo.args, ...within.args, limit) as MemoryRow[];
+  ).all(...upTo.params, ...within.params, limit) as MemoryRow[];
   const ids = new Set(hits.map((row) => row.id));
   return [...hits, ...others.filter((row) => !ids.has(row.id))].sort(oldestFirst).slice(0, limit);
 }
@@ -332,7 +332,7 @@ export function loadEntryTextKeysPageAt(
       cachedStatement(
         db,
         `SELECT id, tenant_id, content, source, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
-      ).all(...within.args, limit) as EntryTextKeyPageRow[],
+      ).all(...within.params, limit) as EntryTextKeyPageRow[],
   );
   const keys = rows.map((row) => ({
     id: row.id,
@@ -366,7 +366,7 @@ export function loadEntriesPageAt(db: DatabaseSyncLike, tenantId: TenantId, page
       cachedStatement(
         db,
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
-      ).all(...within.args, limit) as MemoryRow[],
+      ).all(...within.params, limit) as MemoryRow[],
   );
 }
 
@@ -395,7 +395,7 @@ export function selectTenantTextsPage(db: DatabaseSyncLike, tenantId: string, pa
       cachedStatement(
         db,
         `SELECT id, content, source, scope, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
-      ).all(...within.args, limit) as Array<TenantText & { created: string }>,
+      ).all(...within.params, limit) as Array<TenantText & { created: string }>,
   );
   return { texts: rows, next };
 }
@@ -416,7 +416,7 @@ export function selectLiveEntriesBySourcePrefix(
         db,
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
           `WHERE ${within.match("superseded_by IS NULL AND source LIKE ? ESCAPE '\\'")} ${ENTRY_PAGE_ORDER}`,
-      ).all(`${escapeLike(prefix)}%`, ...within.args, limit) as MemoryRow[],
+      ).all(`${escapeLike(prefix)}%`, ...within.params, limit) as MemoryRow[],
   );
   return { entries: entries.filter((entry) => entry.source.startsWith(prefix)), next };
 }
@@ -440,7 +440,7 @@ export function selectEntriesFromOriginAt(
         db,
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
           `WHERE ${within.match(`origin_project = ?${live}${prefix}`)} ${ENTRY_PAGE_ORDER}`,
-      ).all(rows.origin, ...prefixArgs, ...within.args, limit) as MemoryRow[],
+      ).all(rows.origin, ...prefixArgs, ...within.params, limit) as MemoryRow[],
   );
 }
 
@@ -481,7 +481,7 @@ function textKeyCandidates(db: DatabaseSyncLike, tenantId: TenantId, text: strin
   const rows = cachedStatement(
     db,
     `SELECT id, tenant_id, content, source FROM memories WHERE ${where}${tenant.sql}`,
-  ).all(phrase ?? longestWord(text), ...tenant.args) as EntryTextKeyDbRow[];
+  ).all(phrase ?? longestWord(text), ...tenant.params) as EntryTextKeyDbRow[];
   return rows.map(({ tenant_id, ...row }) => ({ ...row, tenantId: tenant_id ?? DEFAULT_TENANT_ID }));
 }
 
@@ -529,7 +529,7 @@ export function contentsWithTagAt(
     db,
     `SELECT content, tags_json FROM memories WHERE tenant_id = ? ` +
       `AND instr(tags_json, ?) > 0${inProject.sql} AND ${admit.sql}`,
-  ).all(tenantId, JSON.stringify(tag), ...inProject.args, ...admit.params) as Array<{
+  ).all(tenantId, JSON.stringify(tag), ...inProject.params, ...admit.params) as Array<{
     content: string;
     tags_json: string;
   }>;
@@ -645,7 +645,7 @@ export function selectRowsHoldingOutsideSourcePrefixAt(
     db,
     `SELECT id, content, source FROM memories WHERE ${where} AND superseded_by IS NULL ` +
       `AND substr(source, 1, ?) != ?${visible.sql}`,
-  ).all(phrase ?? longestWord(text), tenantId, sourcePrefix.length, sourcePrefix, ...visible.args) as Array<{
+  ).all(phrase ?? longestWord(text), tenantId, sourcePrefix.length, sourcePrefix, ...visible.params) as Array<{
     id: string;
     content: string;
     source: string;
@@ -740,7 +740,7 @@ export function loadEntriesWithSignalsAt(
       cachedStatement(
         db,
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(anyOf.join(' OR '))} ${ENTRY_PAGE_ORDER}`,
-      ).all(...params, ...within.args, limit) as MemoryRow[],
+      ).all(...params, ...within.params, limit) as MemoryRow[],
   );
 }
 

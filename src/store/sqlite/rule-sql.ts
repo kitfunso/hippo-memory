@@ -16,7 +16,7 @@ import {
   type LossAversion,
 } from '../../base/memory/memory.js';
 import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../base/scope/recall-scope.js';
-import { placeholders } from '../../db/sql.js';
+import { placeholders, type SqlFragment } from '../../db/sql.js';
 import { REWARD_FACTOR_SQL } from '../../db/decay-key.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
@@ -30,7 +30,7 @@ export function rewardFactorSql(): string {
 /** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in
  * step. An unparseable date scores NULL here and 0 in JS, so sums agree. `now` is bound, so the text, and the statement
  * cached for it, stay the same at every call. */
-export function strengthSql(now: Date, rules: LossAversion) {
+export function strengthSql(now: Date, rules: LossAversion): SqlFragment {
   const ratio = parseLossAversionRatio(rules.lossAversionRatio);
   const num = (n: number): string => (Number.isInteger(n) ? n.toFixed(1) : String(n));
   const pos = 'COALESCE(outcome_positive, 0)';
@@ -55,11 +55,6 @@ export function strengthSql(now: Date, rules: LossAversion) {
     ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`,
     params: isDecayAblated() ? [] : [now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY],
   };
-}
-
-export interface SqlFragment {
-  sql: string;
-  params: string[];
 }
 
 // json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.
@@ -101,3 +96,6 @@ export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): Sql
   if (ownScope == null) return { sql: `(${notPersonal})`, params: [] };
   return { sql: `(${notPersonal} OR ${col}scope = ?)`, params: [ownScope] };
 }
+
+/** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
+export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
