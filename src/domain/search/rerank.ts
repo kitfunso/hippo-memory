@@ -2,7 +2,7 @@ import { cosineOf } from '../../base/rank/cosine.js';
 import type { RerankerFn, RerankerOptions, RerankResult } from '../rerankers/types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 
-const DEFAULT_RERANK_TOP_K = 50;
+export const DEFAULT_RERANK_TOP_K = 50;
 
 // MMR is O(K^2) cosine ops; candidates below this window never survive budget filtering anyway.
 const MMR_CANDIDATE_CAP = 100;

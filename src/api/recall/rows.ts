@@ -7,6 +7,7 @@ import type { ClefSettings } from '../../base/config/config.js';
 import { getReranker } from '../../domain/rerankers/index.js';
 import { isClefModel } from '../../domain/rerankers/clef.js';
 import { JEV_DEFAULT_TOP_K } from '../../domain/rerankers/jev.js';
+import { DEFAULT_RERANK_TOP_K } from '../../domain/search/rerank.js';
 import type { RerankerFn } from '../../domain/rerankers/types.js';
 import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
@@ -94,7 +95,7 @@ export interface CliRecallRerankerPick {
 export function cliRecallReranker(name: string): CliRecallRerankerPick | null {
   const fn = getReranker(name);
   if (!fn) return null;
-  return { fn, defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : 50 };
+  return { fn, defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : DEFAULT_RERANK_TOP_K };
 }
 
 /** A registry reranker that sends `clef` when a call names no transport of its own, for a script that reranks outside a

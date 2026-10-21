@@ -1,25 +1,14 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
 import { envActiveScope, envAnthropicApiKey } from '../../base/util/env.js';
-import { evalNow } from '../../base/memory/ablation.js';
 import * as fs from 'fs';
-import {
-  calculateStrength,
-  calculateRewardFactor,
-  confidenceFacets,
-  confidenceLabel,
-  Layer,
-  ConfidenceLevel,
-  strengthOptionsOf,
-  type MemoryEntry,
-  type StrengthOptions,
-} from '../../base/memory/memory.js';
+import { Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { parseSteps, traceRecord } from '../../api/memories/trace.js';
+import { parseSteps, traceRecord, traceStats } from '../../api/memories/trace.js';
 import { extractPathTags } from '../../api/memories/remember-local.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import * as client from './client.js';
@@ -32,15 +21,13 @@ import {
   type CliFlags,
   type CommandContext,
   boolFlag,
-  flagIsTrue,
+  hasFlag,
   isOneOf,
+  repeatedFlag,
   stringFlag,
   stringFlagOrExit,
   stringListFlag,
-  hasFlag,
-  repeatedFlag,
 } from './flag-values.js';
-import { DAY_MS } from '../../base/util/time.js';
 import { errorMessage } from '../../base/util/log.js';
 import { CliExit, fail } from './exit.js';
 
@@ -146,15 +133,22 @@ async function writeMemory(hippoRoot: string, tenantId: string, text: string, fl
     force: boolFlag(flags, 'force'),
   });
   if (outcome.status === 'skipped') {
-    console.log(`Skipped (salience: ${outcome.reason}, score ${outcome.score.toFixed(2)})`);
+    printSkipped(outcome);
     return;
   }
-  const weak = outcome.startedWeak;
-  if (weak) console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
+  if (outcome.startedWeak) printWeakened(outcome.startedWeak);
   printRemembered(outcome.entry, useGlobal, outcome.warnings);
 
   const request = { requested: boolFlag(flags, 'extract'), apiKey: envAnthropicApiKey() };
   printExtraction(await api.extractRememberedFacts(ctx, outcome.entry, request));
+}
+
+function printSkipped({ reason, score }: { reason: string; score: number }): void {
+  console.log(`Skipped (salience: ${reason}, score ${score.toFixed(2)})`);
+}
+
+function printWeakened({ reason, strength }: { reason: string; strength: number }): void {
+  console.log(`Weakened (salience: ${reason}, strength ${strength.toFixed(2)})`);
 }
 
 function printRemembered(entry: MemoryEntry, useGlobal: boolean, warnings: readonly string[]): void {
@@ -216,7 +210,7 @@ async function supersedeMemory(
     layer: parseLayerFlag(flags),
     tags: supersedeTags(flags),
     // Without --pin the successor keeps the old row's pin.
-    pinned: flagIsTrue(flags, 'pin') ? true : undefined,
+    pinned: boolFlag(flags, 'pin') ? true : undefined,
   };
 
   let newId: string;
@@ -315,25 +309,6 @@ type TraceView = ReturnType<typeof traceStats> &
     id: string;
     sourceLabel: 'local' | 'global';
   };
-
-function traceStats(entry: MemoryEntry, rules: StrengthOptions) {
-  const now = evalNow();
-  const strength = calculateStrength(entry, now, rules);
-  const halfLife = entry.halfLifeDays;
-  const rewardFactor = calculateRewardFactor(entry, rules.ablation);
-  const effHalfLife = halfLife * rewardFactor;
-  const createdMs = new Date(entry.created).getTime();
-  const ageDays = (now.getTime() - createdMs) / DAY_MS;
-  const lastMs = new Date(entry.lastRetrieved).getTime();
-  const sinceLast = (now.getTime() - lastMs) / DAY_MS;
-  const facets = confidenceFacets(entry, now);
-  const conf = confidenceLabel(entry, now).text;
-
-  // Projected strength: same decay curve, just push `now` out.
-  const projectedAt = (days: number): number =>
-    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), rules);
-  return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
-}
 
 async function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry, id: string, tenantId: string) {
   // Parents (consolidation lineage) — schema v9 field.
@@ -447,8 +422,7 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
     fail('Memory content too short (minimum 3 characters).');
   }
   // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need
-  // the direct path. The salience gate is not in richFlag and the route does not apply it, so a routed remember stores
-  // what a direct one would skip.
+  // the direct path. Both paths ask the api for the same salience gate.
   const richFlag =
     boolFlag(flags, 'pin') ||
     boolFlag(flags, 'global') ||
@@ -481,7 +455,14 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
       owner: thinOwnerCheck.value,
       artifactRef: stringFlag(flags, 'artifact-ref'),
       tags,
+      salienceGate: true,
     });
+    if ('skipped' in result) {
+      printSkipped(result.skipped);
+      return;
+    }
+    const weak = result.startedWeak;
+    if (weak) printWeakened(weak);
     console.log(`Remembered [${result.id}] (via ${info.url})`);
     console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
     for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
