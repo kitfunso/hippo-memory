@@ -76,6 +76,14 @@ export interface StoreSide {
 /** A rejection as data, so an error compares like a return; a throw that is not an Error is rethrown. */
 export type Outcome<R> = { readonly value: R } | { readonly error: string };
 
+/** The value call `i` resolved to; a call that rejected fails the test. */
+export function valueAt<T>(outcomes: readonly Outcome<unknown>[], i: number): T {
+  const outcome = outcomes[i];
+  if (outcome === undefined || !('value' in outcome)) throw new Error(`call ${i} did not resolve`);
+  // SAFETY: the caller names the type its call `i` resolves to.
+  return outcome.value as T;
+}
+
 export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
   try {
     return { value: await run() };
@@ -87,8 +95,19 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
 
 export type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
 
+/** A required group, or 'base' for the methods HippoStore declares itself. */
+export type ConformanceGroup = RequiredGroup | 'base';
+
+/** What a call on `G` is handed: the group's methods, or the store itself for 'base'. */
+export type GroupOf<G extends ConformanceGroup> = G extends RequiredGroup ? HippoStore[G] : HippoStore;
+
 /** One call on a store group; R is every value the calls in one run resolve to. */
-export type GroupCall<G extends RequiredGroup, R> = (group: HippoStore[G], store: HippoStore) => Promise<R>;
+export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store: HippoStore) => Promise<R>;
+
+function groupOf<G extends ConformanceGroup>(store: HippoStore, group: G): GroupOf<G> {
+  // SAFETY: GroupOf<G> is HippoStore for 'base' and HippoStore[G] for every other G, as the branch reads.
+  return (group === 'base' ? store : store[group as RequiredGroup]) as GroupOf<G>;
+}
 
 export interface SideResult<R> {
   readonly outcomes: readonly Outcome<R>[];
@@ -104,13 +123,13 @@ function auditRowsAt(root: string): AuditEvent[] {
   }
 }
 
-async function runSide<G extends RequiredGroup, R>(
+async function runSide<G extends ConformanceGroup, R>(
   side: StoreSide,
   group: G,
   calls: readonly GroupCall<G, R>[],
   guard: <T>(fn: () => T) => T,
 ): Promise<SideResult<R>> {
-  const methods = side.store[group];
+  const methods = groupOf(side.store, group);
   const outcomes: Outcome<R>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => guard(() => call(methods, side.store))));
   await side.store.close();
@@ -118,7 +137,7 @@ async function runSide<G extends RequiredGroup, R>(
 }
 
 /** The memory side's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
-export async function onBothStores<G extends RequiredGroup, R>(
+export async function onBothStores<G extends ConformanceGroup, R>(
   fixture: TwoTenantFixture,
   group: G,
   calls: readonly GroupCall<G, R>[],

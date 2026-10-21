@@ -47,6 +47,10 @@ function instancesIn(tokens: readonly string[], phrase: readonly string[]): numb
 const instances = (row: FtsRow, phrase: readonly string[]): number =>
   instancesIn(row.content, phrase) + instancesIn(row.tags, phrase);
 
+/** As an FTS5 `content : "phrase"` query: the content column holds the phrase's tokens one after another. */
+export const contentHoldsPhrase = (entry: MemoryEntry, phrase: string): boolean =>
+  instancesIn(ftsRowOf(entry).content, ftsTokens(phrase)) > 0;
+
 const K1 = 1.2;
 const B = 0.75;
 
