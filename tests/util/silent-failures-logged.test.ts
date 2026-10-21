@@ -8,7 +8,7 @@ import { fetchWithRetry } from '../../src/infra/http-retry.js';
 import { heartbeatVerdict } from '../../src/surface/server/auth.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { handleInit } from '../../src/surface/cli/init.js';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { DEFAULT_EMBEDDING_MODEL, resolveEmbeddingModel } from '../../src/base/embeddings/local.js';
@@ -167,7 +167,7 @@ describe('capture log append', () => {
       process.stdout.write(`${line}
 `),
     );
-    await cmdCapture(captureTarget(root), {
+    await runCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'file',
       filePath: blank,

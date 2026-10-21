@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { handleRemember, handleTrace } from '../../src/surface/cli/remember.js';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { recordSessionDigest } from '../../src/surface/capture/session-digest.js';
 import { captureTarget, hookStore } from '../_helpers/cli-stores.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -100,7 +100,7 @@ describe('trace lineage', () => {
   });
 });
 
-describe('cmdCapture', () => {
+describe('runCapture', () => {
   it('reads no full row for its copy check and keeps every write on one handle', async () => {
     const counts: number[] = [];
     for (const n of SIZES) {
@@ -116,7 +116,7 @@ describe('cmdCapture', () => {
         const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
         try {
           const { statements } = await recordStatementsAsync(() =>
-            cmdCapture(captureTarget(root), {
+            runCapture(captureTarget(root), {
               source: 'last-session',
               sessionTurns,
               dryRun: false,

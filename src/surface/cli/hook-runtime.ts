@@ -40,7 +40,7 @@ export async function logSessionEndImport(
 }
 
 /**
- * Best-effort log line for the handleSessionEndWorker snapshot-close step: handleSleep/cmdCapture restore their
+ * Best-effort log line for the handleSessionEndWorker snapshot-close step: handleSleep/runCapture restore their
  * console tee before this runs, so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file
  * directly. */
 export function appendSessionEndCloseLog(

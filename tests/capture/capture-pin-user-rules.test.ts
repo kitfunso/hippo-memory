@@ -4,7 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
 import { contextGet } from '../../src/api/index.js';
@@ -28,7 +28,7 @@ describe('capture pins the rules a person states', () => {
   let ctx: FullContext;
 
   const capture = (turns: SessionTurn[]) =>
-    cmdCapture(captureTarget(root), {
+    runCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'last-session',
       sessionTurns: turns,
@@ -83,7 +83,7 @@ describe('capture pins the rules a person states', () => {
   it('a file capture names no speaker, so its rules stay unpinned', async () => {
     const file = join(scratch, 'notes.md');
     writeFileSync(file, TAUGHT);
-    await cmdCapture(captureTarget(root), {
+    await runCapture(captureTarget(root), {
       tenantId: 'default',
       source: 'file',
       filePath: file,

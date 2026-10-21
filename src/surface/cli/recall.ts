@@ -435,8 +435,8 @@ function fitRecallBlock(options: FitRecallBlockOptions) {
   const planTokens = planText === null ? 0 : printedTokens(`${planText}\n`);
   const showPlan = planText !== null && planTokens <= left;
   if (showPlan) left -= planTokens;
-  const cmdPlanningFallacyHint = showPlan ? (planning.hint ?? null) : null;
-  const cmdPlanningFallacyWatching = showPlan ? (planning.watching ?? null) : null;
+  const planningFallacyHint = showPlan ? (planning.hint ?? null) : null;
+  const planningFallacyWatching = showPlan ? (planning.watching ?? null) : null;
 
   // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
   const floor = o.minResults ?? 1;
@@ -458,8 +458,8 @@ function fitRecallBlock(options: FitRecallBlockOptions) {
     recallText,
     continuity,
     continuityTokens,
-    cmdPlanningFallacyHint,
-    cmdPlanningFallacyWatching,
+    planningFallacyHint,
+    planningFallacyWatching,
     anchorRing,
   };
 }
@@ -532,8 +532,8 @@ function recallOutput(
 /** The keys are set in the order the JSON prints them. */
 interface RecallJsonTail {
   suppressionSummary: FittedRecall['hints']['summary'];
-  planningFallacyHint?: NonNullable<FittedRecall['cmdPlanningFallacyHint']>;
-  planningFallacyWatching?: NonNullable<FittedRecall['cmdPlanningFallacyWatching']>;
+  planningFallacyHint?: NonNullable<FittedRecall['planningFallacyHint']>;
+  planningFallacyWatching?: NonNullable<FittedRecall['planningFallacyWatching']>;
   anchoringHint?: NonNullable<FittedRecall['hints']['anchoring']>;
   availabilityHint?: NonNullable<FittedRecall['hints']['availability']>;
   continuity?: ContinuityBlockJson;
@@ -542,13 +542,13 @@ interface RecallJsonTail {
 
 /** The JSON keys after the result list: suppression summary, any bias hints, then continuity when asked for. */
 function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined): RecallJsonTail {
-  const { cmdPlanningFallacyHint, cmdPlanningFallacyWatching, continuityTokens } = fit;
-  const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = fit.hints;
-  const tail: RecallJsonTail = { suppressionSummary: cmdSuppressionSummary };
-  if (cmdPlanningFallacyHint) tail.planningFallacyHint = cmdPlanningFallacyHint;
-  if (cmdPlanningFallacyWatching) tail.planningFallacyWatching = cmdPlanningFallacyWatching;
-  if (cmdAnchoringHint) tail.anchoringHint = cmdAnchoringHint;
-  if (cmdAvailabilityHint) tail.availabilityHint = cmdAvailabilityHint;
+  const { planningFallacyHint, planningFallacyWatching, continuityTokens } = fit;
+  const { anchoring, availability, summary } = fit.hints;
+  const tail: RecallJsonTail = { suppressionSummary: summary };
+  if (planningFallacyHint) tail.planningFallacyHint = planningFallacyHint;
+  if (planningFallacyWatching) tail.planningFallacyWatching = planningFallacyWatching;
+  if (anchoring) tail.anchoringHint = anchoring;
+  if (availability) tail.availabilityHint = availability;
   if (includeContinuity) {
     tail.continuity = continuityJson(fit.continuity);
     tail.continuityTokens = continuityTokens;

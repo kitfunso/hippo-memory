@@ -19,7 +19,7 @@ import { consolidate } from '../../src/index.js';
 import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.js';
 import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
 import { importGenericFile, importVault } from '../../src/entry/importers.js';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -191,7 +191,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       fs.writeFileSync(file, 'decision: rotate deploy keys every 90 days\n');
       vi.spyOn(console, 'log').mockImplementation(() => {});
       return added(root, () =>
-        cmdCapture(captureTarget(root), {
+        runCapture(captureTarget(root), {
           tenantId: 'default',
           source: 'file',
           filePath: file,

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { cmdCapture } from '../../src/surface/capture/command.js';
+import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -18,7 +18,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('cmdCapture failure', () => {
+describe('runCapture failure', () => {
   it.each([
     ['a missing file', (): string => (initTestStore(path.join(dir, '.hippo')), path.join(dir, '.hippo'))],
     ['an uninitialised store', (): string => path.join(dir, 'no-store')],
@@ -27,7 +27,7 @@ describe('cmdCapture failure', () => {
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
     const log = path.join(dir, 'tee.log');
     await expect(
-      cmdCapture(captureTarget(root), {
+      runCapture(captureTarget(root), {
         tenantId: 'default',
         source: 'file',
         filePath: path.join(dir, 'absent.md'),

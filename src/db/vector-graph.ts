@@ -1,6 +1,8 @@
 // Handwritten HNSW graph (Malkov and Yashunin) over plain data: no database, no I/O. Same seed and insert order give
 // the same graph.
 
+import { stepMulberry32 } from '../base/util/prng.js';
+
 export interface VectorGraphOptions {
   dim: number;
   m?: number;
@@ -58,12 +60,9 @@ export function createVectorGraph(opts: VectorGraphOptions): VectorGraph {
 }
 
 function nextRandom(graph: VectorGraph): number {
-  // mulberry32
-  graph.rng = (graph.rng + 0x6d2b79f5) >>> 0;
-  let t = graph.rng;
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  const step = stepMulberry32(graph.rng);
+  graph.rng = step.state;
+  return step.value;
 }
 
 class Heap {

@@ -9,8 +9,9 @@ import type { Http } from '../../base/ports/http.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
+import { rerankerPost } from './remote.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
+import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
 import { parseOutboundUrl } from '../../base/util/net.js';
@@ -108,7 +109,7 @@ async function requestPermutation(
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}`);
   }
-  const txt = replyText(await readCappedJson(resp, RERANKER_MAX_REPLY_BYTES));
+  const txt = replyText(await readCappedJson(resp, MAX_REPLY_BYTES));
   const m = txt.match(/\[\s*(\d+(?:\s*,\s*\d+)*)\s*\]/);
   const parsed = m ? m[1].split(',').map((s) => parseInt(s.trim(), 10)) : [];
   const isPermutation =
