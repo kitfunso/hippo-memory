@@ -1,7 +1,8 @@
 import type { Context } from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { hasGroup, type HippoStore, type StoreGroup } from '../../store/index.js';
+import { hasGroup, type HippoStore, type OptionalGroup, type StoreGroup } from '../../store/index.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import {
   HttpError,
@@ -44,13 +45,32 @@ import { PROJECT_BRIEF_ROUTES } from './routes/project-briefs.js';
 import { SKILL_ROUTES } from './routes/skills.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './routes/recall.js';
 import { parseJsonBody } from './validation.js';
-import type { AuthedRouteRequest, ResolvedServeOptions, Route, RouteRequest, RouteEndpoint } from './types.js';
+import type {
+  AuthedRouteRequest,
+  ResolvedServeOptions,
+  Route,
+  RouteEndpoint,
+  RouteParams,
+  RouteRequest,
+} from './types.js';
 
 function webhook(
   handle: (r: WebhookRequest, store: HippoStore, config: HippoConfig) => Promise<void>,
 ): (r: RouteRequest) => Promise<void> {
   return async ({ req, res, opts }) => {
     await handle({ req, res, opts }, opts.store, opts.configAt(opts.hippoRoot));
+  };
+}
+
+/** A handler that takes a context typed with the row's storeReady `group`, which the gate's 501 has already proved. */
+function withGroup<G extends OptionalGroup>(
+  group: G,
+  handler: (r: AuthedRouteRequest & { ctx: ContextWith<G> }, params: RouteParams) => Promise<void>,
+): (r: AuthedRouteRequest, params: RouteParams) => Promise<void> {
+  return async (r, params) => {
+    const { store } = r.ctx;
+    if (!hasGroup(store, group)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+    await handler({ ...r, ctx: { ...r.ctx, store } }, params);
   };
 }
 
@@ -105,7 +125,7 @@ export const V1_ROUTES: readonly Route[] = [
     auth: 'caller',
     // The copy names its source folder and goes to the operator's global store, which only a folder store reaches.
     storeReady: 'folderFiles',
-    handler: handlePromoteMemory,
+    handler: withGroup('folderFiles', handlePromoteMemory),
   },
   {
     method: 'DELETE',
