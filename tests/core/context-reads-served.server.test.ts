@@ -8,9 +8,11 @@ import { shareRoot } from '../_helpers/share-root.js';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from '../_helpers/context-fixture.js';
-import { inMemoryContextStore } from '../_helpers/in-memory-context-store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import { memorySide } from '../_helpers/memory-side.js';
+import type { MemoryTables } from '../../src/store/memory/tables.js';
+import { memoryContextRowsOf } from '../_helpers/memory-recall-rows.js';
 
 type Call =
   | { readonly via: 'http'; readonly query: string }
@@ -42,8 +44,14 @@ async function send(url: string, call: Call): Promise<Reply> {
   return { status: res.status, body: await res.json() };
 }
 
+/** The store a run serves; the in-memory one's writes are read back from its tables. */
+interface Served {
+  readonly store: HippoStore;
+  readonly tables?: MemoryTables;
+}
+
 /** Every call over serve() on a fresh copy of the fixture, with no global store. */
-async function runServed(makeStore?: (root: string) => HippoStore) {
+async function runServed(makeStore?: (root: string) => Served) {
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-served-'));
   try {
     const root = join(home, 'store');
@@ -51,7 +59,7 @@ async function runServed(makeStore?: (root: string) => HippoStore) {
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);
-    const store = makeStore?.(root);
+    const { store, tables } = makeStore?.(root) ?? {};
     const handle = await serve({ hippoRoot: root, port: 0, store });
     const replies: Reply[] = [];
     try {
@@ -60,7 +68,7 @@ async function runServed(makeStore?: (root: string) => HippoStore) {
       await handle.stop();
       await store?.close();
     }
-    return { replies: rounded(replies), rows: contextRowsOf(root) };
+    return { replies: rounded(replies), rows: tables ? memoryContextRowsOf(tables) : contextRowsOf(root) };
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -95,11 +103,11 @@ describe('context over serve()', () => {
     const onHippoDb = await runServed();
     expect(onHippoDb.replies.map((r) => r.status)).toEqual([200, 200, 200, 200, 200]);
     expect(JSON.stringify(onHippoDb.replies)).toContain('rollout');
-    const inMemory = await runServed((root) => inMemoryContextStore(root).store);
+    const inMemory = await runServed(memorySide);
     expect(inMemory.replies).toEqual(onHippoDb.replies);
     expect(inMemory.rows).toEqual(onHippoDb.rows);
     // The default store answers the data-only context reads from worker threads; the same store in process must agree with it.
-    const inProcess = await runServed(sqliteStore);
+    const inProcess = await runServed((root) => ({ store: sqliteStore(root) }));
     expect(onHippoDb.replies).toEqual(inProcess.replies);
     expect(onHippoDb.rows).toEqual(inProcess.rows);
   });

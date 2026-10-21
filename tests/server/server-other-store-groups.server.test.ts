@@ -3,21 +3,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { inMemoryGraphReadsStore, seedGraphRows, type SeededGraph } from '../_helpers/in-memory-graph-reads-store.js';
-import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
-import {
-  HELD,
-  heldAt,
-  heldContent,
-  inMemoryQuarantineStore,
-  seedQuarantineRecords,
-  type InMemoryQuarantineStore,
-} from '../_helpers/in-memory-quarantine-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
+import { seedGraphRows, type SeededGraph } from '../_helpers/graph-reads-seed.js';
+import { HELD, heldAt, heldContent, seedQuarantineRecords } from '../_helpers/quarantine-seed.js';
 
 describe('serve() under a store that has the predictions group', () => {
   let fixture: TwoTenantFixture;
-  let memory: InMemoryPredictionsStore;
+  let memory: MemorySide;
   let handle: ServerHandle;
 
   const hippoDbRows = () => {
@@ -36,7 +29,7 @@ describe('serve() under a store that has the predictions group', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    memory = inMemoryPredictionsStore(fixture.dir);
+    memory = memorySide(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
   });
 
@@ -110,7 +103,7 @@ describe('serve() under a store that has the predictions group', () => {
 
 describe('serve() under a store that has the quarantine group', () => {
   let fixture: TwoTenantFixture;
-  let memory: InMemoryQuarantineStore;
+  let memory: MemorySide;
   let handle: ServerHandle;
   let adminB: string;
 
@@ -135,7 +128,7 @@ describe('serve() under a store that has the quarantine group', () => {
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     adminB = seedQuarantineRecords(fixture.dir);
-    memory = inMemoryQuarantineStore(fixture.dir);
+    memory = memorySide(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
   });
 
@@ -261,7 +254,7 @@ describe('serve() under a store that has the graphReads group', () => {
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     graph = await seedGraphRows(fixture.dir);
-    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: inMemoryGraphReadsStore(fixture.dir).store });
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memorySide(fixture.dir).store });
   });
 
   afterAll(async () => {

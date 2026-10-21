@@ -7,7 +7,6 @@
  * dropping the `user:github:<login>` owner stamp and slipping past CI.
  */
 
-import { rawProvenanceOf } from '../_helpers/in-memory-reports-store.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
@@ -17,6 +16,7 @@ import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { rawProvenanceOf } from '../../src/store/memory/reports.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',

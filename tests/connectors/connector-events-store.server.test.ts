@@ -16,12 +16,9 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
-import {
-  inMemoryConnectorEventsStore,
-  type InMemoryConnectorEventsStore,
-} from '../_helpers/in-memory-connector-events-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const slackActor: Actor = { subject: 'connector:slack', role: 'admin' };
@@ -64,12 +61,12 @@ function copyWithRoutes(): string {
   return root;
 }
 
-const slackRows = (memory: InMemoryConnectorEventsStore) =>
+const slackRows = (memory: MemorySide) =>
   memory
     .events()
     .filter((e) => e.connector === 'slack')
     .map((e) => [e.eventKey, e.memoryId]);
-const githubRows = (memory: InMemoryConnectorEventsStore) =>
+const githubRows = (memory: MemorySide) =>
   memory
     .events()
     .filter((e) => e.connector === 'github')
@@ -98,7 +95,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
 
   it('ingest, redelivery, empty body, deletion and unknown deletion answer from the store with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryConnectorEventsStore(copyOf());
+    const memory = memorySide(copyOf());
     const slack: Context = {
       tenantId: TENANT_A,
       actor: slackActor,
@@ -197,7 +194,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
   // Generated per run, so no signing secret is ever written down.
   const secrets = { slack: randomBytes(24).toString('hex'), github: randomBytes(24).toString('hex') };
   const handles: ServerHandle[] = [];
-  let memory: InMemoryConnectorEventsStore;
+  let memory: MemorySide;
   let served: { readonly root: string; readonly url: string };
   let baseline: number;
 
@@ -286,7 +283,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('SLACK_SIGNING_SECRET', secrets.slack);
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', secrets.github);
-    memory = inMemoryConnectorEventsStore(copyWithRoutes());
+    memory = memorySide(copyWithRoutes());
     served = await serveOn(memory.store);
     baseline = memory.auditRows().length;
   });

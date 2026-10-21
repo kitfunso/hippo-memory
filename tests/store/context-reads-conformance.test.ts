@@ -14,7 +14,6 @@ import type {
 } from '../../src/entry/store-kit.js';
 import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from '../_helpers/context-fixture.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryContextStore } from '../_helpers/in-memory-context-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -23,6 +22,7 @@ import {
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
+  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -41,10 +41,9 @@ async function conforms(named: readonly Named[], on = fixture): Promise<Map<stri
   const sides = await onBothStores(
     on,
     'contextReads',
-    inMemoryContextStore,
     named.map(([, call]) => call),
   );
-  expect(sides.other).toEqual(sides.sqlite);
+  expectSameOutcomes(sides);
   if (on === fixture) expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return new Map(named.map(([name], i) => [name, sides.sqlite.outcomes[i]]));
 }

@@ -120,6 +120,7 @@ const EVAL_KIT = [
   'loadEmbeddingIndex',
   'loadRecallSearchEntries',
   'loadVectorCandidateEntriesAt',
+  'memoryStore',
   'recordTokenUse',
   'resolveTenantId',
   'tokensBySession',
@@ -274,6 +275,7 @@ describe('published runtime exports', () => {
       hybridSearchWire
       initStore isWorthSurfacingWire
       loadAllEntries loadAllEntriesWire loadEmbeddingIndex loadRecallSearchEntries loadVectorCandidateEntriesAt
+      memoryStore
       recordTokenUse resolveTenantId
       tokensBySession
       upsertEntryRow upsertEntryRowWire
