@@ -43,7 +43,8 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
 
 /**
  * Captures the session's statements into `ctx`'s tenant under the caller's project, skipping each text a row the caller
- * can see already holds. No console output and no process.exit.
+ * can see already holds. The write reads those rows again in its own transaction, so no other write lands between the
+ * dedup and the write. No console output and no process.exit.
  */
 export async function captureSessionTexts(
   ctx: CaptureContext,
@@ -56,12 +57,11 @@ export async function captureSessionTexts(
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other
   // projects' rows do not.
+  const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
   const held = await ctx.store.captures.textsHolding(
-    ctx.tenantId,
+    dedup.tenantId,
     items.map((i) => longestWord(i.content)),
-    {
-      project: projectNames(req.project),
-    },
+    { project: dedup.project },
   );
   const tally = await captureExtractedItems(
     { store: ctx.store, config: ctx.config, index: folderIndex(ctx) },
@@ -71,6 +71,7 @@ export async function captureSessionTexts(
       sessionId: req.sessionId,
       actor: ctx.actor.subject,
       lean: true,
+      dedup,
     },
     items,
     storedTextKeys(held),

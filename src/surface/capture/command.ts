@@ -5,13 +5,13 @@ import { duplicateKey, longestWord, storedTextKeys } from '../../base/util/same-
 import { embedMemoryDetached, type EmbedTarget } from '../../domain/search/embed-memories.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../../base/scope/project-identity.js';
+import { projectId, projectNames, type ProjectRef, isInitialized } from '../../base/scope/project-identity.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { teeStdStreams } from '../../base/util/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
-import type { CapturedOutcome } from '../../store/port/captures.js';
+import type { CaptureDedup, CapturedOutcome } from '../../store/port/captures.js';
 import type { StoreGroups } from '../../store/port.js';
 
 export interface CaptureOptions {
@@ -132,6 +132,7 @@ async function captureFromCli(
     tenantId: options.global ? undefined : options.tenantId,
     originProject: options.originProject,
     lean: false,
+    dedup: captureDedup(options),
   };
   if (!options.dryRun) return captureExtractedItems({ store, config, index }, writeOpts, extracted, keys);
   return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
@@ -145,17 +146,18 @@ async function storedKeysInView(
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
 ): Promise<Set<string>> {
-  const stored = await store.captures.textsHolding(
-    options.global ? ALL_TENANTS : options.tenantId,
-    extracted.map((item) => longestWord(item.content)),
-    { everyScope: true },
-  );
+  const { tenantId, ...filter } = captureDedup(options);
+  const words = extracted.map((item) => longestWord(item.content));
+  return storedTextKeys(await store.captures.textsHolding(tenantId, words, filter));
+}
+
+/** The rows a capture's dedup reads, as data, so the store's write can read them again in its own transaction. */
+function captureDedup(options: CaptureOptions): CaptureDedup {
+  const tenantId = options.global ? ALL_TENANTS : options.tenantId;
   const origin = options.originProject;
-  return storedTextKeys(
-    origin === undefined
-      ? stored
-      : stored.filter((e) => classifyOriginProject(e.originProject, origin) !== 'cross-project'),
-  );
+  // classifyOriginProject in SQL: a project with no id sees every row, any other its own names and user-global rows.
+  if (origin === undefined || projectId(origin) === '') return { tenantId, everyScope: true };
+  return { tenantId, everyScope: true, project: projectNames(origin) };
 }
 
 function printCaptureTally(options: CaptureOptions, { captured, skipped, rejected }: CaptureTally): void {
@@ -233,6 +235,8 @@ export interface CaptureWriteOptions {
   readonly actor?: string;
   /** No stats and no embedding, since embedding runs a model in a server process. */
   readonly lean: boolean;
+  /** The rows the dedup read; the store's write reads them again before it writes. */
+  readonly dedup: CaptureDedup;
 }
 
 /** A folder's store with the config its root loaded for this capture, and where its rows' vectors go. */
@@ -278,7 +282,8 @@ export async function captureExtractedItems(
   keys: Set<string>,
 ): Promise<CaptureTally> {
   const plan = planCapture(extracted, keys, (item) => captureEntry(item, options, config.defaultHalfLifeDays));
-  const outcomes = await store.captures.write(plan.entries, { actor: options.actor, lean: options.lean });
+  const { actor, lean, dedup } = options;
+  const outcomes = await store.captures.write(plan.entries, { actor, lean, dedup });
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const counted = new Set<number>();
   for (const slot of plan.slots) {

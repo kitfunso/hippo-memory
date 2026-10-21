@@ -8,7 +8,7 @@ import { normalizeValueForRejection, rejectionDigest } from '../../src/base/reco
 import { duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import type { Captures } from '../../src/store/port/captures.js';
 import type { Sync } from '../../src/store/sqlite/served.js';
 import { captureExtractedItems } from '../../src/surface/capture/command.js';
@@ -120,7 +120,7 @@ describe('captures.write', () => {
     const rejected = 'Never cache the session token in local storage.';
     reject(rejected);
     const first = 'Always run the migration dry run before the real one.';
-    const outcomes = write([entry(first), entry(rejected)], { lean: true });
+    const outcomes = write([entry(first), entry(rejected)], { lean: true, dedup: { tenantId: 'default' } });
     expect(outcomes).toEqual(['captured', 'rejected']);
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([first]);
   });
@@ -128,7 +128,7 @@ describe('captures.write', () => {
 
 describe('captureExtractedItems', () => {
   const item = (content: string): ExtractedItem => ({ content, category: 'decision', tags: [] });
-  const options = { tenantId: undefined, originProject: undefined, lean: true };
+  const options = { tenantId: undefined, originProject: undefined, lean: true, dedup: { tenantId: 'default' } };
   const capture = (items: ExtractedItem[], keys: Set<string>) =>
     captureExtractedItems(captureTarget(root), options, items, keys);
 
@@ -154,5 +154,25 @@ describe('captureExtractedItems', () => {
       rejected: 0,
     });
     expect(loadAllEntries(root, 'default')).toEqual([]);
+  });
+
+  it('skips a text another writer stores between the plan and the write, so the store keeps one row of it', async () => {
+    const text = 'Rotate the deploy key before the quarterly audit starts.';
+    const { store, config, index } = captureTarget(root);
+    const captures: Captures = {
+      ...store.captures,
+      write: (entries, opts) => {
+        writeEntry(root, createMemory(text, { source: 'capture' }));
+        return store.captures.write(entries, opts);
+      },
+    };
+    const keys = new Set<string>();
+    expect(await captureExtractedItems({ store: { captures }, config, index }, options, [item(text)], keys)).toEqual({
+      captured: 0,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(loadAllEntries(root, 'default').filter((e) => e.content === text)).toHaveLength(1);
+    expect(keys.size).toBe(0);
   });
 });
