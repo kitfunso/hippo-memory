@@ -1,6 +1,20 @@
 import { errorFields, errorMessage, log } from '../base/util/log.js';
-import { isSqliteBusy } from './busy-code.js';
 import type { DatabaseSyncLike } from './sqlite.js';
+
+// SQLite's busy result codes; the SQLite adapter turns each into the port's StoreBusyError at its boundary.
+const SQLITE_BUSY = 5;
+const SQLITE_LOCKED = 6;
+// SQLITE_BUSY with extended code 2: a write on a read snapshot another writer has since moved past.
+const SQLITE_BUSY_SNAPSHOT = 517;
+
+function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
+  return typeof cause === 'object' && cause !== null && 'errcode' in cause;
+}
+
+export function isSqliteBusy(cause: unknown): boolean {
+  const code = carriesErrcode(cause) ? cause.errcode : undefined;
+  return code === SQLITE_BUSY || code === SQLITE_LOCKED || code === SQLITE_BUSY_SNAPSHOT;
+}
 
 /** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
 export const DEFAULT_BUSY_WAIT_MS = 5000;

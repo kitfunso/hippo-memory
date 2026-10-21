@@ -3,6 +3,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { Sync } from './served.js';
 import type { HandleOpener, OnHandle, OnHandleAsync, StoreFiles } from './open.js';
+import { inPortTermsAsync } from './port-errors.js';
 
 // A void method's body returns nothing too: `void` alone would let a value through to callers the port promised none.
 type BodyOf<M, Lead extends unknown[]> = M extends (...args: infer A) => infer R
@@ -58,14 +59,20 @@ export function boundWithFiles<G>(on: OnHandle, bodies: FileBodies<G>, open?: Ha
   return bind<G, Sync<G>>(on, bodies, open, true);
 }
 
+// The async kinds answer the port directly, with no `served` wrap, so their throws take the port's terms here.
+const inPort =
+  (onAsync: OnHandleAsync): OnHandleAsync =>
+  (fn, open) =>
+    inPortTermsAsync(() => onAsync(fn, open));
+
 /** `bound` for bodies that yield: each call keeps its handle open until the body's Promise settles. */
 export function boundAsync<G>(onAsync: OnHandleAsync, bodies: AsyncBodies<G>, open?: HandleOpener): G {
-  return bind<G, G>(onAsync, bodies, open, false);
+  return bind<G, G>(inPort(onAsync), bodies, open, false);
 }
 
 /** `boundAsync` for bodies that also take the mirror files. */
 export function boundAsyncWithFiles<G>(onAsync: OnHandleAsync, bodies: AsyncFileBodies<G>, open?: HandleOpener): G {
-  return bind<G, G>(onAsync, bodies, open, true);
+  return bind<G, G>(inPort(onAsync), bodies, open, true);
 }
 
 /** `method`, answered by `none` with no handle opened when its list is empty, so an empty batch never creates the

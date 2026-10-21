@@ -10,6 +10,7 @@ import type { AgentImport } from '../port/agent-import.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from './handles.js';
 import { served } from './served.js';
+import { inPortTerms } from './port-errors.js';
 import { sqliteStore } from './store.js';
 
 export type SqliteImportStore = StoreWith<'agentImport' | 'projectTags'>;
@@ -28,7 +29,7 @@ export function sqliteImportStores(rules: LossAversion): SqliteImportStores {
       ...sqliteStore(root, rules),
       agentImport: served<AgentImport>(sqliteAgentImport(handlesOf(root, rules).on, busyWaitMs)),
     }),
-    create: async (root) => initStore(root),
+    create: async (root) => inPortTerms(() => initStore(root)),
     standIn: () => standIn(rules),
     isBusy: isStoreBusy,
   };

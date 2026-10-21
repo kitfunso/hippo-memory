@@ -1,7 +1,7 @@
-// The request-scope plumbing the composition roots (cli, server, stdio MCP) run their requests in.
+// The request-scope plumbing the composition roots (cli, server, stdio MCP) run their requests in. A busy code that
+// escapes a scope leaves it as the port's StoreBusyError, as one from a store call does.
 import {
   HOOK_DB_WAIT_MS,
-  isSqliteBusy,
   noteStoreBusy,
   outsideRequestStores,
   runWithRequestStores,
@@ -9,6 +9,8 @@ import {
   SERVER_DB_WAIT_MS,
 } from '../../db/index.js';
 import { withRequestStoresSync } from '../../db/request-stores.js';
+import { isStoreBusy } from '../port.js';
+import { inPortTerms, inPortTermsAsync } from './port-errors.js';
 
 export type RequestPreset = 'cli' | 'hook' | 'server';
 
@@ -21,7 +23,7 @@ const PRESETS = {
 
 /** Runs `fn` with one store handle per store, closed with it, at the root's lock wait. */
 export function runSqliteRequest<T>(fn: () => T | Promise<T>, preset: RequestPreset): Promise<T> {
-  return runWithRequestStores(fn, PRESETS[preset]);
+  return inPortTermsAsync(() => runWithRequestStores(fn, PRESETS[preset]));
 }
 
 /** The hook preset: a store still busy after the wait skips the hook's work with one warning, undefined and exit 0. */
@@ -29,7 +31,7 @@ export async function runSqliteHookRequest<T>(fn: () => T | Promise<T>): Promise
   try {
     return await runSqliteRequest(fn, 'hook');
   } catch (error) {
-    if (!isSqliteBusy(error)) throw error;
+    if (!isStoreBusy(error)) throw error;
     noteStoreBusy('hook skipped');
     return undefined;
   }
@@ -37,11 +39,11 @@ export async function runSqliteHookRequest<T>(fn: () => T | Promise<T>): Promise
 
 /** A synchronous batch, such as an import's writes, opens each store once; inside a request it joins that scope. */
 export function runSqliteBatch<T>(fn: () => T): T {
-  return withRequestStoresSync(fn);
+  return inPortTerms(() => withRequestStoresSync(fn));
 }
 
 /** A scope of its own: the caller closes a handle the work holds across its pauses; the lock wait carries over. */
 export function runDetachedSqliteRequest<T>(fn: () => T | Promise<T>): Promise<T> {
   const busyWaitMs = scopedBusyWait();
-  return outsideRequestStores(() => runWithRequestStores(fn, { busyWaitMs }));
+  return inPortTermsAsync(() => outsideRequestStores(() => runWithRequestStores(fn, { busyWaitMs })));
 }

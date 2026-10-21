@@ -6,7 +6,6 @@ import {
 } from '../../base/session/compaction-timing.js';
 import { errorMessage, reportCompactionFailure } from '../../base/util/log.js';
 import { isSqliteBusy, type DatabaseSyncLike } from '../../db/index.js';
-import { isStoreBusy } from '../port/busy.js';
 import {
   closeStartedWithoutSummary,
   nextCompactionStart,
@@ -174,7 +173,7 @@ function saveRecordItemsAt(
     saveItems(db, files, itemContext(tenantId, record, record.items), noteTo(notes), opts.baseHalfLifeDays);
     return { notes, failure: null };
   } catch (err) {
-    return { notes, failure: { busy: isStoreBusy(err), message: errorMessage(err) } };
+    return { notes, failure: { busy: isSqliteBusy(err), message: errorMessage(err) } };
   }
 }
 

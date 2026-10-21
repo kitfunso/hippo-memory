@@ -9,6 +9,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { HALF_LIFE_BASE_META_KEY } from '../../src/store/sqlite/open.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
+import { StoreBusyError } from '../../src/store/port.js';
 import { mintAdminKey } from '../_helpers/admin-server.js';
 import {
   cleanups,
@@ -108,7 +109,10 @@ describe('a setup still waiting for the write lock', () => {
     // Taken after the executor, so a failed run gives the lock up before it waits for the threads to exit.
     const lock = holdWriteLock(root);
 
-    await expect(read()).rejects.toThrow(/database is locked/);
+    const busy = read();
+    await expect(busy).rejects.toThrow(/database is locked/);
+    // The executor hands the worker's driver error to the server as the port's own.
+    await expect(busy).rejects.toBeInstanceOf(StoreBusyError);
     lock.release();
 
     await expect(read()).resolves.toBeUndefined();
