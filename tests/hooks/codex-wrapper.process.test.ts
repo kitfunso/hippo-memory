@@ -306,14 +306,12 @@ describe('resolveCodexSessionTranscript', () => {
 
 describe('resolveCodexWrapperPaths and CODEX_HOME', () => {
   let env: { cleanup: () => void; home: string };
-  const prevCodexHome = process.env.CODEX_HOME;
 
   beforeEach(() => {
     env = withFakeHome();
   });
 
   afterEach(() => {
-    setCodexHome(prevCodexHome);
     env.cleanup();
   });
 
@@ -345,7 +343,6 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   const DECOY = 'decoy-4410';
   let root: string;
   let env: { cleanup: () => void; home: string };
-  const prevCodexHome = process.env.CODEX_HOME;
 
   beforeEach(() => {
     env = withFakeHome();
@@ -353,7 +350,6 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   });
 
   afterEach(() => {
-    setCodexHome(prevCodexHome);
     env.cleanup();
   });
 
