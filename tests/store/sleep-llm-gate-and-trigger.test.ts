@@ -105,7 +105,8 @@ describe('the sleep LLM gate', () => {
 
       const result = await consolidate(root, { fetcher });
 
-      expect(fetcher).toHaveBeenCalledTimes(1);
+      // The failure stops the launches; calls already in flight, at most three, still land.
+      expect(fetcher.mock.calls.length).toBeLessThanOrEqual(1 + 3);
       const details = result.details.join('\n');
       expect(details).toMatch(/extraction: HTTP 401: .*authentication_error/);
       expect(details).toContain(`2 of ${TOPICS.length} candidates skipped`);
@@ -123,6 +124,54 @@ describe('the sleep LLM gate', () => {
       // Three attempts per candidate: the retry policy's own, and no candidate skipped.
       expect(fetcher).toHaveBeenCalledTimes(3 * TOPICS.length);
       expect(result.details.join('\n')).not.toContain('candidates skipped');
+    });
+  });
+
+  describe('extraction concurrency', () => {
+    const COUNT = 10;
+    const FAIL_AT = 5;
+
+    function rootWithMany(): string {
+      const root = newRoot();
+      for (let i = 0; i < COUNT; i++) {
+        writeEntry(root, createMemory(`release note number ${i} about the staging cluster`));
+      }
+      return root;
+    }
+
+    function trackedFetcher(failOrdinal: number | null) {
+      vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+      const seen = { launched: 0, inFlight: 0, peak: 0 };
+      const fetcher = vi.fn<typeof fetch>(async () => {
+        const ordinal = seen.launched++;
+        seen.peak = Math.max(seen.peak, ++seen.inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        seen.inFlight--;
+        if (ordinal === failOrdinal) return new Response('{"type":"error"}', { status: 401 });
+        return emptyFacts();
+      });
+      return { fetcher, seen };
+    }
+
+    it('runs at most four calls at once', async () => {
+      const { fetcher, seen } = trackedFetcher(null);
+
+      await consolidate(rootWithMany(), { fetcher });
+
+      expect(seen.launched).toBe(COUNT);
+      expect(seen.peak).toBeGreaterThan(1);
+      expect(seen.peak).toBeLessThanOrEqual(4);
+    });
+
+    it('stops launching at a permanent failure and counts the skipped rows by input index', async () => {
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const { fetcher, seen } = trackedFetcher(FAIL_AT);
+
+      const result = await consolidate(rootWithMany(), { fetcher });
+
+      expect(seen.launched).toBeGreaterThan(FAIL_AT);
+      expect(seen.launched).toBeLessThanOrEqual(FAIL_AT + 1 + 3);
+      expect(result.details.join('\n')).toContain(`${COUNT - FAIL_AT - 1} of ${COUNT} candidates skipped`);
     });
   });
 

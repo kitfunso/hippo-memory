@@ -21,6 +21,9 @@ import type { TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import { holdingPhrase, IN_PHRASE_HITS, TENANT_IS } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
+import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
+import { ENTRY_PAGE_ORDER, entryPage } from './keyset.js';
+import type { EntryCursor } from '../port/types.js';
 import type { AmbientRefusalReason } from '../../base/scope/read-admission.js';
 import type {
   AmbientCandidateRequest,
@@ -33,8 +36,7 @@ import type { SourceTally } from '../port/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../port/reports.js';
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
-/** idx_memories_pinned (migration v51) serves it. */
-const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created ASC, id ASC`;
+const AMBIENT_PINNED = 'pinned = 1 AND superseded_by IS NULL';
 /** A stamp whose text does not sort by time; idx_memories_created_drift (migration v51) holds the live ones. */
 const CREATED_DRIFTED = "(length(created) <> 24 OR created NOT LIKE '%Z')";
 
@@ -175,6 +177,22 @@ export interface AmbientLoad extends Omit<AmbientCandidateRequest, 'admit'> {
   readonly judge: AmbientJudge;
 }
 
+// Every pin, a keyset page at a time: a cap would drop pins without notice.
+function pinnedEntries(db: DatabaseSyncLike, tenantId: TenantId): Generator<MemoryEntry> {
+  return rowsInPages((after?: EntryCursor) => {
+    const { rows, next } = entryPage(
+      tenantId,
+      { limit: READ_PAGE_ROWS, after },
+      (within, limit) =>
+        cachedStatement(
+          db,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(AMBIENT_PINNED)} ${ENTRY_PAGE_ORDER}`,
+        ).all(...within.args, limit) as MemoryRow[],
+    );
+    return { entries: rows.map(rowToEntry), next };
+  });
+}
+
 // The pins plus the `recentNeeded` newest rows `judge` keeps, for ambient injection, with each refusal in the order the
 // rows were read. One connection; `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the
 // recent rows past the first window.
@@ -194,7 +212,7 @@ export function loadAmbientCandidatesAt(
     ).map(rowToEntry);
 
   const byId = new Map<string, MemoryEntry>();
-  for (const e of run(AMBIENT_PINNED_WHERE, [tenantId])) {
+  for (const e of pinnedEntries(db, tenantId)) {
     if (admit(e)) byId.set(e.id, e);
   }
 

@@ -6,7 +6,14 @@ import type { TenantId } from '../base/util/tenant.js';
 import type { DormantRevival } from '../base/memory/dormant-revival.js';
 import type { JsonObject } from '../base/util/json.js';
 import type { CardDetail } from './port/cards.js';
-import type { CorrectionLink, LegacyStats, RawProvenance, StatusCounts, StrengthTallies } from './port/reports.js';
+import type {
+  CorrectionLinkPage,
+  LegacyStats,
+  RawProvenancePage,
+  ReportPage,
+  StatusCounts,
+  StrengthTallies,
+} from './port/reports.js';
 import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './port/dormant.js';
 import type { FailureLog, FailureSummary } from './port/failure-log.js';
 import type { CompleteGoalOpts, PushGoalOpts } from './port/goals.js';
@@ -177,10 +184,10 @@ export interface Reports {
   stats(): Promise<LegacyStats>;
   /** What `hippo status` counts over every row of every tenant, superseded ones too: host admin. */
   statusCounts(now: Date, atRiskBelow: number): Promise<StatusCounts>;
-  /** Each superseded row with its successor, by the superseded row's created then id: host admin. */
-  correctionLinks(): Promise<CorrectionLink[]>;
-  /** The kind='raw' count and the raw rows missing provenance, by created then id: host admin. */
-  rawProvenance(): Promise<RawProvenance>;
+  /** A page of superseded rows with their successors, by the superseded row's created then id: host admin. */
+  correctionLinks(page: ReportPage): Promise<CorrectionLinkPage>;
+  /** The kind='raw' count and a page of the raw rows missing provenance, by created then id: host admin. */
+  rawProvenance(page: ReportPage): Promise<RawProvenancePage>;
   /** Rows the tenant created since the last sleep of the store, looking back at most a day from `now`. */
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }

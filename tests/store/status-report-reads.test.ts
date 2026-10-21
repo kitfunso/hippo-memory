@@ -55,7 +55,9 @@ function seed(): void {
 describe('status report reads', () => {
   it('builds the same correction-latency report from the join as from every row', () => {
     seed();
-    const report = buildCorrectionLatency(sqliteSyncStore(handlesOf(root)).reports.correctionLinks());
+    const report = buildCorrectionLatency(
+      sqliteSyncStore(handlesOf(root)).reports.correctionLinks({ limit: 500 }).links,
+    );
     expect(report).toEqual(buildCorrectionLatency(correctionLinksOf(loadAllEntries(root, 'default'))));
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
@@ -63,7 +65,7 @@ describe('status report reads', () => {
 
   it('builds the same provenance report from the count and the gaps as from every row', () => {
     seed();
-    const report = buildProvenanceCoverage(sqliteSyncStore(handlesOf(root)).reports.rawProvenance());
+    const report = buildProvenanceCoverage(sqliteSyncStore(handlesOf(root)).reports.rawProvenance({ limit: 500 }));
     expect(report).toEqual(buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default'))));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
@@ -73,7 +75,7 @@ describe('status report reads', () => {
     seed();
     const reports = () => {
       const { correctionLinks, rawProvenance } = sqliteSyncStore(handlesOf(root)).reports;
-      return { links: correctionLinks(), raw: rawProvenance() };
+      return { links: correctionLinks({ limit: 500 }), raw: rawProvenance({ limit: 500 }) };
     };
     const before = recordStatements(reports);
     writeEntriesTogether(
@@ -90,6 +92,32 @@ describe('status report reads', () => {
     expect(after.reads.map((r) => r.rows)).toEqual(before.reads.map((r) => r.rows));
     expect(after.result.raw.total).toBe(22);
     expect(after.result.links).toEqual(before.result.links);
+  });
+});
+
+describe('status report pages', () => {
+  it('walks the links and the gaps one row at a time to the same rows as one big page', () => {
+    seed();
+    const { reports } = sqliteSyncStore(handlesOf(root));
+    const whole = reports.correctionLinks({ limit: 500 });
+    const links: typeof whole.links = [];
+    for (
+      let page = reports.correctionLinks({ limit: 1 });
+      ;
+      page = reports.correctionLinks({ limit: 1, after: page.next! })
+    ) {
+      expect(page.links.length).toBeLessThanOrEqual(1);
+      links.push(...page.links);
+      if (page.next === null) break;
+    }
+    expect(links).toEqual(whole.links);
+    expect(links).toHaveLength(2);
+    const bigGaps = reports.rawProvenance({ limit: 500 });
+    const first = reports.rawProvenance({ limit: 1 });
+    expect(first.total).toBe(bigGaps.total);
+    expect([...first.gaps, ...(first.next ? reports.rawProvenance({ limit: 1, after: first.next }).gaps : [])]).toEqual(
+      bigGaps.gaps,
+    );
   });
 });
 
