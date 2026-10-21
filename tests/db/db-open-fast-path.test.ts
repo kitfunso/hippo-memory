@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { consolidate } from '../../src/index.js';
-import { runDoctor } from '../../src/doctor.js';
+import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import {
   openHippoDb,

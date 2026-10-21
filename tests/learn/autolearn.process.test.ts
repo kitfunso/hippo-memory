@@ -18,6 +18,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { processGit } from '../../src/infra/git-runner.js';
+import { testInfra } from '../_helpers/infra.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -383,6 +384,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         hostAdmin: true,
         store: sqliteStore(hippoRoot),
         config: loadConfig(hippoRoot),
+        infra: testInfra(),
       },
     );
 

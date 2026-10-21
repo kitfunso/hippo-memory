@@ -13,6 +13,7 @@ import { defaultDashboardReads, defaultStore } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
+import { rootInfra } from '../../infra/ports.js';
 
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
@@ -32,6 +33,7 @@ function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonl
 
 function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
   const loadConfig = configReader(envRuntimeSettings);
+  const infra = rootInfra();
   // Set from each call, so each read is dated and aged by the clocks the server read when the request came in.
   const clock = { nowMs: 0, wallMs: 0 };
   const { store, view } = readerStore(hippoRoot, clock);
@@ -43,6 +45,7 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
     actor: adminActor(DASHBOARD_ACTOR),
     store,
     config: loadConfig(hippoRoot),
+    infra: infra(),
   });
   const run = async (call: ReaderCall): Promise<ReaderValue> => {
     const fresh = 'fresh' in call && call.fresh;

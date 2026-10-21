@@ -1,5 +1,5 @@
 // Recall text pieces the CLI and MCP presenters share, so the cutoff wording and the hints cannot drift apart.
-// They sit in mcp, not cli: cli imports server and server imports mcp, so mcp importing cli would close a cycle.
+// They sit in render, below both: cli imports server and server imports mcp, so neither may import the other.
 
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {

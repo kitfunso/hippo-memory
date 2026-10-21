@@ -5,7 +5,7 @@ import { SPOOL_PROBLEM, spoolCounts } from '../capture/compaction-spool.js';
 import { defaultSleepLogPath } from '../hooks-install/json-hooks.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';
-import { truncateCodePointSafe } from '../../base/util/transcript-tail.js';
+import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, stringFlag } from './flag-values.js';
 import { hookStoreRoot } from './hook-runtime.js';

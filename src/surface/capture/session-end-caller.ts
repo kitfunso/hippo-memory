@@ -6,6 +6,7 @@ import type { HandoffEvidence } from '../../base/session/handoff.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';
 import { snapshotFields, type WorkingState } from './working-state.js';
+import { withEntryInfra } from '../entry-infra.js';
 
 export type CallerEvidence = Pick<HandoffEvidence, 'gitRef' | 'dirtyTree' | 'testStatus'>;
 
@@ -48,9 +49,10 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
  * the retry writes no second handoff.
  */
 export async function sessionEndHandoffForCaller(
-  ctx: Context,
+  given: Context,
   req: CallerSessionEndRequest,
 ): Promise<CallerSessionEndResult> {
+  const ctx = withEntryInfra(given);
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = await bindCaller(ctx, req.sessionId, req.project);

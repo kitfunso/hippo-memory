@@ -15,6 +15,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -79,6 +80,7 @@ describe('token ledger write failures', () => {
         hostAdmin: true,
         store: sqliteStore(root),
         config: loadConfig(root),
+        infra: testInfra(),
       },
     );
     expect(res?.error).toBeUndefined();

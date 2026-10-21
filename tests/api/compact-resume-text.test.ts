@@ -9,7 +9,7 @@ import { transcriptWorkingState } from '../../src/surface/capture/working-state.
 import { preCompactForCaller } from '../../src/server.js';
 import type { TaskSnapshot } from '../../src/store/port/sessions.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context-render.js';
-import { truncateCodePointSafe } from '../../src/base/util/transcript-tail.js';
+import { truncateCodePointSafe } from '../../src/base/util/code-point-cut.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';

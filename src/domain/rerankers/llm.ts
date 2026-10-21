@@ -4,7 +4,7 @@ import {
   envLlmRerankerTimeoutMs,
   envLlmRerankerUrl,
 } from '../../base/util/env.js';
-import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
+import type { RerankerFn, RerankResult, RerankerOptions } from '../../base/ports/reranker.js';
 import type { Http } from '../../base/ports/http.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';

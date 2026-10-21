@@ -2,6 +2,8 @@
 import type { Machine } from '../util/agent-homes.js';
 import type { EmbedderFor } from './embedder.js';
 import type { Llm } from './llm.js';
+import type { RerankerLookup } from './reranker.js';
+import type { ReadApiCalls } from '../session/transcript-calls.js';
 
 export interface InfraPorts {
   /** The disk the agent-memory and project-repair reads look at, with its git. */
@@ -10,4 +12,8 @@ export interface InfraPorts {
   readonly llm?: Llm;
   /** Builds the provider that embeds a recall's query from a store's embeddings config. */
   readonly embedderFor: EmbedderFor;
+  /** The rerankers a recall names, built once per root so the cross-encoder loads once; absent, no name resolves. */
+  readonly reranker?: RerankerLookup;
+  /** Reads the model calls of a session's transcript for its re-read count; absent, the count is skipped. */
+  readonly transcriptCalls?: ReadApiCalls;
 }

@@ -40,7 +40,7 @@ import { loadConfig } from '../../dist/base/config/config.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../../dist/store/sqlite/folder-forms.js';
-import { remember as apiRemember, retrieve as apiRetrieve } from '../../dist/api/index.js';
+import { remember as apiRemember, retrieve as apiRetrieve } from '../../dist/entry/eval-scripts.js';
 
 interface CliArgs {
   storeSize: number;

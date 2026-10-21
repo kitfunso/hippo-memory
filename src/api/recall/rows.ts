@@ -4,11 +4,11 @@
 import { confidenceFacets, Layer } from '../../base/memory/memory.js';
 import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
 import type { ClefSettings } from '../../base/config/config.js';
-import { getReranker } from '../infra.js';
+import { rerankerOf } from '../infra.js';
 import { isClefModel } from '../../domain/rerankers/clef.js';
 import { JEV_DEFAULT_TOP_K } from '../../domain/rerankers/jev.js';
 import { DEFAULT_RERANK_TOP_K } from '../../domain/search/rerank.js';
-import type { RerankerFn } from '../../domain/rerankers/types.js';
+import type { RerankerFn } from '../../base/ports/reranker.js';
 import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
 import type { ContinuityBlock, HippoStore } from '../../store/port.js';
@@ -18,14 +18,15 @@ import type { Context, ContextWith } from '../types.js';
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
 /** The global store beside this one ('' when the call reaches none), whether this one is it, and the boosting scope. */
-export interface CliRecallSetting {
+export interface RecallStoreSetting {
   readonly globalRoot: string;
   readonly primaryIsGlobal: boolean;
   readonly activeScope: string | null;
 }
 
-/** The CLI merges `--scope` with the scope it detects into `activeScope`, which only boosts. */
-export function cliRecallSetting(ctx: Context, activeScope: string | null): CliRecallSetting {
+/** Which stores a recall reads under `ctx`, with `activeScope` (an explicit scope merged with the detected one), which
+ * only boosts. */
+export function recallStoreSetting(ctx: Context, activeScope: string | null): RecallStoreSetting {
   return {
     globalRoot: ctx.reach?.global?.root ?? '',
     primaryIsGlobal: ctx.reach?.isGlobal ?? false,
@@ -33,13 +34,14 @@ export function cliRecallSetting(ctx: Context, activeScope: string | null): CliR
   };
 }
 
-export interface CliRecallOrigin {
+export interface RecallRowOrigin {
   readonly globalOn: boolean;
   /** True when a ranked row came from the global store: this store is it, or the merge tagged the row global. */
   readonly isGlobal: (r: SearchResult) => boolean;
 }
 
-export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRecallOrigin {
+/** Whether the call reaches a global store, and which ranked rows came from it. */
+export function recallRowOrigin(ctx: Context, setting: RecallStoreSetting): RecallRowOrigin {
   const globalOn = ctx.reach?.global !== undefined;
   return { globalOn, isGlobal: (r) => setting.primaryIsGlobal || (globalOn && r.isGlobal === true) };
 }
@@ -60,9 +62,9 @@ export async function scopeHiddenCount(
 }
 
 /** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
-export async function loadCliRecallContinuity(
+export async function loadScopedContinuity(
   ctx: Context,
-  setting: CliRecallSetting,
+  setting: RecallStoreSetting,
   wanted: boolean,
 ): Promise<ContinuityBlock> {
   if (!wanted || setting.primaryIsGlobal) {
@@ -83,25 +85,27 @@ export async function loadCliRecallContinuity(
   };
 }
 
-export interface CliRecallRerankerPick {
+export interface RecallRerankerPick {
   readonly fn: RerankerFn;
   readonly defaultTopK: number;
 }
 
-/**
- * The reranker a `--reranker` name picks and the top-k it takes by default; an unknown name throws, a blank one picks
- * none.
- */
-export function cliRecallReranker(name: string): CliRecallRerankerPick | null {
-  const fn = getReranker(name);
+/** The reranker `name` picks from the Context's registry and the top-k it takes by default; an unknown name throws, a
+ * blank one picks none. */
+export function recallRerankerPick(ctx: Pick<Context, 'infra'>, name: string): RecallRerankerPick | null {
+  const fn = rerankerOf(ctx, name);
   if (!fn) return null;
   return { fn, defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : DEFAULT_RERANK_TOP_K };
 }
 
 /** A registry reranker that sends `clef` when a call names no transport of its own, for a script that reranks outside a
  * recall; a blank name picks none. */
-export function rerankerWithClef(name: string | null | undefined, clef: ClefSettings): RerankerFn | null {
-  const fn = getReranker(name);
+export function rerankerWithClef(
+  ctx: Pick<Context, 'infra'>,
+  name: string | null | undefined,
+  clef: ClefSettings,
+): RerankerFn | null {
+  const fn = rerankerOf(ctx, name);
   if (fn === null) return null;
   return (query, results, options) => fn(query, results, { ...options, clef: options?.clef ?? clef });
 }

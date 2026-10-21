@@ -19,6 +19,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { pushGoal } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -75,6 +76,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
     };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
@@ -110,6 +112,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
       hostAdmin: true,
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
     };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',

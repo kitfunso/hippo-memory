@@ -16,6 +16,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -85,6 +86,7 @@ describe('mcp hippo_predict_baserate', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     const text = extractText(res);
@@ -112,6 +114,7 @@ describe('mcp hippo_predict_baserate', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     const text = extractText(res);
@@ -133,6 +136,7 @@ describe('mcp hippo_predict_baserate', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     expect(res?.result).toMatchObject({ isError: true });
@@ -152,6 +156,7 @@ describe('mcp hippo_predict_baserate', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     const text = extractText(res);

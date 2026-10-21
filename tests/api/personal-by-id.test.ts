@@ -14,6 +14,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -44,6 +45,7 @@ function mcpCtxFor(actor: Actor): McpContext {
     store,
     reach: testReach(root, store),
     config: loadConfig(root),
+    infra: testInfra(),
   };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return ctx;

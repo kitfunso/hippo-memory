@@ -7,6 +7,7 @@ import type { CallerProject } from '../../api/prompt-hook.js';
 import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState } from './caller-session.js';
 import { mergeWorkingState, type WorkingState } from './working-state.js';
 import type { ContinuityKey } from '../../store/port/types.js';
+import { withEntryInfra } from '../entry-infra.js';
 
 export interface CallerPreCompactRequest {
   readonly sessionId: string;
@@ -31,7 +32,8 @@ async function logged<T>(what: string, fn: () => Promise<T>): Promise<T | null> 
   }
 }
 
-export async function preCompactForCaller(ctx: Context, req: CallerPreCompactRequest): Promise<CallerHookOutput> {
+export async function preCompactForCaller(given: Context, req: CallerPreCompactRequest): Promise<CallerHookOutput> {
+  const ctx = withEntryInfra(given);
   assertTrigger(req.trigger);
   const state = checkedWorkingState(req.workingState);
   const key = await bindCaller(ctx, req.sessionId, req.project);

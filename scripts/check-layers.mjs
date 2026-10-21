@@ -11,6 +11,9 @@
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and local/**, which the next rule covers: the api reads the store through the port and takes shared rules from src/base.
 // So does any import from src/api/** or src/domain/** into src/store/local/**, with no list, any isLocalStore there, and any hippoRoot in src/api/**: both read the store through its port groups.
 // So does any import, runtime or type-only, from src/surface/dashboard/** into src/store, src/db or src/surface/cli: the dashboard reads through src/api, with no baseline.
+// layers.json `apart`: a folder named there imports nothing, type-only too, from the folders it lists (the api reads
+// the outside services from its Context, never from src/infra). `barrels`: each root file named there imports and
+// re-exports only from its folder (src/index.ts from src/entry).
 // layers.json `dbReach`: every file outside the db layer and `dbReach.through` (the store) reaches the db layer through the store; `allowed` names each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
 
@@ -374,6 +377,48 @@ function findDashboardReaches(srcDir) {
   return out;
 }
 
+/** `file:line` of each import from a folder `apart` lists into a folder it keeps apart from, type-only too. */
+function findApartReaches(map, srcDir) {
+  const apart = map.apart ?? {};
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = [];
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    const barred = apart[from.split('/')[0]];
+    if (!barred || !from.includes('/')) continue;
+    for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
+      const to = target && rel(target);
+      if (to && barred.some((folder) => to.startsWith(`${folder}/`))) out.push(`src/${from}:${line} imports src/${to}`);
+    }
+  }
+  return out;
+}
+
+/** `file:line` of each import or re-export in a `barrels` root file from outside its folder, and each listed file that
+ * is gone. */
+function findBarrelReaches(map, srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = [];
+  for (const [name, folder] of Object.entries(map.barrels ?? {})) {
+    const file = join(root, name);
+    if (!existsSync(file)) {
+      out.push(`${MAP} barrels: src/${name} does not exist`);
+      continue;
+    }
+    for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
+      const to = target ? rel(target) : spec;
+      if (!to.startsWith(`${folder}/`)) {
+        out.push(`src/${name}:${line} reaches ${to}; re-export it from a src/${folder} barrel`);
+      }
+    }
+  }
+  return out;
+}
+
 /** Imports from `dbReach.layer` in a file outside it and `dbReach.through` that `dbReach.allowed` does not name, then allowed entries nothing uses or that give no why. */
 function findDbReaches(map, srcDir) {
   const rule = map.dbReach;
@@ -477,6 +522,20 @@ const localProblems = localReachProblems('src');
 if (localProblems.length > 0 && !args.includes('--list')) {
   console.error('The api or domain reaches the local store past its port groups, or the api names the folder:');
   for (const p of localProblems) console.error(`  ${p}`);
+  process.exit(1);
+}
+
+const apartReaches = findApartReaches(map, 'src');
+if (apartReaches.length > 0 && !args.includes('--list')) {
+  console.error(`A folder imports one ${MAP} keeps it apart from; take the service from the Context its root built:`);
+  for (const r of apartReaches) console.error(`  ${r}`);
+  process.exit(1);
+}
+
+const barrelReaches = findBarrelReaches(map, 'src');
+if (barrelReaches.length > 0 && !args.includes('--list')) {
+  console.error(`A barrel root file in ${MAP} reaches past its folder:`);
+  for (const r of barrelReaches) console.error(`  ${r}`);
   process.exit(1);
 }
 

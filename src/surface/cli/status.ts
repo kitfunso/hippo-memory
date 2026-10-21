@@ -14,8 +14,8 @@ import {
 } from '../../base/memory/memory.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
-import { runDoctor, formatDoctor, type DoctorStore } from '../../doctor.js';
-import { buildSupportBundle, TAIL_MAX_LINES } from '../../support-bundle.js';
+import { runDoctor, formatDoctor, type DoctorStore } from './doctor.js';
+import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
 import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { MODEL_LOAD_POLICY } from '../../src/infra/transformers.js';
 import { createCrossEncoderReranker } from '../../src/domain/rerankers/cross-encoder.js';
 import { transformersCrossEncoder } from '../../src/infra/cross-encoder.js';
-import type { RerankerFn } from '../../src/domain/rerankers/types.js';
+import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 

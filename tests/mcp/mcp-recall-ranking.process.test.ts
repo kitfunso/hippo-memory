@@ -22,6 +22,7 @@ import {
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -101,6 +102,7 @@ function call(
       ...ctx,
       store: sqliteStore(home),
       config: loadConfig(home),
+      infra: testInfra(),
     },
   );
 }

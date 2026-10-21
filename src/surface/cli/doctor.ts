@@ -3,24 +3,23 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { findHippoStoreDir, isInitialized } from './base/scope/project-identity.js';
-import { getGlobalRoot } from './domain/sharing/global-store.js';
-import type { StoreHealth } from './store/port/diagnostics.js';
-import type { StoreGroups } from './store/port.js';
-import { needsNewerHippo } from './base/errors/store-open.js';
-import { loadConfig } from './base/config/config.js';
-import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './base/session/compaction-timing.js';
-import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './surface/capture/compaction-spool.js';
-import { isEmbeddingAvailable } from './base/embeddings/local.js';
-import { CODEX_TRUST_LINE } from './domain/hooks/shared.js';
-import { isCodexPresent } from './surface/hooks-install/detect.js';
-import { claudeConfigDir, codexHomeDir } from './base/util/agent-homes.js';
-import { planProjectRepair } from './domain/sharing/project-merge.js';
-import { currentMachine } from './infra/machine.js';
-import { errorMessage, log } from './base/util/log.js';
-import { tryReadJsonFile, type JsonValue, isJsonObjectLiteral } from './base/util/json.js';
-import { DAY_MS } from './base/util/time.js';
-import { plural } from './base/util/format.js';
+import { findHippoStoreDir, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import type { StoreHealth } from '../../store/port/diagnostics.js';
+import type { StoreGroups } from '../../store/port.js';
+import { needsNewerHippo } from '../../base/errors/store-open.js';
+import { loadConfig } from '../../base/config/config.js';
+import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../../base/session/compaction-timing.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from '../capture/compaction-spool.js';
+import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
+import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
+import { isCodexPresent } from '../hooks-install/detect.js';
+import { claudeConfigDir, codexHomeDir } from '../../base/util/agent-homes.js';
+import { globalProjectRepairPlan } from '../../api/objects/projects.js';
+import { currentMachine } from '../../infra/machine.js';
+import { errorMessage, log } from '../../base/util/log.js';
+import { tryReadJsonFile, type JsonValue, isJsonObjectLiteral } from '../../base/util/json.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { plural } from '../../base/util/format.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -230,7 +229,7 @@ function compactionsCheck(
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
 async function projectsCheck(global: DoctorStore, tenantId: string): Promise<DoctorCheck> {
   try {
-    const r = await planProjectRepair(global.projectTags, tenantId, { isGlobal: true, machine: currentMachine() });
+    const r = await globalProjectRepairPlan(global.projectTags, tenantId, currentMachine());
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0
@@ -488,7 +487,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   checks.push(nodeCheck(opts.nodeVersion ?? process.versions.node));
 
   const local = findHippoStoreDir(cwd);
-  const globalRoot = getGlobalRoot();
+  const globalRoot = resolveGlobalRootDir();
   const hasGlobal = isInitialized(globalRoot);
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);

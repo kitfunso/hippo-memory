@@ -2,8 +2,8 @@ import type { Context } from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { hasGroup, type HippoStore, type OptionalGroup, type StoreGroup } from '../../store/index.js';
-import type { HippoConfig } from '../../base/config/config.js';
+import type { WebhookPorts } from '../connectors/ingest.js';
+import { hasGroup, type OptionalGroup, type StoreGroup } from '../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -56,10 +56,10 @@ import type {
 } from './types.js';
 
 function webhook(
-  handle: (r: WebhookRequest, store: HippoStore, config: HippoConfig) => Promise<void>,
+  handle: (r: WebhookRequest, ports: WebhookPorts) => Promise<void>,
 ): (r: RouteRequest) => Promise<void> {
   return async ({ req, res, opts }) => {
-    await handle({ req, res, opts }, opts.store, opts.configAt(opts.hippoRoot));
+    await handle({ req, res, opts }, { store: opts.store, config: opts.configAt(opts.hippoRoot), infra: opts.infra() });
   };
 }
 

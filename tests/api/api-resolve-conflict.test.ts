@@ -10,6 +10,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts, readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -72,6 +73,7 @@ async function mcpResolve(args: Record<string, string | number | boolean>): Prom
       hostAdmin: true,
       store: sqliteStore(root),
       config: loadConfig(root),
+      infra: testInfra(),
     },
   );
 }

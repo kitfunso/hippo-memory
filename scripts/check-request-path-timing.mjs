@@ -39,6 +39,7 @@ const { createApiKey } = await load('store/sqlite/auth.js');
 const { contextGet, adminActor } = await load('api/index.js');
 const { contextReach } = await load('api/types.js');
 const { loadConfig } = await load('base/config/config.js');
+const { rootInfra } = await load('infra/ports.js');
 const { handleMcpRequest } = await load('surface/mcp/server.js');
 const { runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/index.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
@@ -128,6 +129,8 @@ fs.cpSync(localRoot, copyRoot, { recursive: true });
 const localStore = sqliteStore(localRoot);
 const reach = contextReach(sqliteReach(localRoot, localStore), loadConfig);
 const config = loadConfig(localRoot);
+// The script is its own composition root, so it hands the api the real ports as the CLI does.
+const infra = rootInfra()();
 const ctx = {
   hippoRoot: localRoot,
   tenantId: 'default',
@@ -135,6 +138,7 @@ const ctx = {
   store: localStore,
   reach,
   config,
+  infra,
 };
 const mcpCtx = {
   hippoRoot: localRoot,
@@ -145,6 +149,7 @@ const mcpCtx = {
   store: localStore,
   reach,
   config,
+  infra,
 };
 // A transport runs each tool call inside its host's request scope (the server per request, stdio per frame).
 const tool =

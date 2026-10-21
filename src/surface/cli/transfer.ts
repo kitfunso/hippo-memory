@@ -24,6 +24,7 @@ import {
   cliBatch,
   cliImportFiles,
   cliInitGlobal,
+  cliInfra,
   cliRequest,
   cliStore,
   cliSyncOptions,
@@ -335,7 +336,11 @@ async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
     name: nonEmptyStringFlag(flags, 'name'),
     scope: nonEmptyStringFlag(flags, 'scope'),
   };
-  const vaultResult = await importVault(folderPath, vaultOptions, { store: cliStore(hippoRoot), batch: cliRequest });
+  const vaultResult = await importVault(folderPath, vaultOptions, {
+    store: cliStore(hippoRoot),
+    batch: cliRequest,
+    infra: cliInfra(),
+  });
   printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
 }
 

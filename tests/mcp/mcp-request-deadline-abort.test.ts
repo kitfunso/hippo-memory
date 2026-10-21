@@ -6,6 +6,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 let root: string;
 let ctx: McpContext;
@@ -19,6 +20,7 @@ beforeEach(() => {
     role: 'admin',
     store: sqliteStore(root),
     config: loadConfig(root),
+    infra: testInfra(),
   };
 });
 

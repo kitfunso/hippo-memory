@@ -3,6 +3,16 @@
 import { remember, type RememberOptions, type Context } from '../../api/index.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
+import type { HippoConfig } from '../../base/config/config.js';
+import type { InfraPorts } from '../../base/ports/infra.js';
+import type { HippoStore } from '../../store/port.js';
+
+/** What the server hands a connector's webhook: the store, its config and the outside services. */
+export interface WebhookPorts {
+  store: HippoStore;
+  config: HippoConfig;
+  infra: InfraPorts;
+}
 
 export type IngestStatus = 'ingested' | 'duplicate' | 'skipped' | 'skipped_duplicate';
 

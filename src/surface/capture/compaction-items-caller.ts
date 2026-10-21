@@ -7,6 +7,7 @@ import { scrubCompactionItems } from './compaction-record.js';
 import { log } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { assertRequestId, assertTrigger, bindCaller, callerInHoldout } from './caller-session.js';
+import { withEntryInfra } from '../entry-infra.js';
 
 export interface CallerItemsRequest {
   readonly sessionId: string;
@@ -24,7 +25,11 @@ export interface CallerItemsResult {
 /**
  * Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled or deferred here.
  */
-export async function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsRequest): Promise<CallerItemsResult> {
+export async function saveCompactionItemsForCaller(
+  given: Context,
+  req: CallerItemsRequest,
+): Promise<CallerItemsResult> {
+  const ctx = withEntryInfra(given);
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
   // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's growth.

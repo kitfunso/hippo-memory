@@ -1,19 +1,8 @@
-// Transcript reads shared by src/surface/capture/ and compaction-record.ts; a leaf so neither has to import the other.
+// Reads the end of a JSONL transcript at an offset: PreCompact and the session digest need its last lines only.
 import * as fs from 'fs';
 
 /** Never read the whole transcript: PreCompact fires exactly when it's largest. */
 export const PRE_COMPACT_TAIL_BYTES = 256 * 1024;
-
-/** Cut to `maxChars` UTF-16 units, backing off one unit rather than leave half a surrogate pair in a stored field. */
-export function truncateCodePointSafe(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  let end = maxChars;
-  if (end > 0) {
-    const code = text.charCodeAt(end - 1);
-    if (code >= 0xd800 && code <= 0xdbff) end -= 1;
-  }
-  return text.slice(0, end);
-}
 
 /** The last `capBytes` of a JSONL transcript, read at an offset and starting on a whole line so every line parses. */
 export function readTranscriptTail(transcriptPath: string, capBytes: number = PRE_COMPACT_TAIL_BYTES): string {

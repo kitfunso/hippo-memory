@@ -13,6 +13,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { isJsonObject, tryParseJson } from '../../src/base/util/json.js';
+import { testInfra } from '../_helpers/infra.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -154,6 +155,7 @@ describe('hippo_learn needs a host admin', () => {
         hostAdmin: true,
         store: sqliteStore(home),
         config: loadConfig(home),
+        infra: testInfra(),
       },
     );
     expect(res?.error).toBeUndefined();

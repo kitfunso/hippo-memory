@@ -1,6 +1,6 @@
 // Store health, connectors, the summary tree and curation verbs, in `hippo help` order.
 
-import { TAIL_MAX_LINES } from '../../../support-bundle.js';
+import { TAIL_MAX_LINES } from '../support-bundle.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../../../api/assemble.js';
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../../base/util/limits.js';
 import { type VerbSpec, verb } from '../verb-row.js';

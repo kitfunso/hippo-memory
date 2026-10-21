@@ -6,7 +6,7 @@ import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import * as api from '../../api/index.js';
-import { cliRecallOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
+import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
 import { cliConfig, cliApiContext, cliSecondStore, cliStore } from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import { printedTokens } from '../../api/context-render.js';
@@ -63,7 +63,7 @@ async function explainQuery(hippoRoot: string, tenantId: string, query: string, 
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || envActiveScope();
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
-  const origin = cliRecallOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
+  const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   const explainGlobalOn = origin.globalOn;
   await noteScopeHidden(ctx, explainGlobalOn ? cliStore(globalRoot) : undefined, query, explicitScope || undefined);
 

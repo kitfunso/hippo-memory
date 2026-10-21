@@ -13,6 +13,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -89,6 +90,7 @@ describe('MCP hippo_remember', () => {
         hostAdmin: true,
         store: sqliteStore(root),
         config: loadConfig(root),
+        infra: testInfra(),
       },
     );
     const text = JSON.stringify(response);
