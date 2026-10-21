@@ -325,10 +325,6 @@ describe('CLI printRecall — trace wiring', () => {
     vi.stubEnv('HIPPO_HOME', hippoRoot);
   });
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it('writes ONE trace (pipeline=cli) at hippoRoot + last_trace_id, atomically with last_retrieval_ids', async () => {
     await hippo(hippoRoot, ...INIT);
     await hippo(hippoRoot, 'remember', 'cli-trace-target epsilon fact');
@@ -411,10 +407,6 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     vi.stubEnv('HIPPO_SESSION_ID', '');
     vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
   it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', async () => {

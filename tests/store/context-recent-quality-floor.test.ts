@@ -444,10 +444,6 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
     hippoDir = path.join(tmpDir, '.hippo');
   });
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   /** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
   async function runHippo(args: string[]): Promise<string> {
     vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
