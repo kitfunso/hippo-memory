@@ -21,6 +21,7 @@ const ROWS = [
   'DELETE /v1/memories/:id',
   'POST /v1/outcome',
   'GET /v1/context',
+  'POST /v1/vectors/nearest',
   'POST /v1/sleep',
   'POST /v1/auth/keys',
   'GET /v1/auth/keys',

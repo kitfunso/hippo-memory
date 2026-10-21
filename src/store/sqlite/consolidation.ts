@@ -2,7 +2,7 @@
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, getMeta, setMeta, SLEEP_DB_WAIT_MS } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import { findRejectedValue } from './rejection.js';
+import { findRejectedValue, rejectedDigestsAt } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
@@ -451,6 +451,7 @@ const bareRowsAt: Bodies<Pick<Consolidation, BareRows>> = {
   objectBackedAmong: memoriesBackingAmongAt,
   ftsDrift: ftsDriftAt,
   rejectedValue: findRejectedValue,
+  rejectedDigests: rejectedDigestsAt,
   halfLifeBase: recordedHalfLifeBaseAt,
   particleIds: storedParticleIdsAt,
   particlesByIds: storedParticlesByIdsAt,

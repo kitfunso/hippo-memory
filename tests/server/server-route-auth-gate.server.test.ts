@@ -23,6 +23,7 @@ const NO_CREDENTIAL = {
   'DELETE /v1/memories/:id': 401,
   'POST /v1/outcome': 401,
   'GET /v1/context': 401,
+  'POST /v1/vectors/nearest': 401,
   'POST /v1/sleep': 401,
   'POST /v1/auth/keys': 401,
   'GET /v1/auth/keys': 401,

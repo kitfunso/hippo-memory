@@ -103,9 +103,9 @@ describe('sleep after consolidation', () => {
     const isPageRead = (sql: string): boolean =>
       sql.startsWith(FULL_ROW) && sql.endsWith('created ASC, id ASC LIMIT ?');
     const pageReads = statements.filter(isPageRead);
-    // Each of the three walks reads its one page once per tenant, on that tenant's index.
-    expect(pageReads).toHaveLength(3 * 2);
-    expect(pageReads.every((sql) => sql.includes('tenant_id = ?'))).toBe(true);
+    // Each of the three walks reads its one page in one statement over both tenants, each on that tenant's index.
+    expect(pageReads).toHaveLength(3);
+    expect(pageReads.every((sql) => sql.includes('tenant_id = t.tid'))).toBe(true);
   });
 });
 

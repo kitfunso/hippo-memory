@@ -5,10 +5,11 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memo
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import { recordStatementsAsync } from '../_helpers/count-statements.js';
+import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { loadConfig } from '../../src/base/config/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { SCAN_PAGE_ROWS } from '../_helpers/vector-rows.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -23,6 +24,9 @@ const FEWER_ROWS = ROWS / 10;
 const DIM = 384;
 // Ten times the rows may read ten times the rows, and no more.
 const MAX_GROWTH = ROWS / FEWER_ROWS;
+// The scan's one statement per page of vectors; no other statement may grow with the store.
+const SCAN = 'FROM memory_vectors v CROSS JOIN memories m';
+const scanPages = (rows: number): number => Math.ceil(rows / SCAN_PAGE_ROWS);
 // The statements a recall runs and the rows it reads are the same on every runner.
 const MAX_ROWS_READ = 13_000;
 const MAX_STATEMENTS = 80;
@@ -89,7 +93,7 @@ describe('hybrid recall at 10k rows', () => {
   }, 65_000);
 
   // Each case scans every stored 384-dim vector, which a shared CI runner takes seconds over.
-  it('a recall over ten times the rows runs no more statements and reads at most ten times the rows', async () => {
+  it('a recall over ten times the rows runs only its extra scan pages more and reads at most ten times the rows', async () => {
     let t0 = performance.now();
     const atRows = await recordStatementsAsync(() => recall(home));
     const msAtRows = performance.now() - t0;
@@ -100,19 +104,23 @@ describe('hybrid recall at 10k rows', () => {
     );
     // The 20 rows that name the query plus the 50 nearest vectors, none of them shared, all inside the budget.
     expect(atFewer.result).toHaveLength(70);
-    // The smaller recall ran its vector scan too, so the two counts compare like with like.
-    expect(atFewer.rowsRead).toBeGreaterThanOrEqual(FEWER_ROWS);
-    // A query per row scored, or per chunk of rows, grows the statements with the store.
-    expect(atRows.statements.length).toBeLessThanOrEqual(atFewer.statements.length);
+    // Both recalls ran their vector scan, a page per statement, so the two counts compare like with like.
+    expect(countMatching(atFewer.statements, SCAN)).toBe(scanPages(FEWER_ROWS));
+    expect(countMatching(atRows.statements, SCAN)).toBe(scanPages(ROWS));
+    // A query per row scored grows the statements with the store; a page of vectors per statement grows them by 1/1024.
+    expect(atRows.statements.length - atFewer.statements.length).toBeLessThanOrEqual(
+      scanPages(ROWS) - scanPages(FEWER_ROWS),
+    );
     expect(atRows.rowsRead).toBeLessThanOrEqual(MAX_GROWTH * atFewer.rowsRead);
   }, 120_000);
 
-  it('one recall reads each stored vector once and few other rows', async () => {
-    const { result, statements, rowsRead } = await recordStatementsAsync(recallOnce);
+  it('one recall holds at most a page of vectors at a time and reads few other rows', async () => {
+    const { result, statements, rowsRead, reads } = await recordStatementsAsync(recallOnce);
     // The 200 rows that name the query plus the 50 nearest vectors, less row 2500, which is both.
     expect(result).toHaveLength(249);
-    // Every stored vector is read, so the ceilings below measure a recall that ran its vector scan.
-    expect(rowsRead).toBeGreaterThanOrEqual(ROWS);
+    // The scan ran, a page per statement, so the ceilings below measure a recall that scored every vector.
+    expect(countMatching(statements, SCAN)).toBe(scanPages(ROWS));
+    expect(peakRowsRead(reads, SCAN)).toBeLessThanOrEqual(SCAN_PAGE_ROWS);
     // About 1.3 times what one recall does; a second vector scan or a whole-store load of memories passes it.
     expect(rowsRead).toBeLessThanOrEqual(MAX_ROWS_READ);
     expect(statements.length).toBeLessThanOrEqual(MAX_STATEMENTS);

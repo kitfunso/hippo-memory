@@ -74,6 +74,7 @@ export interface VectorCoverage {
 }
 
 export interface StoredVectorSummary {
-  readonly ids: Set<string>;
+  /** Stored vectors, orphans of deleted memories included. */
+  readonly vectors: number;
   readonly dims: number | undefined;
 }

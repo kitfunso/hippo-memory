@@ -32,7 +32,7 @@
  *
  * Output JSON lands in benchmarks/a1/results/p99-<timestamp>.json.
  * Exit code 0 if no request failed and the gated p99 < --gate-ms, else 1.
- * --report-only drops the latency gate: CI passes it, since runner speed moves p99 with no code change, and reads the percentiles from the job summary.
+ * --report-only drops the latency gate, for a machine of unknown speed; CI gates the 1k run at 40 ms (docs/ARCHITECTURE.md).
  */
 
 import { appendFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';

@@ -122,9 +122,9 @@ jobs:
       - name: Perf regression gate
         run: node scripts/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
-      # Written to the job summary and never gated: a runner stall moves p99 with no code change. The step above gates the same request on statements, rows and store opens.
+      # Gated on the fastest of 5 rounds, so one runner stall does not fail it; docs/ARCHITECTURE.md has the margin's numbers.
       - name: p99 recall at 1k memories
-        run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --report-only
+        run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --gate-ms 40
       - name: Install the packed tarball
         run: npm run smoke:pack
       - name: Provenance gate

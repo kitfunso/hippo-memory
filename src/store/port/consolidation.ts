@@ -30,6 +30,8 @@ export interface Consolidation {
   sessionDecayContext(): Promise<SessionDecayContext>;
   /** The tenant's tombstone for `digest`, or null when it has none. */
   rejectedValue(tenantId: string, digest: string): Promise<RejectedValueRow | null>;
+  /** The digests among `digests` the tenant holds a tombstone for, in one read however many are asked. */
+  rejectedDigests(tenantId: string, digests: readonly string[]): Promise<Set<string>>;
   /** The default half-life base the memories are on. */
   halfLifeBase(): Promise<number>;
   /** Plans the moves to base `to` from one read of the rows and writes them, their audit rows and the new base in that

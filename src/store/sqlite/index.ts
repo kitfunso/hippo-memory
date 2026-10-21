@@ -9,6 +9,7 @@ export { isHippoDbStore } from './hippo-db-stores.js';
 export { runDetachedSqliteRequest, runSqliteBatch, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
 export { sqliteServerRuntime, type ServerRuntimeOptions, type SqliteServerRuntime } from './server-runtime.js';
 export { tenantOfApiKey, type ResolveOptions } from './tenant.js';
+export { askingNearestFirst } from './vector-reads.js';
 export { OTHER_STORE_MARKER, withSharedStoreHandles } from '../../db/index.js';
 // The ./store-kit entry's vector rules, so an add-on store keeps hippo.db's bytes and ranking.
 export {

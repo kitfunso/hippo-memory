@@ -144,7 +144,9 @@ function post(port: MessagePort, reply: Reply): void {
 /** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with no handle on the store's
  * files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
-  const graphs = init.pinned ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold }) : undefined;
+  const graphs = init.pinned
+    ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold, maxVectors: init.vectorGraphMaxVectors })
+    : undefined;
   const ops = workerOps(init, graphs);
   const stores = new WorkerStores(init);
   // Each step still closes what is left when the one before it throws, so a failed flush leaves no handle on the files.

@@ -7,6 +7,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { RejectedValueRow } from '../port/rejections.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { chunked } from '../../base/util/chunked.js';
 
 // SAFETY: every read cast to this row selects REJECTED_VALUE_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface RawRejectedValueRow {
@@ -42,6 +43,29 @@ export function findRejectedValue(db: DatabaseSyncLike, tenantId: string, digest
        FROM rejected_values WHERE tenant_id = ? AND digest = ?`,
   ).get(tenantId, digest) as RawRejectedValueRow | undefined;
   return row ? rowToRejectedValue(row) : null;
+}
+
+/** The tenant's tombstones among `digests`, by digest, in chunked IN lists on the primary key. */
+export function rejectedValuesAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  digests: readonly string[],
+): Map<string, RejectedValueRow> {
+  const found = new Map<string, RejectedValueRow>();
+  for (const chunk of chunked([...new Set(digests)])) {
+    const rows = cachedStatement(
+      db,
+      `SELECT ${REJECTED_VALUE_COLUMNS} FROM rejected_values ` +
+        'WHERE tenant_id = ? AND digest IN (SELECT value FROM json_each(?))',
+    ).all(tenantId, JSON.stringify(chunk)) as RawRejectedValueRow[];
+    for (const row of rows) found.set(row.digest, rowToRejectedValue(row));
+  }
+  return found;
+}
+
+/** The digests among `digests` the tenant holds a tombstone for. */
+export function rejectedDigestsAt(db: DatabaseSyncLike, tenantId: string, digests: readonly string[]): Set<string> {
+  return new Set(rejectedValuesAt(db, tenantId, digests).keys());
 }
 
 /** Insert (or refresh) a tombstone row; the caller owns the transaction (used by the `reject` verb and
@@ -110,16 +134,31 @@ export function checkRejectionGuard(db: DatabaseSyncLike, tenantId: string, entr
   // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is read as a
   // tenantId-only upsert introduces content there.
   const storedRow = cachedStatement(db, `SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
-    | { content: string; tenant_id: string }
+    | StoredContentRow
     | undefined;
-  const isNewRow = storedRow === undefined;
-  const tenantChanged = !isNewRow && storedRow.tenant_id !== tenantId;
-  const isContentIntroduction = isNewRow || tenantChanged || rejectionDigest(storedRow.content) !== incomingDigest;
-  if (!isContentIntroduction) return; // unchanged same-id re-persist — exempt by construction
+  // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
+  if (!introducesContent(storedRow, tenantId, incomingDigest)) return;
+  throw rejectedValueError(tombstone, entryId);
+}
 
-  throw new RejectedValueError({
-    digest: incomingDigest,
-    tenantId,
+/** The columns of the row an id holds now that say whether a write to it introduces content. */
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+export interface StoredContentRow {
+  readonly content: string;
+  readonly tenant_id: string | null;
+}
+
+/** True when writing content of `digest` under `tenantId` over `stored`, the row the id holds now, introduces it: a new
+ * row, a move to the tenant, or changed content. The guard refuses only these. */
+export function introducesContent(stored: StoredContentRow | undefined, tenantId: string, digest: string): boolean {
+  return stored === undefined || stored.tenant_id !== tenantId || rejectionDigest(stored.content) !== digest;
+}
+
+/** The refusal of a write to `entryId` that `tombstone` matched. */
+function rejectedValueError(tombstone: RejectedValueRow, entryId: string): RejectedValueError {
+  return new RejectedValueError({
+    digest: tombstone.digest,
+    tenantId: tombstone.tenantId,
     entryId,
     reason: tombstone.reason,
     rejectedAt: tombstone.rejectedAt,
