@@ -63,14 +63,7 @@ import {
   cliSyncOptions,
   cliConfig,
 } from './api-context.js';
-import {
-  type CliFlags,
-  type CommandContext,
-  boolFlag,
-  flagIsTrue,
-  stringFlag,
-  stringFlagOrExit,
-} from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
 import {
   logSessionEndImport,
   appendSessionEndCloseLog,
@@ -176,7 +169,7 @@ async function restoreCompactSnapshot(
  * sleep then capture, and exit. The child logs to a file that the next SessionStart reads via `hippo last-sleep`. */
 export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
-  const turn = flagIsTrue(flags, 'turn');
+  const turn = boolFlag(flags, 'turn');
   // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes
   // where the hook table used to point.
   const logFile =
@@ -271,10 +264,10 @@ function inlineWorkerFlags(flags: CliFlags, w: SessionEndWorkerInput): CliFlags 
   keep('log-file', w.logFile ?? stringFlag(flags, 'log-file'));
   keep('transcript', w.transcriptPath ?? stringFlag(flags, 'transcript'));
   keep('session-id', w.sessionId ?? stringFlag(flags, 'session-id'));
-  if (flagIsTrue(flags, 'turn')) out['turn'] = true;
-  if (flagIsTrue(flags, 'dry-run')) out['dry-run'] = true;
-  if (flagIsTrue(flags, 'no-learn')) out['no-learn'] = true;
-  if (flagIsTrue(flags, 'no-share')) out['no-share'] = true;
+  if (boolFlag(flags, 'turn')) out['turn'] = true;
+  if (boolFlag(flags, 'dry-run')) out['dry-run'] = true;
+  if (boolFlag(flags, 'no-learn')) out['no-learn'] = true;
+  if (boolFlag(flags, 'no-share')) out['no-share'] = true;
   return out;
 }
 
@@ -303,7 +296,7 @@ function vscodeStopInput(raw: BoundedStdin): CaptureInput | null {
 }
 
 export async function handleSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  await runSessionWorker(stringFlag(flags, 'session-id') ?? null, flagIsTrue(flags, 'turn') ? 'turn' : 'full', (mode) =>
+  await runSessionWorker(stringFlag(flags, 'session-id') ?? null, boolFlag(flags, 'turn') ? 'turn' : 'full', (mode) =>
     sessionEndWork(hippoRoot, tenantId, flags, mode),
   );
 }
