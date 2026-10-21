@@ -359,7 +359,12 @@ describe('conflict tenant isolation', () => {
     expect(readEntry(tmpDir, a.id)!.conflictsWith).toContain(b.id);
 
     // Re-home b to tenant-b — the (a, b) conflict row is now cross-tenant.
-    writeEntry(tmpDir, { ...b, tenantId: 'tenant-b' });
+    const db = openHippoDb(tmpDir);
+    try {
+      db.prepare(`UPDATE memories SET tenant_id = 'tenant-b' WHERE id = ?`).run(b.id);
+    } finally {
+      closeHippoDb(db);
+    }
 
     // Re-run detection passing the same pair, so the row stays open and the
     // refMap rebuild — not the resolve-stale path — is what must exclude it.
