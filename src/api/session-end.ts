@@ -271,16 +271,18 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
     process.off('exit', flushRereadLog);
     for (const line of rereadLog.splice(0)) w.log(line);
   };
-  process.once('exit', flushRereadLog);
   // A folder with neither a project nor a global store must not get one made.
   const into = endStore(ctx);
-  if (into === null) {
-    w.log('skip: no hippo store for this folder or globally', { startFresh: true });
+  process.once('exit', flushRereadLog);
+  try {
+    if (into === null) {
+      w.log('skip: no hippo store for this folder or globally', { startFresh: true });
+      return;
+    }
+    await sleepStep(ctx, w);
+  } finally {
     flushRereadLog();
-    return;
   }
-  await sleepStep(ctx, w);
-  flushRereadLog();
   const scan = w.readScan((line) => w.log(line));
   await captureStep(ctx, into, scan, w);
   await w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) => w.log(line));

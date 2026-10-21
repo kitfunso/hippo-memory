@@ -1,6 +1,7 @@
 // The tallies and counters the Reports group returns.
 import type { JsonValue } from '../../base/util/json.js';
 import type { ConfidenceLevel, Layer } from '../../base/memory/memory.js';
+import type { EntryCursor } from './types.js';
 
 /** Named field set for the legacy `stats.json` mirror: the only fields any caller reads. */
 export interface LegacyStats {
@@ -45,6 +46,23 @@ export interface CorrectionLink {
   newId: string;
   correctedAt: string;
   sourceCreated: string | null;
+}
+
+/** What a paged report read asks for: up to `limit` rows after `after`, in the report's created-then-id order. */
+export interface ReportPage {
+  readonly limit: number;
+  readonly after?: EntryCursor;
+}
+
+/** One page of correction links and where the next page starts (null after the last). */
+export interface CorrectionLinkPage {
+  links: CorrectionLink[];
+  next: EntryCursor | null;
+}
+
+/** One page of provenance gaps; `total` is the raw count on the same snapshot. */
+export interface RawProvenancePage extends RawProvenance {
+  next: EntryCursor | null;
 }
 
 /** How many kind='raw' rows the store holds, and each one missing an owner or an artifact ref. */

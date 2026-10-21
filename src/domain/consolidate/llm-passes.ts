@@ -1,6 +1,8 @@
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import type { EntryCursor } from '../../store/port/types.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { isPermanentFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 
@@ -72,31 +74,79 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
   await entityProfilePass(run, llm);
 }
 
+// A local model serves a few calls at once; more only queues them at the provider.
+const EXTRACTION_CONCURRENCY = 4;
+
+type Extract = typeof import('../learn/extract.js').extractFacts;
+interface Extraction {
+  facts: Awaited<ReturnType<Extract>>;
+  errors: Array<[string, LlmFailure | undefined]>;
+  threw?: unknown;
+}
+
+/** Runs `call` for every index with at most `width` in flight, launching nothing once `canLaunch` says no; a result
+ * sits at its input index, undefined where nothing launched. */
+async function pooled<T>(
+  count: number,
+  width: number,
+  canLaunch: () => boolean,
+  call: (index: number) => Promise<T>,
+): Promise<Array<T | undefined>> {
+  const results = Array.from<T | undefined>({ length: count });
+  let next = 0;
+  const lane = async (): Promise<void> => {
+    while (canLaunch() && next < count) {
+      const index = next++;
+      results[index] = await call(index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(width, count) }, lane));
+  return results;
+}
+
 /**
- * Extracts facts from each candidate; true when it stopped on a failure every later call would repeat (bad key, no
- * credit, unknown model).
+ * Extracts facts from each candidate, up to four model calls at once; every write, count and report then runs in input
+ * order. True when it stopped on a failure every later call would repeat (bad key, no credit, unknown model).
  */
 async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly MemoryEntry[]): Promise<boolean> {
   const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
   const report = llm.llmError('extraction');
-  let extractedCount = 0;
-  let stopped = false;
-  const onError = (msg: string, failure?: LlmFailure): void => {
-    report(msg, failure);
-    if (failure && isPermanentFailure(failure)) stopped = true;
-  };
-  for (const [index, candidate] of batch.entries()) {
+  let stopAt = Number.POSITIVE_INFINITY;
+  const extract = async (index: number): Promise<Extraction> => {
+    const out: Extraction = { facts: [], errors: [] };
+    const onError = (msg: string, failure?: LlmFailure): void => {
+      out.errors.push([msg, failure]);
+      if (failure && isPermanentFailure(failure)) stopAt = Math.min(stopAt, index);
+    };
     try {
-      const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError });
-      if (facts.length > 0) {
-        const stored = await storeExtractedFacts(run.store, candidate, facts, run.config.defaultHalfLifeDays);
+      out.facts = await extractFacts(batch[index].content, { ...llm.llmOpts, onError });
+    } catch (err) {
+      out.threw = err;
+    }
+    return out;
+  };
+  const results = await pooled(
+    batch.length,
+    EXTRACTION_CONCURRENCY,
+    () => stopAt === Number.POSITIVE_INFINITY,
+    extract,
+  );
+  let extractedCount = 0;
+  for (const [index, candidate] of batch.entries()) {
+    const out = results[index];
+    if (out === undefined) break;
+    for (const [msg, failure] of out.errors) report(msg, failure);
+    try {
+      if (out.threw !== undefined) throw out.threw;
+      if (out.facts.length > 0) {
+        const stored = await storeExtractedFacts(run.store, candidate, out.facts, run.config.defaultHalfLifeDays);
         extractedCount += stored.length;
       }
     } catch (err) {
       report(errorMessage(err));
       log.warn('consolidate extraction threw', errorFields(err));
     }
-    if (stopped) {
+    if (index === stopAt) {
       const skipped = batch.length - index - 1;
       report(
         `stopped after a failure that will not clear on retry; ${skipped} of ${batch.length} candidates skipped, and ` +
@@ -106,7 +156,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
     }
   }
   run.result.extracted = extractedCount;
-  return stopped;
+  return stopAt !== Number.POSITIVE_INFINITY;
 }
 
 // 1.7. DAG summarization — cluster extracted facts and generate summaries
@@ -181,13 +231,24 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   }
 }
 
+/** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a statement need not. */
+async function allUnprofiledTopicSummaries(store: SleepRun['store']['consolidation']): Promise<MemoryEntry[]> {
+  const all: MemoryEntry[] = [];
+  for (let after: EntryCursor | undefined; ;) {
+    const page = await store.unprofiledTopicSummaries({ limit: READ_PAGE_ROWS, after });
+    all.push(...page.entries);
+    if (page.next === null) return all;
+    after = page.next;
+  }
+}
+
 // 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7 was skipped
 // (re-clusters existing L2s every sleep).
 // Reads the stored L2s, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const { buildEntityProfiles } = await import('./dag.js');
-    const l2Summaries = await run.store.consolidation.unprofiledTopicSummaries();
+    const l2Summaries = await allUnprofiledTopicSummaries(run.store.consolidation);
     if (l2Summaries.length >= 2) {
       const profileResult = await buildEntityProfiles(run.store, l2Summaries, {
         ...llmOpts,
