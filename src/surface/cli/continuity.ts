@@ -20,6 +20,7 @@ import { cliApiContext } from './api-context.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../../base/session/handoff.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../../store/port/sessions.js';
+import { sessionEventJson, snapshotJson } from '../../api/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
 import {
@@ -53,16 +54,16 @@ async function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags
   const snapshot = await apiSnapshotSave(cliApiContext(hippoRoot, tenantId), {
     task,
     summary,
-    next_step: nextStep,
+    nextStep,
     source: stringFlagOrExit(flags, 'source') ?? 'cli',
-    session_id: sessionId || null,
+    sessionId: sessionId || null,
   });
 
   console.log(`Saved active task snapshot #${snapshot.id}`);
   console.log(`   Task: ${snapshot.task}`);
-  console.log(`   Next: ${snapshot.next_step}`);
-  if (snapshot.session_id) {
-    console.log(`   Session: ${snapshot.session_id}`);
+  console.log(`   Next: ${snapshot.nextStep}`);
+  if (snapshot.sessionId) {
+    console.log(`   Session: ${snapshot.sessionId}`);
   }
 }
 
@@ -88,7 +89,7 @@ async function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags
   }
 
   if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify({ snapshot }, null, 2));
+    console.log(JSON.stringify({ snapshot: snapshotJson(snapshot) }, null, 2));
     return;
   }
 
@@ -126,16 +127,16 @@ async function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, f
   }
 
   const event = await sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
-    session_id: s.sessionId,
+    sessionId: s.sessionId,
     task: s.task || null,
-    event_type: eventType || 'note',
+    eventType: eventType || 'note',
     content,
     source: stringFlagOrExit(flags, 'source') ?? 'cli',
   });
 
   console.log(`Logged session event #${event.id}`);
-  console.log(`   Session: ${event.session_id}`);
-  console.log(`   Type: ${event.event_type}`);
+  console.log(`   Session: ${event.sessionId}`);
+  console.log(`   Type: ${event.eventType}`);
 }
 
 async function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): Promise<void> {
@@ -146,7 +147,7 @@ async function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, 
   });
 
   if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify({ events }, null, 2));
+    console.log(JSON.stringify({ events: events.map(sessionEventJson) }, null, 2));
     return;
   }
 
@@ -160,7 +161,13 @@ async function sessionLatest(hippoRoot: string, tenantId: string, s: SessionArgs
   });
 
   if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify({ snapshot: snapshot ?? null, events }, null, 2));
+    console.log(
+      JSON.stringify(
+        { snapshot: snapshot ? snapshotJson(snapshot) : null, events: events.map(sessionEventJson) },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
@@ -195,15 +202,15 @@ async function sessionComplete(hippoRoot: string, tenantId: string, s: SessionAr
   if (summary) metadata.summary = summary;
 
   const event = await sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
-    session_id: sessionId,
+    sessionId,
     task: task || null,
-    event_type: 'session_complete',
+    eventType: 'session_complete',
     content: outcome,
     source: stringFlagOrExit(flags, 'source') ?? 'cli',
     metadata,
   });
 
-  console.log(`Completed session ${event.session_id} with outcome=${outcome} (event #${event.id})`);
+  console.log(`Completed session ${event.sessionId} with outcome=${outcome} (event #${event.id})`);
 
   const stamped = await handoffStampOutcome(cliApiContext(hippoRoot, tenantId), sessionId, outcome);
   if (stamped > 0) {
@@ -401,12 +408,12 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
 
   if (snapshot) {
     console.log(`Task: ${snapshot.task}`);
-    console.log(`Status: ${snapshot.status} | Source: ${snapshot.source} | Updated: ${snapshot.updated_at}`);
-    if (snapshot.session_id) {
-      console.log(`Session: ${snapshot.session_id}`);
+    console.log(`Status: ${snapshot.status} | Source: ${snapshot.source} | Updated: ${snapshot.updatedAt}`);
+    if (snapshot.sessionId) {
+      console.log(`Session: ${snapshot.sessionId}`);
     }
     console.log(`Summary: ${snapshot.summary}`);
-    console.log(`Next: ${snapshot.next_step}`);
+    console.log(`Next: ${snapshot.nextStep}`);
   } else {
     console.log('No active task snapshot.');
   }
@@ -415,8 +422,8 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
     console.log('');
     console.log('Recent events:');
     for (const ev of events) {
-      const ts = ev.created_at.slice(0, ISO_DATETIME_CHARS).replace('T', ' ');
-      console.log(`  [${ts}] (${ev.event_type}) ${ev.content}`);
+      const ts = ev.createdAt.slice(0, ISO_DATETIME_CHARS).replace('T', ' ');
+      console.log(`  [${ts}] (${ev.eventType}) ${ev.content}`);
     }
   }
 }
@@ -428,13 +435,13 @@ async function currentShow(hippoRoot: string, tenantId: string, flags: CliFlags)
   if (asJson) {
     console.log(
       JSON.stringify({
-        snapshot: snapshot ?? null,
+        snapshot: snapshot ? snapshotJson(snapshot) : null,
         events: events.map((ev) => ({
           id: ev.id,
-          session_id: ev.session_id,
-          event_type: ev.event_type,
+          session_id: ev.sessionId,
+          event_type: ev.eventType,
           content: ev.content,
-          created_at: ev.created_at,
+          created_at: ev.createdAt,
         })),
       }),
     );

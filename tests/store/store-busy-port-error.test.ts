@@ -9,7 +9,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const root = makeRoot('busy-port-error');
-const SNAPSHOT = { task: 'ship', summary: 'half done', next_step: 'merge', session_id: 's1' };
+const SNAPSHOT = { task: 'ship', summary: 'half done', nextStep: 'merge', sessionId: 's1' };
 
 /** Runs `fn` while another connection holds the write lock. */
 async function whileHeld<T>(fn: () => Promise<T>): Promise<T> {

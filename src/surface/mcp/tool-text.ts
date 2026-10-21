@@ -31,7 +31,7 @@ function handoffLines(h: SessionHandoff): string[] {
 function trailLines(events: readonly SessionEvent[]): string[] {
   return events.map((e) => {
     const preview = truncateWithEllipsis(e.content, MCP_PREVIEW_CHARS, '…');
-    return `- [${e.event_type}] ${preview}`;
+    return `- [${e.eventType}] ${preview}`;
   });
 }
 
@@ -42,7 +42,7 @@ export function formatContinuityBlock(block: ContinuityBlock): string {
     lines.push('### Active Task Snapshot');
     lines.push(`- Task: ${block.activeSnapshot.task}`);
     lines.push(`- Summary: ${block.activeSnapshot.summary}`);
-    lines.push(`- Next: ${block.activeSnapshot.next_step}`);
+    lines.push(`- Next: ${block.activeSnapshot.nextStep}`);
   }
   if (block.sessionHandoff) {
     lines.push('');
@@ -103,13 +103,13 @@ export function snapshotPiece(s: TaskSnapshot): string {
     '## Active Task Snapshot',
     `- Task: ${s.task}`,
     `- Status: ${s.status}`,
-    `- Updated: ${s.updated_at}`,
+    `- Updated: ${s.updatedAt}`,
     '',
     '### Summary',
     s.summary,
     '',
     '### Next step',
-    s.next_step,
+    s.nextStep,
     '',
     '',
   ].join('\n');

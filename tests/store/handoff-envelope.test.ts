@@ -325,8 +325,8 @@ describe('test 6: writeSessionEndHandoff', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'ship W1',
       summary: 'writing the envelope',
-      next_step: 'run the tests',
-      session_id: 'sess-a',
+      nextStep: 'run the tests',
+      sessionId: 'sess-a',
       scope: null,
     });
 
@@ -347,8 +347,8 @@ describe('test 6: writeSessionEndHandoff', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'owned by sess-a',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-a',
+      nextStep: 'next',
+      sessionId: 'sess-a',
     });
 
     expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-b', evidence: null })).toBeNull();
@@ -364,8 +364,8 @@ describe('test 6: writeSessionEndHandoff', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-d',
+      nextStep: 'next',
+      sessionId: 'sess-d',
     });
     saveSessionHandoff(root, 'default', {
       version: 1,
@@ -392,8 +392,8 @@ describe('test 6: writeSessionEndHandoff', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-e',
+      nextStep: 'next',
+      sessionId: 'sess-e',
     });
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-e', summary: 'tie handoff', artifacts: [] });
 
@@ -431,22 +431,22 @@ describe('test 6: writeSessionEndHandoff', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-f1',
+      nextStep: 'next',
+      sessionId: 'sess-f1',
     });
-    appendSessionEvent(root, 'default', { session_id: 'sess-f1', event_type: 'session_complete', content: 'success' });
+    appendSessionEvent(root, 'default', { sessionId: 'sess-f1', eventType: 'session_complete', content: 'success' });
     const withOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f1', evidence: null });
     expect(withOutcome!.outcome).toBe('success');
 
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-f2',
+      nextStep: 'next',
+      sessionId: 'sess-f2',
     });
     appendSessionEvent(root, 'default', {
-      session_id: 'sess-f2',
-      event_type: 'session_complete',
+      sessionId: 'sess-f2',
+      eventType: 'session_complete',
       content: 'not-a-real-outcome',
     });
     const withoutOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f2', evidence: null });

@@ -40,8 +40,8 @@ beforeEach(() => {
   saveActiveTaskSnapshot(store, 'default', {
     task: 'ship the context split',
     summary: 'renderContext split by stage',
-    next_step: 'run the goldens',
-    session_id: 'sess-golden',
+    nextStep: 'run the goldens',
+    sessionId: 'sess-golden',
   });
 });
 

@@ -18,7 +18,7 @@ import type { MemoryTables } from './tables.js';
 
 type Handoff = Omit<SessionHandoff, 'updatedAt'>;
 type Stored = Owned<SessionHandoffRow>;
-type HandoffSnapshot = Pick<TaskSnapshot, 'task' | 'summary' | 'next_step' | 'scope'>;
+type HandoffSnapshot = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep' | 'scope'>;
 
 /** The columns every write of `handoff` sets, as hippo.db's insert and in-place rewrite bind them. */
 function columnsOf(handoff: Handoff, now: string): Omit<SessionHandoffRow, 'id' | 'session_id'> {
@@ -131,14 +131,14 @@ function replaceTranscriptIn(t: MemoryTables, tenantId: string, handoff: Handoff
 // session end that reads the same transcript adds no second revision.
 function transcriptSource(
   existing: SessionHandoff | null,
-  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null,
+  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'> | null,
   evidence: HandoffEvidence | null,
 ): { snapshot: HandoffSnapshot; evidence: HandoffEvidence } | null {
   if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
   const same =
     existing?.taskId === derived.task &&
     existing.summary === derived.summary &&
-    existing.nextAction === derived.next_step;
+    existing.nextAction === derived.nextStep;
   if (existing && same) return null;
   return { snapshot: { ...derived, scope: null }, evidence: { ...evidence, derivedFrom: 'transcript' } };
 }
@@ -159,7 +159,7 @@ function sessionEndHandoff(
     repoRoot: carry ? existing.repoRoot : undefined,
     taskId: snapshot.task,
     summary: snapshot.summary,
-    nextAction: snapshot.next_step,
+    nextAction: snapshot.nextStep,
     artifacts: carry ? existing.artifacts : [],
     scope: snapshot.scope,
     evidence,
@@ -181,9 +181,9 @@ function sessionEndSource(
   const active = loadSnapshotIn(t, tenantId, key);
   // After every reply the transcript is newer than the last compaction's snapshot.
   const snapshotGivesWay = inPlace === true && derived !== null && active?.source === 'pre-compact';
-  if (active && active.session_id === sessionId && !snapshotGivesWay) {
+  if (active && active.sessionId === sessionId && !snapshotGivesWay) {
     // Strict '>': a same-millisecond tie must not swallow the session's only write.
-    if (existing && existing.updatedAt > active.updated_at) return null;
+    if (existing && existing.updatedAt > active.updatedAt) return null;
     return { snapshot: active, evidence, fromTranscript: false };
   }
   const fromDerived = transcriptSource(existing, derived, evidence);

@@ -131,8 +131,8 @@ describe('CLI end to end', () => {
     saveActiveTaskSnapshot(globalStore, 'default', {
       task: 'Foreign global active task',
       summary: 'Foreign global snapshot summary',
-      next_step: 'Resume unrelated global action',
-      session_id: 'other-project-session',
+      nextStep: 'Resume unrelated global action',
+      sessionId: 'other-project-session',
       source: 'test',
     });
     saveSessionHandoff(globalStore, 'default', {
@@ -144,8 +144,8 @@ describe('CLI end to end', () => {
       artifacts: [],
     });
     appendSessionEvent(globalStore, 'default', {
-      session_id: 'other-project-session',
-      event_type: 'note',
+      sessionId: 'other-project-session',
+      eventType: 'note',
       content: 'Foreign global event trail',
       source: 'test',
     });

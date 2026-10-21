@@ -183,8 +183,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     saveActiveTaskSnapshot(s.hippoRoot, 'default', {
       task: 't',
       summary: 's',
-      next_step: 'n',
-      session_id: VSCODE_SESSION,
+      nextStep: 'n',
+      sessionId: VSCODE_SESSION,
       source: 'pre-compact',
     });
     let log = await stop(transcript);
@@ -200,7 +200,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(memoriesWith('every pull request in CI')).toBe(1);
     expect(memoriesWith('retry budget at three attempts')).toBe(1);
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
-      session_id: VSCODE_SESSION,
+      sessionId: VSCODE_SESSION,
       status: 'active',
     });
   });
@@ -454,7 +454,7 @@ describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => 
     );
     expect(r.status, r.stderr).toBe(0);
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
-      session_id: VSCODE_SESSION,
+      sessionId: VSCODE_SESSION,
       source: 'pre-compact',
     });
   });
@@ -472,7 +472,7 @@ describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => 
     expect(compactionRows(s.hippoRoot)).toEqual([]);
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
       task: 'fix the flaky login test in auth.spec.ts',
-      session_id: VSCODE_SESSION,
+      sessionId: VSCODE_SESSION,
       source: 'pre-compact',
     });
   });
@@ -519,8 +519,8 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
       saveActiveTaskSnapshot(root, 'default', {
         task: 'fix the flaky login test',
         summary: 's',
-        next_step: 'n',
-        session_id: CLAUDE_SESSION,
+        nextStep: 'n',
+        sessionId: CLAUDE_SESSION,
         source: 'pre-compact',
       });
     }
@@ -535,7 +535,7 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
     await waitForLog(logFile, `closed 1 active snapshot(s) for session ${CLAUDE_SESSION}`);
     expect(loadActiveTaskSnapshot(otherRoot, 'default')).toBeNull();
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
-      session_id: CLAUDE_SESSION,
+      sessionId: CLAUDE_SESSION,
       status: 'active',
     });
   });

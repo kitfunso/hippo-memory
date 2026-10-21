@@ -123,8 +123,8 @@ describe('__session-end-worker with no store in the folder', () => {
     saveActiveTaskSnapshot(globalRoot, 'default', {
       task: 'billing service lockfile task',
       summary: 's',
-      next_step: 'n',
-      session_id: 'sess-global-close',
+      nextStep: 'n',
+      sessionId: 'sess-global-close',
       source: 'pre-compact',
     });
 

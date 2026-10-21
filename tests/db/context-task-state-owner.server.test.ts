@@ -30,7 +30,7 @@ const ctx = (owner: string): FullContext =>
   apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner });
 
 function snap(task: string, session: string) {
-  return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
+  return { task, summary: `${task} summary`, nextStep: `${task} next`, sessionId: session };
 }
 
 /** B's row first, then A's newer one: an unkeyed read would give A's row to both. */

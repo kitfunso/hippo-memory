@@ -370,7 +370,7 @@ async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: Contex
   // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read stays unbounded.
   const snapshot = freshActiveSnapshot(block.activeSnapshot, { sessionId: opts.currentSessionId });
   // The block's handoff and events are the raw snapshot's session's, so they stand only while that snapshot is fresh.
-  if (snapshot?.session_id) return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
+  if (snapshot?.sessionId) return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
   // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an older eligible one.
   return {
     snapshot,
@@ -582,7 +582,7 @@ async function recordRetrieval(
   const retrievedIds = updatedEntries.map((u) => u.id);
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
-    sessionId: opts.currentSessionId || activeSnapshot?.session_id || null,
+    sessionId: opts.currentSessionId || activeSnapshot?.sessionId || null,
     pipeline: 'context',
     query: plan.query,
     explainMode: false,

@@ -20,16 +20,16 @@ describe('task_snapshot tenant isolation', () => {
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A task',
       summary: 'A summary',
-      next_step: 'A next',
-      session_id: 'sess-a',
+      nextStep: 'A next',
+      sessionId: 'sess-a',
       source: 'test',
     });
 
     saveActiveTaskSnapshot(tmpDir, 'tenantB', {
       task: 'B task',
       summary: 'B summary',
-      next_step: 'B next',
-      session_id: 'sess-b',
+      nextStep: 'B next',
+      sessionId: 'sess-b',
       source: 'test',
     });
 
@@ -50,8 +50,8 @@ describe('task_snapshot tenant isolation', () => {
     saveActiveTaskSnapshot(tmpDir, 'tenantB', {
       task: 'B task',
       summary: 'B',
-      next_step: 'B',
-      session_id: 'sess-b',
+      nextStep: 'B',
+      sessionId: 'sess-b',
       source: 'test',
     });
 
@@ -64,15 +64,15 @@ describe('task_snapshot tenant isolation', () => {
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A',
       summary: 'A',
-      next_step: 'A',
-      session_id: 'sess-a',
+      nextStep: 'A',
+      sessionId: 'sess-a',
       source: 'test',
     });
     saveActiveTaskSnapshot(tmpDir, 'tenantB', {
       task: 'B',
       summary: 'B',
-      next_step: 'B',
-      session_id: 'sess-b',
+      nextStep: 'B',
+      sessionId: 'sess-b',
       source: 'test',
     });
 
@@ -91,15 +91,15 @@ describe('task_snapshot tenant isolation', () => {
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A keeps its mirror',
       summary: 'A',
-      next_step: 'A',
-      session_id: 'sess-a',
+      nextStep: 'A',
+      sessionId: 'sess-a',
       source: 'test',
     });
     saveActiveTaskSnapshot(tmpDir, 'tenantB', {
       task: 'B has its own',
       summary: 'B',
-      next_step: 'B',
-      session_id: 'sess-b',
+      nextStep: 'B',
+      sessionId: 'sess-b',
       source: 'test',
     });
 
@@ -119,8 +119,8 @@ describe('task_snapshot tenant isolation', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'd',
       summary: 'd',
-      next_step: 'd',
-      session_id: 'sess-d',
+      nextStep: 'd',
+      sessionId: 'sess-d',
       source: 'test',
     });
     expect(fs.existsSync(path.join(tmpDir, 'buffer', 'active-task.md'))).toBe(true);
@@ -132,15 +132,15 @@ describe('task_snapshot tenant isolation', () => {
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'first',
       summary: 'first',
-      next_step: 'first',
-      session_id: 'sess-a',
+      nextStep: 'first',
+      sessionId: 'sess-a',
       source: 'test',
     });
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'second',
       summary: 'second',
-      next_step: 'second',
-      session_id: 'sess-a',
+      nextStep: 'second',
+      sessionId: 'sess-a',
       source: 'test',
     });
 

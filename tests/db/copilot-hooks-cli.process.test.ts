@@ -196,7 +196,7 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     expect(fs.readFileSync(logFile, 'utf8')).toContain('snapshot saved');
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
       task: 'fix the flaky login test in auth.spec.ts',
-      session_id: SESSION,
+      sessionId: SESSION,
       source: 'pre-compact',
     });
   });

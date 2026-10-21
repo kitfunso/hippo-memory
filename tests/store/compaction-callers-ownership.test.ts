@@ -10,6 +10,7 @@ import {
   sessionEndHandoffForCaller,
 } from '../../src/server.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { snapshotFields } from '../../src/surface/capture/working-state.js';
 import {
   ALICE,
   BOB,
@@ -41,12 +42,12 @@ useCallerStore();
 
 describe('sessionEndHandoffForCaller', () => {
   it("writes the owner's handoff and closes only the owner's snapshot", async () => {
-    const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
+    const mine = saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
     // Bob's row names the same session id, so only the key keeps the close off it.
     const bobs = saveActiveTaskSnapshot(
       root,
       TENANT,
-      { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sA' },
+      { task: 'Bob task', summary: 'b', nextStep: 'b', sessionId: 'sA' },
       BOB,
     );
     expect(await sessionEnd(owned('alice'))).toEqual({ handoffWritten: true, snapshotsClosed: 1 });
@@ -74,7 +75,7 @@ describe('sessionEndHandoffForCaller', () => {
   });
 
   it('retry after a failed close writes no second handoff', async () => {
-    const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
+    const mine = saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
     // An earlier save time, so the handoff is strictly newer than the snapshot it covers.
     withDb((db) =>
       db

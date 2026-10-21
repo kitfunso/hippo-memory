@@ -23,20 +23,20 @@ describe('consolidate auto-promote: session -> trace', () => {
     initTestStore(tmpDir);
     const sid = 'test-session-auto';
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'read x.ts',
       source: 'agent',
     });
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'edit line 42',
       source: 'agent',
     });
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid,
-      event_type: 'session_complete',
+      sessionId: sid,
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
       metadata: { summary: 'fixed broken test' },
@@ -64,8 +64,8 @@ describe('consolidate auto-promote: session -> trace', () => {
     initTestStore(tmpDir);
     const sid = 'test-no-outcome';
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'did stuff',
       source: 'agent',
     });
@@ -79,8 +79,8 @@ describe('consolidate auto-promote: session -> trace', () => {
   it('does NOT promote a session whose completion outcome is not a known one', async () => {
     initTestStore(tmpDir);
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-bogus',
-      event_type: 'session_complete',
+      sessionId: 'sess-bogus',
+      eventType: 'session_complete',
       content: 'bogus',
       source: 'agent',
     });
@@ -95,14 +95,14 @@ describe('consolidate auto-promote: session -> trace', () => {
     initTestStore(tmpDir);
     const sid = 'test-idempotent';
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'action a',
       source: 'agent',
     });
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid,
-      event_type: 'session_complete',
+      sessionId: sid,
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
     });
@@ -127,15 +127,15 @@ describe('consolidate auto-promote: session -> trace', () => {
     const sharedTokens = 'refactor auth module rotation strategy overlapping distinctive tokens here';
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-1',
-      event_type: 'session_complete',
+      sessionId: 'sess-1',
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
       metadata: { summary: `${sharedTokens} always enable new flow` },
     });
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-2',
-      event_type: 'session_complete',
+      sessionId: 'sess-2',
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
       metadata: { summary: `${sharedTokens} never enable new flow disable it` },

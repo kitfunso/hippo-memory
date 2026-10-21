@@ -23,14 +23,14 @@ describe('session_events tenant isolation', () => {
     initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'tenantA', {
-      session_id: 'shared-id',
-      event_type: 'note',
+      sessionId: 'shared-id',
+      eventType: 'note',
       content: 'A says hi',
       source: 'test',
     });
     appendSessionEvent(tmpDir, 'tenantB', {
-      session_id: 'shared-id',
-      event_type: 'note',
+      sessionId: 'shared-id',
+      eventType: 'note',
       content: 'B says hi',
       source: 'test',
     });
@@ -48,14 +48,14 @@ describe('session_events tenant isolation', () => {
     initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'tenantA', {
-      session_id: 'sess-a',
-      event_type: 'session_complete',
+      sessionId: 'sess-a',
+      eventType: 'session_complete',
       content: 'success',
       source: 'test',
     });
     appendSessionEvent(tmpDir, 'tenantB', {
-      session_id: 'sess-b',
-      event_type: 'session_complete',
+      sessionId: 'sess-b',
+      eventType: 'session_complete',
       content: 'success',
       source: 'test',
     });

@@ -38,14 +38,14 @@ function seedContinuityState(): void {
   saveActiveTaskSnapshot(hippoDir, 'default', {
     task: 'Resume the current branch cleanly',
     summary: 'Current session is about the continuity-first slice.',
-    next_step: 'Use the current-session handoff, not the stale one.',
-    session_id: 'sess-current',
+    nextStep: 'Use the current-session handoff, not the stale one.',
+    sessionId: 'sess-current',
     source: 'test',
   });
 
   appendSessionEvent(hippoDir, 'default', {
-    session_id: 'sess-current',
-    event_type: 'note',
+    sessionId: 'sess-current',
+    eventType: 'note',
     content: 'Checked the latest branch state and confirmed the matching handoff should drive the next action.',
     source: 'test',
   });

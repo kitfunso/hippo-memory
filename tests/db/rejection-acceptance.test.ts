@@ -520,14 +520,14 @@ describe('auto-promoted trace tombstone check', () => {
     const home = makeRoot('rejection-acceptance-trace');
     const sid = 'test-session-rejected-trace';
     appendSessionEvent(home, 'default', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'read config.ts',
       source: 'agent',
     });
     appendSessionEvent(home, 'default', {
-      session_id: sid,
-      event_type: 'session_complete',
+      sessionId: sid,
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
       metadata: { summary: 'rotated the deploy key' },

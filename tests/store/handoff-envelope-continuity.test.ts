@@ -32,8 +32,8 @@ describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
       saveActiveTaskSnapshot(root, 'default', {
         task: `T_${i}`,
         summary: `summary ${i}`,
-        next_step: `next ${i}`,
-        session_id: sessionId,
+        nextStep: `next ${i}`,
+        sessionId: sessionId,
       });
       writeSessionEndHandoff(root, {
         tenantId: 'default',
@@ -106,8 +106,8 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'private task',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-priv-active',
+      nextStep: 'next',
+      sessionId: 'sess-priv-active',
       scope: 'slack:private:C1',
     });
     saveSessionHandoff(root, 'default', {
@@ -128,8 +128,8 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'private task',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-a',
+      nextStep: 'next',
+      sessionId: 'sess-a',
       scope: 'slack:private:C1',
     });
     saveSessionHandoff(root, 'default', {
@@ -150,18 +150,18 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'private task',
       summary: 'summary',
-      next_step: 'next',
-      session_id: 'sess-mix',
+      nextStep: 'next',
+      sessionId: 'sess-mix',
       scope: 'proj:private:x',
     });
     appendSessionEvent(root, 'default', {
-      session_id: 'sess-mix',
-      event_type: 'note',
+      sessionId: 'sess-mix',
+      eventType: 'note',
       content: 'public event',
     });
     appendSessionEvent(root, 'default', {
-      session_id: 'sess-mix',
-      event_type: 'note',
+      sessionId: 'sess-mix',
+      eventType: 'note',
       content: 'private event',
       scope: 'proj:private:x',
     });
@@ -257,8 +257,8 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
     saveActiveTaskSnapshot(root, 'default', {
       task: 'T',
       summary: 'snapshot summary',
-      next_step: 'next',
-      session_id: 'sess-carry',
+      nextStep: 'next',
+      sessionId: 'sess-carry',
     });
     const refreshed = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-carry', evidence: null });
     expect(refreshed!.constraints).toEqual(['no schema break']);
@@ -282,8 +282,8 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
     saveActiveTaskSnapshot(root, 'default', {
       task: 'T-new',
       summary: 'snapshot summary',
-      next_step: 'next',
-      session_id: 'sess-diff',
+      nextStep: 'next',
+      sessionId: 'sess-diff',
     });
     const notCarried = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-diff', evidence: null });
     expect(notCarried!.constraints).toEqual([]);
@@ -311,8 +311,8 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
     saveActiveTaskSnapshot(root, 'default', {
       task: 'T',
       summary: 'snapshot summary',
-      next_step: 'next',
-      session_id: 'sess-scope-mismatch',
+      nextStep: 'next',
+      sessionId: 'sess-scope-mismatch',
     });
     const handoff = writeSessionEndHandoff(root, {
       tenantId: 'default',

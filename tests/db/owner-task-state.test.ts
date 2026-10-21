@@ -43,7 +43,7 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 }
 
 function snap(task: string, session = 's1') {
-  return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
+  return { task, summary: `${task} summary`, nextStep: `${task} next`, sessionId: session };
 }
 
 function handoff(summary: string, sessionId = 's1'): Omit<SessionHandoff, 'updatedAt'> {
@@ -187,7 +187,7 @@ describe('handoffs and failures keyed by owner and project', () => {
   });
 
   it('derived-path retry writes no second revision', () => {
-    const derived = { task: 'derived', summary: 'from the transcript', next_step: 'carry on' };
+    const derived = { task: 'derived', summary: 'from the transcript', nextStep: 'carry on' };
     expect(
       writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sd', evidence: null, derived, key: A })?.taskId,
     ).toBe('derived');

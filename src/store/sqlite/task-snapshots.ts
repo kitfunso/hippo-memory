@@ -51,9 +51,9 @@ function insertSnapshot(
   ).run(
     redactSecretsStrict(snapshot.task),
     redactSecretsStrict(snapshot.summary),
-    redactSecretsStrict(snapshot.next_step),
+    redactSecretsStrict(snapshot.nextStep),
     snapshot.source ?? 'cli',
-    snapshot.session_id ?? null,
+    snapshot.sessionId ?? null,
     snapshot.scope ?? null,
     tenantId,
     now,

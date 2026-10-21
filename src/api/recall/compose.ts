@@ -442,7 +442,7 @@ function continuityTokensOf(c: ContinuityBlock): number {
   return (
     tokenCount(filteredSnapshot?.task) +
     tokenCount(filteredSnapshot?.summary) +
-    tokenCount(filteredSnapshot?.next_step) +
+    tokenCount(filteredSnapshot?.nextStep) +
     tokenCount(filteredHandoff?.summary) +
     tokenCount(filteredHandoff?.nextAction) +
     (filteredHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenCount(a), 0) +

@@ -84,8 +84,8 @@ export async function seedLocalGroups(root: string): Promise<void> {
   // A pending queue row, for the read of the tenants with graph work waiting.
   markGraphDirty(root, TENANT, 'mem_p_plain');
   appendSessionEvent(root, TENANT, {
-    session_id: TRACE_SESSION,
-    event_type: 'session_complete',
+    sessionId: TRACE_SESSION,
+    eventType: 'session_complete',
     content: 'wrapped up',
   });
   onDb(root, (db) => {

@@ -137,8 +137,8 @@ describe('promptHookContext', () => {
     saveActiveTaskSnapshot(cliStore, 'default', {
       task: 'ship',
       summary: 'half done',
-      next_step: 'run tests',
-      session_id: 'parity',
+      nextStep: 'run tests',
+      sessionId: 'parity',
     });
     // Copied before either side runs: the first prompt of a session must not see the other side's ledger rows.
     const srvStore = path.join(tmp, 'srv', 'proj', '.hippo');
@@ -183,8 +183,8 @@ describe('promptHookContext', () => {
     saveActiveTaskSnapshot(store, 'default', {
       task: 'ship',
       summary: 'half done',
-      next_step: 'run tests',
-      session_id: 'state-only',
+      nextStep: 'run tests',
+      sessionId: 'state-only',
     });
     const payload: HookPayload = { session_id: 'state-only', hook_event_name: 'UserPromptSubmit' };
     const out = await promptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
@@ -427,7 +427,7 @@ describe('promptHookContext on a shared store', () => {
     saveActiveTaskSnapshot(
       store,
       'default',
-      { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' },
+      { task: 'ship', summary: 'half done', nextStep: 'run tests', sessionId: 'owner' },
       { owner: 'prompt-hook-test', project: ['p'] },
     );
     expect((await ask(store, 'someone-else', false)).stdout).toContain('Active Task Snapshot');

@@ -72,10 +72,10 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
     task: snapshot.task,
     status: snapshot.status,
     source: snapshot.source,
-    session_id: snapshot.session_id,
-    created_at: snapshot.created_at,
-    updated_at: snapshot.updated_at,
-    next_step: snapshot.next_step,
+    session_id: snapshot.sessionId,
+    created_at: snapshot.createdAt,
+    updated_at: snapshot.updatedAt,
+    next_step: snapshot.nextStep,
   });
 
   const body = [
@@ -85,15 +85,15 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
     snapshot.summary,
     '',
     `## Next step`,
-    snapshot.next_step,
+    snapshot.nextStep,
     '',
     `## Task`,
     snapshot.task,
     '',
   ];
 
-  if (snapshot.session_id) {
-    body.push(`## Session`, snapshot.session_id, '');
+  if (snapshot.sessionId) {
+    body.push(`## Session`, snapshot.sessionId, '');
   }
 
   fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
@@ -118,25 +118,25 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
 
   const latest = events[events.length - 1]!;
   const fm = dumpFrontmatter({
-    session_id: latest.session_id,
+    session_id: latest.sessionId,
     task: latest.task,
     event_count: events.length,
-    updated_at: latest.created_at,
+    updated_at: latest.createdAt,
   });
 
   const lines = [
     '# Recent Session Trail',
     '',
-    `- Session: ${latest.session_id}`,
+    `- Session: ${latest.sessionId}`,
     `- Task: ${latest.task ?? 'n/a'}`,
-    `- Updated: ${latest.created_at}`,
+    `- Updated: ${latest.createdAt}`,
     '',
     '## Events',
     '',
   ];
 
   for (const event of events) {
-    lines.push(`- [${event.created_at}] (${event.event_type}) ${event.content}`);
+    lines.push(`- [${event.createdAt}] (${event.eventType}) ${event.content}`);
   }
 
   lines.push('');

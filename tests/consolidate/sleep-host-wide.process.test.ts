@@ -170,14 +170,14 @@ function seed(config: { memoryValue?: { enabled: boolean } }): string {
   );
   const session = 'sess-golden';
   appendSessionEvent(root, 'default', {
-    session_id: session,
-    event_type: 'action',
+    sessionId: session,
+    eventType: 'action',
     content: 'read the deploy runbook',
     source: 'agent',
   });
   appendSessionEvent(root, 'default', {
-    session_id: session,
-    event_type: 'session_complete',
+    sessionId: session,
+    eventType: 'session_complete',
     content: 'success',
     source: 'agent',
     metadata: { summary: 'deployed the fix' },

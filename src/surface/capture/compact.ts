@@ -89,9 +89,9 @@ async function snapshotJustSaved(sessions: Sessions, tenantId: string, sessionId
   if (sessionId === null || sessionId === '') return false;
   const active = await sessions.loadSnapshot(tenantId, null);
   return (
-    active?.session_id === sessionId &&
+    active?.sessionId === sessionId &&
     active.source === 'pre-compact' &&
-    Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS
+    Date.now() - Date.parse(active.updatedAt) < TWIN_FIRE_MS
   );
 }
 
@@ -264,7 +264,7 @@ async function saveDerivedSnapshot(
     );
   } else {
     try {
-      await sessions.saveSnapshot(tenantId, { ...merged, source: 'pre-compact', session_id: sessionId }, null);
+      await sessions.saveSnapshot(tenantId, { ...merged, source: 'pre-compact', sessionId }, null);
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) await markSnapshotOnRecord(hooks, tenantId, recordId, logFile);
     } catch (err) {

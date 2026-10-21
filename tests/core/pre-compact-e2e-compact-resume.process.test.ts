@@ -35,13 +35,13 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'add rate limiting to the endpoint',
       summary: 'Implemented the webhook handler; decided on PostgreSQL; now adding rate limiting.',
-      next_step: 'Add the rate limiter middleware and write tests for it.',
+      nextStep: 'Add the rate limiter middleware and write tests for it.',
       source: 'pre-compact',
-      session_id: 'sess-resume-1',
+      sessionId: 'sess-resume-1',
     });
     appendSessionEvent(hippoRoot, 'default', {
-      session_id: 'sess-resume-1',
-      event_type: 'note',
+      sessionId: 'sess-resume-1',
+      eventType: 'note',
       content: 'decided to use PostgreSQL for the backend',
     });
 
@@ -63,9 +63,9 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'session-a task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: 'sess-a',
+      sessionId: 'sess-a',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-b', source: 'compact' });
@@ -79,9 +79,9 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'session-match task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: 'sess-match',
+      sessionId: 'sess-match',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-match', source: 'compact' });
@@ -95,7 +95,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'no-session-id task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'cli',
     });
 
@@ -111,9 +111,9 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale snapshot task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: 'sess-stale',
+      sessionId: 'sess-stale',
     });
     backdateActiveSnapshot(hippoRoot, 'default', 16);
 
@@ -129,9 +129,9 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'fresh-enough snapshot task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: 'sess-fresh',
+      sessionId: 'sess-fresh',
     });
     backdateActiveSnapshot(hippoRoot, 'default', 14);
 
@@ -147,14 +147,14 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 't',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: 'sess-long-event',
+      sessionId: 'sess-long-event',
     });
     const longContent = 'E'.repeat(1000);
     appendSessionEvent(hippoRoot, 'default', {
-      session_id: 'sess-long-event',
-      event_type: 'note',
+      sessionId: 'sess-long-event',
+      eventType: 'note',
       content: longContent,
     });
 
@@ -170,9 +170,9 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 't',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: 'sess-x',
+      sessionId: 'sess-x',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-x', source: 'startup' });
@@ -186,7 +186,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'manual-use task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
     });
 
@@ -200,7 +200,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'manual-use task',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
     });
 
@@ -222,9 +222,9 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'task before corruption',
       summary: 's',
-      next_step: 'n',
+      nextStep: 'n',
       source: 'pre-compact',
-      session_id: 'sess-corrupt',
+      sessionId: 'sess-corrupt',
     });
 
     // Genuinely corrupt the store: overwrite the main db file with garbage
@@ -260,9 +260,9 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'combined-firing task',
       summary: 'combined-firing summary',
-      next_step: 'combined-firing next step',
+      nextStep: 'combined-firing next step',
       source: 'pre-compact',
-      session_id: 'sess-combo',
+      sessionId: 'sess-combo',
     });
     vi.stubEnv('HOME', dir);
     vi.stubEnv('USERPROFILE', dir);

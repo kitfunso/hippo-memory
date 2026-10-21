@@ -109,14 +109,14 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
 
     const sid = 'test-session-tenant-x';
     appendSessionEvent(home, 'tenant-x', {
-      session_id: sid,
-      event_type: 'action',
+      sessionId: sid,
+      eventType: 'action',
       content: 'rotate the deploy key',
       source: 'agent',
     });
     appendSessionEvent(home, 'tenant-x', {
-      session_id: sid,
-      event_type: 'session_complete',
+      sessionId: sid,
+      eventType: 'session_complete',
       content: 'success',
       source: 'agent',
       metadata: { summary: 'rotated the deploy key' },

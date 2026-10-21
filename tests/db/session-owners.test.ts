@@ -159,12 +159,12 @@ describe('bindSessionOwner', () => {
 
   it('an owner snapshot save raises the floor', () => {
     setFloor('0.0.1');
-    saveActiveTaskSnapshot(home, 'default', { task: 't', summary: 's', next_step: 'n' });
+    saveActiveTaskSnapshot(home, 'default', { task: 't', summary: 's', nextStep: 'n' });
     expect(floor()).toBe('0.0.1');
     saveActiveTaskSnapshot(
       home,
       'default',
-      { task: 't', summary: 's', next_step: 'n' },
+      { task: 't', summary: 's', nextStep: 'n' },
       { owner: 'alice', project: ['p'] },
     );
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);

@@ -23,9 +23,9 @@ export function stampOf(key: ContinuityKey | null | undefined): { owner: string 
   return key ? continuityStamp(key) : { owner: null, origin: null };
 }
 
-/** Newest first by `updated_at`, then the larger id. */
+/** Newest first by `updatedAt`, then the larger id. */
 const newestSnapshot = (a: Owned<TaskSnapshot>, b: Owned<TaskSnapshot>): number =>
-  byBytes(b.row.updated_at, a.row.updated_at) || b.row.id - a.row.id;
+  byBytes(b.row.updatedAt, a.row.updatedAt) || b.row.id - a.row.id;
 
 function activeIn(t: MemoryTables, tenantId: string, key: ContinuityKey | null | undefined): Owned<TaskSnapshot>[] {
   const active = t.snapshots.filter((s) => s.tenantId === tenantId && s.row.status === 'active' && keyMatches(key, s));
@@ -40,18 +40,18 @@ export function loadSnapshotIn(t: MemoryTables, tenantId: string, key: Continuit
 export function saveSnapshotIn(t: MemoryTables, tenantId: string, input: SnapshotInput, key: ContinuityKey | null) {
   const stamp = stampOf(key);
   const now = new Date().toISOString();
-  for (const s of activeIn(t, tenantId, key)) s.row = { ...s.row, status: 'superseded', updated_at: now };
+  for (const s of activeIn(t, tenantId, key)) s.row = { ...s.row, status: 'superseded', updatedAt: now };
   const row: TaskSnapshot = {
     id: nextId(t, 'task_snapshots'),
     task: redactSecretsStrict(input.task),
     summary: redactSecretsStrict(input.summary),
-    next_step: redactSecretsStrict(input.next_step),
+    nextStep: redactSecretsStrict(input.nextStep),
     status: 'active',
     source: input.source ?? 'cli',
-    session_id: input.session_id ?? null,
+    sessionId: input.sessionId ?? null,
     scope: input.scope ?? null,
-    created_at: now,
-    updated_at: now,
+    createdAt: now,
+    updatedAt: now,
   };
   t.snapshots.push({ tenantId, row, ...stamp });
   return { ...row };
@@ -61,7 +61,7 @@ export function saveSnapshotIn(t: MemoryTables, tenantId: string, input: Snapsho
 function clearIn(t: MemoryTables, tenantId: string, status: string): boolean {
   const newest = activeIn(t, tenantId, null)[0];
   if (!newest) return false;
-  newest.row = { ...newest.row, status, updated_at: new Date().toISOString() };
+  newest.row = { ...newest.row, status, updatedAt: new Date().toISOString() };
   return true;
 }
 
@@ -69,8 +69,8 @@ function clearIn(t: MemoryTables, tenantId: string, status: string): boolean {
 function closeIn(t: MemoryTables, tenantId: string, sessionId: string, status: string, key: ContinuityKey | null) {
   if (key) continuityStamp(key);
   const now = new Date().toISOString();
-  const closing = activeIn(t, tenantId, key).filter((s) => s.row.session_id === sessionId);
-  for (const s of closing) s.row = { ...s.row, status, updated_at: now };
+  const closing = activeIn(t, tenantId, key).filter((s) => s.row.sessionId === sessionId);
+  for (const s of closing) s.row = { ...s.row, status, updatedAt: now };
   return closing.length;
 }
 
@@ -78,9 +78,9 @@ function appendEventIn(t: MemoryTables, tenantId: string, input: SessionEventInp
   const id = nextId(t, 'session_events');
   const row: SessionEvent = {
     id,
-    session_id: input.session_id,
+    sessionId: input.sessionId,
     task: input.task ?? null,
-    event_type: input.event_type,
+    eventType: input.eventType,
     content: input.content,
     source: input.source ?? 'cli',
     scope: input.scope ?? null,
@@ -89,14 +89,14 @@ function appendEventIn(t: MemoryTables, tenantId: string, input: SessionEventInp
       id,
       column: 'metadata_json',
     }),
-    created_at: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
   };
   t.events.push({ tenantId, row });
   return structuredClone(row);
 }
 
 const newestEvent = (a: Tenanted<SessionEvent>, b: Tenanted<SessionEvent>): number =>
-  byBytes(b.row.created_at, a.row.created_at) || b.row.id - a.row.id;
+  byBytes(b.row.createdAt, a.row.createdAt) || b.row.id - a.row.id;
 
 /** The `limit` newest events a non-empty session id and task narrow, returned oldest first. */
 export function listEventsIn(
@@ -107,7 +107,7 @@ export function listEventsIn(
   const { sessionId, task } = opts;
   const limit = Math.max(1, Math.trunc(opts.limit ?? DEFAULT_EVENT_LIMIT));
   const events = t.events.filter(
-    (e) => e.tenantId === tenantId && (!sessionId || e.row.session_id === sessionId) && (!task || e.row.task === task),
+    (e) => e.tenantId === tenantId && (!sessionId || e.row.sessionId === sessionId) && (!task || e.row.task === task),
   );
   return structuredClone(
     events
@@ -121,7 +121,7 @@ export function listEventsIn(
 /** The content of the session's newest `session_complete` event, read for the handoff's outcome. */
 export function sessionCompletion(t: MemoryTables, tenantId: string, sessionId: string): string | undefined {
   const done = t.events.filter(
-    (e) => e.tenantId === tenantId && e.row.session_id === sessionId && e.row.event_type === 'session_complete',
+    (e) => e.tenantId === tenantId && e.row.sessionId === sessionId && e.row.eventType === 'session_complete',
   );
   return done.sort(newestEvent)[0]?.row.content;
 }

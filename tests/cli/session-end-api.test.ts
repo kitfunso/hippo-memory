@@ -87,7 +87,7 @@ function withAutoSleep(threshold: number): Context {
 
 describe('sessionEndWork', () => {
   it('runs the steps in order and closes the session snapshot', async () => {
-    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', next_step: 'n', session_id: 's1' });
+    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     await sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}/s1.jsonl` }));
     expect(steps).toEqual(['sleep', 'scan', 'capture:own:t1,t2,t3:-', 'digest:3:s1']);
     expect(loadActiveTaskSnapshot(root, TENANT)).toBeNull();
@@ -95,10 +95,10 @@ describe('sessionEndWork', () => {
   });
 
   it('a turn close captures only the turns after the cursor, moves it, and leaves the snapshot open', async () => {
-    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', next_step: 'n', session_id: 's1' });
+    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     await sessionEndWork(withAutoSleep(1000), work({ mode: 'turn', transcriptPath: `${root}/s1.jsonl` }));
     expect(steps).toEqual(['scan', 'capture:own:t2,t3:-', 'cursor:3', 'digest:3:s1']);
-    expect(loadActiveTaskSnapshot(root, TENANT)?.session_id).toBe('s1');
+    expect(loadActiveTaskSnapshot(root, TENANT)?.sessionId).toBe('s1');
     expect(lines).toContain('skip snapshot close: turn mode');
   });
 
@@ -128,7 +128,7 @@ describe('sessionEndWork', () => {
   it('a folder with no store of its own skips sleep, imports its notes and captures into the global store', async () => {
     const globalRoot = makeRoot('session-end-api-global');
     try {
-      saveActiveTaskSnapshot(globalRoot, TENANT, { task: 't', summary: 's', next_step: 'n', session_id: 's1' });
+      saveActiveTaskSnapshot(globalRoot, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
       await sessionEndWork(withoutOwnStore(globalRoot), work({ transcriptPath: `${root}/s1.jsonl` }));
       expect(steps).toEqual(['import', 'scan', `capture:global:t1,t2,t3:${PROJECT}`, 'digest:3:s1']);
       expect(lines).toContain('skip sleep: this folder has no store of its own');
@@ -154,7 +154,7 @@ describe('sessionEndWork', () => {
 
   // A worker process runs many sessions, so a listener per call would pile up until the process exits.
   it('leaves no exit listener behind once the re-read lines are logged', async () => {
-    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', next_step: 'n', session_id: 's1' });
+    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     const before = process.listenerCount('exit');
     const transcriptPath = `${root}-missing.jsonl`;
     await sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath }));

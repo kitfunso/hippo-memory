@@ -323,31 +323,31 @@ describe('session events integration with handoffs', () => {
     initTestStore(tmpDir);
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-lifecycle',
-      event_type: 'session_start',
+      sessionId: 'sess-lifecycle',
+      eventType: 'session_start',
       content: 'Session started',
       source: 'openclaw',
     });
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-lifecycle',
-      event_type: 'note',
+      sessionId: 'sess-lifecycle',
+      eventType: 'note',
       content: 'Did some work',
       source: 'openclaw',
     });
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-lifecycle',
-      event_type: 'session_end',
+      sessionId: 'sess-lifecycle',
+      eventType: 'session_end',
       content: 'Session ended',
       source: 'openclaw',
     });
 
     const events = listSessionEvents(tmpDir, 'default', { session_id: 'sess-lifecycle', limit: 10 });
     expect(events).toHaveLength(3);
-    expect(events[0]!.event_type).toBe('session_start');
-    expect(events[1]!.event_type).toBe('note');
-    expect(events[2]!.event_type).toBe('session_end');
+    expect(events[0]!.eventType).toBe('session_start');
+    expect(events[1]!.eventType).toBe('note');
+    expect(events[2]!.eventType).toBe('session_end');
   });
 
   it('handoff + session latest returns combined view', () => {
@@ -356,13 +356,13 @@ describe('session events integration with handoffs', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship PR2',
       summary: 'Implementing session continuity',
-      next_step: 'Run tests',
-      session_id: 'sess-combined',
+      nextStep: 'Run tests',
+      sessionId: 'sess-combined',
     });
 
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-combined',
-      event_type: 'session_start',
+      sessionId: 'sess-combined',
+      eventType: 'session_start',
       content: 'Session started',
     });
 
@@ -375,7 +375,7 @@ describe('session events integration with handoffs', () => {
 
     const snapshot = loadActiveTaskSnapshot(tmpDir, 'default');
     expect(snapshot).not.toBeNull();
-    expect(snapshot!.session_id).toBe('sess-combined');
+    expect(snapshot!.sessionId).toBe('sess-combined');
 
     const events = listSessionEvents(tmpDir, 'default', { session_id: 'sess-combined' });
     expect(events.length).toBeGreaterThanOrEqual(1);

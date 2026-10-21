@@ -82,8 +82,8 @@ describe('mcp hippo_recall include_continuity', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Wire MCP continuity',
       summary: 'Plan reviewed.',
-      next_step: 'Land Task 2.',
-      session_id: 'sess-mcp-1',
+      nextStep: 'Land Task 2.',
+      sessionId: 'sess-mcp-1',
       source: 'test',
     });
     saveSessionHandoff(home, 'default', {
@@ -94,8 +94,8 @@ describe('mcp hippo_recall include_continuity', () => {
       artifacts: [],
     });
     appendSessionEvent(home, 'default', {
-      session_id: 'sess-mcp-1',
-      event_type: 'note',
+      sessionId: 'sess-mcp-1',
+      eventType: 'note',
       content: 'A trail event.',
       source: 'test',
     });
@@ -125,8 +125,8 @@ describe('mcp hippo_recall include_continuity', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Private task',
       summary: 'Private',
-      next_step: 'Private',
-      session_id: 'sess-private',
+      nextStep: 'Private',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'slack:private:Csecret',
     });
@@ -154,8 +154,8 @@ describe('mcp hippo_recall include_continuity', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Private task',
       summary: 'Private',
-      next_step: 'Private',
-      session_id: 'sess-private',
+      nextStep: 'Private',
+      sessionId: 'sess-private',
       source: 'test',
       scope: 'slack:private:Csecret',
     });

@@ -54,7 +54,7 @@ export async function continuityLatest(
   const { sessions } = ctx.store;
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, null);
   const events = await sessions.listEvents(ctx.tenantId, {
-    sessionId: opts.sessionId || snapshot?.session_id || undefined,
+    sessionId: opts.sessionId || snapshot?.sessionId || undefined,
     limit: opts.limit,
   });
   return { snapshot, events };

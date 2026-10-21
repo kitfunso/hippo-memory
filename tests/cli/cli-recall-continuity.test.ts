@@ -34,8 +34,8 @@ function seedContinuity(): void {
   saveActiveTaskSnapshot(hippoDir, 'default', {
     task: 'Wire continuity into recall',
     summary: 'Plan reviewed twice. Implementation underway.',
-    next_step: 'Land Task 4 CLI flag.',
-    session_id: 'sess-recall-cont',
+    nextStep: 'Land Task 4 CLI flag.',
+    sessionId: 'sess-recall-cont',
     source: 'test',
   });
   saveSessionHandoff(hippoDir, 'default', {
@@ -46,8 +46,8 @@ function seedContinuity(): void {
     artifacts: ['src/cli.ts'],
   });
   appendSessionEvent(hippoDir, 'default', {
-    session_id: 'sess-recall-cont',
-    event_type: 'note',
+    sessionId: 'sess-recall-cont',
+    eventType: 'note',
     content: 'A trail event from the continuity test.',
     source: 'test',
   });

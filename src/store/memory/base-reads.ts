@@ -45,7 +45,7 @@ export function continuityIn(
   key: ContinuityKey | null,
 ): ContinuityBlock {
   const activeSnapshot = loadSnapshotIn(t, tenantId, key);
-  const sessionId = activeSnapshot?.session_id ?? undefined;
+  const sessionId = activeSnapshot?.sessionId ?? undefined;
   return {
     activeSnapshot,
     sessionHandoff: sessionId ? latestHandoffIn(t, tenantId, sessionId, {}, key) : null,

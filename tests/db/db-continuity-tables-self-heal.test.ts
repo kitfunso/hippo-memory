@@ -162,13 +162,13 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     saveActiveTaskSnapshot(root, 'default', {
       task: 'Sample task',
       summary: 'Sample summary',
-      next_step: 'Sample next step',
-      session_id: 'sess-healthy',
+      nextStep: 'Sample next step',
+      sessionId: 'sess-healthy',
       source: 'test',
     });
     appendSessionEvent(root, 'default', {
-      session_id: 'sess-healthy',
-      event_type: 'note',
+      sessionId: 'sess-healthy',
+      eventType: 'note',
       content: 'Sample event content',
       source: 'test',
     });
@@ -270,8 +270,8 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     saveActiveTaskSnapshot(hippoDir, 'default', {
       task: 'Resume the current branch cleanly',
       summary: 'Continuity self-heal regression coverage.',
-      next_step: 'Verify context does not crash on missing tables.',
-      session_id: 'sess-heal',
+      nextStep: 'Verify context does not crash on missing tables.',
+      sessionId: 'sess-heal',
       source: 'test',
     });
 

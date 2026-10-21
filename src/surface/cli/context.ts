@@ -38,6 +38,7 @@ import {
 import { requireInit } from './shared.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { continuityTexts } from './print.js';
+import { sessionEventJson, snapshotJson } from '../../api/continuity-json.js';
 import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, inPilotHoldout } from './hook-runtime.js';
 
 async function printContext(
@@ -253,9 +254,9 @@ async function renderContextJson(view: ContextView, query: string): Promise<void
   }));
   const jsonText = JSON.stringify({
     query: query || NO_QUERY,
-    activeSnapshot: result.activeSnapshot ?? null,
+    activeSnapshot: result.activeSnapshot ? snapshotJson(result.activeSnapshot) : null,
     sessionHandoff: result.sessionHandoff ?? null,
-    recentSessionEvents: result.recentEvents ?? [],
+    recentSessionEvents: (result.recentEvents ?? []).map(sessionEventJson),
     memories: output,
     tokens: result.tokens,
   });

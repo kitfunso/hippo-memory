@@ -49,8 +49,8 @@ async function conforms(calls: readonly GroupCall<'sessions', unknown>[]) {
 const snap = (task: string, session: string | null, over: Partial<SnapshotInput> = {}): SnapshotInput => ({
   task,
   summary: `${task} summary`,
-  next_step: `${task} next`,
-  session_id: session,
+  nextStep: `${task} next`,
+  sessionId: session,
   ...over,
 });
 
@@ -99,23 +99,23 @@ describe('Sessions events', () => {
     const outcomes = await conforms([
       (g) =>
         g.appendEvent(TENANT_A, {
-          session_id: 's1',
-          event_type: 'note',
+          sessionId: 's1',
+          eventType: 'note',
           content: 'first',
           task: 'ship',
           metadata: { n: 1 },
         }),
-      (g) => g.appendEvent(TENANT_A, { session_id: 's1', event_type: 'note', content: 'second' }),
+      (g) => g.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'note', content: 'second' }),
       (g) =>
         g.appendEvent(TENANT_A, {
-          session_id: 's2',
-          event_type: 'decision',
+          sessionId: 's2',
+          eventType: 'decision',
           content: 'third',
           task: 'ship',
           source: 'hook',
           scope: 'team:ops',
         }),
-      (g) => g.appendEvent(TENANT_B, { session_id: 's1', event_type: 'note', content: 'tenant b' }),
+      (g) => g.appendEvent(TENANT_B, { sessionId: 's1', eventType: 'note', content: 'tenant b' }),
       (g) => g.listEvents(TENANT_A, { sessionId: 's1' }),
       (g) => g.listEvents(TENANT_A, { task: 'ship' }),
       (g) => g.listEvents(TENANT_A, { limit: 2 }),
@@ -186,12 +186,12 @@ describe('Sessions handoffs', () => {
 });
 
 describe('Sessions.writeSessionEndHandoff', () => {
-  const derived = (summary: string) => ({ task: 'transcript task', summary, next_step: 'carry on' });
+  const derived = (summary: string) => ({ task: 'transcript task', summary, nextStep: 'carry on' });
 
   it('writes from the active snapshot or the transcript, once per change, and rewrites a transcript read in place', async () => {
     const outcomes = await conforms([
       (g) => g.saveSnapshot(TENANT_A, snap('ship', 's1'), ALICE),
-      (g) => g.appendEvent(TENANT_A, { session_id: 's1', event_type: 'session_complete', content: 'success' }),
+      (g) => g.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'session_complete', content: 'success' }),
       (g) => g.writeSessionEndHandoff(TENANT_A, { sessionId: 's1', evidence: { gitRef: 'abc' }, key: ALICE }),
       (g) => g.writeSessionEndHandoff(TENANT_A, { sessionId: 's1', evidence: null, key: ALICE }),
       (g) =>

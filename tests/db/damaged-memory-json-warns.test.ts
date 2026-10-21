@@ -121,8 +121,8 @@ describe('a session event with damaged metadata', () => {
   it('reads with empty metadata and is named once at warn', () => {
     const root = newRoot();
     const event = appendSessionEvent(root, TENANT, {
-      session_id: 'sess-1',
-      event_type: 'note',
+      sessionId: 'sess-1',
+      eventType: 'note',
       content: 'x',
       source: 'test',
       metadata: { a: 1 },

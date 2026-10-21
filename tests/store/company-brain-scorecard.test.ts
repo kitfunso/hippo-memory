@@ -43,7 +43,7 @@ function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScore
   const signals = {
     task: Boolean(snapshot?.task?.trim()),
     snapshotSummary: Boolean(snapshot?.summary?.trim()),
-    nextStep: Boolean(snapshot?.next_step?.trim()),
+    nextStep: Boolean(snapshot?.nextStep?.trim()),
     handoffSummary: Boolean(handoff?.summary?.trim()),
     nextAction: Boolean(handoff?.nextAction?.trim()),
     artifacts: Boolean(handoff?.artifacts?.length),
@@ -55,7 +55,7 @@ function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScore
 
   const eventTrail = events.slice(-1).map((event) => {
     const preview = event.content.split(/\s+/).slice(0, 4).join(' ');
-    return `${event.event_type}: ${preview}`;
+    return `${event.eventType}: ${preview}`;
   });
 
   const parts: string[] = [];
@@ -63,7 +63,7 @@ function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScore
   if (snapshot) {
     parts.push(`Task: ${snapshot.task}`);
     parts.push(`Summary: ${snapshot.summary}`);
-    parts.push(`Next: ${snapshot.next_step}`);
+    parts.push(`Next: ${snapshot.nextStep}`);
   }
 
   if (handoff) {
@@ -104,8 +104,8 @@ function appendVerboseTrail(hippoRoot: string, sessionId: string): void {
 
   steps.forEach((content, index) => {
     appendSessionEvent(hippoRoot, 'default', {
-      session_id: sessionId,
-      event_type: index === 0 ? 'session_start' : 'note',
+      sessionId: sessionId,
+      eventType: index === 0 ? 'session_start' : 'note',
       content,
       source: 'test',
     });
@@ -127,8 +127,8 @@ describe('Company Brain continuity scorecard scaffold', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship the Company Brain measurement tranche',
       summary: 'Docs are updated and the continuity scorecard is the only code scaffold in scope.',
-      next_step: 'Run the scorecard test, then verify the baseline red tests stayed unchanged.',
-      session_id: sessionId,
+      nextStep: 'Run the scorecard test, then verify the baseline red tests stayed unchanged.',
+      sessionId: sessionId,
       source: 'test',
     });
 
@@ -157,8 +157,8 @@ describe('Company Brain continuity scorecard scaffold', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Continuity-first recall scorecard regression',
       summary: 'Validate that recall path matches the scorecard helper.',
-      next_step: 'Assert distilled tokens stay below 45 percent of raw events.',
-      session_id: sessionId,
+      nextStep: 'Assert distilled tokens stay below 45 percent of raw events.',
+      sessionId: sessionId,
       source: 'test',
     });
     saveSessionHandoff(tmpDir, 'default', {
@@ -185,7 +185,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
     const signals = {
       task: Boolean(block.activeSnapshot?.task?.trim()),
       snapshotSummary: Boolean(block.activeSnapshot?.summary?.trim()),
-      nextStep: Boolean(block.activeSnapshot?.next_step?.trim()),
+      nextStep: Boolean(block.activeSnapshot?.nextStep?.trim()),
       handoffSummary: Boolean(block.sessionHandoff?.summary?.trim()),
       nextAction: Boolean(block.sessionHandoff?.nextAction?.trim()),
       artifacts: Boolean(block.sessionHandoff?.artifacts?.length),
@@ -204,12 +204,12 @@ describe('Company Brain continuity scorecard scaffold', () => {
     const rawTranscriptTokens = estimateTokens(rawEvents.map((e) => e.content).join('\n'));
     const lastEvent = block.recentSessionEvents.at(-1);
     const lastPreview = lastEvent
-      ? `${lastEvent.event_type}: ${lastEvent.content.split(/\s+/).slice(0, 4).join(' ')}`
+      ? `${lastEvent.eventType}: ${lastEvent.content.split(/\s+/).slice(0, 4).join(' ')}`
       : '';
     const distilledParts = [
       `Task: ${block.activeSnapshot!.task}`,
       `Summary: ${block.activeSnapshot!.summary}`,
-      `Next: ${block.activeSnapshot!.next_step}`,
+      `Next: ${block.activeSnapshot!.nextStep}`,
       `Handoff: ${block.sessionHandoff!.summary}`,
       `Action: ${block.sessionHandoff!.nextAction}`,
       `Artifacts: ${(block.sessionHandoff!.artifacts ?? []).join(', ')}`,
@@ -236,8 +236,8 @@ describe('Company Brain continuity scorecard scaffold', () => {
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Resume the current branch cleanly',
       summary: 'Current session is about the continuity-first slice.',
-      next_step: 'Use the current-session handoff, not the stale one.',
-      session_id: currentSession,
+      nextStep: 'Use the current-session handoff, not the stale one.',
+      sessionId: currentSession,
       source: 'test',
     });
 

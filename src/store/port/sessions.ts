@@ -7,39 +7,39 @@ export interface TaskSnapshot {
   id: number;
   task: string;
   summary: string;
-  next_step: string;
+  nextStep: string;
   status: string;
   source: string;
-  session_id: string | null;
+  sessionId: string | null;
   scope: string | null;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SessionEvent {
   id: number;
-  session_id: string;
+  sessionId: string;
   task: string | null;
-  event_type: string;
+  eventType: string;
   content: string;
   source: string;
   scope: string | null;
   metadata: Record<string, JsonValue>;
-  created_at: string;
+  createdAt: string;
 }
 
 export type SnapshotInput = {
   task: string;
   summary: string;
-  next_step: string;
+  nextStep: string;
   source?: string;
-  session_id?: string | null;
+  sessionId?: string | null;
   scope?: string | null;
 };
 
 export interface SessionEventInput {
-  session_id: string;
-  event_type: string;
+  sessionId: string;
+  eventType: string;
   content: string;
   task?: string | null;
   source?: string;
@@ -58,7 +58,7 @@ export interface SessionEndHandoffRequest {
   readonly tenantId: string;
   readonly sessionId: string;
   readonly evidence: HandoffEvidence | null;
-  readonly derived?: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null;
+  readonly derived?: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'> | null;
   readonly key?: ContinuityKey;
   readonly inPlace?: boolean;
 }

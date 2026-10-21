@@ -109,10 +109,10 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot).not.toBeNull();
-    expect(snapshot!.session_id).toBe('sess-B');
+    expect(snapshot!.sessionId).toBe('sess-B');
     expect(snapshot!.task).toBe('');
     expect(snapshot!.task).not.toContain('SESSION A TASK');
-    expect(snapshot!.next_step).toContain('continue B work');
+    expect(snapshot!.nextStep).toContain('continue B work');
   });
 
   it('CX8: a PEM private-key block is redacted through the END delimiter, not just the BEGIN line', async () => {
@@ -229,7 +229,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot).not.toBeNull();
-    expect(snapshot!.session_id).toBe('sess-cx7');
+    expect(snapshot!.sessionId).toBe('sess-cx7');
     expect(snapshot!.task).toContain('oversized-record survival');
     expect(fs.readFileSync(logFile, 'utf8')).toContain('tail window grown');
   });

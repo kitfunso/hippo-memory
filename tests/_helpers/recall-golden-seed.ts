@@ -231,8 +231,8 @@ export function seedPortBranches(root: string): void {
   saveActiveTaskSnapshot(root, TENANT, {
     task: 'ship the eu cluster',
     summary: 'cutover planned',
-    next_step: 'run the canary',
-    session_id: SESSION,
+    nextStep: 'run the canary',
+    sessionId: SESSION,
   });
   saveSessionHandoff(root, TENANT, {
     version: 1,
@@ -240,7 +240,7 @@ export function seedPortBranches(root: string): void {
     summary: 'handoff after the canary',
     nextAction: 'promote it',
   });
-  appendSessionEvent(root, TENANT, { session_id: SESSION, event_type: 'note', content: 'canary passed' });
+  appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
   const prediction = savePrediction(root, TENANT, {
     classTag: 'deploy-duration',
     claimText: 'rollout duration estimate for the eu cluster',

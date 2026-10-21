@@ -208,9 +208,9 @@ describe('GET /v1/context', () => {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'ctx-route-snapshot-test',
       summary: 'Snapshot for the activeSnapshot return path',
-      next_step: 'Verify the route surfaces it',
+      nextStep: 'Verify the route surfaces it',
       source: 'test',
-      session_id: 'sess-ctx-route',
+      sessionId: 'sess-ctx-route',
       scope: null,
     });
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });

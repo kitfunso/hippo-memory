@@ -52,9 +52,9 @@ function expectedText(): string {
   const snapshot = loadActiveTaskSnapshot(s.hippoRoot, tenantId);
   expect(snapshot).not.toBeNull();
   const events =
-    snapshot!.session_id === null
+    snapshot!.sessionId === null
       ? []
-      : listSessionEvents(s.hippoRoot, tenantId, { session_id: snapshot!.session_id }).map((e) => ({
+      : listSessionEvents(s.hippoRoot, tenantId, { session_id: snapshot!.sessionId }).map((e) => ({
           ...e,
           content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
         }));
@@ -164,9 +164,9 @@ describe('preCompactForCaller', () => {
     const fields = (x: TaskSnapshot | null) => ({
       task: x?.task,
       summary: x?.summary,
-      next_step: x?.next_step,
+      next_step: x?.nextStep,
       source: x?.source,
-      session_id: x?.session_id,
+      session_id: x?.sessionId,
     });
     expect(local?.task).toBe('Fix the flaky login test and mail [email] once it passes.');
     expect(fields(stored)).toEqual(fields(local));
