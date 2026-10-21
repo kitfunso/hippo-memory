@@ -27,6 +27,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import type { RerankerFn } from '../../domain/rerankers/index.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
+import { anthropicLlmFromEnv } from '../../infra/ports.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
  * config.json once. */
@@ -137,7 +138,11 @@ export function cliStdioHost(): McpHost {
     if (callers === undefined) {
       const run = (): Promise<void> =>
         runDetachedStoreRequest(() =>
-          consolidateStore(cliStore(root), { config: cliConfig(root), tenantId: hostTenantId }),
+          consolidateStore(cliStore(root), {
+            config: cliConfig(root),
+            tenantId: hostTenantId,
+            llm: anthropicLlmFromEnv(),
+          }),
         ).then(() => {});
       callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
       byRoot.set(root, callers);

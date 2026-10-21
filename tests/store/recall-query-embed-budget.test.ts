@@ -187,6 +187,7 @@ describe("a recall's query embedding", () => {
     const before = embeddings.requests();
 
     const ranked = await searchBothHybrid(QUERY, ...sharingStores(local, global), {
+      embedderFor: resolveEmbeddingProvider,
       budget: 1_000_000,
       tenantId: TENANT,
       recallScope: {},

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { extractFacts } from '../../src/domain/learn/extract.js';
 
 function mockFetcher(body: string, ok = true): typeof fetch {
@@ -15,7 +16,7 @@ describe('extractFacts', () => {
     ]);
     const fetcher = mockFetcher(response);
 
-    const facts = await extractFacts('some conversation text', { apiKey: 'test', fetcher });
+    const facts = await extractFacts('some conversation text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
     expect(facts).toHaveLength(2);
     expect(facts[0]!.content).toBe('Alice prefers dark roast coffee');
@@ -27,13 +28,13 @@ describe('extractFacts', () => {
 
   it('returns [] on API failure', async () => {
     const fetcher = mockFetcher('ignored', false);
-    const facts = await extractFacts('some text', { apiKey: 'test', fetcher });
+    const facts = await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toEqual([]);
   });
 
   it('returns [] on malformed JSON', async () => {
     const fetcher = mockFetcher('this is not json at all');
-    const facts = await extractFacts('some text', { apiKey: 'test', fetcher });
+    const facts = await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toEqual([]);
   });
 
@@ -45,7 +46,7 @@ describe('extractFacts', () => {
     }));
     const fetcher = mockFetcher(JSON.stringify(tenFacts));
 
-    const facts = await extractFacts('long conversation', { apiKey: 'test', fetcher });
+    const facts = await extractFacts('long conversation', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toHaveLength(8);
   });
 
@@ -53,7 +54,7 @@ describe('extractFacts', () => {
     const fetcher: typeof fetch = () => {
       throw new Error('network down');
     };
-    const facts = await extractFacts('text', { apiKey: 'test', fetcher });
+    const facts = await extractFacts('text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toEqual([]);
   });
 
@@ -64,7 +65,7 @@ describe('extractFacts', () => {
       { content: 42, tags: [], valence: 'neutral' },
     ]);
     const fetcher = mockFetcher(response);
-    const facts = await extractFacts('text', { apiKey: 'test', fetcher });
+    const facts = await extractFacts('text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toHaveLength(1);
     expect(facts[0]!.content).toBe('Alice has a dog named Rex');
   });
@@ -74,7 +75,7 @@ describe('extractFacts', () => {
       { content: 'Alice said something interesting', tags: [], valence: 'unknown_valence' },
     ]);
     const fetcher = mockFetcher(response);
-    const facts = await extractFacts('text', { apiKey: 'test', fetcher });
+    const facts = await extractFacts('text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toHaveLength(1);
     expect(facts[0]!.valence).toBe('neutral');
   });

@@ -1,18 +1,13 @@
 // The one LLM call behind every DAG summary, kept apart from the graph writes so its request bytes are tested on their
 // own.
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import {
-  type AnthropicMessageFailure,
-  describeMessageFailure,
-  sendAnthropicMessage,
-} from '../../base/util/anthropic-messages.js';
+import { describeLlmFailure, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
 
 export interface DagSummaryOptions {
-  apiKey: string;
+  llm: Llm;
   model?: string;
-  fetcher?: typeof fetch;
-  onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
+  onError?: (msg: string, failure?: LlmFailure) => void;
 }
 
 const DAG_SUMMARY_PROMPT =
@@ -39,15 +34,13 @@ export async function generateDagSummary(
   const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecretsStrict(f)}`).join('\n');
   const prompt = DAG_SUMMARY_PROMPT.replace('{label}', redactSecretsStrict(label)).replace('{facts}', factsBlock);
 
-  const reply = await sendAnthropicMessage({
-    apiKey: opts.apiKey,
+  const reply = await opts.llm.send({
     model: opts.model,
     maxTokens: SUMMARY_MAX_TOKENS,
     prompt,
-    fetcher: opts.fetcher,
   });
   if (!reply.ok) {
-    opts.onError?.(describeMessageFailure(reply.failure), reply.failure);
+    opts.onError?.(describeLlmFailure(reply.failure), reply.failure);
     return null;
   }
 

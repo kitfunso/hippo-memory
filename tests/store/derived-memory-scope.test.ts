@@ -1,6 +1,7 @@
 /** EI2 T3/T6/T7: derived memories keep the source scope; briefs never quote a restricted receipt. */
 
 import { describe, it, expect, vi } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -216,8 +217,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-summary');
     const result = await buildDag(sqliteStore(home), [...privFacts, ...pubFacts], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'test-key',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
 
     expect(result.candidateClusters).toBe(2);
@@ -280,8 +280,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-profile');
     const result = await buildEntityProfiles(sqliteStore(home), [...privL2s, ...pubL2s], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
     });
 
     expect(result.profilesCreated).toBe(2);

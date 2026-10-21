@@ -1,5 +1,6 @@
 // The store is not scrubbed at write, so every path that ships memory text off the box must scrub it first.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,18 +64,16 @@ describe('secret redaction before memory text leaves the box', () => {
   it('refine scrubs the merged text, and scrubs a source before cutting it at 400 chars', async () => {
     const source = createMemory(`${'x'.repeat(390)} ${SECRET}`);
     await refineOne(TEXT, [source], {
-      apiKey: 'k',
-      fetcher: capture({ content: [{ text: 'a refined principle' }] }),
+      llm: anthropicLlm({ apiKey: 'k', fetcher: capture({ content: [{ text: 'a refined principle' }] }) }),
     });
     expectScrubbed(1);
   });
 
   it('dag summaries and fact extraction scrub their input', async () => {
     await generateDagSummary(TEXT, [TEXT], {
-      apiKey: 'k',
-      fetcher: capture({ content: [{ text: 'a summary line' }] }),
+      llm: anthropicLlm({ apiKey: 'k', fetcher: capture({ content: [{ text: 'a summary line' }] }) }),
     });
-    await extractFacts(TEXT, { apiKey: 'k', fetcher: capture({ content: [{ text: '[]' }] }) });
+    await extractFacts(TEXT, { llm: anthropicLlm({ apiKey: 'k', fetcher: capture({ content: [{ text: '[]' }] }) }) });
     expectScrubbed(2);
   });
 

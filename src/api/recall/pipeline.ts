@@ -19,6 +19,7 @@ import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
 import { applyReranker } from '../../domain/search/rerank.js';
 import { searchByEngine } from '../../domain/search/engine.js';
 import type { HippoConfig } from '../../base/config/config.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
 import {
   CONFLICT_PEER_MULTIPLIER,
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
@@ -53,6 +54,8 @@ export interface RankRecallCtx extends RankSource {
    * but walks its graph once. */
   global?: RankSource;
   tenantId: string;
+  /** Builds the provider that embeds the query for each store's vector arm. */
+  embedderFor: EmbedderFor;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
 }
@@ -93,23 +96,18 @@ export interface RecallReranker {
 /** A stage rankRecall can stop before, in pipeline order. */
 export type RankStage = 'expand' | 'rerank' | 'salience' | 'outcome' | 'layer';
 
-/** Everything that shapes one ranking, already parsed and validated. */
-export interface RankRecallOptions {
-  query: string;
-  /** Tokens the engines may spend, priced by `cost`. */
-  budget: number;
-  /** Price of one result, usually the tokens its printed line takes. */
-  cost: ResultCost;
-  window: Required<Pick<RecallWindowOptions, 'limit'>>;
-  /** Record a rerank trace step for each score change. */
-  why?: boolean;
+/** The rows a ranking may return, and the scope its boosts favour. */
+export interface RankRecallFilters {
   includeSuperseded: boolean;
   asOf?: string;
   /** `--scope`: unlocks that envelope scope on top of the default-admitted set. */
   explicitScope: string | null;
   /** Scope used for boosting only, never for filtering. */
   activeScope: string | null;
-  search: RecallSearchOptions;
+}
+
+/** The stages after the search, each off until its flag sets it. */
+export interface RankRecallStages {
   graphHops?: RecallGraphHops;
   evcAdaptive?: boolean;
   filterConflicts?: boolean;
@@ -123,6 +121,19 @@ export interface RankRecallOptions {
   /** The caller rejected a flag this stage reads; ranking stops before it so the notes and goal-log rows produced up to
    *  there match the CLI's error path. */
   haltBefore?: RankStage;
+}
+
+/** Everything that shapes one ranking, already parsed and validated. */
+export interface RankRecallOptions extends RankRecallFilters, RankRecallStages {
+  query: string;
+  /** Tokens the engines may spend, priced by `cost`. */
+  budget: number;
+  /** Price of one result, usually the tokens its printed line takes. */
+  cost: ResultCost;
+  window: Required<Pick<RecallWindowOptions, 'limit'>>;
+  /** Record a rerank trace step for each score change. */
+  why?: boolean;
+  search: RecallSearchOptions;
 }
 
 /** Ranked results and what the caller needs to report and persist them. */
@@ -350,7 +361,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
     // stores again.
     return rankBothStores(
       query,
-      { local: vectorSourceOf(ctx), global: vectorSourceOf(ctx.global) },
+      { local: vectorSourceOf(ctx), global: vectorSourceOf({ ...ctx.global, embedderFor: ctx.embedderFor }) },
       { local: pool.local, global: pool.global },
       vectorCandidates,
       {

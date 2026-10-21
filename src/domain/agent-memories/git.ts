@@ -1,5 +1,5 @@
 // The git layout of a project root, which Claude Code, Gemini and Copilot use to name a project's memory folder.
-import type { GitRunner } from '../../base/util/git-runner.js';
+import type { GitRunner } from '../../base/ports/git.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 
 export interface GitLayout {

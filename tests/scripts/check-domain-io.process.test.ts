@@ -43,24 +43,18 @@ describe('check-domain-io', () => {
     file('api/b.ts', "export const x = 1;\nimport * as fs from 'node:fs';\n");
     file('base/util/c.ts', "import * as fs from 'node:fs';\n");
     file('surface/cli/d.ts', "import { spawn } from 'child_process';\n");
-    expect(findDomainIo(dir, new Set())).toEqual({
-      hits: [
-        { file: 'api/b.ts', line: 2, spec: 'node:fs' },
-        { file: 'domain/learn/a.ts', line: 1, spec: 'child_process' },
-      ],
-      stale: [],
-    });
+    expect(findDomainIo(dir)).toEqual([
+      { file: 'api/b.ts', line: 2, spec: 'node:fs' },
+      { file: 'domain/learn/a.ts', line: 1, spec: 'child_process' },
+    ]);
   });
 
-  it('passes an exempt file while it still imports, and fails it once it is clean', () => {
-    const exempt = new Set(['domain/sharing/share.ts']);
-    file('domain/sharing/share.ts', "import * as fs from 'node:fs';\n");
-    expect(findDomainIo(dir, exempt)).toEqual({ hits: [], stale: [] });
-    file('domain/sharing/share.ts', 'export const x = 1;\n');
-    expect(findDomainIo(dir, exempt)).toEqual({ hits: [], stale: ['domain/sharing/share.ts'] });
+  it('fails the file it once exempted: no exemption list exists to put one back on', () => {
+    file('domain/sharing/project-merge.ts', "import * as fs from 'node:fs';\n");
+    expect(findDomainIo(dir)).toEqual([{ file: 'domain/sharing/project-merge.ts', line: 1, spec: 'node:fs' }]);
   });
 
   it('passes on the real src tree', () => {
-    expect(findDomainIo(resolve(__dirname, '..', '..', 'src'))).toEqual({ hits: [], stale: [] });
+    expect(findDomainIo(resolve(__dirname, '..', '..', 'src'))).toEqual([]);
   });
 });

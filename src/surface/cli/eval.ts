@@ -7,6 +7,7 @@ import { memoryList } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
 import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import { folderVectorSource } from '../../entry/folder-search.js';
+import { resolveEmbeddingProvider } from '../../base/embeddings/provider.js';
 import {
   bootstrapCorpus,
   compareSummaries,
@@ -91,7 +92,9 @@ async function runCorpusEval(
     : (numberFlag(flags, 'local-bump') ?? cliConfig(hippoRoot).search.localBump);
 
   return runEval(cases, entries, {
-    stores: isInitialized(globalRoot) ? { local: cliFolder(hippoRoot), global: cliFolder(globalRoot) } : undefined,
+    stores: isInitialized(globalRoot)
+      ? { local: cliFolder(hippoRoot), global: cliFolder(globalRoot), embedderFor: resolveEmbeddingProvider }
+      : undefined,
     source: folderVectorSource({ hippoRoot }),
     mmr: !boolFlag(flags, 'no-mmr'),
     mmrLambda: numberFlag(flags, 'mmr-lambda'),

@@ -1,5 +1,6 @@
 // The recall and context hot paths read each candidate once and a fixed number of rows, however large the store's history grows.
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { resolveEmbeddingProvider } from '../../src/base/embeddings/provider.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -94,13 +95,14 @@ describe('rankRecall with a global store', () => {
       memory('local note 0 on the zephyrine cache eviction'),
     ]);
     const at = (root: string) => ({ store: sqliteStore(root), config: loadConfig(root) });
-    const ctx = { ...at(local), global: at(global), tenantId: 'default' };
+    const ctx = { ...at(local), global: at(global), tenantId: 'default', embedderFor: resolveEmbeddingProvider };
     // Recency reads the clock, so both rankings see one instant.
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local)));
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 
     const reloaded = await searchBothHybrid('zephyrine cache', ...sharingStores(local, global), {
+      embedderFor: resolveEmbeddingProvider,
       budget: 4000,
       cost: (r) => r.tokens,
       explain: false,

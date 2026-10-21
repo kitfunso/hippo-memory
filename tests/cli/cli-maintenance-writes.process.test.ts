@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { adminActor, reject } from '../../src/api/index.js';
 import { refineStore, type RefineOptions } from '../../src/surface/cli/refine-llm.js';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureError } from '../../src/domain/learn/autolearn.js';
@@ -296,8 +297,10 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
     (text: string, status = 200): typeof fetch =>
     async () =>
       new Response(JSON.stringify({ content: [{ text }] }), { status });
-  const refine = (s: Store, opts: Omit<RefineOptions, 'apiKey' | 'tenantId'>) =>
-    s.call(() => refineStore(s.root, { apiKey: 'no-key', tenantId: 'default', ...opts }));
+  const refine = (s: Store, fetcher: typeof fetch, opts: Omit<RefineOptions, 'llm' | 'tenantId'> = {}) =>
+    s.call(() =>
+      refineStore(s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
+    );
 
   /** A merged row, a merged row already refined, and a plain one; the seeded text of each, by id. */
   function seedForRefine(s: Store) {
@@ -316,8 +319,8 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
   it('rewrites a merged row and tags it, skips a refined one, and rewrites both under all', async () => {
     const s = new Store();
     const { merged, refined } = seedForRefine(s);
-    const first = await refine(s, { fetcher: answering('Failed charges are retried three times.') });
-    const all = await refine(s, { fetcher: answering('Each charge is retried, then a receipt is sent.'), all: true });
+    const first = await refine(s, answering('Failed charges are retried three times.'));
+    const all = await refine(s, answering('Each charge is retried, then a receipt is sent.'), { all: true });
     expect(first.result).toEqual({
       scanned: 2,
       refined: 1,
@@ -346,7 +349,7 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
   it('a failed model call leaves the row as it was', async () => {
     const s = new Store();
     const { merged, refined, seeded } = seedForRefine(s);
-    const r = await refine(s, { fetcher: answering('ignored', 500) });
+    const r = await refine(s, answering('ignored', 500));
     expect(r.stderr).toContain('[hippo] warn: refine: API answered HTTP 500');
     expect(r.result).toEqual({
       scanned: 2,
@@ -365,7 +368,7 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
   it('dryRun writes nothing', async () => {
     const s = new Store();
     const { merged, refined, seeded } = seedForRefine(s);
-    const r = await refine(s, { fetcher: answering('Failed charges are retried three times.'), dryRun: true });
+    const r = await refine(s, answering('Failed charges are retried three times.'), { dryRun: true });
     expect(r.result).toMatchObject({
       refined: 1,
       details: [

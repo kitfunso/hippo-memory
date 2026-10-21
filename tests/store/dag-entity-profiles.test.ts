@@ -11,6 +11,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { buildEntityProfiles, rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
@@ -102,8 +103,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const fetcher = makeOkFetcher('synthetic-alice-entity-profile-content-zzz');
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [l2a, l2b, l2c], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'test-key',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
 
     expect(result.profilesCreated).toBe(1);
@@ -152,8 +152,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, l2);
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [l2], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'k',
-      fetcher: makeOkFetcher(),
+      llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
     });
     expect(result.profilesCreated).toBe(0);
     expect(result.candidateClusters).toBe(0);
@@ -169,8 +168,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [parented, unparented1, unparented2], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'k',
-      fetcher: makeOkFetcher(),
+      llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
     });
     // Only the 2 unparented ones cluster
     expect(result.l2sLinked).toBe(2);
@@ -197,8 +195,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
     await buildEntityProfiles(sqliteStore(hippoRoot), [l2a, l2b], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'k',
-      fetcher: makeOkFetcher('alice-clean-profile-content-zzz'),
+      llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher('alice-clean-profile-content-zzz') }),
     });
 
     const db = openHippoDb(hippoRoot);
@@ -284,8 +281,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
     expect(result.rebuilt).toBe(1);
@@ -467,8 +463,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [...tenantAL2s, ...tenantBL2s], {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'k',
-      fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz'),
+      llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz') }),
     });
     // 2 L3s expected — one per tenant cluster (NOT one merged L3 in 'default')
     expect(result.profilesCreated).toBe(2);

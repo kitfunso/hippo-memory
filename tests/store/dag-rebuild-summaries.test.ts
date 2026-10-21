@@ -7,6 +7,7 @@
  * race-loser no-op (E3 MED #5), cap hard-ceiling clamping (E3 R2 must-fix).
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
@@ -43,8 +44,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const fetcher = makeOkFetcher('newly-generated-summary-content-X');
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'test-key',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
       cap: 20,
     });
 
@@ -113,12 +113,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher();
-    await rebuildDirtySummaries(sqliteStore(hippoRoot), { apiKey: 'k', fetcher, cap: 20 });
+    await rebuildDirtySummaries(sqliteStore(hippoRoot), { llm: anthropicLlm({ apiKey: 'k', fetcher }), cap: 20 });
 
     // Second call — should be no-op
     const result2 = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
     expect(result2.attempted).toBe(0);
@@ -165,8 +164,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
 
@@ -192,8 +190,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         forceMarkDirty(hippoRoot, sum.id);
       }
       return rebuildDirtySummaries(sqliteStore(hippoRoot), {
-        apiKey: 'k',
-        fetcher: makeOkFetcher(),
+        llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
         cap: 20,
       });
     });
@@ -222,8 +219,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const fetcher = makeOkFetcher();
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
 
@@ -294,8 +290,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
 
@@ -327,8 +322,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
-      apiKey: 'k',
-      fetcher,
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
     expect(result.failed).toBe(1);

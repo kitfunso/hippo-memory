@@ -9,6 +9,7 @@ import { errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, ContextWith } from '../types.js';
+import { infraOf } from '../infra.js';
 
 // The tags a caller in this process adds from the folder it runs in.
 export { extractPathTags } from '../../domain/search/path-context.js';
@@ -106,12 +107,10 @@ export async function rememberLocally(ctx: Context, input: LocalRememberInput): 
     : { status: 'stored', entry, embedding, warnings };
 }
 
-/** What a caller asks of fact extraction. The key comes from the caller, which read it from its own environment. */
+/** What a caller asks of fact extraction; the model is the one its Context carries. */
 export interface FactExtractionRequest {
   /** The caller asked for extraction (`--extract`); the store's config can turn it on without that. */
   readonly requested: boolean;
-  readonly apiKey?: string;
-  readonly fetcher?: typeof fetch;
 }
 
 /** `off`: nobody asked. `no_key`: asked, with no key to call the model. `ran`: the facts the model gave and each reason
@@ -130,17 +129,16 @@ export async function extractRememberedFacts(
 ): Promise<FactExtraction> {
   const { extraction, defaultHalfLifeDays } = ctx.config;
   if (!request.requested && extraction.enabled !== true) return { status: 'off' };
-  const { apiKey, fetcher } = request;
-  if (!apiKey) return { status: 'no_key' };
+  const { llm } = infraOf(ctx);
+  if (!llm) return { status: 'no_key' };
   const failures: string[] = [];
   let facts = 0;
   try {
     // Loaded on demand, so a write that extracts nothing does not pay for the module.
     const { extractFacts, storeExtractedFacts } = await import('../../domain/learn/extract.js');
     const found = await extractFacts(entry.content, {
-      apiKey,
+      llm,
       model: extraction.model,
-      fetcher,
       onError: (msg) => {
         failures.push(msg);
       },

@@ -6,6 +6,7 @@ import type { HippoConfig } from '../base/config/config.js';
 import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '../store/port.js';
 import type { ConfiguredFolder } from '../domain/search/embed-memories.js';
 import type { CallerState } from './callers.js';
+import type { InfraPorts } from '../base/ports/infra.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -50,6 +51,8 @@ export interface Context {
   /** The root's per-caller state: recall rings, each client's last shown ids, and how a write starts a sleep. Absent, a
    * recall keeps no session history and a write starts no sleep. */
   readonly callers?: CallerState;
+  /** The machine, model and embedder this context reaches past the store; absent, `infraOf` builds the real ones. */
+  readonly infra?: InfraPorts;
 }
 
 /** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader. */

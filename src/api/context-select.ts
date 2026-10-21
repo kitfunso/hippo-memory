@@ -9,6 +9,7 @@ import { rankBothStores } from '../domain/sharing/search-both.js';
 import { evalNow } from '../base/memory/ablation.js';
 import { searchByEngine } from '../domain/search/engine.js';
 import { vectorSourceOf } from '../domain/search/hybrid.js';
+import { infraOf } from './infra.js';
 import type { HybridVectorCandidates, VectorSource } from '../domain/search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../base/rank/search-types.js';
 import { compareScoredResults } from '../base/rank/compare.js';
@@ -375,7 +376,12 @@ async function searchBothStores(
   );
   const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
   const sources = {
-    local: vectorSourceOf({ store: plan.local.store, config: plan.config, onHippoDb: ctx.reach?.isHippoDb }),
+    local: vectorSourceOf({
+      store: plan.local.store,
+      config: plan.config,
+      onHippoDb: ctx.reach?.isHippoDb,
+      embedderFor: infraOf(ctx).embedderFor,
+    }),
     // Its own config.json names the global store's embedding model, read only when the vector arm runs.
     global: globalVectorSource(ctx),
   };
@@ -433,7 +439,12 @@ async function searchLocalRows(
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
   const ctxResults = await searchByEngine(
-    vectorSourceOf({ store, config: ctxConfig, onHippoDb: ctx.reach?.isHippoDb }),
+    vectorSourceOf({
+      store,
+      config: ctxConfig,
+      onHippoDb: ctx.reach?.isHippoDb,
+      embedderFor: infraOf(ctx).embedderFor,
+    }),
     query,
     localEntries,
     usePhysicsCtx ? ctxConfig.physics : null,
@@ -480,5 +491,5 @@ function globalInReach(ctx: Context): GlobalInReach {
 /** The global store's vectors, embedded by the model its own config.json names. */
 function globalVectorSource(ctx: Context): VectorSource {
   const { store, config } = globalInReach(ctx);
-  return vectorSourceOf({ store, config, onHippoDb: true });
+  return vectorSourceOf({ store, config, onHippoDb: true, embedderFor: infraOf(ctx).embedderFor });
 }
