@@ -443,12 +443,13 @@ export interface CreateMemoryOptions {
   tenantId?: string;
 }
 
-/**
- * Create a new memory entry with defaults. Untyped JavaScript callers that omit the options get the compiled default
- * half-life.
- */
-export function createMemory(content: string, options: CreateMemoryOptions): MemoryEntry;
-export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
+/** Create a new memory entry with defaults; hippo's own writers name the half-life base, so the type asks for it. */
+export function createMemory(content: string, options: CreateMemoryOptions): MemoryEntry {
+  return createMemoryWithDefaults(content, options);
+}
+
+/** The published form: every option is optional, and an absent half-life base takes DEFAULT_HALF_LIFE_DAYS. */
+export function createMemoryWithDefaults(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   assertValidMemoryInput(content, options);
 
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
