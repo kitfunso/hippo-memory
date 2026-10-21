@@ -1,14 +1,14 @@
 // Each dashboard read hands JavaScript the same rows on a tenant five times larger: counts come from SQL aggregates, a
 // page from one sorted LIMIT, the scatter from a fixed grid past its point cap.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../src/base/memory/memory.js';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { buildOverview, buildProjectDetail } from '../src/api/dashboard/overview.js';
-import { buildMemoryPage, buildSearch, type MemoryQuery } from '../src/api/dashboard/queries.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { recordStatementsAsync } from './_helpers/count-statements.js';
-import { replaceDetectedConflicts, writeEntriesTogether } from './_helpers/root-forms.js';
-import { dashboardOf, embed, isoAgo, makeStore, NOW, type TmpStore } from './_helpers/dashboard-fixture.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { buildOverview, buildProjectDetail } from '../../src/api/dashboard/overview.js';
+import { buildMemoryPage, buildSearch, type MemoryQuery } from '../../src/api/dashboard/queries.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
+import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { dashboardOf, embed, isoAgo, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';
 
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 const BASE_ROWS = 100;

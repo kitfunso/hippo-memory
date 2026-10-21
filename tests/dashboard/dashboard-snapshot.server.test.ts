@@ -2,25 +2,25 @@
 // that one population.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer, type MemoryEntry } from '../src/base/memory/memory.js';
-import { memoryFacts, seriesDay } from '../src/base/memory/memory-facts.js';
-import { AT_RISK_BELOW } from '../src/base/memory/strength-bands.js';
-import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { storedVectorIds } from '../src/db/vector-store.js';
-import { isLiveMemory } from '../src/api/dashboard/live.js';
-import { buildOverview } from '../src/api/dashboard/overview.js';
-import { buildMemoryPage, type MemoryQuery } from '../src/api/dashboard/queries.js';
-import type { Overview, ProjectSummary } from '../src/api/dashboard/types.js';
-import type { DashboardTotals, ProjectTally } from '../src/store/port/dashboard-reads.js';
-import { dashboardOf, embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
-import { countMatching, recordStatementsAsync } from './_helpers/count-statements.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { memoryFacts, seriesDay } from '../../src/base/memory/memory-facts.js';
+import { AT_RISK_BELOW } from '../../src/base/memory/strength-bands.js';
+import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { storedVectorIds } from '../../src/db/vector-store.js';
+import { isLiveMemory } from '../../src/api/dashboard/live.js';
+import { buildOverview } from '../../src/api/dashboard/overview.js';
+import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
+import type { Overview, ProjectSummary } from '../../src/api/dashboard/types.js';
+import type { DashboardTotals, ProjectTally } from '../../src/store/port/dashboard-reads.js';
+import { dashboardOf, embed, isoAgo, makeStore, NOW, seed, type TmpStore } from '../_helpers/dashboard-fixture.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import {
   listMemoryConflicts,
   replaceDetectedConflicts,
   resolveConflictKeeping,
   loadAllEntries,
-} from './_helpers/root-forms.js';
+} from '../_helpers/root-forms.js';
 
 let store: TmpStore;
 

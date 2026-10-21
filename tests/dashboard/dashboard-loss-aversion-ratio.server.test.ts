@@ -1,8 +1,8 @@
 // HIPPO_LOSS_AVERSION_RATIO reaches the dashboard: its listener and reader thread are roots that read the ratio, so
 // the memory page (built from the snapshot) and the drawer (read fresh) score a negative memory by it.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import type { MemoryDetail, MemoryPage } from '../src/api/dashboard/types.js';
-import { get, isoAgo, makeStore, parse, seed, startDashboard } from './_helpers/dashboard-fixture.js';
+import type { MemoryDetail, MemoryPage } from '../../src/api/dashboard/types.js';
+import { get, isoAgo, makeStore, parse, seed, startDashboard } from '../_helpers/dashboard-fixture.js';
 
 // Faded enough that the negative multiplier stays under the 1.0 clamp, so the ratio shows in the strength.
 const FADED_NEGATIVE = {

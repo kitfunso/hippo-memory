@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, teardown } from './_real-store-guard.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { setup, teardown } from '../_real-store-guard.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 let home: string;
 

@@ -1,12 +1,12 @@
 // The overview's open-conflict count and a memory's conflicts follow HIPPO_TENANT, like the memory list.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as conflicts from '../src/store/sqlite/conflicts.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { replaceDetectedConflicts, writeEntry } from './_helpers/root-forms.js';
-import type { MemoryDetail, Overview } from '../src/api/dashboard/types.js';
-import { adminActor } from '../src/api/index.js';
-import { dashboardMemoryDetail } from '../src/api/dashboard/detail.js';
-import { apiCtx } from './_helpers/api-ctx.js';
+import * as conflicts from '../../src/store/sqlite/conflicts.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
+import type { MemoryDetail, Overview } from '../../src/api/dashboard/types.js';
+import { adminActor } from '../../src/api/index.js';
+import { dashboardMemoryDetail } from '../../src/api/dashboard/detail.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
 import {
   get,
   makeStore,
@@ -15,7 +15,7 @@ import {
   startDashboard,
   type RunningDashboard,
   type TmpStore,
-} from './_helpers/dashboard-fixture.js';
+} from '../_helpers/dashboard-fixture.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

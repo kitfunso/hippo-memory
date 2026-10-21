@@ -1,9 +1,9 @@
 // The read routes of the Health view: overview, project, memory page, detail and search, their validation, and the removed endpoints.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Layer, type MemoryEntry } from '../src/base/memory/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { buildOverview, buildProjectDetail } from '../src/api/dashboard/overview.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { buildOverview, buildProjectDetail } from '../../src/api/dashboard/overview.js';
 import type {
   MemoryDetail,
   MemoryPage,
@@ -12,7 +12,7 @@ import type {
   ScatterGrid,
   ScatterPoints,
   SearchResult,
-} from '../src/api/dashboard/types.js';
+} from '../../src/api/dashboard/types.js';
 import {
   NOW,
   call,
@@ -26,8 +26,8 @@ import {
   startDashboard,
   type RunningDashboard,
   type TmpStore,
-} from './_helpers/dashboard-fixture.js';
-import { writeEntriesTogether } from './_helpers/root-forms.js';
+} from '../_helpers/dashboard-fixture.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
 const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;

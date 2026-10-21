@@ -4,9 +4,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Layer } from '../src/base/memory/memory.js';
-import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
-import { buildOverview } from '../src/api/dashboard/overview.js';
+import { Layer } from '../../src/base/memory/memory.js';
+import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
+import { buildOverview } from '../../src/api/dashboard/overview.js';
 import {
   NOW,
   call,
@@ -21,8 +21,8 @@ import {
   type DashboardView,
   type RunningDashboard,
   type TmpStore,
-} from './_helpers/dashboard-fixture.js';
-import type { MemoryDetail, Overview } from '../src/api/dashboard/types.js';
+} from '../_helpers/dashboard-fixture.js';
+import type { MemoryDetail, Overview } from '../../src/api/dashboard/types.js';
 
 const COALESCE_MS = 10_000;
 const TTL_MS = 5 * 60_000;

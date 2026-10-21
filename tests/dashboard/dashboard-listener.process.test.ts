@@ -4,16 +4,16 @@ import { readFileSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { join, resolve } from 'node:path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { serve } from '../src/server.js';
-import { removeScratch, scratch, type Scratch } from './_helpers/compaction-hooks.js';
-import { sessionCookie, startDashboard } from './_helpers/dashboard-fixture.js';
-import { boundPort } from './_helpers/listen.js';
-import { makeRoot } from './_helpers/make-root.js';
-import { ownStderr } from './_helpers/own-stderr.js';
-import { hippoRun } from './_helpers/spawn-hippo.js';
-import { initTestStore } from './_helpers/store-template.js';
+import { serve } from '../../src/server.js';
+import { removeScratch, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
+import { sessionCookie, startDashboard } from '../_helpers/dashboard-fixture.js';
+import { boundPort } from '../_helpers/listen.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { ownStderr } from '../_helpers/own-stderr.js';
+import { hippoRun } from '../_helpers/spawn-hippo.js';
+import { initTestStore } from '../_helpers/store-template.js';
 
-const CONNECTIONS_CLI = resolve(__dirname, 'fixtures', 'dashboard-connections-cli.mjs');
+const CONNECTIONS_CLI = resolve(__dirname, '..', 'fixtures', 'dashboard-connections-cli.mjs');
 
 const scratches: Scratch[] = [];
 const roots: string[] = [];

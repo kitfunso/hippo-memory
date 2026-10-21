@@ -6,12 +6,12 @@ import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
-import { serveDashboard } from '../src/surface/server/dashboard-listener.js';
-import type { ServerHandle } from '../src/surface/server/types.js';
-import { resolveTenantId } from '../src/surface/server/boot.js';
-import { makeRoot, makeStore } from './_helpers/make-root.js';
-import { sessionCookie } from './_helpers/dashboard-fixture.js';
-import { runCliOut } from './_helpers/run-cli-as.js';
+import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
+import type { ServerHandle } from '../../src/surface/server/types.js';
+import { resolveTenantId } from '../../src/surface/server/boot.js';
+import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { sessionCookie } from '../_helpers/dashboard-fixture.js';
+import { runCliOut } from '../_helpers/run-cli-as.js';
 import {
   createCard,
   claimCard,
@@ -21,7 +21,7 @@ import {
   completeCard,
   heartbeatCard,
   saveSessionHandoff,
-} from './_helpers/root-forms.js';
+} from '../_helpers/root-forms.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

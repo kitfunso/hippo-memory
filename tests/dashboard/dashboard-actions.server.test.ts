@@ -2,9 +2,9 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { request as httpRequest } from 'node:http';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
-import type { MemoryDetail, ResolveResult } from '../src/api/dashboard/types.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
+import type { MemoryDetail, ResolveResult } from '../../src/api/dashboard/types.js';
 import {
   NOW,
   call,
@@ -19,8 +19,8 @@ import {
   type Json,
   type RunningDashboard,
   type TmpStore,
-} from './_helpers/dashboard-fixture.js';
-import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from './_helpers/root-forms.js';
+} from '../_helpers/dashboard-fixture.js';
+import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

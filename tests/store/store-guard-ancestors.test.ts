@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { snapshot, watchedStoreDirs } from './_real-store-guard.js';
+import { snapshot, watchedStoreDirs } from '../_real-store-guard.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

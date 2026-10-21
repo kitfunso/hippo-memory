@@ -3,13 +3,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/base/memory/memory.js';
-import { serveDashboard } from '../src/surface/server/dashboard-listener.js';
-import type { ServerHandle } from '../src/surface/server/types.js';
-import { DASHBOARD_TOKEN, sessionCookie } from './_helpers/dashboard-fixture.js';
-import { makeStore } from './_helpers/make-root.js';
-import { writeEntry } from './_helpers/root-forms.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
+import type { ServerHandle } from '../../src/surface/server/types.js';
+import { DASHBOARD_TOKEN, sessionCookie } from '../_helpers/dashboard-fixture.js';
+import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

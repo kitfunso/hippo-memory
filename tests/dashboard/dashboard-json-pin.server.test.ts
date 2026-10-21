@@ -1,9 +1,9 @@
 // Pins the dashboard reads the golden leaves out, recorded on the snapshot build before bounded reads replaced it:
 // every sort, brushes, case folding past ASCII, tag hits, first-seen project order, strength cut points, a past-cap grid.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../src/base/memory/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { replaceDetectedConflicts, writeEntriesTogether } from './_helpers/root-forms.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
 import {
   embed,
   get,
@@ -11,9 +11,10 @@ import {
   makeStore,
   seed,
   startDashboard,
+  type Json,
   type RunningDashboard,
   type TmpStore,
-} from './_helpers/dashboard-fixture.js';
+} from '../_helpers/dashboard-fixture.js';
 
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 const CONFIDENCES = ['verified', 'observed', 'inferred', 'stale'] as const;
@@ -129,7 +130,7 @@ const READS: readonly string[] = [
 const FILE_OVER = 6_000;
 
 /** Reads the dashboard serves as JSON; the snapshot id differs per run, so it is masked. */
-function parsed(body: string): unknown {
+function parsed(body: string): Json {
   return JSON.parse(body.replace(/"snapshotId":\d+/g, '"snapshotId":"<id>"'));
 }
 

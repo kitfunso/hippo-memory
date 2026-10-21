@@ -2,9 +2,9 @@
 // so the access token in a URL stays out of the log. The committed-write case lives in tests/api/dashboard-detail.server.test.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { serveDashboard } from '../src/surface/server/dashboard-listener.js';
-import type { ServerHandle } from '../src/surface/server/types.js';
-import { DASHBOARD_TOKEN, get, makeStore, type TmpStore } from './_helpers/dashboard-fixture.js';
+import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
+import type { ServerHandle } from '../../src/surface/server/types.js';
+import { DASHBOARD_TOKEN, get, makeStore, type TmpStore } from '../_helpers/dashboard-fixture.js';
 
 let store: TmpStore;
 let dash: ServerHandle;

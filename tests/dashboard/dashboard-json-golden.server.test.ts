@@ -1,9 +1,9 @@
 // Pins the status and JSON body of every dashboard read and write the SPA makes, on a fixed store and clock, so a
 // change to how the dashboard is served moves no byte. Snapshot ids, card ids and card timestamps are masked.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Layer } from '../src/base/memory/memory.js';
-import { quarantineScopeFor } from '../src/domain/trust/quarantine.js';
-import { createCard, replaceDetectedConflicts } from './_helpers/root-forms.js';
+import { Layer } from '../../src/base/memory/memory.js';
+import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
+import { createCard, replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import {
   embed,
   get,
@@ -16,7 +16,7 @@ import {
   type Reply,
   type RunningDashboard,
   type TmpStore,
-} from './_helpers/dashboard-fixture.js';
+} from '../_helpers/dashboard-fixture.js';
 
 const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
 const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;
@@ -123,7 +123,12 @@ const WRITES: ReadonlyArray<readonly [string, Json]> = [
 const mask = masker();
 
 /** The status and the parsed body, so a failure diffs the field that changed; a body that is not JSON stays text. */
-function pinned(path: string, reply: Reply): { status: number; body: unknown } {
+interface Pinned {
+  status: number;
+  body: Json | string;
+}
+
+function pinned(path: string, reply: Reply): Pinned {
   const text = mask(path, reply.body);
   try {
     return { status: reply.status, body: JSON.parse(text) };
