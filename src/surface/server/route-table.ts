@@ -276,7 +276,7 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
   if (match === null) return false;
   const { route, run } = match;
   noteAccess(r.req, { route: routeLabel(route) });
-  // Only a store with worker threads has moved the route's SQLite work; under any other the handler still opens
+  // Only a store with worker threads has moved the route's hippo.db work; under any other the handler still opens
   // hippo.db itself.
   await r.opts.offLoop(() => run(r));
   return true;

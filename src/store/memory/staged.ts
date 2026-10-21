@@ -6,7 +6,7 @@ import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import type { EntryTarget, RawArchive } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
-import { appendAudit, bumpCounter, sqliteNow, tenantKey } from './rows.js';
+import { appendAudit, bumpCounter, hippoDbNow, tenantKey } from './rows.js';
 import { asStored } from './stored-entry.js';
 import type { ArchivedRow, MemoryTables } from './tables.js';
 import { dropOrphanVectors } from './vectors.js';
@@ -41,7 +41,7 @@ const stampedColumns = (e: MemoryEntry): string =>
 /** Stamps updated_at on each new row and each rewritten one, as an upsert does; an UPDATE of only the blanked
  * columns leaves it, as hippo.db's do. */
 function stampUpdates(t: MemoryTables, next: ReadonlyMap<string, MemoryEntry>): void {
-  const now = sqliteNow();
+  const now = hippoDbNow();
   for (const [id, row] of next) {
     const before = t.entries.get(id);
     if (before === row) continue;

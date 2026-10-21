@@ -107,8 +107,8 @@ function settleReplies(worker: Worker, state: ReaderState): Promise<void> {
 
 /** Starts the reader thread for `init`'s tenant; close() lets it close its store and waits for it to exit. */
 export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): DashboardReader {
-  // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of the node:sqlite
-  // warning.
+  // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of Node's
+  // experimental-module warning.
   const worker = new Worker(THREAD_ENTRY, { env: SHARE_ENV, execArgv: ['--no-warnings'], workerData: init });
   // The listener keeps the process alive; the thread alone must not.
   worker.unref();

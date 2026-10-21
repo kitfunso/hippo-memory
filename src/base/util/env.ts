@@ -247,7 +247,7 @@ export const envSleepTimeoutMs = posInt('HIPPO_SLEEP_TIMEOUT_MS');
  * error; 0 for no deadline; base/util/request-scope.ts holds the default. */
 export const envRequestDeadlineMs = nonNegInt('HIPPO_REQUEST_DEADLINE_MS');
 /**
- * How many store calls may wait for one worker thread before the next is refused; store/sqlite/executor.ts holds the
+ * How many store calls may wait for one worker thread before the next is refused; the adapter's executor.ts holds the
  * default.
  */
 export const envStoreQueueMax = posInt('HIPPO_STORE_QUEUE_MAX');

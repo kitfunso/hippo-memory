@@ -1,4 +1,4 @@
-// What every in-memory group shares: SQLite's text order and case folding, the id sequences, the audit append and the
+// What every in-memory group shares: hippo.db's text order and case folding, the id sequences, the audit append and the
 // store-wide counters.
 import type { JsonObject, JsonValue } from '../../base/util/json.js';
 import { parseStoredObject, type StoredJsonSite } from '../../base/util/stored-json.js';
@@ -15,11 +15,11 @@ export const oldestFirst = (a: MemoryEntry, b: MemoryEntry): number =>
 /** A key unique within a tenant, as hippo.db's (tenant_id, x) primary keys are. */
 export const tenantKey = (tenantId: string, key: string): string => `${tenantId}\u0000${key}`;
 
-/** SQLite's LOWER and LIKE fold ASCII letters only. */
+/** hippo.db's LOWER and LIKE fold ASCII letters only. */
 export const asciiFolded = (text: string): string => text.replace(/[A-Z]/g, (c) => c.toLowerCase());
 
 /** datetime('now') as hippo.db writes it: UTC to the second, a space before the time. */
-export const sqliteNow = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ');
+export const hippoDbNow = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ');
 
 /** The id the next row of hippo.db table `table` gets, which is AUTOINCREMENT there; a rolled-back write takes none. */
 export const peekId = (t: MemoryTables, table: string): number => (t.seq.get(table) ?? 0) + 1;

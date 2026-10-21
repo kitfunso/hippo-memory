@@ -83,7 +83,7 @@ export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle>
     });
   });
   setKeepAliveTimeouts(server);
-  // The reader thread closes before the runtime, which closes its held connection last, so that close is SQLite's last.
+  // The reader thread closes before the runtime, which closes its held connection last, so that close is the last.
   const release = async (): Promise<void> => {
     await serving.reader.close();
     await runtime.close();

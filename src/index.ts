@@ -71,7 +71,7 @@ export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
 export type { SleepContext, SleepStore };
 /** Sleeps the whole store under `ctx`, whose store sets the groups a sleep pass works on. */
 export async function sleep(ctx: SleepContext, opts?: SleepOpts): Promise<SleepResult> {
-  // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close SQLite's last, which
+  // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close hippo.db's last, which
   // checkpoints and deletes the WAL.
   return withSharedStoreHandles(() => sleepStore(ctx, opts));
 }

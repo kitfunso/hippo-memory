@@ -25,7 +25,7 @@ export const DEFAULT_LIST_LIMIT = 100;
 // Days of git history `hippo learn --git` and hippo_learn scan when the caller names none.
 export const DEFAULT_LEARN_DAYS = 7;
 
-// Ceiling for a caller-named list page; SQLite `LIMIT ?` and one response's size bound it, and every list surface
+// Ceiling for a caller-named list page; hippo.db's `LIMIT ?` and one response's size bound it, and every list surface
 // shares it.
 export const MAX_LIST_LIMIT = 1000;
 

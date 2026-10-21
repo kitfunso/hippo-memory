@@ -162,7 +162,7 @@ export type RouteEndpoint<R> =
   | { regex: RegExp; handler: (r: R, match: RegExpMatchArray) => Promise<void> };
 
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under another store it runs
- * only with its `storeReady` group; its SQLite work runs on a worker thread when the store has one. */
+ * only with its `storeReady` group; its hippo.db work runs on a worker thread when the store has one. */
 export type Route = { method: string } & StoreStatus &
   (
     | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & PathEndpoint<AuthedRouteRequest>)

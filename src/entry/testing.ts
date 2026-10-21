@@ -40,7 +40,7 @@ export {
   writeIndexMirror,
 } from '../surface/open-store.js';
 
-// The wire forms that read or write hippo.db live here, at the root, so wire-kit.ts stays off the SQLite adapter.
+// The wire forms that read or write hippo.db live here, at the root, so wire-kit.ts stays off the hippo.db adapter.
 export function loadAllEntriesWire(hippoRoot: string): MemoryWire[] {
   return loadAllEntries(hippoRoot).map(toWire);
 }

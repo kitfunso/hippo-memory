@@ -1,6 +1,6 @@
 /** Skill object: an agent-followable `instructions` body plus an optional `trigger`, evolving via supersession.
  *  `skillsMarkdown` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred
- *  (security). `trigger` is stored in `trigger_text` because it is a SQLite reserved keyword. */
+ *  (security). `trigger` is stored in `trigger_text` because it is an SQL reserved keyword. */
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';

@@ -71,7 +71,7 @@ export function selectGraphSeeds(
 }
 
 // Pass 1: take the STRONGEST reaching-seed strength per new neighbor across ALL relations at this depth before
-// committing any to `visited`; marking mid-loop would lock a node to whichever relation SQLite returned first and drop
+// committing any to `visited`; marking mid-loop would lock a node to whichever relation came first and drop
 // a stronger seed's later edge.
 function bestStrengthAtDepth(
   rels: ReadonlyArray<Relation>,
@@ -128,7 +128,7 @@ async function reachedEntityScores(
     const hopFactor = Math.pow(decay, depth);
     const bestStrengthThisDepth = bestStrengthAtDepth(rels, frontierSet, visited, frontierStrength, originStrength);
     // Pass 2: commit strongest-first (then id asc, so deterministic), so the per-hop fanout cap keeps the
-    // highest-scoring neighbors rather than whichever SQLite happened to return.
+    // highest-scoring neighbors rather than whichever the store happened to return.
     const nextFrontier: number[] = [];
     const nextStrength = new Map<number, number>();
     const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
