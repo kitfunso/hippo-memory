@@ -1,5 +1,5 @@
 // What a user sees after upgrading: `hippo serve` says the key rule at start, and a routed CLI write with no key fails with the fix in its text.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFailed } from 'vitest';
 import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -55,21 +55,18 @@ function startServe(extra: Readonly<Record<string, string>> = {}): Promise<Serve
     stops.push(stop);
     let stdout = '';
     let stderr = '';
-    const timer = setTimeout(
-      () => reject(new Error(`no start lines within 30 s. stdout=${stdout} stderr=${stderr}`)),
-      30_000,
-    );
+    // A start that never prints its lines fails at the test timeout; this keeps what it did print.
+    onTestFailed(() => {
+      console.error(`stdout=${stdout} stderr=${stderr}`);
+    });
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8');
     });
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf8');
-      if (!stdout.includes('press Ctrl+C to stop')) return;
-      clearTimeout(timer);
-      resolve({ stdout, stop });
+      if (stdout.includes('press Ctrl+C to stop')) resolve({ stdout, stop });
     });
     child.once('exit', (code) => {
-      clearTimeout(timer);
       reject(new Error(`hippo serve exited early (code=${code}). stdout=${stdout} stderr=${stderr}`));
     });
   });

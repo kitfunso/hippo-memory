@@ -66,8 +66,8 @@ describe('scope-aware context injection', () => {
 
     const scopedMem = parsed.memories.find((m: { id: string }) => m.id === scoped.id);
     const unscopedMem = parsed.memories.find((m: { id: string }) => m.id === unscoped.id);
-    expect(scopedMem).toBeDefined();
-    expect(unscopedMem).toBeDefined();
+    expect(scopedMem?.id).toBe(scoped.id);
+    expect(unscopedMem?.id).toBe(unscoped.id);
     // Scoped memory should have higher score (1.5x boost)
     expect(scopedMem.score).toBeGreaterThan(unscopedMem.score);
   });
@@ -94,8 +94,8 @@ describe('scope-aware context injection', () => {
 
     const scopedMem = parsed.memories.find((m: { id: string }) => m.id === scoped.id);
     const unscopedMem = parsed.memories.find((m: { id: string }) => m.id === unscoped.id);
-    expect(scopedMem).toBeDefined();
-    expect(unscopedMem).toBeDefined();
+    expect(scopedMem?.id).toBe(scoped.id);
+    expect(unscopedMem?.id).toBe(unscoped.id);
     // Mismatched scope (0.5x) should rank lower than neutral (1.0x)
     expect(unscopedMem.score).toBeGreaterThan(scopedMem.score);
   });

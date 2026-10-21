@@ -103,8 +103,6 @@ describe('hybrid recall candidates with stored vectors', () => {
   });
 
   afterEach(() => {
-    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-    vi.stubEnv('OPENAI_API_KEY', undefined);
     vi.unstubAllGlobals();
     for (const d of dirs.splice(0)) removeAfterRequest(d);
   });

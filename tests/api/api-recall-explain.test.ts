@@ -49,8 +49,6 @@ describe('api.recall explain', () => {
     }
     // The boosted (goal-tagged) row carries a goal-boost trace step.
     const boosted = result.results.find((r) => r.id === goalMatch.id);
-    expect(boosted).toBeDefined();
-    expect(boosted!.rerankTrace).toBeDefined();
     expect(boosted!.rerankTrace!.length).toBe(1);
     expect(boosted!.rerankTrace![0].stage).toBe('goal-boost');
     expect(boosted!.rerankTrace![0].scoreAfter).toBe(boosted!.score);

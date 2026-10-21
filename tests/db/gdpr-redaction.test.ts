@@ -101,7 +101,7 @@ describe('GDPR Path A redaction + migration v20', () => {
     const db = openHippoDb(root);
     try {
       const payloadJson = fetchPayloadJson(db, id);
-      expect(payloadJson).toBeDefined();
+      expect(payloadJson).toEqual(expect.any(String));
       const payload = parseJson<RedactedArchivePayload>(payloadJson!);
       expect(payload.redacted).toBe(true);
       expect(payload.tenant_id).toBe('tenant-A');

@@ -47,23 +47,15 @@ function l2norm(v: number[]): number {
 }
 
 const ENV_KEYS = ['OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY'];
-const savedEnv: Record<string, string | undefined> = {};
 
 describe('EmbeddingProvider', () => {
   beforeEach(() => {
     // Embedding-API hosts are egress-blocked in the build sandbox, so every test
     // here uses a mocked fetch; a real integration test is Workstream C.
-    for (const k of ENV_KEYS) {
-      savedEnv[k] = process.env[k];
-      vi.stubEnv(k, undefined);
-    }
+    for (const k of ENV_KEYS) vi.stubEnv(k, undefined);
   });
 
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (savedEnv[k] === undefined) vi.stubEnv(k, undefined);
-      else vi.stubEnv(k, savedEnv[k]);
-    }
     vi.unstubAllGlobals();
   });
 

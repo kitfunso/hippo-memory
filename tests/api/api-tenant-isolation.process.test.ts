@@ -64,7 +64,6 @@ describe('api tenant isolation', () => {
     const db = openHippoDb(home);
     try {
       const row = queryRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
-      expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
     } finally {
       closeHippoDb(db);
@@ -144,14 +143,13 @@ describe('api tenant isolation', () => {
     try {
       const supersedeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'supersede' });
       const supersedeRow = supersedeEvents.find((e) => e.targetId === created.id);
-      expect(supersedeRow).toBeDefined();
       // SAFETY: supersede() writes its audit_log row with metadata={ newId }
       // (see api.ts supersede()), so newId is present on this row.
       expect((supersedeRow!.metadata as { newId?: string }).newId).toBe(result.newId);
 
       const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
       const rememberRow = rememberEvents.find((e) => e.targetId === result.newId);
-      expect(rememberRow).toBeDefined();
+      expect(rememberRow?.targetId).toBe(result.newId);
     } finally {
       closeHippoDb(db);
     }
@@ -179,7 +177,6 @@ describe('api tenant isolation', () => {
         `SELECT tenant_id, superseded_by FROM memories WHERE id = ?`,
         created.id,
       );
-      expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
       expect(row!.superseded_by).toBeNull();
 
@@ -253,7 +250,6 @@ describe('authCreate HTTP body.tenantId ignored', () => {
     const db2 = openHippoDb(home);
     try {
       const row = queryRow<{ tenant_id: string }>(db2, `SELECT tenant_id FROM api_keys WHERE key_id = ?`, body.keyId);
-      expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
     } finally {
       closeHippoDb(db2);

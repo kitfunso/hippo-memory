@@ -29,8 +29,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     // SAFETY: PRAGMA table_info always returns rows with these column names.
     const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; dflt_value: string | null }>;
     const kind = cols.find((c) => c.name === 'kind');
-    expect(kind).toBeDefined();
-    expect(kind!.dflt_value).toContain('distilled');
+    expect(kind?.dflt_value).toContain('distilled');
     closeHippoDb(db);
     removeAfterRequest(home);
   });
@@ -68,7 +67,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     ).run();
     expect(() => db.prepare(`DELETE FROM memories WHERE id='r1'`).run()).toThrow(/raw is append-only/);
     const row = db.prepare(`SELECT id FROM memories WHERE id='r1'`).get();
-    expect(row).toBeDefined();
+    expect(row).toEqual({ id: 'r1' });
     closeHippoDb(db);
     removeAfterRequest(home);
   });
@@ -92,8 +91,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     // SAFETY: PRAGMA table_info always returns rows with these column names.
     const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; notnull: number }>;
     const c = cols.find((x) => x.name === col);
-    expect(c).toBeDefined();
-    expect(c!.notnull).toBe(0);
+    expect(c?.notnull).toBe(0);
     closeHippoDb(db);
     removeAfterRequest(home);
   });

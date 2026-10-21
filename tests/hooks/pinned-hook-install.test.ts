@@ -22,23 +22,15 @@ afterEach(() => {
  * a tmp directory — no signature change on installJsonHooks/uninstallJsonHooks.
  */
 let tmpHome: string;
-let savedUserProfile: string | undefined;
-let savedHome: string | undefined;
 
 beforeEach(() => {
   tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hookinst-'));
   fs.mkdirSync(path.join(tmpHome, '.claude'), { recursive: true });
-  savedUserProfile = process.env.USERPROFILE;
-  savedHome = process.env.HOME;
   vi.stubEnv('USERPROFILE', tmpHome);
   vi.stubEnv('HOME', tmpHome);
 });
 
 afterEach(() => {
-  if (savedUserProfile !== undefined) vi.stubEnv('USERPROFILE', savedUserProfile);
-  else vi.stubEnv('USERPROFILE', undefined);
-  if (savedHome !== undefined) vi.stubEnv('HOME', savedHome);
-  else vi.stubEnv('HOME', undefined);
   fs.rmSync(tmpHome, { recursive: true, force: true });
 });
 

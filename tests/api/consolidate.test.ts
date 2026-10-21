@@ -80,7 +80,7 @@ describe('Decay pass', () => {
 
     // Entry should still be on disk
     const remaining = loadAllEntries(tmpDir, 'default');
-    expect(remaining.find((e) => e.id === ancient.id)).toBeDefined();
+    expect(remaining.find((e) => e.id === ancient.id)?.id).toBe(ancient.id);
   });
 
   it('a dry run reports the same counts and detail lines the real run then produces', async () => {

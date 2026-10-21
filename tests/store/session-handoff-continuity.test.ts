@@ -88,7 +88,7 @@ describe('session handoff create/save/load', () => {
     expect(handoff.summary).toBe('Tests are green, PR is open');
     expect(handoff.nextAction).toBe('Merge after review');
     expect(handoff.artifacts).toEqual(['src/foo.ts', 'src/bar.ts']);
-    expect(handoff.updatedAt).toBeTruthy();
+    expect(handoff.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 
   it('saves a minimal handoff without optional fields', () => {
@@ -191,7 +191,7 @@ describe('loadHandoffById', () => {
         .prepare(`SELECT id FROM session_handoffs WHERE session_id = 'sess-byid' ORDER BY id DESC LIMIT 1`)
         .get() as { id: number } | undefined;
 
-      expect(row).toBeTruthy();
+      expect(row?.id).toBeTypeOf('number');
       const loaded = loadHandoffById(tmpDir, 'default', row!.id);
       expect(loaded).not.toBeNull();
       expect(loaded!.sessionId).toBe('sess-byid');

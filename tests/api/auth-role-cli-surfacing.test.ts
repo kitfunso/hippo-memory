@@ -88,7 +88,6 @@ describe('auth CLI role surfacing', () => {
 
         const items = listApiKeys(t.ctx.hippoRoot, { tenantId: ALL_TENANTS, active: true });
         const legacy = items.find((i) => i.keyId === 'hk_legacy0000000000000000');
-        expect(legacy).toBeDefined();
         expect(legacy!.role).toBe('member'); // fail-safe-to-member
       } finally {
         closeHippoDb(db);

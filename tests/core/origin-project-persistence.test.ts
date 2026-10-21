@@ -222,22 +222,16 @@ describe('v39 migration backfill', () => {
     const dotfiles = path.join(tmpRoot, 'dotfiles');
     fs.mkdirSync(path.join(dotfiles, '.git'), { recursive: true });
     const globalRoot = path.join(dotfiles, 'hippo-global');
-    const origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', globalRoot);
-    try {
-      initTestStore(globalRoot);
-      writeEntry(globalRoot, {
-        ...createMemory('a user-global lesson in a dotfiles-managed store'),
-        originProject: '',
-      });
-      regressStoreToV38(globalRoot);
-      closeHippoDb(openHippoDb(globalRoot)); // migrate
-      const [entry] = loadAllEntries(globalRoot, 'default');
-      expect(entry.originProject).toBe('');
-    } finally {
-      if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
-      else vi.stubEnv('HIPPO_HOME', undefined);
-    }
+    initTestStore(globalRoot);
+    writeEntry(globalRoot, {
+      ...createMemory('a user-global lesson in a dotfiles-managed store'),
+      originProject: '',
+    });
+    regressStoreToV38(globalRoot);
+    closeHippoDb(openHippoDb(globalRoot)); // migrate
+    const [entry] = loadAllEntries(globalRoot, 'default');
+    expect(entry.originProject).toBe('');
   });
 
   it('is idempotent: a second migration pass changes nothing', () => {

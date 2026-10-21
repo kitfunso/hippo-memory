@@ -203,7 +203,6 @@ describe('producer + sync vetoes (real stores)', () => {
   let tmpRoot: string;
   let projA: string;
   let globalStore: string;
-  let origHippoHome: string | undefined;
 
   const SECRET_ROW = 'service api key sk_vendor_deadbeef123456 for the ingest worker';
   const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
@@ -215,16 +214,7 @@ describe('producer + sync vetoes (real stores)', () => {
     initTestStore(projA);
     globalStore = path.join(tmpRoot, 'globalstore');
     initTestStore(globalStore);
-    origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', globalStore);
-  });
-
-  afterEach(() => {
-    if (origHippoHome !== undefined) {
-      vi.stubEnv('HIPPO_HOME', origHippoHome);
-    } else {
-      vi.stubEnv('HIPPO_HOME', undefined);
-    }
   });
 
   it('shareMemory refuses a secret row even with force', async () => {

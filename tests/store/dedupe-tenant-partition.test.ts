@@ -97,12 +97,10 @@ describe('deduplicateStore tenant partition', () => {
     expect(result.pairs.length).toBe(2);
 
     const tenantAPair = result.pairs.find((p) => p.removed === aWeak.id);
-    expect(tenantAPair).toBeDefined();
     expect(tenantAPair?.kept).toBe(aStrong.id);
     expect(tenantAPair?.keptContent).toBe(CONTENT_B);
 
     const tenantBPair = result.pairs.find((p) => p.removed === bWeak.id);
-    expect(tenantBPair).toBeDefined();
     expect(tenantBPair?.kept).toBe(bStrong.id);
     expect(tenantBPair?.keptContent).toBe(CONTENT_A);
 

@@ -1,0 +1,8 @@
+  remember <text>          Store a memory
+    --tag <tag>            Add a tag (repeatable)
+    --error                Tag as error (boosts retention)
+    --pin                  Pin memory (never decays)
+    --verified             Set confidence: verified (default)
+    --observed             Set confidence: observed
+    --inferred             Set confidence: inferred
+    --global               Store in global store ($HIPPO_HOME or ~/.hippo/)

@@ -63,8 +63,8 @@ describe('wmPush', () => {
     expect(item.sessionId).toBe('sess_abc');
     expect(item.taskId).toBe('task_123');
     expect(item.metadata).toEqual({ retries: 3 });
-    expect(item.createdAt).toBeTruthy();
-    expect(item.updatedAt).toBeTruthy();
+    expect(item.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    expect(item.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 
   it('defaults importance to 0 when not provided', () => {
@@ -116,8 +116,7 @@ describe('bounded buffer eviction', () => {
 
     // The high-priority entry should remain
     const highItem = items.find((item) => item.content === 'high-priority');
-    expect(highItem).toBeDefined();
-    expect(highItem!.importance).toBe(0.9);
+    expect(highItem?.importance).toBe(0.9);
   });
 
   it('evicts the oldest of equal entries, even when all share one created_at', async () => {

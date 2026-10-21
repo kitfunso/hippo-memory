@@ -305,7 +305,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       // Cross-check scope ↔ tag agreement: the repo:<owner/name> tag must
       // identify the same repo as the scope's third segment.
       const repoTag = e.tags.find((t) => t.startsWith('repo:'));
-      expect(repoTag).toBeDefined();
+      expect(repoTag).toMatch(/^repo:[^/]+\/[^/]+$/);
       const repoFull = repoTag!.slice('repo:'.length);
       if (e.scope === SCOPE_PUBLIC) {
         expect(repoFull).toBe(PUBLIC_REPO.full_name);
@@ -334,7 +334,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     // ---- (6) No-scope recall denial of a private repo memory -------------
     // Pick the first delivery whose repo was private, then recall its marker.
     const privateDelivery = deliveries.find((d) => d.isPrivate && !toDeleteIds.has(d.deliveryId));
-    expect(privateDelivery).toBeDefined();
+    expect(privateDelivery?.isPrivate).toBe(true);
     const privateMarker = privateDelivery!.markerText;
 
     const noScope = await retrieve(ctx, { query: privateMarker });

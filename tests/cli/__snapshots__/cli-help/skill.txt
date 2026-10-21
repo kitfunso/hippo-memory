@@ -1,0 +1,12 @@
+  skill new "<name>"       Record a skill (reusable agent-followable capability)
+    --instructions "<txt>" The skill body (required)
+    --trigger "<when>"     Optional: when to apply this skill
+  skill list [--status active|superseded|closed|all] [--limit N]
+                           List skills (table is authoritative, survives decay)
+  skill get <id>           Show a skill by its table id
+  skill export             Render active skills as an AGENTS.md/CLAUDE.md markdown block
+  skill supersede <id>     Record a new version that supersedes an active skill
+    --instructions "<txt>" The new skill body (required)
+    --trigger "<when>"     Optional new trigger
+    --change "<summary>"   What changed in this version (the delta note)
+  skill close <id>         Retire (close) an active skill by its table id

@@ -40,17 +40,11 @@ function tmpHome() {
   // so hasGlobal=false inside api.contextGet. Keeps the test local-only and
   // prevents any global writes from leaking into the shared baseline.
   const globalTmp = makeRoot('api-ctx-global', { init: false });
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
     restore: () => {
       removeAfterRequest(home);
-      if (origHippoHome !== undefined) {
-        vi.stubEnv('HIPPO_HOME', origHippoHome);
-      } else {
-        vi.stubEnv('HIPPO_HOME', undefined);
-      }
     },
   };
 }
@@ -171,7 +165,7 @@ describe('api.contextGet', () => {
 
       const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 });
 
-      expect(result.activeSnapshot).toBeTruthy();
+      expect(result.activeSnapshot).toMatchObject({ session_id: 'sess-ctxtest' });
       expect(result.activeSnapshot?.session_id).toBe('sess-ctxtest');
       expect(result.activeSnapshot?.task).toBe('Test task for api.contextGet');
     } finally {

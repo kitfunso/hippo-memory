@@ -1,0 +1,12 @@
+  setup                    One-shot: detect installed AI tools and install their hooks:
+                           claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default), opencode a plugin, codex 2 hooks in
+                           its hooks.json plus a launcher wrapper, copilot 4 hooks, the
+                           MCP server and an instructions block under $COPILOT_HOME
+                           (~/.copilot by default); other tools get a
+                           hint. Then imports each agent's
+                           user-level memories into the global store
+    --all                  Install for every JSON-hook tool, even if not detected
+    --dry-run              Show what would be installed without writing
+    --no-schedule          Skip installing or repairing the daily runner
+    --no-learn             Skip the agent memory import

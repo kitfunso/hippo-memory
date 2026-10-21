@@ -1,0 +1,1 @@
+  inspect <id>             Show full memory detail

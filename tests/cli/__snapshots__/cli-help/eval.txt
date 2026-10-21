@@ -1,0 +1,13 @@
+  eval [<corpus.json>]     Measure recall quality against a test corpus
+    --bootstrap            Generate a synthetic corpus from current memories
+    --out <path>           With --bootstrap, write to file instead of stdout
+    --max-cases <n>        With --bootstrap, cap case count (default: 50)
+    --show-cases           Print per-case details (query, R@10, missed, top 3)
+    --compare <path>       JSON from a prior `eval --json` run; print deltas
+    --no-mmr               Disable MMR for this eval run
+    --mmr-lambda <f>       Override MMR lambda for this run
+    --embedding-weight <f> Override cosine weight (default: 0.6)
+    --local-bump <f>       Local-over-global priority multiplier (default: 1.2)
+    --equal-sources        Shortcut for --local-bump 1.0
+    --min-mrr <f>          Exit non-zero if mean MRR falls below this
+    --json                 Output full summary as JSON

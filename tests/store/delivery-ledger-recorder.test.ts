@@ -134,8 +134,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.stubEnv('HIPPO_HOME', undefined);
-  vi.stubEnv('HIPPO_FAKE_NOW', undefined);
 });
 
 describe('the observer never changes contextGet', () => {

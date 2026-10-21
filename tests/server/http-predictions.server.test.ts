@@ -69,7 +69,6 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     });
     expect(res.status).toBe(201);
     const body = await jsonAs<{ prediction: Prediction }>(res);
-    expect(body.prediction).toBeDefined();
     expect(body.prediction.classTag).toBe('migration-effort');
     expect(body.prediction.claimText).toBe('migration takes 2 days');
     expect(body.prediction.estimateValue).toBe(2);
@@ -153,7 +152,7 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     expect(closed.closureState).toBe('closed');
     expect(closed.actualValue).toBe(3);
     expect(closed.closureNote).toBe('took longer');
-    expect(closed.closedAt).toBeDefined();
+    expect(closed.closedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it('status filter validation: invalid status → 400', async () => {

@@ -1,0 +1,5 @@
+  reject <memory-id>       Tombstone a value so it refuses re-ingestion
+    reject --value "<t>"   Pre-emptive form: tombstone a value not (currently) stored
+    --reason "<why>"       Required. The tombstone stores no content — this
+                           is its only human-readable identity.
+    --global               Reject in the global store

@@ -1,5 +1,5 @@
 // The dashboard's listener: a port it cannot open, the socket deadlines it shares with the API server, and a stop on a signal.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, onTestFailed } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { join, resolve } from 'node:path';
@@ -14,10 +14,6 @@ import { hippoRun } from './_helpers/spawn-hippo.js';
 import { initTestStore } from './_helpers/store-template.js';
 
 const CONNECTIONS_CLI = resolve(__dirname, 'fixtures', 'dashboard-connections-cli.mjs');
-// How long the child gets to reach a state the test waits for.
-const REACH_MS = 20_000;
-// The 15 s `hippo serve` allows a signal shutdown, plus room for a loaded machine to end a process.
-const EXIT_WAIT_MS = 20_000;
 
 const scratches: Scratch[] = [];
 const roots: string[] = [];
@@ -52,7 +48,7 @@ interface Exit {
 interface Watched {
   readonly stderr: () => string;
   readonly output: () => string;
-  /** Settles with the match once stdout holds `pattern`; fails with what the child wrote when it ends or 20 s pass first. */
+  /** Settles with the match once stdout holds `pattern`; fails when the child ends first. */
   readonly printed: (pattern: RegExp) => Promise<RegExpExecArray>;
   readonly exited: Promise<Exit>;
 }
@@ -69,19 +65,20 @@ function watch(child: ChildProcessWithoutNullStreams): Watched {
     stderr += chunk.toString('utf8');
   });
   const output = (): string => `stdout:\n${stdout}\nstderr:\n${stderr}`;
+  // A wait that only the runner's timeout ends would otherwise leave no evidence of what the child did.
+  onTestFailed(() => {
+    console.error(output());
+  });
   // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
   const exited = new Promise<Exit>((done) => child.once('close', (code, signal) => done({ code, signal })));
   const printed = (pattern: RegExp): Promise<RegExpExecArray> =>
     new Promise((done, fail) => {
-      const giveUp = (why: string): void =>
-        fail(new Error(`${why} before the dashboard printed ${pattern}\n${output()}`));
-      const timer = setTimeout(() => giveUp(`${REACH_MS} ms passed`), REACH_MS);
-      void exited.then(({ code, signal }) => giveUp(`the child ended (code ${code}, signal ${signal})`));
+      void exited.then(({ code, signal }) =>
+        fail(new Error(`the child ended (code ${code}, signal ${signal}) before the dashboard printed ${pattern}`)),
+      );
       const check = (): void => {
         const match = pattern.exec(stdout);
-        if (match === null) return;
-        clearTimeout(timer);
-        done(match);
+        if (match !== null) done(match);
       };
       waiting.push(check);
       check();
@@ -148,12 +145,8 @@ describe('hippo dashboard listener', () => {
     expect(overview.status, await overview.text()).toBe(200);
 
     deliverStop(child);
-    const outcome = await Promise.race([
-      watched.exited,
-      new Promise<'still running'>((done) => setTimeout(() => done('still running'), EXIT_WAIT_MS)),
-    ]);
-
-    expect(outcome, watched.output()).toEqual({ code: 0, signal: null });
+    // `hippo serve` allows a signal shutdown 15 s, inside the test timeout; a child that never ends fails there.
+    expect(await watched.exited, watched.output()).toEqual({ code: 0, signal: null });
     expect(JSON.parse(readFileSync(reportFile, 'utf8'))).toEqual({ atSignal: 1, atExit: 0 });
     expect(watched.stderr()).toMatch(/received SIG(INT|TERM), shutting down/);
     expect(watched.stderr()).not.toContain('did not finish within');

@@ -221,7 +221,6 @@ describe('GET /v1/context', () => {
     const body = await jsonAs<{
       activeSnapshot?: { session_id: string; task: string };
     }>(res);
-    expect(body.activeSnapshot).toBeTruthy();
     expect(body.activeSnapshot?.session_id).toBe('sess-ctx-route');
     expect(body.activeSnapshot?.task).toBe('ctx-route-snapshot-test');
   });
@@ -317,8 +316,7 @@ describe('GET /v1/context - ambientState field', () => {
     expect(body.entries).toHaveLength(1);
     // `- **[verified] ambient-route-marker-row** (100%)` and a newline: 49 chars.
     expect(body.tokens).toBe(13);
-    expect(body.ambientState).toBeDefined();
-    expect(body.ambientState!.totalMemories).toBe(1);
+    expect(body.ambientState?.totalMemories).toBe(1);
   });
 
   it('is absent when ambient is off in config, while the existing fields are unchanged', async () => {

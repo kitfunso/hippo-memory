@@ -87,7 +87,7 @@ describe('recall --why rerankTrace', () => {
     const out = await hippo(home, ...WHY_ARGS);
     const lines = out.split('\n');
     const rankingLine = lines.find((l) => l.trim().startsWith('ranking:'));
-    expect(rankingLine, `no ranking line in output:\n${out}`).toBeDefined();
+    expect(rankingLine?.trim(), `no ranking line in output:\n${out}`).toMatch(/^ranking:/);
 
     // Fired stages must appear in pipeline order within the chain.
     const order = ['interference', 'value', 'utility', 'goal-boost', 'retrieval-count-downweight'];
@@ -106,8 +106,7 @@ describe('recall --why rerankTrace', () => {
       results: Array<{ id: string; rerankTrace?: Array<{ stage: string; scoreBefore: number; scoreAfter: number }> }>;
     };
     const hero = parsed.results.find((r) => r.id === heroId);
-    expect(hero, `hero not in results:\n${out}`).toBeDefined();
-    expect(hero!.rerankTrace).toBeDefined();
+    expect(hero?.id, `hero not in results:\n${out}`).toBe(heroId);
     const trace = hero!.rerankTrace!;
     expect(trace.map((s) => s.stage)).toEqual([
       'interference',

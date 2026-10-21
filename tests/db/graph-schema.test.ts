@@ -30,7 +30,7 @@ describe('graph schema v37', () => {
         expect(
           db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(t),
           `missing table ${t}`,
-        ).toBeDefined();
+        ).toEqual({ name: t });
       }
     } finally {
       closeHippoDb(db);
@@ -99,14 +99,14 @@ describe('graph schema v37', () => {
         db
           .prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_memories_graph_referenced_guard'`)
           .get(),
-      ).toBeDefined();
+      ).toEqual({ name: 'trg_memories_graph_referenced_guard' });
       expect(
         db
           .prepare(
             `SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_entities_no_tenant_move_when_referenced'`,
           )
           .get(),
-      ).toBeDefined();
+      ).toEqual({ name: 'trg_entities_no_tenant_move_when_referenced' });
     } finally {
       closeHippoDb(db);
     }

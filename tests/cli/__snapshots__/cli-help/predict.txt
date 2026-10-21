@@ -1,0 +1,14 @@
+  predict "<claim>"        Record a prediction to score against the actual outcome later
+    --class <c>            Reference class (required)
+    --estimate <v>         Numeric estimate
+    --unit <u>             Unit of the estimate
+    --target <YYYY-MM-DD>  When the outcome is due
+  predict close <id>       Close a prediction
+    --state <s>            closed | closed-unknown (required)
+    --actual <v>           The actual value
+    --note "<text>"        Closure note
+  predict list [--class <c>] [--status open|closed|closed-unknown|all] [--limit N]
+                           List predictions (closed and closed-unknown need --class)
+  predict show <id>        Show one prediction
+  predict baserate --class <c>
+                           How past estimates in a class compared with the actuals

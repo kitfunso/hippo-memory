@@ -54,10 +54,6 @@ beforeEach(() => {
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
-afterEach(() => {
-  vi.stubEnv('HIPPO_HOME', undefined);
-});
-
 describe('pinned-only context loads a slice, not the corpus', () => {
   it('returns a pin that sits far outside the recent window', async () => {
     // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.

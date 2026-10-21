@@ -64,8 +64,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     });
 
     const hit = results.find((r) => r.entry.id === trace.id);
-    expect(hit).toBeDefined();
-    expect(hit!.entry.layer).toBe(Layer.Trace);
+    expect(hit?.entry.layer).toBe(Layer.Trace);
   });
 
   it('traces are candidates for the replay pass', async () => {
@@ -114,6 +113,6 @@ describe('Trace layer inherits core memory mechanics', () => {
     const result = await consolidate(tmpDir, { now: new Date() });
     expect(result.dryRun).toBe(false);
     const survivors = loadAllEntries(tmpDir, 'default');
-    expect(survivors.find((e) => e.id === trace.id)).toBeDefined();
+    expect(survivors.find((e) => e.id === trace.id)?.layer).toBe(Layer.Trace);
   });
 });

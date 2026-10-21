@@ -45,7 +45,7 @@ describe('the suite never reaches the real scheduler', () => {
       // The preload line proves the refusing wrapper was live in the child; any other line would be a scheduler call.
       expect(r.calls).toEqual(['preload']);
       const fakeHome = process.env.HIPPO_TEST_TMP_USERHOME;
-      expect(fakeHome).toBeTruthy();
+      expect(fakeHome).toMatch(/[\\/]hippo-test-userhome-\w{6}$/);
       expect(existsSync(join(fakeHome!, '.claude', 'settings.json'))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });

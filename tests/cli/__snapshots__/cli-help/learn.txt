@@ -1,0 +1,4 @@
+  learn                    Learn lessons from repository history
+    --git                  Scan recent git commits for lessons
+    --days <n>             Scan this many days back (default: 7)
+    --repos <paths>        Comma-separated repo paths to scan

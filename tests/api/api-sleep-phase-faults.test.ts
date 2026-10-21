@@ -48,7 +48,6 @@ function newCtx() {
 
   // Per-test HIPPO_HOME isolation (autoShare phase 4 calls initGlobal()).
   const globalTmp = makeRoot('sleep-fault-global', { init: false });
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalTmp);
 
   const ctx = apiCtx(hippoRoot, 'default', adminActor('test:phase-faults'));
@@ -58,8 +57,6 @@ function newCtx() {
     tmpDir,
     restore: () => {
       removeAfterRequest(tmpDir);
-      if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
-      else vi.stubEnv('HIPPO_HOME', undefined);
     },
   };
 }
@@ -123,7 +120,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row!.metadata.errorMessage).toBe('phase 2 fault: deduplicateStore threw');
     // Phase 1 ran successfully → consolidationCount is set (could be 0 if
     // nothing to consolidate, but the assignment-before-throw path was hit).
-    expect(row!.metadata.consolidationCount).toBeDefined();
+    expect(row!.metadata.consolidationCount).toBe(0);
     // dedupCount still 0 (phase 2 threw before assignment)
     expect(row!.metadata.dedupCount).toBe(0);
   });
@@ -143,7 +140,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 3 fault: auditMemories threw');
     // Phases 1+2 completed → dedupCount assigned (0 on empty store is fine)
-    expect(row!.metadata.dedupCount).toBeDefined();
+    expect(row!.metadata.dedupCount).toBe(0);
     // auditDeletedCount still 0 (phase 3 threw before assignment)
     expect(row!.metadata.auditDeletedCount).toBe(0);
   });
@@ -166,7 +163,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 4 fault: autoShare threw');
     // Phases 1-3 completed
-    expect(row!.metadata.auditDeletedCount).toBeDefined();
+    expect(row!.metadata.auditDeletedCount).toBe(0);
     // ambientTotal still 0 (phase 5 didn't run)
     expect(row!.metadata.ambientTotal).toBe(0);
   });
@@ -186,7 +183,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 5 fault: computeAmbientState threw');
     // Phases 1-4 completed
-    expect(row!.metadata.auditDeletedCount).toBeDefined();
+    expect(row!.metadata.auditDeletedCount).toBe(0);
     // ambientTotal still 0 (phase 5 threw before assignment)
     expect(row!.metadata.ambientTotal).toBe(0);
   });

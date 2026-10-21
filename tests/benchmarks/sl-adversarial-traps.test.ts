@@ -30,7 +30,6 @@ describe('adversarial traps schema', () => {
   it('includes the 3 new adversarial categories with required fields', () => {
     for (const id of NEW_IDS) {
       const cat = TRAP_CATEGORIES.find((c) => c.id === id);
-      expect(cat).toBeDefined();
       expect(cat!.lesson.length).toBeGreaterThan(20);
       expect(cat!.tags.length).toBeGreaterThanOrEqual(3);
       expect(cat!.recallQueries.length).toBeGreaterThanOrEqual(2);
@@ -169,7 +168,6 @@ describe('existing-10 categories PRNG-stability vs earlier positions', () => {
     };
     for (const [catId, expectedPositions] of Object.entries(expected)) {
       const tp = TRAP_PLACEMENTS.find((p) => p.category === catId);
-      expect(tp).toBeDefined();
       expect(tp!.positions).toEqual(expectedPositions);
     }
   });

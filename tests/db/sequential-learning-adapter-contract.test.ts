@@ -103,7 +103,7 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       const localDbPath = join(storeDir, '.hippo', 'hippo.db');
       const globalDbPath = join(storeDir, 'hippo.db');
       const dbToOpen = existsSync(localDbPath) ? localDbPath : globalDbPath;
-      expect(existsSync(dbToOpen)).toBeTruthy();
+      expect(existsSync(dbToOpen)).toBe(true);
 
       // Vitest can't resolve `node:sqlite` via ESM import (vite intercepts it),
       // so use createRequire — the same trick src/db/index.ts uses.

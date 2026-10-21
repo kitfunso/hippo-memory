@@ -97,7 +97,6 @@ tool calls and capture the session when it ends, so there is nothing to run
 before you finish.`;
 
 describe('installCopilot and uninstallCopilot', () => {
-  const prev = { copilot: process.env.COPILOT_HOME, hippo: process.env.HIPPO_HOME, vscode: process.env.VSCODE_APPDATA };
   let fake: FakeHomeHandle;
   let copilotHome: string;
   let files: CopilotFiles;
@@ -119,9 +118,6 @@ describe('installCopilot and uninstallCopilot', () => {
     fs.mkdirSync(copilotHome);
   });
   afterEach(() => {
-    vi.stubEnv('COPILOT_HOME', prev.copilot ?? '');
-    vi.stubEnv('HIPPO_HOME', prev.hippo ?? '');
-    vi.stubEnv('VSCODE_APPDATA', prev.vscode ?? '');
     fake.cleanup();
   });
 

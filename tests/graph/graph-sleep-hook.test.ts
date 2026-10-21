@@ -61,7 +61,6 @@ function newCtx(): TestCtx {
   const { base: tmpDir, root: hippoRoot } = makeStore('sleep-hook');
   // Per-test HIPPO_HOME isolation (autoShare phase calls initGlobal()).
   const globalTmp = makeRoot('sleep-hook-global', { init: false });
-  const origHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalTmp);
   const ctx = apiCtx(hippoRoot, T, adminActor('test:sleep-hook'));
   return {
@@ -69,8 +68,6 @@ function newCtx(): TestCtx {
     ctx,
     restore: () => {
       removeAfterRequest(tmpDir);
-      if (origHome !== undefined) vi.stubEnv('HIPPO_HOME', origHome);
-      else vi.stubEnv('HIPPO_HOME', undefined);
     },
   };
 }

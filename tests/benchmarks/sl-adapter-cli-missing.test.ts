@@ -16,10 +16,6 @@ async function loadAdapter(cli: string) {
 }
 
 describe('sequential-learning hippo adapter refuses to run without a working CLI', () => {
-  afterEach(() => {
-    vi.stubEnv('HIPPO_BENCH_CLI', undefined);
-  });
-
   it('init() rejects, names the build step and leaves no temp store when the CLI file is missing', async () => {
     const adapter = await loadAdapter(join(process.cwd(), 'does-not-exist', 'hippo.js'));
     await expect(adapter.init()).rejects.toThrow(/npm run build/);

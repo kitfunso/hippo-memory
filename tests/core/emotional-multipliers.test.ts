@@ -191,7 +191,7 @@ describe('behavioral: env=0 ranking effect', () => {
     const result = await retrieve(ctx, { query: 'shared ranking keyword variant test' });
     expect(result.results.length).toBeGreaterThanOrEqual(valences.length);
     const strength = result.results.find((r) => r.content.includes('variant negative test'))?.strength;
-    expect(strength).toBeDefined();
+    expect(strength).toEqual(expect.any(Number));
     return strength!;
   }
 

@@ -1,0 +1,2 @@
+  dashboard                Open web dashboard for memory health
+    --port <n>             Port to serve on (default: 3333)

@@ -88,13 +88,19 @@ describe('scope grants over HTTP', () => {
 
     const recallDenied = await callTool(member.plaintext, 'hippo_recall', { query: 'kowalski', scope: PRIVATE_SCOPE });
     expect(recallDenied.text).not.toContain('payroll');
-    expect(JSON.parse(recallDenied.text).error).toBeTruthy();
+    expect(JSON.parse(recallDenied.text).error).toEqual({
+      code: -32603,
+      message: `scope ${PRIVATE_SCOPE} requires admin role`,
+    });
     const recallOpen = await callTool(member.plaintext, 'hippo_recall', { query: 'kowalski' });
     expect(recallOpen.text).not.toContain('payroll');
 
     const contextDenied = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: '4000' });
     expect(contextDenied.text).not.toContain('payroll');
-    expect(JSON.parse(contextDenied.text).error).toBeTruthy();
+    expect(JSON.parse(contextDenied.text).error).toEqual({
+      code: -32603,
+      message: `scope ${PRIVATE_SCOPE} requires admin role`,
+    });
 
     const assemble = await get(
       `/v1/sessions/sess_1/assemble?scope=${encodeURIComponent(PRIVATE_SCOPE)}`,

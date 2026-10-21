@@ -78,7 +78,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       const create = runCliSpawned(home, env, 'card', 'create', '--title', 't');
       expect(create.status, create.out).toBe(0);
       const id = create.out.match(/Created card (\S+)/)?.[1];
-      expect(id).toBeTruthy();
+      expect(id).toMatch(/^card_[0-9a-f]+$/);
 
       const handoff = runCliSpawned(home, env, 'handoff', 'create', '--summary', 's', '--card-id', id!);
       expect(handoff.status, handoff.out).toBe(0);
@@ -142,7 +142,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
       const id = create.out.match(/Created card (\S+)/)?.[1];
-      expect(id).toBeTruthy();
+      expect(id).toMatch(/^card_[0-9a-f]+$/);
       const claim = await runCli(home, env, 'card', 'claim', id!, '--runtime', 'r');
       expect(claim.status, claim.out).toBe(0);
 
@@ -162,7 +162,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
       const id = create.out.match(/Created card (\S+)/)?.[1];
-      expect(id).toBeTruthy();
+      expect(id).toMatch(/^card_[0-9a-f]+$/);
 
       const claim = await runCli(home, env, 'card', 'claim', id!, '--runtime');
       expect(claim.status).toBe(1);
@@ -176,7 +176,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
       const id = create.out.match(/Created card (\S+)/)?.[1];
-      expect(id).toBeTruthy();
+      expect(id).toMatch(/^card_[0-9a-f]+$/);
       await runCli(home, env, 'card', 'claim', id!, '--runtime', 'r1');
       await runCli(home, env, 'card', 'review', id!);
 
@@ -258,7 +258,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       const parent = await runCli(home, env, 'card', 'create', '--title', 'parent');
       expect(parent.status, parent.out).toBe(0);
       const parentId = cardIdFrom(parent.out);
-      expect(parentId).toBeTruthy();
+      expect(parentId).toMatch(/^card_[0-9a-f]+$/);
 
       const create = await runCli(
         home,
@@ -278,7 +278,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       );
       expect(create.status, create.out).toBe(0);
       const childId = cardIdFrom(create.out);
-      expect(childId).toBeTruthy();
+      expect(childId).toMatch(/^card_[0-9a-f]+$/);
 
       const list = await runCli(home, env, 'card', 'list', '--status', 'backlog', '--json');
       expect(list.status, list.out).toBe(0);

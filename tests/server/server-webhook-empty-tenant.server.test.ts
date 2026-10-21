@@ -52,8 +52,6 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
   });
 
   afterEach(async () => {
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
-    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
     await handle.stop();
   });
 

@@ -1,0 +1,4 @@
+  supersede <id> "<text>"  Replace a memory with a new version; the old one points at it
+    --layer <layer>        Layer for the new memory (default: the old memory's layer)
+    --tag <tag>            Tag for the new memory (repeatable; default: the old memory's tags)
+    --pin                  Pin the new memory (default: pinned if the old one was)

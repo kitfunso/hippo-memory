@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { vi } from 'vitest';
 import { adminActor } from '../../src/api/index.js';
 import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/domain/agent-memories/report.js';
@@ -29,7 +30,6 @@ export interface World {
   readonly local: string;
   readonly global: string;
   readonly machine: Machine;
-  readonly savedHippoHome: string | undefined;
 }
 
 /** A scratch home, a project with its own store, and HIPPO_HOME pointed at a global store that does not exist yet. */
@@ -47,15 +47,12 @@ export function openWorld(): World {
     local,
     global: join(dir, 'global'),
     machine: { home, env: {}, platform: process.platform, ...REAL_IO },
-    savedHippoHome: process.env.HIPPO_HOME,
   };
-  process.env.HIPPO_HOME = world.global;
+  vi.stubEnv('HIPPO_HOME', world.global);
   return world;
 }
 
 export function closeWorld(w: World): void {
-  if (w.savedHippoHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = w.savedHippoHome;
   removeAfterRequest(w.dir);
 }
 

@@ -48,6 +48,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   closeWorld(w);
+  vi.unstubAllEnvs();
 });
 
 /** A checkout under the world with `url` as its origin, written as git writes `.git/config`. */

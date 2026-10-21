@@ -162,7 +162,6 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
     expect(stored[0]!.tenantId).toBe('tenant-extract');
 
     const persisted = loadEveryTenantEntries(home).find((e) => e.id === stored[0]!.id);
-    expect(persisted).toBeDefined();
-    expect(persisted!.tenantId).toBe('tenant-extract');
+    expect(persisted?.tenantId).toBe('tenant-extract');
   });
 });

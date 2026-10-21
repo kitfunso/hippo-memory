@@ -49,7 +49,10 @@ beforeEach(() => {
   w = openWorld();
   dir = projectNotes(w);
 });
-afterEach(() => closeWorld(w));
+afterEach(() => {
+  closeWorld(w);
+  vi.unstubAllEnvs();
+});
 
 const sync = (): Promise<ImportReport> =>
   importForStore(w.local, {

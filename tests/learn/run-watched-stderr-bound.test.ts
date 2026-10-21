@@ -36,7 +36,9 @@ describe('runWatched', () => {
   });
 
   it('kills a command that passes its deadline and rejects with a typed error', async () => {
-    const err = await runWatched([process.execPath, '-e', 'setTimeout(() => {}, 3000)'], 300).catch((e: Error) => e);
+    // A child that never exits on its own, so only the deadline can end it.
+    const forever = 'setInterval(() => {}, 1 << 30)';
+    const err = await runWatched([process.execPath, '-e', forever], 300).catch((e: Error) => e);
     expect(err).toBeInstanceOf(RunWatchedTimeoutError);
     expect(err).toMatchObject({ deadlineMs: 300 });
   });

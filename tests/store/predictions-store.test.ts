@@ -68,8 +68,7 @@ describe('predictions store (first-class object)', () => {
       const memRow = db.prepare(`SELECT id, content, tags_json FROM memories WHERE id = ?`).get(pred.memoryId!) as
         | { id: string; content: string; tags_json: string }
         | undefined;
-      expect(memRow).toBeDefined();
-      expect(memRow!.content).toBe('migration takes 2 days');
+      expect(memRow?.content).toBe('migration takes 2 days');
       // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
       // writeEntry/savePrediction in this codebase.
       const tags = JSON.parse(memRow!.tags_json) as string[];
@@ -97,8 +96,7 @@ describe('predictions store (first-class object)', () => {
     expect(closed.closureState).toBe('closed');
     expect(closed.actualValue).toBe(0.4);
     expect(closed.closureNote).toBe('higher than expected');
-    expect(closed.closedAt).toBeDefined();
-    expect(closed.closedAt).not.toBeNull();
+    expect(closed.closedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 
     // Audit row landed
     const db = openHippoDb(home);

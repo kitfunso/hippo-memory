@@ -1,0 +1,3 @@
+  provenance               Provenance coverage gate for kind='raw' rows
+    --json                 Output as JSON
+    --strict               Exit non-zero when coverage < 100%

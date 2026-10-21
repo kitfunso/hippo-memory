@@ -381,7 +381,7 @@ describe('typed objects over HTTP, one shared store', () => {
   it('a policy made with no validFrom starts at the instant it was created', async () => {
     const made = await api.send('POST', '/v1/policies', { policyName: 'Access', policyText: 'Two reviewers' });
     expect(fieldIn(made, 'validFrom')).toBe(fieldIn(made, 'createdAt'));
-    expect(fieldIn(made, 'createdAt')).toBeDefined();
+    expect(fieldIn(made, 'createdAt')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 });
 

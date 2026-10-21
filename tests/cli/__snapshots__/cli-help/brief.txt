@@ -1,0 +1,11 @@
+  brief new "<repo>"       Record a repo-scoped project brief
+    --summary "<text>"     The brief body (required)
+  brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
+                           List project briefs (table is authoritative, survives decay)
+  brief get <id>           Show a project brief by its table id
+  brief supersede <id>     Record a new version that supersedes an active brief
+    --summary "<text>"     The new brief body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  brief close <id>         Retire (close) an active project brief by its table id
+  brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
+    --dry-run              Print the assembled brief without writing it

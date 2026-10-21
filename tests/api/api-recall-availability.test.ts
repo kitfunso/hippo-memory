@@ -78,13 +78,11 @@ describe('api.recall availabilityHint', () => {
   });
   afterEach(() => {
     removeAfterRequest(root);
-    vi.stubEnv('HIPPO_AVAILABILITY', undefined);
   });
 
   it('fires and emits exactly one audit row on a recency-biased recall', async () => {
     seedFiringFixture(root);
     const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
-    expect(result.availabilityHint).toBeDefined();
     expect(result.availabilityHint!.recentCount).toBe(4);
     expect(result.availabilityHint!.returnedCount).toBe(4);
     expect(result.availabilityHint!.olderCandidatesPassedOver).toBeGreaterThanOrEqual(3);
@@ -119,7 +117,6 @@ describe('api.recall availabilityHint', () => {
     // No scope on the recall = default-deny private rows. With the fix (pool=entries)
     // only the 6 public olds count; the buggy pool=all would have counted 9.
     const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
-    expect(result.availabilityHint).toBeDefined();
     expect(result.availabilityHint!.olderCandidatesPassedOver).toBe(6);
   });
 

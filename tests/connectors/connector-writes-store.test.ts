@@ -163,7 +163,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       ]);
       return result;
     });
-    expect(held.quarantined).toBeDefined();
+    expect(held.quarantined).toEqual({ reason: expect.any(String) });
     expect(memory.records()).toEqual([
       {
         tenantId: TENANT_A,

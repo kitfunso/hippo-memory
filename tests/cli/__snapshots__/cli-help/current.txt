@@ -1,0 +1,3 @@
+  current <sub>            Show compact current state for agent injection
+    current show           Active task + recent session events (default)
+      --json               Output as JSON

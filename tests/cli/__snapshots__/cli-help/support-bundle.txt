@@ -1,0 +1,4 @@
+  support-bundle           Write a redacted JSON file for a support ticket: versions, doctor,
+                           config without secrets, store counts, log names; never memory text
+    --out <file>           Where to write it (default: hippo-support-<time>.json here)
+    --include-logs         Add the last 200 lines of each hippo log, known secret shapes removed

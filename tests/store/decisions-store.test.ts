@@ -92,8 +92,7 @@ describe('decisions store (first-class object)', () => {
         `SELECT content, tags_json, source FROM memories WHERE id = ?`,
         d.memoryId!,
       );
-      expect(memRow).toBeDefined();
-      expect(memRow!.content).toContain('use Postgres');
+      expect(memRow?.content).toContain('use Postgres');
       expect(memRow!.content).toContain('Context: scale and JSONB');
       expect(memRow!.source).toBe('decision');
       expect(parseJson<string[]>(memRow!.tags_json)).toContain('decision');

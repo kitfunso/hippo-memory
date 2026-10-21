@@ -1,0 +1,14 @@
+  invalidate "<pattern>"   Actively weaken memories matching an old pattern
+                           (content overlap, or a tag EXACTLY equal to the
+                           full pattern - never token-level tag matching)
+    --id <memory-id>       Invalidate exactly one memory (instead of a pattern)
+    --dry-run              Preview what would be hit; writes nothing
+                           Note: a pattern equal to the system tag
+                           'invalidated' re-weakens previously invalidated
+                           memories - preview with --dry-run first
+    --reason "<why>"       Optional: what replaced it
+  invalidate --churn       FE2: tag memories 'churn-stale' whose named file
+                           changed or was deleted, or whose named symbol or
+                           npm script was removed, in this repo's git history
+                           since the memory was stored or confirmed
+    --dry-run              Preview what would be tagged; writes nothing

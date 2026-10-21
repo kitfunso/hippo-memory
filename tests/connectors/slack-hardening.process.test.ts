@@ -181,7 +181,7 @@ describe('Slack hardening + migration v19', () => {
         expect(rows[0].bucket).toBe('unroutable');
         expect(rows[0].team_id).toBe('TFOREIGN');
         expect(rows[0].tenant_id).toBe('__unroutable__');
-        expect(rows[0].signature).toBeTruthy();
+        expect(rows[0].signature).toMatch(/^v0=[0-9a-f]{64}$/);
         expect(rows[0].slack_timestamp).toBe(ts);
       } finally {
         closeHippoDb(db);
@@ -205,7 +205,7 @@ describe('Slack hardening + migration v19', () => {
       eventId: 'EvRace',
     });
     expect(r1.status).toBe('ingested');
-    expect(r1.memoryId).toBeTruthy();
+    expect(r1.memoryId).toMatch(/^mem_[0-9a-f]+$/);
 
     // Second call with same eventId: fast-path pre-check returns duplicate
     // immediately. The plan stop-condition documents this: "the existing
@@ -364,11 +364,10 @@ describe('Slack hardening + migration v19', () => {
     expect(result.ok).toBe(true);
     expect(result.status).toBe('ingested');
     expect(result.retryCount).toBe(1);
-    expect(result.memoryId).toBeTruthy();
+    expect(result.memoryId).toMatch(/^mem_[0-9a-f]+$/);
 
     // Memory exists.
     const created = loadAllEntries(root, 'default').find((e) => e.id === result.memoryId);
-    expect(created).toBeDefined();
     expect(created?.kind).toBe('raw');
 
     // DLQ row has retried_at + retry_count = 1.
@@ -379,7 +378,7 @@ describe('Slack hardening + migration v19', () => {
         retried_at?: string;
         retry_count?: number | bigint;
       };
-      expect(after.retried_at).toBeTruthy();
+      expect(after.retried_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
       expect(Number(after.retry_count)).toBe(1);
     } finally {
       closeHippoDb(db);

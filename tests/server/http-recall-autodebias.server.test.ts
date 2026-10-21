@@ -51,7 +51,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await handle.stop();
   rmSync(home, { recursive: true, force: true });
-  vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
 });
 
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -68,10 +67,9 @@ describe('HTTP /v1/memories planningFallacyHint', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=${q}`);
     expect(res.status).toBe(200);
     const body = await jsonAs<Partial<RecallResult>>(res);
-    expect(body.planningFallacyHint).toBeDefined();
     const { planningFallacyHint: hint } = body;
     if (hint === undefined) {
-      throw new Error('unreachable: expect(body.planningFallacyHint).toBeDefined() above guarantees this');
+      throw new Error('planningFallacyHint missing from the response');
     }
     // Wire-shape: camelCase fields per _Base.alias_generator=to_camel parity.
     expect(hint.classTag).toBe('migration-effort');

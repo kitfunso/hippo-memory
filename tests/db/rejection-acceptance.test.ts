@@ -393,11 +393,9 @@ describe('consolidation-loop fix: merge tombstone check', () => {
     // untouched (the demotion loop never ran for this cluster).
     const e1After = allAfter.find((e) => e.id === e1.id);
     const e2After = allAfter.find((e) => e.id === e2.id);
-    expect(e1After).toBeDefined();
-    expect(e2After).toBeDefined();
-    expect(e1After!.layer).toBe(Layer.Episodic);
-    expect(e2After!.layer).toBe(Layer.Episodic);
-    expect(e1After!.halfLifeDays).toBe(e1.halfLifeDays);
+    expect(e1After?.layer).toBe(Layer.Episodic);
+    expect(e2After?.layer).toBe(Layer.Episodic);
+    expect(e1After?.halfLifeDays).toBe(e1.halfLifeDays);
     expect(e2After!.halfLifeDays).toBe(e2.halfLifeDays);
 
     const dbAfter = openHippoDb(home);
@@ -536,7 +534,7 @@ describe('auto-promoted trace tombstone check', () => {
     expect(firstResult.promotedTraces).toBe(1);
 
     const traceBefore = loadEveryTenantEntries(home).find((e) => e.layer === Layer.Trace);
-    expect(traceBefore).toBeDefined();
+    expect(traceBefore?.layer).toBe(Layer.Trace);
 
     await api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
     expect(readEntry(home, traceBefore!.id)).toBeNull();
@@ -660,8 +658,7 @@ describe('merge tombstone check uses the destination tenant', () => {
     expect(result.semanticCreated).toBe(1);
     const allAfter = loadEveryTenantEntries(home);
     const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
-    expect(semantic).toBeDefined();
-    expect(semantic!.tenantId).toBe('tenant-a');
+    expect(semantic?.tenantId).toBe('tenant-a');
   });
 });
 

@@ -35,17 +35,11 @@ afterEach(() => {
 
 function tmpHome() {
   const home = makeRoot('api-recall-noside');
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       removeAfterRequest(home);
-      if (origHippoHome !== undefined) {
-        vi.stubEnv('HIPPO_HOME', origHippoHome);
-      } else {
-        vi.stubEnv('HIPPO_HOME', undefined);
-      }
     },
   };
 }

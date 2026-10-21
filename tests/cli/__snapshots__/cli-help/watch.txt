@@ -1,0 +1,1 @@
+  watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)

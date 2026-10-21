@@ -70,8 +70,8 @@ describe('loadSearchEntries bm25_score', () => {
     const results = loadSearchEntries(root, 'alpha beta', 200, 'default');
     const both = results.find((e) => e.content === 'alpha beta');
     const one = results.find((e) => e.content === 'alpha by itself');
-    expect(both?.bm25Score).toBeDefined();
-    expect(one?.bm25Score).toBeDefined();
+    expect(both?.bm25Score).toBeTypeOf('number');
+    expect(one?.bm25Score).toBeTypeOf('number');
     expect(both!.bm25Score!).toBeLessThan(one!.bm25Score!);
   });
 

@@ -31,6 +31,10 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 
 oneRequestPerTest();
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const INIT = ['init', '--no-hooks', '--no-schedule', '--no-learn'];
 
 /** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test as execFileSync threw. */
@@ -53,17 +57,11 @@ function disableEmbeddings(storeDir: string) {
 
 function tmpHome() {
   const home = makeRoot('recall-trace-wiring');
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       removeAfterRequest(home);
-      if (origHippoHome !== undefined) {
-        vi.stubEnv('HIPPO_HOME', origHippoHome);
-      } else {
-        vi.stubEnv('HIPPO_HOME', undefined);
-      }
     },
   };
 }
@@ -327,10 +325,6 @@ describe('CLI printRecall — trace wiring', () => {
     vi.stubEnv('HIPPO_HOME', hippoRoot);
   });
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it('writes ONE trace (pipeline=cli) at hippoRoot + last_trace_id, atomically with last_retrieval_ids', async () => {
     await hippo(hippoRoot, ...INIT);
     await hippo(hippoRoot, 'remember', 'cli-trace-target epsilon fact');
@@ -367,8 +361,7 @@ describe('CLI printRecall — trace wiring', () => {
     const traces = traceRows(localStore, 'cli');
     expect(traces).toHaveLength(2);
     const zeroTrace = traces.find((t) => t.id !== baselineTraceId);
-    expect(zeroTrace).toBeDefined();
-    expect(zeroTrace!.result_count).toBe(0);
+    expect(zeroTrace?.result_count).toBe(0);
 
     // SAFETY: recall_traces.id is an INTEGER PRIMARY KEY; node:sqlite
     // returns it as a JS number for values within safe-integer range.
@@ -414,10 +407,6 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     vi.stubEnv('HIPPO_SESSION_ID', '');
     vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
   it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', async () => {

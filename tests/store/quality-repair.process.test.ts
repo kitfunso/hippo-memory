@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -32,6 +32,9 @@ const FRAGMENT = 'if the build fails';
 let root: string;
 beforeEach(() => {
   root = makeRoot('quality-repair');
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 function seedIn(store: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {

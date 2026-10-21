@@ -1,6 +1,7 @@
 // withTrialScope undoes every write; withWriteScope's busyWaitMs reaches the lock wait. Real SQLite; the lock holder is a child process.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
+import type { Writable } from 'node:stream';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -20,8 +21,10 @@ beforeEach(() => {
   root = makeRoot('trial-scope');
 });
 afterEach(async () => {
+  holderStdin?.end();
   await holder;
   holder = null;
+  holderStdin = null;
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -89,18 +92,22 @@ const HOLDER = `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[2]);
 db.exec('BEGIN IMMEDIATE');
+const release = () => { db.exec('COMMIT'); db.close(); };
+if (process.argv[3]) setTimeout(release, Number(process.argv[3]));
+else process.stdin.once('end', release).resume();
 process.stdout.write('held');
-setTimeout(() => { db.exec('COMMIT'); db.close(); }, Number(process.argv[3]));
 `;
 
 let holder: Promise<void> | null = null;
+let holderStdin: Writable | null = null;
 
-async function holdWriteLock(holdMs: number): Promise<void> {
+/** Takes the write lock in another process until the test ends, or for `holdMs` when the waiter blocks this thread. */
+async function holdWriteLock(holdMs?: number): Promise<void> {
   const script = path.join(root, 'holder.cjs');
   fs.writeFileSync(script, HOLDER);
-  const child = spawn(process.execPath, [script, path.join(root, 'hippo.db'), String(holdMs)], {
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
+  const args = [script, path.join(root, 'hippo.db'), ...(holdMs === undefined ? [] : [String(holdMs)])];
+  const child = spawn(process.execPath, args, { stdio: ['pipe', 'pipe', 'inherit'] });
+  holderStdin = child.stdin;
   holder = new Promise<void>((resolve) => {
     child.on('close', () => resolve());
   });
@@ -115,6 +122,7 @@ describe('withWriteScope busyWaitMs', () => {
     const db = openHippoDb(root);
     try {
       db.exec('PRAGMA busy_timeout = 0');
+      // The wait blocks this thread, so the lock goes on the holder's own clock while it waits.
       await holdWriteLock(600);
       withWriteScope(
         db,
@@ -137,7 +145,7 @@ describe('withWriteScope busyWaitMs', () => {
     try {
       expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number })?.timeout).toBe(DEFAULT_BUSY_WAIT_MS);
       db.exec('PRAGMA busy_timeout = 0');
-      await holdWriteLock(1500);
+      await holdWriteLock();
       vi.spyOn(Date, 'now').mockImplementation(() => clock);
       vi.spyOn(Atomics, 'wait').mockImplementation(() => {
         waits += 1;
@@ -165,7 +173,7 @@ describe('withWriteScope busyWaitMs', () => {
     const db = openHippoDb(root);
     try {
       db.exec('PRAGMA busy_timeout = 0');
-      await holdWriteLock(600);
+      await holdWriteLock();
       const attempt = (): void =>
         withWriteScope(
           db,

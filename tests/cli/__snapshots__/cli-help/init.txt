@@ -1,0 +1,9 @@
+  init                     Create .hippo/ structure in current directory
+    --scan [dir]           Find all git repos under dir (default: ~) and init each
+    --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
+    --global               Init the global store ($HIPPO_HOME or ~/.hippo/)
+    --no-hooks             Skip auto-detecting and installing agent hooks
+                           (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
+    --no-schedule          Skip auto-creating the machine-level daily runner
+    --no-learn             Skip seeding memories from git history and importing
+                           coding agents' own memories (every init imports those)

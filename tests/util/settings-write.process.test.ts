@@ -21,7 +21,10 @@ let env: FakeHomeHandle;
 beforeEach(() => {
   env = withFakeHome('hippo-settings-write-');
 });
-afterEach(() => env.cleanup());
+afterEach(() => {
+  env.cleanup();
+  vi.unstubAllEnvs();
+});
 
 function seed(): string {
   const { settings: file } = resolveJsonHookPaths('claude-code');
@@ -30,9 +33,9 @@ function seed(): string {
   return file;
 }
 
-/** A child that opens `file` for reading and keeps it open for `ms`; resolves once the file is held. */
-async function holdOpen(file: string, ms: number) {
-  const script = `const fs = require('fs'); const fd = fs.openSync(process.argv[1], 'r'); console.log('held'); setTimeout(() => fs.closeSync(fd), ${ms});`;
+/** A child that opens `file` for reading and keeps it open until the test kills it; resolves once the file is held. */
+async function holdOpen(file: string) {
+  const script = `const fs = require('fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
   const child = spawn(process.execPath, ['-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   await once(child.stdout, 'data');
   return child;
@@ -41,11 +44,13 @@ async function holdOpen(file: string, ms: number) {
 // How long hippo retries a refused rename before it writes in place.
 const RETRY_BUDGET_MS = 1_000;
 
-/** Puts the retry on a clock the test owns: each pause moves that clock on and returns at once. Answers the total paused, in ms. */
-function skipPauses(): () => number {
+/** Puts the retry on a clock the test owns: each pause runs `onPause`, moves that clock on and returns at once. Answers
+ * the total paused, in ms. */
+function skipPauses(onPause: () => void = () => undefined): () => number {
   let now = Date.now();
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   const pauses = vi.spyOn(Atomics, 'wait').mockImplementation((_cells, _index, _value, ms = 0) => {
+    onPause();
     now += ms;
     return 'timed-out';
   });
@@ -58,20 +63,31 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
     syncBuiltinESMExports();
   });
 
-  it('waits for the program to let go, then writes', async () => {
+  it('waits for the program to let go, then writes', () => {
     const file = seed();
-    const holder = await holdOpen(file, 300);
+    // This process holds the file and lets go at hippo's first pause, so the retry, not a race, decides what happens.
+    let held: number | undefined = fs.openSync(file, 'r');
+    const letGo = (): void => {
+      if (held !== undefined) fs.closeSync(held);
+      held = undefined;
+    };
+    const pausedMs = skipPauses(letGo);
 
-    expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
+    try {
+      expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
+    } finally {
+      letGo();
+    }
 
-    await once(holder, 'exit');
+    // One 10 ms pause, then the rename: an in-place write would come only after the whole retry budget.
+    expect(pausedMs()).toBe(10);
     expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
   });
 
   it('after the retry, writes in place when the program only has the file open for reading', async () => {
     const file = seed();
-    const holder = await holdOpen(file, 10_000);
+    const holder = await holdOpen(file);
     const pausedMs = skipPauses();
 
     try {
@@ -91,7 +107,7 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
     const file = seed();
     const target = fs.realpathSync(file);
     const write = fs.writeFileSync.bind(fs);
-    const holder = await holdOpen(file, 10_000);
+    const holder = await holdOpen(file);
     vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
       if (dest === target) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
       write(dest, data, options);

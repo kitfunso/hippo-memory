@@ -31,23 +31,21 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 
 oneRequestPerTest();
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function tmpHome() {
   const home = makeRoot('df3');
   // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir so
   // hasGlobal=false inside api.contextGet (same pattern as api-context.test.ts).
   const globalTmp = makeRoot('df3-global', { init: false });
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
     restore: () => {
       removeAfterRequest(home);
       rmSync(globalTmp, { recursive: true, force: true });
-      if (origHippoHome !== undefined) {
-        vi.stubEnv('HIPPO_HOME', origHippoHome);
-      } else {
-        vi.stubEnv('HIPPO_HOME', undefined);
-      }
     },
   };
 }
@@ -446,10 +444,6 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
     hippoDir = path.join(tmpDir, '.hippo');
   });
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   /** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
   async function runHippo(args: string[]): Promise<string> {
     vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
@@ -506,21 +500,17 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
 describe('pinned budget reserve dedupes mirrored entries', () => {
   let home: string;
   let globalTmp: string;
-  let origHippoHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('df3-dedupe');
     // An INITIALIZED global store, so api.contextGet takes the hasGlobal path
     // and pinnedGlobal is populated.
     globalTmp = makeRoot('df3-dedupe-global');
-    origHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HIPPO_HOME', globalTmp);
   });
 
   afterEach(() => {
     removeAfterRequest(home);
-    if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
-    else vi.stubEnv('HIPPO_HOME', undefined);
   });
 
   it('a pin mirrored in local+global reserves its cost ONCE, so a recent entry still fits', async () => {

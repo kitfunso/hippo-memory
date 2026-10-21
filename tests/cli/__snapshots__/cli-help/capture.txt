@@ -1,0 +1,9 @@
+  capture                  Extract memories from conversation text
+    --stdin                Read from piped input
+    --file <path>          Read from a file
+    --last-session         Read the transcript a hook names on stdin, else the newest
+                           Claude Code one from any project
+    --transcript <path>    Explicit transcript path (implies --last-session)
+    --log-file <path>      Tee output to a log file (paired with 'hippo last-sleep')
+    --dry-run              Preview without writing
+    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)

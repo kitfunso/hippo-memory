@@ -100,12 +100,10 @@ describe('JSON hook installer', () => {
       const compactEntry = settings.hooks.SessionStart.find((e: { hooks: Array<{ command: string }> }) =>
         e.hooks[0].command.includes('hippo compact-resume'),
       );
-      expect(compactEntry).toBeDefined();
       expect(compactEntry.matcher).toBe('compact');
       const lastSleepEntry = settings.hooks.SessionStart.find((e: { hooks: Array<{ command: string }> }) =>
         e.hooks[0].command.includes('hippo last-sleep'),
       );
-      expect(lastSleepEntry).toBeDefined();
       expect(lastSleepEntry.matcher).toBeUndefined();
     });
 

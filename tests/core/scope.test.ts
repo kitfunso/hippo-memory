@@ -11,22 +11,8 @@ function isString<T>(value: T): value is T & string {
 }
 
 describe('envActiveScope', () => {
-  const savedEnv: Record<string, string | undefined> = {};
-
   beforeEach(() => {
-    // Save and clear relevant env vars
-    for (const key of ['HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL']) {
-      savedEnv[key] = process.env[key];
-      vi.stubEnv(key, undefined);
-    }
-  });
-
-  afterEach(() => {
-    // Restore env vars
-    for (const [key, val] of Object.entries(savedEnv)) {
-      if (val === undefined) vi.stubEnv(key, undefined);
-      else vi.stubEnv(key, val);
-    }
+    for (const key of ['HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL']) vi.stubEnv(key, undefined);
   });
 
   it('returns null when no env vars set and on default branch', () => {

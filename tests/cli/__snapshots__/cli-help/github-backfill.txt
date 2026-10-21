@@ -1,0 +1,5 @@
+hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
+  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)
+  --since  Initial high-water-mark for first run (optional, ISO 8601)
+  --max    Cap items per stream (optional, integer)
+  Requires GITHUB_TOKEN env var with repo read scope.

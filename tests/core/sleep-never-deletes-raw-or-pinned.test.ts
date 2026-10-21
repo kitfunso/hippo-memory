@@ -213,7 +213,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     expect(fetcher).toHaveBeenCalled();
     expect(readEntry(root, condemned.id)?.pinned).toBe(true);
     expect(readEntry(root, forgotten.id)).toBeNull();
-    expect(readEntry(root, replaced.id)?.supersededBy).toBeTruthy();
+    expect(readEntry(root, replaced.id)?.supersededBy).toMatch(/^mem_[0-9a-f]+$/);
     expect(result.removed).toBe(0);
     expect(result.removedIds).toEqual([]);
     expect(result.details).toContain(`  ↩  ${condemned.id} not removed: pinned or already gone before sleep saved`);
@@ -233,7 +233,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     await consolidate(root, { now: new Date(Date.now() + 2 * DAY), fetcher });
 
     const after = facts.map((f) => readEntry(root, f.id)!);
-    expect(after[0]!.dagParentId).toBeTruthy();
+    expect(after[0]!.dagParentId).toMatch(/^[a-z]+_[0-9a-f]+$/);
     expect(new Set(after.map((f) => f.dagParentId)).size).toBe(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(loadAllDirtySummaries(root)).toEqual([]);

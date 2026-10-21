@@ -81,7 +81,7 @@ describe('schema v55', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       expect([...tableColumns(db, 'delivery_events')]).toEqual(expect.arrayContaining(['tool_use_id', 'failure_id']));
-      expect(indexSql(db, INDEX)).toBeDefined();
+      expect(indexSql(db, INDEX)).toContain(INDEX);
       // SAFETY: the SELECT names exactly these three columns.
       const rows = db.prepare('SELECT session_id, tool_use_id, failure_id FROM delivery_events').all();
       expect(rows).toEqual([{ session_id: 's1', tool_use_id: null, failure_id: null }]);

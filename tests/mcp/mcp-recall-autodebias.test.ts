@@ -77,7 +77,6 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
 
   afterEach(() => {
     removeAfterRequest(home);
-    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
 
   it('prepends "## Planning fallacy hint" block when query matches forward-claim AND class resolves', async () => {

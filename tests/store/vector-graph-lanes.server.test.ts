@@ -1,6 +1,5 @@
 // The store worker's two readers answer a nearest-row read alike, though only the first holds the vector graph.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setTimeout as delay } from 'node:timers/promises';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
@@ -8,6 +7,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { cleanups, newRoot, undoAll } from '../_helpers/store-worker-server.js';
 import { clusteredVectors, near, seedVectorRows } from '../_helpers/vector-rows.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 afterEach(undoAll);
 
@@ -20,10 +20,6 @@ const ids = (entries: readonly MemoryEntry[]): string[] => entries.map((e) => e.
 function stderrText(): () => string {
   const write = vi.spyOn(process.stderr, 'write');
   return () => write.mock.calls.map(([chunk]) => String(chunk)).join('');
-}
-
-async function until(done: () => boolean): Promise<void> {
-  while (!done()) await delay(20);
 }
 
 describe('a nearest-row read on a store over the threshold', () => {
@@ -51,7 +47,10 @@ describe('a nearest-row read on a store over the threshold', () => {
     });
 
     await store.vectors.nearestEntries(vectors[0], spec('even'));
-    await until(() => logged().includes(`the vector graph of ${ROWS} vectors of length ${DIM} is ready`));
+    await waitFor(() => logged().includes(`the vector graph of ${ROWS} vectors of length ${DIM} is ready`), {
+      what: 'the first reader to log its vector graph ready',
+      timeoutMs: 20_000,
+    });
 
     for (const [n, tenant] of ['even', 'odd', 'even', 'odd'].entries()) {
       const q = near(vectors[n * 50], n);

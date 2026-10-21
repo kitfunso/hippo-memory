@@ -108,8 +108,7 @@ describe('incidents store (first-class object)', () => {
         `SELECT content, tags_json, source FROM memories WHERE id = ?`,
         inc.memoryId!,
       );
-      expect(memRow).toBeDefined();
-      expect(memRow!.content).toContain('DB pool exhausted');
+      expect(memRow?.content).toContain('DB pool exhausted');
       expect(memRow!.content).toContain('Context: spike at 14:00');
       expect(memRow!.source).toBe('incident');
       // SAFETY: tags_json is this test's own row, written by saveIncident as a

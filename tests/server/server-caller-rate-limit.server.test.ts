@@ -256,7 +256,6 @@ describe('the MCP stream heartbeat', () => {
     const a = mint({ ownerSubject: 'oid-stream' });
     await start({ perCaller: SLOW, perAddress: WIDE });
     const ac = new AbortController();
-    const deadline = setTimeout(() => ac.abort(), 5000);
     try {
       const res = await fetch(`${url}/mcp/stream`, {
         headers: { accept: 'text/event-stream', ...bearer(a) },
@@ -278,7 +277,6 @@ describe('the MCP stream heartbeat', () => {
         200,
       );
     } finally {
-      clearTimeout(deadline);
       ac.abort();
     }
   });

@@ -75,7 +75,6 @@ describe('importVault (i) — LIKE-escape isolation on vault name', () => {
       const after = loadAllEntries(tmpDir, 'default');
       // ab's row survives (escape worked); a%'s row archived.
       const abLive = after.find((e) => e.id === abId);
-      expect(abLive).toBeDefined();
       expect(abLive!.artifactRef).toBe('vault:ab:n.md');
       expect(after.some((e) => e.artifactRef === 'vault:a%:m.md')).toBe(false);
 

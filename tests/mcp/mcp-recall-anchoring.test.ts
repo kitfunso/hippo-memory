@@ -82,7 +82,6 @@ describe('mcp hippo_recall anchoringHint', () => {
 
   afterEach(() => {
     removeAfterRequest(home);
-    vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
 
   it('R2 fires after >=3 recalls with same query on same session (memory_dominance + suppressedByInterference bumped)', async () => {

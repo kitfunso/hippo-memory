@@ -36,7 +36,7 @@ async function remember(text: string, ...extra: string[]): Promise<string> {
   const r = await run('remember', text, '--force', ...extra);
   expect(r.status, r.stderr).toBe(0);
   const id = /Remembered \[([^\]]+)\]/.exec(r.stdout)?.[1];
-  expect(id).toBeTruthy();
+  expect(id).toMatch(/^mem_[0-9a-f]+$/);
   return id ?? '';
 }
 

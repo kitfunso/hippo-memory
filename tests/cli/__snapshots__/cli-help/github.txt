@@ -1,0 +1,6 @@
+  github                   GitHub connector subcommands (backfill, dlq)
+    backfill --repo <owner/name> [--since ISO] [--max <N>]
+                           Paginated backfill of issues + comments
+    dlq list               List DLQ entries for the active tenant
+    dlq replay <id> [--force]
+                           Re-ingest a DLQ entry (--force skips sig check)

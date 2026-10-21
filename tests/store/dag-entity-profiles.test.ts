@@ -129,12 +129,11 @@ describe('level-3 entity profiles + drillDown depth', () => {
         earliest_at: string | null;
         latest_at: string | null;
       };
-      expect(profile).toBeTruthy();
       expect(profile.dag_level).toBe(3);
-      expect(profile.dag_level_3_built_at).toBeTruthy();
+      expect(profile.dag_level_3_built_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(profile.descendant_count).toBe(3);
-      expect(profile.earliest_at).toBeTruthy();
-      expect(profile.latest_at).toBeTruthy();
+      expect(profile.earliest_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      expect(profile.latest_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 
       // All 3 L2s now have dag_parent_id pointing to profile
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
@@ -310,7 +309,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       };
       expect(row.content).toBe('rebuilt-alice-profile-content-yyy');
       expect(row.rebuild_count).toBe(1);
-      expect(row.last_rebuilt_at).toBeTruthy();
+      expect(row.last_rebuilt_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(row.summary_dirty).toBe(0);
       // dag_level_3_built_at UNCHANGED (set once at create, not bumped on rebuild)
       expect(row.dag_level_3_built_at).toBe(builtAtIso);
@@ -323,7 +322,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
         SELECT metadata_json FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
       `)
         .get(l3.id) as { metadata_json: string } | undefined;
-      expect(auditRow).toBeTruthy();
+      expect(auditRow).toMatchObject({ metadata_json: expect.any(String) });
       const meta = JSON.parse(auditRow!.metadata_json);
       expect(meta.dag_level).toBe(3);
       expect(meta.source).toBe('E3-rebuild');

@@ -76,7 +76,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(row.content).toBe('newly-generated-summary-content-X');
       expect(row.summary_dirty).toBe(0);
       expect(row.rebuild_count).toBe(1);
-      expect(row.last_rebuilt_at).toBeTruthy();
+      expect(row.last_rebuilt_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(row.descendant_count).toBe(3);
       expect(row.earliest_at).toBe(child1.created);
       expect(row.latest_at).toBe(child3.created);
@@ -89,7 +89,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       `,
         summary.id,
       );
-      expect(auditRow).toBeTruthy();
+      expect(auditRow).toMatchObject({ metadata_json: expect.any(String) });
       const meta = JSON.parse(auditRow.metadata_json);
       expect(meta.source).toBe('E3-rebuild');
       expect(meta.zero_children).toBe(false);
@@ -264,7 +264,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       `,
         summary.id,
       );
-      expect(auditRow).toBeTruthy();
+      expect(auditRow).toMatchObject({ metadata_json: expect.any(String) });
       const meta = JSON.parse(auditRow.metadata_json);
       expect(meta.zero_children).toBe(true);
       expect(meta.descendant_count).toBe(0);

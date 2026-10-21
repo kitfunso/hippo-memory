@@ -1,0 +1,2 @@
+  correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
+    --json                 Output as JSON

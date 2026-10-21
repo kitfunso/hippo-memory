@@ -214,8 +214,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('test #12: cap hard-ceiling: consolidate() clamps HIPPO_DAG_REBUILD_CAP before it reaches rebuildDirtySummaries', async () => {
-    const saved = process.env.HIPPO_DAG_REBUILD_CAP;
-    const savedKey = process.env.ANTHROPIC_API_KEY;
     const originalFetch = global.fetch;
     // The spy reads the cap consolidate() computed, so the 1000 ceiling is
     // proven without seeding more than 1000 dirty rows.
@@ -252,10 +250,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     } finally {
       rebuildSpy.mockRestore();
       global.fetch = originalFetch;
-      if (savedKey !== undefined) vi.stubEnv('ANTHROPIC_API_KEY', savedKey);
-      else vi.stubEnv('ANTHROPIC_API_KEY', undefined);
-      if (saved !== undefined) vi.stubEnv('HIPPO_DAG_REBUILD_CAP', saved);
-      else vi.stubEnv('HIPPO_DAG_REBUILD_CAP', undefined);
     }
   });
 

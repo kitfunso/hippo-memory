@@ -1,0 +1,10 @@
+  projects [list]          List the project names in a store, with a hint for old worktree names
+    --json                 Output as JSON
+    --global               Operate on the global store
+    projects merge <from> <into> [--apply]
+                           Fold one project name into another (dry run unless --apply;
+                           writes a backup and one audit event first)
+    projects repair [--apply]
+                           Set aside misfiled note imports, fold old project names into
+                           their ids, re-tag merged rows (dry run unless --apply;
+                           writes a backup and one audit event first)

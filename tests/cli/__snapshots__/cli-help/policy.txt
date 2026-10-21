@@ -1,0 +1,15 @@
+  policy new "<name>"      Record a policy (bi-temporal first-class object + mirror)
+    --text "<rule>"        The policy rule/statement (required)
+    --from "<iso>"         Effective-from date (default: now)
+    --to "<iso>"           Effective-to date (optional; open-ended if omitted)
+  policy list [--status active|superseded|closed|all] [--limit N]
+                           List policies (table is authoritative, survives decay)
+  policy get <id>          Show a policy by its table id
+  policy asof "<iso-date>" Show active policies in force at a valid-time
+    --name "<policy>"      Filter to one policy by name
+  policy supersede <id>    Record a new version that supersedes an active policy
+    --text "<rule>"        The new rule (required)
+    --from "<iso>"         New effective-from (default: now)
+    --to "<iso>"           New effective-to (optional)
+    --change "<summary>"   What changed in this version (the delta note)
+  policy close <id>        Retire (close) an active policy by its table id

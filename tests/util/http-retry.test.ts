@@ -11,6 +11,7 @@ import {
 } from '../../src/base/util/http-retry.js';
 import { envLlmTimeoutMs } from '../../src/base/util/env.js';
 import { classifyTransportFailure } from '../../src/surface/cli/client.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -257,7 +258,7 @@ describe('fetchWithRetry against a local server', () => {
   });
 
   it('still honours a caller abort signal alongside its own timeout', async () => {
-    const { url } = await startServer([null]);
+    const { url, hits } = await startServer([null]);
     const controller = new AbortController();
     const sleeps: number[] = [];
     const pending = fetchWithRetry(
@@ -270,7 +271,9 @@ describe('fetchWithRetry against a local server', () => {
         },
       },
     );
-    setTimeout(() => controller.abort(), 50);
+    // The abort lands once the server holds the request, so it ends an attempt in flight rather than one not yet sent.
+    await waitFor(() => hits() === 1, { what: 'the request to reach the server' });
+    controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     // The caller gave up, so no second attempt is queued.
     expect(sleeps).toEqual([]);

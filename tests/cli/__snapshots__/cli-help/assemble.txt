@@ -1,0 +1,6 @@
+  assemble --session <id>  Build a session's chronological context window
+    --budget N             Token budget for the printed window (default 4000)
+    --fresh-tail N         Recent rows always kept verbatim (default 10)
+    --no-summarize-older   Disable older-row summary substitution
+    --scope <s>            Restrict to exact scope (default: deny *:private:*)
+    --json                 Output as JSON

@@ -191,8 +191,6 @@ describe('MCP hippo_recall ranking', () => {
   });
 
   afterEach(() => {
-    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-    vi.stubEnv('OPENAI_API_KEY', undefined);
     vi.unstubAllGlobals();
     for (const h of homes.splice(0)) removeAfterRequest(h);
   });

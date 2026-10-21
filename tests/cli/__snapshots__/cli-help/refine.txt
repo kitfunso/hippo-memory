@@ -1,0 +1,7 @@
+  refine                   Rewrite consolidated semantic memories with Claude
+    --limit <n>            Cap the number of memories processed this run
+    --all                  Ignore `llm-refined` tag and re-refine everything
+    --dry-run              Call the API but don't write results back
+    --model <id>           Override the default model (claude-sonnet-4-6)
+    --json                 Output summary as JSON
+    (requires ANTHROPIC_API_KEY in env)

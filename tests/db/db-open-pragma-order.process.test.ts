@@ -16,10 +16,11 @@ afterEach(() => {
   churners = [];
 });
 
-// Pure open/close pragma churn on an already-WAL store takes no lock at all
-// (each pragma is a no-op or connection-local); a real INSERT is what puts
-// a RESERVED lock under the foreground open's own pragma sequence.
-// Each child reports the writes it committed while the go file existed, and every error, so the test sees the contention happened.
+// A churner prints 'wrote' once it has committed this many beside the foreground opens, which then stop.
+const WINDOW_WRITES = 25;
+
+// Pragma-only churn on a WAL store takes no lock; a real INSERT puts a RESERVED lock under the foreground open's pragmas.
+// Each child reports its writes while the go file existed, and every error, so the test sees the contention happened.
 function churnScript(dbPath: string, goFile: string, stopFile: string): string {
   return `
     const { DatabaseSync } = require('node:sqlite');
@@ -36,6 +37,7 @@ function churnScript(dbPath: string, goFile: string, stopFile: string): string {
         db.exec("INSERT INTO meta(key, value) VALUES('churn', '1') ON CONFLICT(key) DO UPDATE SET value=excluded.value");
         db.close();
         if (during) windowWrites++;
+        if (windowWrites === ${WINDOW_WRITES}) process.stdout.write('wrote\\n');
       } catch (err) {
         errors.push(String(err && err.message));
       }
@@ -50,7 +52,7 @@ interface ChurnReport {
   errors: string[];
 }
 
-/** Starts a churner; `ready` resolves after its first write attempt, `report` resolves with its counts after it exits. */
+/** Starts a churner: `ready` after its first write attempt, `wrote` once it has its window writes, `report` at exit. */
 function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
   const child = spawn(process.execPath, ['-e', churnScript(dbPath, goFile, stopFile)], {
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -65,6 +67,7 @@ function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
     out += chunk.toString();
     if (out.includes('ready\n')) markReady();
   });
+  const wrote = (): boolean => out.includes('wrote\n');
   const report = new Promise<ChurnReport>((resolve, reject) => {
     child.on('error', reject);
     child.on('close', (code) => {
@@ -78,7 +81,7 @@ function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
       resolve(parsed);
     });
   });
-  return { ready, report };
+  return { ready, wrote, report };
 }
 
 describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
@@ -93,26 +96,28 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
     await Promise.all(started.map((c) => c.ready));
 
     writeFileSync(goFile, '');
-    const deadline = Date.now() + 2500;
     let opens = 0;
     const errors: string[] = [];
-    while (Date.now() < deadline) {
+    // The opens run until every churner has committed its writes beside them, so the overlap is counted, not timed.
+    do {
       try {
         closeHippoDb(openHippoDb(root));
         opens++;
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err));
       }
-    }
+      // A turn of the event loop between opens, so the churners' 'wrote' lines are read.
+      await new Promise((resolve) => setImmediate(resolve));
+    } while (!started.every((c) => c.wrote()));
     writeFileSync(stopFile, '');
     const reports = await Promise.all(started.map((c) => c.report));
 
-    // Open and write counts follow the scheduler over a 2.5 s window, so only the floor of one is fixed.
+    // The open count follows the scheduler, so only the floor of one is fixed.
     expect(opens).toBeGreaterThan(0);
     expect(errors).toEqual([]);
     for (const report of reports) {
       expect(report.errors).toEqual([]);
-      expect(report.windowWrites).toBeGreaterThan(0);
+      expect(report.windowWrites).toBeGreaterThanOrEqual(WINDOW_WRITES);
     }
   });
 });

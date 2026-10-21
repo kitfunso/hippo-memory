@@ -16,21 +16,9 @@ afterEach(() => {
 });
 
 const KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_REQUIRE_AUTH', 'HIPPO_ABLATE_DECAY', 'HIPPO_AUTODEBIAS'] as const;
-const saved = new Map<string, string | undefined>();
 
 beforeEach(() => {
-  for (const key of KEYS) {
-    saved.set(key, process.env[key]);
-    vi.stubEnv(key, undefined);
-  }
-});
-
-afterEach(() => {
-  for (const key of KEYS) {
-    const value = saved.get(key);
-    if (value === undefined) vi.stubEnv(key, undefined);
-    else vi.stubEnv(key, value);
-  }
+  for (const key of KEYS) vi.stubEnv(key, undefined);
 });
 
 describe('flag spellings', () => {

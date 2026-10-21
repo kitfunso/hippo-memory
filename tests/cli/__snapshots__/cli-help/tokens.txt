@@ -1,0 +1,8 @@
+  tokens                   Tokens of memory text hippo handed agents, per surface
+                           (hook, compact-resume, context, recall, MCP, HTTP), what
+                           skipping unchanged hook blocks saved, and how much of the
+                           hook and compact-resume blocks later model calls re-read,
+                           counted when a session ends. Estimates (characters / 4)
+    --days <n>             Window in days (default: 30)
+    --json                 Output as JSON
+    --global               Operate on the global store

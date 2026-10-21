@@ -134,7 +134,6 @@ describe('request-path output on a fixed store', () => {
   let tmp: string;
   let localRoot: string;
   let cwd: string;
-  const saved = { home: process.env.HIPPO_HOME, now: process.env.HIPPO_FAKE_NOW };
 
   beforeEach(async () => {
     tmp = makeRoot('request-snapshot', { init: false });
@@ -156,9 +155,6 @@ describe('request-path output on a fixed store', () => {
 
   afterEach(() => {
     process.chdir(cwd);
-    vi.stubEnv('HIPPO_HOME', saved.home);
-    if (saved.now === undefined) vi.stubEnv('HIPPO_FAKE_NOW', undefined);
-    else vi.stubEnv('HIPPO_FAKE_NOW', saved.now);
   });
 
   const mcpCtx = (): McpContext => {

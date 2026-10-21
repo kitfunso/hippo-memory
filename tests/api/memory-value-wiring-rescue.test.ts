@@ -85,7 +85,7 @@ describe('(e) rescue semantics', () => {
     const after = loadEveryTenantEntries(dir);
     for (const orig of rescuedSrc) {
       const refreshed = after.find((e) => e.id === orig.id);
-      expect(refreshed, `expected rescued entry ${orig.id} to survive`).toBeDefined();
+      expect(refreshed?.id, `expected rescued entry ${orig.id} to survive`).toBe(orig.id);
       // P2-1 fix: rescued entries get the SAME bookkeeping refresh as every
       // other survivor -- stored strength reflects the actual computed
       // (condemnation-basis) strength, not the stale original (1.0 default
@@ -124,11 +124,11 @@ describe('(e) rescue semantics', () => {
 
     const after = loadEveryTenantEntries(dir);
     const semanticSummary = after.find((e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated'));
-    expect(semanticSummary, 'expected a new merged semantic summary').toBeDefined();
+    expect(semanticSummary?.layer, 'expected a new merged semantic summary').toBe(Layer.Semantic);
 
     // Both rescued twins survive (demoted half-life, not deleted).
-    expect(after.find((e) => e.id === twinA.id)).toBeDefined();
-    expect(after.find((e) => e.id === twinB.id)).toBeDefined();
+    expect(after.find((e) => e.id === twinA.id)?.id).toBe(twinA.id);
+    expect(after.find((e) => e.id === twinB.id)?.id).toBe(twinB.id);
   });
 
   it('rescued entries participate in conflict detection (rescuedIds bypasses the strength filter)', async () => {
@@ -173,7 +173,6 @@ describe('(e) rescue semantics', () => {
     const found = conflicts.find(
       (c) => (c.memory_a_id === a.id && c.memory_b_id === b.id) || (c.memory_a_id === b.id && c.memory_b_id === a.id),
     );
-    expect(found, 'expected a conflict row between the two rescued entries').toBeDefined();
     expect(found!.reason).toMatch(/enabled\/disabled/);
   });
 
@@ -219,7 +218,7 @@ describe('(f) pinned exemption unchanged', () => {
     expect(result.removed).toBe(0);
 
     const remaining = loadEveryTenantEntries(dir);
-    expect(remaining.find((e) => e.id === entry.id)).toBeDefined();
+    expect(remaining.find((e) => e.id === entry.id)?.id).toBe(entry.id);
     expect(auditRescueRows(dir, 'default').length).toBe(0);
   });
 });

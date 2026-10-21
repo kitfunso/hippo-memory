@@ -39,7 +39,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  vi.stubEnv('HIPPO_LOG', undefined);
   syncBuiltinESMExports();
 });
 
@@ -193,7 +192,7 @@ describe('config stamp', () => {
     initTestStore(root);
     const config = path.join(root, 'config.json');
     failStat('ENOTDIR', config);
-    expect(loadConfig(root).embeddings).toBeDefined();
+    expect(loadConfig(root).embeddings.model).toBe(DEFAULT_EMBEDDING_MODEL);
   });
 });
 

@@ -1,0 +1,18 @@
+  wm <sub>                 Working memory — bounded buffer for current state
+    wm push                Push a working memory entry
+      --scope <scope>      Scope name (default: default)
+      --content <text>     Content to store (required)
+      --importance <n>     Priority 0-1 (default: 0.5)
+      --session <id>       Session ID
+      --task <id>          Task ID
+    wm read                Read working memory entries
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session
+      --limit <n>          Max entries (default: 20)
+      --json               Output as JSON
+    wm clear               Clear working memory entries
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session
+    wm flush               Same as clear; nothing runs it at session end
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session

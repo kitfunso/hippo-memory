@@ -236,12 +236,11 @@ describe('hybridSearch explain breakdown', () => {
     });
     expect(results.length).toBe(1);
     const b = results[0].breakdown;
-    expect(b).toBeDefined();
+    expect(b?.mode).toBe('bm25-only');
     if (!b) return;
     // In a test env without a Transformers.js backend the embedding path is off
     // and the mode falls through to bm25-only. The hybrid-no-vec case needs
     // a mocked embedding pipeline and is verified via live dogfooding.
-    expect(b.mode).toBe('bm25-only');
     expect(b.matchedTerms).toEqual(expect.arrayContaining(['fred', 'cache']));
     expect(b.strengthMultiplier).toBeGreaterThanOrEqual(0.5);
     expect(b.strengthMultiplier).toBeLessThanOrEqual(1);
@@ -262,7 +261,7 @@ describe('hybridSearch explain breakdown', () => {
     });
     for (const r of results) {
       const b = r.breakdown;
-      expect(b).toBeDefined();
+      expect(b?.final).toBeCloseTo(r.score, 5);
       if (!b) continue;
       const expected =
         b.base *

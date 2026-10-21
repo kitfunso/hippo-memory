@@ -16,7 +16,7 @@ describe('README MCP tool list', () => {
     // The README line is the published text under test, so it is read as text on purpose.
     const readme = readFileSync(resolve(__dirname, '..', '..', 'README.md'), 'utf8');
     const line = readme.split('\n').find((l) => l.startsWith('Exposes ') && l.includes('tools:'));
-    expect(line).toBeDefined();
+    expect(line).toMatch(/^Exposes \d+ tools:/);
     const listed = [...line!.matchAll(/`(hippo_[a-z_]+)`/g)].map((m) => m[1]).sort();
     expect(listed).toEqual(served);
     expect(line).toContain(`Exposes ${served.length} tools`);

@@ -95,7 +95,7 @@ describe('GDPR Path A completeness fixes', () => {
         `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
         'mem_legacy_canary_1',
       )?.mirror_cleaned_at;
-      expect(cleanedAt).toBeTruthy();
+      expect(cleanedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     } finally {
       closeHippoDb(db2);
     }
@@ -108,7 +108,7 @@ describe('GDPR Path A completeness fixes', () => {
         `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
         'mem_legacy_canary_1',
       )?.mirror_cleaned_at;
-      expect(stillCleaned).toBeTruthy();
+      expect(stillCleaned).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
       // Confirm zero pending rows.
       const pending = queryOne<{ c?: number }>(
         db3,
@@ -162,7 +162,7 @@ describe('GDPR Path A completeness fixes', () => {
         `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
         'mem_other_archived_id',
       )?.mirror_cleaned_at;
-      expect(cleanedAt).toBeTruthy();
+      expect(cleanedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     } finally {
       closeHippoDb(db2);
     }

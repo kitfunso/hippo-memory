@@ -1,0 +1,16 @@
+  goal <sub>               Goal stack, scoped per session
+    goal push <name>       Push a new active goal; prints the new goal id
+      --policy <type>      schema-fit-biased | error-prioritized |
+                           recency-first | hybrid
+      --success "<cond>"   Optional success condition text
+      --level <n>          Goal level (default: 0)
+      --parent <goalId>    Parent goal id (for sub-goals)
+      --session-id <s>     Override session (defaults to HIPPO_SESSION_ID)
+      --tenant-id <t>      Override tenant (defaults to HIPPO_TENANT)
+    goal list              Show active goals as a table
+      --all                Include suspended/completed goals
+    goal complete <id>     Mark a goal completed
+      --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
+      --no-propagate       Close the goal without applying strength side-effects
+    goal suspend <id>      Move an active goal to suspended
+    goal resume <id>       Move a suspended goal back to active (depth-capped)

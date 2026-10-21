@@ -26,8 +26,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** Sends headers that promise a 2 MB body plus a few bytes of it, never the rest, and resolves with the status line. */
-function statusBeforeBodyArrives(port: number, path: string, timeoutMs = 3000): Promise<string> {
+/** Sends headers that promise a 2 MB body and a few bytes of it, never the rest; a server waiting for it never answers. */
+function statusBeforeBodyArrives(port: number, path: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1', () => {
       socket.write(
@@ -35,24 +35,16 @@ function statusBeforeBodyArrives(port: number, path: string, timeoutMs = 3000): 
           `Content-Type: application/json\r\nContent-Length: ${2 * 1024 * 1024}\r\n\r\n{"content":"x`,
       );
     });
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error(`no response within ${timeoutMs} ms: the server is waiting for the body`));
-    }, timeoutMs);
     let data = '';
     socket.on('data', (chunk) => {
       data += chunk.toString('utf8');
       const eol = data.indexOf('\r\n');
       if (eol >= 0) {
-        clearTimeout(timer);
         socket.destroy();
         resolve(data.slice(0, eol));
       }
     });
-    socket.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
+    socket.on('error', reject);
   });
 }
 

@@ -419,7 +419,9 @@ describe('cli thin-client mode', () => {
 
       const db2 = openHippoDb(hippoRoot);
       try {
-        expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rsarchive'`).get()).toBeDefined();
+        expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rsarchive'`).get()).toEqual({
+          id: 'mem_rsarchive',
+        });
       } finally {
         closeHippoDb(db2);
       }
@@ -637,7 +639,7 @@ describe('cli thin-client mode', () => {
 
       const routedRemember = runCli(workspace, 'remember', 'routed-counter-canary');
       const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];
-      expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toBeTruthy();
+      expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
 
       const routedForget = runCli(workspace, 'forget', routedId!);
       expect(routedForget.stdout, `stderr: ${routedForget.stderr}`).toMatch(/Forgot/);
@@ -658,7 +660,7 @@ describe('cli thin-client mode', () => {
 
       const directRemember = runCli(workspace, 'remember', 'direct-counter-canary');
       const directId = /Remembered \[([^\]]+)\]/.exec(directRemember.stdout)?.[1];
-      expect(directId, `stdout: ${directRemember.stdout} stderr: ${directRemember.stderr}`).toBeTruthy();
+      expect(directId, `stdout: ${directRemember.stdout} stderr: ${directRemember.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
       const directForget = runCli(workspace, 'forget', directId!);
       expect(directForget.stdout, `stderr: ${directForget.stderr}`).toMatch(/Forgot/);
       expect(getActorForId(workspace, directId!)).toBe('cli');

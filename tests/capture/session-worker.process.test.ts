@@ -26,7 +26,10 @@ beforeEach(() => {
   sessions = path.join(fake.home, '.hippo', 'sessions');
   fs.mkdirSync(sessions, { recursive: true });
 });
-afterEach(() => fake.cleanup());
+afterEach(() => {
+  fake.cleanup();
+  vi.unstubAllEnvs();
+});
 
 /** A pid that named a process a moment ago and names none now. */
 function deadPid(): number {

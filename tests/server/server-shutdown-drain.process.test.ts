@@ -16,11 +16,13 @@ function trackedRoot(): string {
   return home;
 }
 
-function delayedResolver(ms: number): AuthResolver {
-  return () =>
-    new Promise((resolve) =>
-      setTimeout(() => resolve({ tenantId: 'default', subject: 'drain-test', role: 'admin' }), ms),
-    );
+/** A resolver that vouches once `release()` is called, so the test decides how long a request stays in flight. */
+function gatedResolver() {
+  let release = (): void => undefined;
+  const vouched = new Promise<Awaited<ReturnType<AuthResolver>>>((resolve) => {
+    release = () => resolve({ tenantId: 'default', subject: 'drain-test', role: 'admin' });
+  });
+  return { resolver: () => vouched, release };
 }
 
 const neverResolves: AuthResolver = () => new Promise(() => undefined);
@@ -52,11 +54,13 @@ afterEach(() => {
 
 describe('serve() graceful stop', () => {
   it('lets a request already running finish instead of cutting its socket', async () => {
-    const { resolver, asked } = watched(delayedResolver(400));
+    const gate = gatedResolver();
+    const { resolver, asked } = watched(gate.resolver);
     const handle = await serve({ hippoRoot: trackedRoot(), port: 0, authResolver: resolver, shutdownDrainMs: 5000 });
     const pending = slowRecall(handle);
     await asked;
     const stopped = handle.stop();
+    gate.release();
 
     const res = await pending;
     expect(res.status).toBe(200);
@@ -113,14 +117,15 @@ describe('serve() graceful stop', () => {
   it('on an uncaught exception, logs it, answers the request already running, then exits 1', async () => {
     const home = trackedRoot();
     const script = join(home, 'crash-mid-request.mjs');
-    // The throw is scheduled by the auth step, so it always lands while that request is in flight.
+    // The auth step schedules the throw and vouches only once the crash handler has run, so the request is in flight.
     writeFileSync(
       script,
       [
         `const { serve } = await import(${dist('server.js')});`,
         'const authResolver = () => {',
+        "  const vouched = new Promise((done) => process.once('uncaughtException', () => done({ tenantId: 'default', subject: 'drain-test', role: 'admin' })));",
         "  setTimeout(() => { throw new Error('boom-serve'); }, 0);",
-        "  return new Promise((done) => setTimeout(() => done({ tenantId: 'default', subject: 'drain-test', role: 'admin' }), 300));",
+        '  return vouched;',
         '};',
         `const handle = await serve({ hippoRoot: ${JSON.stringify(home)}, port: 0, handleSignals: true, authResolver });`,
         'console.log(handle.url);',

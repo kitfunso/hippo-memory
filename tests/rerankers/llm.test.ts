@@ -152,7 +152,6 @@ describe('llmReranker against a local endpoint', () => {
     vi.useRealTimers();
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    vi.stubEnv('HIPPO_LLM_RERANKER_URL', undefined);
   });
 
   const inputs = (): SearchResult[] => [asResult('alpha', 1.0), asResult('beta', 0.5)];
@@ -254,7 +253,6 @@ describe('llmReranker reply size cap', () => {
   afterEach(async () => {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    vi.stubEnv('HIPPO_LLM_RERANKER_URL', undefined);
   });
 
   it('keeps the input order, names the cap in its warning and stops reading early', async () => {

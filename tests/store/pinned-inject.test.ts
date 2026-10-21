@@ -82,7 +82,6 @@ describe('hippo context --pinned-only', () => {
 
     const out = await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
     const parsed = JSON.parse(out);
-    expect(parsed.hookSpecificOutput).toBeDefined();
     expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
     expect(parsed.hookSpecificOutput.additionalContext).toBeTypeOf('string');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('NEVER use --no-verify');
@@ -163,8 +162,7 @@ describe('hippo context --pinned-only', () => {
     const { loadAllEntries } = await import('../_helpers/root-forms.js');
     const reloaded = loadAllEntries(hippoDir, 'default');
     const target = reloaded.find((e) => e.id === pinned.id);
-    expect(target).toBeDefined();
-    expect(target!.retrievalCount).toBe(0);
+    expect(target?.retrievalCount).toBe(0);
     expect(target!.lastRetrieved).toBe(pinned.lastRetrieved);
   });
 

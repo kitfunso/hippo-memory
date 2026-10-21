@@ -1,0 +1,3 @@
+  dedup                    Remove duplicate memories (keeps stronger copy)
+    --dry-run              Preview without removing
+    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing

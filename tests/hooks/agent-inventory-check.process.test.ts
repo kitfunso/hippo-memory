@@ -208,7 +208,6 @@ describe('check-agent-inventory', () => {
     } as const;
     for (const tool of detectInstalledTools()) {
       const entry = inventory.entries.find((e) => e.id === tool.name);
-      expect(entry, tool.name).toBeDefined();
       expect(entry!.integration, tool.name).toContain(kindToIntegration[tool.kind]);
     }
   });

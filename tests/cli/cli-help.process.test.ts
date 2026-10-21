@@ -1,4 +1,5 @@
-// Pins the exact stdout, stderr and exit code of every help and unknown-verb form, and that --help runs no verb.
+// Pins every help and unknown-verb form, that --help runs no verb, and that each help block names and describes the
+// flags its row declares. Each block is its own file under __snapshots__/cli-help/, so one changed block is one small diff.
 // In-process, since a spawn per form cost about a minute of CI time; one spawned run keeps the built binary in the loop.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -9,12 +10,16 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs, runCli, usageText, verbUsage } from '../../src/cli.js';
 import type { VerbFlags } from '../../src/surface/cli/flags.js';
+import { USAGE_EXAMPLES, USAGE_HEADER } from '../../src/surface/cli/usage.js';
+import type { VerbRow } from '../../src/surface/cli/verb-row.js';
 import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 
 // Read from the dispatch table so a verb added later is covered without editing this file.
-const VERBS = Object.entries(COMMANDS).flatMap(([verb, spec]) => [verb, ...(spec.aliases ?? [])]);
+const ROWS = Object.entries<VerbRow>(COMMANDS);
+const ALIASES = ROWS.flatMap(([verb, row]) => (row.aliases ?? []).map((alias) => [alias, verb] as const));
+const VERBS = [...ROWS.map(([verb]) => verb), ...ALIASES.map(([alias]) => alias)];
 const SUBCOMMANDS = [
   ['audit', 'prune'],
   ['slack', 'backfill'],
@@ -36,9 +41,6 @@ const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void
   ([verb, spec]) => [verb, vi.spyOn(spec, 'run').mockImplementation(() => undefined)] as const,
 );
 
-interface CommandRow {
-  readonly flags: VerbFlags;
-}
 // Pinned rather than read from the rows, so a row that gains or loses --dry-run fails here first.
 const DRY_RUN_VERBS = ['audit', 'capture', 'dedup', 'forget', 'import', 'invalidate', 'refine', 'setup', 'sleep'];
 // Declared flags the help does not name yet: document one, then delete it here; the list may only shrink.
@@ -65,12 +67,31 @@ const UNDOCUMENTED = new Map(
     graph: ['entity', 'format', 'json', 'open', 'out'],
   }),
 );
+// Named flags whose help line says nothing of what they do: describe one, then delete it here; the list may only shrink.
+const UNDESCRIBED = new Map(
+  Object.entries({ snapshot: ['next-step', 'summary', 'task'], session: ['content'], import: ['scope'] }),
+);
 const namesOf = (flags: VerbFlags): string[] => [
   ...(flags.switches ?? []),
   ...(flags.values ?? []),
   ...(flags.numbers ?? []),
   ...(flags.lists ?? []),
 ];
+
+/** Whether a help line whose left column names `--name` says what it does, on that line or the one under it. */
+function describes(lines: readonly string[], name: string): boolean {
+  const flag = new RegExp(`--${name}(?![a-z0-9-])`);
+  // `--name <arg> Text`: one space before the text where the placeholder fills the left column.
+  const tight = new RegExp(`--${name}(?:[ =]"?<[^>]*>"?)?\\]? [A-Z(]`);
+  return lines.some((line, i) => {
+    const [left = '', ...right] = line.trimStart().split(/ {2,}/);
+    if (!flag.test(left)) return false;
+    return right.join('').trim() !== '' || tight.test(left) || /^ {20,}\S/.test(lines[i + 1] ?? '');
+  });
+}
+
+const helpFile = (name: string): string => `./__snapshots__/cli-help/${name}.txt`;
+
 interface HelpDirs {
   readonly cwd: string;
   readonly home: string;
@@ -99,11 +120,6 @@ async function run(args: string[]): Promise<HelpRun> {
 }
 
 const pick = ({ status, stdout, stderr }: InProcessResult): InProcessResult => ({ status, stdout, stderr });
-// The full listing is pinned once, under hippo --help; every other snapshot names it instead of repeating it.
-const pinned = (res: InProcessResult): InProcessResult => ({
-  ...pick(res),
-  stdout: res.stdout === full.stdout ? '<full usage>' : res.stdout,
-});
 
 beforeAll(async () => {
   dirs = {
@@ -127,12 +143,21 @@ afterAll(() => {
 });
 
 describe('CLI help output is byte-identical and runs nothing', () => {
-  it('hippo --help', () => {
-    expect(full).toMatchSnapshot();
+  it('hippo --help is the header, each row block in table order, the listed-last blocks, then the examples', async () => {
+    await expect(USAGE_HEADER).toMatchFileSnapshot(helpFile('_header'));
+    await expect(USAGE_EXAMPLES).toMatchFileSnapshot(helpFile('_examples'));
+    const blocks = [...ROWS.flatMap(([, row]) => row.usage ?? []), ...ROWS.flatMap(([, row]) => row.listedLast ?? [])];
+    expect(full).toEqual({ status: 0, stderr: '', stdout: `${USAGE_HEADER}${blocks.join('')}${USAGE_EXAMPLES}\n` });
   });
 
-  it('the dispatch table holds the pinned verbs, so a dropped verb fails here', () => {
-    expect([...VERBS].sort()).toMatchSnapshot();
+  it('the dispatch table lists its verbs, aliases and help blocks in the pinned order', async () => {
+    const listing = [
+      ...ROWS.map(([verb, row]) =>
+        [verb, ...(row.aliases ?? []).map((alias) => `alias ${alias}`), ...(row.usage ? [] : ['no block'])].join(', '),
+      ),
+      ...ROWS.filter(([, row]) => row.listedLast).map(([verb]) => `${verb}, listed last`),
+    ];
+    await expect(`${listing.join('\n')}\n`).toMatchFileSnapshot(helpFile('_listing'));
   });
 
   it.for([{ args: [] }, { args: ['-h'] }, { args: ['help'] }, { args: ['--help'] }])(
@@ -151,12 +176,22 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect([res.ran, res.written]).toEqual([[], []]);
   });
 
-  it.for(VERBS)('hippo %s --help', async (verb) => {
+  it.for(ROWS.map(([verb]) => verb))('hippo %s --help', async (verb) => {
     const res = await run([verb, '--help']);
-    expect(res.ran, 'a handler ran').toEqual([]);
-    expect(res.written).toEqual([]);
-    expect(res.stdout).toBe(`${verbUsage(verb) ?? usageText()}\n`);
-    expect(pinned(res)).toMatchSnapshot();
+    expect([res.ran, res.written, res.status, res.stderr]).toEqual([[], [], 0, '']);
+    const own = verbUsage(verb);
+    // The internal __ workers have no block of their own and print the full usage.
+    if (own === null) expect(res.stdout).toBe(full.stdout);
+    else {
+      expect(res.stdout).toBe(`${own}\n`);
+      await expect(res.stdout).toMatchFileSnapshot(helpFile(verb));
+    }
+  });
+
+  it.for(ALIASES)('hippo %s --help prints the block of hippo %s', async ([alias, verb]) => {
+    const [aliased, own] = [await run([alias, '--help']), await run([verb, '--help'])];
+    expect(pick(aliased)).toEqual(pick(own));
+    expect([aliased.ran, aliased.written]).toEqual([[], []]);
   });
 
   it('every verb row names a handle<Verb> export and never a cmd<Name>', () => {
@@ -187,8 +222,8 @@ describe('CLI help output is byte-identical and runs nothing', () => {
   it.for(SUBCOMMANDS)('hippo %s %s --help', async ([verb, sub]) => {
     const res = await run([verb, sub, '--help']);
     expect(res.stdout).toContain(OWN_FLAG.get(`${verb} ${sub}`));
-    expect([res.ran, res.written]).toEqual([[], []]);
-    expect(pinned(res)).toMatchSnapshot();
+    expect([res.ran, res.written, res.status, res.stderr]).toEqual([[], [], 0, '']);
+    await expect(res.stdout).toMatchFileSnapshot(helpFile(`${verb}-${sub}`));
   });
 
   it('hippo slack workspaces add --help prints the workspaces usage and runs nothing', async () => {
@@ -200,14 +235,19 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect([res.ran, res.written]).toEqual([[], []]);
   });
 
-  it.for([{ args: ['frobnicate'] }, { args: ['frobnicate', '--help'] }, { args: ['frobnicate', '--zzz'] }])(
-    'unknown verb: hippo $args',
-    async ({ args }) => {
-      const res = await run(args);
-      expect([res.ran, res.written]).toEqual([[], []]);
-      expect(pinned(res)).toMatchSnapshot();
+  it.for([
+    { args: ['frobnicate'], status: 1, stderr: 'Unknown command: frobnicate\n' },
+    { args: ['frobnicate', '--help'], status: 0, stderr: '' },
+    {
+      args: ['frobnicate', '--zzz'],
+      status: 1,
+      stderr: 'hippo: ignoring unknown flag --zzz. A later release will reject it.\nUnknown command: frobnicate\n',
     },
-  );
+  ])('unknown verb: hippo $args', async ({ args, status, stderr }) => {
+    const res = await run(args);
+    expect([res.ran, res.written]).toEqual([[], []]);
+    expect(pick(res)).toEqual({ status, stdout: full.stdout, stderr });
+  });
 
   it.each(['--version', '-v'])('hippo %s prints the package version', async (flag) => {
     // SAFETY: package.json always carries a string version.
@@ -263,24 +303,36 @@ describe('usage blocks', () => {
     expect(VERBS.filter((verb) => !verb.startsWith('__') && verbUsage(verb) === null)).toEqual([]);
   });
 
-  it.for(Object.entries<CommandRow>(COMMANDS).filter(([verb]) => !verb.startsWith('__')))(
-    '%s help names every flag the verb declares and no other',
+  it.for(ROWS.filter(([verb]) => !verb.startsWith('__')))(
+    '%s help names and describes every flag the verb declares, and no other',
     async ([verb, spec]) => {
       const subHelp: string[] = [];
       // One at a time: each run captures the process's stdout.
       for (const sub of SUBCOMMANDS.filter(([own]) => own === verb)) {
         subHelp.push((await run([...sub, '--help'])).stdout);
       }
-      const named = new Set(
-        [...[verbUsage(verb), ...subHelp].join('\n').matchAll(/--([a-z][a-z0-9-]*)/g)].map((m) => m[1]),
-      );
+      const text = [verbUsage(verb), ...subHelp].join('\n');
+      const named = new Set([...text.matchAll(/--([a-z][a-z0-9-]*)/g)].map((m) => m[1]));
       const declared = namesOf(spec.flags);
+      const lines = text.split('\n');
       expect({
         missing: declared.filter((name) => !named.has(name)).sort(),
         undeclared: [...named].filter((name) => !declared.includes(name)),
-      }).toEqual({ missing: UNDOCUMENTED.get(verb) ?? [], undeclared: [] });
+        undescribed: declared.filter((name) => named.has(name) && !describes(lines, name)).sort(),
+      }).toEqual({ missing: UNDOCUMENTED.get(verb) ?? [], undeclared: [], undescribed: UNDESCRIBED.get(verb) ?? [] });
     },
   );
+
+  it('a flag line with no description fails the check, and each described form passes', () => {
+    const lines = [
+      '    --bare <x>',
+      '    --gap <x>          Says what it does',
+      '    --tight <f> Override the weight',
+      '  verb list [--under N]',
+      '                           Lists rows',
+    ];
+    expect(['bare', 'gap', 'tight', 'under'].filter((name) => !describes(lines, name))).toEqual(['bare']);
+  });
 
   it('a block holds only its verb, and an alias prints its verb block', () => {
     expect(verbUsage('init')).toMatch(/^ {2}init .*\n {4}--scan/);

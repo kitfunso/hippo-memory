@@ -72,7 +72,6 @@ describe('api.recall anchoringHint', () => {
   });
   afterEach(() => {
     removeAfterRequest(root);
-    vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
 
   it('populates anchoringHint on R2 (memory_dominance) when snapshot has 2 prior wins for same memory', async () => {
@@ -83,7 +82,6 @@ describe('api.recall anchoringHint', () => {
       query: 'frobnicate baz quux',
       hints: { recallHistory: snapshot },
     });
-    expect(result.anchoringHint).toBeDefined();
     expect(result.anchoringHint!.reason).toBe('memory_dominance');
     expect(result.anchoringHint!.memoryId).toBe(memId);
     expect(result.anchoringHint!.queryCount).toBe(3);

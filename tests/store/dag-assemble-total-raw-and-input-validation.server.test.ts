@@ -208,7 +208,7 @@ describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
         }
       ).result?.tools ?? [];
     const recall = tools.find((t) => t.name === 'hippo_recall');
-    expect(recall).toBeDefined();
+    expect(recall?.name).toBe('hippo_recall');
     const props = recall?.inputSchema?.properties ?? {};
     expect(props).toHaveProperty('fresh_tail_session_id');
     expect(props).toHaveProperty('fresh_tail_count');

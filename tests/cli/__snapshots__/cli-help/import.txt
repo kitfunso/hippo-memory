@@ -1,0 +1,17 @@
+  import                   Import memories from other AI tools
+    --chatgpt <path>       Import from ChatGPT memory export (JSON or txt)
+    --claude <path>        Import from CLAUDE.md or Claude memory.json
+    --cursor <path>        Import from .cursorrules or .cursor/rules
+    --file <path>          Import from any markdown or text file
+    --markdown <path>      Import from structured MEMORY.md / AGENTS.md
+    --vault <path>         Import a markdown-vault FOLDER as kind='raw' notes
+                             (Obsidian/Foam/Dendron). Requires --name <vault>.
+                             [--scope <scope>]
+    --agents               Sync every coding agent's own memories (Claude Code, Codex,
+                             Gemini CLI, Copilot, OpenClaw, Qwen Code) now; with
+                             --dry-run, print each tool's folders and what would change.
+                             HIPPO_AGENT_MEMORY_TOOLS=<ids> or config agentMemories.tools
+                             picks the tools; "none" or [] turns the import off
+    --dry-run              Preview without writing
+    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
+    --tag <tag>            Add extra tag (repeatable)

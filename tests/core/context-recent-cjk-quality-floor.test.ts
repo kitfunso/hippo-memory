@@ -29,17 +29,11 @@ afterEach(() => {
 function tmpHome() {
   const home = makeRoot('df3-cjk');
   const globalTmp = makeRoot('df3-cjk-global', { init: false });
-  const origHippoHome = process.env.HIPPO_HOME;
   vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
-      if (origHippoHome !== undefined) {
-        vi.stubEnv('HIPPO_HOME', origHippoHome);
-      } else {
-        vi.stubEnv('HIPPO_HOME', undefined);
-      }
     },
   };
 }

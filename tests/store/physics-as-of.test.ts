@@ -76,7 +76,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.stubEnv('OPENAI_API_KEY', undefined);
   removeAfterRequest(root);
 });
 

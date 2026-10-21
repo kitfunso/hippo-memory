@@ -127,8 +127,7 @@ describe('auditPrune', () => {
     const row = db
       .prepare(`SELECT actor, op, metadata_json FROM audit_log WHERE tenant_id = ? AND op = 'audit_prune'`)
       .get('acme') as { actor: string; op: string; metadata_json: string } | undefined;
-    expect(row).toBeDefined();
-    expect(row!.actor).toBe('cli:test');
+    expect(row?.actor).toBe('cli:test');
     expect(row!.op).toBe('audit_prune');
     const meta = JSON.parse(row!.metadata_json);
     expect(meta.count).toBe(1);

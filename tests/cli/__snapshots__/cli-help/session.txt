@@ -1,0 +1,17 @@
+  session <sub>            Append or inspect short-term session history
+    session log            Append a structured session event
+      --id <session-id>
+      --content <text>
+      --type <type>        Event type (default: note)
+      --task <task>        Optional task label
+      --source <source>    Optional source label
+    session show           Show recent events for a session or task
+      --id <session-id>
+      --task <task>
+      --limit <n>          Event limit (default: 8)
+      --json               Output as JSON
+    session latest         Show latest task snapshot + events
+      --id <session-id>   Filter by session
+      --json               Output as JSON
+    session resume         Re-inject latest handoff as context output
+      --id <session-id>   Filter by session

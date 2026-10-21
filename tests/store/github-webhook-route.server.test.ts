@@ -156,8 +156,6 @@ describe('POST /v1/connectors/github/events', () => {
   });
 
   afterEach(async () => {
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET_PREVIOUS', undefined);
     await handle.stop();
   });
 
@@ -171,8 +169,7 @@ describe('POST /v1/connectors/github/events', () => {
 
     const entries = loadAllEntries(root, 'default');
     const ghRow = entries.find((e) => e.tags.includes('source:github') && e.kind === 'raw');
-    expect(ghRow).toBeDefined();
-    expect(ghRow!.artifactRef).toBe('github://acme/repo/issue/42');
+    expect(ghRow?.artifactRef).toBe('github://acme/repo/issue/42');
   });
 
   it('2. valid signature + issue_comment.created → 200, memory ingested', async () => {
@@ -181,7 +178,7 @@ describe('POST /v1/connectors/github/events', () => {
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
     const ghRow = entries.find((e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/42/comment/999');
-    expect(ghRow).toBeDefined();
+    expect(ghRow?.artifactRef).toBe('github://acme/repo/issue/42/comment/999');
   });
 
   it('3. valid signature + pull_request.opened → 200, memory ingested', async () => {
@@ -190,7 +187,7 @@ describe('POST /v1/connectors/github/events', () => {
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
     const ghRow = entries.find((e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/pull/7');
-    expect(ghRow).toBeDefined();
+    expect(ghRow?.artifactRef).toBe('github://acme/repo/pull/7');
   });
 
   it('4. valid signature + pull_request_review_comment.created → 200, memory ingested', async () => {
@@ -201,7 +198,7 @@ describe('POST /v1/connectors/github/events', () => {
     const ghRow = entries.find(
       (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/pull/7/review_comment/12345',
     );
-    expect(ghRow).toBeDefined();
+    expect(ghRow?.artifactRef).toBe('github://acme/repo/pull/7/review_comment/12345');
   });
 
   it('5. bad signature → 401', async () => {

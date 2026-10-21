@@ -1,0 +1,9 @@
+  incident "<incident>"    Record an incident (first-class object + memory mirror)
+    --context "<details>"  What happened / surrounding detail
+    --link <mem-id>        Link a memory as evidence (repeatable)
+  incident list [--status open|resolved|closed|all] [--limit N]
+                           List incidents (table is authoritative, survives decay)
+  incident get <id>        Show an incident by its table id
+  incident resolve <id>    Resolve an open incident (open -> resolved)
+    --resolution "<text>"  How it was resolved (required)
+  incident close <id>      Retire (close) an open or resolved incident by its table id

@@ -1,0 +1,4 @@
+  drill <summary-id>       Walk down a DAG level-2 summary to its children
+    --limit N              Cap children list (default 50)
+    --budget N             Token budget for the printed children (≈ chars/4)
+    --json                 Output as JSON

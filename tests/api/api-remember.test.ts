@@ -119,7 +119,7 @@ describe("api.remember stamps the caller's project", () => {
       untrusted: true,
       project: { name: 'acme/app' },
     });
-    expect(result.quarantined).toBeDefined();
+    expect(result.quarantined).toEqual({ reason: 'pattern:override-instructions' });
     expect(originOf(ctx, result.id)).toBe('acme/app');
   });
 });

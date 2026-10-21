@@ -89,7 +89,6 @@ describe('hippo recall --why exposes envelope', () => {
     // Both stores together hold only the one memory this test remembered.
     expect(parsed.results).toHaveLength(1);
     const first = parsed.results[0];
-    expect(first.envelope).toBeDefined();
     expect(first.envelope.kind).toBe('distilled');
     expect(first.envelope.owner).toBe('agent:claude');
     expect(first.envelope.artifact_ref).toBe('slack://team/channel/1700.123');

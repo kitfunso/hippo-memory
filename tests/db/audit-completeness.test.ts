@@ -57,7 +57,7 @@ describe('audit log captures every mutation', () => {
     } finally {
       closeHippoDb(dbLocal);
     }
-    expect(localId, 'expected to find local row id').toBeTruthy();
+    expect(localId, 'expected to find local row id').toMatch(/^mem_[0-9a-f]+$/);
 
     await runCliOut(['promote', localId!], { env, cwd: home });
 
@@ -90,7 +90,7 @@ describe('audit log captures every mutation', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(oldId, 'expected to find old row id').toBeTruthy();
+    expect(oldId, 'expected to find old row id').toMatch(/^mem_[0-9a-f]+$/);
 
     await runCliOut(['supersede', oldId!, 'audit-supersede-canary-33 new content'], { env, cwd: home });
 
@@ -98,9 +98,9 @@ describe('audit log captures every mutation', () => {
     try {
       const events = queryAuditEvents(db2, { tenantId: 'default', op: 'supersede' });
       const match = events.find((e) => e.targetId === oldId);
-      expect(match, `expected supersede event for ${oldId}`).toBeTruthy();
+      expect(match?.targetId, `expected supersede event for ${oldId}`).toBe(oldId);
       const meta = match!.metadata;
-      expect(meta.newId).toBeTruthy();
+      expect(meta.newId).toMatch(/^mem_[0-9a-f]+$/);
       expect(meta.newId).not.toBe(oldId);
     } finally {
       closeHippoDb(db2);
@@ -153,7 +153,7 @@ describe('audit log captures every mutation', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(rememberedId, 'expected to find row id in local db').toBeTruthy();
+    expect(rememberedId, 'expected to find row id in local db').toMatch(/^mem_[0-9a-f]+$/);
 
     await runCliOut(['forget', rememberedId!], { env, cwd: home });
 

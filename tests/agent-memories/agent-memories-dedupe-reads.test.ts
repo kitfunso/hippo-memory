@@ -40,7 +40,10 @@ beforeEach(() => {
   w = openWorld();
   NOTES.forEach((text, i) => note(projectNotes(w), `note-${i}.md`, text));
 });
-afterEach(() => closeWorld(w));
+afterEach(() => {
+  closeWorld(w);
+  vi.unstubAllEnvs();
+});
 
 const row = (content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { layer: Layer.Semantic }),

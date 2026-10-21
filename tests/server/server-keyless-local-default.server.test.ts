@@ -41,7 +41,6 @@ interface Call {
 let home: string;
 let handle: ServerHandle;
 let apiKey: string;
-const saved = new Map<string, string | undefined>();
 
 function parsed(text: string): ReplyBody {
   try {
@@ -98,10 +97,7 @@ function rememberActors(): string[] {
 }
 
 beforeEach(async () => {
-  for (const key of MODE_KEYS) {
-    saved.set(key, process.env[key]);
-    vi.stubEnv(key, undefined);
-  }
+  for (const key of MODE_KEYS) vi.stubEnv(key, undefined);
   home = makeRoot('keyless-default');
   const db = openHippoDb(home);
   try {
@@ -115,11 +111,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await handle.stop();
   rmSync(home, { recursive: true, force: true });
-  for (const key of MODE_KEYS) {
-    const value = saved.get(key);
-    if (value === undefined) vi.stubEnv(key, undefined);
-    else vi.stubEnv(key, value);
-  }
 });
 
 /** Requests that reach the loopback socket without being this machine's own user. */

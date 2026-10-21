@@ -60,7 +60,7 @@ describe('capture contract conformance', () => {
         // SAFETY: fixtures are checked-in files in this shape; a wrong shape fails the toEqual below.
         const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, dir, file), 'utf8')) as Fixture;
         const read = READERS.get(dir);
-        expect(read).toBeDefined();
+        expect(read).toBeTypeOf('function');
         expect(read!(fixture)).toEqual(fixture.expect);
       });
     }

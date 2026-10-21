@@ -211,7 +211,6 @@ describe('memory-value harness (real stores)', () => {
         const expectedFit = computeSchemaFit(content, [], entriesSoFar);
         const memId = gold.memories[memIdx].id;
         const row = rowById.get(memId);
-        expect(row, `no features row for ${memId}`).toBeDefined();
         expect(row!.features.schema_fit).toBeCloseTo(expectedFit, 10);
         entriesSoFar.push(createMemory(content));
         memIdx++;

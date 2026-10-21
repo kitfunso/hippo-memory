@@ -83,13 +83,11 @@ describe('api.recall planningFallacyHint', () => {
   });
   afterEach(() => {
     removeAfterRequest(root);
-    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
 
   it('populates planningFallacyHint when query has forward-claim AND class resolves AND nClosed > 0', async () => {
     seedMigrationEffortBaserate(root);
     const result = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days' });
-    expect(result.planningFallacyHint).toBeDefined();
     expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
     expect(result.planningFallacyHint!.source).toBe('j3.2-auto');
     expect(result.planningFallacyHint!.nClosed).toBe(3);
@@ -182,7 +180,7 @@ describe('api.recall planningFallacyHint', () => {
     // Baseline: 0 predict_baserate rows after seeding.
     const baselineBaserate = countAuditOps(root, 'predict_baserate');
     const result = await retrieve(ctxFor(root), { query: 'migration effort will take 3 days' });
-    expect(result.planningFallacyHint).toBeDefined();
+    expect(result.planningFallacyHint?.classTag).toBe('migration-effort');
     // J3.2 emits recall_autodebias_hint, NOT predict_baserate.
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(1);
     expect(countAuditOps(root, 'predict_baserate')).toBe(baselineBaserate);
@@ -201,7 +199,6 @@ describe('api.recall planningFallacyHint', () => {
     //    the migration-effort class hint, even though the predictions were created
     //    via tenant-global savePrediction calls without scope segregation.
     const result = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days' });
-    expect(result.planningFallacyHint).toBeDefined();
     expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
     // Sanity: the same data with an explicit scope filter on recall still surfaces
     // the hint (the resolver doesn't consult opts.scope by design).
@@ -209,7 +206,6 @@ describe('api.recall planningFallacyHint', () => {
       query: 'the migration effort will take 3 days',
       filter: { scope: 'channel:work' },
     });
-    expect(scopedResult.planningFallacyHint).toBeDefined();
     expect(scopedResult.planningFallacyHint!.classTag).toBe('migration-effort');
   });
 
@@ -230,7 +226,7 @@ describe('api.recall planningFallacyHint', () => {
     }
     // Tenant-a query gets the hint.
     const resultA = await retrieve(ctxA, { query: 'migration effort will take 3 days' });
-    expect(resultA.planningFallacyHint).toBeDefined();
+    expect(resultA.planningFallacyHint?.classTag).toBe('migration-effort');
     // Tenant-b query gets nothing.
     const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
     const resultB = await retrieve(ctxB, { query: 'migration effort will take 3 days' });
