@@ -50,3 +50,6 @@ export {
   AmbientState,
 } from '../base/memory/ambient.js';
 export { estimateTokens } from '../base/util/token-text.js';
+export { tokenize, textOverlap } from '../base/util/tokenize.js';
+export { isEmbeddingAvailable } from '../base/embeddings/local.js';
+export { getEmbedding } from '../infra/local-embedder.js';

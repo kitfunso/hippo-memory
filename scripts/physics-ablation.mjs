@@ -29,7 +29,7 @@ import { embedMemory } from '../dist/domain/search/embed-memories.js';
 import { loadConfig } from '../dist/base/config/config.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/base/embeddings/local.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
-import { hybridSearch } from '../dist/index.js';
+import { hybridSearch } from '../dist/entry/search.js';
 import { physicsSearch } from '../dist/entry/store-kit.js';
 import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../dist/base/rank/physics-config.js';

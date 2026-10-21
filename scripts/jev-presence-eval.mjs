@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { hybridSearch } from '../dist/index.js';
+import { hybridSearch } from '../dist/entry/search.js';
 import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { loadAllEntries } from '../dist/entry/testing.js';
 import { getReranker } from '../dist/entry/eval-scripts.js';

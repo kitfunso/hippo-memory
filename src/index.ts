@@ -1,5 +1,6 @@
 /**
- * Hippo public API: re-exports for programmatic use, each from the src/entry barrel that owns it.
+ * Hippo public API: re-exports for programmatic use, each from the src/entry barrel that owns it. Search, importers
+ * and the eval suite have their own subpaths: hippo-memory/search, hippo-memory/importers and hippo-memory/eval.
  */
 export {
   MemoryEntry,
@@ -37,26 +38,11 @@ export {
   renderAmbientSummary,
   formatAmbientVector,
   AmbientState,
-} from './entry/memory.js';
-export {
-  search,
-  hybridSearch,
-  explainMatch,
-  MatchExplanation,
-  detectTemporalDirection,
-  temporalBoost,
-  computeTemporalRange,
-  SearchResult,
   tokenize,
   textOverlap,
-  multihopSearch,
-  graphExpandRecall,
-  MAX_HOPS,
-  DEFAULT_MAX_NEIGHBORS,
-  type GraphExpandOpts,
   isEmbeddingAvailable,
   getEmbedding,
-} from './entry/search.js';
+} from './entry/memory.js';
 export {
   ConsolidationResult,
   type SleepOpts,
@@ -67,26 +53,4 @@ export {
   consolidate,
   strengthBucket,
 } from './entry/sleep.js';
-export {
-  captureError,
-  extractLessons,
-  partitionLessons,
-  getGlobalRoot,
-  transferScore,
-  runFeatureEval,
-  formatResult,
-  resultToBaseline,
-  detectRegressions,
-  buildSyntheticCorpus,
-} from './entry/learning.js';
-export {
-  importChatGPT,
-  importClaude,
-  importCursor,
-  importGenericFile,
-  importMarkdown,
-  importVault,
-  importEntries,
-  ImportResult,
-  ImportOptions,
-} from './entry/importers.js';
+export { captureError, extractLessons, partitionLessons, getGlobalRoot, transferScore } from './entry/learning.js';

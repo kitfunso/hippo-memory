@@ -1,5 +1,5 @@
-// The root entry's rankers. The ones that boost by path read the caller's working folder here, at the entry, so the
-// domain rankers take it as an input.
+// The `hippo-memory/search` entry's rankers. The ones that boost by path read the caller's working folder here, at the
+// entry, so the domain rankers take it as an input.
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import { search as rankBm25, type SearchOptions } from '../domain/search/bm25-search.js';
@@ -19,7 +19,4 @@ export { hybridSearch } from './folder-search.js';
 export { explainMatch, MatchExplanation } from '../domain/search/explain.js';
 export { detectTemporalDirection, temporalBoost, computeTemporalRange } from '../domain/search/temporal.js';
 export { SearchResult } from '../base/rank/search-types.js';
-export { tokenize, textOverlap } from '../base/util/tokenize.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from '../domain/graph/recall.js';
-export { isEmbeddingAvailable } from '../base/embeddings/local.js';
-export { getEmbedding } from '../infra/local-embedder.js';

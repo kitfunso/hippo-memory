@@ -189,7 +189,7 @@ describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
     const modules = rootReexports();
     // src/index.ts and its barrels, not this test, set the list; these two prove the scan reads a multi-line block and a mixed line.
-    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './domain/graph/recall.js']));
+    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './base/memory/memory.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
 
@@ -224,85 +224,95 @@ describe('published runtime exports', () => {
     const names = importBuiltEntry<Record<string, string[]>>(script);
     expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)])))
       .toMatchInlineSnapshot(`
-      {
-        ".": "CARD_LEASE_MS CARD_TRANSITIONS
-      DEFAULT_MAX_NEIGHBORS
-      Layer
-      MAX_HOPS
-      applyOutcome
-      buildSyntheticCorpus
-      calculateStrength captureError computeAmbientState computeSalience computeSchemaFit computeTemporalRange confidenceFacets consolidate createMemory
-      detectRegressions detectTemporalDirection
-      estimateTokens explainMatch extractLessons
-      formatAmbientVector formatResult
-      generateId getEmbedding getGlobalRoot graphExpandRecall
-      hybridSearch
-      importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault isCardStatus isEmbeddingAvailable isHandoffOutcome
-      markRetrieved multihopSearch
-      partitionLessons
-      renderAmbientSummary resolveConfidence resultToBaseline runFeatureEval
-      search sleep strengthBucket
-      temporalBoost textOverlap tokenize transferScore",
-        "./json-hooks": "installJsonHooks
-      readJsonFile resolveJsonHookPaths
-      uninstallJsonHooks
-      writeSettingsFile",
-        "./project-identity": "MAX_PROJECT_ALIASES MCP_PROJECT_SCOPED_HEADER
-      resolveProjectIdentity",
-        "./server": "BadRequestError
-      ConflictError
-      ForbiddenError
-      HttpError
-      LOOPBACK_HOST_HEADER
-      NotFoundError
-      authCreate authCreateSelf authRevoke
-      bindSessionOwner bindSessionOwnerOn
-      captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
-      isCrossSite isLoopback isReservedActor
-      ownerOrSubject
-      preCompactForCaller promptHookContext
-      saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
-        "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
-      WORKING_STATE_CAPS
-      collectHandoffEvidence collectSessionTurns compactSummaryBody
-      failureReport
-      lessonFromFailure
-      parseCompactionItems
-      scrubForSharing sessionTail
-      transcriptWorkingState",
-        "./store-kit": "ALL_TENANTS
-      EMBEDDING_MODEL_META_KEY
-      OTHER_STORE_MARKER
-      PROTECTED_ROWS
-      RECALL_DEFAULT_DENY_SCOPES RejectedValueError
-      SECRET_TAGS StoreBusyError
-      ambientRefusal
-      bufferToFloat32
-      decodeVector descendantAdmits
-      encodeVector entryAfterOutcome
-      float32ToBuffer ftsTermParts
-      hasGroup heldTexts
-      isSharedStore
-      loadConfig
-      normalizeValueForRejection
-      ownScopeTouches
-      passesScopeFilterForRecall physicsSearch
-      rankVectorRows rarestFtsQuery readerReaches rejectionDigest repairKeeps replacesIndex requireGroup
-      sqliteStore
-      tallyAmbientEntries targetReader",
-        "./testing": "ambientSecretAdmit ambientSecretAdmitWire
-      batchWriteAndDeleteWire buildIndexFromDb
-      calculateStrengthWire createMemoryWire
-      embedMemory embedMemoryWire
-      hybridSearchWire
-      initStore isWorthSurfacingWire
-      loadAllEntries loadAllEntriesWire loadEmbeddingIndex loadRecallSearchEntries loadVectorCandidateEntriesAt
-      memoryStore
-      recordTokenUse resolveTenantId
-      tokensBySession
-      upsertEntryRow upsertEntryRowWire
-      writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeEntryWire writeIndexMirror",
-      }
-    `);
+        {
+          ".": "CARD_LEASE_MS CARD_TRANSITIONS
+        Layer
+        applyOutcome
+        calculateStrength captureError computeAmbientState computeSalience computeSchemaFit confidenceFacets consolidate createMemory
+        estimateTokens extractLessons
+        formatAmbientVector
+        generateId getEmbedding getGlobalRoot
+        isCardStatus isEmbeddingAvailable isHandoffOutcome
+        markRetrieved
+        partitionLessons
+        renderAmbientSummary resolveConfidence
+        sleep strengthBucket
+        textOverlap tokenize transferScore",
+          "./eval": "buildSyntheticCorpus
+        detectRegressions
+        formatResult
+        resultToBaseline runFeatureEval",
+          "./importers": "importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault",
+          "./json-hooks": "installJsonHooks
+        readJsonFile resolveJsonHookPaths
+        uninstallJsonHooks
+        writeSettingsFile",
+          "./project-identity": "MAX_PROJECT_ALIASES MCP_PROJECT_SCOPED_HEADER
+        resolveProjectIdentity",
+          "./search": "DEFAULT_MAX_NEIGHBORS
+        MAX_HOPS
+        computeTemporalRange
+        detectTemporalDirection
+        explainMatch
+        graphExpandRecall
+        hybridSearch
+        multihopSearch
+        search
+        temporalBoost",
+          "./server": "BadRequestError
+        ConflictError
+        ForbiddenError
+        HttpError
+        LOOPBACK_HOST_HEADER
+        NotFoundError
+        authCreate authCreateSelf authRevoke
+        bindSessionOwner bindSessionOwnerOn
+        captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
+        isCrossSite isLoopback isReservedActor
+        ownerOrSubject
+        preCompactForCaller promptHookContext
+        saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
+          "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
+        WORKING_STATE_CAPS
+        collectHandoffEvidence collectSessionTurns compactSummaryBody
+        failureReport
+        lessonFromFailure
+        parseCompactionItems
+        scrubForSharing sessionTail
+        transcriptWorkingState",
+          "./store-kit": "ALL_TENANTS
+        EMBEDDING_MODEL_META_KEY
+        OTHER_STORE_MARKER
+        PROTECTED_ROWS
+        RECALL_DEFAULT_DENY_SCOPES RejectedValueError
+        SECRET_TAGS StoreBusyError
+        ambientRefusal
+        bufferToFloat32
+        decodeVector descendantAdmits
+        encodeVector entryAfterOutcome
+        float32ToBuffer ftsTermParts
+        hasGroup heldTexts
+        isSharedStore
+        loadConfig
+        normalizeValueForRejection
+        ownScopeTouches
+        passesScopeFilterForRecall physicsSearch
+        rankVectorRows rarestFtsQuery readerReaches rejectionDigest repairKeeps replacesIndex requireGroup
+        sqliteStore
+        tallyAmbientEntries targetReader",
+          "./testing": "ambientSecretAdmit ambientSecretAdmitWire
+        batchWriteAndDeleteWire buildIndexFromDb
+        calculateStrengthWire createMemoryWire
+        embedMemory embedMemoryWire
+        hybridSearchWire
+        initStore isWorthSurfacingWire
+        loadAllEntries loadAllEntriesWire loadEmbeddingIndex loadRecallSearchEntries loadVectorCandidateEntriesAt
+        memoryStore
+        recordTokenUse resolveTenantId
+        tokensBySession
+        upsertEntryRow upsertEntryRowWire
+        writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeEntryWire writeIndexMirror",
+        }
+      `);
   });
 });
