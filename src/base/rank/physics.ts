@@ -173,24 +173,43 @@ export function attractionForce(
 
 /**
  * Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where
- * cosine_distance = 1 - cosine_similarity.
+ * cosine_distance = 1 - cosine_similarity. Adds into `out` (a fresh zero vector by default) using `diff` as scratch.
  */
-export function repulsionForce(pi: PhysicsParticle, pj: PhysicsParticle, kRepulsion: number): number[] {
+export function repulsionForce(
+  pi: PhysicsParticle,
+  pj: PhysicsParticle,
+  kRepulsion: number,
+  out: number[] = vecZero(pi.position.length),
+  diff: number[] = vecZero(pi.position.length),
+): number[] {
   const cos = cosineOf(pi.position, pj.position);
   const dist = Math.max(MIN_COSINE_DISTANCE, 1 - cos);
   const magnitude = (kRepulsion * pi.mass * pj.mass) / (dist * dist);
   // Direction: away from j
-  const direction = vecNormalize(vecSub(pi.position, pj.position));
-  return vecScale(direction, magnitude);
+  for (let k = 0; k < out.length; k++) diff[k] = pi.position[k] - pj.position[k];
+  const norm = vecNorm(diff);
+  if (norm < NEAR_ZERO) {
+    for (let k = 0; k < out.length; k++) out[k] += 0 * magnitude;
+    return out;
+  }
+  const inv = 1 / norm;
+  for (let k = 0; k < out.length; k++) out[k] += diff[k] * inv * magnitude;
+  return out;
 }
 
 /**
  * Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with effectiveHalfLife from the
- * memory's current half_life_days.
+ * memory's current half_life_days. Adds into `out`, a fresh zero vector by default.
  */
-export function dragForce(particle: PhysicsParticle, drag: number, effectiveHalfLife: number): number[] {
-  const damping = drag / Math.max(1, effectiveHalfLife);
-  return vecScale(particle.velocity, -damping);
+export function dragForce(
+  particle: PhysicsParticle,
+  drag: number,
+  effectiveHalfLife: number,
+  out: number[] = vecZero(particle.velocity.length),
+): number[] {
+  const damping = -(drag / Math.max(1, effectiveHalfLife));
+  for (let k = 0; k < out.length; k++) out[k] += particle.velocity[k] * damping;
+  return out;
 }
 
 export interface ForceContext {
@@ -201,16 +220,10 @@ export interface ForceContext {
   config: PhysicsConfig;
 }
 
-function addInto(net: number[], force: number[]): void {
-  for (let k = 0; k < net.length; k++) net[k] += force[k];
-}
-
-/** The net force on particle i, accumulated into one new array; `diff` is the caller's scratch for pair directions. */
-function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceContext, diff: number[]): number[] {
+/** Zeroes `net`, then accumulates the net force on particle i into it; `diff` is the caller's scratch. */
+function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceContext, net: number[], diff: number[]) {
   const pi = particles[i];
-  const dim = pi.position.length;
-  const net = vecZero(dim);
-
+  net.fill(0);
   const conflicts = ctx.conflictPairs.get(pi.memoryId);
 
   for (let j = 0; j < particles.length; j++) {
@@ -219,53 +232,72 @@ function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceCont
 
     attractionForce(pi, pj, ctx.config.gMemory, net, diff);
 
-    if (conflicts?.has(pj.memoryId)) addInto(net, repulsionForce(pi, pj, ctx.config.kRepulsion));
+    if (conflicts?.has(pj.memoryId)) repulsionForce(pi, pj, ctx.config.kRepulsion, net, diff);
   }
 
-  addInto(net, dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS));
-
-  return net;
+  dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS, net);
 }
 
-/** Acceleration of particle i: its net force divided by mass, scaled in place. */
-function computeAcceleration(i: number, particles: PhysicsParticle[], ctx: ForceContext, diff: number[]): number[] {
-  const accel = computeNetForce(i, particles, ctx, diff);
-  const inv = 1 / Math.max(MIN_MASS, particles[i].mass);
-  for (let k = 0; k < accel.length; k++) accel[k] *= inv;
-  return accel;
+/** Acceleration of every particle (net force over mass) into `into`, one preallocated vector each. */
+function computeAccelerations(particles: PhysicsParticle[], ctx: ForceContext, into: number[][], diff: number[]): void {
+  for (let i = 0; i < particles.length; i++) {
+    const accel = into[i];
+    computeNetForce(i, particles, ctx, accel, diff);
+    const inv = 1 / Math.max(MIN_MASS, particles[i].mass);
+    for (let k = 0; k < accel.length; k++) accel[k] *= inv;
+  }
 }
 
-/** One Velocity Verlet step for all particles; mutates in place for performance. */
-function verletStep(particles: PhysicsParticle[], accelerations: number[][], ctx: ForceContext): void {
+/** vecNormalize in place. */
+function normalizeInPlace(v: number[]): void {
+  const mag = vecNorm(v);
+  if (mag < NEAR_ZERO) {
+    v.fill(0);
+    return;
+  }
+  const inv = 1 / mag;
+  for (let k = 0; k < v.length; k++) v[k] *= inv;
+}
+
+/** vecClampMagnitude in place. */
+function clampInPlace(v: number[], maxMag: number): void {
+  const mag = vecNorm(v);
+  if (mag <= maxMag) return;
+  const scale = maxMag / mag;
+  for (let k = 0; k < v.length; k++) v[k] *= scale;
+}
+
+/** One Velocity Verlet step for all particles; the vectors of particles, `accelerations` and `next` change in place,
+ * and `next` holds the new accelerations for the caller to swap in. */
+function verletStep(
+  particles: PhysicsParticle[],
+  accelerations: number[][],
+  next: number[][],
+  ctx: ForceContext,
+  diff: number[],
+): void {
   const dt = ctx.config.dt;
   const maxVel = ctx.config.maxVelocity;
+  const halfDt2 = 0.5 * dt * dt;
 
   for (let i = 0; i < particles.length; i++) {
-    const p = particles[i];
-
+    const { position, velocity } = particles[i];
     // Position update: pos += vel*dt + 0.5*accel*dt^2
-    const velDt = vecScale(p.velocity, dt);
-    const accelDt2 = vecScale(accelerations[i], 0.5 * dt * dt);
-    p.position = vecAdd(vecAdd(p.position, velDt), accelDt2);
+    for (let k = 0; k < position.length; k++)
+      position[k] = position[k] + velocity[k] * dt + accelerations[i][k] * halfDt2;
   }
 
-  const diff = vecZero(particles[0].position.length);
-  const newAccelerations: number[][] = [];
-  for (let i = 0; i < particles.length; i++) newAccelerations.push(computeAcceleration(i, particles, ctx, diff));
+  computeAccelerations(particles, ctx, next, diff);
 
   // Velocity update: vel += 0.5*(accel_old + accel_new)*dt
   for (let i = 0; i < particles.length; i++) {
-    const p = particles[i];
-    const avgAccel = vecScale(vecAdd(accelerations[i], newAccelerations[i]), 0.5);
-    p.velocity = vecAdd(p.velocity, vecScale(avgAccel, dt));
-
+    const { position, velocity } = particles[i];
+    for (let k = 0; k < velocity.length; k++) {
+      velocity[k] = velocity[k] + (accelerations[i][k] + next[i][k]) * 0.5 * dt;
+    }
     // Stability: clamp velocity and normalize position to unit sphere
-    p.velocity = vecClampMagnitude(p.velocity, maxVel);
-    p.position = vecNormalize(p.position);
-  }
-
-  for (let i = 0; i < accelerations.length; i++) {
-    accelerations[i] = newAccelerations[i];
+    clampInPlace(velocity, maxVel);
+    normalizeInPlace(position);
   }
 }
 
@@ -280,11 +312,15 @@ export function simulate(particles: PhysicsParticle[], ctx: ForceContext): Simul
     };
   }
 
-  const diff = vecZero(particles[0].position.length);
-  const accelerations: number[][] = particles.map((_, i) => computeAcceleration(i, particles, ctx, diff));
+  const dim = particles[0].position.length;
+  const diff = vecZero(dim);
+  let accelerations: number[][] = particles.map(() => vecZero(dim));
+  let next: number[][] = particles.map(() => vecZero(dim));
+  computeAccelerations(particles, ctx, accelerations, diff);
 
   for (let step = 0; step < ctx.config.substeps; step++) {
-    verletStep(particles, accelerations, ctx);
+    verletStep(particles, accelerations, next, ctx, diff);
+    [accelerations, next] = [next, accelerations];
   }
 
   const now = new Date().toISOString();

@@ -1,5 +1,5 @@
 // simulate() accumulates forces in place; this keeps the allocating implementation it replaced and holds the two together.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   attractionForce,
   repulsionForce,
@@ -99,16 +99,33 @@ function fixture(): Fixture {
 }
 
 describe('simulate', () => {
-  it('matches the allocating implementation to 1e-12', () => {
+  it('matches the allocating implementation bit for bit', () => {
     const a = fixture();
     const b = fixture();
     simulate(a.particles, a.ctx);
     simulateAllocating(b.particles, b.ctx);
     for (let i = 0; i < a.particles.length; i++) {
       for (let k = 0; k < 8; k++) {
-        expect(Math.abs(a.particles[i].position[k] - b.particles[i].position[k])).toBeLessThan(1e-12);
-        expect(Math.abs(a.particles[i].velocity[k] - b.particles[i].velocity[k])).toBeLessThan(1e-12);
+        expect(a.particles[i].position[k]).toBe(b.particles[i].position[k]);
+        expect(a.particles[i].velocity[k]).toBe(b.particles[i].velocity[k]);
       }
     }
+  });
+
+  it('copies no vector while stepping: the particles keep their own arrays', () => {
+    const { particles, ctx } = fixture();
+    const positions = particles.map((p) => p.position);
+    const velocities = particles.map((p) => p.velocity);
+    const slice = vi.spyOn(Array.prototype, 'slice');
+    try {
+      simulate(particles, ctx);
+      expect(slice).not.toHaveBeenCalled();
+    } finally {
+      slice.mockRestore();
+    }
+    particles.forEach((p, i) => {
+      expect(p.position).toBe(positions[i]);
+      expect(p.velocity).toBe(velocities[i]);
+    });
   });
 });
