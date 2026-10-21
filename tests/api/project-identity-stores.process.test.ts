@@ -34,9 +34,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-// Every sync asks git for each folder's layout in a child process, and the re-sync cases run several syncs.
-const RESYNC_MS = 15_000;
-
 const T = 'default';
 let w: World;
 
@@ -226,108 +223,92 @@ describe('the upgrade re-sync', () => {
     'Retries back off from two seconds.',
   ];
 
-  it(
-    'moves folder-named imports and their dormant snapshots under the id, importing nothing twice',
-    async () => {
-      const api = checkout('git@github.com:acme/api.git', 'api');
-      NOTES.forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
-      globalConfig(false);
-      await sync(api);
-      unlinkSync(join(projectNotes(w, api), 'n2.md'));
-      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
-      const before = liveRows(w.global);
-      expect(before.map((e) => e.originProject)).toEqual(['api', 'api']);
+  it('moves folder-named imports and their dormant snapshots under the id, importing nothing twice', async () => {
+    const api = checkout('git@github.com:acme/api.git', 'api');
+    NOTES.forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
+    globalConfig(false);
+    await sync(api);
+    unlinkSync(join(projectNotes(w, api), 'n2.md'));
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
+    const before = liveRows(w.global);
+    expect(before.map((e) => e.originProject)).toEqual(['api', 'api']);
 
-      globalConfig(true);
-      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
-      const after = liveRows(w.global);
-      expect(after.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort());
-      for (const e of after) {
-        expect(e).toMatchObject({
-          originProject: 'github.com/acme/api',
-          source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
-        });
-      }
-      const [snap] = withDb(w.global, (db) => listDormantSnapshots(db, T));
-      expect(snap.entry).toMatchObject({
+    globalConfig(true);
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
+    const after = liveRows(w.global);
+    expect(after.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort());
+    for (const e of after) {
+      expect(e).toMatchObject({
         originProject: 'github.com/acme/api',
         source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
       });
+    }
+    const [snap] = withDb(w.global, (db) => listDormantSnapshots(db, T));
+    expect(snap.entry).toMatchObject({
+      originProject: 'github.com/acme/api',
+      source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
+    });
 
-      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
-      note(projectNotes(w, api), 'n2.md', NOTES[2]);
-      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
-    },
-    RESYNC_MS,
-  );
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
+    note(projectNotes(w, api), 'n2.md', NOTES[2]);
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+  });
 
-  it(
-    'moves a dormant-only folder-named import, so a returning note is restored, not imported again',
-    async () => {
-      const api = checkout('git@github.com:acme/api.git', 'api');
-      note(projectNotes(w, api), 'n0.md', NOTES[0]);
-      globalConfig(false);
-      await sync(api);
-      unlinkSync(join(projectNotes(w, api), 'n0.md'));
-      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
+  it('moves a dormant-only folder-named import, so a returning note is restored, not imported again', async () => {
+    const api = checkout('git@github.com:acme/api.git', 'api');
+    note(projectNotes(w, api), 'n0.md', NOTES[0]);
+    globalConfig(false);
+    await sync(api);
+    unlinkSync(join(projectNotes(w, api), 'n0.md'));
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
 
-      globalConfig(true);
-      note(projectNotes(w, api), 'n0.md', NOTES[0]);
-      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
-      expect(liveRows(w.global)).toMatchObject([
-        {
-          originProject: 'github.com/acme/api',
-          source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
-        },
-      ]);
-    },
-    RESYNC_MS,
-  );
+    globalConfig(true);
+    note(projectNotes(w, api), 'n0.md', NOTES[0]);
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+    expect(liveRows(w.global)).toMatchObject([
+      {
+        originProject: 'github.com/acme/api',
+        source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
+      },
+    ]);
+  });
 
-  it(
-    'repair keeps folder-named imports in their own session folder, folds the name, and the next sync moves them',
-    async () => {
-      const api = checkout('git@github.com:acme/api.git', 'api');
-      NOTES.slice(0, 2).forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
-      globalConfig(false);
-      await sync(api);
-      globalConfig(true);
-      const transcript = join(dirname(projectNotes(w, api)), 's.jsonl');
-      writeFileSync(transcript, `${JSON.stringify({ cwd: api })}\n`);
-      withDb(w.global, (db) =>
-        db
-          .prepare(
-            `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'api', 'auto', ?, ?, ?)`,
-          )
-          .run(T, api, transcript, new Date().toISOString()),
-      );
+  it('repair keeps folder-named imports in their own session folder, folds the name, and the next sync moves them', async () => {
+    const api = checkout('git@github.com:acme/api.git', 'api');
+    NOTES.slice(0, 2).forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
+    globalConfig(false);
+    await sync(api);
+    globalConfig(true);
+    const transcript = join(dirname(projectNotes(w, api)), 's.jsonl');
+    writeFileSync(transcript, `${JSON.stringify({ cwd: api })}\n`);
+    withDb(w.global, (db) =>
+      db
+        .prepare(
+          `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'api', 'auto', ?, ?, ?)`,
+        )
+        .run(T, api, transcript, new Date().toISOString()),
+    );
 
-      const r = await projectNameRepair(cliApiContext(w.global, T), { dryRun: false });
-      expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
-      expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
-      expect((await planAt(w.global)).copies).toEqual([]);
-    },
-    RESYNC_MS,
-  );
+    const r = await projectNameRepair(cliApiContext(w.global, T), { dryRun: false });
+    expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
+    expect((await planAt(w.global)).copies).toEqual([]);
+  });
 
-  it(
-    'follows a merge: imports under the merged name move on the next sync instead of coming back as copies',
-    async () => {
-      const svc = checkout('file:///srv/git/svc.git', 'svc');
-      note(projectNotes(w, svc), 'a.md', NOTES[0]);
-      writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'old-svc' }));
-      await sync(svc);
-      writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
-      const next = await nextProcess();
-      expect((await next.merge('old-svc', 'new-svc')).setAside).toEqual([]);
+  it('follows a merge: imports under the merged name move on the next sync instead of coming back as copies', async () => {
+    const svc = checkout('file:///srv/git/svc.git', 'svc');
+    note(projectNotes(w, svc), 'a.md', NOTES[0]);
+    writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'old-svc' }));
+    await sync(svc);
+    writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
+    const next = await nextProcess();
+    expect((await next.merge('old-svc', 'new-svc')).setAside).toEqual([]);
 
-      expect(toolTally(await next.sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
-      expect(liveRows(w.global)).toMatchObject([
-        { content: NOTES[0], originProject: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
-      ]);
-    },
-    RESYNC_MS,
-  );
+    expect(toolTally(await next.sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
+    expect(liveRows(w.global)).toMatchObject([
+      { content: NOTES[0], originProject: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
+    ]);
+  });
 });
 
 describe('a project store with an id', () => {

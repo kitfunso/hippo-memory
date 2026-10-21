@@ -1,7 +1,7 @@
 /**
  * LC2-E1 memory-value eval harness — cross-ingest determinism.
  *
- * Split out of memory-value-harness.test.ts (codex confirmation-pass P1-B
+ * Split out of memory-value-harness.process.test.ts (codex confirmation-pass P1-B
  * fix, 2026-08-09): that file's per-test-file wallclock was crossing
  * Vitest's ~60s Windows worker-RPC "onTaskUpdate" timeout (62.86s observed,
  * exit 1, despite all 17 tests passing). This file holds the ONE test that
@@ -9,7 +9,7 @@
  * TEST_SIM_ROUNDS the other file's generic pipeline tests use) — the
  * property under test here IS "does the pinned protocol reproduce
  * identically," so it must exercise the pinned round count, not a reduced
- * one. Fixture definitions are shared with memory-value-harness.test.ts via
+ * one. Fixture definitions are shared with memory-value-harness.process.test.ts via
  * memory-value-fixtures.ts.
  *
  * Proves the structural fix for codex's two P1 findings (2026-08-09):

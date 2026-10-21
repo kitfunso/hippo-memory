@@ -25,8 +25,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-// Every sync asks git for each folder's layout in a child process.
-vi.setConfig({ testTimeout: 20_000 });
 
 const HELD = 'Run the schema check before this service deploys.';
 const MERGED = 'Pin the node version in the CI workflow file.';

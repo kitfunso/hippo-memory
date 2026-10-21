@@ -46,8 +46,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Each case ingests, simulates and extracts a question against real stores on disk.
-vi.setConfig({ testTimeout: 30_000 });
 
 type GateOptions = {
   splitRegistered?: object;

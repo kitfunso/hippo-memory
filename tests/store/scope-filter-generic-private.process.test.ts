@@ -32,8 +32,6 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 
 oneRequestPerTest();
 
-// A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
-vi.setConfig({ testTimeout: 30_000 });
 
 function ctx(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });

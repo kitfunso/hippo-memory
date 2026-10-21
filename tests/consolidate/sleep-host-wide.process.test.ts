@@ -25,8 +25,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-// Each case seeds and runs a full three-tenant sleep three times, once at one-row pages, which can pass the unit budget.
-vi.setConfig({ testTimeout: 20_000 });
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const DAY = 86_400_000;

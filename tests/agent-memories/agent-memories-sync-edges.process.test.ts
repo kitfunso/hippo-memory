@@ -34,8 +34,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
-vi.setConfig({ testTimeout: 20_000 });
 
 const A = 'Run the schema check before this service deploys.';
 const B = 'Run the schema check and the smoke test before each deploy.';

@@ -29,8 +29,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
-vi.setConfig({ testTimeout: 30_000 });
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';

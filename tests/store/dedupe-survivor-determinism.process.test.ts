@@ -32,8 +32,6 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-// Test 2 builds six fresh stores, one per ingest order, which can pass the unit budget on a Windows runner.
-vi.setConfig({ testTimeout: 15_000 });
 
 function ctxFor(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });

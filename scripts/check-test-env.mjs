@@ -10,7 +10,14 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
-import { EVAL_TESTS, STARTS_A_CHILD, STARTS_A_SERVER, projectOfName } from './lib/test-classes.mjs';
+import {
+  EVAL_TESTS,
+  RAISES_OWN_TIMEOUT,
+  STARTS_A_CHILD,
+  STARTS_A_SERVER,
+  projectOfName,
+  reachesChildProcess,
+} from './lib/test-classes.mjs';
 
 const isProcessEnv = (e) => e.getText() === 'process.env';
 const isEnvMember = (e) =>
@@ -217,13 +224,21 @@ export function misnamedTests(dir) {
   const startsChild = startsVia(helpers, STARTS_A_CHILD);
   const startsServer = startsVia(helpers, STARTS_A_SERVER);
   const skipped = new Set(EVAL_TESTS);
+  // The token-eval harness belongs to another owner and keeps its names.
   const hits = [];
   for (const path of filesUnder(dir, (n) => /\.test\.(ts|mjs)$/.test(n))) {
     const file = relative(dirname(dir), path).replaceAll('\\', '/');
-    if (skipped.has(file)) continue;
+    if (skipped.has(file) || file.startsWith('tests/token-eval-')) continue;
     const source = readFileSync(path, 'utf8');
-    const want = startsChild(source) ? 'process' : startsServer(source) ? 'server' : 'unit';
     const has = projectOfName(file);
+    // A test that spawns inside src never names child_process, so the import graph decides when it lifts its own budget.
+    const waitsOnChild = startsChild(source) || (RAISES_OWN_TIMEOUT.test(source) && reachesChildProcess(path));
+    const want =
+      waitsOnChild || (has === 'process' && reachesChildProcess(path))
+        ? 'process'
+        : startsServer(source)
+          ? 'server'
+          : 'unit';
     if (want !== has) hits.push({ file, has, want });
   }
   return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));

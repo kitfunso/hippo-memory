@@ -15,8 +15,6 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 
 oneRequestPerTest();
 
-// A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
-vi.setConfig({ testTimeout: 12_000 });
 
 function callTool(
   reqId: number,
