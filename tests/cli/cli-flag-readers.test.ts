@@ -143,7 +143,7 @@ describe('inline flag reads', () => {
   });
 
   // Files other lanes own still read flags inline; each entry must keep a read, so the list only shrinks.
-  const OTHER_LANES = ['incidents.ts', 'playbooks.ts', 'predictions.ts'];
+  const OTHER_LANES = ['predictions.ts'];
   const RAW_READ = /(?<![\w.'"/])flags(?:\[|\.(?!js\b)[A-Za-z])/;
   const cliFiles = files.filter((f) => f.includes(`${path.sep}surface${path.sep}cli${path.sep}`));
 
