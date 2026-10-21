@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { duplicateKey } from '../../src/base/util/same-text.js';
@@ -47,7 +48,7 @@ function reject(text: string): void {
 }
 
 describe('failure log functions', () => {
-  const log = () => sqliteSyncStore(root).failureLog;
+  const log = () => sqliteSyncStore(handlesOf(root)).failureLog;
 
   it('record writes a row that a later read finds', () => {
     log().record({
@@ -75,7 +76,7 @@ describe('failure log functions', () => {
 
 describe('compactions.start and compactions.markSnapshotSaved', () => {
   it('inserts a started record and marks its snapshot saved', () => {
-    const { compactions } = sqliteSyncStore(root);
+    const { compactions } = sqliteSyncStore(handlesOf(root));
     const id = compactions.start('default', {
       sessionId: 's1',
       originProject: 'acme/app',
@@ -108,7 +109,7 @@ describe('compactions.saveCallerItems', () => {
   };
 
   it('writes the items once and answers a retry with the first count', () => {
-    const { compactions } = sqliteSyncStore(root);
+    const { compactions } = sqliteSyncStore(handlesOf(root));
     expect(compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
     expect(compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
     expect(loadAllEntries(root, 'default')).toHaveLength(1);
@@ -116,7 +117,8 @@ describe('compactions.saveCallerItems', () => {
 });
 
 describe('captures.write', () => {
-  const write = (...args: Parameters<Sync<Captures>['write']>) => sqliteSyncStore(root).captures.write(...args);
+  const write = (...args: Parameters<Sync<Captures>['write']>) =>
+    sqliteSyncStore(handlesOf(root)).captures.write(...args);
   const entry = (content: string) => createMemory(content, { source: 'capture' });
 
   it('writes each new entry and counts a rejected value', () => {

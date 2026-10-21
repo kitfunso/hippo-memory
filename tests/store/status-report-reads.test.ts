@@ -1,6 +1,7 @@
 // The status verbs read only the rows their report needs, and the report is the one the whole-store read gave.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { physicsEnergyText } from '../../src/surface/cli/status.js';
@@ -54,7 +55,7 @@ function seed(): void {
 describe('status report reads', () => {
   it('builds the same correction-latency report from the join as from every row', () => {
     seed();
-    const report = buildCorrectionLatency(sqliteSyncStore(root).reports.correctionLinks());
+    const report = buildCorrectionLatency(sqliteSyncStore(handlesOf(root)).reports.correctionLinks());
     expect(report).toEqual(buildCorrectionLatency(correctionLinksOf(loadAllEntries(root, 'default'))));
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
@@ -62,7 +63,7 @@ describe('status report reads', () => {
 
   it('builds the same provenance report from the count and the gaps as from every row', () => {
     seed();
-    const report = buildProvenanceCoverage(sqliteSyncStore(root).reports.rawProvenance());
+    const report = buildProvenanceCoverage(sqliteSyncStore(handlesOf(root)).reports.rawProvenance());
     expect(report).toEqual(buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default'))));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
@@ -71,7 +72,7 @@ describe('status report reads', () => {
   it('reads the same rows when the store holds five times more rows outside the reports', () => {
     seed();
     const reports = () => {
-      const { correctionLinks, rawProvenance } = sqliteSyncStore(root).reports;
+      const { correctionLinks, rawProvenance } = sqliteSyncStore(handlesOf(root)).reports;
       return { links: correctionLinks(), raw: rawProvenance() };
     };
     const before = recordStatements(reports);
@@ -108,13 +109,13 @@ describe('physics status stats', () => {
     const entries = Array.from({ length: n }, (_, i) => createMemory(`particle memory ${i}`));
     writeEntriesTogether(root, entries);
     const saved = particles(entries.map((e) => e.id));
-    sqliteSyncStore(root).consolidation.saveParticles(saved);
+    sqliteSyncStore(handlesOf(root)).consolidation.saveParticles(saved);
     return saved;
   }
 
   it('averages the speeds a whole read averages, and loads the particles only up to the limit', () => {
     seedParticles(3);
-    const index = sqliteSyncStore(root).embeddingIndex;
+    const index = sqliteSyncStore(handlesOf(root)).embeddingIndex;
     const whole = loadStoredParticles(root);
     const mean = whole.reduce((sum, p) => sum + vecNorm(p.velocity), 0) / whole.length;
     expect(index.particleStats(3)).toEqual({ count: 3, meanSpeed: mean, particles: whole });
@@ -123,7 +124,7 @@ describe('physics status stats', () => {
 
   it('reads one column past the limit, whatever the particle count', () => {
     seedParticles(4);
-    const stats = () => sqliteSyncStore(root).embeddingIndex.particleStats(2);
+    const stats = () => sqliteSyncStore(handlesOf(root)).embeddingIndex.particleStats(2);
     const reads = recordStatements(stats).reads.filter((r) => r.sql.includes('memory_physics'));
     expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
   });

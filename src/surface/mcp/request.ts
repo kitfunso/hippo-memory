@@ -16,6 +16,7 @@ import {
   type McpContext,
   type McpRequest,
   type McpResponse,
+  type ToolCall,
   type ToolHandler,
 } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
@@ -50,7 +51,7 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpContext
 
 // ── Tool execution ──
 
-/** A tool, and whether it needs a folder store; unset, it runs under any store. */
+/** A tool, and the optional group it needs; unset, it runs under any store. */
 type ToolEntry =
   | { readonly needs?: undefined; readonly run: ToolHandler }
   | { readonly needs: 'folderFiles'; readonly run: LocalToolHandler };
@@ -59,6 +60,11 @@ type ToolEntry =
 function localTool(run: LocalToolHandler): ToolEntry {
   return { needs: 'folderFiles', run };
 }
+
+type ToolRun = (args: Record<string, JsonValue>) => string | Promise<string>;
+
+/** A tool bound to one store: its run for a call, or undefined when the call's reach has no global store for it. */
+type StoreTool = (ctx: McpContext) => ToolRun | undefined;
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
   ['hippo_recall', { run: runRecallTool }],
@@ -76,31 +82,53 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_peers', localTool(runPeersTool)],
 ]);
 
-/** A call with no context yet (tools/list on stdio) lists every tool. */
-function runsOn(store: HippoStore | undefined, toolName: string): boolean {
-  const need = TOOL_HANDLERS.get(toolName)?.needs;
-  return store === undefined || need === undefined || hasGroup(store, need);
+// A store's groups are fixed for its life, so each tool's need is proven once per store, not on each call.
+const toolsByStore = new WeakMap<HippoStore, ReadonlyMap<string, StoreTool>>();
+
+/** The tools `store` serves, bound to it the first time a transport hands it in; a tool it lacks the group for is left
+ * out, so a list hides it and a call answers not ported. */
+function toolsOn(store: HippoStore): ReadonlyMap<string, StoreTool> {
+  const known = toolsByStore.get(store);
+  if (known !== undefined) return known;
+  const tools = new Map<string, StoreTool>();
+  for (const [name, entry] of TOOL_HANDLERS) {
+    const bound = boundTool(entry, store);
+    if (bound !== undefined) tools.set(name, bound);
+  }
+  toolsByStore.set(store, tools);
+  return tools;
 }
 
-type ToolRun = (args: Record<string, JsonValue>) => string | Promise<string>;
+function boundTool(entry: ToolEntry, store: HippoStore): StoreTool | undefined {
+  if (entry.needs === undefined) {
+    const { run } = entry;
+    return (ctx) => (args) => run({ ...toolCall(ctx), args });
+  }
+  if (!hasGroup(store, entry.needs)) return undefined;
+  const { run } = entry;
+  return (ctx) => {
+    const globalTarget = ctx.reach?.globalTarget;
+    return globalTarget === undefined ? undefined : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
+  };
+}
+
+/** The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host (the HTTP server's
+ * Bearer, or the stdio host's folder walk and HIPPO_TENANT). */
+function toolCall(ctx: McpContext): Omit<ToolCall, 'args'> {
+  const { hippoRoot, tenantId, config, store } = ctx;
+  return { ctx, hippoRoot, store, config, tenantId };
+}
+
+/** A call with no context yet (tools/list on stdio) lists every tool. */
+function runsOn(store: HippoStore | undefined, toolName: string): boolean {
+  return store === undefined || toolsOn(store).has(toolName);
+}
 
 /** The tool bound to `ctx`, or undefined when its store does not serve it. */
 function toolRun(name: string, ctx: McpContext): ToolRun | undefined {
-  const entry = TOOL_HANDLERS.get(name);
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table drifted apart.
-  if (!entry) throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
-  // The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host (the HTTP server's
-  // Bearer, or the stdio host's folder walk and HIPPO_TENANT).
-  const { hippoRoot, tenantId, config, store } = ctx;
-  const call = { ctx, hippoRoot, store, config, tenantId };
-  if (entry.needs === undefined) {
-    const { run } = entry;
-    return (args) => run({ ...call, args });
-  }
-  const globalTarget = ctx.reach?.globalTarget;
-  if (!hasGroup(store, 'folderFiles') || globalTarget === undefined) return undefined;
-  const { run } = entry;
-  return (args) => run({ ...call, args, store, globalTarget });
+  if (!TOOL_HANDLERS.has(name)) throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
+  return toolsOn(ctx.store).get(name)?.(ctx);
 }
 
 // ── Request handling ──

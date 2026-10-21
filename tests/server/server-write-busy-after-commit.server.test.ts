@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from 'vites
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -63,7 +64,7 @@ function count(root: string, sql: string, ...params: string[]): number {
 }
 
 function forgottenTotal(root: string): number {
-  return Number(sqliteSyncStore(root).reports.stats().total_forgotten);
+  return Number(sqliteSyncStore(handlesOf(root)).reports.stats().total_forgotten);
 }
 
 /** Holds the store's write lock while `fn` runs, or until `fn` calls the release it is handed. */
