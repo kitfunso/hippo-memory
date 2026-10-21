@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import { once } from 'events';
+import { createInterface } from 'readline';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseFrame } from '../../src/surface/mcp/framing.js';
@@ -63,41 +65,23 @@ describe('parseFrame', () => {
 describe('hippo mcp stdio', () => {
   let tmpHome: string;
   let tmpHippo: string;
-  let prevHome: string | undefined;
-  let prevUserProfile: string | undefined;
-  let prevHippoHome: string | undefined;
   let proc: ChildProcessWithoutNullStreams | null = null;
 
   beforeEach(() => {
     tmpHome = makeRoot('mcp-test', { init: false });
     tmpHippo = path.join(tmpHome, '.hippo');
     fs.mkdirSync(tmpHippo, { recursive: true });
-    prevHome = process.env.HOME;
-    prevUserProfile = process.env.USERPROFILE;
-    prevHippoHome = process.env.HIPPO_HOME;
     vi.stubEnv('HOME', tmpHome);
     vi.stubEnv('USERPROFILE', tmpHome);
     vi.stubEnv('HIPPO_HOME', tmpHippo);
   });
 
   afterEach(async () => {
-    if (proc && proc.exitCode === null) {
-      const exited = new Promise<void>((resolve) => proc!.once('exit', () => resolve()));
-      // Closing stdin lets the server exit itself and write its coverage; SIGKILL would lose it.
+    if (proc && proc.exitCode === null && proc.signalCode === null) {
+      // Closing stdin lets the server exit itself and write its coverage; one that never exits fails at the hook timeout.
+      const exited = once(proc, 'exit');
       proc.stdin.end();
-      const timedOut = await Promise.race([
-        exited.then(() => false),
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 2000)),
-      ]);
-      if (timedOut) proc.kill('SIGKILL');
-      await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 2000))]);
-    }
-    vi.stubEnv('HOME', prevHome);
-    vi.stubEnv('USERPROFILE', prevUserProfile);
-    vi.stubEnv('HIPPO_HOME', prevHippoHome);
-    try {
-    } catch {
-      // Windows occasionally holds file handles briefly after process exit.
+      await exited;
     }
   });
 
@@ -111,38 +95,15 @@ describe('hippo mcp stdio', () => {
       env: { ...process.env, HIPPO_HOME: tmpHippo },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-
-    const responses: string[] = [];
-    const waiters: Array<(line: string) => void> = [];
-    let stdoutBuffer = '';
-    proc.stdout.on('data', (chunk: Buffer) => {
-      stdoutBuffer += chunk.toString('utf-8');
-      let idx;
-      while ((idx = stdoutBuffer.indexOf('\n')) !== -1) {
-        const line = stdoutBuffer.slice(0, idx).trim();
-        stdoutBuffer = stdoutBuffer.slice(idx + 1);
-        if (!line) continue;
-        const waiter = waiters.shift();
-        if (waiter) waiter(line);
-        else responses.push(line);
+    // A reply that never comes (the issue #13 hang) fails at the test timeout.
+    const lines = createInterface({ input: proc.stdout })[Symbol.asyncIterator]();
+    const nextReply = async (): Promise<string> => {
+      for (;;) {
+        const { value, done } = await lines.next();
+        if (done) throw new Error('stdout closed before a reply');
+        if (value.trim()) return value.trim();
       }
-    });
-
-    const waitForResponse = (timeoutMs: number) =>
-      new Promise<string>((resolve, reject) => {
-        const cached = responses.shift();
-        if (cached) return resolve(cached);
-        const timer = setTimeout(() => {
-          const idx = waiters.indexOf(waiter);
-          if (idx !== -1) waiters.splice(idx, 1);
-          reject(new Error(`No response in ${timeoutMs}ms (issue #13 regression)`));
-        }, timeoutMs);
-        const waiter = (line: string) => {
-          clearTimeout(timer);
-          resolve(line);
-        };
-        waiters.push(waiter);
-      });
+    };
 
     const initMsg = JSON.stringify({
       jsonrpc: '2.0',
@@ -158,7 +119,7 @@ describe('hippo mcp stdio', () => {
     // Critically: do NOT close stdin. This is what mcp2cli does and what
     // issue #13 says hangs forever.
 
-    const responseLine = await waitForResponse(5000);
+    const responseLine = await nextReply();
     const response = JSON.parse(responseLine);
     expect(response.jsonrpc).toBe('2.0');
     expect(response.id).toBe(1);
@@ -172,7 +133,7 @@ describe('hippo mcp stdio', () => {
       method: 'tools/list',
     });
     proc.stdin.write(listMsg + '\n');
-    const listLine = await waitForResponse(5000);
+    const listLine = await nextReply();
     const listResp = JSON.parse(listLine);
     expect(listResp.id).toBe(2);
     expect(Array.isArray(listResp.result?.tools)).toBe(true);

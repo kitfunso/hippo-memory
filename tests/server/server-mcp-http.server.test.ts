@@ -146,12 +146,8 @@ describe('MCP-over-HTTP transport', () => {
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('text/event-stream');
       const reader = res.body!.getReader();
-      const { value, done } = await Promise.race([
-        reader.read(),
-        new Promise<{ value: undefined; done: true }>((resolve) =>
-          setTimeout(() => resolve({ value: undefined, done: true }), 1000),
-        ),
-      ]);
+      // The ping goes out as the stream opens; a stream that never sends it hangs to the test timeout.
+      const { value, done } = await reader.read();
       expect(done).toBe(false);
       const text = new TextDecoder().decode(value);
       expect(text).toContain(': ping');

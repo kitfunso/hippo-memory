@@ -1,6 +1,5 @@
 // A request scope owns one handle per store; code that outlives the scope, or runs beside it, never gets or closes that handle.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { setTimeout as sleep } from 'node:timers/promises';
 import {
   openHippoDb,
   closeHippoDb,
@@ -22,16 +21,22 @@ const busyTimeout = (db: DatabaseSyncLike): number =>
   Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
 describe('runWithRequestStores', () => {
-  it('a timer that outlives its scope gets a connection of its own, which closeHippoDb closes', async () => {
+  it('work that outlives its scope gets a connection of its own, which closeHippoDb closes', async () => {
     let late: Promise<DatabaseSyncLike> | undefined;
+    // Released only once the scope has closed, so the late open runs after it in the scope's async context.
+    let release = (): void => undefined;
+    const scopeClosed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const scoped = await runWithRequestStores(
       () => {
-        late = sleep(20).then(() => openHippoDb(root));
+        late = scopeClosed.then(() => openHippoDb(root));
         return openHippoDb(root);
       },
       { busyWaitMs: 250 },
     );
     expect(scoped.isOpen).toBe(false);
+    release();
     const db = await late!;
     try {
       // Identity as a boolean: the matcher would format the closed handle, which throws.
@@ -60,14 +65,21 @@ describe('runWithRequestStores', () => {
 
   it("interleaved scopes never share or close each other's handles", async () => {
     let first: DatabaseSyncLike | undefined;
+    // Scope a stays open until b has opened its own handle beside it.
+    let release = (): void => undefined;
+    const bOpened = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const a = runWithRequestStores(async () => {
       first = openHippoDb(root);
-      await sleep(10);
+      await bOpened;
       expect(openHippoDb(root)).toBe(first);
     });
     const b = runWithRequestStores(async () => {
       const own = openHippoDb(root);
       expect(own === first).toBe(false);
+      expect(first?.isOpen).toBe(true);
+      release();
       await a;
       expect(first?.isOpen).toBe(false);
       expect(own.isOpen).toBe(true);

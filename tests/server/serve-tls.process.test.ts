@@ -1,5 +1,5 @@
 // `hippo serve` answers HTTPS when given a certificate and key; half a pair or an unreadable file stops it, never a quiet fall back to cleartext.
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -198,21 +198,18 @@ describe('hippo serve over TLS', () => {
       children.push(() => child.kill('SIGKILL'));
       let stdout = '';
       let stderr = '';
-      const timer = setTimeout(
-        () => reject(new Error(`no start lines within 30 s. stdout=${stdout} stderr=${stderr}`)),
-        30_000,
-      );
+      // A start that never prints its lines fails at the test timeout; this keeps what it did print.
+      onTestFailed(() => {
+        console.error(`stdout=${stdout} stderr=${stderr}`);
+      });
       child.stderr.on('data', (chunk: Buffer) => {
         stderr += chunk.toString('utf8');
       });
       child.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString('utf8');
-        if (!stdout.includes('press Ctrl+C to stop')) return;
-        clearTimeout(timer);
-        resolve(stdout);
+        if (stdout.includes('press Ctrl+C to stop')) resolve(stdout);
       });
       child.on('exit', (code) => {
-        clearTimeout(timer);
         reject(new Error(`hippo serve exited early (code=${code}). stdout=${stdout} stderr=${stderr}`));
       });
     });

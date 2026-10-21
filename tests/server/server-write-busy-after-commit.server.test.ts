@@ -66,17 +66,39 @@ function forgottenTotal(root: string): number {
   return Number(sqliteSyncStore(root).reports.stats().total_forgotten);
 }
 
-/** Holds the store's write lock until `releaseMs`, long enough that the first tries answer 503. */
-async function withLockHeld<T>(root: string, releaseMs: number, fn: () => Promise<T>): Promise<T> {
+/** Holds the store's write lock while `fn` runs, or until `fn` calls the release it is handed. */
+async function withLockHeld<T>(root: string, fn: (release: () => void) => Promise<T>): Promise<T> {
   const holder = new DatabaseSync(getHippoDbPath(root));
   holder.exec('BEGIN IMMEDIATE');
-  const timer = setTimeout(() => holder.exec('ROLLBACK'), releaseMs);
-  try {
-    return await fn();
-  } finally {
-    clearTimeout(timer);
+  const release = (): void => {
     if (holder.isTransaction) holder.exec('ROLLBACK');
+  };
+  try {
+    return await fn(release);
+  } finally {
+    release();
     holder.close();
+  }
+}
+
+/** Runs a routed write with the lock held until the server has refused one try busy, so the client's retry lands it. */
+async function landedOnRetry<T>(root: string, write: () => Promise<T>): Promise<{ result: T; statuses: number[] }> {
+  const realFetch = globalThis.fetch;
+  const statuses: number[] = [];
+  const spy = vi.spyOn(globalThis, 'fetch');
+  try {
+    const result = await withLockHeld(root, (release) => {
+      spy.mockImplementation(async (...args) => {
+        const res = await realFetch(...args);
+        statuses.push(res.status);
+        if (res.status === 503) release();
+        return res;
+      });
+      return write();
+    });
+    return { result, statuses };
+  } finally {
+    spy.mockRestore();
   }
 }
 
@@ -103,25 +125,31 @@ describe('routed writes under a busy store', () => {
   });
 
   it('remember: a lock held across the first tries ends in one stored row, not an error or a duplicate', async () => {
-    const result = await withLockHeld(home, 1200, () =>
+    const { result, statuses } = await landedOnRetry(home, () =>
       client.remember(url, undefined, { content: 'remember-busy-canary' }),
     );
-    expect(result.id).toBeTruthy();
+    expect(statuses).toEqual([503, 200]);
+    expect(result.id).toMatch(/^mem_[0-9a-f]+$/);
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary')).toBe(1);
+    expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, result.id)).toBe(1);
   });
 
   it('forget: a lock held across the first tries ends in one removal counted once', async () => {
     const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary' });
     const before = forgottenTotal(home);
-    await expect(withLockHeld(home, 1200, () => client.forget(url, undefined, id))).resolves.toEqual({ ok: true, id });
+    await expect(landedOnRetry(home, () => client.forget(url, undefined, id))).resolves.toEqual({
+      result: { ok: true, id },
+      statuses: [503, 200],
+    });
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
     expect(forgottenTotal(home)).toBe(before + 1);
   });
 
   it('archiveRaw: a lock held across the first tries ends in one archive row', async () => {
     const { id } = await client.remember(url, undefined, { content: 'archive-busy-canary', kind: 'raw' });
-    await expect(withLockHeld(home, 1200, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({
-      ok: true,
+    await expect(landedOnRetry(home, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({
+      result: { ok: true },
+      statuses: [503, 200],
     });
     expect(count(home, `SELECT COUNT(*) AS n FROM raw_archive WHERE memory_id = ?`, id)).toBe(1);
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
@@ -129,7 +157,8 @@ describe('routed writes under a busy store', () => {
 
   it('promote: a held global lock ends in exactly one global copy and one promote audit row', async () => {
     const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary' });
-    const result = await withLockHeld(globalHome, 1200, () => client.promote(url, undefined, id));
+    const { result, statuses } = await landedOnRetry(globalHome, () => client.promote(url, undefined, id));
+    expect(statuses).toEqual([503, 200]);
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
     expect(
       count(globalHome, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?`, result.globalId),
@@ -140,7 +169,7 @@ describe('routed writes under a busy store', () => {
     const before = forgottenTotal(home);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      await withLockHeld(home, 60_000, async () => {
+      await withLockHeld(home, async () => {
         await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'), {
           busyWaitMs: 50,
         });
@@ -160,7 +189,7 @@ describe('routed writes under a busy store', () => {
     const before = forgottenTotal(home);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      await withLockHeld(home, 60_000, async () => {
+      await withLockHeld(home, async () => {
         await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), {
           busyWaitMs: 50,
         });

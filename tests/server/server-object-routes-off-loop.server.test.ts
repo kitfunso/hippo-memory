@@ -1,6 +1,5 @@
 // The typed-object routes answer from store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setTimeout as delay } from 'node:timers/promises';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memory/memory.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -465,11 +464,10 @@ describe('an object write waiting for the write lock', () => {
       return res;
     });
     await sent('objects.saveObject', saves + 1);
-    const answered: Array<[string, number | string]> = [];
+    const answered: Array<[string, number]> = [];
     for (const step of reads) {
-      // A read sent to the writer thread waits behind the blocked save for as long as the lock is held.
-      const first = await Promise.race([send(run, step), delay(5_000, 'late', { ref: false })]);
-      answered.push([step[0], first instanceof Response ? first.status : first]);
+      // A read sent to the writer thread waits behind the blocked save until the lock is released, so it hangs here.
+      answered.push([step[0], (await send(run, step)).status]);
     }
     const landedUnderLock = landed;
     lock.release();

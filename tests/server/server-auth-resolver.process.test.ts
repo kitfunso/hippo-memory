@@ -536,15 +536,11 @@ describe('auth resolver stream', () => {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
-    const deadline = Date.now() + 4000;
-    while (Date.now() < deadline && !buf.includes('auth_revoked')) {
-      const r = await Promise.race([
-        reader.read(),
-        new Promise<{ value: undefined; done: true }>((ok) =>
-          setTimeout(() => ok({ value: undefined, done: true }), 500),
-        ),
-      ]);
-      if (r.value) buf += decoder.decode(r.value);
+    // Read until the close frame or the end of the stream; one that never closes hangs to the test timeout.
+    while (!buf.includes('auth_revoked')) {
+      const r = await reader.read();
+      if (r.done) break;
+      buf += decoder.decode(r.value);
     }
     ac.abort();
     expect(buf).toContain('auth_revoked');

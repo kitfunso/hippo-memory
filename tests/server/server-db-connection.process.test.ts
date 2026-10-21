@@ -100,7 +100,7 @@ describe('hippo serve store connection', () => {
   it('stops waiting for a locked store after the server lock wait, instead of stalling the event loop until the lock goes', async () => {
     const root = makeRoot('srv-conn-locked');
     dirs.push(root);
-    // Another process holds an exclusive lock for 6 s; in rollback-journal mode that blocks the journal-mode switch every open makes.
+    // Another process holds an exclusive lock until it is killed; in rollback-journal mode that blocks the journal-mode switch every open makes.
     const script = join(root, 'hold-lock.mjs');
     writeFileSync(
       script,
@@ -110,11 +110,11 @@ describe('hippo serve store connection', () => {
         "db.exec('PRAGMA journal_mode = DELETE');",
         "db.exec('BEGIN EXCLUSIVE');",
         "console.log('locked');",
-        "setTimeout(() => { db.exec('COMMIT'); db.close(); }, 6000);",
+        'process.stdin.resume();',
       ].join('\n'),
     );
     const holder = spawn(process.execPath, ['--no-warnings', script, join(root, 'hippo.db')], {
-      stdio: ['ignore', 'pipe', 'inherit'],
+      stdio: ['pipe', 'pipe', 'inherit'],
     });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let handle: ServerHandle | undefined;

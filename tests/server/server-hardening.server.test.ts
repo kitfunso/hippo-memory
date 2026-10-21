@@ -30,6 +30,22 @@ function signSlack(ts: string, body: string): string {
   return `v0=${createHmac('sha256', SLACK_SECRET).update(`v0:${ts}:${body}`).digest('hex')}`;
 }
 
+/** The reason of the stream's "event: closed" frame; a stream that never sends one hangs to the test timeout. */
+async function closedReasonOf(reader: ReadableStreamDefaultReader<Uint8Array>, seen: string): Promise<string | null> {
+  const decoder = new TextDecoder();
+  let buf = seen;
+  for (;;) {
+    const m = buf.match(/event:\s*closed\s*\ndata:\s*(\{[^\n]*\})/);
+    if (m) {
+      // SAFETY: the matched frame's data is the JSON object the stream-close handler writes, with a `reason` field.
+      return (JSON.parse(m[1]!) as { reason?: string }).reason ?? null;
+    }
+    const r = await reader.read();
+    if (r.done) return null;
+    buf += decoder.decode(r.value);
+  }
+}
+
 describe('server hardening', () => {
   let root: string;
   let handle: ServerHandle;
@@ -66,32 +82,7 @@ describe('server hardening', () => {
       });
       expect(res.status).toBe(200);
       const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-
-      // Drain frames for up to 3s, looking for "event: closed" with
-      // reason=max_age_exceeded.
-      let buf = '';
-      let closedReason: string | null = null;
-      const deadline = Date.now() + 3000;
-      while (Date.now() < deadline && closedReason === null) {
-        const r = await Promise.race([
-          reader.read(),
-          new Promise<{ value: undefined; done: true }>((resolve) =>
-            setTimeout(() => resolve({ value: undefined, done: true }), 500),
-          ),
-        ]);
-        if (r.value) buf += decoder.decode(r.value);
-        const m = buf.match(/event:\s*closed\s*\ndata:\s*(\{[^\n]*\})/);
-        if (m) {
-          // SAFETY: the regex above only matches an SSE "event: closed" frame
-          // whose data payload is the JSON object src/server.ts's stream-close
-          // handler writes, which always includes a `reason` field.
-          const parsed = JSON.parse(m[1]!) as { reason?: string };
-          closedReason = parsed.reason ?? null;
-          break;
-        }
-        if (r.done) break;
-      }
+      const closedReason = await closedReasonOf(reader, '');
       try {
         reader.cancel().catch(() => {});
       } catch {
@@ -131,15 +122,9 @@ describe('server hardening', () => {
       });
       expect(res.status).toBe(200);
       const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
 
       // Read initial ping to confirm stream live.
-      const first = await Promise.race([
-        reader.read(),
-        new Promise<{ value: undefined; done: true }>((resolve) =>
-          setTimeout(() => resolve({ value: undefined, done: true }), 1000),
-        ),
-      ]);
+      const first = await reader.read();
       expect(first.done).toBe(false);
 
       // Now revoke the key. Next heartbeat should close the stream.
@@ -150,28 +135,7 @@ describe('server hardening', () => {
         closeHippoDb(db2);
       }
 
-      let buf = decoder.decode(first.value);
-      let closedReason: string | null = null;
-      const deadline = Date.now() + 3000;
-      while (Date.now() < deadline && closedReason === null) {
-        const r = await Promise.race([
-          reader.read(),
-          new Promise<{ value: undefined; done: true }>((resolve) =>
-            setTimeout(() => resolve({ value: undefined, done: true }), 500),
-          ),
-        ]);
-        if (r.value) buf += decoder.decode(r.value);
-        const m = buf.match(/event:\s*closed\s*\ndata:\s*(\{[^\n]*\})/);
-        if (m) {
-          // SAFETY: the regex above only matches an SSE "event: closed" frame
-          // whose data payload is the JSON object src/server.ts's stream-close
-          // handler writes, which always includes a `reason` field.
-          const parsed = JSON.parse(m[1]!) as { reason?: string };
-          closedReason = parsed.reason ?? null;
-          break;
-        }
-        if (r.done) break;
-      }
+      const closedReason = await closedReasonOf(reader, new TextDecoder().decode(first.value));
       try {
         reader.cancel().catch(() => {});
       } catch {

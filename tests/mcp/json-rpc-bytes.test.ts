@@ -177,23 +177,35 @@ describe('replies the stdio loop writes', () => {
     ]);
   });
 
-  it('a call past its deadline, with -32001 and the request id', async () => {
+  it('a call past its deadline, with -32001 and the request id, and the late reply is dropped', async () => {
+    // The call is held until the reply is out, so no timer race decides the order. The deadline stays real: a faked
+    // timer fires outside the request's async scope and drops the request id.
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '40');
     const real = cliStdioHost();
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let ran = false;
     const slow: McpHost = {
       contextFor: (hippoRoot, tenantId) => real.contextFor(hippoRoot, tenantId),
       runRequest: async (run) => {
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await held;
+        ran = true;
         return run();
       },
     };
     startStdioLoop(slow);
     feed('{"jsonrpc":"2.0","id":13,"method":"tools/list"}\n');
     await vi.waitFor(() => expect(written).toHaveLength(1), { timeout: 5000 });
+    expect(ran).toBe(false);
     expect(written[0]).toMatch(
       /^\{"jsonrpc":"2.0","id":13,"error":\{"code":-32001,"message":"Request timed out: tools\/list did not finish within 40 ms; a write it started may or may not be saved","data":\{"requestId":"[0-9a-f-]{36}"\}\}\}\n$/,
     );
+    release();
     fire(stdin, 'end');
     await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0), { timeout: 5000 });
+    expect(ran).toBe(true);
+    expect(written).toHaveLength(1);
   });
 });

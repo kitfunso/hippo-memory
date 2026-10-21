@@ -1,5 +1,5 @@
 // A signal or crash shutdown that cannot finish ends the process at its bound; one that can finish still exits 0 on a signal.
-import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, beforeEach, onTestFailed, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -19,8 +19,6 @@ afterEach(() => {
 // The script's shutdownDrainMs plus the 10 s the store's threads get to close.
 const DRAIN_MS = 200;
 const BOUND_MS = DRAIN_MS + 10_000;
-// A loaded machine starts and ends a process slowly; past this the child counts as never exiting.
-const MARGIN_MS = 10_000;
 // How long the child gets to reach a state the test waits for.
 const REACH_MS = 20_000;
 
@@ -60,7 +58,7 @@ interface Served {
   readonly stderr: () => string;
   /** What the child has written, for the message of a wait that gave up. */
   readonly output: () => string;
-  /** Settles when the script prints `line`; fails with what the child wrote when it ends or 20 s pass first. */
+  /** Settles when the script prints `line`; fails with what the child wrote when it ends first. */
   readonly printed: (line: string) => Promise<void>;
   readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
 }
@@ -89,20 +87,21 @@ function serveThen(home: string, after: readonly string[]): Served {
     stderr += chunk.toString('utf8');
   });
   const output = (): string => `stdout:\n${stdout}\nstderr:\n${stderr}`;
+  // A wait that only the runner's timeout ends would otherwise leave no evidence of what the child did.
+  onTestFailed(() => {
+    console.error(output());
+  });
   // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
   const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((done) =>
     child.once('close', (code, signal) => done({ code, signal })),
   );
   const printed = (line: string): Promise<void> =>
     new Promise((done, fail) => {
-      // A wait that only the runner's timeout ends leaves no evidence of what the child did.
-      const giveUp = (why: string): void => fail(new Error(`${why} before the script printed "${line}"\n${output()}`));
-      const timer = setTimeout(() => giveUp(`${REACH_MS} ms passed`), REACH_MS);
-      void exited.then(({ code, signal }) => giveUp(`the child ended (code ${code}, signal ${signal})`));
+      void exited.then(({ code, signal }) =>
+        fail(new Error(`the child ended (code ${code}, signal ${signal}) before the script printed "${line}"`)),
+      );
       const check = (): void => {
-        if (!stdout.split('\n').includes(line)) return;
-        clearTimeout(timer);
-        done();
+        if (stdout.split('\n').includes(line)) done();
       };
       waiting.push(check);
       check();
@@ -166,12 +165,8 @@ describe('serve() shutdown bound', () => {
       served.child.stdin.write('go\n');
       const triggeredAt = Date.now();
 
-      const outcome = await Promise.race([
-        served.exited,
-        new Promise<'still running'>((done) => setTimeout(() => done('still running'), BOUND_MS + MARGIN_MS)),
-      ]);
-
-      expect(outcome, served.output()).toEqual(KILLED);
+      // A child that never ends fails at the test timeout, with its output printed.
+      expect(await served.exited, served.output()).toEqual(KILLED);
       expect(Date.now() - triggeredAt).toBeGreaterThanOrEqual(BOUND_MS - 1000);
       const boundLines = served
         .stderr()

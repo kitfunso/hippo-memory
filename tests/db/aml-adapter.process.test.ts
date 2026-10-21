@@ -392,9 +392,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     expect(searchRes.status).toBe(200);
     const searchBody: { data: SearchRow[] } = await searchRes.json();
     const row = searchBody.data.find((r) => r.content.includes('zqx7') && r.content.includes('wvk3'));
-    expect(row).toBeDefined();
-    expect(row!.content).toContain('user: zqx7');
-    expect(row!.content).toContain('assistant: wvk3');
+    expect(row?.content).toBe('user: zqx7\nassistant: wvk3');
   });
 });
 
