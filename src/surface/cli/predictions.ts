@@ -9,7 +9,7 @@ import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from '
 import { requireInit } from './shared.js';
 import { foundOrExit, idArgOrExit, requireStatus } from './object-verbs.js';
 import { fail } from './exit.js';
-import type { Prediction } from '../../store/port/predictions.js';
+import type { Prediction } from '../../store/port/objects.js';
 
 const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';

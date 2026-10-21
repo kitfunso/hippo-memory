@@ -1,5 +1,4 @@
 // hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with their audit rows.
-import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { appendAuditEvent } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter, type KeysetPosition } from '../../base/util/keyset.js';
@@ -13,7 +12,7 @@ import type {
   Quarantine,
 } from '../port.js';
 import type { Sync } from './served.js';
-import type { QuarantineRow, QuarantineStatus } from '../port/quarantine.js';
+import { QUARANTINE_LIST_LIMIT, type QuarantineRow, type QuarantineStatus } from '../port/quarantine.js';
 import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../base/scope/recall-scope.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { OnHandle, StoreFiles } from './open.js';
@@ -64,7 +63,7 @@ function listQuarantineRows(
   db: DatabaseSyncLike,
   tenantId: string,
   status: QuarantineStatus | 'all' = 'pending',
-  limit = DEFAULT_LIST_LIMIT,
+  limit = QUARANTINE_LIST_LIMIT,
   afterRow?: KeysetPosition,
 ): QuarantineRow[] {
   // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history, drop it from the

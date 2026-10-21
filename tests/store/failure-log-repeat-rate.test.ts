@@ -17,7 +17,7 @@ import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import type { FailureOutcome } from '../../src/store/port/failure-log.js';
+import type { FailureOutcome } from '../../src/store/port/rejections.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';

@@ -1,14 +1,11 @@
-import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter } from '../../base/util/keyset.js';
 import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { QueryAuditOptions } from '../port/audit-log.js';
-import type { AuditPrune } from '../port/audit-maintenance.js';
-import type { ListAuditAfterOpts } from '../port/key-audit.js';
-import { ALL_TENANTS } from '../../base/util/tenant.js';
+import { auditRowsRead, type QueryAuditOptions } from '../port/audit.js';
+import type { AuditPrune } from '../port/audit.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 // node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a
@@ -64,36 +61,12 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions):
     params.push(opts.since);
   }
   const after = keysetAfter('ts', 'id', opts.after);
-  // One past the cap: GET /v1/audit reads a row ahead to tell whether another page exists.
-  const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT + 1));
+  const limit = auditRowsRead(opts.limit);
   const rows = cachedStatement(
     db,
     `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC ` +
       `LIMIT ?`,
   ).all(...params, ...after.params, limit) as AuditRow[];
-  return rows.map(rowToAuditEvent);
-}
-
-/** Cursor read: events with id > afterId, ascending. Retention prune leaves gaps in the ids, so resume from the last id
- * returned, never from a count. */
-export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterOpts): AuditEvent[] {
-  if (!Number.isInteger(opts.afterId) || opts.afterId < 0) {
-    throw new RangeError('afterId must be a non-negative integer');
-  }
-  if (opts.limit !== undefined && !Number.isInteger(opts.limit)) {
-    throw new RangeError('limit must be an integer');
-  }
-  const where: string[] = ['id > ?'];
-  const params: unknown[] = [opts.afterId];
-  if (opts.tenantId !== ALL_TENANTS) {
-    where.push('+tenant_id = ?');
-    params.push(opts.tenantId);
-  }
-  const limit = Math.max(1, Math.min(opts.limit ?? 1000, MAX_AUDIT_LIMIT));
-  const rows = cachedStatement(
-    db,
-    `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT ?`,
-  ).all(...params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
 }
 

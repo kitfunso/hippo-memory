@@ -1,7 +1,7 @@
 import { predictionMirror } from '../../base/records/prediction.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../../store/port.js';
 import type { Context } from '../types.js';
-import type { Prediction, SavePredictionOptions } from '../../store/port/predictions.js';
+import type { Prediction, SavePredictionOptions } from '../../store/port/objects.js';
 import type { PredictionBaserate } from '../../store/port/types.js';
 
 const predictionsOf = (ctx: Context): Predictions => ctx.store.predictions;

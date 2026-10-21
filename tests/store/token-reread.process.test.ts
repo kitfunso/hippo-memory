@@ -12,7 +12,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { carryingCalls, lastSentState, recordTokenUse } from '../../src/store/sqlite/token-ledger.js';
 import { shouldSkipUnchanged } from '../../src/base/session/skip-unchanged.js';
 import { readApiCalls } from '../../src/infra/transcript-calls.js';
-import type { TokenEvent, TokenSummary, TokenSurface } from '../../src/store/port/token-ledger.js';
+import type { TokenEvent, TokenSummary, TokenSurface } from '../../src/store/port/ledger.js';
 import type { ApiCall } from '../../src/base/session/transcript-calls.js';
 import { isSubagentPayload } from '../../src/base/util/hook-payload.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';

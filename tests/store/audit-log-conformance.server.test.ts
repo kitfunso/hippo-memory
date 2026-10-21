@@ -4,7 +4,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from '../_helpers/audit-rows.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -21,8 +22,7 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
-import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
-import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import type { QueryAuditOptions } from '../../src/store/port/audit.js';
 import { memorySide } from '../_helpers/memory-side.js';
 
 const HOST = '__host__';
@@ -107,7 +107,7 @@ function seedAuditRows(dir: string): void {
       role: 'admin',
       expiresAt: '2999-01-01T00:00:00.000Z',
     }).plaintext;
-    fixtureAudit = listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
+    fixtureAudit = auditRowsOn(db);
   } finally {
     vi.useRealTimers();
     closeHippoDb(db);

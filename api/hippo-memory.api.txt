@@ -202,7 +202,6 @@ entry/store-kit.d.ts: LastRecallWrites re-export
 entry/store-kit.d.ts: LegacyStats re-export
 entry/store-kit.d.ts: LiftedRejection re-export
 entry/store-kit.d.ts: ListApiKeysOpts re-export
-entry/store-kit.d.ts: ListAuditAfterOpts re-export
 entry/store-kit.d.ts: ListDormantOpts re-export
 entry/store-kit.d.ts: LoserFate re-export
 entry/store-kit.d.ts: MemoryConflict re-export

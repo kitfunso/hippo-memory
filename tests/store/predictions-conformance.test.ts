@@ -15,7 +15,7 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent, PredictionBaserate } from '../../src/store/port/types.js';
-import type { Prediction, SavePredictionOptions } from '../../src/store/port/predictions.js';
+import type { Prediction, SavePredictionOptions } from '../../src/store/port/objects.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();

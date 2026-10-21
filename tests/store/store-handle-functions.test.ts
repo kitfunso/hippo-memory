@@ -10,7 +10,7 @@ import { duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
-import type { Captures } from '../../src/store/port/captures.js';
+import type { Captures } from '../../src/store/port/capture.js';
 import type { Sync } from '../../src/store/sqlite/served.js';
 import { captureExtractedItems } from '../../src/surface/capture/command.js';
 import type { ExtractedItem } from '../../src/surface/capture/extract.js';

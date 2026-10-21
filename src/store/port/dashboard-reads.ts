@@ -52,7 +52,7 @@ export interface DashboardTotals {
 }
 
 /** The rows of one project a memory list keeps; an infinite bound keeps every row on that side. */
-export interface DashboardFilter {
+interface DashboardFilter {
   /** Indices into LAYER_ORDER. */
   readonly layers: readonly number[];
   readonly minAgeDays: number;
@@ -112,7 +112,7 @@ export interface ListedRow {
 }
 
 /** One live row as the scatter plots it; `layer` and `band` are indices. */
-export interface ScatterPoint {
+interface ScatterPoint {
   readonly id: string;
   readonly ageDays: number;
   readonly strength: number;

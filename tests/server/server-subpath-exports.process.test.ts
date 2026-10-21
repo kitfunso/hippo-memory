@@ -141,7 +141,6 @@ const STORE_KIT_TYPES = [
   'LastRecall',
   'LastRecallWrites',
   'ListApiKeysOpts',
-  'ListAuditAfterOpts',
   'MemoryEntry',
   'NewApiKey',
   'OptionalGroup',

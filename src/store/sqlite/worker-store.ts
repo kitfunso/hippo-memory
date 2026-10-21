@@ -208,7 +208,7 @@ export function workerSqliteStore(
 }
 
 /** The operator's global stores a server opens beside its own, closed with it. */
-export interface GlobalStores {
+interface GlobalStores {
   readonly open: (root: string) => HippoStore & StoreGroups;
   readonly close: () => Promise<void>;
 }

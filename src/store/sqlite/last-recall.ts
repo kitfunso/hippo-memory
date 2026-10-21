@@ -50,8 +50,7 @@ function applyOutcomeToLastAt(db: DatabaseSyncLike, files: StoreFiles, target: E
   return applyOutcomeAt(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
 }
 
-const outcomesAt: FileBodies<Pick<LastRecall, 'applyTracedOutcome' | 'applyOutcomeToLast'>> = {
-  applyTracedOutcome: applyOutcomeAt,
+const outcomesAt: FileBodies<Pick<LastRecall, 'applyOutcomeToLast'>> = {
   applyOutcomeToLast: applyOutcomeToLastAt,
 };
 

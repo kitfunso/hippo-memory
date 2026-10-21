@@ -16,7 +16,7 @@ import {
   surfaceTotals,
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
-import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../port/token-ledger.js';
+import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../port/ledger.js';
 import type { LastSent } from '../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../base/session/transcript-calls.js';
 
@@ -108,7 +108,7 @@ export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceI
 }
 
 /** Tokens hippo sent and skipped in one session, for {@link tokensBySession}. */
-export interface SessionTokens {
+interface SessionTokens {
   sessionId: string;
   /** Tokens of memory text sent to the agent. */
   sent: number;

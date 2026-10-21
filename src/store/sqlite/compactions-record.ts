@@ -41,8 +41,7 @@ import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { updateStatsAt } from './index-and-stats.js';
 import type { StoreFiles } from './open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../base/util/log.js';
-import type { CompactionStart } from '../port/compactions.js';
-import type { CompactionText } from '../port/compaction-hooks.js';
+import type { CompactionStart, CompactionText } from '../port/capture.js';
 
 export type { CompactionStatus };
 
@@ -202,12 +201,12 @@ export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, record
 }
 
 /** A caller's checked project, and the id its retries carry so a retry finds this record. */
-export interface SummaryCaller {
+interface SummaryCaller {
   originProject?: string;
   requestId?: string;
 }
 
-export interface RecordSummaryOptions {
+interface RecordSummaryOptions {
   readonly meta: Omit<CompactionStart, 'originProject'>;
   readonly text: CompactionText;
   readonly at: Date;

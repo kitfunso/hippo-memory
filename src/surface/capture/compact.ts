@@ -1,11 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { TaskSnapshot } from '../../store/port/sessions.js';
+import type { TaskSnapshot, Sessions } from '../../store/port/sessions.js';
 import { isInitialized } from '../../base/scope/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
-import type { Sessions } from '../../store/port-groups.js';
-import type { CompactionHooks } from '../../store/port/compaction-hooks.js';
-import type { CompactionStart } from '../../store/port/compactions.js';
+import type { CompactionHooks, CompactionStart } from '../../store/port/capture.js';
 import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../../domain/hooks/shared.js';
 import {

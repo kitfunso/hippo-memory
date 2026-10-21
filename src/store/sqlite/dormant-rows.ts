@@ -10,7 +10,8 @@ import { escapeLike } from '../../base/util/escape.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { DormantMove } from '../port/consolidation.js';
-import type { DormantMemory, ListDormantOpts } from '../port/dormant.js';
+import { dormantListCap, dormantTerms, type DormantMemory, type ListDormantOpts } from '../port/dormant.js';
+import { DORMANT_ORDER, orderSql } from '../rules/order.js';
 import type { DormantSnapshot } from '../port/types.js';
 
 // SAFETY: every read cast to this row selects DORMANT_COLUMNS; scripts/check-row-casts.mjs proves it.
@@ -24,8 +25,6 @@ interface DormantRow {
   dormant_at: string;
 }
 const DORMANT_COLUMNS = 'tenant_id, id, content, entry_json, reason, strength, dormant_at';
-
-const DEFAULT_DORMANT_LIMIT = 20;
 
 /** Insert (or refresh) the dormant snapshot for `move.entry`; the caller deletes the `memories` row in the same
  * transaction. */
@@ -120,23 +119,16 @@ export function listDormantRows(
   opts: ListDormantOpts = {},
   admit: SqlFragment = EVERY_SCOPE,
 ): DormantMemory[] {
-  const terms = (opts.query ?? '')
-    .trim()
-    .split(/\s+/)
-    .filter((t) => t.length > 0);
-  const limit =
-    opts.limit !== undefined && Number.isFinite(opts.limit) && opts.limit >= 1
-      ? Math.floor(opts.limit)
-      : DEFAULT_DORMANT_LIMIT;
+  const terms = dormantTerms(opts);
   const termClauses = terms.map(() => ` AND content LIKE ? ESCAPE '\\'`).join('');
   const rows = cachedStatement(
     db,
     `SELECT ${DORMANT_COLUMNS}
        FROM ${DORMANT_WITH_SCOPE}
       WHERE tenant_id = ? AND ${admit.sql}${termClauses}
-      ORDER BY dormant_at DESC, id ASC
+      ORDER BY ${orderSql(DORMANT_ORDER)}
       LIMIT ?`,
-  ).all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), limit) as DormantRow[];
+  ).all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), dormantListCap(opts)) as DormantRow[];
   return rows.map(rowToDormantMemory);
 }
 

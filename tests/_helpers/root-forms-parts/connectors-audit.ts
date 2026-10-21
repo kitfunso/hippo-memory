@@ -7,16 +7,21 @@ import {
   type GitHubEventLogEntry,
 } from '../../../src/store/sqlite/connectors/github.js';
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../../src/store/sqlite/connectors/slack.js';
-import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
-import { handlesOf } from '../../../src/store/sqlite/handles.js';
 import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { listApiKeyRows } from '../../../src/store/sqlite/auth.js';
-import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/store/port/key-writes.js';
+import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/store/port/keys.js';
 import type { AppendAuditOpts } from '../../../src/store/port/types.js';
 import type { ConnectorEventRecord } from '../../../src/store/port/connectors.js';
 
+/** The highest audit id hippo.db ever assigned, pruned rows included. */
 export function auditHighId(hippoRoot: string): number {
-  return sqliteSyncStore(handlesOf(hippoRoot)).keyAudit.auditHighId();
+  return onHandle(hippoRoot, (db) => {
+    // SAFETY: sqlite_sequence holds one integer seq per AUTOINCREMENT table.
+    const row = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'audit_log'").get() as
+      | { seq: number }
+      | undefined;
+    return row?.seq ?? 0;
+  });
 }
 
 export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {

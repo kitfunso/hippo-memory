@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { savePolicy } from '../../src/domain/objects/policies.js';
-import type { EntityType } from '../../src/store/port/graph-reads.js';
+import type { EntityType } from '../../src/store/port/graph.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph-writes.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
 import { objectsAt } from './objects-at.js';

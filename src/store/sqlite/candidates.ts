@@ -11,7 +11,7 @@ import { strengthSql } from './rule-sql.js';
 import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
 import { type DatabaseSyncLike, isFtsAvailable, isFtsInSync, withReadSnapshot } from '../../db/index.js';
-import { isoInstant } from '../../base/memory/created-stamp.js';
+import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { originInSql, rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
@@ -72,11 +72,8 @@ interface Position {
 /** Up to `limit` live rows `own` admits, newest first, after `after`. */
 type ReadNewest = (own: OwnRows, limit: number, after?: Position) => MemoryEntry[];
 
-// The text itself when it is toISOString's form, else the instant Date reads (as contextGet sorts it), else oldest.
-function positionOf(e: MemoryEntry): Position {
-  const iso = [...e.created].length === 24 && /z$/i.test(e.created);
-  return { at: iso ? e.created : (isoInstant(e.created) ?? ''), id: e.id };
-}
+// As contextGet sorts a row: a drifted stamp at the instant Date reads in it.
+const positionOf = (e: MemoryEntry): Position => ({ at: sortableStamp(e.created), id: e.id });
 
 const newestFirst = (a: Position, b: Position): number =>
   a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.id === b.id ? 0 : a.id < b.id ? 1 : -1;

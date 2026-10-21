@@ -4,14 +4,14 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } fro
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
-import { chunked, ID_CHUNK } from '../../base/util/chunked.js';
+import { chunked } from '../../base/util/chunked.js';
+import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { duplicateKey, longestWord } from '../../base/util/same-text.js';
 import { tenantAnd } from './tenant.js';
 import {
   afterIdAnd,
-  byEntryOrder,
   entryPage,
   ENTRY_PAGE_ORDER,
   idPageOf,
@@ -21,11 +21,10 @@ import {
   type SqlAnd,
 } from './keyset.js';
 import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '../port/consolidation.js';
-import type { IdPage, IdPageRequest } from '../port/embedding-index.js';
-import type { RawRefRow } from '../port/context-reads.js';
+import type { IdPage, IdPageRequest } from '../port/vectors.js';
+import type { RawRefRow, SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../port/project-tags.js';
 import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
-import type { SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/dag-reads.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 
 const MAX_FRESH_RAW = 200;
@@ -89,18 +88,9 @@ export function selectChildrenByParent(
   return byParent;
 }
 
-/** Batched lookup, capped at ID_CHUNK ids per call to keep IN(?,?,...) within SQLite limits. */
+/** The rows of every id in `ids`, in the by-id read's order; the rows of one chunk alone cannot be sorted in SQL. */
 export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
-  if (ids.length === 0) return [];
-  const capped = ids.slice(0, ID_CHUNK);
-  const tenant = tenantAnd(tenantId, TENANT_IS);
-  // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
-  const rows = cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT value FROM json_each(?))${tenant.sql} ` +
-      `ORDER BY created ASC, content ASC, id ASC`,
-  ).all(JSON.stringify(capped), ...tenant.args) as MemoryRow[];
-  return rows.map(rowToEntry);
+  return [...selectEntriesByIds(db, ids, tenantId).values()].sort(byIdOrder);
 }
 
 const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';
@@ -179,9 +169,7 @@ export function loadFreshRawMemoriesAt(
   const origin = originAnd(origins);
   sql += origin.sql;
   params.push(...origin.args);
-  // Tie tail makes same-`created` rows deterministic; `content` before `id` because ids are random
-  // UUIDs, so an id-only tail would pick which same-created rows make the window per instance.
-  sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
+  sql += ` ORDER BY ${orderSql(FRESH_RAW_ORDER)} LIMIT ?`;
   params.push(capped);
   const rows = cachedStatement(db, sql).all(...params) as MemoryRow[];
   return rows.map(rowToEntry);
@@ -322,7 +310,7 @@ function ftsMentionRows(db: DatabaseSyncLike, ftsQuery: string, within: EntryRow
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${nonAscii} ${ENTRY_PAGE_ORDER}`,
   ).all(...upTo.args, ...within.args, limit) as MemoryRow[];
   const ids = new Set(hits.map((row) => row.id));
-  return [...hits, ...others.filter((row) => !ids.has(row.id))].sort(byEntryOrder).slice(0, limit);
+  return [...hits, ...others.filter((row) => !ids.has(row.id))].sort(oldestFirst).slice(0, limit);
 }
 
 /** entryPage over whole rows, decoded. */
@@ -384,7 +372,7 @@ export function loadEntriesPageAt(db: DatabaseSyncLike, tenantId: TenantId, page
 
 /** The columns a text match needs, for one row of a tenant. */
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface TenantText {
+interface TenantText {
   readonly id: string;
   readonly content: string;
   readonly source: string;
@@ -392,7 +380,7 @@ export interface TenantText {
 }
 
 /** One page of TenantText rows, and where the next page starts (null after the last). */
-export interface TenantTextPage {
+interface TenantTextPage {
   readonly texts: TenantText[];
   readonly next: EntryCursor | null;
 }

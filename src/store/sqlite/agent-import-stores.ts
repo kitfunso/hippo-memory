@@ -13,9 +13,9 @@ import { served } from './served.js';
 import { inPortTerms } from './port-errors.js';
 import { sqliteStore } from './store.js';
 
-export type SqliteImportStore = StoreWith<'agentImport' | 'projectTags'>;
+type SqliteImportStore = StoreWith<'agentImport' | 'projectTags'>;
 
-export interface SqliteImportStores {
+interface SqliteImportStores {
   open(root: string, opts: { readonly busyWaitMs?: number }): SqliteImportStore;
   create(root: string): Promise<void>;
   standIn(): SqliteImportStore;

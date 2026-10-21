@@ -4,7 +4,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { naturalLog } from './natural-log.js';
 
 /** FTS5's unicode61 tokens: runs of letters and digits, case folded, diacritics removed. */
-export const ftsTokens = (text: string): string[] =>
+const ftsTokens = (text: string): string[] =>
   text
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
@@ -54,7 +54,7 @@ export const contentHoldsPhrase = (entry: MemoryEntry, phrase: string): boolean 
 const K1 = 1.2;
 const B = 0.75;
 
-export interface FtsMatch {
+interface FtsMatch {
   readonly entry: MemoryEntry;
   /** FTS5's bm25(): negative, lower is better. */
   readonly bm25: number;

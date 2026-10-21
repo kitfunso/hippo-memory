@@ -1,6 +1,6 @@
 // The in-memory KeyWrites group and findApiKey's read of the same rows.
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { ApiKeyListRow, KeyListQuery, KeyMint, KeyWrites, NewApiKey, SelfKeyMint } from '../port/key-writes.js';
+import type { ApiKeyListRow, KeyListQuery, KeyMint, KeyWrites, NewApiKey, SelfKeyMint } from '../port/keys.js';
 import type { ApiKeyRecord, AppendAuditOpts } from '../port/types.js';
 import { appendAudit, nextId } from './rows.js';
 import type { KeyRow, MemoryTables } from './tables.js';

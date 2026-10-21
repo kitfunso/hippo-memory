@@ -1,7 +1,7 @@
 // ContextReads answers alike on hippo.db and on a store held in memory: the same values, the same errors, no audit row.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
+import { auditRowsOn } from '../_helpers/audit-rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type {
   AmbientCandidateRequest,
@@ -25,7 +25,6 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -56,7 +55,7 @@ beforeAll(() => {
   seedContextRows(fixture.dir);
   const db = openHippoDb(fixture.dir);
   try {
-    fixtureAudit = listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
+    fixtureAudit = auditRowsOn(db);
   } finally {
     closeHippoDb(db);
   }

@@ -304,7 +304,7 @@ describe('an id-list read of one tenant', () => {
     expect(result).toEqual({ held: true, listed: 10 });
 
     const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
-    expect(idReads).toHaveLength(2);
+    expect(idReads).toHaveLength(1);
     const db = openStore(root);
     try {
       for (const sql of idReads) {

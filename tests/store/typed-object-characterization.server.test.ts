@@ -7,7 +7,7 @@ import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { runCli } from '../../src/cli.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
-import type { SourceObjectType } from '../../src/store/port/graph-reads.js';
+import type { SourceObjectType } from '../../src/store/port/graph.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';

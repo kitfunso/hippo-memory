@@ -18,7 +18,7 @@ import {
   markGraphDirtyAt,
   markPendingProcessedUpToAt,
 } from '../../../src/store/sqlite/graph-queue.js';
-import type { Entity, Relation } from '../../../src/store/port/graph-reads.js';
+import type { Entity, Relation } from '../../../src/store/port/graph.js';
 import { handlesOf, onHandle, openStore } from '../../../src/store/sqlite/handles.js';
 import { loadVectorCandidateEntriesAt } from '../../../src/store/sqlite/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
@@ -31,8 +31,7 @@ import {
   storedVectorSummaryAt,
 } from '../../../src/store/sqlite/vector-index.js';
 import type { RebuildPatch } from '../../../src/store/port/consolidation.js';
-import type { VectorCandidateSpec } from '../../../src/store/port/vector-reads.js';
-import type { StoredVectorSummary } from '../../../src/store/port/embedding-index.js';
+import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/store/port/vectors.js';
 
 export function markPendingProcessedUpTo(hippoRoot: string, tenantId: string, maxId: number): number {
   return onHandle(hippoRoot, (db) => markPendingProcessedUpToAt(db, tenantId, maxId));

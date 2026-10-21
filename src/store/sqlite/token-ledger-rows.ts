@@ -1,12 +1,12 @@
 // SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction and the arithmetic.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { TokenSurface } from '../port/token-ledger.js';
+import type { TokenSurface } from '../port/ledger.js';
 import { placeholders } from '../../db/sql.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
-export interface TokenRowInput {
+interface TokenRowInput {
   ts: string;
   tenantId: string;
   sessionId: string | null;
@@ -30,7 +30,7 @@ export function pruneTokenRowsBefore(db: DatabaseSyncLike, cutoffIso: string): v
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface LedgerAnchor {
+interface LedgerAnchor {
   id: number;
   event: string;
   block_hash: string | null;
@@ -66,7 +66,7 @@ export function countSkipsAfter(
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface SurfaceTotalsRow {
+interface SurfaceTotalsRow {
   surface: string;
   injected: number;
   tokens: number;
@@ -93,7 +93,7 @@ export function surfaceTotals(db: DatabaseSyncLike, tenantId: string, sinceIso: 
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface SessionTotalsRow {
+interface SessionTotalsRow {
   sessions: number;
   hook_sessions: number;
   reread_sessions: number;
@@ -120,7 +120,7 @@ export function sessionTotals(
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface SessionTokenRow {
+interface SessionTokenRow {
   session_id: string;
   sent: number;
   skipped: number;
@@ -141,7 +141,7 @@ export function sessionTokenRows(db: DatabaseSyncLike, tenantId: string, sinceIs
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface InjectedBlockRow {
+interface InjectedBlockRow {
   ts: string;
   surface: TokenSurface;
   tokens: number;

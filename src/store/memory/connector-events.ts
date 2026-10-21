@@ -10,7 +10,7 @@ import type {
   StoredCursors,
 } from '../port/connectors.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
-import { byBytes } from './rows.js';
+import { byBytes } from '../rules/order.js';
 import { archiveRow, stage } from './staged.js';
 import { eventSlot, logOnce } from './connector-writes.js';
 import type { MemoryTables, ParkedLetter } from './tables.js';
@@ -189,9 +189,6 @@ function cursorsOn(t: MemoryTables): Cursors {
     },
   };
 }
-
-/** The cursor map keys, so a loader files hippo.db's rows where these reads look. */
-export const cursorKey = key;
 
 export function memoryConnectorEvents(t: MemoryTables): ConnectorEvents {
   return {

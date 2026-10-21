@@ -9,7 +9,7 @@ import { scrubForSharing } from './share-scrub.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { assertRequestId, bindCaller } from './caller-session.js';
 import { FAILURE_TEXT_MAX_CHARS, failureHash } from './failure-reading.js';
-import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../../store/port/failure-log.js';
+import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../../store/port/rejections.js';
 import type { ContinuityKey } from '../../store/port/types.js';
 import { withEntryInfra } from '../entry-infra.js';
 

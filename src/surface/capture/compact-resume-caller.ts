@@ -9,8 +9,7 @@ import {
 import { bookTokenUse, ledgerReachOf } from '../../api/ledger-db.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
-import type { Sessions } from '../../store/port-groups.js';
-import type { SessionEvent } from '../../store/port/sessions.js';
+import type { Sessions, SessionEvent } from '../../store/port/sessions.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';
