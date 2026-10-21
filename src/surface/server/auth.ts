@@ -1,7 +1,7 @@
 // Bearer and loopback auth for the HTTP server.
 import { envAllowKeylessLocal, envRequireAuth, envTenant } from '../../base/util/env.js';
 import type { IncomingMessage } from 'node:http';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import { verifyApiKeyCached } from './api-key.js';
 import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../../api/index.js';
@@ -156,22 +156,34 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   return clean;
 }
 
-function logResolverFailure(what: string, raw: string, token: string): void {
-  // The plugin's message is logged, but never the token, even if the plugin echoed it.
-  log.error(`auth resolver ${what}: ${raw.split(token).join('[token]')}`);
+/** The fields with `token` cut out of every text, since a plugin may echo it into its message, stack or cause. */
+function withoutToken(fields: LogFields, token: string): LogFields {
+  return Object.fromEntries(
+    Object.entries(fields).map(([k, v]) => [k, isJsonString(v) ? v.split(token).join('[token]') : v]),
+  );
+}
+
+function logResolverFailure<E>(what: string, err: E, token: string): void {
+  const message = errorMessage(err).split(token).join('[token]');
+  log.error(`auth resolver ${what}: ${message}`, withoutToken(errorFields(err), token));
 }
 
 /** 503 when upstream throws or misses the deadline, so a stream heartbeat can tell an outage from a revocation. */
 async function askResolver(resolver: AuthResolver, token: string, deadlineMs: number): Promise<ResolvedBearer> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const abort = new AbortController();
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`no answer within ${deadlineMs} ms`)), deadlineMs);
+    timer = setTimeout(() => {
+      const late = new Error(`no answer within ${deadlineMs} ms`);
+      abort.abort(late);
+      reject(late);
+    }, deadlineMs);
   });
   let resolved: ResolvedBearer | null;
   try {
-    resolved = await Promise.race([(async () => resolver(token))(), deadline]);
+    resolved = await Promise.race([(async () => resolver(token, abort.signal))(), deadline]);
   } catch (err) {
-    logResolverFailure('threw', err instanceof Error ? err.message : 'unknown error', token);
+    logResolverFailure('threw', err, token);
     throw new HttpError(503, 'auth provider unavailable');
   } finally {
     clearTimeout(timer);
@@ -181,7 +193,7 @@ async function askResolver(resolver: AuthResolver, token: string, deadlineMs: nu
     clean = resolved ? sanitiseResolved(resolved) : null;
   } catch (err) {
     // A throwing getter is a resolver bug, not an outage, so it is a 401 like any malformed answer.
-    logResolverFailure('threw', err instanceof Error ? err.message : 'unknown error', token);
+    logResolverFailure('threw', err, token);
   }
   if (!clean) throw new HttpError(401, 'invalid api key');
   return clean;
@@ -211,7 +223,14 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpti
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
     const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
-    const clean = await askResolver(opts.authResolver, token, deadlineMs);
+    let clean: ResolvedBearer;
+    try {
+      clean = await askResolver(opts.authResolver, token, deadlineMs);
+    } catch (err) {
+      // A refused token spends the address's failed-auth budget like a wrong key; an outage (503) does not.
+      if (err instanceof HttpError && err.status === 401) chargeScryptRun(req, opts);
+      throw err;
+    }
     // A resolver vouches for a person, never names one.
     return { ...clean, viaAuthResolver: true, owner: clean.subject };
   }

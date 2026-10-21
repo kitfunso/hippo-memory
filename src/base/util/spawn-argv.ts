@@ -1,7 +1,9 @@
 // Starting a command from an argv list with no shell, Windows .cmd and .bat shims included, so no argument is ever
 // parsed as shell syntax.
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { errorFields, errorMessage, log } from './log.js';
 import { envPath, envPathExt } from './env.js';
 import { isFile } from './real-path.js';
 
@@ -19,6 +21,27 @@ export function cmdShimArgs(shimPath: string, forwardArgs: readonly string[]): s
   const command = `"${shimPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
   // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer pair.
   return ['/d', '/v:off', '/s', '/c', `"${command}"`];
+}
+
+// npm writes `"$basedir/node_modules/<pkg>/<file>.js"` into the .ps1 shim of every package that ships a Node script.
+const NPM_SHIM_ENTRY = /\$basedir[\\/](node_modules[\\/][^"'\r\n]+?\.[cm]?js)["']/;
+
+/** The JS file an npm .ps1 shim runs, so the caller can start Node on it with no PowerShell. Null when the shim is
+ * unreadable, names no script, or names one that is not a file under the shim's own folder. */
+export function npmShimEntry(shimPath: string): string | null {
+  let text: string;
+  try {
+    text = fs.readFileSync(shimPath, 'utf8');
+  } catch (err) {
+    log.warn(`cannot read the shim ${shimPath}: ${errorMessage(err)}`, errorFields(err));
+    return null;
+  }
+  // Split on either slash, so the shim parses the same on every platform, not only where `\` is a separator.
+  const segments = NPM_SHIM_ENTRY.exec(text)?.[1]?.split(/[\\/]/);
+  if (segments === undefined) return null;
+  const dir = path.dirname(shimPath);
+  const entry = path.resolve(dir, ...segments);
+  return !path.relative(dir, entry).startsWith('..') && isFile(entry) ? entry : null;
 }
 
 const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';

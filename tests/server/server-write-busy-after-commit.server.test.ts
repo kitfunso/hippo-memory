@@ -126,7 +126,7 @@ describe('routed writes under a busy store', () => {
 
   it('remember: a lock held across the first tries ends in one stored row, not an error or a duplicate', async () => {
     const { result, statuses } = await landedOnRetry(home, () =>
-      client.remember(url, undefined, { content: 'remember-busy-canary' }),
+      client.remember(url, undefined, { content: 'remember-busy-canary', force: true }),
     );
     expect(statuses).toEqual([503, 200]);
     expect(result.id).toMatch(/^mem_[0-9a-f]+$/);
@@ -135,7 +135,7 @@ describe('routed writes under a busy store', () => {
   });
 
   it('forget: a lock held across the first tries ends in one removal counted once', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary' });
+    const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary', force: true });
     const before = forgottenTotal(home);
     await expect(landedOnRetry(home, () => client.forget(url, undefined, id))).resolves.toEqual({
       result: { ok: true, id },
@@ -146,7 +146,7 @@ describe('routed writes under a busy store', () => {
   });
 
   it('archiveRaw: a lock held across the first tries ends in one archive row', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'archive-busy-canary', kind: 'raw' });
+    const { id } = await client.remember(url, undefined, { content: 'archive-busy-canary', kind: 'raw', force: true });
     await expect(landedOnRetry(home, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({
       result: { ok: true },
       statuses: [503, 200],
@@ -156,7 +156,7 @@ describe('routed writes under a busy store', () => {
   });
 
   it('promote: a held global lock ends in exactly one global copy and one promote audit row', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary' });
+    const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary', force: true });
     const { result, statuses } = await landedOnRetry(globalHome, () => client.promote(url, undefined, id));
     expect(statuses).toEqual([503, 200]);
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
@@ -205,7 +205,7 @@ describe('routed writes under a busy store', () => {
   });
 
   it('promote: a busy audit write rolls back the global copy, so a failed promote leaves nothing to duplicate', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'promote-audit-busy-canary' });
+    const { id } = await client.remember(url, undefined, { content: 'promote-audit-busy-canary', force: true });
     const globalDb = openHippoDb(globalHome);
     try {
       globalDb.exec(

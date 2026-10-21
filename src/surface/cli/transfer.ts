@@ -30,7 +30,7 @@ import {
   type CliContext,
 } from './api-context.js';
 import { printError } from './output.js';
-import { errorMessage, log } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
 import {
@@ -157,6 +157,7 @@ async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err:
   log.warn(
     `import: embedding backfill failed (${errorMessage(err)}); ${waiting} rows have no vector; ` +
       `run '${embedCommand}' to backfill`,
+    errorFields(err),
   );
 }
 

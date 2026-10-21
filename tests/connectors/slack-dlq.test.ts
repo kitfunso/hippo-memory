@@ -29,7 +29,7 @@ describe('slack DLQ', () => {
   it('markSlackDlqRetried sets retried_at', async () => {
     await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'boom' });
     const [item] = await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' });
-    await sqliteStore(root).connectorEvents.markDeadLetterRetried('slack', item.id);
+    await sqliteStore(root).connectorEvents.markDeadLetterRetried('slack', 'default', item.id);
     const [after] = await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' });
     expect(Number.isNaN(Date.parse(String(after.retriedAt)))).toBe(false);
   });

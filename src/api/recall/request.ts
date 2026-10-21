@@ -339,7 +339,7 @@ async function finishOrReport(finish: () => Promise<number | null | void>): Prom
     await finish();
     return true;
   } catch (err) {
-    reportAuditWriteFailure('recall', String(err));
+    reportAuditWriteFailure('recall', err);
     return false;
   }
 }

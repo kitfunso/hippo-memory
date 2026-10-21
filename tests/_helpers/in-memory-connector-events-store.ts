@@ -165,13 +165,13 @@ function stateOn(hippoRoot: string, letters: ParkedLetter[], workspaces: Map<str
         .slice(0, limit)
         .map((row) => rowOf(row));
     },
-    async deadLetter(connector, id) {
+    async deadLetter(connector, tenantId, id) {
       const row = find(connector, id);
-      return row ? rowOf(row) : null;
+      return row && row.tenantId === tenantId ? rowOf(row) : null;
     },
-    async markDeadLetterRetried(connector, id) {
+    async markDeadLetterRetried(connector, tenantId, id) {
       const row = find(connector, id);
-      if (row) {
+      if (row && row.tenantId === tenantId) {
         letters.splice(letters.indexOf(row), 1, {
           ...row,
           retryCount: row.retryCount + 1,

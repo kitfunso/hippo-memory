@@ -4,7 +4,7 @@ import { type DatabaseSyncLike, withWriteScope, getMeta, setMeta, SLEEP_DB_WAIT_
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { findRejectedValue } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { log, errorMessage } from '../../base/util/log.js';
+import { log } from '../../base/util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow, ftsDriftAt } from './entry-row.js';
@@ -404,7 +404,7 @@ const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
 /** Writes each row in its own scope, logging each one that failed; returns how many failed. */
 function auditEachRowAt(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]): number {
   const failed = recordAuditEventsRowByRowAt(db, events);
-  for (const { event, error } of failed) reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
+  for (const { event, error } of failed) reportAuditWriteFailure(event.op, error, event.targetId);
   return failed.length;
 }
 

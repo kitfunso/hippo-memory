@@ -1,4 +1,3 @@
-import { errorMessage } from '../../base/util/log.js';
 import { type DatabaseSyncLike } from '../../db/index.js';
 import { appendAuditEvent } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
@@ -28,7 +27,7 @@ export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions):
     });
   } catch (error) {
     // The mutation has already succeeded; a broken audit table must not undo it.
-    reportAuditWriteFailure(op, errorMessage(error), targetId);
+    reportAuditWriteFailure(op, error, targetId);
   }
 }
 

@@ -297,6 +297,7 @@ export async function cmdPreCompact(
     await runPreCompact(hippoRoot, store, options, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
+    logger.error(`pre-compact failed: ${errorMessage(err)}`, errorFields(err));
   }
 
   process.exit(0);

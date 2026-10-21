@@ -18,7 +18,7 @@ export interface RateLimiterOptions {
   burst: number;
   /** A bucket untouched for this many ms is dropped by the throttled sweep. */
   idleEvictMs: number;
-  /** Hard cap on tracked keys; at the cap an unseen key evicts the least-recently-used one and gets its own bucket. */
+  /** Hard cap on tracked keys; at the cap an unseen key replaces a refilled bucket, else one that can still spend. */
   maxKeys: number;
 }
 
@@ -48,13 +48,32 @@ function spend(b: Bucket): boolean {
   return allowed;
 }
 
+/** Frees one slot: the oldest bucket that has refilled to full, else the oldest that can still spend, else (every
+ * bucket is throttled) the oldest. A throttled caller therefore keeps its bucket while others can be dropped. */
+function makeRoom(buckets: Map<string, Bucket>, now: number, opts: RateLimiterOptions): void {
+  if (buckets.size < opts.maxKeys) return;
+  let spendable: string | undefined;
+  let oldest: string | undefined;
+  for (const [key, b] of buckets) {
+    oldest ??= key;
+    const tokens = tokensAt(b, now, opts.ratePerSec, opts.burst);
+    if (tokens >= opts.burst) {
+      buckets.delete(key);
+      return;
+    }
+    if (tokens >= 1) spendable ??= key;
+  }
+  const victim = spendable ?? oldest;
+  if (victim !== undefined) buckets.delete(victim);
+}
+
 /**
  * Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys`
- * cap bounds the map. A caller that keeps asking stays recent, so it only escapes its throttle by staying silent while
- * `maxKeys` other keys arrive.
+ * cap bounds the map. At the cap a full bucket goes first and a throttled one stays, so a flood of new keys cannot
+ * reset a throttled caller unless every tracked key is throttled.
  */
 export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
-  const { ratePerSec, burst, idleEvictMs, maxKeys } = opts;
+  const { ratePerSec, burst, idleEvictMs } = opts;
   // Every request reaches these buckets because serve() holds the store's pidfile lock (claimPidfile).
   const buckets = new Map<string, Bucket>();
   let lastSweep = 0;
@@ -65,12 +84,6 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
     for (const [key, b] of buckets) {
       if (now - b.last >= idleEvictMs) buckets.delete(key);
     }
-  }
-
-  function makeRoom(): void {
-    if (buckets.size < maxKeys) return;
-    const lru = buckets.keys().next();
-    if (!lru.done) buckets.delete(lru.value);
   }
 
   return {
@@ -84,7 +97,7 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
         buckets.set(key, existing);
         return spend(refill(existing, now, ratePerSec, burst));
       }
-      makeRoom();
+      makeRoom(buckets, now, opts);
       // Unseen key: a full bucket, so a fresh client's first request passes.
       const bucket: Bucket = { tokens: burst, last: now };
       buckets.set(key, bucket);
