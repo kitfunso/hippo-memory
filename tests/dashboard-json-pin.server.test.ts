@@ -1,6 +1,5 @@
 // Pins the dashboard reads the golden leaves out, recorded on the snapshot build before bounded reads replaced it:
 // every sort, brushes, case folding past ASCII, tag hits, first-seen project order, strength cut points, a past-cap grid.
-import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../src/base/memory/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -127,24 +126,25 @@ const READS: readonly string[] = [
   '/api/memory/mem_p_a02',
 ];
 
-const HASHED_OVER = 6_000;
+const FILE_OVER = 6_000;
 
-/** Long bodies (the grid) are pinned by length and digest, so the record stays readable. */
-function line(path: string, status: number, body: string): string {
-  const masked = body.replace(/"snapshotId":\d+/g, '"snapshotId":"<id>"');
-  if (masked.length <= HASHED_OVER) return `GET ${path} -> ${status} ${masked}`;
-  const digest = createHash('sha256').update(masked).digest('hex');
-  return `GET ${path} -> ${status} <${masked.length} chars sha256 ${digest}>`;
+/** Reads the dashboard serves as JSON; the snapshot id differs per run, so it is masked. */
+function parsed(body: string): unknown {
+  return JSON.parse(body.replace(/"snapshotId":\d+/g, '"snapshotId":"<id>"'));
 }
 
+const slug = (path: string): string => path.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
 describe('dashboard JSON on a varied store', () => {
-  it('answers each read with the body the snapshot build gave', async () => {
-    const transcript: string[] = [];
-    for (const path of READS) {
-      const reply = await get(dash.port, path);
-      transcript.push(line(path, reply.status, reply.body));
+  // A failure names the read and diffs the field that changed; a grid body too long to read inline has its own file.
+  it.each([...READS, BIG])('answers GET %s with the body the snapshot build gave', async (path) => {
+    const reply = await get(dash.port, path);
+    const body = parsed(reply.body);
+    const text = JSON.stringify({ status: reply.status, body }, null, 2);
+    if (text.length > FILE_OVER) {
+      await expect(text).toMatchFileSnapshot(`__snapshots__/dashboard-json-pin/${slug(path)}.json`);
+    } else {
+      expect({ status: reply.status, body }).toMatchSnapshot();
     }
-    transcript.push(line(BIG, 200, (await get(dash.port, BIG)).body));
-    expect(transcript).toMatchSnapshot();
   });
 });
