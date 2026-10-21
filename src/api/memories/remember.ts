@@ -11,6 +11,7 @@ import {
   type MemoryKind,
   type TraceOutcome,
 } from '../../base/memory/memory.js';
+import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { assertCallerProject } from '../../base/scope/project-identity.js';
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
@@ -62,6 +63,12 @@ export interface RememberOptions {
   local?: RememberLocal;
 }
 
+/** A write that asks for the salience gate: one it judges not worth keeping answers `RememberSkipped` and stores
+ * nothing, and a weak one starts weakened. A pinned write skips the gate. Without the field, nothing is gated. */
+export interface GatedRememberOptions extends RememberOptions {
+  salienceGate: boolean;
+}
+
 export interface RememberResult {
   id: string;
   kind: MemoryKind;
@@ -76,6 +83,13 @@ export interface RememberResult {
   /** Set only when the write's event was logged before: nothing was stored, so `id` names no row; `memoryId` is the id
    * the first write logged. */
   duplicate?: { memoryId: string | null };
+  /** Set only when the salience gate started the row weakened. */
+  startedWeak?: { reason: string; strength: number };
+}
+
+/** The salience gate dropped the write: nothing was stored or counted. */
+export interface RememberSkipped {
+  skipped: { reason: string; score: number };
 }
 
 /** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a
@@ -182,11 +196,45 @@ function quarantineOf({ requestedScope, detection }: PreparedRemember): Connecto
   return detection.flagged ? { originalScope: requestedScope, reason: detection.reason ?? 'unknown' } : undefined;
 }
 
-/** Store one memory, then start the root's auto-sleep if enough new memories have landed (`ctx.callers`). */
-export async function remember(ctx: Context, opts: RememberOptions): Promise<RememberResult> {
-  const result = await writeRemembered(ctx, opts);
+// The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
+// tenant, and a window past this reads more than a duplicate check needs.
+const MAX_SALIENCE_ROWS = 500;
+const WEAK_HALF_LIFE_FACTOR = 0.5;
+
+/** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned. */
+async function salienceVerdict(ctx: Context, opts: RememberOptions): Promise<SalienceResult | null> {
+  const { salience } = ctx.config;
+  if (!salience.enabled || opts.local?.pinned) return null;
+  // computeSalience compares against the last `recentWindow` rows only.
+  const window = Math.trunc(salience.recentWindow);
+  const rows = Number.isSafeInteger(window) && window >= 1 ? Math.min(window, MAX_SALIENCE_ROWS) : MAX_SALIENCE_ROWS;
+  const recent = await ctx.store.contextReads.newestEntries(ctx.tenantId, rows);
+  return computeSalience(opts.content, [...(opts.tags ?? [])], recent, {
+    recentWindow: salience.recentWindow,
+    overlapThreshold: salience.overlapThreshold,
+    minContentLength: salience.minContentLength,
+    maxRepeatErrors: salience.maxRepeatErrors,
+  });
+}
+
+/** Store one memory, then start the root's auto-sleep if enough new memories have landed (`ctx.callers`). With
+ * `salienceGate` the write may be dropped instead (see GatedRememberOptions). */
+export async function remember(ctx: Context, opts: GatedRememberOptions): Promise<RememberResult | RememberSkipped>;
+export async function remember(ctx: Context, opts: RememberOptions): Promise<RememberResult>;
+export async function remember(
+  ctx: Context,
+  opts: RememberOptions | GatedRememberOptions,
+): Promise<RememberResult | RememberSkipped> {
+  const verdict = 'salienceGate' in opts && opts.salienceGate ? await salienceVerdict(ctx, opts) : null;
+  if (verdict?.decision === 'skip') return { skipped: { reason: verdict.reason, score: verdict.score } };
+  const startedWeak =
+    verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
+  const local = startedWeak
+    ? { ...opts.local, weaken: { strength: startedWeak.strength, halfLifeFactor: WEAK_HALF_LIFE_FACTOR } }
+    : opts.local;
+  const result = await writeRemembered(ctx, { ...opts, local });
   await autoSleepAfterWrite(ctx);
-  return result;
+  return startedWeak ? { ...result, startedWeak } : result;
 }
 
 /** The store's entryWrites group writes the row and its one remember audit row, under the caller's subject. A write
