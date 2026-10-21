@@ -85,7 +85,7 @@ export function compareScoresDesc(a: number, b: number): number {
 /**
  * Score-desc then tie-key comparator for the physics layer (no `entry`/`content` in scope): the default memoryId key is
  * per-instance determinism only.
- * Cross-ingest stability needs `tieKeyOf` (content), since the baseScore tie order picks the cluster_top_k set. A
+ * Cross-ingest stability needs `tieKeyOf` (content), since the baseScore tie order picks the clusterTopK set. A
  * factory, as two fields sort in turn.
  */
 export function comparePhysicsResultsBy<T extends { memoryId: string }>(

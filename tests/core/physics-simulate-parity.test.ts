@@ -22,9 +22,9 @@ function netForce(i: number, particles: PhysicsParticle[], ctx: ForceContext): n
   const conflicts = ctx.conflictPairs.get(pi.memoryId);
   for (let j = 0; j < particles.length; j++) {
     if (i === j) continue;
-    net = vecAdd(net, attractionForce(pi, particles[j], ctx.config.G_memory));
+    net = vecAdd(net, attractionForce(pi, particles[j], ctx.config.gMemory));
     if (conflicts?.has(particles[j].memoryId)) {
-      net = vecAdd(net, repulsionForce(pi, particles[j], ctx.config.K_repulsion));
+      net = vecAdd(net, repulsionForce(pi, particles[j], ctx.config.kRepulsion));
     }
   }
   return vecAdd(net, dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS));
@@ -34,7 +34,7 @@ const accelOf = (i: number, ps: PhysicsParticle[], ctx: ForceContext): number[] 
   vecScale(netForce(i, ps, ctx), 1 / Math.max(0.01, ps[i].mass));
 
 function simulateAllocating(particles: PhysicsParticle[], ctx: ForceContext): void {
-  const { dt, max_velocity: maxVel } = ctx.config;
+  const { dt, maxVelocity: maxVel } = ctx.config;
   let accelerations = particles.map((_, i) => accelOf(i, particles, ctx));
   for (let step = 0; step < ctx.config.substeps; step++) {
     for (let i = 0; i < particles.length; i++) {

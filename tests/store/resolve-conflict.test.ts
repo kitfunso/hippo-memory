@@ -10,6 +10,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '../../src/base/er
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -131,7 +132,7 @@ describe('resolveConflict', () => {
 
   it('writes nothing when a side no longer holds the scope the api decided on', () => {
     const { aId, bId, conflictId } = seedConflict();
-    const resolved = sqliteSyncStore(tmpDir).conflicts.resolve('default', {
+    const resolved = sqliteSyncStore(handlesOf(tmpDir)).conflicts.resolve('default', {
       conflictId,
       keep: { id: aId, scope: null },
       loser: { id: bId, scope: 'personal:private:moved' },
@@ -154,7 +155,7 @@ describe('resolveConflict', () => {
     const team = copyOf('team:shared');
     const mine = copyOf('personal:private:alice', 'alice');
     const theirs = copyOf('personal:private:bob', 'bob');
-    const resolved = sqliteSyncStore(tmpDir).conflicts.resolve('default', {
+    const resolved = sqliteSyncStore(handlesOf(tmpDir)).conflicts.resolve('default', {
       conflictId,
       keep: { id: aId, scope: null },
       loser: { id: bId, scope: null },
@@ -185,7 +186,7 @@ describe('resolveConflict', () => {
       actor: 'cli',
       reason: 'wrong',
     };
-    expect(sqliteSyncStore(tmpDir).conflicts.resolve('default', resolution)).toBe(true);
+    expect(sqliteSyncStore(handlesOf(tmpDir)).conflicts.resolve('default', resolution)).toBe(true);
     expect(readEntry(tmpDir, bId)).toBeNull();
     expect(readEntry(tmpDir, personal.id)).not.toBeNull();
   });

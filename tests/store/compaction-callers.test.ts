@@ -87,7 +87,9 @@ describe('storeLesson for a caller', () => {
 
   it('counts a user-global lesson as a repeat in every project', async () => {
     seed(LESSON, '', ['error', 'auto-captured']);
-    expect(sqliteSyncStore(root).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web'])).toEqual([LESSON]);
+    expect(
+      sqliteSyncStore(handlesOf(root)).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web']),
+    ).toEqual([LESSON]);
     expect(await storeLesson(failureTarget(root, TENANT), LESSON, other)).toBe('duplicate');
   });
 });

@@ -5,6 +5,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -18,7 +19,7 @@ oneRequestPerTest();
 let root: string;
 // Another person's personal scope, which a rejection with no personal scope of its own leaves alone.
 const ELSEWHERE = 'personal:private:someone-else';
-const rejections = (): ReturnType<typeof sqliteSyncStore>['rejections'] => sqliteSyncStore(root).rejections;
+const rejections = (): ReturnType<typeof sqliteSyncStore>['rejections'] => sqliteSyncStore(handlesOf(root)).rejections;
 
 beforeEach(() => {
   root = makeRoot('rejected-values');

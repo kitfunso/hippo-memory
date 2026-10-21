@@ -13,7 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/delete-and-batch.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
@@ -590,7 +590,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       [ids[0], 'test', { dormant: true }],
     ]);
     // Counted like forget and archiveRaw (review finding on PR #227).
-    expect(Number(sqliteSyncStore(home).reports.stats().total_forgotten)).toBe(1);
+    expect(Number((await sqliteStore(home).reports.stats()).total_forgotten)).toBe(1);
   });
 });
 

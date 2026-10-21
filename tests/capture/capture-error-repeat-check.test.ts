@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'module';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
@@ -64,6 +65,6 @@ describe('capture-error repeat check does not read every memory', () => {
     });
     writeEntry(root, entry);
 
-    expect(sqliteSyncStore(root).lessonWrites.contentsWithTag('default', 'auto-captured')).toEqual([]);
+    expect(sqliteSyncStore(handlesOf(root)).lessonWrites.contentsWithTag('default', 'auto-captured')).toEqual([]);
   });
 });
