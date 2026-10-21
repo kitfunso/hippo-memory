@@ -1,11 +1,10 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { strengthSql } from './rule-sql.js';
+import { originInSql, strengthSql } from './rule-sql.js';
 import { SECRET_TAGS } from '../../base/util/secret-detect.js';
-import { originInSql } from '../../base/scope/project-identity.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../base/memory/ambient.js';
 import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../base/memory/memory.js';
-import { placeholders } from '../../base/util/sql.js';
+import { placeholders } from '../../db/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../base/util/json.js';

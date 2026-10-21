@@ -11,7 +11,7 @@ import type { DeliveryEventInput } from '../../base/session/delivery.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { blockHash } from '../../base/util/token-text.js';
-import { placeholders, rowsPerStatement, valuesRows } from '../../base/util/sql.js';
+import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { RecallTraceInput } from '../port/recall-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';

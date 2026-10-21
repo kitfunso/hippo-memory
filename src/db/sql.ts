@@ -1,4 +1,4 @@
-// SQL text helpers shared by every layer that builds an IN list or VALUES row.
+// SQL text for an IN list or VALUES rows, for the data layer and the SQLite adapter that bind them.
 
 /** `n` bound-parameter marks joined for an IN list or VALUES row, e.g. 3 -> "?, ?, ?". */
 export function placeholders(n: number): string {

@@ -13,7 +13,7 @@ import {
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { chunked } from '../../base/util/chunked.js';
 import { HANDOFF_COLUMNS, type SessionHandoffDbRow } from './handoffs.js';
-import { placeholders } from '../../base/util/sql.js';
+import { placeholders } from '../../db/sql.js';
 import type { CardDetail } from '../port/cards.js';
 import type { CardCreate, Cards } from '../port-groups.js';
 import type { Sync } from './served.js';

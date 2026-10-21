@@ -13,9 +13,8 @@ import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WH
 import { type DatabaseSyncLike, isFtsAvailable, isFtsInSync, withReadSnapshot } from '../../db/index.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
+import { originInSql, rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { originInSql } from '../../base/scope/project-identity.js';
 import { pickRarestFtsQuery, loadRecallEntriesAt } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../base/util/tenant.js';

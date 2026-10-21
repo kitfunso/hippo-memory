@@ -12,7 +12,7 @@ import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.
 import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
 import { saveProjectBrief, briefFromReceipts } from '../../src/domain/objects/project-briefs.js';
 import { derivationScope, commonDerivationScope } from '../../src/base/scope/recall-scope.js';
-import { placeholders } from '../../src/base/util/sql.js';
+import { placeholders } from '../../src/db/sql.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/base/config/config.js';
