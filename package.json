@@ -39,6 +39,7 @@
     "dev": "tsc --watch",
     "pretest": "npm run build",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:delivery-ledger": "vitest run tests/delivery-ledger tests/migration-v55",
