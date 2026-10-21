@@ -369,13 +369,13 @@ describe('the delivery ledger prune', () => {
   it("runs at most once a minute per store, and again once the store's minute has passed", () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.parse('2026-09-01T00:00:00.000Z'));
-    const { ledger } = sqliteSyncStore(root);
+    const { ledger } = sqliteSyncStore(handlesOf(root));
     expect([writeVia(ledger, 'p1', 0), writeVia(ledger, 'p2', 30_000)].map(prunes)).toEqual([1, 0]);
     vi.setSystemTime(Date.parse('2026-09-01T00:00:59.000Z'));
     expect(prunes(writeVia(ledger, 'p3', 59_000))).toBe(0);
     vi.setSystemTime(Date.parse('2026-09-01T00:01:01.000Z'));
     expect(prunes(writeVia(ledger, 'p4', 61_000))).toBe(1);
-    expect(prunes(writeVia(sqliteSyncStore(root).ledger, 'another store', 62_000))).toBe(1);
+    expect(prunes(writeVia(sqliteSyncStore(handlesOf(root)).ledger, 'another store', 62_000))).toBe(1);
     expect(count('delivery_events')).toBe(5);
   });
 

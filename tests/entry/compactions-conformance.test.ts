@@ -7,6 +7,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   onBothStores,
@@ -71,7 +72,7 @@ function seed(dir: string): void {
   } finally {
     closeHippoDb(db);
   }
-  const { compactions } = sqliteSyncStore(dir);
+  const { compactions } = sqliteSyncStore(handlesOf(dir));
   compactions.start(TENANT_A, {
     sessionId: 'sA',
     originProject: 'acme/app',

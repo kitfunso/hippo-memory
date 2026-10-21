@@ -6,6 +6,7 @@ import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/i
 import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { failuresPerSession } from '../../src/base/records/failure-repeats.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureSignature, lessonFromFailure } from '../../src/surface/capture/failure-reading.js';
@@ -81,7 +82,7 @@ describe('repeat-error rate', () => {
   });
 
   it('counts a repeat only when another session hit the signature first', () => {
-    const { failureLog } = sqliteSyncStore(home);
+    const { failureLog } = sqliteSyncStore(handlesOf(home));
     const log = (sessionId: string | null, sigHash: string, outcome: FailureOutcome = 'duplicate'): number =>
       failureLog.record({ tenantId: 'default', sessionId, tool: 'Bash', outcome, sigHash });
     log('s1', 'A', 'stored');
@@ -114,7 +115,7 @@ describe('repeat-error rate', () => {
   });
 
   it('a session that hit a signature first never repeats it, even after another session hits it too', () => {
-    const { failureLog } = sqliteSyncStore(home);
+    const { failureLog } = sqliteSyncStore(handlesOf(home));
     for (const sessionId of ['a', 'b', 'a']) {
       failureLog.record({ tenantId: 'default', sessionId, outcome: 'duplicate', sigHash: 'E' });
     }
@@ -124,7 +125,7 @@ describe('repeat-error rate', () => {
   });
 
   it('looks back past the window and prunes rows past retention', () => {
-    const { failureLog } = sqliteSyncStore(home);
+    const { failureLog } = sqliteSyncStore(handlesOf(home));
     withDb(home, (db) => {
       expect(summarizeFailures(db, 'default', ago(30))).toMatchObject({ total: 0, rated: 0, repeats: 0, sessions: 0 });
       failureLog.record({ tenantId: 'default', sessionId: 'old', outcome: 'stored', sigHash: 'A', now: ago(200) });

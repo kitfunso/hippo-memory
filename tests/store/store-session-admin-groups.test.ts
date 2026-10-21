@@ -4,6 +4,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf } from '../../s
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { sqliteSyncStore, sqliteStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import type { ConflictListQuery } from '../../src/store/port/conflicts.js';
 import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -31,7 +32,7 @@ const entry = (text: string) => createMemory(text, { baseHalfLifeDays: DEFAULT_H
 describe('sessions group', () => {
   it('keeps a snapshot, events and a handoff, in both forms', async () => {
     const r = root();
-    const sync = sqliteSyncStore(r).sessions;
+    const sync = sqliteSyncStore(handlesOf(r)).sessions;
     const served = sqliteStore(r).sessions;
     const snap = { task: 'ship', summary: 'half done', next_step: 'merge', session_id: 's1' };
     expect(sync.saveSnapshot(T, snap, null).task).toBe('ship');
@@ -59,7 +60,7 @@ describe('sessions group', () => {
 describe('cards group', () => {
   it('runs a card from create to complete in both forms', async () => {
     const r = root();
-    const sync = sqliteSyncStore(r).cards;
+    const sync = sqliteSyncStore(handlesOf(r)).cards;
     const served = sqliteStore(r).cards;
     const card = sync.create(T, { title: 'wire the port' });
     expect((await served.load(T, card.id))?.title).toBe('wire the port');
@@ -80,7 +81,7 @@ describe('cards group', () => {
 describe('goals group', () => {
   it('pushes a goal and lists it, then completes it', async () => {
     const r = root();
-    const sync = sqliteSyncStore(r).goals;
+    const sync = sqliteSyncStore(handlesOf(r)).goals;
     const served = sqliteStore(r).goals;
     const goal = sync.push(T, { sessionId: 's1', goalName: 'ship the refactor' });
     expect((await served.sessionGoals(T, 's1')).map((g) => g.id)).toEqual([goal.id]);
@@ -99,7 +100,7 @@ describe('conflicts group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'contradiction', score: 0.9 }]);
-    const sync = sqliteSyncStore(r).conflicts;
+    const sync = sqliteSyncStore(handlesOf(r)).conflicts;
     const served = sqliteStore(r).conflicts;
     const query = (tenantId: TenantId): ConflictListQuery => ({ tenantId, status: 'open', limit: 10 });
     const [open] = sync.list(query(T)).rows;
@@ -140,7 +141,7 @@ describe('dormant group', () => {
   it('lists, restores and forgets, and keeps another tenant out', async () => {
     const r = root();
     const row = seed(r);
-    const sync = sqliteSyncStore(r).dormant;
+    const sync = sqliteSyncStore(handlesOf(r)).dormant;
     const served = sqliteStore(r).dormant;
     expect(sync.list(T, null, {}).map((m) => m.id)).toEqual([row.id]);
     expect(await served.holds(T, null, row.id)).toBe(true);
@@ -172,7 +173,7 @@ describe('reports group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'x', score: 0.9 }]);
-    const sync = sqliteSyncStore(r).reports;
+    const sync = sqliteSyncStore(handlesOf(r)).reports;
     const served = sqliteStore(r).reports;
     const status = await served.memoryStatus(T, new Date(), 0.1);
     expect(status).toMatchObject({ total: 2, openConflicts: 1 });

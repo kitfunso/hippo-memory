@@ -8,6 +8,7 @@ import type { TokenUse } from '../../src/store/port/token-ledger.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { log } from '../../src/base/util/log.js';
 
 const HASH = 'aaaaaaaaaaaaaaaa';
@@ -80,7 +81,7 @@ describe('Ledger.recordTurn', () => {
     const rec = recorder();
     const delivery = rec.takeEvent() ?? undefined;
     const run = recordStatements(() =>
-      sqliteSyncStore(root).ledger.recordTurn({ uses: [use(), use({ surface: 'hook_recall' })], delivery }),
+      sqliteSyncStore(handlesOf(root)).ledger.recordTurn({ uses: [use(), use({ surface: 'hook_recall' })], delivery }),
     );
     expect(countMatching(run.statements, STORE_OPEN)).toBe(1);
     const lastTokenRow = run.statements.map((sql) => sql.includes('INSERT INTO token_ledger')).lastIndexOf(true);
@@ -94,7 +95,7 @@ describe('Ledger.recordTurn', () => {
   it('without perRow the first failed row stops the rest, and the delivery event still lands', () => {
     failRowsOn('hook');
     const rec = recorder();
-    sqliteSyncStore(root).ledger.recordTurn({
+    sqliteSyncStore(handlesOf(root)).ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
       delivery: rec.takeEvent() ?? undefined,
     });
@@ -106,7 +107,7 @@ describe('Ledger.recordTurn', () => {
     failRowsOn('hook');
     const rec = recorder();
     const noted = vi.spyOn(log, 'warnThenDebug');
-    sqliteSyncStore(root).ledger.recordTurn({
+    sqliteSyncStore(handlesOf(root)).ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
       perRow: true,
       delivery: rec.takeEvent() ?? undefined,
@@ -121,13 +122,13 @@ describe('Ledger.recordTurn', () => {
 
 describe('Ledger.lastSent', () => {
   it('reads the last injected hash and the skips since it, and null for a session with no rows', () => {
-    sqliteSyncStore(root).ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
-    expect(sqliteSyncStore(root).ledger.lastSent('default', 's1', 'hook')).toEqual({
+    sqliteSyncStore(handlesOf(root)).ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
+    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', 's1', 'hook')).toEqual({
       hash: HASH,
       skipsSince: 1,
     });
-    expect(sqliteSyncStore(root).ledger.lastSent('default', 's1', 'context')).toBeNull();
-    expect(sqliteSyncStore(root).ledger.lastSent('default', 'other', 'hook')).toBeNull();
-    expect(sqliteSyncStore(root).ledger.lastSent('default', undefined, 'hook')).toBeNull();
+    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', 's1', 'context')).toBeNull();
+    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', 'other', 'hook')).toBeNull();
+    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', undefined, 'hook')).toBeNull();
   });
 });

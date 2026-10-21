@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import type { FailureEvent, FailureOutcome } from '../../src/entry/store-kit.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   onBothStores,
@@ -37,7 +38,7 @@ const event = (over: Partial<FailureEvent> = {}): FailureEvent => ({
 });
 
 function seed(dir: string): void {
-  const log = sqliteSyncStore(dir).failureLog;
+  const log = sqliteSyncStore(handlesOf(dir)).failureLog;
   log.record(event({ requestId: 'req-old', outcome: 'duplicate', now: '2025-10-01T00:00:00.000Z' }));
   log.record(event({ requestId: 'req-1', outcome: 'store-failed', now: '2026-02-28T00:00:00.000Z' }));
   log.record(event({ tenantId: TENANT_B, sessionId: 's-b', requestId: 'req-1', now: '2026-02-28T00:00:00.000Z' }));

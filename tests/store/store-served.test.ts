@@ -48,4 +48,12 @@ describe('served', () => {
   it('runs each method with the sync group as this', async () => {
     expect(await wrapped.self()).toBe(group);
   });
+
+  it('serves a group inside a store the same way and copies a Map as a value', async () => {
+    const byId = new Map([['a', 1]]);
+    const store = served<{ probe: Probe; byId: Map<string, number> }>({ probe: group, byId });
+    await expect(store.probe.twice(2)).resolves.toBe(4);
+    expect(await store.probe.self()).toBe(group);
+    expect(store.byId).toBe(byId);
+  });
 });

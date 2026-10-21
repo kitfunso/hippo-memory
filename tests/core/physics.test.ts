@@ -208,7 +208,7 @@ describe('Force computations', () => {
       const p = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const query = [1, 0, 0]; // identical direction
       const force = queryGravityMagnitude(p, query, 2.0);
-      // G_query * mass * cos^2 = 2 * 1 * 1 = 2
+      // gQuery * mass * cos^2 = 2 * 1 * 1 = 2
       expect(force).toBeCloseTo(2.0, 5);
     });
 
@@ -227,7 +227,7 @@ describe('Force computations', () => {
       expect(f2).toBeCloseTo(f1 * 3, 10);
     });
 
-    it('G_query scales force linearly', () => {
+    it('gQuery scales force linearly', () => {
       const p = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const query = [1, 0, 0];
       const f1 = queryGravityMagnitude(p, query, 1.0);
@@ -443,7 +443,7 @@ describe('Scoring', () => {
       const still = makeParticle({ memoryId: 'still', position: [1, 0, 0], velocity: [0, 0, 0] });
       const moving = makeParticle({ memoryId: 'moving', position: [1, 0, 0], velocity: [0.1, 0, 0] });
       const query = [1, 0, 0];
-      const config = { ...DEFAULT_PHYSICS_CONFIG, momentum_weight: 0.5 };
+      const config = { ...DEFAULT_PHYSICS_CONFIG, momentumWeight: 0.5 };
       const results = physicsScore([still, moving], query, config);
       const movingResult = results.find((r) => r.memoryId === 'moving')!;
       const stillResult = results.find((r) => r.memoryId === 'still')!;
@@ -464,9 +464,9 @@ describe('Scoring', () => {
       const query = [1, 0, 0];
       const config = {
         ...DEFAULT_PHYSICS_CONFIG,
-        cluster_threshold: 0.99, // very tight threshold for the close cluster
-        cluster_top_k: 10,
-        interference_gain: 1.0,
+        clusterThreshold: 0.99, // very tight threshold for the close cluster
+        clusterTopK: 10,
+        interferenceGain: 1.0,
       };
 
       // Score cluster particles
@@ -485,8 +485,8 @@ describe('Scoring', () => {
       const query = vecNormalize([1, 1, 0]);
       const config = {
         ...DEFAULT_PHYSICS_CONFIG,
-        cluster_threshold: 0.95, // high threshold; cos([1,0,0],[0,1,0]) = 0
-        cluster_top_k: 10,
+        clusterThreshold: 0.95, // high threshold; cos([1,0,0],[0,1,0]) = 0
+        clusterTopK: 10,
       };
       const results = physicsScore(particles, query, config);
       for (const r of results) {
@@ -532,12 +532,12 @@ describe('Simulation', () => {
       expect(moved1 || moved2).toBe(true);
     });
 
-    it('velocity stays clamped to max_velocity', () => {
+    it('velocity stays clamped to maxVelocity', () => {
       const p1 = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]), velocity: [0.05, 0.05, 0] });
       const p2 = makeParticle({ memoryId: 'b', position: vecNormalize([0.9, 0.4, 0]), velocity: [-0.05, 0.05, 0] });
 
       const ctx = makeCtx({
-        config: { ...DEFAULT_PHYSICS_CONFIG, substeps: 50, max_velocity: 0.1 },
+        config: { ...DEFAULT_PHYSICS_CONFIG, substeps: 50, maxVelocity: 0.1 },
       });
       simulate([p1, p2], ctx);
 
@@ -570,7 +570,7 @@ describe('Simulation', () => {
 
       // Run first batch
       simulate(particles, ctx1);
-      const energyAfterFirst = computeSystemEnergy(particles, config.G_memory).kinetic;
+      const energyAfterFirst = computeSystemEnergy(particles, config.gMemory).kinetic;
 
       // Run second batch
       const ctx2 = makeCtx({ config });
@@ -579,7 +579,7 @@ describe('Simulation', () => {
       // Run third batch
       const ctx3 = makeCtx({ config });
       simulate(particles, ctx3);
-      const energyAfterThird = computeSystemEnergy(particles, config.G_memory).kinetic;
+      const energyAfterThird = computeSystemEnergy(particles, config.gMemory).kinetic;
 
       // Kinetic energy should generally decrease due to drag
       // At least one of these should show decrease

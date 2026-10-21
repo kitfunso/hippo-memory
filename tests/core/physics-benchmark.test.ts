@@ -595,7 +595,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
 
           simulate(particles, ctx);
           savePhysicsState(db, particles);
-          energyHistory.push(computeSystemEnergy(particles, ctx.config.G_memory).total);
+          energyHistory.push(computeSystemEnergy(particles, ctx.config.gMemory).total);
         }
 
         expect(energyHistory.length).toBeGreaterThanOrEqual(10);

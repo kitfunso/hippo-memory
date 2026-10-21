@@ -7,6 +7,7 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { createSuccessor } from '../../src/base/memory/memory.js';
 import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -59,6 +60,6 @@ export function supersedeNow(ctx: RootedContext, oldId: string, newContent: stri
     oldId,
     successor,
   };
-  sqliteSyncStore(ctx.hippoRoot).entryWrites.supersede(write);
+  sqliteSyncStore(handlesOf(ctx.hippoRoot)).entryWrites.supersede(write);
   return successor.id;
 }

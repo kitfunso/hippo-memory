@@ -5,6 +5,7 @@ import { rmSync } from 'node:fs';
 import { PROTECTED_ROWS } from '../../src/base/memory/memory-audit.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { QualityRepairResult } from '../../src/store/port/audit-maintenance.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -48,7 +49,7 @@ function seed(): void {
   seedRow('cutB', CUT, { tenantId: TENANT_B });
   const mirror = { ...createMemory('we chose sqlite for the queue', { tenantId: TENANT_A }), originProject: 'proj' };
   const fields = { decisionText: 'use sqlite', context: undefined };
-  sqliteSyncStore(fixture.dir).objects.saveObject(TENANT_A, 'decision', {
+  sqliteSyncStore(handlesOf(fixture.dir)).objects.saveObject(TENANT_A, 'decision', {
     mirror,
     fields,
     actor: 'cli',
