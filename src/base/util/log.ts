@@ -159,6 +159,12 @@ export function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+/** The text of an error the caller's classifier named as expected, for its one debug line. Nothing is wrong, so the
+ * line leaves the stack out; check-caught-error-logs accepts this at debug level only. */
+export function expectedErrorText<E>(err: E): string {
+  return errorMessage(err);
+}
+
 /** One post-compact failure, told once to the hook's output (`say`) and once to the structured log. */
 export function reportCompactionFailure(
   say: (message: string) => void,

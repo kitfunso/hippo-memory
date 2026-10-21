@@ -34,7 +34,7 @@ function readsOneField(call) {
   return ts.isVariableDeclaration(p) && p.initializer === call && ts.isObjectBindingPattern(p.name);
 }
 
-// expectedErrorText (src/base/util/expected-errors.ts) names an error the caller classified as expected.
+// expectedErrorText (src/base/util/log.ts) names an error the caller classified as expected.
 const isExpectedErrorTextCall = (n) =>
   ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'expectedErrorText';
 

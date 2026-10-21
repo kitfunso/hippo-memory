@@ -7,8 +7,7 @@ import {
   isSqliteBusy,
   noteStoreBusy,
 } from '../../db/index.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { expectedErrorText } from '../../base/util/expected-errors.js';
+import { errorMessage, expectedErrorText, log, errorFields } from '../../base/util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
 import { recordTokenUse, lastSentState, recordRereadsAt } from './token-ledger.js';
 import { hashArm, type PilotArm } from '../../base/session/pilot-arm.js';

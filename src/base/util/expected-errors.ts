@@ -19,12 +19,6 @@ export function ignoringCodes<T>(codes: readonly string[], fn: () => T): T | und
   }
 }
 
-/** The text of an error the caller's classifier named as expected, for its one debug line. Nothing is wrong, so the
- * line leaves the stack out; check-caught-error-logs accepts this at debug level only. */
-export function expectedErrorText<E>(err: E): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /** The decoded text, or undefined for a malformed percent escape (the URIError decodeURIComponent documents). */
 export function tryDecodeUri(text: string): string | undefined {
   try {
