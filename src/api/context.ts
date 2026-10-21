@@ -23,8 +23,8 @@ import {
 } from '../base/memory/ambient.js';
 import type { HippoStore } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
+import { finiteOr } from '../domain/context/select-policy.js';
 import {
-  finiteOr,
   globalStoreInReach,
   selectBySearch,
   selectPinned,

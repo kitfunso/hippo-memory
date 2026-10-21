@@ -64,7 +64,13 @@ afterAll(async () => {
 
 describe('HTTP input validation', () => {
   const bad: Array<[string, string, string, Body | undefined, RegExp]> = [
-    ['memory kind', 'POST', '/v1/memories', { content: 'a fact', kind: 'opinion' }, /invalid kind: opinion/],
+    [
+      'memory kind',
+      'POST',
+      '/v1/memories',
+      { content: 'a fact', kind: 'opinion' },
+      /^(?!.*opinion)invalid kind; allowed: raw, distilled/s,
+    ],
     ['memory scope type', 'POST', '/v1/memories', { content: 'a fact', scope: 123 }, /scope must be a string/],
     [
       'memory tags type',

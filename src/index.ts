@@ -90,7 +90,7 @@ function isFolder(target: string | SleepStore): target is string {
   return typeof target === 'string';
 }
 // The one dedupe.js export that is public; the rest of dedupe.js stays internal.
-export { strengthBucket } from './domain/consolidate/dedupe.js';
+export { strengthTieKey as strengthBucket } from './domain/consolidate/dedupe.js';
 
 // Embedding search
 export { isEmbeddingAvailable, getEmbedding } from './base/embeddings/local.js';

@@ -8,12 +8,12 @@ import type { CardDetail } from '../../store/port/cards.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
-  repeatedFlag,
-  stringFlagOrExit,
   type CommandContext,
   boolFlag,
-  flagIsTrue,
+  flagValueless,
+  repeatedFlag,
   stringFlag,
+  stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -161,7 +161,7 @@ async function cardCreate(hippoRoot: string, tenantId: string, _args: string[], 
     }
     budget = Number(budgetRaw);
   }
-  if (flagIsTrue(flags, 'depends-on')) {
+  if (flagValueless(flags, 'depends-on')) {
     fail('--depends-on requires a value');
   }
   const dependsOn = repeatedFlag(flags, 'depends-on');

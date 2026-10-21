@@ -6,7 +6,14 @@ import { objectClose, objectGet, objectList, objectStates } from '../../api/obje
 import type { Incident } from '../../base/records/object-types.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, type CliFlags, repeatedFlag, stringFlag, type CommandContext } from './flag-values.js';
+import {
+  flagValueless,
+  nonEmptyStringFlag,
+  type CliFlags,
+  repeatedFlag,
+  stringFlag,
+  type CommandContext,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
 import { fail } from './exit.js';
@@ -84,7 +91,7 @@ async function incidentCreate(ctx: Context, incidentText: string, flags: CliFlag
     fail('       hippo incident close <id>');
   }
   const context = nonEmptyStringFlag(flags, 'context');
-  if (flags['link'] === true) {
+  if (flagValueless(flags, 'link')) {
     fail('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
   }
   const linkedMemoryIds = repeatedFlag(flags, 'link');
