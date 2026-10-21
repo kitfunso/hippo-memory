@@ -2,6 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
+import { ENV_SCRUBBED_IN_TESTS } from './scripts/lib/test-env-scrub.mjs';
 import { EVAL_TESTS, PROCESS_GLOBS, SERVER_GLOBS } from './scripts/lib/test-classes.mjs';
 
 // Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
@@ -26,16 +27,31 @@ process.env.USERPROFILE = isolatedUserHome;
 const isolatedAppData = join(isolatedUserHome, 'AppData', 'Roaming');
 process.env.APPDATA = isolatedAppData;
 const AGENT_HOME_KEYS = [
-  'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'CODEX_HOME', 'COPILOT_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_PROJECT_DIR_NAME', 'VSCODE_PORTABLE', 'VSCODE_APPDATA',
-  'GEMINI_CLI_HOME', 'QWEN_HOME', 'QWEN_RUNTIME_DIR', 'QWEN_CODE_MEMORY_BASE_DIR', 'QWEN_CODE_MEMORY_LOCAL', 'QWEN_CODE_MEMORY_PROJECT_SCOPE',
-  'OPENCLAW_WORKSPACE_DIR', 'OPENCLAW_STATE_DIR', 'OPENCLAW_HOME', 'OPENCLAW_PROFILE',
+  'XDG_CONFIG_HOME',
+  'CODEX_HOME',
+  'COPILOT_HOME',
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_CODE_PROJECT_DIR_NAME',
+  'VSCODE_PORTABLE',
+  'VSCODE_APPDATA',
+  'GEMINI_CLI_HOME',
+  'QWEN_HOME',
+  'QWEN_RUNTIME_DIR',
+  'QWEN_CODE_MEMORY_BASE_DIR',
+  'QWEN_CODE_MEMORY_LOCAL',
+  'QWEN_CODE_MEMORY_PROJECT_SCOPE',
+  'OPENCLAW_WORKSPACE_DIR',
+  'OPENCLAW_STATE_DIR',
+  'OPENCLAW_HOME',
+  'OPENCLAW_PROFILE',
 ];
 for (const k of AGENT_HOME_KEYS) delete process.env[k];
 delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
 // This shell may itself be a Claude Code session; the var would leak into every spawned CLI child and falsify null-session_id trace assertions.
 delete process.env.CLAUDE_CODE_SESSION_ID;
-const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
-for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
+// check-test-env.mjs fails a secret, endpoint or path that src/base/util/env.ts reads and this list lacks.
+const SCRUBBED_ENV_KEYS = ENV_SCRUBBED_IN_TESTS;
+for (const k of SCRUBBED_ENV_KEYS) delete process.env[k];
 // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
 process.env.HIPPO_SKIP_SCHEDULE = '1';
 
@@ -44,6 +60,9 @@ export { EVAL_TESTS };
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const UNIT_MS = 5_000;
+const SETUP = ['tests/_install-freshness.ts', 'tests/_real-store-guard.ts', 'tests/_store-template.ts'];
+// Only tests that run dist (child processes, the server, workers) need a build, so the unit project starts without one.
+const BUILD = ['tests/_build-freshness.ts'];
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
 
 export default defineConfig({
@@ -52,21 +71,54 @@ export default defineConfig({
     // Its name says which (*.process.test.ts, *.server.test.ts); scripts/check-test-env.mjs fails a name that does not match.
     // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
     projects: [
-      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS], testTimeout: UNIT_MS, hookTimeout: Math.max(UNIT_MS, 10_000) } },
-      { extends: true, test: { name: 'process', include: PROCESS_GLOBS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
-      { extends: true, test: { name: 'server', include: SERVER_GLOBS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: TEST_GLOBS,
+          exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS],
+          testTimeout: UNIT_MS,
+          hookTimeout: Math.max(UNIT_MS, 10_000),
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'process',
+          include: PROCESS_GLOBS,
+          exclude: SKIPPED,
+          globalSetup: BUILD,
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'server',
+          include: SERVER_GLOBS,
+          exclude: SKIPPED,
+          globalSetup: BUILD,
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
+        },
+      },
     ],
+    // One run of the guard and the template, however many projects a run selects; only the build check is per project.
+    globalSetup: SETUP,
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
-      HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
+      HIPPO_HOME: isolatedHippoHome,
+      HOME: isolatedUserHome,
+      USERPROFILE: isolatedUserHome,
+      APPDATA: isolatedAppData,
       HIPPO_SKIP_SCHEDULE: '1',
       ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
-      ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
+      ...Object.fromEntries(SCRUBBED_ENV_KEYS.map((k) => [k, ''])),
     },
-    globalSetup: ['tests/_build-freshness.ts', 'tests/_real-store-guard.ts', 'tests/_store-template.ts'],
     // About a fifth of the files spawn git/hippo/nested-vitest children, so one fork per core oversubscribes a big box (CHANGELOG 1.38.3).
     maxWorkers: 6,
     coverage: {

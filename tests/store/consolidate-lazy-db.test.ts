@@ -26,13 +26,16 @@ import { normalizeValueForRejection, rejectionDigest } from '../../src/base/reco
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
 describe('consolidateDb lazy open', () => {
   it('a no-op sleep (no entries, no promotable sessions, no merge clusters) completes clean', async () => {
     const home = makeRoot('consolidate-lazy-db');
-    const result = await consolidate(home, { dryRun: false, now: new Date() });
+    const result = await consolidate(home, { dryRun: false, now: FIXED_NOW });
     expect(result.merged).toBe(0);
     expect(result.semanticCreated).toBe(0);
     expect(result.promotedTraces).toBe(0);

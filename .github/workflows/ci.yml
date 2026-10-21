@@ -259,7 +259,7 @@ jobs:
         run: npx vitest run tests/embeddings/local-cache.process.test.ts
         env:
           HIPPO_REQUIRE_MODEL_CACHE: '1'
-          HIPPO_MODEL_CACHE: ${{ github.workspace }}/node_modules/@huggingface/transformers/.cache
+          HIPPO_TEST_MODEL_CACHE: ${{ github.workspace }}/node_modules/@huggingface/transformers/.cache
 
   # The oldest Node that package.json engines accepts. The floor said 22.5 while
   # hippo needed 22.16 (node:sqlite unflagged, FTS5 bundled), because nothing ran there.

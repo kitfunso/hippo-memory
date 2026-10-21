@@ -6,6 +6,9 @@ import { Layer } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -39,7 +42,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       metadata: { summary: 'fixed broken test' },
     });
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.promotedTraces).toBe(1);
     expect(result.details).toContain('  🧬 promoted 1 trace from completed session');
@@ -67,7 +70,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       source: 'agent',
     });
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     const traces = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(0);
@@ -82,7 +85,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       source: 'agent',
     });
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.promotedTraces).toBe(0);
     expect(loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace)).toHaveLength(0);
@@ -104,9 +107,9 @@ describe('consolidate auto-promote: session -> trace', () => {
       source: 'agent',
     });
 
-    await consolidate(tmpDir, { now: new Date() });
-    await consolidate(tmpDir, { now: new Date() });
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
+    await consolidate(tmpDir, { now: FIXED_NOW });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     const traces = loadAllEntries(tmpDir, 'default').filter(
       (e) => e.layer === Layer.Trace && e.sourceSessionId === sid,
@@ -138,7 +141,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       metadata: { summary: `${sharedTokens} never enable new flow disable it` },
     });
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     const entries = loadAllEntries(tmpDir, 'default');
     const traceIds = new Set(entries.filter((e) => e.layer === Layer.Trace).map((e) => e.id));
@@ -165,7 +168,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       closeHippoDb(db);
     }
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
 
     const traces = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(0);

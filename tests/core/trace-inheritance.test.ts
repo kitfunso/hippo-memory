@@ -18,6 +18,9 @@ import { savePhysicsState, loadPhysicsState } from '../../src/db/physics-state.j
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
@@ -110,7 +113,7 @@ describe('Trace layer inherits core memory mechanics', () => {
 
     // And consolidate() runs cleanly over a store that contains a trace
     // with physics state — no layer-specific crash, no data loss.
-    const result = await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
     expect(result.dryRun).toBe(false);
     const survivors = loadAllEntries(tmpDir, 'default');
     expect(survivors.find((e) => e.id === trace.id)?.layer).toBe(Layer.Trace);

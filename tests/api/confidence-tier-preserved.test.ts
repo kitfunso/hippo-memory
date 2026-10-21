@@ -14,6 +14,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+
+pinClock();
 
 oneRequestPerTest();
 
@@ -46,7 +49,7 @@ describe('confidence tier survives sleep', () => {
     writeEntry(tmpDir, entry);
     expect(readEntry(tmpDir, entry.id)!.confidence).toBe('inferred');
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: FIXED_NOW });
     const afterSleep = readEntry(tmpDir, entry.id)!;
     expect(afterSleep.confidence).toBe('inferred');
     expect(resolveConfidence(afterSleep, new Date())).toBe('stale');

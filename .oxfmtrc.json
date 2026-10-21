@@ -20,6 +20,7 @@
     "scripts/ledger-overhead.mjs",
     "scripts/diff_orderings.mjs",
     "scripts/hook-latency.mjs",
-    "tests/fixtures/**"
+    "tests/fixtures/**",
+    "tests/**/__snapshots__/**"
   ]
 }
