@@ -1,7 +1,7 @@
 // One (sequence, arm, seed) run: its dirs, env, settings and hippo store, plus the shared context and record writer.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { HIPPO_JS, sh, git } from './exec.mjs';
+import { HIPPO_JS, sh, cloneFresh } from './exec.mjs';
 import { HIPPO_ARMS, armSettings, armEnv, armSet, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs } from './homes.mjs';
 import { stubBaseCommit, assertNoInstructionLinks, STUB_CLAUDE_MD, X3_STUB } from './workspace.mjs';
@@ -73,7 +73,7 @@ export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
     const cached = path.join(cacheDir, s.id);
     if (!fs.existsSync(cached)) {
       fs.mkdirSync(cacheDir, { recursive: true });
-      git(['clone', '--quiet', s.repo, cached]);
+      cloneFresh(s.repo, cached);
     }
     const screens = screen ? (spec.families ?? []).filter((f) => f.sequence === s.id && f.screen).map((f) => f.screen) : [];
     // A set X sequence may run in X3, whose stub adds its own CLAUDE.md text (E6 plan R22).
