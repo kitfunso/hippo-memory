@@ -6,7 +6,8 @@ import { isHandoffOutcome, rowToSessionHandoff, type HandoffOutcome } from '../.
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { CardDetail } from '../port/cards.js';
 import type { CardCreate, Cards } from '../port-groups.js';
-import { byBytes, nextId } from './rows.js';
+import { byBytes, newestFirst } from '../rules/order.js';
+import { nextId } from './rows.js';
 import type { MemoryTables } from './tables.js';
 
 const leaseUntilFrom = (now: string): string => new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();
@@ -97,7 +98,7 @@ function createIn(t: MemoryTables, tenantId: string, input: CardCreate): Card {
 
 function runsOf(t: MemoryTables, tenantId: string, id: string): CardRun[] {
   const runs = t.cardRuns.filter((r) => r.tenantId === tenantId && r.row.card === id).map((r) => ({ ...r.row }));
-  return runs.sort((a, b) => byBytes(b.started, a.started) || b.id - a.id);
+  return runs.sort(newestFirst<CardRun>({ key: (r) => r.started, intId: (r) => r.id }));
 }
 
 // card_deps has no rowid, so each read comes back in its index's order: by the other id's bytes.
@@ -115,10 +116,10 @@ function detailIn(t: MemoryTables, tenantId: string, id: string): CardDetail | n
   const comments = t.cardComments
     .filter((c) => c.tenantId === tenantId && c.row.cardId === id)
     .map((c) => ({ ...c.row }))
-    .sort((a, b) => byBytes(b.createdAt, a.createdAt) || b.id - a.id);
+    .sort(newestFirst({ key: (c) => c.createdAt, intId: (c) => c.id }));
   const handoffs = t.handoffs
     .filter((h) => h.tenantId === tenantId && h.row.card_id === id)
-    .sort((a, b) => byBytes(b.row.created_at, a.row.created_at) || b.row.id - a.row.id);
+    .sort(newestFirst({ key: (h) => h.row.created_at, intId: (h) => h.row.id }));
   const handoff = handoffs[0] ? rowToSessionHandoff(handoffs[0].row) : null;
   return { card: { ...card }, deps: depsOf(t, tenantId, id), runs: runsOf(t, tenantId, id), comments, handoff };
 }
@@ -219,7 +220,7 @@ function reclaimIn(t: MemoryTables, tenantId: string): string[] {
 function listIn(t: MemoryTables, tenantId: string, status?: CardStatus): Card[] {
   assertTenantId('listCards', tenantId);
   const cards = [...t.cards.values()].filter((c) => c.tenantId === tenantId && (!status || c.status === status));
-  return cards.sort((a, b) => byBytes(b.updatedAt, a.updatedAt) || byBytes(b.id, a.id)).map((c) => ({ ...c }));
+  return cards.sort(newestFirst<Card>({ key: (c) => c.updatedAt, textId: (c) => c.id })).map((c) => ({ ...c }));
 }
 
 export function memoryCards(t: MemoryTables): Cards {

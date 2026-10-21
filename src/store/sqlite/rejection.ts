@@ -8,6 +8,7 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { RejectedValueRow } from '../port/rejections.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
+import { orderSql, REJECTED_ORDER } from '../rules/order.js';
 
 // SAFETY: every read cast to this row selects REJECTED_VALUE_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface RawRejectedValueRow {
@@ -118,7 +119,7 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
   const rows = cachedStatement(
     db,
     `SELECT ${REJECTED_VALUE_COLUMNS}
-       FROM rejected_values WHERE tenant_id = ? ORDER BY rejected_at DESC, digest ASC`,
+       FROM rejected_values WHERE tenant_id = ? ORDER BY ${orderSql(REJECTED_ORDER)}`,
   ).all(tenantId) as RawRejectedValueRow[];
   return rows.map(rowToRejectedValue);
 }

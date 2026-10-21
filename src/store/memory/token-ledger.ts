@@ -1,7 +1,8 @@
 // The in-memory token ledger: the base recordTokens write and the reports group's tokenUse summary.
 import { DAY_MS } from '../../base/util/time.js';
 import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../port/token-ledger.js';
-import { byBytes, nextId } from './rows.js';
+import { byBytes } from '../rules/order.js';
+import { nextId } from './rows.js';
 import type { TokenRow } from './session-tables.js';
 import type { MemoryTables } from './tables.js';
 

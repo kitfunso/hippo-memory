@@ -9,7 +9,8 @@ import { tableColumns } from '../../db/tables.js';
 import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
-import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../base/memory/memory-audit.js';
+import { isRepairCandidate, previewDefect } from '../../base/memory/memory-audit.js';
+import { repairIssues } from '../rules/repair-issues.js';
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
@@ -88,17 +89,7 @@ function judge(
   entries: readonly MemoryEntry[],
   backing: ReadonlySet<string>,
 ): QualityRepairIssue[] {
-  const parents = parentsOf(db, tenantId, entries);
-  return entries.flatMap((entry): QualityRepairIssue[] => {
-    const defect = repairDefect(entry, parents);
-    if (defect === null) return [];
-    const kept = repairKeeps(entry, backing.has(entry.id), protect);
-    return [
-      kept === undefined
-        ? { id: entry.id, ...defect }
-        : { id: entry.id, ...defect, disposition: 'protected', protection: kept },
-    ];
-  });
+  return repairIssues(entries, parentsOf(db, tenantId, entries), backing, protect);
 }
 
 function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {

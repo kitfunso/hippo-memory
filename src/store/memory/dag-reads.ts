@@ -3,7 +3,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { DagReads, DescendantWalk, SessionRawQuery, SummaryDescendants } from '../port/dag-reads.js';
-import { oldestFirst } from './rows.js';
+import { oldestFirst } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 
 function sessionRaws(t: MemoryTables, { tenantId, sessionId, origins }: SessionRawQuery): MemoryEntry[] {

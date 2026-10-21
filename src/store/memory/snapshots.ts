@@ -4,7 +4,8 @@ import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
 import { continuityStamp, type ContinuityKey } from '../port/types.js';
 import type { Sessions } from '../port-groups.js';
-import { byBytes, nextId, storedObject } from './rows.js';
+import { newestFirst } from '../rules/order.js';
+import { nextId, storedObject } from './rows.js';
 import type { Owned, Tenanted } from './session-tables.js';
 import type { MemoryTables } from './tables.js';
 
@@ -24,8 +25,7 @@ export function stampOf(key: ContinuityKey | null | undefined): { owner: string 
 }
 
 /** Newest first by `updatedAt`, then the larger id. */
-const newestSnapshot = (a: Owned<TaskSnapshot>, b: Owned<TaskSnapshot>): number =>
-  byBytes(b.row.updatedAt, a.row.updatedAt) || b.row.id - a.row.id;
+const newestSnapshot = newestFirst<Owned<TaskSnapshot>>({ key: (s) => s.row.updatedAt, intId: (s) => s.row.id });
 
 function activeIn(t: MemoryTables, tenantId: string, key: ContinuityKey | null | undefined): Owned<TaskSnapshot>[] {
   const active = t.snapshots.filter((s) => s.tenantId === tenantId && s.row.status === 'active' && keyMatches(key, s));
@@ -95,8 +95,7 @@ function appendEventIn(t: MemoryTables, tenantId: string, input: SessionEventInp
   return structuredClone(row);
 }
 
-const newestEvent = (a: Tenanted<SessionEvent>, b: Tenanted<SessionEvent>): number =>
-  byBytes(b.row.createdAt, a.row.createdAt) || b.row.id - a.row.id;
+const newestEvent = newestFirst<Tenanted<SessionEvent>>({ key: (e) => e.row.createdAt, intId: (e) => e.row.id });
 
 /** The `limit` newest events a non-empty session id and task narrow, returned oldest first. */
 export function listEventsIn(

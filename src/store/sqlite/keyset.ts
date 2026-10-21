@@ -3,6 +3,7 @@
 import { keysetPage, type KeysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
+import { orderSql, STORE_ORDER } from '../rules/order.js';
 import type { EntryCursor } from '../port/types.js';
 import type { IdPage } from '../port/embedding-index.js';
 
@@ -19,7 +20,7 @@ export interface EntryPageRequest {
 }
 
 /** The tail every read in loadAllEntries' order ends with; its LIMIT binds the `limit` an EntryRowsRead is given. */
-export const ENTRY_PAGE_ORDER = 'ORDER BY created ASC, id ASC LIMIT ?';
+export const ENTRY_PAGE_ORDER = `ORDER BY ${orderSql(STORE_ORDER)} LIMIT ?`;
 
 /** Where one page in loadAllEntries' order reads: `match(filter)` is the WHERE that keeps the rows `filter` keeps of
  * the page's tenant, or of every tenant, after its cursor, and `args` binds what it adds, after the filter's own. */
@@ -67,17 +68,9 @@ function everyTenantRows(range: SqlAnd, keep: number): EntryRows {
     match: (filter) =>
       `rowid IN (${TENANT_IDS} SELECT m.rowid FROM t JOIN memories m ON m.rowid IN (SELECT rowid FROM memories ` +
       `INDEXED BY idx_memories_tenant_created WHERE tenant_id = t.tid AND (${filter})${range.sql} ` +
-      'ORDER BY created ASC, id ASC LIMIT ?))',
+      `${ENTRY_PAGE_ORDER}))`,
     args: [...range.args, keep],
   };
-}
-
-// SQLite compares TEXT by its UTF-8 bytes; JS string order differs from that above U+FFFF.
-const textOrder = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
-
-/** loadAllEntries' order, as SQLite sorts it, for rows two reads of one page answered. */
-export function byEntryOrder(a: EntryCursor, b: EntryCursor): number {
-  return textOrder(a.created, b.created) || textOrder(a.id, b.id);
 }
 
 const TENANT_IDS =

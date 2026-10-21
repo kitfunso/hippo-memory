@@ -13,7 +13,7 @@ import { escapeLike } from '../../base/util/escape.js';
 import { placeholders } from '../../db/sql.js';
 import type { OriginFilter } from '../port/types.js';
 import type { RecallSearchEntriesOptions } from '../port/sharing.js';
-import type { VectorCandidateSpec } from '../port/vector-reads.js';
+import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec } from '../port/vector-reads.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 
@@ -246,7 +246,7 @@ export async function loadVectorCandidateEntriesAt(
   const params = [...tenant.args, ...scope.params];
   const matches = await topVectorMatches(db, {
     query: queryVector,
-    k: spec.limit ?? 50,
+    k: spec.limit ?? VECTOR_CANDIDATE_LIMIT,
     where: `${tenant.sql} AND m.kind != 'archived'${scope.sql}${current}`,
     params,
     index,

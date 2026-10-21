@@ -5,14 +5,13 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { chunked } from '../../base/util/chunked.js';
-import { byIdOrder } from '../rules/order.js';
+import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { duplicateKey, longestWord } from '../../base/util/same-text.js';
 import { tenantAnd } from './tenant.js';
 import {
   afterIdAnd,
-  byEntryOrder,
   entryPage,
   ENTRY_PAGE_ORDER,
   idPageOf,
@@ -171,9 +170,7 @@ export function loadFreshRawMemoriesAt(
   const origin = originAnd(origins);
   sql += origin.sql;
   params.push(...origin.args);
-  // Tie tail makes same-`created` rows deterministic; `content` before `id` because ids are random
-  // UUIDs, so an id-only tail would pick which same-created rows make the window per instance.
-  sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
+  sql += ` ORDER BY ${orderSql(FRESH_RAW_ORDER)} LIMIT ?`;
   params.push(capped);
   const rows = cachedStatement(db, sql).all(...params) as MemoryRow[];
   return rows.map(rowToEntry);
@@ -312,7 +309,7 @@ function ftsMentionRows(db: DatabaseSyncLike, ftsQuery: string, within: EntryRow
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${nonAscii} ${ENTRY_PAGE_ORDER}`,
   ).all(...upTo.args, ...within.args, limit) as MemoryRow[];
   const ids = new Set(hits.map((row) => row.id));
-  return [...hits, ...others.filter((row) => !ids.has(row.id))].sort(byEntryOrder).slice(0, limit);
+  return [...hits, ...others.filter((row) => !ids.has(row.id))].sort(oldestFirst).slice(0, limit);
 }
 
 /** entryPage over whole rows, decoded. */

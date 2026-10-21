@@ -34,21 +34,34 @@ export function comparing<R>(keys: readonly OrderKey<R>[]): (a: R, b: R) => numb
 export const orderSql = <R>(keys: readonly OrderKey<R>[]): string =>
   keys.map((k) => `${k.column} ${k.desc ? 'DESC' : 'ASC'}`).join(', ');
 
-type EntryKey = OrderKey<Pick<MemoryEntry, 'created' | 'content' | 'id'>>;
-const CREATED: EntryKey = textKey('created', (e) => e.created);
-const CONTENT: EntryKey = textKey('content', (e) => e.content);
-const ID: EntryKey = textKey('id', (e) => e.id);
+type Cursor = Pick<MemoryEntry, 'created' | 'id'>;
+type Keyed = Pick<MemoryEntry, 'created' | 'content' | 'id'>;
+const CREATED = textKey<Cursor>('created', (e) => e.created);
+const CONTENT = textKey<Keyed>('content', (e) => e.content);
+const ID = textKey<Cursor>('id', (e) => e.id);
 
 /** loadAllEntries' order and every page of it: created, then id. */
-export const STORE_ORDER: readonly EntryKey[] = [CREATED, ID];
+export const STORE_ORDER: readonly OrderKey<Cursor>[] = [CREATED, ID];
 /** A by-id read: created, content, then id, since ids are random. */
-export const BY_ID_ORDER: readonly EntryKey[] = [CREATED, CONTENT, ID];
-/** The fresh raw tail: newest first, content then id breaking a tie. */
-export const FRESH_RAW_ORDER: readonly EntryKey[] = [{ ...CREATED, desc: true }, CONTENT, ID];
+export const BY_ID_ORDER: readonly OrderKey<Keyed>[] = [CREATED, CONTENT, ID];
+/** The fresh raw tail: newest first, content then id breaking a tie, since ids are random. */
+export const FRESH_RAW_ORDER: readonly OrderKey<Keyed>[] = [{ ...CREATED, desc: true }, CONTENT, ID];
 
 export const oldestFirst = comparing(STORE_ORDER);
 export const byIdOrder = comparing(BY_ID_ORDER);
 export const freshRawOrder = comparing(FRESH_RAW_ORDER);
+
+/** The dormant list: newest set aside first, the id breaking a tie. */
+export const DORMANT_ORDER: readonly OrderKey<{
+  readonly dormantAt: string;
+  readonly entry: { readonly id: string };
+}>[] = [{ ...textKey('dormant_at', (s) => s.dormantAt), desc: true }, textKey('id', (s) => s.entry.id)];
+
+/** The rejections list: newest tombstone first, the digest breaking a tie. */
+export const REJECTED_ORDER: readonly OrderKey<{ readonly rejectedAt: string; readonly digest: string }>[] = [
+  { ...textKey('rejected_at', (r) => r.rejectedAt), desc: true },
+  textKey('digest', (r) => r.digest),
+];
 
 /** A list walked by (key, id) descending, as keysetAfter pages it in SQL; an id is a text or an integer column. */
 export type DescendingKeyset<R> =

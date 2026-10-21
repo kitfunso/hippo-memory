@@ -5,7 +5,8 @@ import type { ContinuityBlock } from '../port.js';
 import type { ClassResolution, ContinuityKey, PlanningFallacyEvidence } from '../port/types.js';
 import { latestHandoffIn } from './handoffs.js';
 import { baserateIn } from './predictions.js';
-import { byBytes, rowsByIds } from './rows.js';
+import { freshRawOrder } from '../rules/order.js';
+import { rowsByIds } from './rows.js';
 import { listEventsIn, loadSnapshotIn } from './snapshots.js';
 import type { MemoryTables } from './tables.js';
 
@@ -34,7 +35,7 @@ export function freshRawIn(
       (origins === null || (origin !== null && (origin === '' || origins.includes(origin))))
     );
   });
-  fresh.sort((a, b) => byBytes(b.created, a.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id));
+  fresh.sort(freshRawOrder);
   return structuredClone(fresh.slice(0, Math.min(count, MAX_FRESH_RAW)));
 }
 

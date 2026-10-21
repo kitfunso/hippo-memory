@@ -13,7 +13,8 @@ import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave, Ob
 import type { PoliciesInForceQuery } from '../port/objects.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { closeOp, createOp, filterValue, ID_KEY, saveRules, supersedeOp } from './object-rules.js';
-import { appendAudit, asciiFolded, byBytes, nextId, peekId } from './rows.js';
+import { byBytes, type DescendingKeyset, isBelow, newestFirst } from '../rules/order.js';
+import { appendAudit, asciiFolded, nextId, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
@@ -46,17 +47,20 @@ class Unlinked extends Error {
   }
 }
 
+const BY_CREATED_AT: DescendingKeyset<{ readonly createdAt: string; readonly id: number }> = {
+  key: (row) => row.createdAt,
+  intId: (row) => row.id,
+};
+
 function listIn<K extends ObjectKind>(t: MemoryTables, tenantId: string, kind: K, query: ObjectListQuery<K>) {
   const column = filterValue(kind);
   const { after } = query;
   const hits = [...tableOf(t, kind).values()].filter((row) => {
     if (row.tenantId !== tenantId || (query.status !== undefined && row.status !== query.status)) return false;
     if (query.filter !== undefined && column && column(row) !== query.filter) return false;
-    if (!after) return true;
-    const byKey = byBytes(row.createdAt, String(after.key));
-    return byKey < 0 || (byKey === 0 && row.id < Number(after.id));
+    return !after || isBelow(BY_CREATED_AT, row, after);
   });
-  return structuredClone(hits.sort((a, b) => byBytes(b.createdAt, a.createdAt) || b.id - a.id).slice(0, query.limit));
+  return structuredClone(hits.sort(newestFirst(BY_CREATED_AT)).slice(0, query.limit));
 }
 
 /** Where a save lands: the tenant, the new row's id and version, and the id of the row it replaces. */
@@ -179,7 +183,7 @@ function inForceIn(t: MemoryTables, tenantId: string, query: PoliciesInForceQuer
       (p.validTo === null || byBytes(asOf, p.validTo) < 0) &&
       (p.status === 'active' || replacedLater(p.supersededBy)),
   );
-  return structuredClone(hits.sort((a, b) => byBytes(b.validFrom, a.validFrom) || b.id - a.id).slice(0, query.limit));
+  return structuredClone(hits.sort(newestFirst({ key: (p) => p.validFrom, intId: (p) => p.id })).slice(0, query.limit));
 }
 
 function receiptsIn(t: MemoryTables, tenantId: string, tag: string, limit: number): BriefReceipt[] {
@@ -191,7 +195,7 @@ function receiptsIn(t: MemoryTables, tenantId: string, tag: string, limit: numbe
       passesScopeFilterForRecall(m.scope ?? null, undefined) &&
       asciiFolded(JSON.stringify(m.tags)).includes(quoted),
   );
-  hits.sort((a, b) => byBytes(b.created, a.created) || byBytes(b.id, a.id));
+  hits.sort(newestFirst({ key: (m) => m.created, textId: (m) => m.id }));
   return hits.slice(0, limit).map((m) => ({ id: m.id, created: m.created, source: m.source, content: m.content }));
 }
 

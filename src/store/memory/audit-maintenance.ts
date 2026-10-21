@@ -1,6 +1,7 @@
 // The in-memory AuditMaintenance group: object-backed ids, the automatic deletes, the audit prune and quality repair.
 import { calculateStrength, canAutoDelete, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
-import { isRepairCandidate, repairDefect, repairKeeps } from '../../base/memory/memory-audit.js';
+import { isRepairCandidate } from '../../base/memory/memory-audit.js';
+import { repairIssues } from '../rules/repair-issues.js';
 import type {
   AuditMaintenance,
   AuditPrune,
@@ -9,7 +10,8 @@ import type {
   RepairProtection,
 } from '../port/audit-maintenance.js';
 import { setAside } from './dormant.js';
-import { appendAudit, byBytes, oldestFirst, tenantKey } from './rows.js';
+import { byBytes, oldestFirst } from '../rules/order.js';
+import { appendAudit, tenantKey } from './rows.js';
 import { markParentDirty, stage, type Tx } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
@@ -66,17 +68,7 @@ function planIssues(t: MemoryTables, tenantId: string, protect: RepairProtection
     t,
     entries.map((e) => e.id),
   );
-  const issues = entries.flatMap((entry): QualityRepairIssue[] => {
-    const defect = repairDefect(entry, parents);
-    if (defect === null) return [];
-    const kept = repairKeeps(entry, backing.has(entry.id), protect);
-    return [
-      kept === undefined
-        ? { id: entry.id, ...defect }
-        : { id: entry.id, ...defect, disposition: 'protected', protection: kept },
-    ];
-  });
-  return { total: entries.length, issues };
+  return { total: entries.length, issues: repairIssues(entries, parents, backing, protect) };
 }
 
 /** Moves each set-aside row to dormant storage in one staged write, behind the automatic-delete guard. */

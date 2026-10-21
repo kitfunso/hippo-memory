@@ -11,7 +11,8 @@ import {
 import type { HandoffFilter, SessionEndHandoffRequest, TaskSnapshot } from '../port/sessions.js';
 import { isJsonObject, tryParseJson } from '../../base/util/json.js';
 import type { ContinuityKey } from '../port/types.js';
-import { byBytes, nextId } from './rows.js';
+import { byBytes, newestFirst } from '../rules/order.js';
+import { nextId } from './rows.js';
 import type { Owned } from './session-tables.js';
 import { keyMatches, loadSnapshotIn, sessionCompletion, stampOf } from './snapshots.js';
 import type { MemoryTables } from './tables.js';
@@ -46,8 +47,7 @@ export function saveHandoffIn(t: MemoryTables, tenantId: string, handoff: Handof
   return rowToSessionHandoff(row);
 }
 
-const newestHandoff = (a: Stored, b: Stored): number =>
-  byBytes(b.row.created_at, a.row.created_at) || b.row.id - a.row.id;
+const newestHandoff = newestFirst<Stored>({ key: (h) => h.row.created_at, intId: (h) => h.row.id });
 
 /** Each session's newest revision among the key's rows, since an outcome is only ever stamped on that one. */
 function newestRevisions(t: MemoryTables, tenantId: string, key: ContinuityKey | null): Set<number> {

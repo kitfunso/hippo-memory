@@ -1,11 +1,11 @@
-import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
+import { MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter } from '../../base/util/keyset.js';
 import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { QueryAuditOptions } from '../port/audit-log.js';
+import { auditRowsRead, type QueryAuditOptions } from '../port/audit-log.js';
 import type { AuditPrune } from '../port/audit-maintenance.js';
 import type { ListAuditAfterOpts } from '../port/key-audit.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -64,8 +64,7 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions):
     params.push(opts.since);
   }
   const after = keysetAfter('ts', 'id', opts.after);
-  // One past the cap: GET /v1/audit reads a row ahead to tell whether another page exists.
-  const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT + 1));
+  const limit = auditRowsRead(opts.limit);
   const rows = cachedStatement(
     db,
     `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC ` +

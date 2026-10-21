@@ -1,4 +1,4 @@
-// What every in-memory group shares: hippo.db's text order and case folding, the id sequences, the audit append and the
+// What every in-memory group shares: hippo.db's case folding, the id sequences, the audit append and the
 // store-wide counters.
 import type { JsonObject, JsonValue } from '../../base/util/json.js';
 import { parseStoredObject, type StoredJsonSite } from '../../base/util/stored-json.js';
@@ -6,12 +6,6 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
 import { byIdOrder } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
-
-/** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic plane. */
-export const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
-
-export const oldestFirst = (a: MemoryEntry, b: MemoryEntry): number =>
-  byBytes(a.created, b.created) || byBytes(a.id, b.id);
 
 /** A key unique within a tenant, as hippo.db's (tenant_id, x) primary keys are. */
 export const tenantKey = (tenantId: string, key: string): string => `${tenantId}\u0000${key}`;

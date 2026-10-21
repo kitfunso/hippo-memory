@@ -3,7 +3,8 @@
 import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../port-groups.js';
 import type { WorkingMemoryItem } from '../port/sessions.js';
 import { handoffByIdIn, latestHandoffIn, saveHandoffIn, stampOutcomeIn, writeSessionEndIn } from './handoffs.js';
-import { byBytes, nextId, storedObject, tenantKey } from './rows.js';
+import { byBytes } from '../rules/order.js';
+import { nextId, storedObject, tenantKey } from './rows.js';
 import type { Tenanted } from './session-tables.js';
 import { memorySnapshots } from './snapshots.js';
 import type { MemoryTables } from './tables.js';

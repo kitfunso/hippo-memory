@@ -20,6 +20,7 @@ import type { CallerItems, CallerItemsSaved, CompactionStart, Compactions } from
 import { tenantKey } from './rows.js';
 import { stage, type Tx } from './staged.js';
 import type { CompactionRecord, MemoryTables } from './tables.js';
+import { newestFirst } from '../rules/order.js';
 
 interface Held {
   readonly id: string | null;
@@ -64,7 +65,7 @@ function summarize(t: MemoryTables, tenantId: string, req: CallerItems): Compact
         r.startedAt <= now &&
         r.startedAt >= floor,
     )
-    .sort((a, b) => (a.startedAt === b.startedAt ? (a.id < b.id ? 1 : -1) : a.startedAt < b.startedAt ? 1 : -1))[0];
+    .sort(newestFirst({ key: (r) => r.startedAt, textId: (r) => r.id }))[0];
   const record = started ?? newRecord(tenantId, req.sessionId, req.project, 'summarised');
   if (started === undefined) t.compactions.push(record);
   Object.assign(record, { status: 'summarised', items: [...req.items], requestId: req.requestId });

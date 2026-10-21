@@ -5,7 +5,7 @@ import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
 import type { Goals } from '../port-groups.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { ActiveGoals, GetActiveGoalsOpts, Goal, RetrievalPolicy } from '../port/types.js';
-import { byBytes } from './rows.js';
+import { byBytes } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 
 // The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.

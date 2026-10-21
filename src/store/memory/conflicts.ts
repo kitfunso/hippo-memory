@@ -2,7 +2,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../base/records/rejection-digest.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
-import { keysetPage, type KeysetPosition } from '../../base/util/keyset.js';
+import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import type {
   ConflictListQuery,
@@ -13,7 +13,7 @@ import type {
   MemoryConflict,
 } from '../port/conflicts.js';
 import type { Conflicts } from '../port-groups.js';
-import { byBytes } from './rows.js';
+import { isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
 import { keepTombstone } from './rejections.js';
 import { archiveRow, markParentDirty, stage, type Tx } from './staged.js';
 import type { MemoryTables } from './tables.js';
@@ -31,18 +31,12 @@ function rowOf(t: MemoryTables, tenantId: TenantId, conflict: MemoryConflict): C
   return { conflict: { ...conflict }, a: memberOf(a), b: memberOf(b) };
 }
 
-const newestChange = (x: MemoryConflict, y: MemoryConflict): number =>
-  byBytes(y.updated_at, x.updated_at) || y.id - x.id;
-
-function isBelow(c: MemoryConflict, after: KeysetPosition): boolean {
-  const byKey = byBytes(c.updated_at, String(after.key));
-  return byKey < 0 || (byKey === 0 && c.id < Number(after.id));
-}
+const WALK: DescendingKeyset<MemoryConflict> = { key: (c) => c.updated_at, intId: (c) => c.id };
 
 function pageIn(t: MemoryTables, { tenantId, status, limit, after }: ConflictListQuery): ConflictRowPage {
   const hits = t.conflicts
-    .filter((c) => (status === '*' || c.status === status) && (!after || isBelow(c, after)))
-    .sort(newestChange)
+    .filter((c) => (status === '*' || c.status === status) && (!after || isBelow(WALK, c, after)))
+    .sort(newestFirst(WALK))
     .flatMap((c) => rowOf(t, tenantId, c) ?? []);
   const page = keysetPage(hits.slice(0, limit + 1), limit, (row) => ({
     key: row.conflict.updated_at,

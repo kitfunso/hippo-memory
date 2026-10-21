@@ -14,7 +14,8 @@ import type { CorrectionLink, RawProvenance, StatusCounts, StrengthTallies } fro
 import type { EntryCursor, EntryPage } from '../port/types.js';
 import { openConflictsIn } from './conflicts.js';
 import { failureSummary } from './failure-log.js';
-import { byBytes, counter, oldestFirst } from './rows.js';
+import { byBytes, oldestFirst } from '../rules/order.js';
+import { counter } from './rows.js';
 import type { MemoryTables } from './tables.js';
 import { tokenUseIn } from './token-ledger.js';
 
