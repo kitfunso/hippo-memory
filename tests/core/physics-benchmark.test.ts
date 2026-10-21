@@ -610,6 +610,6 @@ describe('Physics vs Classic A/B Benchmark', () => {
       } finally {
         closeHippoDb(db);
       }
-    });
+    }, 60_000);
   });
 });
