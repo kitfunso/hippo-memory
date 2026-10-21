@@ -1,6 +1,9 @@
 // The Conflicts group's types: a conflict read with both members' columns, and the keyset page that carries them.
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { TenantId } from '../../base/util/tenant.js';
+import type { MemoryConflict } from '../../base/memory/conflict-wire.js';
+
+export type { MemoryConflict };
 
 /** The columns of one member that the api's reach, liveness and project rules read. */
 export interface ConflictMember {
@@ -23,7 +26,7 @@ export interface ConflictListQuery {
   /** '*' reads every status. */
   readonly status: string;
   readonly limit: number;
-  /** Resume after this (updated_at, id) position; the list runs newest change first. */
+  /** Resume after this (updatedAt, id) position; the list runs newest change first. */
   readonly after?: KeysetPosition;
 }
 
@@ -55,19 +58,8 @@ export interface ConflictResolution {
   readonly actor: string;
   /** Kept on the tombstone and a raw loser's archive row. */
   readonly reason: string;
-  /** Core's clock, as `toISOString` gives it: the conflict's updated_at and a rejected loser's tombstone time. */
+  /** Core's clock, as `toISOString` gives it: the conflict's updatedAt and a rejected loser's tombstone time. */
   readonly at: string;
-}
-
-export interface MemoryConflict {
-  id: number;
-  memory_a_id: string;
-  memory_b_id: string;
-  reason: string;
-  score: number;
-  status: string;
-  detected_at: string;
-  updated_at: string;
 }
 
 export interface Conflicts {

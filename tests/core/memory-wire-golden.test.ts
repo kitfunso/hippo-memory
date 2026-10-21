@@ -15,7 +15,7 @@ import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { everyFieldEntry, GOLDEN_TENANT, recallableEntry } from '../_helpers/every-field-entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW } from '../_helpers/recall-golden-seed.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -114,6 +114,16 @@ describe('memory wire goldens', () => {
 
   it('hippo recall --json --why', async () => {
     expect(await stdoutOf('recall', 'haddock', '--json', '--why')).toMatchSnapshot();
+  });
+
+  it('a conflict: hippo conflicts --json, trace --json open_conflicts and the conflict mirror', async () => {
+    const pair = { memory_a_id: everyFieldEntry().id, memory_b_id: recallableEntry().id };
+    replaceDetectedConflicts(root, [{ ...pair, reason: 'deploy target', score: 0.87654321 }], FAKE_NOW);
+    // A row write refreshes the side mirrors, the conflict one among them.
+    writeEntry(root, recallableEntry());
+    expect(await stdoutOf('conflicts', '--json')).toMatchSnapshot();
+    expect(await stdoutOf('trace', everyFieldEntry().id, '--json')).toMatchSnapshot();
+    expect(fs.readFileSync(path.join(root, 'conflicts', 'conflict_1.md'), 'utf8')).toMatchSnapshot();
   });
 
   it('MCP hippo_recall text', async () => {

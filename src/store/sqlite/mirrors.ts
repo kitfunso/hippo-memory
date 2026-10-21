@@ -22,6 +22,7 @@ import {
 } from './rows.js';
 import type { LegacyStats } from '../port/reports.js';
 import type { MemoryConflict } from '../port/conflicts.js';
+import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
 import { serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../base/util/atomic-write.js';
@@ -154,22 +155,13 @@ function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): v
     const filename = `conflict_${conflict.id}.md`;
     keep.add(filename);
 
-    const fm = dumpFrontmatter({
-      id: conflict.id,
-      memory_a_id: conflict.memory_a_id,
-      memory_b_id: conflict.memory_b_id,
-      reason: conflict.reason,
-      score: Math.round(conflict.score * 10000) / 10000,
-      status: conflict.status,
-      detected_at: conflict.detected_at,
-      updated_at: conflict.updated_at,
-    });
+    const fm = dumpFrontmatter({ ...conflictToWire(conflict), score: Math.round(conflict.score * 10000) / 10000 });
 
     const body = [
       '# Memory Conflict',
       '',
-      `- Memory A: ${conflict.memory_a_id}`,
-      `- Memory B: ${conflict.memory_b_id}`,
+      `- Memory A: ${conflict.memoryAId}`,
+      `- Memory B: ${conflict.memoryBId}`,
       `- Reason: ${conflict.reason}`,
       `- Score: ${conflict.score.toFixed(SCORE_DECIMALS)}`,
       `- Status: ${conflict.status}`,

@@ -1,6 +1,7 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
 import { envActiveScope } from '../../base/util/env.js';
+import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as fs from 'fs';
 import { Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import * as api from '../../api/index.js';
@@ -327,7 +328,7 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
   const openIn = (root: string) =>
     api.conflictListAll((page) => api.conflictList(cliApiContext(root, tenantId), 'open', {}, page));
   const allConflicts = [...(await openIn(hippoRoot)), ...(isInitialized(globalRoot) ? await openIn(globalRoot) : [])];
-  const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
+  const myConflicts = allConflicts.filter((c) => c.memoryAId === id || c.memoryBId === id);
   return { parentPreviews, myConflicts };
 }
 
@@ -359,7 +360,7 @@ function printTraceJson(t: TraceView): void {
         outcome_positive: entry.outcomePositive,
         outcome_negative: entry.outcomeNegative,
         parents: t.parentPreviews,
-        open_conflicts: t.myConflicts,
+        open_conflicts: t.myConflicts.map(conflictToWire),
       },
       null,
       2,
@@ -405,7 +406,7 @@ function printTraceText(t: TraceView): void {
     console.log();
     console.log(`Open conflicts: ${myConflicts.length}`);
     for (const c of myConflicts) {
-      const other = c.memory_a_id === id ? c.memory_b_id : c.memory_a_id;
+      const other = c.memoryAId === id ? c.memoryBId : c.memoryAId;
       console.log(`  - with ${other}: ${c.reason} (score=${fmt(c.score, 2)})`);
     }
   }

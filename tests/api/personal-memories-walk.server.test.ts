@@ -514,7 +514,7 @@ describe('personal memories walk (plan lane T)', () => {
       { memory_a_id: t1, memory_b_id: t2, reason: 'walk: team pair', score: 0.9 },
     ]);
     const open = listMemoryConflicts(store, 'open', 'default');
-    const pairOf = (id: string): number => open.find((c) => c.memory_a_id === id || c.memory_b_id === id)!.id;
+    const pairOf = (id: string): number => open.find((c) => c.memoryAId === id || c.memoryBId === id)!.id;
     const [aPair, teamPair] = [pairOf(p1), pairOf(t1)];
 
     for (const who of ['A', 'B', 'ADM'] as const) {

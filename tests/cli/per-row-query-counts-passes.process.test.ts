@@ -180,7 +180,7 @@ describe('replaceDetectedConflicts', () => {
       ]);
       const [conflict] = listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);
-      expect(resolveConflictKeeping(root, 'default', conflict.id, conflict.memory_a_id)).toBe(true);
+      expect(resolveConflictKeeping(root, 'default', conflict.id, conflict.memoryAId)).toBe(true);
       expect(mirrorsRewritten()).toBe(2);
     }
   });

@@ -62,7 +62,7 @@ export async function runConflictsTool(call: ToolCall): Promise<string> {
   const conflicts = await conflictListAll((page) => conflictListOpen(apiCtx, { ...page, project: ctx?.project }));
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts
-    .map((c) => `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`)
+    .map((c) => `conflict_${c.id}: ${c.memoryAId} <-> ${c.memoryBId} (score=${c.score.toFixed(2)}) — ${c.reason}`)
     .join('\n');
 }
 
