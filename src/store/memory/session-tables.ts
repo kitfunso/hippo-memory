@@ -20,13 +20,13 @@ export interface Owned<R> extends Tenanted<R> {
   readonly origin: string | null;
 }
 
-export interface CardDep {
+interface CardDep {
   readonly tenantId: string;
   readonly parent: string;
   readonly child: string;
 }
 
-export interface SessionOwner {
+interface SessionOwner {
   readonly owner: string;
   readonly createdAt: string;
 }
@@ -44,7 +44,7 @@ export interface TokenRow {
 }
 
 /** One recall trace as hippo.db keeps it: the query's hash and length, never its text. */
-export interface RecallTrace {
+interface RecallTrace {
   readonly id: number;
   readonly ts: string;
   readonly tenantId: string;

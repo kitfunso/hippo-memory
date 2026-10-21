@@ -202,12 +202,12 @@ export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, record
 }
 
 /** A caller's checked project, and the id its retries carry so a retry finds this record. */
-export interface SummaryCaller {
+interface SummaryCaller {
   originProject?: string;
   requestId?: string;
 }
 
-export interface RecordSummaryOptions {
+interface RecordSummaryOptions {
   readonly meta: Omit<CompactionStart, 'originProject'>;
   readonly text: CompactionText;
   readonly at: Date;

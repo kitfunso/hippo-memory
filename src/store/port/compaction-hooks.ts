@@ -61,7 +61,7 @@ export interface SpooledSummary {
 }
 
 /** How long a call waits on a locked store; unset is the store's default wait. */
-export interface StoreWait {
+interface StoreWait {
   readonly busyWaitMs?: number;
 }
 

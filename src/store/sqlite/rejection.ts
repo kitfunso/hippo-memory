@@ -143,7 +143,7 @@ export function checkRejectionGuard(db: DatabaseSyncLike, tenantId: string, entr
 
 /** The columns of the row an id holds now that say whether a write to it introduces content. */
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface StoredContentRow {
+interface StoredContentRow {
   readonly content: string;
   readonly tenant_id: string | null;
 }

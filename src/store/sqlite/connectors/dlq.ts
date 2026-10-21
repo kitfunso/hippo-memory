@@ -22,8 +22,8 @@ function assertColumns(names: readonly string[]): void {
 }
 
 // The driver returns each column by its stored affinity; the connector's rowToItem coerces every field.
-export type DlqRawValue = string | number | bigint | null;
-export type DlqRawRow = Record<string, DlqRawValue>;
+type DlqRawValue = string | number | bigint | null;
+type DlqRawRow = Record<string, DlqRawValue>;
 
 /** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in insert order. */
 function insertDlqRow(

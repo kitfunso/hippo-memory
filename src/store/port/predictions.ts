@@ -72,7 +72,7 @@ export interface SavePredictionOptions {
 }
 
 /** One closed prediction as the baserate reads it: both values set. */
-export interface ClosedEstimate {
+interface ClosedEstimate {
   readonly estimate: number;
   readonly actual: number;
 }

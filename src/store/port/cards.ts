@@ -3,7 +3,7 @@ import type { Card, CardComment, CardRun } from '../../base/records/card.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 
 /** The ids a card waits on and the ids that wait on it. */
-export interface CardDeps {
+interface CardDeps {
   parents: string[];
   children: string[];
 }

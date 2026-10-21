@@ -21,7 +21,7 @@ export interface KeyRow extends Omit<NewApiKey, 'role'> {
   readonly scopes: readonly string[];
 }
 
-export interface StoredVector {
+interface StoredVector {
   readonly model: string;
   readonly bytes: Uint8Array;
 }
@@ -104,7 +104,7 @@ export interface SleepRun {
   readonly removed: number;
 }
 
-export type ObjectTables = { readonly [K in ObjectKind]: Map<number, ObjectByKind[K]> };
+type ObjectTables = { readonly [K in ObjectKind]: Map<number, ObjectByKind[K]> };
 
 export interface MemoryTables extends SessionTables {
   /** Every tenant's memories by id, in the order hippo.db's rowids would hold them. */
@@ -146,7 +146,7 @@ export interface MemoryTables extends SessionTables {
   readonly sleepRuns: SleepRun[];
 }
 
-export function emptyObjectTables(): ObjectTables {
+function emptyObjectTables(): ObjectTables {
   return {
     decision: new Map(),
     incident: new Map(),

@@ -63,7 +63,7 @@ export type SleepGroup = keyof SleepGroups;
 
 /** Groups a store may skip for a fallback: recall scores the plain vectors, GET /ready answers 200 with
  * `store: "unchecked"`, and context writes no last recall for the CLI's no-ids outcome to read. */
-export interface FallbackGroups {
+interface FallbackGroups {
   readonly vectorViews: VectorViews;
   readonly readiness: Readiness;
   readonly lastRecall: LastRecall;

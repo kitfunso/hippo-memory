@@ -389,7 +389,7 @@ export function loadEntriesPageAt(db: DatabaseSyncLike, tenantId: TenantId, page
 
 /** The columns a text match needs, for one row of a tenant. */
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-export interface TenantText {
+interface TenantText {
   readonly id: string;
   readonly content: string;
   readonly source: string;
@@ -397,7 +397,7 @@ export interface TenantText {
 }
 
 /** One page of TenantText rows, and where the next page starts (null after the last). */
-export interface TenantTextPage {
+interface TenantTextPage {
   readonly texts: TenantText[];
   readonly next: EntryCursor | null;
 }

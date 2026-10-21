@@ -6,7 +6,7 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 export type TenantMark = readonly [number, string | null];
 
 /** A job's arguments as postMessage can copy them, and where each ALL_TENANTS sat. */
-export interface MarkedArgs {
+interface MarkedArgs {
   readonly args: readonly unknown[];
   readonly allTenants: readonly TenantMark[];
 }

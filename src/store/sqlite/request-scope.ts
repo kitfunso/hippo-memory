@@ -12,7 +12,7 @@ import { withRequestStoresSync } from '../../db/request-stores.js';
 import { isStoreBusy } from '../port.js';
 import { inPortTerms, rethrowInPortTerms } from './port-errors.js';
 
-export type RequestPreset = 'cli' | 'hook' | 'server';
+type RequestPreset = 'cli' | 'hook' | 'server';
 
 /** Lock wait per root; a hook also skips later writes once one wait runs out, so it never stalls its host. */
 const PRESETS = {

@@ -37,7 +37,7 @@ export function loadSnapshotIn(t: MemoryTables, tenantId: string, key: Continuit
   return newest ? { ...newest.row } : null;
 }
 
-export function saveSnapshotIn(t: MemoryTables, tenantId: string, input: SnapshotInput, key: ContinuityKey | null) {
+function saveSnapshotIn(t: MemoryTables, tenantId: string, input: SnapshotInput, key: ContinuityKey | null) {
   const stamp = stampOf(key);
   const now = new Date().toISOString();
   for (const s of activeIn(t, tenantId, key)) s.row = { ...s.row, status: 'superseded', updatedAt: now };

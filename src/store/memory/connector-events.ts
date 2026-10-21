@@ -190,9 +190,6 @@ function cursorsOn(t: MemoryTables): Cursors {
   };
 }
 
-/** The cursor map keys, so a loader files hippo.db's rows where these reads look. */
-export const cursorKey = key;
-
 export function memoryConnectorEvents(t: MemoryTables): ConnectorEvents {
   return {
     async eventRecord(event) {

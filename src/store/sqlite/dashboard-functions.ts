@@ -46,7 +46,7 @@ export type FactRow = Pick<
   | 'layer'
 >;
 
-export type FactInputs = StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>;
+type FactInputs = StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>;
 
 // The defaults are rowToEntry's, so a row scores here as it would through the full mapper.
 export function factInputs(row: FactRow): FactInputs {

@@ -35,7 +35,7 @@ export interface GoalRow {
   completed_at: string | null;
   outcome_score: number | null;
 }
-export const GOAL_COLUMNS = `id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+const GOAL_COLUMNS = `id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
            success_condition, retrieval_policy_id, created_at, completed_at, outcome_score`;
 
 const MAX_ACTIVE_GOAL_DEPTH = 3;

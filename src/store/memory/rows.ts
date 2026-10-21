@@ -66,7 +66,7 @@ export function appendAudit(t: MemoryTables, events: readonly AppendAuditOpts[])
   if (rows.length > 0) t.seq.set('audit_log', first + rows.length - 1);
 }
 
-export type Counter = 'total_remembered' | 'total_recalled' | 'total_forgotten';
+type Counter = 'total_remembered' | 'total_recalled' | 'total_forgotten';
 
 export function counter(t: MemoryTables, name: Counter): number {
   return Number(t.meta.get(name) ?? '0');

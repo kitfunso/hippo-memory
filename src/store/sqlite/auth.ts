@@ -67,7 +67,7 @@ export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOptions): C
   return { keyId, plaintext };
 }
 
-export interface ValidateResult {
+interface ValidateResult {
   valid: boolean;
   tenantId?: string;
   keyId?: string;

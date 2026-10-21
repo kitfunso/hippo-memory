@@ -108,7 +108,7 @@ export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceI
 }
 
 /** Tokens hippo sent and skipped in one session, for {@link tokensBySession}. */
-export interface SessionTokens {
+interface SessionTokens {
   sessionId: string;
   /** Tokens of memory text sent to the agent. */
   sent: number;

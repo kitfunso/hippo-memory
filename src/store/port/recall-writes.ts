@@ -53,7 +53,7 @@ export interface RecallTraceInput {
 }
 
 /** One ranked result to persist alongside its trace row. */
-export interface RecallTraceResultInput {
+interface RecallTraceResultInput {
   memoryId: string;
   score: number;
   /**
