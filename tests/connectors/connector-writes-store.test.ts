@@ -12,10 +12,10 @@ import { messageToRememberOpts } from '../../src/surface/connectors/slack/transf
 import { withSqliteBlocked } from '../../src/db/index.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import type { ConnectorEvent } from '../../src/store/port.js';
-import { inMemoryConnectorWritesStore } from '../_helpers/in-memory-connector-writes-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { memorySide } from '../_helpers/memory-side.js';
 
 oneRequestPerTest();
 
@@ -68,7 +68,7 @@ afterEach(() => {
 describe('a served store with connectorWrites takes connector traffic', () => {
   it('stores one Slack message and one GitHub event and archives on one Slack deletion, with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryConnectorWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const ctx = { hippoRoot, tenantId: TENANT_A, actor: connector, store: memory.store, config: loadConfig(hippoRoot) };
     const slackMessage = messageToRememberOpts({
       teamId: 'T1',
@@ -132,7 +132,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
   });
 
   it('holds a flagged GitHub comment for review: quarantine scope on the entry, one pending record, the quarantine row ahead of the remember row', async () => {
-    const memory = inMemoryConnectorWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const ctx = {
       hippoRoot: markedFolder(),
       tenantId: TENANT_A,

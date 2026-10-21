@@ -10,7 +10,6 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import type { AuditEvent, HippoStore, MemoryEntry } from '../../src/entry/store-kit.js';
 import type { DescendantWalk, SessionRawCount, SessionRawWindow, SummaryDescendants } from '../../src/store/port.js';
-import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
 import {
   onBothStores,
@@ -22,6 +21,7 @@ import {
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { memorySide } from '../_helpers/memory-side.js';
 
 const SESSION = 'sess-dag';
 const PRIVATE = 'slack:private:C1';
@@ -114,7 +114,7 @@ let fixtureAudit: readonly AuditEvent[];
 
 /** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's values. */
 async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
-  const sides = await onBothStores(fixture, 'dagReads', inMemoryDagReadsStore, calls);
+  const sides = await onBothStores(fixture, 'dagReads', calls);
   expect(sides.other).toEqual(sides.sqlite);
   expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return sides.sqlite.outcomes.map((o) => {
@@ -392,6 +392,6 @@ describe('assemble and drill over serve()', () => {
       { totalChildren: 12, truncated: true },
       { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },
     ]);
-    expect(await runServed((root) => inMemoryDagReadsStore(root).store)).toEqual(onHippoDb);
+    expect(await runServed((root) => memorySide(root).store)).toEqual(onHippoDb);
   });
 });

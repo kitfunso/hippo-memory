@@ -26,11 +26,12 @@ import {
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { inMemoryVectorStore } from '../_helpers/in-memory-vector-store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { memorySide } from '../_helpers/memory-side.js';
+import { memoryRowsOf } from '../_helpers/memory-recall-rows.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -137,7 +138,7 @@ interface Pass {
   rows: ReturnType<typeof rowsOf>;
   requests: number;
   log: string;
-  calls: string[];
+  calls: readonly string[];
 }
 
 const http = (mode: string): Call => ({ via: 'http', args: { q: QUERY, mode, limit: '20' } });
@@ -178,7 +179,7 @@ async function runPass(
     prepare?.(s.root);
     // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
     shareRoot(s.root);
-    const memory = backing === 'memory' ? inMemoryVectorStore(s.root) : undefined;
+    const memory = backing === 'memory' ? memorySide(s.root) : undefined;
     const store = memory?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
     const before = embeddings.requests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
@@ -202,7 +203,8 @@ async function runPass(
       once.mockRestore();
     }
     const requests = embeddings.requests() - before;
-    return normalize({ replies, rows: rowsOf(s.root), requests, log: lines.join(''), calls: memory?.calls ?? [] }, s);
+    const rows = memory ? memoryRowsOf(memory.tables) : rowsOf(s.root);
+    return normalize({ replies, rows, requests, log: lines.join(''), calls: memory?.calls ?? [] }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }
@@ -299,9 +301,7 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
     const onHippoDb = await runPass([http('hybrid')], false, 'workers', staleModel);
     const onMemory = await runPass([http('hybrid')], false, 'memory', staleModel);
     expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed'\n");
-    expect(onMemory.log).toContain(
-      "run 'hippo embed' on the SQLite store, then rebuild the 'in-memory' database from it",
-    );
+    expect(onMemory.log).toContain("run 'hippo embed' on the SQLite store, then rebuild the 'memory' database from it");
   });
 });
 
@@ -312,7 +312,7 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
   beforeAll(() => {
     const root = join(templates.dir, 'local');
     sqlite = sqliteStore(root).vectors;
-    memory = inMemoryVectorStore(root).store.vectors;
+    memory = memorySide(root).store.vectors;
   });
 
   const ids = async (reads: VectorReads, q: readonly number[], spec: VectorCandidateSpec): Promise<string[]> =>

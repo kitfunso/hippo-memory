@@ -4,13 +4,13 @@ import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OBJECT_ROW, V1_ROWS } from '../_helpers/v1-route-rows.js';
-import { inMemoryObjectsStore, type InMemoryObjectsStore } from '../_helpers/in-memory-objects-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { requestLine } from '../_helpers/other-store-server.js';
+import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
 
 describe('serve() under a store that has the objects group', () => {
   let fixture: TwoTenantFixture;
-  let memory: InMemoryObjectsStore;
+  let memory: MemorySide;
   let handle: ServerHandle;
 
   type RouteBody = Readonly<Record<string, string | boolean | readonly string[]>>;
@@ -101,7 +101,7 @@ describe('serve() under a store that has the objects group', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    memory = inMemoryObjectsStore(fixture.dir);
+    memory = memorySide(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
   });
 

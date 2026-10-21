@@ -1,4 +1,4 @@
-// Runs one store group's calls on hippo.db's store and on another store, each over its own copy of a two-tenant fixture,
+// Runs one store group's calls on hippo.db's store and on memoryStore, each over its own copy of a two-tenant fixture,
 // and returns each side's answers and audit rows so a test can assert the two equal.
 import { cpSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,7 @@ import type { AuditEvent } from '../../src/store/port/types.js';
 import { initTestStore } from './store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { removeAfterRequest } from './one-request-per-test.js';
+import { memorySide } from './memory-side.js';
 
 export const TENANT_A = 'acme';
 export const TENANT_B = 'globex';
@@ -84,7 +85,7 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
   }
 }
 
-type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
+export type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
 
 /** One call on a store group; R is every value the calls in one run resolve to. */
 export type GroupCall<G extends RequiredGroup, R> = (group: HippoStore[G], store: HippoStore) => Promise<R>;
@@ -116,11 +117,10 @@ async function runSide<G extends RequiredGroup, R>(
   return { outcomes, audit: side.auditRows() };
 }
 
-/** The other side's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
+/** The memory side's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
 export async function onBothStores<G extends RequiredGroup, R>(
   fixture: TwoTenantFixture,
   group: G,
-  makeOther: (root: string) => StoreSide,
   calls: readonly GroupCall<G, R>[],
 ): Promise<{ readonly sqlite: SideResult<R>; readonly other: SideResult<R> }> {
   const home = mkdtempSync(join(tmpdir(), 'hippo-conformance-'));
@@ -134,7 +134,7 @@ export async function onBothStores<G extends RequiredGroup, R>(
       calls,
       (fn) => fn(),
     );
-    const otherSide = makeOther(roots.other);
+    const otherSide = memorySide(roots.other);
     const other = await runSide(otherSide, group, calls, (fn) => withSqliteBlocked(otherSide.store.kind, fn));
     return { sqlite, other };
   } finally {

@@ -11,7 +11,6 @@ import type {
   Rejection,
 } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryRejectionsStore } from '../_helpers/in-memory-rejections-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -77,7 +76,7 @@ function seed(dir: string): Seeded {
 }
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'rejections', inMemoryRejectionsStore, calls);
+  const sides = await onBothStores(fixture, 'rejections', calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite;
 }
@@ -160,7 +159,7 @@ describe('Rejections.apply', () => {
 
   it('replaces a merged row holding the text with the successor built from its other texts', async () => {
     const { merged } = seeded;
-    const sides = await onBothStores(fixture, 'rejections', inMemoryRejectionsStore, [
+    const sides = await onBothStores(fixture, 'rejections', [
       async (g, store) => {
         const applied = await g.apply(rejection({ value: 'the office moves in june' }));
         const rows = await store.entriesByIds([merged.id, ...applied.successorIds], TENANT_A);

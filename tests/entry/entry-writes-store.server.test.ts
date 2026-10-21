@@ -23,9 +23,9 @@ import { resolveClientKey } from '../../src/api/recall/last-recalled.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
-import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/base/config/config.js';
+import { memorySide } from '../_helpers/memory-side.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const admin: Actor = { subject: 'cli', role: 'admin' };
@@ -79,7 +79,7 @@ describe('the api with ctx.store', () => {
 
   it('writes through entryWrites with hippo.db blocked, and creates no hippo.db in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryEntryWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) };
     await withSqliteBlocked('in-memory', async () => {
       const raw = await remember(ctx, { content: 'raw call transcript about the outage', kind: 'raw' });
@@ -147,7 +147,7 @@ describe('the entry write routes', () => {
   it('serve every entry write through the store that has entryWrites; a no-ids outcome needs no last recall', async () => {
     const root = copyOf();
     const before = auditIdsOnHippoDb(root);
-    const memory = inMemoryEntryWritesStore(root);
+    const memory = memorySide(root);
     handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
     const token = fixture.tokens.adminA;
     const note = await json<RememberResult>(
@@ -206,7 +206,7 @@ describe('the entry write routes', () => {
 describe('hippo_remember and hippo_outcome under another store', () => {
   it('remember and apply an outcome through the store, with hippo.db blocked', async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryEntryWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const callers = createCallerState();
     const ctx: McpContext = {
       hippoRoot,

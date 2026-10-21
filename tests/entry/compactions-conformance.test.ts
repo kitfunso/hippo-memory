@@ -8,7 +8,6 @@ import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryCompactionsStore } from '../_helpers/in-memory-compactions-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -124,7 +123,7 @@ describe('Compactions', () => {
       'the token is [REDACTED] for now',
       'x'.repeat(501),
     ];
-    const sides = await onBothStores<'compactions', Value>(fixture, 'compactions', inMemoryCompactionsStore, [
+    const sides = await onBothStores<'compactions', Value>(fixture, 'compactions', [
       async (g) => {
         started = await g.start(TENANT_A, {
           sessionId: 'sP',

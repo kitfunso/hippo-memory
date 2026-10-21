@@ -6,7 +6,6 @@ import { withSharedStoreHandles } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryReportsStore } from '../_helpers/in-memory-reports-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -76,7 +75,7 @@ function seed(dir: string): void {
 }
 
 async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
-  const sides = await onBothStores(fixture, 'reports', inMemoryReportsStore, calls);
+  const sides = await onBothStores(fixture, 'reports', calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite.outcomes;
 }

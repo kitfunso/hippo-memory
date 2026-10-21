@@ -5,16 +5,6 @@ import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import type { Entity, Relation, StoredGraph } from '../../src/store/port/graph-reads.js';
 import {
-  BULK_TENANT,
-  HELD_SCOPE,
-  inMemoryGraphReadsStore,
-  MANY,
-  seededAt,
-  seedGraphRows,
-  SOLO_TENANT,
-  type SeededGraph,
-} from '../_helpers/in-memory-graph-reads-store.js';
-import {
   onBothStores,
   seedTwoTenants,
   TENANT_A,
@@ -24,6 +14,15 @@ import {
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import {
+  BULK_TENANT,
+  HELD_SCOPE,
+  MANY,
+  seededAt,
+  seedGraphRows,
+  SOLO_TENANT,
+  type SeededGraph,
+} from '../_helpers/graph-reads-seed.js';
 
 oneRequestPerTest();
 
@@ -68,7 +67,7 @@ const ids = (entities: readonly number[], relations: readonly Edge[], truncated 
 
 /** Both stores' answers, asserted equal, with nothing appended to either audit log. */
 async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
-  const sides = await onBothStores(fixture, 'graphReads', inMemoryGraphReadsStore, calls);
+  const sides = await onBothStores(fixture, 'graphReads', calls);
   expect(sides.other).toEqual(sides.sqlite);
   expect(sides.sqlite.audit).toEqual(auditBefore);
   return sides.sqlite.outcomes.map((o) => {
@@ -115,7 +114,7 @@ beforeAll(async () => {
     relations: without(newest.relations, newest.relations[1]!),
   };
   // Unasserted here, so a store that disagrees fails the test that reads the rows and not the whole file.
-  auditBefore = (await onBothStores(fixture, 'graphReads', inMemoryGraphReadsStore, [])).sqlite.audit;
+  auditBefore = (await onBothStores(fixture, 'graphReads', [])).sqlite.audit;
 });
 
 afterAll(() => {

@@ -2,7 +2,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import { inMemoryKeyAuditStore } from '../_helpers/in-memory-key-audit-store.js';
 import {
   FIXTURE_REVOKED_AT,
   onBothStores,
@@ -31,7 +30,7 @@ let baseline: Side;
 
 /** Runs the calls on both stores, asserts they agree, and returns hippo.db's side. */
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'keyAudit', inMemoryKeyAuditStore, calls);
+  const sides = await onBothStores(fixture, 'keyAudit', calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite;
 }

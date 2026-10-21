@@ -5,7 +5,6 @@ import { rmSync } from 'node:fs';
 import type { FailureEvent, FailureOutcome } from '../../src/entry/store-kit.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryFailureLogStore } from '../_helpers/in-memory-failure-log-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -58,7 +57,7 @@ function seed(dir: string): void {
 }
 
 async function conforms<G extends 'failureLog' | 'lessonWrites'>(group: G, calls: readonly GroupCall<G, Value>[]) {
-  const sides = await onBothStores(fixture, group, inMemoryFailureLogStore, calls);
+  const sides = await onBothStores(fixture, group, calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite.outcomes;
 }

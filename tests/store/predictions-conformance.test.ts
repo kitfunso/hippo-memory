@@ -4,7 +4,6 @@ import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/store/port.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
-import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -44,7 +43,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'predictions', inMemoryPredictionsStore, calls);
+  const sides = await onBothStores(fixture, 'predictions', calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite;
 }

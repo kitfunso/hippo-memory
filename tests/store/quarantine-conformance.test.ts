@@ -13,16 +13,6 @@ import type {
   QuarantinedMemory,
 } from '../../src/store/port.js';
 import {
-  BULK_RECORDS,
-  BULK_TENANT,
-  bulkId,
-  HELD,
-  heldAt,
-  heldContent,
-  inMemoryQuarantineStore,
-  seedQuarantineRecords,
-} from '../_helpers/in-memory-quarantine-store.js';
-import {
   onBothStores,
   seedTwoTenants,
   TENANT_A,
@@ -34,6 +24,15 @@ import {
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import {
+  BULK_RECORDS,
+  BULK_TENANT,
+  bulkId,
+  HELD,
+  heldAt,
+  heldContent,
+  seedQuarantineRecords,
+} from '../_helpers/quarantine-seed.js';
 
 oneRequestPerTest();
 
@@ -58,7 +57,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'quarantine', inMemoryQuarantineStore, calls);
+  const sides = await onBothStores(fixture, 'quarantine', calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite;
 }
@@ -166,7 +165,7 @@ beforeAll(async () => {
   seedQuarantineRecords(fixture.dir);
   nextAuditId = auditHighId(fixture.dir) + 1;
   // Unasserted here, so a store that disagrees fails the test that reads the state and not the whole file.
-  baseline = (await onBothStores(fixture, 'quarantine', inMemoryQuarantineStore, STATE)).sqlite;
+  baseline = (await onBothStores(fixture, 'quarantine', STATE)).sqlite;
 });
 
 afterAll(() => {

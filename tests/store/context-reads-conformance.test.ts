@@ -14,7 +14,6 @@ import type {
 } from '../../src/entry/store-kit.js';
 import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from '../_helpers/context-fixture.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { inMemoryContextStore } from '../_helpers/in-memory-context-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -41,7 +40,6 @@ async function conforms(named: readonly Named[], on = fixture): Promise<Map<stri
   const sides = await onBothStores(
     on,
     'contextReads',
-    inMemoryContextStore,
     named.map(([, call]) => call),
   );
   expect(sides.other).toEqual(sides.sqlite);

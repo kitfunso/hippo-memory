@@ -15,7 +15,6 @@ import type {
 } from '../../src/entry/store-kit.js';
 import { ALL_TENANTS } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -94,7 +93,7 @@ function seedMemories(dir: string): void {
 }
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'vectorWrites', inMemoryVectorWritesStore, calls);
+  const sides = await onBothStores(fixture, 'vectorWrites', calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite;
 }

@@ -14,13 +14,13 @@ import { loadPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { memorySide } from '../_helpers/memory-side.js';
 
 oneRequestPerTest();
 
@@ -136,7 +136,7 @@ afterEach(() => {
 describe('embedAll with a store', () => {
   it("embeds every tenant's memories through vectorWrites and leaves hippoRoot holding only its marker", async () => {
     const hippoRoot = markedFolder();
-    const memory = inMemoryVectorWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const run = (): Promise<number> =>
       withSqliteBlocked(memory.store.kind, () => embedAll(on(hippoRoot, memory.store), undefined, provider('fake-a')));
     expect(await run()).toBe(4);
@@ -195,7 +195,7 @@ describe('embedAll with a store', () => {
   });
 
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
-    const memory = inMemoryVectorWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
@@ -221,7 +221,7 @@ describe('embedAll with a store', () => {
 describe('embedMemory with a store', () => {
   it('stores the vector and a first particle through the store, opening no hippo.db', async () => {
     const hippoRoot = markedFolder(hashedConfig());
-    const memory = inMemoryVectorWritesStore(copyOf());
+    const memory = memorySide(copyOf());
     const entry = seeded[1];
     await withSqliteBlocked(memory.store.kind, () => embedMemory(on(hippoRoot, memory.store), entry));
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
@@ -241,7 +241,7 @@ describe('embedMemory with a store', () => {
   ])(
     "leaves every tenant's vectors to embedAll when another model built the index and $name",
     async ({ stale, asked }) => {
-      const memory = inMemoryVectorWritesStore(copyOf(oldIndexed));
+      const memory = memorySide(copyOf(oldIndexed));
       const staleVectors = {
         ...memory.store.vectors,
         embeddingIndexState: async () => ({ storedModel: HASHED_MODEL, hasVectors: true }),

@@ -12,13 +12,6 @@ import type { AuditEvent } from '../../src/entry/store-kit.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/store/port.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  inMemoryConnectorWritesStore,
-  sqliteConnectorSide,
-  type ConnectorSide,
-  type HeldRecord,
-  type LoggedEvent,
-} from '../_helpers/in-memory-connector-writes-store.js';
-import {
   outcomeOf,
   seedTwoTenants,
   TENANT_A,
@@ -30,6 +23,9 @@ import {
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { memorySide } from '../_helpers/memory-side.js';
+import { sqliteConnectorSide, type ConnectorSide, type HeldRecord } from '../_helpers/connector-sides.js';
+import { type LoggedEvent } from '../../src/store/memory/tables.js';
 
 oneRequestPerTest();
 
@@ -96,7 +92,7 @@ async function runSide(side: ConnectorSide, calls: readonly Call[], guard: <T>(f
 /** The other store's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
 async function conforms(calls: readonly Call[]): Promise<Side> {
   const sqlite = await runSide(sqliteConnectorSide(copyOfFixture()), calls, (fn) => fn());
-  const memory = inMemoryConnectorWritesStore(copyOfFixture());
+  const memory = memorySide(copyOfFixture());
   const other = await runSide(memory, calls, (fn) => withSqliteBlocked(memory.store.kind, fn));
   expect(other).toEqual(sqlite);
   return sqlite;

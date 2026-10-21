@@ -15,7 +15,6 @@ import type {
   SavableKind,
 } from '../../src/base/records/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/store/port.js';
-import { inMemoryObjectsStore } from '../_helpers/in-memory-objects-store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -158,7 +157,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 export async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'objects', inMemoryObjectsStore, calls);
+  const sides = await onBothStores(fixture, 'objects', calls);
   expect(sides.other).toEqual(sides.sqlite);
   return sides.sqlite;
 }
