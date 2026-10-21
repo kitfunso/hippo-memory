@@ -109,6 +109,7 @@ export async function bookSessionRereads(
     try {
       tokens += await ledger.replaceRereads(ctx.tenantId, sessionId, read.calls);
     } catch (err) {
+      log.debug('session-end: re-read count failed', errorFields(err));
       lines.push(`re-read count failed: ${errorMessage(err)}`);
     }
   }

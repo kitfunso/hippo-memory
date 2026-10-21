@@ -43,7 +43,7 @@ describe('anthropicLlm reply reading', () => {
     }
     expect(await send('<html>busy</html>')).toEqual({
       ok: false,
-      failure: { kind: 'unreadable', message: 'reply is not JSON' },
+      failure: { kind: 'unreadable', message: 'reply is not JSON', cause: expect.any(Error) },
     });
   });
 
@@ -52,7 +52,7 @@ describe('anthropicLlm reply reading', () => {
     expect(JSON.parse(padded).content[0].text).toBe('tea');
     expect(await send(padded)).toEqual({
       ok: false,
-      failure: { kind: 'unreadable', message: `reply over ${REPLY_CAP_BYTES} bytes` },
+      failure: { kind: 'unreadable', message: `reply over ${REPLY_CAP_BYTES} bytes`, cause: expect.any(Error) },
     });
   });
 });
@@ -123,6 +123,11 @@ describe('anthropicLlm on a transport failure', () => {
     expect(llmFailureFields({ kind: 'request', message: 'fetch failed' })).toEqual({ llmFailure: 'request' });
     expect(llmFailureFields({ kind: 'unreadable', message: 'reply is not JSON' })).toEqual({
       llmFailure: 'unreadable',
+    });
+    const cause = new Error('unterminated string');
+    expect(llmFailureFields({ kind: 'unreadable', message: 'reply is not JSON', cause })).toMatchObject({
+      llmFailure: 'unreadable',
+      errorClass: 'Error',
     });
     expect(llmFailureFields({ kind: 'empty' })).toEqual({ llmFailure: 'empty' });
   });

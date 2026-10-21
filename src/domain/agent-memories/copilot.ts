@@ -5,7 +5,7 @@ import type { AgentFiles } from '../../base/util/agent-files.js';
 import { readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container } from './types.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonObject, isJsonString, parseJson } from '../../base/util/json.js';
 import { vscodeDataFolders } from '../../base/util/agent-homes.js';
 
@@ -39,6 +39,7 @@ function workspaceFolder(
     if (!isJsonString(json.folder)) throw new Error('folder is not a string');
     return fileUriToPath(json.folder, platform);
   } catch (err) {
+    log.debug(`copilot: ${file} not read`, errorFields(err));
     warnings.push(`${file}: ${errorMessage(err)}`);
     return null;
   }
@@ -78,6 +79,7 @@ function projectContainers(
   try {
     ids = ctx.files.folderNames(storage);
   } catch (err) {
+    log.debug(`copilot: ${storage} not listed`, errorFields(err));
     warnings.push(`${storage}: ${errorMessage(err)}`);
     return [];
   }

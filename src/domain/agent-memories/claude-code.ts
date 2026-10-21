@@ -10,7 +10,7 @@ import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from 
 import { gitLayout, type GitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
 import { isJsonObjectLiteral, isJsonString, parseJson, tryParseJson } from '../../base/util/json.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
 const NAME_SLUG_MAX_CHARS = 200;
 
@@ -158,6 +158,7 @@ function autoMemoryDirectory(ctx: AdapterContext, settings: string, warnings: st
   try {
     json = parseJson(file.text);
   } catch (err) {
+    log.debug(`claude-code: ${settings} not read`, errorFields(err));
     warnings.push(`${settings}: ${errorMessage(err)}`);
     return null;
   }

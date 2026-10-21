@@ -1,7 +1,7 @@
 // Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for
 // containers its store now syncs.
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   isInitialized,
   projectNames,
@@ -35,6 +35,7 @@ export async function handOver(
     const at = { origins, tenantId: opts.tenantId, machine: opts.machine, report };
     for (const work of synced) await handOverContainer(store, work, at);
   } catch (err) {
+    log.debug('handover: global copies not handed over', errorFields(err));
     report.warnings.push(
       `global copies not handed over: ${opts.stores.isBusy(err) ? 'the global store was busy' : errorMessage(err)}`,
     );

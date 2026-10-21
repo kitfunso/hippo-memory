@@ -173,6 +173,7 @@ describe('the observer never changes contextGet', () => {
     expect(await contextGet(ctx, { ...baseOpts, deliveryObserver: rec })).toEqual(without);
     expect(rec.takeEvent()).toBeNull();
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: recorder failed: /);
+    expect(String(err.mock.calls[0][0])).toContain('errorClass=Error');
   });
 
   it("lets admit's own throw through and counts a rejected row once however often it is admitted", () => {

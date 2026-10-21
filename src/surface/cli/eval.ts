@@ -26,6 +26,7 @@ import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
 import { errorMessage } from '../../base/util/log.js';
+import { isJsonNumber, isJsonObject, isJsonString, parseJson, type JsonValue } from '../../base/util/json.js';
 import { CliExit, fail } from './exit.js';
 
 const HIT_TOP_K = 10;
@@ -120,17 +121,50 @@ function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
   }
 }
 
+type BaselineMetrics = EvalBaseline['overall'];
+
+function isBaselineMetrics(value: JsonValue | undefined): value is BaselineMetrics {
+  return (
+    isJsonObject(value) &&
+    isJsonNumber(value['mrr']) &&
+    isJsonNumber(value['recallAt5']) &&
+    isJsonNumber(value['ndcgAt5'])
+  );
+}
+
+/** The baseline file's contents as an EvalBaseline, or null when the shape is wrong. */
+export function parseEvalBaseline(value: JsonValue): EvalBaseline | null {
+  if (!isJsonObject(value) || !isJsonString(value['version']) || !isJsonString(value['timestamp'])) return null;
+  const { features, overall } = value;
+  if (!isJsonObject(features) || !Object.values(features).every(isBaselineMetrics) || !isBaselineMetrics(overall)) {
+    return null;
+  }
+  // SAFETY: every present feature entry is checked above; detectRegressions skips a category the file lacks.
+  return {
+    version: value['version'],
+    timestamp: value['timestamp'],
+    features: features as EvalBaseline['features'],
+    overall,
+  };
+}
+
 /** Suite mode: run the built-in feature eval (no corpus file needed, no init needed). */
 async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean, minMrr: number | null): Promise<void> {
   const baselinePath = stringFlagOrExit(flags, 'baseline') || path.join(hippoRoot, 'eval-baseline.json');
   let baseline: EvalBaseline | undefined;
+  let parsed: JsonValue | undefined;
   try {
-    baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+    parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
   } catch (err) {
     // No baseline file is a first run and says nothing; a file that is there and cannot be used warns.
     if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
+  }
+  if (parsed !== undefined) {
+    baseline =
+      parseEvalBaseline(parsed) ??
+      fail(`Eval baseline ${baselinePath} is not a baseline file (version, timestamp, features, overall).`);
   }
 
   const result = await runFeatureEval(PACKAGE_VERSION);

@@ -6,6 +6,8 @@ import { spawnSync } from 'node:child_process';
 import {
   countUnfieldedLogs,
   findPartialPicks,
+  findResultOnlyCatches,
+  resultOnlyCatchLines,
   partialPickLines,
   unfieldedLogLines,
 } from '../../scripts/check-caught-error-logs.mjs';
@@ -174,5 +176,43 @@ describe('check-caught-error-logs', () => {
     const base = JSON.parse(readFileSync(resolve(__dirname, '..', '..', BASELINE), 'utf8')) as Record<string, number>;
     const counts = countUnfieldedLogs(resolve(__dirname, '..', '..', 'src'));
     for (const [f, n] of Object.entries(counts)) expect(n, f).toBeLessThanOrEqual(base[`src/${f}`] ?? 0);
+  });
+
+  it('flags a catch that sends only the error text to a result array, with its line', () => {
+    const text = [
+      'try { g(); } catch (err) {',
+      '  result.details.push(`g failed: ${errorMessage(err)}`);',
+      '}',
+      'try { g(); } catch (cause) {',
+      '  failures.push(String(cause));',
+      '}',
+    ].join('\n');
+    expect(resultOnlyCatchLines(text)).toEqual([1, 4]);
+  });
+
+  it('passes a catch that also logs errorFields, or keeps the error object whole', () => {
+    const text = [
+      'try { g(); } catch (err) {',
+      '  log.warn(`g failed`, errorFields(err));',
+      '  result.details.push(`g failed: ${errorMessage(err)}`);',
+      '}',
+      'try { g(); } catch (error) {',
+      '  failed.push({ event, error });',
+      '}',
+    ].join('\n');
+    expect(resultOnlyCatchLines(text)).toEqual([]);
+  });
+
+  it('fails the check on a result-only catch in the tree', () => {
+    file('src/quiet.ts', 'try { g(); } catch (err) { details.push(errorMessage(err)); }\n');
+    expect(findResultOnlyCatches(join(dir, 'src'))).toEqual(['quiet.ts:1']);
+    writeFileSync(join(dir, BASELINE), '{}\n');
+    const r = run();
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('src/quiet.ts:1: the caught error goes only into a result array, not a log');
+  });
+
+  it('finds no result-only catch in the real src tree', () => {
+    expect(findResultOnlyCatches(resolve(__dirname, '..', '..', 'src'))).toEqual([]);
   });
 });

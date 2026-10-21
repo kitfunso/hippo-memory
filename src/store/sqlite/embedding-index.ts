@@ -22,7 +22,7 @@ import { openStore } from './handles.js';
 import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
 import { dropVectorStaging, upsertVectors } from '../../db/vector-store.js';
 import type { Sync } from './served.js';
-import { releaseEmbedLock, tryEmbedLock } from './embed-lock.js';
+import { embedLockKey, releaseEmbedLock, tryEmbedLock } from './embed-lock.js';
 
 // The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild keeps one open; a
 // worker's handle outlives it, so the table is dropped too.
@@ -101,6 +101,7 @@ export function sqliteEmbeddingIndex({ on, open, files }: Handles): Sync<Embeddi
     ...bound(on, vectorRowsAt),
     ...boundWithFiles(on, particlesAt),
     ...sqliteRebuilds(open),
+    lockKey: () => embedLockKey(files.hippoRoot),
     tryLock: () => tryEmbedLock(files.hippoRoot),
     unlock: (token) => releaseEmbedLock(files.hippoRoot, token),
   };

@@ -5,7 +5,7 @@ import type { SyncOptions } from '../../domain/agent-memories/sync.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import { configReader, type ConfigReader } from '../../base/config/config.js';
-import { consolidateStore } from '../../api/sleep/upkeep.js';
+import { consolidateStore, logPhaseFailures } from '../../api/sleep/upkeep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
 import type { McpHost } from '../mcp/protocol.js';
@@ -151,7 +151,7 @@ export function cliStdioHost(): McpHost {
             tenantId: hostTenantId,
             llm: anthropicLlmFromEnv(),
           }),
-        ).then(() => {});
+        ).then(logPhaseFailures);
       callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
       byRoot.set(root, callers);
     }
