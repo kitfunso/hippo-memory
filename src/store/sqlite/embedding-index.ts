@@ -16,11 +16,10 @@ import {
   storedVectorSummary,
   vectorCoverage,
 } from './vector-index.js';
-import type { Handles } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
+import { answered, bound, type Bodies } from './bound.js';
 import { dropVectorStaging, upsertVectors } from '../../db/vector-store.js';
-import type { Sync } from './served.js';
 import { embedLockKey, releaseEmbedLock, tryEmbedLock } from './embed-lock.js';
 
 // The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild keeps one open; a
@@ -61,14 +60,16 @@ const vectorRowsBodies: Bodies<VectorRows> = {
   pendingIds: pendingVectorIds,
 };
 
-// A particle's start strength is scored, so these take the store's loss-aversion rules beside the handle.
-const particlesBodies: FileBodies<Pick<EmbeddingIndex, Particles>> = {
-  resetParticles: resetStoredParticles,
-  seedParticle: seedStoredParticle,
-};
+// A particle's start strength is scored, so these score by the store's loss-aversion rules.
+function particlesBodies(files: StoreFiles): Bodies<Pick<EmbeddingIndex, Particles>> {
+  return {
+    resetParticles: (db, ...args) => resetStoredParticles(db, files, ...args),
+    seedParticle: (db, ...args) => seedStoredParticle(db, files, ...args),
+  };
+}
 
 /** The open rebuilds by id: each holds its handle across calls, so they stay on the thread that began them. */
-function sqliteRebuilds(open: Handles['open']): Sync<Pick<EmbeddingIndex, Rebuilds>> {
+function sqliteRebuilds(open: Handles['open']): Pick<EmbeddingIndex, Rebuilds> {
   const begun = new Map<string, VectorRebuild>();
   const named = (id: string): VectorRebuild => {
     const rebuild = begun.get(id);
@@ -76,31 +77,33 @@ function sqliteRebuilds(open: Handles['open']): Sync<Pick<EmbeddingIndex, Rebuil
     return rebuild;
   };
   return {
-    beginRebuild: () => {
-      const id = randomUUID();
-      begun.set(id, beginRebuild(open));
-      return id;
-    },
-    stageRebuild: (id, rows) => named(id).stage(rows),
-    commitRebuild: (id, model) => named(id).commit(model),
-    closeRebuild: (id) => {
-      const rebuild = begun.get(id);
-      begun.delete(id);
-      rebuild?.close();
-    },
+    beginRebuild: () =>
+      answered(() => {
+        const id = randomUUID();
+        begun.set(id, beginRebuild(open));
+        return id;
+      }),
+    stageRebuild: (id, rows) => answered(() => named(id).stage(rows)),
+    commitRebuild: (id, model) => answered(() => named(id).commit(model)),
+    closeRebuild: (id) =>
+      answered(() => {
+        const rebuild = begun.get(id);
+        begun.delete(id);
+        rebuild?.close();
+      }),
   };
 }
 
-export function sqliteEmbeddingIndex({ on, open, files }: Handles): Sync<EmbeddingIndex> {
+export function sqliteEmbeddingIndex({ on, open, files }: Handles): EmbeddingIndex {
   return {
-    requiresReindex: (providerId) => embeddingModelRequiresReindex(on, providerId),
-    saveModel: (providerId) => saveStoredEmbeddingModel(on, providerId),
+    requiresReindex: (providerId) => answered(() => embeddingModelRequiresReindex(on, providerId)),
+    saveModel: (providerId) => answered(() => saveStoredEmbeddingModel(on, providerId)),
     ...bound(on, entryRowsBodies, openStore),
     ...bound(on, vectorRowsBodies),
-    ...boundWithFiles(on, particlesBodies),
+    ...bound(on, particlesBodies(files)),
     ...sqliteRebuilds(open),
-    lockKey: () => embedLockKey(files.hippoRoot),
-    tryLock: () => tryEmbedLock(files.hippoRoot),
-    unlock: (token) => releaseEmbedLock(files.hippoRoot, token),
+    lockKey: () => answered(() => embedLockKey(files.hippoRoot)),
+    tryLock: () => answered(() => tryEmbedLock(files.hippoRoot)),
+    unlock: (token) => answered(() => releaseEmbedLock(files.hippoRoot, token)),
   };
 }

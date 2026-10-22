@@ -2,8 +2,7 @@
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
-import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
-import { handlesOf } from '../../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import * as conflictsSql from '../../../src/store/sqlite/conflicts.js';
 import { onHandle, openStore } from '../../../src/store/sqlite/handles.js';
 import type { MemoryConflict } from '../../../src/store/port/conflicts.js';
@@ -24,16 +23,16 @@ export function replaceDetectedConflicts(
   );
 }
 
-export function listMemoryConflicts(
+export async function listMemoryConflicts(
   hippoRoot: string,
   status: string = 'open',
   tenantId: TenantId = ALL_TENANTS,
-): MemoryConflict[] {
-  const { conflicts } = sqliteSyncStore(handlesOf(hippoRoot));
+): Promise<MemoryConflict[]> {
+  const { conflicts } = sqliteStore(hippoRoot);
   const out: MemoryConflict[] = [];
   let after: KeysetPosition | undefined;
   do {
-    const page = conflicts.list({
+    const page = await conflicts.list({
       tenantId,
       status,
       limit: MAX_LIST_LIMIT,
@@ -45,19 +44,19 @@ export function listMemoryConflicts(
   return out;
 }
 
-export function resolveConflictKeeping(
+export async function resolveConflictKeeping(
   hippoRoot: string,
   tenantId: string,
   conflictId: number,
   keepId: string,
-): boolean {
-  const conflicts = sqliteSyncStore(handlesOf(hippoRoot)).conflicts;
-  const row = conflicts.get(tenantId, conflictId);
+): Promise<boolean> {
+  const conflicts = sqliteStore(hippoRoot).conflicts;
+  const row = await conflicts.get(tenantId, conflictId);
   if (!row) return false;
   const a = { id: row.conflict.memory_a_id, scope: row.a?.scope ?? null };
   const b = { id: row.conflict.memory_b_id, scope: row.b?.scope ?? null };
   const [keep, loser] = keepId === a.id ? [a, b] : [b, a];
-  return conflicts.resolve(tenantId, {
+  return await conflicts.resolve(tenantId, {
     conflictId,
     keep,
     loser,

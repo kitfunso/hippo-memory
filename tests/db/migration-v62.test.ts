@@ -5,7 +5,7 @@ import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } fr
 import { cleanupArchivedMirrors } from '../../src/db/raw-archive-mirror-cleanup.js';
 import { conflictResolveAudits } from '../../src/store/sqlite/conflicts.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, DAG_LEVEL } from '../../src/base/memory/memory.js';
-import { recordStatements } from '../_helpers/count-statements.js';
+import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { loadAllDirtySummaries, loadAllL2Summaries, writeEntry } from '../_helpers/root-forms.js';
@@ -95,16 +95,16 @@ describe('schema v62', () => {
     withDb((db) => expect(indexNames(db)).toEqual(expect.arrayContaining(ALL)));
   });
 
-  it('reads dirty summaries through the dirty index', () => {
+  it('reads dirty summaries through the dirty index', async () => {
     seedMemories();
-    const { statements } = recordStatements(() => loadAllDirtySummaries(home, 5));
+    const { statements } = await recordStatementsAsync(async () => await loadAllDirtySummaries(home, 5));
     const sql = statements.find((s) => s.includes('summary_dirty = 1')) ?? failNoSql();
     withDb((db) => expectIndexNoSort(plan(db, sql), DIRTY));
   });
 
-  it('reads unparented topic summaries through the L2 index', () => {
+  it('reads unparented topic summaries through the L2 index', async () => {
     seedMemories();
-    const { statements } = recordStatements(() => loadAllL2Summaries(home));
+    const { statements } = await recordStatementsAsync(async () => await loadAllL2Summaries(home));
     const sql = statements.find((s) => s.includes('dag_parent_id IS NULL')) ?? failNoSql();
     withDb((db) => expectIndexNoSort(plan(db, sql), L2));
   });

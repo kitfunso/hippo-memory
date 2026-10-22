@@ -6,8 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -60,7 +59,7 @@ describe('updateStats under concurrent writers', () => {
       { field: 'remembered', iterations: 40 },
     ]);
 
-    expect(sqliteSyncStore(handlesOf(root)).reports.stats().total_remembered).toBe(160);
+    expect((await sqliteStore(root).reports.stats()).total_remembered).toBe(160);
 
     // reports.stats() coerces with Number(), so it would not notice the column
     // holding "160.0"; node:sqlite binds a JS number as REAL.
@@ -80,7 +79,7 @@ describe('updateStats under concurrent writers', () => {
       { field: 'forgotten', iterations: 60 },
     ]);
 
-    const stats = sqliteSyncStore(handlesOf(root)).reports.stats();
+    const stats = await sqliteStore(root).reports.stats();
     expect(stats.total_remembered).toBe(60);
     expect(stats.total_forgotten).toBe(60);
   });

@@ -24,9 +24,8 @@ import {
   type ItemContext,
   type Log,
 } from './compactions-record.js';
-import { boundWithFiles, type FileBodies } from './bound.js';
-import { type OnHandle, type StoreFiles, waitingOpener } from './open.js';
-import type { Sync } from './served.js';
+import { answered, bound, type Bodies } from './bound.js';
+import { type Handles, type OnHandle, type StoreFiles, waitingOpener } from './open.js';
 import type {
   CompactionHooks,
   CompactionRef,
@@ -234,24 +233,27 @@ function fill(db: DatabaseSyncLike, files: StoreFiles, { tenantId, record, text,
 
 type HookWaited = Pick<CompactionHooks, 'start' | 'markSnapshotSaved'>;
 
-const hookBodies: FileBodies<HookWaited> = {
-  start: (db, files, tenantId, start) =>
-    startCompaction(db, tenantId, { ...start, originProject: compactionOrigin(files.hippoRoot, start.cwd) }),
-  markSnapshotSaved: (db, _files, tenantId, recordId) => markSnapshotSaved(db, tenantId, recordId),
-};
-
-export function sqliteCompactionHooks(on: OnHandle): Sync<CompactionHooks> {
+function hookBodies({ hippoRoot }: StoreFiles): Bodies<HookWaited> {
   return {
-    ...boundWithFiles<HookWaited>(on, hookBodies, waitingOpener(COMPACTION_DB_WAIT_MS)),
-    save: (save) => saveCompaction(on, save),
+    start: (db, tenantId, start) =>
+      startCompaction(db, tenantId, { ...start, originProject: compactionOrigin(hippoRoot, start.cwd) }),
+    markSnapshotSaved: markSnapshotSaved,
+  };
+}
+
+export function sqliteCompactionHooks({ on, files }: Handles): CompactionHooks {
+  return {
+    ...bound(on, hookBodies(files), waitingOpener(COMPACTION_DB_WAIT_MS)),
+    save: (save) => answered(() => saveCompaction(on, save)),
     saveStalled: (tenantId, opts) =>
-      on((db, files) => saveStalled(db, files, tenantId, opts), waitingOpener(opts.busyWaitMs)),
+      answered(() => on((db) => saveStalled(db, files, tenantId, opts), waitingOpener(opts.busyWaitMs))),
     recordSpooled: (spooled, wait) =>
-      on((db, files) => recordSpooled(db, files, spooled), waitingOpener(wait.busyWaitMs)),
+      answered(() => on((db) => recordSpooled(db, files, spooled), waitingOpener(wait.busyWaitMs))),
     saveRecordItems: (tenantId, record, opts) =>
-      on((db, files) => saveRecordItems(db, files, tenantId, record, opts), waitingOpener(opts.busyWaitMs)),
-    openRecords: (tenantId, wait) => on((db) => openRecords(db, tenantId), waitingOpener(wait.busyWaitMs)),
+      answered(() => on((db) => saveRecordItems(db, files, tenantId, record, opts), waitingOpener(opts.busyWaitMs))),
+    openRecords: (tenantId, wait) =>
+      answered(() => on((db) => openRecords(db, tenantId), waitingOpener(wait.busyWaitMs))),
     fill: (tenantId, record, text, opts) =>
-      on((db, files) => fill(db, files, { tenantId, record, text, opts }), waitingOpener(opts.busyWaitMs)),
+      answered(() => on((db) => fill(db, files, { tenantId, record, text, opts }), waitingOpener(opts.busyWaitMs))),
   };
 }

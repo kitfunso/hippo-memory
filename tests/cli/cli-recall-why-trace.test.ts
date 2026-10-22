@@ -74,7 +74,7 @@ describe('recall --why rerankTrace', () => {
     heroId = hero.id;
     writeEntry(localRoot, hero);
 
-    pushGoal(localRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    await pushGoal(localRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     vi.stubEnv('HIPPO_SESSION_ID', sessionId);
   });
 

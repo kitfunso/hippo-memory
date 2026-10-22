@@ -76,7 +76,7 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
     await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
-    pushGoal(env.hippoRoot, { sessionId: 's-cli-1', tenantId: 'default', goalName: 'auth-rewrite' });
+    await pushGoal(env.hippoRoot, { sessionId: 's-cli-1', tenantId: 'default', goalName: 'auth-rewrite' });
 
     const { results } = await recallCli('auth migration', { HIPPO_SESSION_ID: 's-cli-1' });
     const top = results.slice(0, 2).map((r) => r.content);
@@ -110,7 +110,7 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'CCC marker other-tag tagged one', tags: ['other-tag'] });
     await remember(ctx, { content: 'DDD marker other-tag tagged two', tags: ['other-tag'] });
 
-    pushGoal(env.hippoRoot, {
+    await pushGoal(env.hippoRoot, {
       sessionId: 's-cli-override',
       tenantId: 'default',
       goalName: 'auth-rewrite',
@@ -139,12 +139,12 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     // Push then complete — leaves the (tenant, session) with zero active goals.
-    const g = pushGoal(env.hippoRoot, {
+    const g = await pushGoal(env.hippoRoot, {
       sessionId: 's-empty',
       tenantId: 'default',
       goalName: 'auth-rewrite',
     });
-    completeGoal(env.hippoRoot, g.id, { outcomeScore: 1.0 });
+    await completeGoal(env.hippoRoot, g.id, { outcomeScore: 1.0 });
 
     const baseline = (await recallCli('auth migration')).results.map((r) => r.content);
     const withEmpty = (await recallCli('auth migration', { HIPPO_SESSION_ID: 's-empty' })).results.map(

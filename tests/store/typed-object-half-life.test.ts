@@ -97,7 +97,10 @@ const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][
   [
     'prediction',
     async (root) =>
-      savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' }),
+      await savePrediction(root, 'default', {
+        classTag: 'migration-effort',
+        claimText: 'the migration takes two days',
+      }),
   ],
 ];
 

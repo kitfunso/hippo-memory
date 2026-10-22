@@ -126,7 +126,7 @@ export function seeded(
 }
 
 /** Seeds the local store and returns the id of its active goal. */
-function seedLocal(root: string): string {
+async function seedLocal(root: string): Promise<string> {
   initTestStore(root);
   const rows: MemoryEntry[] = [
     seeded(
@@ -181,7 +181,7 @@ function seedLocal(root: string): string {
     rows.push(seeded(`deploy log line ${i} for the nightly batch`, `mem_p_fill${i}`, `2026-01-1${i}T00:00:00.000Z`));
   }
   for (const row of rows) writeEntry(root, row);
-  return pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-alpha' }).id;
+  return (await pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-alpha' })).id;
 }
 
 function seedWide(root: string): void {
@@ -203,7 +203,7 @@ function seedGlobal(root: string): void {
 }
 
 /** The rows the golden seed lacks: a level-2 summary over two deploy rows, a café row, a session raw row, continuity and a closed prediction. */
-export function seedPortBranches(root: string): void {
+export async function seedPortBranches(root: string): Promise<void> {
   const summary = seeded(
     'rollout summary for the nightly batch move',
     'mem_x_summary',
@@ -241,12 +241,12 @@ export function seedPortBranches(root: string): void {
     nextAction: 'promote it',
   });
   appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
-  const prediction = savePrediction(root, TENANT, {
+  const prediction = await savePrediction(root, TENANT, {
     classTag: 'deploy-duration',
     claimText: 'rollout duration estimate for the eu cluster',
     estimateValue: 3,
   });
-  closePrediction(root, TENANT, prediction.id, { closureState: 'closed', actualValue: 5 });
+  await closePrediction(root, TENANT, prediction.id, { closureState: 'closed', actualValue: 5 });
 }
 
 /** writeEntry stamps updated_at from SQLite's real clock and recall breaks bm25 ties on it, so one stamp keeps the order fixed. */
@@ -271,7 +271,7 @@ export async function seedTemplates(extendLocal?: (root: string) => void | Promi
   process.env.HIPPO_FAKE_NOW = FAKE_NOW;
   try {
     const dir = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
-    const goalId = seedLocal(join(dir, 'local'));
+    const goalId = await seedLocal(join(dir, 'local'));
     await extendLocal?.(join(dir, 'local'));
     seedWide(join(dir, 'wide'));
     seedGlobal(join(dir, 'global'));

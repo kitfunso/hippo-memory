@@ -5,10 +5,9 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { createDeliveryRecorder, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import type { TokenUse } from '../../src/store/port/ledger.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { log } from '../../src/base/util/log.js';
 
 const HASH = 'aaaaaaaaaaaaaaaa';
@@ -77,11 +76,12 @@ function failRowsOn(surface: string): void {
 }
 
 describe('Ledger.recordTurn', () => {
-  it('books the rows in order and then the delivery event, on one store open', () => {
+  it('books the rows in order and then the delivery event, on one store open', async () => {
     const rec = recorder();
     const delivery = rec.takeEvent() ?? undefined;
-    const run = recordStatements(() =>
-      sqliteSyncStore(handlesOf(root)).ledger.recordTurn({ uses: [use(), use({ surface: 'hook_recall' })], delivery }),
+    const run = await recordStatementsAsync(
+      async () =>
+        await sqliteStore(root).ledger.recordTurn({ uses: [use(), use({ surface: 'hook_recall' })], delivery }),
     );
     expect(countMatching(run.statements, STORE_OPEN)).toBe(1);
     const lastTokenRow = run.statements.map((sql) => sql.includes('INSERT INTO token_ledger')).lastIndexOf(true);
@@ -92,10 +92,10 @@ describe('Ledger.recordTurn', () => {
     expect(deliveryCount()).toBe(1);
   });
 
-  it('without perRow the first failed row stops the rest, and the delivery event still lands', () => {
+  it('without perRow the first failed row stops the rest, and the delivery event still lands', async () => {
     failRowsOn('hook');
     const rec = recorder();
-    sqliteSyncStore(handlesOf(root)).ledger.recordTurn({
+    await sqliteStore(root).ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
       delivery: rec.takeEvent() ?? undefined,
     });
@@ -103,11 +103,11 @@ describe('Ledger.recordTurn', () => {
     expect(deliveryCount()).toBe(1);
   });
 
-  it('with perRow a failed row is noted, the other rows land and the delivery event is stored', () => {
+  it('with perRow a failed row is noted, the other rows land and the delivery event is stored', async () => {
     failRowsOn('hook');
     const rec = recorder();
     const noted = vi.spyOn(log, 'warnThenDebug');
-    sqliteSyncStore(handlesOf(root)).ledger.recordTurn({
+    await sqliteStore(root).ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
       perRow: true,
       delivery: rec.takeEvent() ?? undefined,
@@ -121,14 +121,14 @@ describe('Ledger.recordTurn', () => {
 });
 
 describe('Ledger.lastSent', () => {
-  it('reads the last injected hash and the skips since it, and null for a session with no rows', () => {
-    sqliteSyncStore(handlesOf(root)).ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
-    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', 's1', 'hook')).toEqual({
+  it('reads the last injected hash and the skips since it, and null for a session with no rows', async () => {
+    await sqliteStore(root).ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
+    expect(await sqliteStore(root).ledger.lastSent('default', 's1', 'hook')).toEqual({
       hash: HASH,
       skipsSince: 1,
     });
-    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', 's1', 'context')).toBeNull();
-    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', 'other', 'hook')).toBeNull();
-    expect(sqliteSyncStore(handlesOf(root)).ledger.lastSent('default', undefined, 'hook')).toBeNull();
+    expect(await sqliteStore(root).ledger.lastSent('default', 's1', 'context')).toBeNull();
+    expect(await sqliteStore(root).ledger.lastSent('default', 'other', 'hook')).toBeNull();
+    expect(await sqliteStore(root).ledger.lastSent('default', undefined, 'hook')).toBeNull();
   });
 });

@@ -8,13 +8,11 @@ import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
 import { saveIndex } from './index-and-stats.js';
 import { readLastRecall } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
-import type { HippoIndex } from './rows.js';
 import type { EntryTarget } from '../port/entry-writes.js';
-import { bound, boundWithFiles, type FileBodies } from './bound.js';
+import { answered, bound } from './bound.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites } from '../port.js';
-import type { Sync } from './served.js';
 import { writeRecallTrace } from './recall-trace.js';
 
 /** What a finished recall wrote after its audit rows: the trace's id, null when none was asked or its write failed, and
@@ -50,36 +48,29 @@ function applyOutcomeToLast(db: DatabaseSyncLike, files: StoreFiles, target: Ent
   return applyOutcome(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
 }
 
-const outcomesBodies: FileBodies<Pick<LastRecall, 'applyOutcomeToLast'>> = {
-  applyOutcomeToLast: applyOutcomeToLast,
-};
-
-/** The two writes a finished recall makes here, either side of the global store's strengthen. */
-interface RecallEnds {
-  finish(writes: RecallWrites): RecallFinish;
-  saveIndex(index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void;
-}
-
-export function sqliteLastRecall({ on, files }: Handles): Sync<LastRecall> {
-  const { finish } = boundWithFiles<Pick<RecallEnds, 'finish'>>(on, { finish: finishRecall });
-  const ends = bound<Pick<RecallEnds, 'saveIndex'>>(on, { saveIndex }, openStore);
+export function sqliteLastRecall({ on, files }: Handles): LastRecall {
   return {
-    ...boundWithFiles(on, outcomesBodies, openStore),
-    finishRecall(writes, globalRoot) {
-      const { ids, opts } = writes.strengthen;
-      const { traceId, strengthened } = finish(writes);
-      if (globalRoot !== undefined) {
-        strengthenRetrieved(
-          globalRoot,
-          ids.filter((id) => !strengthened.has(id)),
-          opts,
-          files,
-        );
-      }
-      // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.
-      const index = { last_retrieval_ids: [...ids], last_trace_id: traceId === null ? null : String(traceId) };
-      ends.saveIndex(index);
-      return traceId;
-    },
+    ...bound<Pick<LastRecall, 'applyOutcomeToLast'>>(
+      on,
+      { applyOutcomeToLast: (db, ...args) => applyOutcomeToLast(db, files, ...args) },
+      openStore,
+    ),
+    finishRecall: (writes, globalRoot) =>
+      answered(() => {
+        const { ids, opts } = writes.strengthen;
+        const { traceId, strengthened } = on((db) => finishRecall(db, files, writes));
+        if (globalRoot !== undefined) {
+          strengthenRetrieved(
+            globalRoot,
+            ids.filter((id) => !strengthened.has(id)),
+            opts,
+            files,
+          );
+        }
+        // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.
+        const index = { last_retrieval_ids: [...ids], last_trace_id: traceId === null ? null : String(traceId) };
+        on((db) => saveIndex(db, index), openStore);
+        return traceId;
+      }),
   };
 }

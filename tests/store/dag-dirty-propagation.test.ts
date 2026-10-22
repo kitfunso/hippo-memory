@@ -26,8 +26,8 @@ function defaultCtx(hippoRoot: string): FullContext {
 }
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
-function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
-  return loadAllDirtySummaries(root).filter((m) => m.tenantId === tenantId);
+async function dirtyFor(root: string, tenantId: string): Promise<MemoryEntry[]> {
+  return (await loadAllDirtySummaries(root)).filter((m) => m.tenantId === tenantId);
 }
 
 describe('child-write dirty-flag propagation', () => {
@@ -55,7 +55,7 @@ describe('child-write dirty-flag propagation', () => {
     // Parent must NOT be dirty yet (the child writeEntry above DID mark dirty,
     // so first clear: re-read dirty list to confirm and reset for the
     // invalidation-specific assertion).
-    const initialDirty = dirtyFor(hippoRoot, 'default');
+    const initialDirty = await dirtyFor(hippoRoot, 'default');
     expect(initialDirty.map((m) => m.id)).toContain(summary.id);
     // Clear the flag manually to isolate invalidation's effect.
     const db = openHippoDb(hippoRoot);
@@ -64,7 +64,7 @@ describe('child-write dirty-flag propagation', () => {
     // Act: invalidateMatching writes the fact back through writeEntry (L97).
     await invalidateMatching(sqliteStore(hippoRoot), { from: 'FRED cache', to: null, type: 'removal' }, 'default');
     // Assert: parent dirty again.
-    expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
+    expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toContain(summary.id);
   });
 
   it('supersede with dag_parent_id → OLD parent marked dirty + NEW parent marked dirty (same parent, idempotent)', async () => {
@@ -97,7 +97,7 @@ describe('child-write dirty-flag propagation', () => {
     // so NEW has dag_parent_id=null and S1 hook early-exits for NEW. Only
     // S2 fires for OLD's parent → +1 audit row, parent dirty.
     await supersede(defaultCtx(hippoRoot), oldFact.id, 'new corrected fact');
-    expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
+    expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toContain(summary.id);
     const db2 = openHippoDb(hippoRoot);
     // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.
     const afterCount = (
@@ -109,7 +109,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(afterCount - beforeCount).toBe(1); // exactly 1 new transition 0→1 from supersede
   });
 
-  it('deleteEntry on fact with dag_parent_id → parent marked dirty', () => {
+  it('deleteEntry on fact with dag_parent_id → parent marked dirty', async () => {
     const summary = createMemory('test summary 3', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -130,10 +130,10 @@ describe('child-write dirty-flag propagation', () => {
     // Act: delete the fact.
     expect(deleteEntry(hippoRoot, fact.id, { actor: 'test' })).toBe(true);
     // Assert: parent dirty again.
-    expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
+    expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toContain(summary.id);
   });
 
-  it('archiveRawMemory on raw row with dag_parent_id → parent marked dirty', () => {
+  it('archiveRawMemory on raw row with dag_parent_id → parent marked dirty', async () => {
     const summary = createMemory('test summary 4', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -155,20 +155,20 @@ describe('child-write dirty-flag propagation', () => {
     archiveRawMemory(db, rawChild.id, { reason: 'test-archive', who: 'test-actor' });
     closeHippoDb(db);
     // Assert.
-    expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
+    expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toContain(summary.id);
   });
 
-  it('writeEntry on fact WITHOUT dag_parent_id → no parent dirty-mark (early-exit verified)', () => {
+  it('writeEntry on fact WITHOUT dag_parent_id → no parent dirty-mark (early-exit verified)', async () => {
     const orphan = createMemory('no parent fact', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       dagLevel: 1,
     });
     writeEntry(hippoRoot, orphan); // dag_parent_id defaults to null
-    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);
   });
 
-  it('cross-tenant safety: child tenant mismatched with parent tenant → no dirty-mark', () => {
+  it('cross-tenant safety: child tenant mismatched with parent tenant → no dirty-mark', async () => {
     const summary = createMemory('tenant1 summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -190,8 +190,8 @@ describe('child-write dirty-flag propagation', () => {
     // Assert: tenant1 sees no dirty (the writeEntry hook called with child's
     // tenant_id='default', and markSummaryDirtyInTx WHERE tenant_id='default'
     // AND dag_level=2 matches 0 rows — summary belongs to tenant1).
-    expect(dirtyFor(hippoRoot, 'tenant1')).toEqual([]);
-    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'tenant1')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);
     // No audit row written either.
     const db2 = openHippoDb(hippoRoot);
     const auditRows = db2
@@ -233,7 +233,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(row.summary_dirty).toBe(1);
   });
 
-  it('batchWriteAndDelete marks parents dirty for writes AND deletes', () => {
+  it('batchWriteAndDelete marks parents dirty for writes AND deletes', async () => {
     // Independent-review-critic R1 HIGH catch: consolidate.ts/sleep flushes
     // pendingWrites + pendingDeletes through batchWriteAndDelete every cycle.
     // Without this hook the dominant mutation source bypasses E2 entirely.
@@ -271,7 +271,7 @@ describe('child-write dirty-flag propagation', () => {
     batchWriteAndDelete(hippoRoot, [newBatchChild], [childToDelete.id]);
 
     // Parent should now be dirty from EITHER the write or the delete path.
-    expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
+    expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toContain(summary.id);
     // Single audit row for the dedup'd parent (Set in batchWriteAndDelete
     // collects unique parent ids; 1 parent → 1 markSummaryDirtyInTx call →
     // 1 audit row from the 0→1 transition).
@@ -283,7 +283,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(auditRows.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('orphan child (parent deleted) → markSummaryDirtyInTx no-ops, no exception', () => {
+  it('orphan child (parent deleted) → markSummaryDirtyInTx no-ops, no exception', async () => {
     const summary = createMemory('to be deleted parent', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -303,6 +303,6 @@ describe('child-write dirty-flag propagation', () => {
     expect(() => writeEntry(hippoRoot, orphan)).not.toThrow();
     // No dirty rows (parent gone), no audit row for the missing parent
     // (markSummaryDirtyInTx WHERE id=? matched 0 rows).
-    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);
   });
 });

@@ -327,7 +327,7 @@ describe('Merge pass', () => {
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.details).toContain('  ⚠️ detected 1 memory conflict');
-    const conflicts = listMemoryConflicts(tmpDir);
+    const conflicts = await listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].reason).toMatch(/enabled\/disabled mismatch|negation polarity mismatch/i);
 
@@ -353,7 +353,7 @@ describe('Merge pass', () => {
 
     await consolidate(tmpDir, { now: FIXED_NOW });
 
-    const conflicts = listMemoryConflicts(tmpDir);
+    const conflicts = await listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].reason).toMatch(
       /enabled\/disabled mismatch|always\/never mismatch|negation polarity mismatch/i,
@@ -380,7 +380,7 @@ describe('Merge pass', () => {
 
       await consolidate(caseDir, { now: FIXED_NOW });
 
-      const conflicts = listMemoryConflicts(caseDir);
+      const conflicts = await listMemoryConflicts(caseDir);
       expect(conflicts, `${left} <> ${right}`).toHaveLength(1);
     }
   });
@@ -401,7 +401,7 @@ describe('Merge pass', () => {
 
     await consolidate(tmpDir, { now: FIXED_NOW });
 
-    expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
+    expect(await listMemoryConflicts(tmpDir)).toHaveLength(0);
     expect(readEntry(tmpDir, a.id)?.conflictsWith ?? []).toEqual([]);
     expect(readEntry(tmpDir, b.id)?.conflictsWith ?? []).toEqual([]);
   });
@@ -431,7 +431,7 @@ describe('Merge pass', () => {
 
     await consolidate(tmpDir, { now: FIXED_NOW });
 
-    expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
+    expect(await listMemoryConflicts(tmpDir)).toHaveLength(0);
     for (const id of ids) {
       expect(readEntry(tmpDir, id)?.conflictsWith ?? []).toEqual([]);
     }
@@ -452,12 +452,12 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, b);
 
     await consolidate(tmpDir, { now: FIXED_NOW });
-    expect(listMemoryConflicts(tmpDir)).toHaveLength(1);
+    expect(await listMemoryConflicts(tmpDir)).toHaveLength(1);
 
     writeEntry(tmpDir, { ...b, content: 'The feature flag is enabled for production users' });
     await consolidate(tmpDir, { now: FIXED_NOW });
 
-    expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
+    expect(await listMemoryConflicts(tmpDir)).toHaveLength(0);
     expect(readEntry(tmpDir, a.id)?.conflictsWith ?? []).toEqual([]);
     expect(readEntry(tmpDir, b.id)?.conflictsWith ?? []).toEqual([]);
   });

@@ -5,7 +5,7 @@
 // A file under src/surface/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
 // So does a runtime import from src/surface/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // layers.json `adapter`: any import, re-export or import() (type-only too) into its folder from a file outside it and its
-// one `root` fails, as does a root import past its `doors`, a sqliteSyncStore name outside them, and any identifier
+// one `root` fails, as does a root import past its `doors`, a sqliteStoreOn name outside them, and any identifier
 // or string naming SQLite in an `unnamedIn` layer: every other file takes its store, and its errors, through the port.
 // So does a runtime import from src/surface/cli/** or src/surface/mcp/** into src/domain, with no list: commands reach business logic through src/api.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and local/**, which the next rule covers: the api reads the store through the port and takes shared rules from src/base.
@@ -281,8 +281,8 @@ function localReachProblems(srcDir) {
   ];
 }
 
-// The synchronous adapter is the root's to hand down; every other file awaits the port.
-const SQLITE_SYNC_NAMES = new Set(['sqliteSyncStore', 'SqliteSyncStore']);
+// The store built on an adapter's own handles is the adapter's; every other file takes the port from a root.
+const ADAPTER_STORE_NAMES = new Set(['sqliteStoreOn']);
 const SQLITE_WORD = /sqlite/i;
 
 /** Imports, re-exports and import() calls, type-only too, from a file outside the adapter's folder into it, one per
@@ -305,7 +305,7 @@ function findAdapterReaches(rule, srcDir) {
   return [...out.values()];
 }
 
-/** `file:line` of each sqliteSyncStore outside the adapter and its root, and of each identifier or string naming SQLite
+/** `file:line` of each sqliteStoreOn outside the adapter and its root, and of each identifier or string naming SQLite
  * in an `unnamedIn` layer. */
 function findAdapterNames(map, rule, srcDir) {
   const root = resolve(srcDir);
@@ -317,8 +317,8 @@ function findAdapterNames(map, rule, srcDir) {
     const unnamed = (rule.unnamedIn ?? []).includes(layerIn(map, from));
     const { identifiers, strings } = readFacts(text, 'file.ts', ['identifiers', 'strings']);
     for (const id of identifiers) {
-      const named = SQLITE_SYNC_NAMES.has(id.name) || (unnamed && SQLITE_WORD.test(id.name));
-      const hint = SQLITE_SYNC_NAMES.has(id.name) ? '; await the port groups instead' : '';
+      const named = ADAPTER_STORE_NAMES.has(id.name) || (unnamed && SQLITE_WORD.test(id.name));
+      const hint = ADAPTER_STORE_NAMES.has(id.name) ? '; take the port from a root instead' : '';
       if (named) out.push(`src/${from}:${id.line} names ${id.name}${hint}`);
     }
     // A module path is the import rule's to report.

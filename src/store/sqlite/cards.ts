@@ -15,7 +15,6 @@ import { chunked } from '../../base/util/chunked.js';
 import { HANDOFF_COLUMNS, type SessionHandoffDbRow } from './handoffs.js';
 import { placeholders } from '../../db/sql.js';
 import type { CardDetail, CardCreate, Cards } from '../port/cards.js';
-import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
@@ -595,6 +594,6 @@ const cardsBodies: Bodies<Cards> = {
   comment: addCardComment,
 };
 
-export function sqliteCards(on: OnHandle): Sync<Cards> {
+export function sqliteCards(on: OnHandle): Cards {
   return bound(on, cardsBodies, openStore);
 }

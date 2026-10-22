@@ -90,7 +90,7 @@ describe('Extracted fact protection', () => {
 
     await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
 
-    const conflicts = listMemoryConflicts(tmpDir);
+    const conflicts = await listMemoryConflicts(tmpDir);
     expect(conflicts.length).toBe(0);
   });
 });

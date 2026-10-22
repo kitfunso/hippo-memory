@@ -4,7 +4,6 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../port/goals.js';
-import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -357,6 +356,6 @@ const goalsBodies: Bodies<Goals> = {
   resume: resumeGoal,
 };
 
-export function sqliteGoals(on: OnHandle): Sync<Goals> {
+export function sqliteGoals(on: OnHandle): Goals {
   return bound(on, goalsBodies);
 }

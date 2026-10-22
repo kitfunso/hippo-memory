@@ -43,9 +43,9 @@ afterEach(async () => {
 
 const row = (id: string) => readEntry(store.hippoRoot, id)!;
 
-function openConflict(aId: string, bId: string, reason: string, tenantId = 'default'): number {
+async function openConflict(aId: string, bId: string, reason: string, tenantId = 'default'): Promise<number> {
   replaceDetectedConflicts(store.hippoRoot, [{ memory_a_id: aId, memory_b_id: bId, reason, score: 0.9 }]);
-  return listMemoryConflicts(store.hippoRoot, '*', tenantId).find((c) => c.reason === reason)!.id;
+  return (await listMemoryConflicts(store.hippoRoot, '*', tenantId)).find((c) => c.reason === reason)!.id;
 }
 
 function lastAudit(): { actor: string; op: string } {
@@ -102,7 +102,7 @@ describe('resolve conflict', () => {
   it('keeps the winner, halves the loser half-life and marks the conflict resolved', async () => {
     const keep = seed(store.hippoRoot, 'deploy target is fly');
     const lose = seed(store.hippoRoot, 'deploy target is render');
-    const id = openConflict(keep.id, lose.id, 'deploy target');
+    const id = await openConflict(keep.id, lose.id, 'deploy target');
 
     const reply = await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: keep.id });
 
@@ -110,14 +110,14 @@ describe('resolve conflict', () => {
     expect(parse<ResolveResult>(reply)).toEqual({ ok: true, conflictId: id, keptId: keep.id, weakenedId: lose.id });
     expect(row(keep.id).halfLifeDays).toBe(keep.halfLifeDays);
     expect(row(lose.id).halfLifeDays).toBe(lose.halfLifeDays / 2);
-    expect(listMemoryConflicts(store.hippoRoot, '*', 'default')[0].status).toBe('resolved');
+    expect((await listMemoryConflicts(store.hippoRoot, '*', 'default'))[0].status).toBe('resolved');
   });
 
   it('answers 409 for a resolved conflict, 400 for a keep outside the pair, 404 for a missing one', async () => {
     const a = seed(store.hippoRoot, 'claim a');
     const b = seed(store.hippoRoot, 'claim b');
     const other = seed(store.hippoRoot, 'claim c');
-    const id = openConflict(a.id, b.id, 'a versus b');
+    const id = await openConflict(a.id, b.id, 'a versus b');
 
     const outside = await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: other.id });
     expect(outside.status).toBe(400);
@@ -158,7 +158,7 @@ describe('another tenant and not-live rows', () => {
   it('answers 404 and changes nothing for every action on another tenant id', async () => {
     const foreign = seed(store.hippoRoot, 'tenant b row', { tenantId: 'tenant_b' });
     const foreign2 = seed(store.hippoRoot, 'tenant b other row', { tenantId: 'tenant_b' });
-    const conflictId = openConflict(foreign.id, foreign2.id, 'tenant b conflict', 'tenant_b');
+    const conflictId = await openConflict(foreign.id, foreign2.id, 'tenant b conflict', 'tenant_b');
 
     expect((await get(dash.port, `/api/memory/${foreign.id}`)).status).toBe(404);
     expect((await postJson(dash.port, `/api/memory/${foreign.id}/pin`, { pinned: true })).status).toBe(404);
@@ -191,7 +191,7 @@ describe('another tenant and not-live rows', () => {
   it('hides a quarantined conflict partner from the detail and refuses to resolve it', async () => {
     const live = seed(store.hippoRoot, 'visible claim');
     const secret = seed(store.hippoRoot, 'hidden quarantined claim', { scope: quarantineScopeFor(null) });
-    const id = openConflict(live.id, secret.id, 'with a quarantined member');
+    const id = await openConflict(live.id, secret.id, 'with a quarantined member');
 
     const detail = await get(dash.port, `/api/memory/${live.id}`);
     expect(detail.status).toBe(200);

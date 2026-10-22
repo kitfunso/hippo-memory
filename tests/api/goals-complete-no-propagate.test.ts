@@ -76,10 +76,10 @@ describe('completeGoal noPropagate flag', () => {
     const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
     // Default strength is 1.0 (ceiling); knock it down so the 1.10x boost shows.
     setStrength(root, m.id, 0.5);
-    const goal = pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
+    const goal = await pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
     seedRecallLog(root, goal.id, m.id, new Date().toISOString());
     const beforeStrength = getStrength(root, m.id);
-    completeGoal(root, goal.id, { outcomeScore: 1.0 }); // positive outcome
+    await completeGoal(root, goal.id, { outcomeScore: 1.0 }); // positive outcome
     const afterStrength = getStrength(root, m.id);
     expect(afterStrength).toBeGreaterThan(beforeStrength);
   });
@@ -87,10 +87,10 @@ describe('completeGoal noPropagate flag', () => {
   it('noPropagate skips strength side-effects', async () => {
     const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
     setStrength(root, m.id, 0.5);
-    const goal = pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
+    const goal = await pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
     seedRecallLog(root, goal.id, m.id, new Date().toISOString());
     const beforeStrength = getStrength(root, m.id);
-    completeGoal(root, goal.id, { outcomeScore: 1.0, noPropagate: true });
+    await completeGoal(root, goal.id, { outcomeScore: 1.0, noPropagate: true });
     const afterStrength = getStrength(root, m.id);
     expect(afterStrength).toBe(beforeStrength); // unchanged
   });
@@ -102,11 +102,11 @@ describe('completeGoal noPropagate flag', () => {
     // happened on call 1; call 2 is a no-op regardless of noPropagate).
     const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
     setStrength(root, m.id, 0.5);
-    const goal = pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
+    const goal = await pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
     seedRecallLog(root, goal.id, m.id, new Date().toISOString());
-    completeGoal(root, goal.id, { outcomeScore: 1.0 }); // call 1: propagates
+    await completeGoal(root, goal.id, { outcomeScore: 1.0 }); // call 1: propagates
     const afterFirstCall = getStrength(root, m.id);
-    completeGoal(root, goal.id, { outcomeScore: 1.0, noPropagate: true }); // call 2
+    await completeGoal(root, goal.id, { outcomeScore: 1.0, noPropagate: true }); // call 2
     expect(getStrength(root, m.id)).toBe(afterFirstCall); // call 2 is a no-op
   });
 });

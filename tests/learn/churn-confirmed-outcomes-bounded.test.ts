@@ -2,10 +2,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { detectChurnStale } from '../../src/domain/learn/invalidation.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
@@ -59,13 +58,13 @@ function seedHistory(root: string): void {
 }
 
 describe('confirmedOutcomeTimes', () => {
-  it('returns the latest good outcome per target since the bound and reads no older row', () => {
+  it('returns the latest good outcome per target since the bound and reads no older row', async () => {
     const root = newRoot();
     seedHistory(root);
-    const learning = sqliteSyncStore(handlesOf(root)).learning;
+    const learning = sqliteStore(root).learning;
 
-    const { result, reads } = recordStatements(() =>
-      learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
+    const { result, reads } = await recordStatementsAsync(
+      async () => await learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
     );
 
     expect([...result.entries()].sort()).toEqual([
@@ -73,14 +72,14 @@ describe('confirmedOutcomeTimes', () => {
       ['new-b', '2026-05-01T00:00:00.000Z'],
     ]);
     expect(outcomeRows(reads)).toBe(2);
-    expect(learning.confirmedOutcomeTimes('default', '2019-01-01T00:00:00.000Z').size).toBe(OLD_TARGETS + 2);
+    expect((await learning.confirmedOutcomeTimes('default', '2019-01-01T00:00:00.000Z')).size).toBe(OLD_TARGETS + 2);
   });
 
-  it('plans the read as a range on the (tenant_id, ts) index, so rows before the bound are never visited', () => {
+  it('plans the read as a range on the (tenant_id, ts) index, so rows before the bound are never visited', async () => {
     const root = newRoot();
     seedHistory(root);
-    const { statements } = recordStatements(() =>
-      sqliteSyncStore(handlesOf(root)).learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
+    const { statements } = await recordStatementsAsync(
+      async () => await sqliteStore(root).learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
     );
     const sql = statements.find((s) => s.includes('FROM audit_log') && s.includes('GROUP BY target_id'));
     expect(sql).toContain('GROUP BY target_id');

@@ -6,8 +6,7 @@ type RootedContext = Pick<Context, 'tenantId' | 'actor'> & { readonly hippoRoot:
 import { loadConfig } from '../../src/base/config/config.js';
 import { createSuccessor } from '../../src/base/memory/memory.js';
 import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -46,7 +45,7 @@ export async function stageSupersedeWinner(
 }
 
 /** api.supersede's read and write on hippo.db, run to its commit before it returns; answers the successor's id. */
-export function supersedeNow(ctx: RootedContext, oldId: string, newContent: string): string {
+export async function supersedeNow(ctx: RootedContext, oldId: string, newContent: string): Promise<string> {
   const [old] = loadEntriesByIds(ctx.hippoRoot, [oldId], ctx.tenantId);
   if (!old) throw new Error(`no row ${oldId} in tenant ${ctx.tenantId} to supersede`);
   const successor = createSuccessor(old, newContent, {
@@ -60,6 +59,6 @@ export function supersedeNow(ctx: RootedContext, oldId: string, newContent: stri
     oldId,
     successor,
   };
-  sqliteSyncStore(handlesOf(ctx.hippoRoot)).entryWrites.supersede(write);
+  await sqliteStore(ctx.hippoRoot).entryWrites.supersede(write);
   return successor.id;
 }

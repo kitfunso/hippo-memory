@@ -7,8 +7,7 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type {
   ConnectorDeadLetter,
   ConnectorEvent,
@@ -126,8 +125,8 @@ function seed(dir: string): Seeded {
 }
 
 /** One workspace, one installation, and a repository two tenants registered, acme first. */
-function registerRoutes(root: string): void {
-  sqliteSyncStore(handlesOf(root)).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
+async function registerRoutes(root: string): Promise<void> {
+  await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(

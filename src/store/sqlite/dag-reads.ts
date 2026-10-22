@@ -11,7 +11,6 @@ import {
 } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../port.js';
-import type { Sync } from './served.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { OnHandle } from './open.js';
@@ -184,7 +183,7 @@ function childrenInOrder(
   return parents.flatMap((id) => byParent.get(id) ?? []);
 }
 
-export function sqliteDagReads(on: OnHandle): Sync<DagReads> {
+export function sqliteDagReads(on: OnHandle): DagReads {
   return bound<DagReads>(
     on,
     {

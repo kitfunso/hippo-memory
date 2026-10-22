@@ -66,13 +66,13 @@ function put(content: string, extra: Partial<MemoryEntry> = {}, tenantId = 'defa
   return entry.id;
 }
 
-function rejectLoser(): RejectedLoser {
+async function rejectLoser(): Promise<RejectedLoser> {
   const keepId = put('Always use semicolons in PowerShell');
   const loserId = put(LOSER);
   replaceDetectedConflicts(root, [
     { memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 },
   ]);
-  const conflictId = listMemoryConflicts(root, 'open')[0]!.id;
+  const conflictId = (await listMemoryConflicts(root, 'open'))[0]!.id;
   const resolve = () => conflictResolve(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });
   return { keepId, loserId, resolve };
 }
@@ -102,7 +102,7 @@ function archivedRawIds(): string[] {
 
 describe('rejecting a conflict loser value', () => {
   it("removes the same duplicates: case and spacing variants and raw rows, never another owner's or tenant's", async () => {
-    const { keepId, loserId, resolve } = rejectLoser();
+    const { keepId, loserId, resolve } = await rejectLoser();
     const spaced = put(`  use &&   TO chain commands\tin powershell `);
     const raw = put(LOSER, { kind: 'raw' });
     const personal = put(LOSER, { scope: 'personal:private:bob', owner: 'bob' });
@@ -120,7 +120,7 @@ describe('rejecting a conflict loser value', () => {
   });
 
   it('never holds every row of the tenant at once', async () => {
-    const { loserId, resolve } = rejectLoser();
+    const { loserId, resolve } = await rejectLoser();
     for (let i = 0; i < 20; i++) put(`unrelated note number ${i}`);
     const { result, sql } = await arrayReads(resolve);
     expect(result.loserId).toBe(loserId);

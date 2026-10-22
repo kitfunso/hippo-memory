@@ -20,8 +20,7 @@ import {
 import type { Ledger, LedgerTurn, PilotArmOptions } from '../port/ledger.js';
 import type { DeliveryEventInput } from '../../base/session/delivery.js';
 import type { OnHandle } from './open.js';
-import { bound, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
+import { answered, bound } from './bound.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
@@ -179,28 +178,26 @@ function pilotArm(
 
 /** Each call runs on the request's handle or a short-lived one. The delivery write takes the opener, since it is
  * fail-soft on an open that fails. */
-export function sqliteLedger(on: OnHandle): Sync<Ledger> {
+export function sqliteLedger(on: OnHandle): Ledger {
   // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
   const prune = deliveryPruneSchedule();
-  const ledgerAt: Bodies<Pick<Ledger, 'lastSent' | 'pilotArm' | 'replaceRereads'>> = {
-    lastSent: lastSentState,
-    pilotArm: pilotArm,
-    replaceRereads: recordRereads,
-  };
-  const reads = bound(on, ledgerAt);
   return {
-    recordTurn: (turn) => recordTurnVia(on, turn, prune),
+    recordTurn: (turn) => answered(() => recordTurnVia(on, turn, prune)),
     lastSent: (tenantId, sessionId, surface) =>
-      noting(
-        () => reads.lastSent(tenantId, sessionId, surface),
-        () => null,
+      answered(() =>
+        noting(
+          () => on((db) => lastSentState(db, tenantId, sessionId, surface)),
+          () => null,
+        ),
       ),
     pilotArm: (tenantId, sessionId, rateBp, opts) =>
-      noting(
-        () => reads.pilotArm(tenantId, sessionId, rateBp, opts),
-        () => hashArm(sessionId, rateBp),
+      answered(() =>
+        noting(
+          () => on((db) => pilotArm(db, tenantId, sessionId, rateBp, opts)),
+          () => hashArm(sessionId, rateBp),
+        ),
       ),
-    writeDeliveryEvent: (input) => writeDeliveryEventVia(on, input, prune),
-    replaceRereads: reads.replaceRereads,
+    writeDeliveryEvent: (input) => answered(() => writeDeliveryEventVia(on, input, prune)),
+    ...bound<Pick<Ledger, 'replaceRereads'>>(on, { replaceRereads: recordRereads }),
   };
 }

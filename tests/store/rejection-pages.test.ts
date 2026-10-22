@@ -12,7 +12,7 @@ import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import type { OnHandle } from '../../src/store/sqlite/open.js';
 import { sqliteRejections } from '../../src/store/sqlite/rejections.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -36,7 +36,8 @@ const WALK_PAGE = 'SELECT id, content, source, scope, created FROM memories ';
 
 /** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares its first page read. */
 function rejectionsWalking(onWalk: () => void) {
-  const { on } = handlesOf(root);
+  const handles = handlesOf(root);
+  const { on } = handles;
   let fired = false;
   const pausing = (db: DatabaseSyncLike): DatabaseSyncLike => ({
     exec: (sql) => db.exec(sql),
@@ -52,7 +53,7 @@ function rejectionsWalking(onWalk: () => void) {
     aggregate: (name, options) => db.aggregate(name, options),
   });
   const walking: OnHandle = (fn, open) => on((db, files) => fn(pausing(db), files), open);
-  return sqliteRejections(walking);
+  return sqliteRejections({ ...handles, on: walking });
 }
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
@@ -121,11 +122,11 @@ function rejection(over: Partial<Rejection> = {}): Rejection {
 }
 
 describe('rejections.apply across pages', () => {
-  it('removes every holder in reach, live or dormant, whole or merged, as one whole scan did', () => {
+  it('removes every holder in reach, live or dormant, whole or merged, as one whole scan did', async () => {
     const ids = seed();
     const dormant = seedDormant();
 
-    const applied = sqliteSyncStore(handlesOf(root)).rejections.apply(rejection());
+    const applied = await sqliteStore(root).rejections.apply(rejection());
 
     const removed = [ids[2], ids[600], ids[700], ids[800], dormant.direct, dormant.merged];
     expect(applied.removedIds).toEqual(removed);
@@ -150,11 +151,11 @@ describe('rejections.apply across pages', () => {
     });
   });
 
-  it('refuses a holder written after the rejected value commits and before the walk, while other writes land', () => {
+  it('refuses a holder written after the rejected value commits and before the walk, while other writes land', async () => {
     const ids = seed();
     const late = { holder: createMemory(VALUE, { tags: [] }), other: createMemory('a lesson written mid-walk') };
     let refused: unknown;
-    const applied = rejectionsWalking(() => {
+    const applied = await rejectionsWalking(() => {
       // No wait for a lock: a write scope held across the walk would fail this write with SQLITE_BUSY.
       withDb((db) => {
         db.exec('PRAGMA busy_timeout = 0');

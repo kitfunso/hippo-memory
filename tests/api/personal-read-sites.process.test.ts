@@ -12,8 +12,7 @@ import {
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
 import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   canReadScope,
   personalScopeOf,
@@ -229,8 +228,8 @@ describe('deny-only read sites', () => {
     ]);
   });
 
-  it('failure dedup: only the team row carries the tag', () => {
-    expect(sqliteSyncStore(handlesOf(root)).lessonWrites.contentsWithTag(T, 'path:hippo')).toEqual([
+  it('failure dedup: only the team row carries the tag', async () => {
+    expect(await sqliteStore(root).lessonWrites.contentsWithTag(T, 'path:hippo')).toEqual([
       'zebrafish note team keeps the build cache warm',
     ]);
   });

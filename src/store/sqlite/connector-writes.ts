@@ -3,8 +3,8 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { githubEventMemory, markGitHubEventSeen } from './connectors/github.js';
 import { markSlackEventSeen, slackEventMemory } from './connectors/slack.js';
-import type { OnHandle, StoreFiles } from './open.js';
-import { boundWithFiles } from './bound.js';
+import type { Handles, StoreFiles } from './open.js';
+import { bound } from './bound.js';
 import { openStore } from './handles.js';
 import type {
   ConnectorArchive,
@@ -13,7 +13,6 @@ import type {
   ConnectorWriteOutcome,
   ConnectorWrites,
 } from '../port.js';
-import type { Sync } from './served.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProjectIn } from './entry-row.js';
 import { writeEntryMirrorsIn, archiveRaw, writeInOwnTenant } from './entry-writes.js';
@@ -71,17 +70,22 @@ function archiveConnectorEntry(db: DatabaseSyncLike, files: StoreFiles, archive:
 }
 
 /** Each call on its own handle; the mirror follows the commit, so a duplicate or a rolled-back write leaves none. */
-export function sqliteConnectorWrites(on: OnHandle): Sync<ConnectorWrites> {
+export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
   return {
-    writeConnectorEntry: (write) =>
-      on((db, files) => {
-        const entry = stampOriginProjectIn(files, write.entry);
-        const result = writeOnce(db, { ...write, entry });
-        if (result.outcome === 'written') writeEntryMirrorsIn(files, entry);
-        return result;
-      }, openStore),
-    ...boundWithFiles<Pick<ConnectorWrites, 'archiveConnectorEntry'>>(on, {
-      archiveConnectorEntry: archiveConnectorEntry,
+    ...bound<Pick<ConnectorWrites, 'writeConnectorEntry'>>(
+      on,
+      {
+        writeConnectorEntry: (db, write) => {
+          const entry = stampOriginProjectIn(files, write.entry);
+          const result = writeOnce(db, { ...write, entry });
+          if (result.outcome === 'written') writeEntryMirrorsIn(files, entry);
+          return result;
+        },
+      },
+      openStore,
+    ),
+    ...bound<Pick<ConnectorWrites, 'archiveConnectorEntry'>>(on, {
+      archiveConnectorEntry: (db, ...args) => archiveConnectorEntry(db, files, ...args),
     }),
   };
 }

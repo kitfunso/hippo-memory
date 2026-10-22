@@ -125,8 +125,8 @@ describe('a write scope that fails in the middle rolls back', () => {
     expect(count(`SELECT COUNT(*) AS n FROM task_snapshots WHERE status = 'active' AND task = 'first'`)).toBe(1);
   });
 
-  it('closePrediction leaves the prediction open when its audit row is refused', () => {
-    const pred = savePrediction(root, 'default', {
+  it('closePrediction leaves the prediction open when its audit row is refused', async () => {
+    const pred = await savePrediction(root, 'default', {
       classTag: 'c',
       claimText: 'takes 2 days',
       estimateValue: 2,
@@ -134,7 +134,7 @@ describe('a write scope that fails in the middle rolls back', () => {
       targetDate: '2026-06-15',
     });
     refuse('audit_log', "NEW.op = 'predict_close'");
-    expect(() => closePrediction(root, 'default', pred.id, { closureState: 'closed', actualValue: 3 })).toThrow(
+    await expect(closePrediction(root, 'default', pred.id, { closureState: 'closed', actualValue: 3 })).rejects.toThrow(
       'refused',
     );
     expect(count(`SELECT COUNT(*) AS n FROM predictions WHERE closure_state = 'open'`)).toBe(1);

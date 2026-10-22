@@ -8,8 +8,6 @@ import type { HippoStore } from '../../src/store/index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { sqlitePredictions } from '../../src/store/sqlite/predictions.js';
-import { served } from '../../src/store/sqlite/served.js';
-import type { Predictions } from '../../src/store/port.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import {
@@ -257,7 +255,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     const info = vi.spyOn(log, 'info');
     // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
     const store = Object.assign(workerSqliteStore(root), {
-      predictions: served<Predictions>(sqlitePredictions(handlesOf(root).on)),
+      predictions: sqlitePredictions(handlesOf(root)),
     });
     const server = await start(root, store);
 

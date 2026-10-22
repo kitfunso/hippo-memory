@@ -4,7 +4,6 @@ import { appendAuditEvents } from './audit.js';
 import { grantScope, insertApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeyAudit, KeyGrants, KeyMint, KeyRevoke, KeyWrites, SelfKeyMint } from '../port.js';
-import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
@@ -88,14 +87,14 @@ const keyAuditBodies: Bodies<KeyAudit> = {
   revokeApiKey: revokeKey,
 };
 
-export function sqliteKeyWrites(on: OnHandle): Sync<KeyWrites> {
+export function sqliteKeyWrites(on: OnHandle): KeyWrites {
   return bound(on, keyWritesBodies);
 }
 
-export function sqliteKeyGrants(on: OnHandle): Sync<KeyGrants> {
+export function sqliteKeyGrants(on: OnHandle): KeyGrants {
   return bound<KeyGrants>(on, { changeScopeGrant: changeScopeGrant });
 }
 
-export function sqliteKeyAudit(on: OnHandle): Sync<KeyAudit> {
+export function sqliteKeyAudit(on: OnHandle): KeyAudit {
   return bound(on, keyAuditBodies);
 }

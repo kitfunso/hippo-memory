@@ -59,7 +59,7 @@ describe('task_snapshot tenant isolation', () => {
     expect(loadActiveTaskSnapshot(tmpDir, 'tenantB')).not.toBeNull();
   });
 
-  it('clear is tenant-scoped: clearing tenant A does not clear tenant B', () => {
+  it('clear is tenant-scoped: clearing tenant A does not clear tenant B', async () => {
     initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A',
@@ -76,7 +76,7 @@ describe('task_snapshot tenant isolation', () => {
       source: 'test',
     });
 
-    const cleared = clearActiveTaskSnapshot(tmpDir, 'tenantA');
+    const cleared = await clearActiveTaskSnapshot(tmpDir, 'tenantA');
     expect(cleared).toBe(true);
 
     expect(loadActiveTaskSnapshot(tmpDir, 'tenantA')).toBeNull();

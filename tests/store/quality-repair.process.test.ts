@@ -59,9 +59,9 @@ function withDb<T>(fn: (db: InstanceType<typeof DatabaseSync>) => T): T {
 }
 
 const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'test', role: 'admin' });
-const run = (apply = false, protect: RepairProtection = repairProtection) =>
-  repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply, protect });
-const dispositionOf = (id: string) => run().issues.find((issue) => issue.id === id)?.disposition;
+const run = async (apply = false, protect: RepairProtection = repairProtection) =>
+  await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply, protect });
+const dispositionOf = async (id: string) => (await run()).issues.find((issue) => issue.id === id)?.disposition;
 
 describe('recoverable automatic memory quality repair', () => {
   it('previews without writes, then preserves full history, audits each move, and leaves a restored row alone', async () => {
@@ -70,12 +70,12 @@ describe('recoverable automatic memory quality repair', () => {
       'Keep test schema setup outside production migrations because production applies every sorted migration.',
     );
     const before = readFileSync(join(root, 'hippo.db'));
-    expect(run()).toMatchObject({ supported: true, appliedIds: [], backup: null });
+    expect(await run()).toMatchObject({ supported: true, appliedIds: [], backup: null });
     expect(readFileSync(join(root, 'hippo.db'))).toEqual(before);
     expect(existsSync(join(root, 'backups'))).toBe(false);
     expect(entryMirrorFiles(root, bad.id)).not.toEqual([]);
 
-    const applied = run(true);
+    const applied = await run(true);
     expect(applied.appliedIds).toEqual([bad.id]);
     expect(existsSync(applied.backup!)).toBe(true);
     expect(entryMirrorFiles(root, bad.id)).toEqual([]);
@@ -93,7 +93,7 @@ describe('recoverable automatic memory quality repair', () => {
       { target_id: bad.id, metadata_json: JSON.stringify({ reason: 'sentence-fragment', backup: applied.backup }) },
     ]);
     expect(withDb((db) => findRejectedValue(db, 'default', rejectionDigest(bad.content)))).toBeNull();
-    expect(run(true)).toMatchObject({ appliedIds: [], backup: null });
+    expect(await run(true)).toMatchObject({ appliedIds: [], backup: null });
 
     expect(await dormantRestore(ctx(), bad.id)).toMatchObject({
       id: bad.id,
@@ -101,13 +101,13 @@ describe('recoverable automatic memory quality repair', () => {
       retrievalCount: 7,
       confidence: 'verified',
     });
-    expect(run(true)).toMatchObject({ appliedIds: [], backup: null, issues: [] });
+    expect(await run(true)).toMatchObject({ appliedIds: [], backup: null, issues: [] });
     const typed = createMemory(bad.content, { source: 'cli' });
     writeEntry(root, typed);
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(typed.id);
   });
 
-  it('keeps pinned, raw, imported, kept-for-good and object-backed memories with their links', () => {
+  it('keeps pinned, raw, imported, kept-for-good and object-backed memories with their links', async () => {
     const content = 'bump build 78 for testflight deploy';
     const pinned = seed(content, { pinned: true });
     const raw = seed(content, { kind: 'raw' });
@@ -120,9 +120,9 @@ describe('recoverable automatic memory quality repair', () => {
       source: 'agent-memory:claude-code:p-001/kept.md#def',
     });
     const backing = seed(content);
-    const prediction = savePrediction(root, 'default', { classTag: 'delivery', claimText: content });
+    const prediction = await savePrediction(root, 'default', { classTag: 'delivery', claimText: content });
     withDb((db) => db.prepare('UPDATE predictions SET memory_id = ? WHERE id = ?').run(backing.id, prediction.id));
-    const result = run(true);
+    const result = await run(true);
     expect(result.appliedIds).toEqual([]);
     expect(result.issues).toEqual(
       expect.arrayContaining([
@@ -150,7 +150,7 @@ describe('recoverable automatic memory quality repair', () => {
       ]),
     );
 
-    const unpinned = run(false, { ...repairProtection, pinned: false });
+    const unpinned = await run(false, { ...repairProtection, pinned: false });
     expect(unpinned.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
@@ -158,13 +158,13 @@ describe('recoverable automatic memory quality repair', () => {
       ]),
     );
 
-    const letGo = run(true, { pinned: false, raw: false, trusted: false, objectBacked: false });
+    const letGo = await run(true, { pinned: false, raw: false, trusted: false, objectBacked: false });
     expect(letGo.appliedIds).toEqual([plain.id]);
     expect(letGo.warnings).toContain(`Kept ${pinned.id}: the store's delete guard protects it.`);
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toEqual([pinned.id]);
   });
 
-  it('never judges hand-written memories, only rows hippo wrote itself', () => {
+  it('never judges hand-written memories, only rows hippo wrote itself', async () => {
     const manual = [
       'Returns 404 when the API key is missing from the header',
       'If the build fails',
@@ -188,7 +188,7 @@ describe('recoverable automatic memory quality repair', () => {
       seed(FRAGMENT, { source: 'promoted:/work/app/.hippo', tags: ['captured'] }),
       seed(FRAGMENT, { source: 'consolidation', layer: Layer.Semantic }),
     ];
-    const issues = run().issues;
+    const issues = (await run()).issues;
     const ids = issues.map((issue) => issue.id);
     for (const row of [...manual, vouched, invalidated, watch, toolFailure, sound]) expect(ids).not.toContain(row.id);
     for (const row of automatic) {
@@ -199,10 +199,10 @@ describe('recoverable automatic memory quality repair', () => {
     }
   });
 
-  it('lists a possible fragment for review and moves nothing', () => {
+  it('lists a possible fragment for review and moves nothing', async () => {
     const possible = seed('Always check which branch the PR merges into');
     const condition = seed('When CI fails we retry once');
-    const result = run(true);
+    const result = await run(true);
     expect(result.appliedIds).toEqual([]);
     expect(result.issues).toHaveLength(2);
     expect(result.issues).toEqual(
@@ -213,7 +213,7 @@ describe('recoverable automatic memory quality repair', () => {
     );
   });
 
-  it('flags ambiguity and mixed bundles while preserving complete parts and structured records', () => {
+  it('flags ambiguity and mixed bundles while preserving complete parts and structured records', async () => {
     const mixed = bundle(
       [
         'Found local migration files to be',
@@ -229,7 +229,7 @@ describe('recoverable automatic memory quality repair', () => {
     const trace = seed('succeeds (inserts or updates)', { traceOutcome: 'success', layer: Layer.Trace });
     const promoted = seed('succeeds (inserts or updates)', { source: 'auto-promote', tags: ['captured'] });
     const digest = seed('succeeds (inserts or updates)', { tags: ['session-digest'] });
-    const result = run(true);
+    const result = await run(true);
     expect(result.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: mixed.id, disposition: 'review' }),
@@ -242,7 +242,7 @@ describe('recoverable automatic memory quality repair', () => {
     expect(loadEveryTenantEntries(root)).toHaveLength(6);
   });
 
-  it('sets a bundle aside only when every part is a certain defect and every parent is automatic', () => {
+  it('sets a bundle aside only when every part is a certain defect and every parent is automatic', async () => {
     const parts = ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy'];
     const fromCapture = bundle(
       parts,
@@ -255,64 +255,64 @@ describe('recoverable automatic memory quality repair', () => {
     const mixedParents = bundle(parts, [seed(parts[0]).id, seed(parts[1], { source: 'cli' }).id]);
     const orphan = bundle(parts, ['mem_gone_1', 'mem_gone_2']);
     const unlinked = bundle(parts, []);
-    expect(dispositionOf(fromCapture.id)).toBe('set-aside');
-    for (const row of [fromPerson, mixedParents, orphan, unlinked]) expect(dispositionOf(row.id)).toBe('review');
+    expect(await dispositionOf(fromCapture.id)).toBe('set-aside');
+    for (const row of [fromPerson, mixedParents, orphan, unlinked]) expect(await dispositionOf(row.id)).toBe('review');
   });
 
-  it('finds a parent that repair already moved to dormant storage', () => {
+  it('finds a parent that repair already moved to dormant storage', async () => {
     const parents = ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy'].map((content) =>
       seed(content),
     );
-    expect([...run(true).appliedIds].sort()).toEqual(parents.map((row) => row.id).sort());
+    expect([...(await run(true)).appliedIds].sort()).toEqual(parents.map((row) => row.id).sort());
     const merged = bundle(
       parents.map((row) => row.content),
       parents.map((row) => row.id),
     );
-    expect(run(true).appliedIds).toEqual([merged.id]);
+    expect((await run(true)).appliedIds).toEqual([merged.id]);
     expect(withDb((db) => readDormantSnapshot(db, 'default', merged.id))?.entry.content).toBe(merged.content);
   });
 
-  it('leaves superseded and archived rows to their own lifecycle', () => {
+  it('leaves superseded and archived rows to their own lifecycle', async () => {
     const next = seed(
       'Keep test schema setup outside production migrations because production applies every sorted migration.',
     );
     seed('Found local migration files to be', { supersededBy: next.id });
     seed('Found local migration files to be', { kind: 'archived' });
-    expect(run(true)).toMatchObject({ total: 1, issues: [], appliedIds: [] });
+    expect(await run(true)).toMatchObject({ total: 1, issues: [], appliedIds: [] });
   });
 
-  it('rolls back snapshots and removal, and removes its backup, when audit fails', () => {
+  it('rolls back snapshots and removal, and removes its backup, when audit fails', async () => {
     const bad = seed('succeeds (inserts or updates)');
     withDb((db) =>
       db.exec(
         "CREATE TRIGGER refuse_repair_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'quality_repair' BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END",
       ),
     );
-    expect(() => run(true)).toThrow(/audit unavailable/);
+    await expect(run(true)).rejects.toThrow(/audit unavailable/);
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(bad.id);
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))).toBeNull();
     expect(readdirSync(join(root, 'backups'))).toEqual([]);
   });
 
-  it('aborts before mutation if the consistent backup cannot be created', () => {
+  it('aborts before mutation if the consistent backup cannot be created', async () => {
     const bad = seed('succeeds (inserts or updates)');
     writeFileSync(join(root, 'backups'), 'blocks the backup directory');
-    expect(() => run(true)).toThrow();
+    await expect(run(true)).rejects.toThrow();
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(bad.id);
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))).toBeNull();
   });
 
-  it('repairs compatible historical tables without upgrading schema version', () => {
+  it('repairs compatible historical tables without upgrading schema version', async () => {
     const bad = seed('Found local migration files to be');
     withDb((db) => {
       db.exec('PRAGMA user_version = 48');
       db.prepare('UPDATE meta SET value = ? WHERE key = ?').run('48', 'schema_version');
     });
-    expect(run(true).appliedIds).toEqual([bad.id]);
+    expect((await run(true)).appliedIds).toEqual([bad.id]);
     expect(withDb((db) => db.prepare('PRAGMA user_version').get())).toEqual({ user_version: 48 });
   });
 
-  it('blocks a historical store missing a deletion guard dependency before any backup or migration', () => {
+  it('blocks a historical store missing a deletion guard dependency before any backup or migration', async () => {
     const bad = seed('Found local migration files to be');
     seed(bad.content, { source: 'cli', confidence: 'verified' });
     withDb((db) => {
@@ -321,7 +321,7 @@ describe('recoverable automatic memory quality repair', () => {
       db.prepare('UPDATE meta SET value = ? WHERE key = ?').run('43', 'schema_version');
     });
     const before = readFileSync(join(root, 'hippo.db'));
-    const result = run(true);
+    const result = await run(true);
     expect(result).toMatchObject({ supported: false, appliedIds: [], backup: null });
     expect(result.blockers).toContain('missing table: customer_notes');
     expect(result.issues).toEqual([
@@ -337,10 +337,10 @@ describe('recoverable automatic memory quality repair', () => {
     expect(withDb((db) => db.prepare('PRAGMA user_version').get())).toEqual({ user_version: 43 });
   });
 
-  it('does not disclose the source text in its report and scopes repair to one tenant', () => {
+  it('does not disclose the source text in its report and scopes repair to one tenant', async () => {
     const mine = seed('succeeds (inserts or updates)');
     const other = seed(mine.content, { tenantId: 'other' });
-    const result = run(true);
+    const result = await run(true);
     expect(result.appliedIds).toEqual([mine.id]);
     expect(JSON.stringify(result)).not.toContain(mine.content);
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(other.id);
@@ -352,7 +352,7 @@ describe('recoverable automatic memory quality repair', () => {
       const bad = createMemory('succeeds (inserts or updates)', { source: 'capture', confidence: 'observed' });
       writeEntry(world.local, bad);
       const repair = { tenantId: 'default', apply: true, protect: repairProtection };
-      expect(repairAutomaticMemories({ hippoRoot: world.local }, repair).appliedIds).toEqual([bad.id]);
+      expect((await repairAutomaticMemories({ hippoRoot: world.local }, repair)).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
       await importForStore(world.local, {
         configAt: loadConfig,

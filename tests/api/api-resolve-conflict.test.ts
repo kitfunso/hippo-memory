@@ -33,7 +33,7 @@ interface Pair {
   conflictId: number;
 }
 
-function seedPair(): Pair {
+async function seedPair(): Promise<Pair> {
   const a = createMemory('deploys run from the main branch', {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     tenantId: TENANT,
@@ -47,7 +47,7 @@ function seedPair(): Pair {
   replaceDetectedConflicts(root, [
     { memory_a_id: a.id, memory_b_id: b.id, reason: 'contradictory deploy advice', score: 0.9 },
   ]);
-  const [conflict] = listMemoryConflicts(root, 'open', TENANT);
+  const [conflict] = await listMemoryConflicts(root, 'open', TENANT);
   if (!conflict) throw new Error('seeded conflict not found');
   return { a, b, conflictId: conflict.id };
 }
@@ -88,59 +88,59 @@ function cliResolve(conflictId: number, flags: Record<string, string | boolean>)
   return runInProcess(() => handleResolve({ hippoRoot: root, tenantId: TENANT, args: [String(conflictId)], flags }));
 }
 
-const openIds = (): number[] => listMemoryConflicts(root, 'open', TENANT).map((c) => c.id);
+const openIds = async (): Promise<number[]> => (await listMemoryConflicts(root, 'open', TENANT)).map((c) => c.id);
 
 describe('MCP hippo_resolve', () => {
   it('keeps its reply for a valid resolve', async () => {
-    const pair = seedPair();
+    const pair = await seedPair();
     const reply = await mcpResolve({ conflict_id: pair.conflictId, keep: pair.a.id });
     expect(replyText(reply)).toBe(`Resolved conflict ${pair.conflictId}: kept ${pair.a.id}, weakened ${pair.b.id}`);
-    expect(openIds()).toEqual([]);
+    expect(await openIds()).toEqual([]);
   });
 
   it('refuses a pair whose member is superseded, as the dashboard does', async () => {
-    const pair = seedPair();
+    const pair = await seedPair();
     supersedeB(pair);
     expect(replyText(await mcpResolve({ conflict_id: pair.conflictId, keep: pair.a.id, forget: true }))).toBe(
       NOT_RESOLVED,
     );
-    expect(openIds()).toEqual([pair.conflictId]);
+    expect(await openIds()).toEqual([pair.conflictId]);
     expect(readEntry(root, pair.b.id, TENANT)?.halfLifeDays).toBe(pair.b.halfLifeDays);
   });
 
   it('refuses a keep id outside the pair with a message naming the pair', async () => {
-    const pair = seedPair();
+    const pair = await seedPair();
     await expect(mcpResolve({ conflict_id: pair.conflictId, keep: 'mem_elsewhere' })).rejects.toThrow(
       `keep must be one of the two memories in conflict ${pair.conflictId}`,
     );
-    expect(openIds()).toEqual([pair.conflictId]);
+    expect(await openIds()).toEqual([pair.conflictId]);
   });
 });
 
 describe('CLI hippo resolve', () => {
   it('keeps its output for a valid resolve', async () => {
-    const pair = seedPair();
+    const pair = await seedPair();
     const run = await cliResolve(pair.conflictId, { keep: pair.a.id });
     expect(run.stdout).toBe(
       `Resolved conflict ${pair.conflictId}: kept ${pair.a.id}, weakened (half-life halved) ${pair.b.id}\n`,
     );
-    expect(openIds()).toEqual([]);
+    expect(await openIds()).toEqual([]);
   });
 
   it('refuses a pair whose member is superseded, as the dashboard does', async () => {
-    const pair = seedPair();
+    const pair = await seedPair();
     supersedeB(pair);
     await expect(cliResolve(pair.conflictId, { keep: pair.a.id, forget: true })).rejects.toThrow(NotFoundError);
-    expect(openIds()).toEqual([pair.conflictId]);
+    expect(await openIds()).toEqual([pair.conflictId]);
     expect(readEntry(root, pair.b.id, TENANT)).not.toBeNull();
   });
 
   it('refuses a keep id outside the pair, as the dashboard does', async () => {
-    const pair = seedPair();
+    const pair = await seedPair();
     await expect(cliResolve(pair.conflictId, { keep: 'mem_elsewhere' })).rejects.toThrow(
       `keep must be one of the two memories in conflict ${pair.conflictId}`,
     );
-    expect(openIds()).toEqual([pair.conflictId]);
+    expect(await openIds()).toEqual([pair.conflictId]);
   });
 });
 
@@ -154,7 +154,7 @@ describe('conflictResolve', () => {
   });
 
   it("answers a resolved conflict with 409 and another tenant's with 404", async () => {
-    const pair = seedPair();
+    const pair = await seedPair();
     await expect(conflictResolve(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(NotFoundError);
     expect(await conflictResolve(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({
       conflictId: pair.conflictId,

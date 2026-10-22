@@ -16,7 +16,7 @@ import { entryRejectRow, selectEntriesByIds, selectTenantTextsPage } from './ent
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import { deleteRejectedValue, insertRejectedValue, listRejectedValues, checkRejectionGuard } from './rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../base/records/rejection-digest.js';
@@ -25,8 +25,7 @@ import { mergedSuccessor } from '../../base/memory/merged-row.js';
 import { rejectedText, rejectionReaches } from '../../base/records/rejection-text.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles } from './bound.js';
-import type { Sync } from './served.js';
+import { bound } from './bound.js';
 import type { EntryCursor } from '../port/types.js';
 
 type HoldsValue = (text: string) => boolean;
@@ -258,7 +257,7 @@ function liftRejection(db: DatabaseSyncLike, tenantId: string, digestPrefix: str
   return { status: 'ok', digest: target.digest, reason: target.reason };
 }
 
-function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): boolean[] {
+export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): boolean[] {
   return checks.map(({ tenantId, entryId, content }) => {
     try {
       checkRejectionGuard(db, tenantId, entryId, content);
@@ -270,15 +269,10 @@ function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): 
   });
 }
 
-/** The guard probe alone, which the local files carry for a dry run that cannot await. */
-export function sqliteRefusedAmong(on: OnHandle): Sync<Pick<Rejections, 'refusedAmong'>> {
-  return bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong });
-}
-
-export function sqliteRejections(on: OnHandle): Sync<Rejections> {
+export function sqliteRejections({ on, files }: Handles): Rejections {
   return {
-    ...boundWithFiles<Pick<Rejections, 'apply'>>(on, { apply: applyRejection }, openStore),
+    ...bound<Pick<Rejections, 'apply'>>(on, { apply: (db, ...args) => applyRejection(db, files, ...args) }, openStore),
     ...bound<Pick<Rejections, 'lift' | 'list'>>(on, { lift: liftRejection, list: listRejectedValues }, openStore),
-    ...sqliteRefusedAmong(on),
+    ...bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong }),
   };
 }

@@ -299,8 +299,8 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
 describe('the card verb is wired through the flag parser and the command table', () => {
   it('`card create` with a repeated --depends-on reaches the card verb and records every parent', async () => {
     initTestStore(root);
-    const a = createCard(root, 'default', { title: 'A' });
-    const b = createCard(root, 'default', { title: 'B' });
+    const a = await createCard(root, 'default', { title: 'A' });
+    const b = await createCard(root, 'default', { title: 'B' });
     const { args, flags } = parseArgs([
       'node',
       'hippo',

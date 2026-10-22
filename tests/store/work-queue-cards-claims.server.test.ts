@@ -58,13 +58,13 @@ function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
 
 describe('concurrent claim', () => {
   it('a claim held open in another connection blocks claimCard, which then sees 0 rows once released', async () => {
-    const card = createCard(root, 'default', { title: 'Contested' });
+    const card = await createCard(root, 'default', { title: 'Contested' });
     const dbPath = join(root, 'hippo.db');
     const { locked, released, startHold, holdHadEnded } = holdLockThenRelease(dbPath, card.id, 600);
     await locked;
 
     startHold();
-    const result = claimCard(root, 'default', card.id, 'second');
+    const result = await claimCard(root, 'default', card.id, 'second');
     const endedByReturn = holdHadEnded();
 
     expect(result).toBeNull();
@@ -74,9 +74,9 @@ describe('concurrent claim', () => {
   });
 
   it('two sequential claims on the same ready card: the second returns null', async () => {
-    const card = createCard(root, 'default', { title: 'Sequential' });
-    const first = claimCard(root, 'default', card.id, 'first');
-    const second = claimCard(root, 'default', card.id, 'second');
+    const card = await createCard(root, 'default', { title: 'Sequential' });
+    const first = await claimCard(root, 'default', card.id, 'first');
+    const second = await claimCard(root, 'default', card.id, 'second');
     expect(first?.status).toBe('running');
     expect(second).toBeNull();
   });
@@ -84,24 +84,24 @@ describe('concurrent claim', () => {
 
 describe('completeCard promotes only children whose parents are all done', () => {
   it('promotes B, leaves C in backlog, closes the open run', async () => {
-    const a = createCard(root, 'default', { title: 'A' });
-    const d = createCard(root, 'default', { title: 'D' });
-    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
-    const c = createCard(root, 'default', { title: 'C', dependsOn: [a.id, d.id] });
+    const a = await createCard(root, 'default', { title: 'A' });
+    const d = await createCard(root, 'default', { title: 'D' });
+    const b = await createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
+    const c = await createCard(root, 'default', { title: 'C', dependsOn: [a.id, d.id] });
     expect(b.status).toBe('backlog');
     expect(c.status).toBe('backlog');
 
-    claimCard(root, 'default', a.id, 'codex');
-    reviewCard(root, 'default', a.id);
-    claimCard(root, 'default', d.id, 'codex'); // D stays running, never completes.
+    await claimCard(root, 'default', a.id, 'codex');
+    await reviewCard(root, 'default', a.id);
+    await claimCard(root, 'default', d.id, 'codex'); // D stays running, never completes.
 
-    const result = completeCard(root, 'default', a.id, 'success');
+    const result = await completeCard(root, 'default', a.id, 'success');
     expect(result).not.toBeNull();
     expect(result!.promotedChildren).toEqual([b.id]);
-    expect(loadCard(root, 'default', b.id)?.status).toBe('ready');
-    expect(loadCard(root, 'default', c.id)?.status).toBe('backlog');
+    expect((await loadCard(root, 'default', b.id))?.status).toBe('ready');
+    expect((await loadCard(root, 'default', c.id))?.status).toBe('backlog');
 
-    const runs = loadCardRuns(root, 'default', a.id);
+    const runs = await loadCardRuns(root, 'default', a.id);
     expect(runs[0]?.ended).not.toBeNull();
     expect(runs[0]?.outcome).toBe('success');
   });
@@ -109,15 +109,15 @@ describe('completeCard promotes only children whose parents are all done', () =>
 
 describe('claim -> block -> reclaim -> review -> complete closes exactly the live run', () => {
   it('the blocked run keeps outcome blocked; the reclaimed run gets the final outcome', async () => {
-    const card = createCard(root, 'default', { title: 'Reclaimed' });
-    claimCard(root, 'default', card.id, 'r1');
-    blockCard(root, 'default', card.id, 'waiting on input');
-    claimCard(root, 'default', card.id, 'r2');
-    reviewCard(root, 'default', card.id);
-    const result = completeCard(root, 'default', card.id, 'success');
+    const card = await createCard(root, 'default', { title: 'Reclaimed' });
+    await claimCard(root, 'default', card.id, 'r1');
+    await blockCard(root, 'default', card.id, 'waiting on input');
+    await claimCard(root, 'default', card.id, 'r2');
+    await reviewCard(root, 'default', card.id);
+    const result = await completeCard(root, 'default', card.id, 'success');
     expect(result).not.toBeNull();
 
-    const runs = loadCardRuns(root, 'default', card.id);
+    const runs = await loadCardRuns(root, 'default', card.id);
     expect(runs).toHaveLength(2);
     expect(runs[0]?.runtime).toBe('r2');
     expect(runs[0]?.ended).not.toBeNull();
@@ -126,7 +126,7 @@ describe('claim -> block -> reclaim -> review -> complete closes exactly the liv
     expect(runs[1]?.ended).not.toBeNull();
     expect(runs[1]?.outcome).toBe('blocked');
 
-    const finalCard = loadCard(root, 'default', card.id);
+    const finalCard = await loadCard(root, 'default', card.id);
     expect(finalCard?.status).toBe('done');
     expect(finalCard?.assigneeRuntime).toBe('r2');
   });
@@ -174,109 +174,109 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
 
 describe('a parent completing while createCard waits for the write lock still yields a ready child', () => {
   it('createCard blocks on BEGIN IMMEDIATE, then reads the parent as done once the lock is released', async () => {
-    const parent = createCard(root, 'default', { title: 'Parent' });
-    claimCard(root, 'default', parent.id, 'codex');
-    reviewCard(root, 'default', parent.id); // in review, not done yet: a read before the commit would see this.
+    const parent = await createCard(root, 'default', { title: 'Parent' });
+    await claimCard(root, 'default', parent.id, 'codex');
+    await reviewCard(root, 'default', parent.id); // in review, not done yet: a read before the commit would see this.
 
     const dbPath = join(root, 'hippo.db');
     const { locked, released, startHold, holdHadEnded } = holdLockThenCompleteParent(dbPath, parent.id, 300);
     await locked;
 
     startHold();
-    const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
+    const child = await createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
     const endedByReturn = holdHadEnded();
 
     // A createCard that did not wait would return while the lock is still held, before the hold ends.
     expect(endedByReturn).toBe(true);
     expect(child.status).toBe('ready');
-    expect(loadCard(root, 'default', child.id)?.status).toBe('ready');
+    expect((await loadCard(root, 'default', child.id))?.status).toBe('ready');
     await released;
   });
 });
 
 describe('completeCard from a non-review status returns null and touches nothing', () => {
   it('leaves card_deps and card_runs untouched', async () => {
-    const parent = createCard(root, 'default', { title: 'Still backlog' });
-    const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
+    const parent = await createCard(root, 'default', { title: 'Still backlog' });
+    const child = await createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
 
     const before = (await cardDetailOf(root, 'default', child.id))?.deps;
-    const result = completeCard(root, 'default', parent.id, 'success');
+    const result = await completeCard(root, 'default', parent.id, 'success');
     expect(result).toBeNull();
 
     const after = (await cardDetailOf(root, 'default', child.id))?.deps;
     expect(after).toEqual(before);
-    expect(loadCardRuns(root, 'default', parent.id)).toEqual([]);
-    expect(loadCard(root, 'default', parent.id)?.status).toBe('ready');
+    expect(await loadCardRuns(root, 'default', parent.id)).toEqual([]);
+    expect((await loadCard(root, 'default', parent.id))?.status).toBe('ready');
   });
 });
 
 describe('completeCard shelves a non-success outcome and releases no children', () => {
   it('failure leaves the card shelved, the child in backlog, and closes the run with outcome failure', async () => {
-    const a = createCard(root, 'default', { title: 'A' });
-    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
-    claimCard(root, 'default', a.id, 'codex');
-    reviewCard(root, 'default', a.id);
+    const a = await createCard(root, 'default', { title: 'A' });
+    const b = await createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
+    await claimCard(root, 'default', a.id, 'codex');
+    await reviewCard(root, 'default', a.id);
 
-    const result = completeCard(root, 'default', a.id, 'failure');
+    const result = await completeCard(root, 'default', a.id, 'failure');
     expect(result).not.toBeNull();
     expect(result!.card.status).toBe('shelved');
     expect(result!.promotedChildren).toEqual([]);
-    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+    expect((await loadCard(root, 'default', b.id))?.status).toBe('backlog');
 
-    const runs = loadCardRuns(root, 'default', a.id);
+    const runs = await loadCardRuns(root, 'default', a.id);
     expect(runs[0]?.ended).not.toBeNull();
     expect(runs[0]?.outcome).toBe('failure');
   });
 
   it('partial leaves the card shelved, the child in backlog, and closes the run with outcome partial', async () => {
-    const a = createCard(root, 'default', { title: 'A' });
-    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
-    claimCard(root, 'default', a.id, 'codex');
-    reviewCard(root, 'default', a.id);
+    const a = await createCard(root, 'default', { title: 'A' });
+    const b = await createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
+    await claimCard(root, 'default', a.id, 'codex');
+    await reviewCard(root, 'default', a.id);
 
-    const result = completeCard(root, 'default', a.id, 'partial');
+    const result = await completeCard(root, 'default', a.id, 'partial');
     expect(result).not.toBeNull();
     expect(result!.card.status).toBe('shelved');
     expect(result!.promotedChildren).toEqual([]);
-    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+    expect((await loadCard(root, 'default', b.id))?.status).toBe('backlog');
 
-    const runs = loadCardRuns(root, 'default', a.id);
+    const runs = await loadCardRuns(root, 'default', a.id);
     expect(runs[0]?.ended).not.toBeNull();
     expect(runs[0]?.outcome).toBe('partial');
   });
 
   it('a shelved parent never releases a child even after every other parent completes', async () => {
-    const a = createCard(root, 'default', { title: 'A' });
-    const c = createCard(root, 'default', { title: 'C' });
-    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id, c.id] });
+    const a = await createCard(root, 'default', { title: 'A' });
+    const c = await createCard(root, 'default', { title: 'C' });
+    const b = await createCard(root, 'default', { title: 'B', dependsOn: [a.id, c.id] });
 
-    claimCard(root, 'default', a.id, 'codex');
-    reviewCard(root, 'default', a.id);
-    completeCard(root, 'default', a.id, 'failure');
-    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+    await claimCard(root, 'default', a.id, 'codex');
+    await reviewCard(root, 'default', a.id);
+    await completeCard(root, 'default', a.id, 'failure');
+    expect((await loadCard(root, 'default', b.id))?.status).toBe('backlog');
 
-    claimCard(root, 'default', c.id, 'codex');
-    reviewCard(root, 'default', c.id);
-    const result = completeCard(root, 'default', c.id, 'success');
+    await claimCard(root, 'default', c.id, 'codex');
+    await reviewCard(root, 'default', c.id);
+    const result = await completeCard(root, 'default', c.id, 'success');
     expect(result!.promotedChildren).toEqual([]);
-    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+    expect((await loadCard(root, 'default', b.id))?.status).toBe('backlog');
   });
 
   it('createCard with dependsOn a shelved parent creates the child in backlog', async () => {
-    const a = createCard(root, 'default', { title: 'A' });
-    claimCard(root, 'default', a.id, 'codex');
-    reviewCard(root, 'default', a.id);
-    completeCard(root, 'default', a.id, 'failure');
-    expect(loadCard(root, 'default', a.id)?.status).toBe('shelved');
+    const a = await createCard(root, 'default', { title: 'A' });
+    await claimCard(root, 'default', a.id, 'codex');
+    await reviewCard(root, 'default', a.id);
+    await completeCard(root, 'default', a.id, 'failure');
+    expect((await loadCard(root, 'default', a.id))?.status).toBe('shelved');
 
-    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
+    const b = await createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
     expect(b.status).toBe('backlog');
   });
 });
 
 describe('the latest handoff filed against a card', () => {
   it('round-trips a handoff saved with a matching cardId and ignores others', async () => {
-    const card = createCard(root, 'default', { title: 'Handoff target' });
+    const card = await createCard(root, 'default', { title: 'Handoff target' });
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-1',

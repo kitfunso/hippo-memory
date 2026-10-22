@@ -6,8 +6,7 @@ import type { CallerItems, CallerItemsSaved, MemoryEntry } from '../../src/entry
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   onBothStores,
@@ -47,7 +46,7 @@ const request = (over: Partial<CallerItems> = {}): CallerItems => ({
   ...over,
 });
 
-function seed(dir: string): void {
+async function seed(dir: string): Promise<void> {
   const row = (content: string, over: Parameters<typeof createMemory>[1], origin: string): string => {
     const entry = {
       ...createMemory(content, { tenantId: TENANT_A, sourceSessionId: 'sOld', ...over }),
@@ -73,16 +72,16 @@ function seed(dir: string): void {
   } finally {
     closeHippoDb(db);
   }
-  const { compactions } = sqliteSyncStore(handlesOf(dir));
-  compactions.start(TENANT_A, {
+  const { compactions } = sqliteStore(dir);
+  await compactions.start(TENANT_A, {
     sessionId: 'sA',
     originProject: 'acme/app',
     trigger: 'auto',
     cwd: null,
     transcriptPath: null,
   });
-  compactions.saveCallerItems(TENANT_A, request({ sessionId: 'sD', requestId: 'req-done', items: [FROZEN] }));
-  compactions.saveCallerItems(TENANT_B, request({ sessionId: 'sB', requestId: 'req-b', items: [HELD] }));
+  await compactions.saveCallerItems(TENANT_A, request({ sessionId: 'sD', requestId: 'req-done', items: [FROZEN] }));
+  await compactions.saveCallerItems(TENANT_B, request({ sessionId: 'sB', requestId: 'req-b', items: [HELD] }));
 }
 
 /** Each side's ids, renamed in the order they first appear, since both stores mint their own. */
@@ -95,11 +94,11 @@ function sameIds<T>(side: T): T {
   return JSON.parse(text);
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(SEEDED));
   fixture = seedTwoTenants();
-  seed(fixture.dir);
+  await seed(fixture.dir);
   vi.useRealTimers();
 });
 

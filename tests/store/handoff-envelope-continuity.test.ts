@@ -40,7 +40,7 @@ describe('IC-SMDP fixture, ambient handoff pop-off', () => {
         sessionId,
         evidence: { gitRef: `ref${i}`, dirtyTree: false, testStatus: 'pass' },
       });
-      closeTaskSnapshotsForSession(root, 'default', sessionId);
+      await closeTaskSnapshotsForSession(root, 'default', sessionId);
     }
 
     const fresh = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });

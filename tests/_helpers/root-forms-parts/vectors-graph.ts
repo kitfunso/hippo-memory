@@ -1,9 +1,9 @@
 // Root-keyed vectors and graph forms tests call; production code goes through the port or the handle-first forms.
 
 import type { MemoryEntry } from '../../../src/base/memory/memory.js';
-import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
+import { READ_PAGE_ROWS } from '../../../src/base/util/pages.js';
 import type { EntryCursor } from '../../../src/store/port/types.js';
-import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import type { PhysicsParticle } from '../../../src/base/rank/physics.js';
 import { getMeta } from '../../../src/db/index.js';
 import {
@@ -32,27 +32,40 @@ export function loadPendingExtractionTenants(hippoRoot: string): { tenantId: str
   return onHandle(hippoRoot, (db) => graphQueueSql.loadPendingExtractionTenants(db));
 }
 
-export function loadEntitiesByMemoryId(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): Entity[] {
-  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.entitiesForMemories(tenantId, memoryIds);
+export async function loadEntitiesByMemoryId(
+  hippoRoot: string,
+  tenantId: string,
+  memoryIds: readonly string[],
+): Promise<Entity[]> {
+  return await sqliteStore(hippoRoot).graphReads.entitiesForMemories(tenantId, memoryIds);
 }
 
-export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  const { consolidation } = sqliteSyncStore(handlesOf(hippoRoot));
-  return Array.from(
-    rowsInPages((after?: EntryCursor) => consolidation.unprofiledTopicSummaries({ limit: READ_PAGE_ROWS, after })),
-  );
+export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry[]> {
+  const { consolidation } = sqliteStore(hippoRoot);
+  const out: MemoryEntry[] = [];
+  let after: EntryCursor | undefined;
+  do {
+    const page = await consolidation.unprofiledTopicSummaries({ limit: READ_PAGE_ROWS, after });
+    out.push(...page.entries);
+    after = page.next ?? undefined;
+  } while (after !== undefined);
+  return out;
 }
 
-export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
-  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+export async function loadAllDirtySummaries(hippoRoot: string, limit?: number): Promise<MemoryEntry[]> {
+  return await sqliteStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
 }
 
-export function loadChildrenOfSummary(hippoRoot: string, summaryId: string, tenantId: string): MemoryEntry[] {
-  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.childrenOfSummary(summaryId, tenantId);
+export async function loadChildrenOfSummary(
+  hippoRoot: string,
+  summaryId: string,
+  tenantId: string,
+): Promise<MemoryEntry[]> {
+  return await sqliteStore(hippoRoot).consolidation.childrenOfSummary(summaryId, tenantId);
 }
 
-export function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
-  return sqliteSyncStore(handlesOf(hippoRoot)).consolidation.applyRebuild(summary, patch);
+export async function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
+  return await sqliteStore(hippoRoot).consolidation.applyRebuild(summary, patch);
 }
 
 export function recordRereads(
@@ -100,17 +113,21 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
   onHandle(hippoRoot, (db) => graphQueueSql.markGraphDirty(db, tenantId, memoryId));
 }
 
-export function loadEntitiesByIds(hippoRoot: string, tenantId: string, ids: readonly number[]): Entity[] {
-  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.entitiesByIds(tenantId, ids);
+export async function loadEntitiesByIds(
+  hippoRoot: string,
+  tenantId: string,
+  ids: readonly number[],
+): Promise<Entity[]> {
+  return await sqliteStore(hippoRoot).graphReads.entitiesByIds(tenantId, ids);
 }
 
-export function loadNeighborRelations(
+export async function loadNeighborRelations(
   hippoRoot: string,
   tenantId: string,
   entityIds: readonly number[],
   opts: { limit?: number } = {},
-): Relation[] {
-  return sqliteSyncStore(handlesOf(hippoRoot)).graphReads.neighborRelations(tenantId, entityIds, {
+): Promise<Relation[]> {
+  return await sqliteStore(hippoRoot).graphReads.neighborRelations(tenantId, entityIds, {
     limit: opts.limit ?? 1000,
   });
 }

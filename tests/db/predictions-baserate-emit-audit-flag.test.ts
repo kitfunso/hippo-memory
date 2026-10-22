@@ -52,9 +52,9 @@ describe('computePredictionBaserate emitAudit flag', () => {
     expect(countPredictBaserateAudits(root)).toBe(1);
   });
 
-  it('default emitAudit=true on n>0 path: emits exactly one predict_baserate audit', () => {
-    const p = savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
-    closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
+  it('default emitAudit=true on n>0 path: emits exactly one predict_baserate audit', async () => {
+    const p = await savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
+    await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
     expect(countPredictBaserateAudits(root)).toBe(0);
     const br = computePredictionBaserate(root, 'default', 'pop');
     expect(br.nClosed).toBe(1);
@@ -68,9 +68,9 @@ describe('computePredictionBaserate emitAudit flag', () => {
     expect(countPredictBaserateAudits(root)).toBe(0);
   });
 
-  it('emitAudit=false on n>0 path: skips audit emit', () => {
-    const p = savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
-    closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
+  it('emitAudit=false on n>0 path: skips audit emit', async () => {
+    const p = await savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
+    await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
     expect(countPredictBaserateAudits(root)).toBe(0);
     const br = computePredictionBaserate(root, 'default', 'pop', 'recall', /*emitAudit=*/ false);
     expect(br.nClosed).toBe(1);

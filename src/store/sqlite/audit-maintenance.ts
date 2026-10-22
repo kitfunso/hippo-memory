@@ -24,9 +24,8 @@ import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, Handles } from './open.js';
 import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, skipEmpty } from './bound.js';
+import { answered, bound, skipEmpty } from './bound.js';
 import type { AuditMaintenance } from '../port.js';
-import type { Sync } from './served.js';
 import { withUnmigratedDb } from '../../db/open.js';
 import type { EntryCursor } from '../port/types.js';
 
@@ -283,10 +282,10 @@ function repairQualityOnce(
   return result;
 }
 
-export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMaintenance> {
-  const { deleteAutomatically } = boundWithFiles<Pick<AuditMaintenance, 'deleteAutomatically'>>(
+export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance {
+  const { deleteAutomatically } = bound<Pick<AuditMaintenance, 'deleteAutomatically'>>(
     on,
-    { deleteAutomatically: deleteEntriesAutomatically },
+    { deleteAutomatically: (db, ...args) => deleteEntriesAutomatically(db, files, ...args) },
     openStore,
   );
   const reads = bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
@@ -299,10 +298,12 @@ export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMainte
     deleteAutomatically: skipEmpty(deleteAutomatically, () => []),
     // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>
-      withUnmigratedDb(files.hippoRoot, !apply, (db) =>
-        repairAutomaticMemories(db, files, { tenantId, apply, protect }),
+      answered(() =>
+        withUnmigratedDb(files.hippoRoot, !apply, (db) =>
+          repairAutomaticMemories(db, files, { tenantId, apply, protect }),
+        ),
       ),
     repairQualityOnce: (tenantId, protect) =>
-      withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnce(db, files, tenantId, protect)),
+      answered(() => withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnce(db, files, tenantId, protect))),
   };
 }

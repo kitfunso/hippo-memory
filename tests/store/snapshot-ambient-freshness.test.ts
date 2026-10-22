@@ -166,7 +166,7 @@ describe('loadFreshActiveTaskSnapshot', () => {
 });
 
 describe('closeTaskSnapshotsForSession', () => {
-  it('5. scoped close: only the owning session can close the active row', () => {
+  it('5. scoped close: only the owning session can close the active row', async () => {
     initTestStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'owned by session A',
@@ -177,14 +177,14 @@ describe('closeTaskSnapshotsForSession', () => {
     });
     const beforeUpdatedAt = saved.updatedAt;
 
-    const closedByB = closeTaskSnapshotsForSession(tmpDir, TENANT, 'session-B');
+    const closedByB = await closeTaskSnapshotsForSession(tmpDir, TENANT, 'session-B');
     expect(closedByB).toBe(0);
     const stillActive = loadActiveTaskSnapshot(tmpDir, TENANT);
     expect(stillActive).not.toBeNull();
     expect(stillActive!.status).toBe('active');
     expect(stillActive!.sessionId).toBe('session-A');
 
-    const closedByA = closeTaskSnapshotsForSession(tmpDir, TENANT, 'session-A');
+    const closedByA = await closeTaskSnapshotsForSession(tmpDir, TENANT, 'session-A');
     expect(closedByA).toBe(1);
 
     // loadActiveTaskSnapshot only ever returns status='active' rows.

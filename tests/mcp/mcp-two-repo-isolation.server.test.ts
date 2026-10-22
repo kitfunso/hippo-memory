@@ -241,7 +241,7 @@ beforeAll(async () => {
     store,
     Object.entries(conflictRows).map(([k, [a, b]]) => pair(a!, b!, `two-repo ${k}`)),
   );
-  const open = listMemoryConflicts(store, 'open', TENANT);
+  const open = await listMemoryConflicts(store, 'open', TENANT);
   const idOf = (k: string): number => open.find((c) => c.reason === `two-repo ${k}`)!.id;
   Object.assign(pairs, { acme: idOf('acme'), beta: idOf('beta'), slack: idOf('slack'), none: idOf('none') });
 

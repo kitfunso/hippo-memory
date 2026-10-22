@@ -149,7 +149,7 @@ describe('rejection guard', () => {
     }
   });
 
-  it('applyRebuildResult refuses a rebuild patch matching a rejected value: old content survives, dirty cleared, one reject_refusal audit, no loop on second run', () => {
+  it('applyRebuildResult refuses a rebuild patch matching a rejected value: old content survives, dirty cleared, one reject_refusal audit, no loop on second run', async () => {
     const home = makeRoot('rejection');
     const summary = createMemory('old summary content', {
       layer: Layer.Semantic,
@@ -171,7 +171,7 @@ describe('rejection guard', () => {
     }
 
     const loaded = readEntry(home, summary.id)!;
-    const result1 = applyRebuildResult(home, loaded, {
+    const result1 = await applyRebuildResult(home, loaded, {
       content: rejectedContent,
       descendantCount: 3,
       earliestAt: '2026-08-01T00:00:00Z',
@@ -205,7 +205,7 @@ describe('rejection guard', () => {
     // No loop: dirty is cleared, so a second attempt against the
     // now-current row (summary_dirty=1 no longer matches) is a race-loser
     // no-op — no second refusal audit.
-    const result2 = applyRebuildResult(home, after, {
+    const result2 = await applyRebuildResult(home, after, {
       content: rejectedContent,
       descendantCount: 3,
       earliestAt: '2026-08-01T00:00:00Z',

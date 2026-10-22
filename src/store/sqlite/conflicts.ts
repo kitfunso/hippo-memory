@@ -10,7 +10,7 @@ import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import type { SqlFragment } from '../../db/sql.js';
@@ -26,8 +26,7 @@ import type {
   Conflicts,
 } from '../port/conflicts.js';
 import { openStore } from './handles.js';
-import type { Sync } from './served.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 
 // The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be ambiguous.
 const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
@@ -603,9 +602,13 @@ export function resolvedConflicts(
 
 const conflictsBodies: Bodies<Omit<Conflicts, 'resolve'>> = { list: conflictPage, get: conflictById };
 
-export function sqliteConflicts(on: OnHandle): Sync<Conflicts> {
+export function sqliteConflicts({ on, files }: Handles): Conflicts {
   return {
     ...bound(on, conflictsBodies, openStore),
-    ...boundWithFiles<Pick<Conflicts, 'resolve'>>(on, { resolve: resolveConflict }, openStore),
+    ...bound<Pick<Conflicts, 'resolve'>>(
+      on,
+      { resolve: (db, ...args) => resolveConflict(db, files, ...args) },
+      openStore,
+    ),
   };
 }

@@ -69,7 +69,7 @@ describe('task state on a shared store', () => {
   it("A's next session gets A's unfinished handoff", async () => {
     saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa1'), KEY_A);
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sa1', summary: 'alice left off here' }, KEY_A);
-    closeTaskSnapshotsForSession(home, 'default', 'sa1', 'session-ended', KEY_A);
+    await closeTaskSnapshotsForSession(home, 'default', 'sa1', 'session-ended', KEY_A);
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sb1', summary: 'bob left off here' }, KEY_B);
     const forA = await contextGet(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' });
     expect(forA.activeSnapshot).toBeUndefined();

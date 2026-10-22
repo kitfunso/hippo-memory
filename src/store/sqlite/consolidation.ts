@@ -32,7 +32,13 @@ import {
   loadEntryIdsPage,
 } from './entry-reads.js';
 import { setHalfLives } from './entry-writes.js';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, type Handles, waitingOpener } from './open.js';
+import {
+  HALF_LIFE_BASE_META_KEY,
+  TYPED_HALF_LIFE_META_KEY,
+  type Handles,
+  type StoreFiles,
+  waitingOpener,
+} from './open.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { commitInChunks, deleteEntriesInBatches } from './delete-and-batch.js';
 import { expireDormantBefore } from './dormant.js';
@@ -41,18 +47,9 @@ import { appendConsolidationRun, incrementSleepCount, loadSessionDecayContext } 
 import { findPromotableSessions, listSessionEvents, traceExistsForSession } from './sessions.js';
 import { saveStoredParticles, storedParticleIds, storedParticlesByIds } from './vector-index.js';
 import { openStore } from './handles.js';
-import {
-  bound,
-  boundAsync,
-  boundAsyncWithFiles,
-  boundWithFiles,
-  skipEmpty,
-  type Bodies,
-  type FileBodies,
-} from './bound.js';
+import { bound, skipEmpty, type Bodies } from './bound.js';
 import type { AppendAuditOpts } from '../port/types.js';
-import type { Sync } from './served.js';
-import { served } from './served.js';
+import { rethrowInPortTerms } from './port-errors.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/domain/consolidate/dag.ts, because it needs module-private
@@ -418,11 +415,8 @@ function auditEachRow(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]):
   return failed.length;
 }
 
-/** The chunked writers yield between chunks, so the synchronous form keeps them async. */
+/** The chunked writers yield between chunks, so each keeps its handle open until its Promise settles. */
 type Chunked = 'commitFlush' | 'expireDormant';
-
-/** hippo.db's Consolidation group as the synchronous store holds it. */
-export type SqliteConsolidation = Sync<Omit<Consolidation, Chunked>> & Pick<Consolidation, Chunked>;
 
 type StoreReads =
   | 'entryIdsPage'
@@ -447,11 +441,13 @@ const storeReadsBodies: Bodies<Pick<Consolidation, StoreReads>> = {
   duplicateCandidates: loadDuplicateCandidates,
 };
 
-const storeWritesBodies: FileBodies<Pick<Consolidation, StoreWrites>> = {
-  replaceConflicts: replaceDetectedConflicts,
-  recordRun: appendConsolidationRun,
-  deleteInBatches: deleteEntriesInBatches,
-};
+function storeWritesBodies(files: StoreFiles): Bodies<Pick<Consolidation, StoreWrites>> {
+  return {
+    replaceConflicts: (db, ...args) => replaceDetectedConflicts(db, files, ...args),
+    recordRun: (db, ...args) => appendConsolidationRun(db, files, ...args),
+    deleteInBatches: (db, ...args) => deleteEntriesInBatches(db, files, ...args),
+  };
+}
 
 const bareRowsBodies: Bodies<Pick<Consolidation, BareRows>> = {
   ftsDrift: ftsDrift,
@@ -476,30 +472,26 @@ const summariesBodies: Bodies<SummaryOps> = {
 
 /** The chunked writers on the store's own clock and pause, under sleep's own lock wait. */
 function chunkedWriters({ onAsync }: Handles): Pick<Consolidation, Chunked> {
-  const { commitFlush } = boundAsyncWithFiles<Pick<Consolidation, 'commitFlush'>>(
-    onAsync,
-    {
-      commitFlush: (db, files, components, { snapshot, holdMs }) =>
-        commitInChunks(db, files, components, { snapshot, budget: { ...WRITE_BUDGET, holdMs } }),
-    },
-    sleepStoreOpener,
-  );
-  const { expireDormant } = boundAsync<Pick<Consolidation, 'expireDormant'>>(
-    onAsync,
-    {
-      expireDormant: (db, cutoffIso, { dryRun, holdMs }) =>
-        expireDormantBefore(db, cutoffIso, { dryRun, budget: { ...WRITE_BUDGET, holdMs } }),
-    },
-    sleepOpener,
-  );
-  return { commitFlush: skipEmpty(commitFlush, async () => []), expireDormant };
+  const commitFlush: Consolidation['commitFlush'] = (components, { snapshot, holdMs }) =>
+    onAsync(
+      (db, files) => commitInChunks(db, files, components, { snapshot, budget: { ...WRITE_BUDGET, holdMs } }),
+      sleepStoreOpener,
+    ).catch(rethrowInPortTerms);
+  return {
+    commitFlush: skipEmpty(commitFlush, () => []),
+    expireDormant: (cutoffIso, { dryRun, holdMs }) =>
+      onAsync(
+        (db) => expireDormantBefore(db, cutoffIso, { dryRun, budget: { ...WRITE_BUDGET, holdMs } }),
+        sleepOpener,
+      ).catch(rethrowInPortTerms),
+  };
 }
 
 /** Sleep's store work on its hippo.db, each call on its own short-lived handle; an empty batch opens none. */
-export function sqliteConsolidation(handles: Handles): SqliteConsolidation {
-  const { on } = handles;
+export function sqliteConsolidation(handles: Handles): Consolidation {
+  const { on, files } = handles;
   const reads = bound(on, storeReadsBodies, openStore);
-  const writes = boundWithFiles(on, storeWritesBodies, openStore);
+  const writes = bound(on, storeWritesBodies(files), openStore);
   const bare = bound(on, bareRowsBodies);
   return {
     ...reads,
@@ -510,12 +502,6 @@ export function sqliteConsolidation(handles: Handles): SqliteConsolidation {
     deleteInBatches: skipEmpty(writes.deleteInBatches, () => []),
     ...chunkedWriters(handles),
   };
-}
-
-/** The synchronous group as the port serves it: the chunked writers answer through their own Promises already. */
-export function servedConsolidation(sync: SqliteConsolidation): Consolidation {
-  const { commitFlush, expireDormant } = sync;
-  return { ...served<Omit<Consolidation, Chunked>>(sync), commitFlush, expireDormant };
 }
 
 type SummaryOps = Pick<

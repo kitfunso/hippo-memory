@@ -216,11 +216,11 @@ function seedTeam(root: string): void {
 
 // Seeds recall-port-only-parity's branches plus a team, a goal and vectors into real stores, so the runner's disk sets its time.
 beforeAll(async () => {
-  templates = await seedTemplates((root) => {
-    seedPortBranches(root);
+  templates = await seedTemplates(async (root) => {
+    await seedPortBranches(root);
     seedTeam(root);
     // A goal with a retrieval policy, so activeGoals has a policy row to read.
-    pushGoal(root, {
+    await pushGoal(root, {
       sessionId: SESSION,
       tenantId: TENANT,
       goalName: 'goal-beta',

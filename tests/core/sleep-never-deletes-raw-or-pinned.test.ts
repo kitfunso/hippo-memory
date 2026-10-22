@@ -236,7 +236,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     expect(after[0]!.dagParentId).toMatch(/^[a-z]+_[0-9a-f]+$/);
     expect(new Set(after.map((f) => f.dagParentId)).size).toBe(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(loadAllDirtySummaries(root)).toEqual([]);
+    expect(await loadAllDirtySummaries(root)).toEqual([]);
   });
 
   it('a summary rebuilt during sleep keeps its new text', async () => {

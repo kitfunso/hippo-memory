@@ -27,10 +27,9 @@ import {
 } from './entry-reads.js';
 import { deleteEntryRowInTx, restampOriginProject, stampOriginProjects, writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
-import type { HandleOpener, StoreFiles, OnHandle } from './open.js';
+import type { Handles, HandleOpener, StoreFiles } from './open.js';
 import { setAsideRow } from './set-aside.js';
-import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
-import type { Sync } from './served.js';
+import { bound, type Bodies } from './bound.js';
 import type {
   AppliedMerge,
   AppliedRepair,
@@ -206,7 +205,12 @@ const readsBodies: Bodies<Reads> = {
   repairedOnce: (db) => getMeta(db, AUTO_REPAIR_META_KEY) === '1',
 };
 
-const writesBodies: FileBodies<Pick<ProjectTags, 'merge' | 'repair'>> = { merge: merge, repair: repair };
+function writesBodies(files: StoreFiles): Bodies<Pick<ProjectTags, 'merge' | 'repair'>> {
+  return {
+    merge: (db, ...args) => merge(db, files, ...args),
+    repair: (db, ...args) => repair(db, files, ...args),
+  };
+}
 
 const markBodies: Bodies<Pick<ProjectTags, 'markRepairedOnce'>> = {
   markRepairedOnce: (db) => setMeta(db, AUTO_REPAIR_META_KEY, '1'),
@@ -214,10 +218,10 @@ const markBodies: Bodies<Pick<ProjectTags, 'markRepairedOnce'>> = {
 
 /** `readOpener` opens the reads' handles: hippo.db's own open, which migrates an older schema first, unless a check
  * that must leave the store as it found it names a read-only one. */
-export function sqliteProjectTags(on: OnHandle, readOpener?: HandleOpener): Sync<ProjectTags> {
+export function sqliteProjectTags({ on, files }: Handles, readOpener?: HandleOpener): ProjectTags {
   return {
     ...bound(on, readsBodies, readOpener),
-    ...boundWithFiles(on, writesBodies),
+    ...bound(on, writesBodies(files)),
     ...bound(on, markBodies),
   };
 }

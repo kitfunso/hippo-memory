@@ -4,7 +4,6 @@ import { loadEntriesWithSignals, loadEntryTextKeysPage, selectTakenIds, selectTe
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
 import type { Sharing } from '../port/sharing.js';
 import { loadRecallEntries, loadSearchEntries } from './search-rows.js';
 
@@ -18,10 +17,6 @@ const sharingReadsBodies: Bodies<Sharing> = {
   recallEntries: loadRecallEntries,
 };
 
-export function sqliteSharing(on: OnHandle): Sync<Sharing> {
+export function sqliteSharing(on: OnHandle): Sharing {
   return bound(on, sharingReadsBodies, openStore);
-}
-
-export function sqliteImportKeys(on: OnHandle): Sync<Pick<Sharing, 'textKeysHolding'>> {
-  return bound<Pick<Sharing, 'textKeysHolding'>>(on, { textKeysHolding: selectTextKeysHolding }, openStore);
 }

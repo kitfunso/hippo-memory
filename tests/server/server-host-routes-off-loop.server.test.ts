@@ -6,8 +6,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log } from '../../src/base/util/log.js';
@@ -209,10 +208,10 @@ const CONFLICT = `INSERT INTO memory_conflicts (memory_a_id, memory_b_id, reason
   VALUES (?, ?, 'seeded contradiction', 0.9, 'open', ?, ?, ?)`;
 
 /** A fresh copy of the seed with two open conflicts, whose Slack team T_ACME and GitHub installation 101 route to the default tenant. */
-function copy() {
+async function copy() {
   const made = freshStore(seed.templates, 'local');
   homes.push(made.home);
-  sqliteSyncStore(handlesOf(made.root)).connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
+  await sqliteStore(made.root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
   onDb(made.root, (db) => {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
       '101',
@@ -258,7 +257,7 @@ const rowsAt = (root: string): string[] =>
     .sort();
 
 async function runSteps(inProcess: boolean) {
-  const { root, globalRoot } = copy();
+  const { root, globalRoot } = await copy();
   const replies = await onServer(root, inProcess ? sqliteStore(root) : undefined, async (server) => {
     const seenSoFar = [];
     for (const [label, send] of STEPS) {
@@ -379,7 +378,7 @@ describe('the server-thread block of the routes this file covers', () => {
   it.each(ROUTES)(
     '%s fails when its handler opens hippo.db on the server thread',
     async (_route, swapped, send, status) => {
-      const { root } = copy();
+      const { root } = await copy();
       const info = vi.spyOn(log, 'info');
       // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
       const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));

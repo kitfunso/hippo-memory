@@ -15,7 +15,7 @@ import type {
   WorkingMemoryPush,
 } from '../port/sessions.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { continuityStamp, type ContinuityKey } from '../port/types.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
@@ -26,9 +26,8 @@ import {
   stampHandoffOutcome,
   writeSessionEndHandoff,
 } from './handoffs.js';
-import type { Sync } from './served.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 import {
   assertKeyedOnSharedStore,
   continuityWhere,
@@ -454,19 +453,23 @@ function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFi
 }
 
 // These write or read the session's mirror files beside hippo.db as well as its rows.
-const sessionMirrorsBodies: FileBodies<
+function sessionMirrorsBodies(
+  files: StoreFiles,
+): Bodies<
   Pick<
     Sessions,
     'saveSnapshot' | 'loadSnapshot' | 'loadFreshSnapshot' | 'clearSnapshot' | 'appendEvent' | 'writeSessionEndHandoff'
   >
-> = {
-  saveSnapshot: saveActiveTaskSnapshot,
-  loadSnapshot: loadActiveTaskSnapshot,
-  loadFreshSnapshot: loadFreshActiveTaskSnapshot,
-  clearSnapshot: clearActiveTaskSnapshot,
-  appendEvent: appendSessionEvent,
-  writeSessionEndHandoff: writeSessionEndHandoff,
-};
+> {
+  return {
+    saveSnapshot: (db, ...args) => saveActiveTaskSnapshot(db, files, ...args),
+    loadSnapshot: (db, ...args) => loadActiveTaskSnapshot(db, files, ...args),
+    loadFreshSnapshot: (db, ...args) => loadFreshActiveTaskSnapshot(db, files, ...args),
+    clearSnapshot: (db, ...args) => clearActiveTaskSnapshot(db, files, ...args),
+    appendEvent: (db, ...args) => appendSessionEvent(db, files, ...args),
+    writeSessionEndHandoff: (db, ...args) => writeSessionEndHandoff(db, files, ...args),
+  };
+}
 
 const sessionRowsBodies: Bodies<
   Pick<
@@ -495,9 +498,9 @@ const sessionRowsBodies: Bodies<
   clearWorkingMemory: wmClear,
 };
 
-export function sqliteSessions(on: OnHandle): Sync<Sessions> {
+export function sqliteSessions({ on, files }: Handles): Sessions {
   return {
-    ...boundWithFiles(on, sessionMirrorsBodies, openStore),
+    ...bound(on, sessionMirrorsBodies(files), openStore),
     ...bound(on, sessionRowsBodies, openStore),
     ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBind }),
   };

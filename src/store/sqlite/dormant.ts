@@ -1,6 +1,6 @@
 // hippo.db's Dormant group: the memories sleep set aside, listed, restored or forgotten for good.
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { touchableScopeSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import type { WriteBudget } from '../../base/util/write-budget.js';
@@ -15,9 +15,8 @@ import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import type { DormantRestoreOutcome, Dormant, DormantRestoreRequest } from '../port/dormant.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
-import type { Sync } from './served.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 import { deleteDormantRow, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
 import type { DormantSnapshot } from '../port/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -167,18 +166,21 @@ const dormantReadsBodies: Bodies<Pick<Dormant, 'list' | 'holds'>> = {
   holds: (db, tenantId, ownScope, id) => hasDormantRow(db, tenantId, id, touchableScopeSql('', ownScope)),
 };
 
-export function sqliteDormant(on: OnHandle): Sync<Dormant> {
+export function sqliteDormant({ on, files }: Handles): Dormant {
   return {
     ...bound(on, dormantReadsBodies),
-    ...boundWithFiles<Pick<Dormant, 'restore'>>(on, { restore: restoreDormantMemory }),
-    forget(tenantId, ownScope, id, actor) {
-      const admit = touchableScopeSql('', ownScope);
-      return on((db, files) => {
-        if (!forgetDormantMemory(db, { tenantId, id, actor, admit })) return false;
-        // Counted like every other permanent removal (forget, archiveRaw).
-        updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${id}`);
-        return true;
-      }, openStore);
-    },
+    ...bound<Pick<Dormant, 'restore'>>(on, { restore: (db, ...args) => restoreDormantMemory(db, files, ...args) }),
+    ...bound<Pick<Dormant, 'forget'>>(
+      on,
+      {
+        forget: (db, tenantId, ownScope, id, actor) => {
+          if (!forgetDormantMemory(db, { tenantId, id, actor, admit: touchableScopeSql('', ownScope) })) return false;
+          // Counted like every other permanent removal (forget, archiveRaw).
+          updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${id}`);
+          return true;
+        },
+      },
+      openStore,
+    ),
   };
 }

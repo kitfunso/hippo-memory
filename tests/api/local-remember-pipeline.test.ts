@@ -11,8 +11,7 @@ import {
   type LocalRememberOutcome,
 } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot, type MakeRootOptions } from '../_helpers/make-root.js';
@@ -41,8 +40,8 @@ function store(config?: MakeRootOptions['config']): FullContext {
   return apiCtx(hippoRoot, 'default', adminActor('cli'));
 }
 
-const counted = (ctx: FullContext): number =>
-  Number(sqliteSyncStore(handlesOf(ctx.hippoRoot)).reports.stats().total_remembered);
+const counted = async (ctx: FullContext): Promise<number> =>
+  Number((await sqliteStore(ctx.hippoRoot).reports.stats()).total_remembered);
 const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
 function seed(ctx: FullContext, content: string, tags: string[]): void {
@@ -85,7 +84,7 @@ describe('rememberLocally', () => {
       pinned: false,
     });
     expect(rows(ctx)).toHaveLength(1);
-    expect(counted(ctx)).toBe(1);
+    expect(await counted(ctx)).toBe(1);
   });
 
   it('says in the outcome and the log that a row the embedder could not index is stored without a vector', async () => {
@@ -114,8 +113,8 @@ describe('rememberLocally', () => {
     const ctx = store();
     for (const n of [1, 2, 3]) seed(ctx, `the billing service sends invoice batch ${n}`, ['billing']);
     const stored = ['billing', 'path:acme', 'scope:eng'];
-    const typedFit = sqliteSyncStore(handlesOf(ctx.hippoRoot)).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
-    const storedFit = sqliteSyncStore(handlesOf(ctx.hippoRoot)).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
+    const typedFit = await sqliteStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
+    const storedFit = await sqliteStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
     expect(typedFit).not.toBe(storedFit);
     expect(
       storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true }))
@@ -130,7 +129,7 @@ describe('rememberLocally', () => {
     const ctx = store();
     await rememberLocally(ctx, { content: TEXT, tags: [] });
     expect((await rememberLocally(ctx, { content: TEXT, tags: [] })).status).toBe('stored');
-    expect(counted(ctx)).toBe(2);
+    expect(await counted(ctx)).toBe(2);
   });
 
   it('skips a repeat of the same text: nothing stored, nothing counted, the reason and score answered', async () => {
@@ -139,7 +138,7 @@ describe('rememberLocally', () => {
     const outcome = await rememberLocally(ctx, { content: TEXT, tags: [] });
     expect(outcome).toEqual({ status: 'skipped', reason: `duplicate (same text as ${first.id})`, score: 0.1 });
     expect(rows(ctx).map((row) => row.id)).toEqual([first.id]);
-    expect(counted(ctx)).toBe(1);
+    expect(await counted(ctx)).toBe(1);
   });
 
   it('starts a repeated error weak: the verdict strength, half the half-life once, and the verdict answered', async () => {
@@ -156,7 +155,7 @@ describe('rememberLocally', () => {
     expect(entry.strength).toBeCloseTo(0.3, 3);
     expect(entry.halfLifeDays).toBe(forced.halfLifeDays * 0.5);
     expect(readEntry(ctx.hippoRoot, entry.id, ctx.tenantId)?.halfLifeDays).toBe(entry.halfLifeDays);
-    expect(counted(ctx)).toBe(1);
+    expect(await counted(ctx)).toBe(1);
   });
 
   const BYPASSES: readonly (readonly [string, Pick<LocalRememberInput, 'pinned' | 'force'>])[] = [
@@ -169,7 +168,7 @@ describe('rememberLocally', () => {
     const outcome = await rememberLocally(ctx, { content: TEXT, tags: [], ...bypass });
     expect(outcome).toMatchObject({ status: 'stored', entry: storedRow(outcome) });
     expect(storedRow(outcome).pinned).toBe(bypass.pinned === true);
-    expect(counted(ctx)).toBe(2);
+    expect(await counted(ctx)).toBe(2);
     const weak = storeOfRepeatedErrors();
     expect(storedRow(await rememberLocally(weak, { ...FIFTH_ERROR, ...bypass })).strength).toBeCloseTo(1, 3);
   });
@@ -179,12 +178,12 @@ describe('rememberLocally', () => {
     await reject(ctx, { value: TEXT, reason: 'wrong' });
     await expect(rememberLocally(ctx, { content: TEXT, tags: [] })).rejects.toThrow(RejectedValueError);
     expect(rows(ctx)).toHaveLength(0);
-    expect(counted(ctx)).toBe(0);
+    expect(await counted(ctx)).toBe(0);
     const weak = storeOfRepeatedErrors();
     await reject(weak, { value: FIFTH_ERROR.content, reason: 'wrong' });
     await expect(rememberLocally(weak, FIFTH_ERROR)).rejects.toThrow(RejectedValueError);
     expect(rows(weak)).toHaveLength(4);
-    expect(counted(weak)).toBe(0);
+    expect(await counted(weak)).toBe(0);
   });
 });
 

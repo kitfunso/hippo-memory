@@ -26,7 +26,7 @@ import {
 } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeEntryMirrorsIn } from './mirrors.js';
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../port/agent-import.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
@@ -34,13 +34,12 @@ import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite } from '../port.js';
-import type { Sync } from './served.js';
 import type { PinWrite } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from './handles.js';
-import { boundWithFiles } from './bound.js';
+import { bound } from './bound.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
@@ -353,38 +352,38 @@ export function supersedeEntry(db: DatabaseSyncLike, tenantId: string, id: strin
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves
  * neither. */
-export function sqliteEntryWrites(on: OnHandle): Sync<EntryWrites> {
+export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
   return {
-    ...boundWithFiles<Pick<EntryWrites, 'writeEntry' | 'applyOutcome'>>(
+    ...bound<Pick<EntryWrites, 'writeEntry' | 'applyOutcome' | 'setPinned' | 'forget'>>(
       on,
-      { writeEntry: writeEntryRow, applyOutcome: applyOutcome },
+      {
+        writeEntry: (db, write) => writeEntryRow(db, files, write),
+        applyOutcome: (db, ...args) => applyOutcome(db, files, ...args),
+        setPinned: (db, pin) => {
+          const entry = commitPinned(db, pin);
+          writeEntryMirrorsIn(files, entry);
+          return entry;
+        },
+        forget: (db, removal) => {
+          withWriteScope(db, 'forget_in_reach', () => {
+            assertInReach(db, removal, removal.id);
+            const { id, tenantId, actor } = removal;
+            if (!deleteEntryCore(db, id, tenantId, { actor })) throw notFound(id);
+          });
+          purgeMirrorBestEffortIn(files, removal.id, false, 'deleteEntry');
+          updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${removal.id}`);
+        },
+      },
       openStore,
     ),
-    ...boundWithFiles<Pick<EntryWrites, 'archiveRaw'>>(on, { archiveRaw: archiveRaw }),
-    setPinned(pin) {
-      return on((db, files) => {
-        const entry = commitPinned(db, pin);
-        writeEntryMirrorsIn(files, entry);
-        return entry;
-      }, openStore);
-    },
-    supersede(write) {
-      on((db, files) => {
+    ...bound<Pick<EntryWrites, 'archiveRaw' | 'supersede'>>(on, {
+      archiveRaw: (db, ...args) => archiveRaw(db, files, ...args),
+      supersede: (db, write) => {
         const successor = stampOriginProjectIn(files, write.successor);
         commitSupersede(db, { ...write, successor });
         writeEntryMirrorsIn(files, successor);
-      });
-    },
-    forget(removal) {
-      on((db, files) => {
-        withWriteScope(db, 'forget_in_reach', () => {
-          assertInReach(db, removal, removal.id);
-          if (!deleteEntryCore(db, removal.id, removal.tenantId, { actor: removal.actor })) throw notFound(removal.id);
-        });
-        purgeMirrorBestEffortIn(files, removal.id, false, 'deleteEntry');
-        updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${removal.id}`);
-      }, openStore);
-    },
+      },
+    }),
   };
 }
 

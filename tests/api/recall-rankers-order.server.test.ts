@@ -35,8 +35,8 @@ const MODEL = 'hashed-16';
 const NO_PARTICLE = new Set(['mem_p_fill0', 'mem_p_noise']);
 
 /** Vectors for every local row and particles for most, so the vector arm and physics scoring both change the order. */
-function seedVectors(root: string, url: string): void {
-  seedPortBranches(root);
+async function seedVectors(root: string, url: string): Promise<void> {
+  await seedPortBranches(root);
   // SAFETY: the SELECT names one column, id, so each row has it.
   const ids = onDb(root, (db) =>
     db
@@ -281,7 +281,7 @@ function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'bo
 describe('recall ranker order', () => {
   beforeAll(async () => {
     embeddings = await startHashedEmbeddings();
-    templates = await seedTemplates((root) => seedVectors(root, embeddings.url));
+    templates = await seedTemplates(async (root) => await seedVectors(root, embeddings.url));
   });
 
   afterAll(async () => {

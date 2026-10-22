@@ -23,7 +23,6 @@ import {
 } from '../port/graph.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
-import type { Sync } from './served.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
@@ -371,6 +370,6 @@ const graphReadsBodies: Bodies<GraphReads> = {
   storedGraph: storedGraphOn,
 };
 
-export function sqliteGraphReads(on: OnHandle): Sync<GraphReads> {
+export function sqliteGraphReads(on: OnHandle): GraphReads {
   return bound(on, graphReadsBodies);
 }

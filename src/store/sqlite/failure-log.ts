@@ -7,7 +7,6 @@ import type { RatedFailure } from '../../base/records/failure-repeats.js';
 import { failureRow, failureTotals, RATED_OUTCOMES, retentionCutoff, sameStoredSession } from '../rules/failure-log.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
@@ -108,6 +107,6 @@ const failureLogBodies: Bodies<FailureLog> = {
   settleOutcome: settleFailureOutcome,
 };
 
-export function sqliteFailureLog(on: OnHandle): Sync<FailureLog> {
+export function sqliteFailureLog(on: OnHandle): FailureLog {
   return bound(on, failureLogBodies);
 }

@@ -2,9 +2,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { portError } from '../../src/store/sqlite/port-errors.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -64,8 +63,8 @@ function count(root: string, sql: string, ...params: string[]): number {
   }
 }
 
-function forgottenTotal(root: string): number {
-  return Number(sqliteSyncStore(handlesOf(root)).reports.stats().total_forgotten);
+async function forgottenTotal(root: string): Promise<number> {
+  return Number((await sqliteStore(root).reports.stats()).total_forgotten);
 }
 
 /** Holds the store's write lock while `fn` runs, or until `fn` calls the release it is handed. */
@@ -138,13 +137,13 @@ describe('routed writes under a busy store', () => {
 
   it('forget: a lock held across the first tries ends in one removal counted once', async () => {
     const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary', force: true });
-    const before = forgottenTotal(home);
+    const before = await forgottenTotal(home);
     await expect(landedOnRetry(home, () => client.forget(url, undefined, id))).resolves.toEqual({
       result: { ok: true, id },
       statuses: [503, 200],
     });
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
-    expect(forgottenTotal(home)).toBe(before + 1);
+    expect(await forgottenTotal(home)).toBe(before + 1);
   });
 
   it('archiveRaw: a lock held across the first tries ends in one archive row', async () => {
@@ -168,7 +167,7 @@ describe('routed writes under a busy store', () => {
   });
 
   it('the stats counter after a committed removal skips a busy store with one warning instead of throwing', async () => {
-    const before = forgottenTotal(home);
+    const before = await forgottenTotal(home);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withLockHeld(home, async () => {
@@ -182,13 +181,13 @@ describe('routed writes under a busy store', () => {
     } finally {
       stderr.mockRestore();
     }
-    expect(forgottenTotal(home)).toBe(before);
+    expect(await forgottenTotal(home)).toBe(before);
   });
 
   it('a stats increment a busy store refused is added to the next update for that root', async () => {
     // An earlier test left its refused increment pending; land it so this one counts only its own.
     updateStatsUnlessBusy(home, {}, 'drain');
-    const before = forgottenTotal(home);
+    const before = await forgottenTotal(home);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withLockHeld(home, async () => {
@@ -199,11 +198,11 @@ describe('routed writes under a busy store', () => {
     } finally {
       stderr.mockRestore();
     }
-    expect(forgottenTotal(home)).toBe(before);
+    expect(await forgottenTotal(home)).toBe(before);
     updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m3');
-    expect(forgottenTotal(home)).toBe(before + 3);
+    expect(await forgottenTotal(home)).toBe(before + 3);
     updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m4');
-    expect(forgottenTotal(home)).toBe(before + 4);
+    expect(await forgottenTotal(home)).toBe(before + 4);
   });
 
   it('promote: a busy audit write rolls back the global copy, so a failed promote leaves nothing to duplicate', async () => {

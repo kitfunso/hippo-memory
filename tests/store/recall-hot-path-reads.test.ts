@@ -121,16 +121,19 @@ describe('rankRecall with a global store', () => {
 });
 
 describe('activeGoalsWithPolicies', () => {
-  it('reads every active goal policy in one query', () => {
+  it('reads every active goal policy in one query', async () => {
     const root = freshRoot('hp-goals');
-    const goals = ['ship', 'test', 'deploy'].map((goalName) =>
-      pushGoal(root, {
-        sessionId: 's1',
-        tenantId: 'default',
-        goalName,
-        policy: { policyType: 'hybrid', weightRecency: 1.5 },
-      }),
-    );
+    const goals = [];
+    for (const goalName of ['ship', 'test', 'deploy']) {
+      goals.push(
+        await pushGoal(root, {
+          sessionId: 's1',
+          tenantId: 'default',
+          goalName,
+          policy: { policyType: 'hybrid', weightRecency: 1.5 },
+        }),
+      );
+    }
     const { result, statements } = recordStatements(() =>
       activeGoalsWithPolicies(root, { sessionId: 's1', tenantId: 'default' }),
     );

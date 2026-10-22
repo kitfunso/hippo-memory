@@ -32,12 +32,12 @@ async function seedBaserateWithNoMemories(): Promise<void> {
     [3, 6],
     [4, 8],
   ]) {
-    const p = savePrediction(root, 'default', {
+    const p = await savePrediction(root, 'default', {
       classTag: 'migration-effort',
       claimText: `migration effort estimate ${estimate} days`,
       estimateValue: estimate,
     });
-    closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: actual });
+    await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: actual });
   }
   const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   for (const entry of loadAllEntries(root, 'default')) await forget(ctx, entry.id);

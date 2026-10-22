@@ -8,7 +8,7 @@ import { blockHash } from '../../base/util/token-text.js';
 import type { FolderFiles, StoreHome } from '../port/folder-files.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
-import type { Sync } from './served.js';
+import { answered } from './bound.js';
 
 function homeOf(hippoRoot: string): StoreHome {
   return {
@@ -21,9 +21,9 @@ function homeOf(hippoRoot: string): StoreHome {
   };
 }
 
-export function sqliteFolderFiles({ on, files }: Handles): Sync<FolderFiles> {
+export function sqliteFolderFiles({ on, files }: Handles): FolderFiles {
   return {
-    ensure: () => on(() => undefined, openStore),
-    home: () => homeOf(files.hippoRoot),
+    ensure: () => answered(() => on(() => undefined, openStore)),
+    home: () => answered(() => homeOf(files.hippoRoot)),
   };
 }

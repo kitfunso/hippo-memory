@@ -7,9 +7,8 @@ import { selectRowsHoldingOutsideSourcePrefix } from './entry-reads.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import { openStore } from './handles.js';
-import { waitingOpener, type OnHandle, type StoreFiles } from './open.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
+import { waitingOpener, type Handles, type StoreFiles } from './open.js';
+import { bound, type Bodies } from './bound.js';
 import { liveUnder, runSteps } from './agent-import-steps.js';
 import type { AgentImport, ContainerApplied, ContainerApply, MirrorFailure } from '../port/agent-import.js';
 
@@ -44,12 +43,12 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
 }
 
 /** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's import asks. */
-export function sqliteAgentImport(on: OnHandle, busyWaitMs?: number): Sync<AgentImport> {
+export function sqliteAgentImport({ on, files }: Handles, busyWaitMs?: number): AgentImport {
   return {
     ...bound(on, importReadsBodies, waitingOpener(busyWaitMs)),
-    ...boundWithFiles<Pick<AgentImport, 'applyContainer'>>(
+    ...bound<Pick<AgentImport, 'applyContainer'>>(
       on,
-      { applyContainer: applyContainer },
+      { applyContainer: (db, plan) => applyContainer(db, files, plan) },
       waitingOpener(busyWaitMs, openStore),
     ),
   };

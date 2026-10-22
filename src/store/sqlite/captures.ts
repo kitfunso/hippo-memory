@@ -6,13 +6,12 @@ import { writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/capture.js';
-import type { Sync } from './served.js';
 import { loadTextsHoldingWords } from './candidates.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, skipEmpty, type Bodies } from './bound.js';
+import { bound, skipEmpty, type Bodies } from './bound.js';
 
 /** The texts rows under `dedup` hold, of those the entries' longest words find. */
 function heldKeys(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: CaptureDedup): Set<string> {
@@ -53,8 +52,12 @@ const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
     loadTextsHoldingWords(db, tenantId, words, project, everyScope ? EVERY_SCOPE : undefined),
 };
 
-export function sqliteCaptures(on: OnHandle): Sync<Captures> {
-  const { write } = boundWithFiles<Pick<Captures, 'write'>>(on, { write: writeCapturedEntries }, openStore);
+export function sqliteCaptures({ on, files }: Handles): Captures {
+  const { write } = bound<Pick<Captures, 'write'>>(
+    on,
+    { write: (db, ...args) => writeCapturedEntries(db, files, ...args) },
+    openStore,
+  );
   return {
     write: skipEmpty(write, () => []),
     ...bound(on, capturedTextsBodies, openStore),

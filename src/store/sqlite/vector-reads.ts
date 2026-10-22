@@ -1,12 +1,11 @@
-// hippo.db's vector reads. Async only: the nearest-row scan yields between chunks, so a store worker awaits these where
-// it runs every other method to its end.
+// hippo.db's vector reads: the nearest-row scan yields between chunks, so its handle stays open until it settles.
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { graphServesStore } from '../../db/vector-graph-index.js';
 import type { VectorIndex } from '../../db/vector-store.js';
 import type { Handles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
-import { bound, boundAsync, skipEmpty, type Bodies } from './bound.js';
-import { served } from './served.js';
+import { bound, skipEmpty, type Bodies } from './bound.js';
+import { rethrowInPortTerms } from './port-errors.js';
 import type { VectorReads } from '../port.js';
 import type { NearestIdsAsk } from '../port/vectors.js';
 import { entriesInOrder, loadVectorCandidateEntries } from './search-rows.js';
@@ -24,14 +23,12 @@ const rowReadsBodies: Bodies<RowReads> = {
 export function sqliteVectorReads({ on, onAsync }: Handles, index?: VectorIndex): VectorReads {
   const reads = bound(on, rowReadsBodies);
   return {
+    ...reads,
     // loadPhysicsState reads every row for an empty list.
-    ...served<RowReads>({ ...reads, physicsParticles: skipEmpty(reads.physicsParticles, () => new Map()) }),
+    physicsParticles: skipEmpty(reads.physicsParticles, () => new Map()),
     // The scan reads a page per event-loop turn, so the handle stays open until the promise settles.
-    ...boundAsync<Pick<VectorReads, 'nearestEntries'>>(
-      onAsync,
-      { nearestEntries: (db, queryVector, spec) => loadVectorCandidateEntries(db, queryVector, spec, index) },
-      openStore,
-    ),
+    nearestEntries: (queryVector, spec) =>
+      onAsync((db) => loadVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(rethrowInPortTerms),
   };
 }
 

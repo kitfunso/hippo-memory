@@ -34,74 +34,74 @@ function pastIso(): string {
 
 describe('claim', () => {
   it('sets a CARD_LEASE_MS lease and returns the live run id; a second claim after a block gets a new run id', async () => {
-    const card = createCard(root, 'default', { title: 'T1 ready' });
-    const claimed = claimCard(root, 'default', card.id, 'r1');
+    const card = await createCard(root, 'default', { title: 'T1 ready' });
+    const claimed = await claimCard(root, 'default', card.id, 'r1');
     expect(claimed).not.toBeNull();
-    const liveRun = loadCardRuns(root, 'default', card.id).find((r) => !r.ended);
+    const liveRun = (await loadCardRuns(root, 'default', card.id)).find((r) => !r.ended);
     expect(claimed!.runId).toBe(liveRun!.id);
     expect(claimed!.leaseUntil).toHaveLength(24);
     expect(claimed!.heartbeatAt).toHaveLength(24);
     expect(Date.parse(claimed!.leaseUntil!) - Date.parse(claimed!.heartbeatAt!)).toBe(CARD_LEASE_MS);
     expect(claimed!.heartbeatAt).toBe(claimed!.updatedAt);
 
-    blockCard(root, 'default', card.id, 'why');
-    const reclaimed = claimCard(root, 'default', card.id, 'r2');
+    await blockCard(root, 'default', card.id, 'why');
+    const reclaimed = await claimCard(root, 'default', card.id, 'r2');
     expect(reclaimed).not.toBeNull();
     expect(reclaimed!.runId).not.toBe(claimed!.runId);
   });
 
   it('sets a lease when claimed from blocked', async () => {
-    const card = createCard(root, 'default', { title: 'T1 blocked' });
+    const card = await createCard(root, 'default', { title: 'T1 blocked' });
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET status = 'blocked' WHERE id = ?`).run(card.id);
     } finally {
       closeHippoDb(db);
     }
-    const claimed = claimCard(root, 'default', card.id, 'r1');
+    const claimed = await claimCard(root, 'default', card.id, 'r1');
     expect(claimed).not.toBeNull();
     expect(claimed!.status).toBe('running');
     expect(claimed!.leaseUntil).toHaveLength(24);
-    const liveRun = loadCardRuns(root, 'default', card.id).find((r) => !r.ended);
+    const liveRun = (await loadCardRuns(root, 'default', card.id)).find((r) => !r.ended);
     expect(liveRun!.id).toBe(claimed!.runId);
   });
 });
 
 describe('heartbeat', () => {
   it('extends a future lease and leaves updatedAt unchanged', async () => {
-    const card = createCard(root, 'default', { title: 'T2 future' });
-    const claimed = claimCard(root, 'default', card.id, 'r1')!;
-    const hb = heartbeatCard(root, 'default', card.id, claimed.runId);
+    const card = await createCard(root, 'default', { title: 'T2 future' });
+    const claimed = (await claimCard(root, 'default', card.id, 'r1'))!;
+    const hb = await heartbeatCard(root, 'default', card.id, claimed.runId);
     expect(hb).not.toBeNull();
     expect(Date.parse(hb!.leaseUntil!)).toBeGreaterThanOrEqual(Date.parse(claimed.leaseUntil!));
     expect(hb!.updatedAt).toBe(claimed.updatedAt);
   });
 
   it('revives a passed lease and leaves updatedAt unchanged', async () => {
-    const card = createCard(root, 'default', { title: 'T2 passed' });
-    const claimed = claimCard(root, 'default', card.id, 'r1')!;
+    const card = await createCard(root, 'default', { title: 'T2 passed' });
+    const claimed = (await claimCard(root, 'default', card.id, 'r1'))!;
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ?`).run(pastIso(), card.id);
     } finally {
       closeHippoDb(db);
     }
-    const hb = heartbeatCard(root, 'default', card.id, claimed.runId);
+    const hb = await heartbeatCard(root, 'default', card.id, claimed.runId);
     expect(hb).not.toBeNull();
     expect(Date.parse(hb!.leaseUntil!)).toBeGreaterThan(Date.now());
     expect(hb!.updatedAt).toBe(claimed.updatedAt);
   });
 
   it('adopts a NULL lease left by a claim made before leases existed and leaves updatedAt unchanged', async () => {
-    const card = createCard(root, 'default', { title: 'T2 null' });
-    const claimed = claimCard(root, 'default', card.id, 'r1')!;
+    const card = await createCard(root, 'default', { title: 'T2 null' });
+    const claimed = (await claimCard(root, 'default', card.id, 'r1'))!;
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET lease_until = NULL, heartbeat_at = NULL WHERE id = ?`).run(card.id);
     } finally {
       closeHippoDb(db);
     }
-    const hb = heartbeatCard(root, 'default', card.id, claimed.runId);
+    const hb = await heartbeatCard(root, 'default', card.id, claimed.runId);
     expect(hb).not.toBeNull();
     expect(hb!.leaseUntil).not.toBeNull();
     expect(hb!.updatedAt).toBe(claimed.updatedAt);
@@ -110,92 +110,92 @@ describe('heartbeat', () => {
 
 describe('refusals', () => {
   it('a stale run id returns null on heartbeat and leaves the row identical', async () => {
-    const card = createCard(root, 'default', { title: 'T3 stale' });
-    claimCard(root, 'default', card.id, 'r1');
-    blockCard(root, 'default', card.id, 'why');
-    const first = loadCardRuns(root, 'default', card.id).find((r) => r.runtime === 'r1')!;
-    claimCard(root, 'default', card.id, 'r2');
-    const before = loadCard(root, 'default', card.id);
-    expect(heartbeatCard(root, 'default', card.id, first.id)).toBeNull();
-    expect(loadCard(root, 'default', card.id)).toEqual(before);
+    const card = await createCard(root, 'default', { title: 'T3 stale' });
+    await claimCard(root, 'default', card.id, 'r1');
+    await blockCard(root, 'default', card.id, 'why');
+    const first = (await loadCardRuns(root, 'default', card.id)).find((r) => r.runtime === 'r1')!;
+    await claimCard(root, 'default', card.id, 'r2');
+    const before = await loadCard(root, 'default', card.id);
+    expect(await heartbeatCard(root, 'default', card.id, first.id)).toBeNull();
+    expect(await loadCard(root, 'default', card.id)).toEqual(before);
   });
 
   it("an unknown card id or another tenant's throws unknown card id on heartbeat", async () => {
-    const card = createCard(root, 'default', { title: 'T3 unknown hb' });
-    claimCard(root, 'default', card.id, 'r1');
-    expect(() => heartbeatCard(root, 'default', 'nope', 1)).toThrow('unknown card id: nope');
-    expect(() => heartbeatCard(root, 'tenant2', card.id, 1)).toThrow(`unknown card id: ${card.id}`);
+    const card = await createCard(root, 'default', { title: 'T3 unknown hb' });
+    await claimCard(root, 'default', card.id, 'r1');
+    await expect(heartbeatCard(root, 'default', 'nope', 1)).rejects.toThrow('unknown card id: nope');
+    await expect(heartbeatCard(root, 'tenant2', card.id, 1)).rejects.toThrow(`unknown card id: ${card.id}`);
   });
 
   it("an unknown card id or another tenant's throws unknown card id on block, review and complete even with a run id", async () => {
-    const card = createCard(root, 'default', { title: 'T3 unknown brc' });
-    const claimed = claimCard(root, 'default', card.id, 'r1')!;
-    expect(() => blockCard(root, 'default', 'nope', 'why', claimed.runId)).toThrow('unknown card id: nope');
-    expect(() => blockCard(root, 'tenant2', card.id, 'why', claimed.runId)).toThrow(`unknown card id: ${card.id}`);
-    expect(() => reviewCard(root, 'default', 'nope', claimed.runId)).toThrow('unknown card id: nope');
-    expect(() => reviewCard(root, 'tenant2', card.id, claimed.runId)).toThrow(`unknown card id: ${card.id}`);
-    expect(() => completeCard(root, 'default', 'nope', 'success', claimed.runId)).toThrow('unknown card id: nope');
-    expect(() => completeCard(root, 'tenant2', card.id, 'success', claimed.runId)).toThrow(
-      `unknown card id: ${card.id}`,
-    );
+    const card = await createCard(root, 'default', { title: 'T3 unknown brc' });
+    const claimed = (await claimCard(root, 'default', card.id, 'r1'))!;
+    for (const [tenant, id] of [
+      ['default', 'nope'],
+      ['tenant2', card.id],
+    ]) {
+      await expect(blockCard(root, tenant, id, 'why', claimed.runId)).rejects.toThrow(`unknown card id: ${id}`);
+      await expect(reviewCard(root, tenant, id, claimed.runId)).rejects.toThrow(`unknown card id: ${id}`);
+      await expect(completeCard(root, tenant, id, 'success', claimed.runId)).rejects.toThrow(`unknown card id: ${id}`);
+    }
   });
 
   it('heartbeat returns null, not throws, for every non-running status', async () => {
     const nonRunning = ['backlog', 'ready', 'blocked', 'review', 'done', 'shelved'];
     for (const status of nonRunning) {
-      const card = createCard(root, 'default', { title: `T3 ${status}` });
+      const card = await createCard(root, 'default', { title: `T3 ${status}` });
       const db = openHippoDb(root);
       try {
         db.prepare(`UPDATE cards SET status = ? WHERE id = ?`).run(status, card.id);
       } finally {
         closeHippoDb(db);
       }
-      expect(heartbeatCard(root, 'default', card.id, 1)).toBeNull();
+      expect(await heartbeatCard(root, 'default', card.id, 1)).toBeNull();
     }
   });
 
   it('an invalid run id throws Invalid run id on heartbeat, block, review and complete before the store opens', async () => {
-    const card = createCard(root, 'default', { title: 'T3 invalid run id' });
-    claimCard(root, 'default', card.id, 'r1');
+    const card = await createCard(root, 'default', { title: 'T3 invalid run id' });
+    await claimCard(root, 'default', card.id, 'r1');
     const badRunIds = [0, -1, 1.5, NaN, Number.MAX_SAFE_INTEGER + 1];
     for (const bad of badRunIds) {
       const message = `Invalid run id: ${bad} (expected a positive integer)`;
-      expect(() => heartbeatCard(root, 'default', card.id, bad)).toThrow(message);
-      expect(() => blockCard(root, 'default', card.id, 'why', bad)).toThrow(message);
-      expect(() => reviewCard(root, 'default', card.id, bad)).toThrow(message);
-      expect(() => completeCard(root, 'default', card.id, 'success', bad)).toThrow(message);
+      await expect(heartbeatCard(root, 'default', card.id, bad)).rejects.toThrow(message);
+      await expect(blockCard(root, 'default', card.id, 'why', bad)).rejects.toThrow(message);
+      await expect(reviewCard(root, 'default', card.id, bad)).rejects.toThrow(message);
+      await expect(completeCard(root, 'default', card.id, 'success', bad)).rejects.toThrow(message);
     }
   });
 });
 
 describe('sweep', () => {
   it('reclaims running cards with a passed or NULL lease, in id order, and leaves everything else alone', async () => {
-    const passed = createCard(root, 'default', { title: 'T4 passed' });
-    const future = createCard(root, 'default', { title: 'T4 future' });
-    const nullLease = createCard(root, 'default', { title: 'T4 null' });
-    const readyCard = createCard(root, 'default', { title: 'T4 ready' });
-    const backlogParent = createCard(root, 'default', { title: 'T4 backlog parent' });
-    const backlogCard = createCard(root, 'default', { title: 'T4 backlog', dependsOn: [backlogParent.id] });
-    const reviewingCard = createCard(root, 'default', { title: 'T4 review' });
-    const blockedCard = createCard(root, 'default', { title: 'T4 blocked' });
-    const doneCard = createCard(root, 'default', { title: 'T4 done' });
-    const shelvedCard = createCard(root, 'default', { title: 'T4 shelved' });
-    const otherTenant = createCard(root, 'tenant2', { title: 'T4 other tenant' });
+    const passed = await createCard(root, 'default', { title: 'T4 passed' });
+    const future = await createCard(root, 'default', { title: 'T4 future' });
+    const nullLease = await createCard(root, 'default', { title: 'T4 null' });
+    const readyCard = await createCard(root, 'default', { title: 'T4 ready' });
+    const backlogParent = await createCard(root, 'default', { title: 'T4 backlog parent' });
+    const backlogCard = await createCard(root, 'default', { title: 'T4 backlog', dependsOn: [backlogParent.id] });
+    const reviewingCard = await createCard(root, 'default', { title: 'T4 review' });
+    const blockedCard = await createCard(root, 'default', { title: 'T4 blocked' });
+    const doneCard = await createCard(root, 'default', { title: 'T4 done' });
+    const shelvedCard = await createCard(root, 'default', { title: 'T4 shelved' });
+    const otherTenant = await createCard(root, 'tenant2', { title: 'T4 other tenant' });
 
-    claimCard(root, 'default', passed.id, 'r1');
-    claimCard(root, 'default', future.id, 'r2');
-    claimCard(root, 'default', nullLease.id, 'r3');
-    claimCard(root, 'default', reviewingCard.id, 'r5');
-    reviewCard(root, 'default', reviewingCard.id);
-    claimCard(root, 'default', blockedCard.id, 'r6');
-    blockCard(root, 'default', blockedCard.id, 'why');
-    claimCard(root, 'default', doneCard.id, 'r7');
-    reviewCard(root, 'default', doneCard.id);
-    completeCard(root, 'default', doneCard.id, 'success');
-    claimCard(root, 'default', shelvedCard.id, 'r8');
-    reviewCard(root, 'default', shelvedCard.id);
-    completeCard(root, 'default', shelvedCard.id, 'failure');
-    claimCard(root, 'tenant2', otherTenant.id, 'r9');
+    await claimCard(root, 'default', passed.id, 'r1');
+    await claimCard(root, 'default', future.id, 'r2');
+    await claimCard(root, 'default', nullLease.id, 'r3');
+    await claimCard(root, 'default', reviewingCard.id, 'r5');
+    await reviewCard(root, 'default', reviewingCard.id);
+    await claimCard(root, 'default', blockedCard.id, 'r6');
+    await blockCard(root, 'default', blockedCard.id, 'why');
+    await claimCard(root, 'default', doneCard.id, 'r7');
+    await reviewCard(root, 'default', doneCard.id);
+    await completeCard(root, 'default', doneCard.id, 'success');
+    await claimCard(root, 'default', shelvedCard.id, 'r8');
+    await reviewCard(root, 'default', shelvedCard.id);
+    await completeCard(root, 'default', shelvedCard.id, 'failure');
+    await claimCard(root, 'tenant2', otherTenant.id, 'r9');
 
     const db = openHippoDb(root);
     try {
@@ -220,30 +220,30 @@ describe('sweep', () => {
     });
     const handoffBefore = (await cardDetailOf(root, 'default', passed.id))?.handoff;
 
-    const reclaimed = reclaimExpiredCards(root, 'default');
+    const reclaimed = await reclaimExpiredCards(root, 'default');
     expect(reclaimed).toHaveLength(2);
     expect(new Set(reclaimed)).toEqual(new Set([passed.id, nullLease.id]));
     expect(reclaimed).toEqual([...reclaimed].sort());
 
     for (const id of reclaimed) {
-      const card = loadCard(root, 'default', id);
+      const card = await loadCard(root, 'default', id);
       expect(card?.status).toBe('ready');
       expect(card?.assigneeRuntime).toBeNull();
       expect(card?.leaseUntil).toBeNull();
       expect(card?.heartbeatAt).toBeNull();
-      const runs = loadCardRuns(root, 'default', id);
+      const runs = await loadCardRuns(root, 'default', id);
       expect(runs[0]?.ended).not.toBeNull();
       expect(runs[0]?.outcome).toBe('reclaimed');
     }
 
-    expect(loadCard(root, 'default', future.id)?.status).toBe('running');
-    expect(loadCard(root, 'default', readyCard.id)?.status).toBe('ready');
-    expect(loadCard(root, 'default', reviewingCard.id)?.status).toBe('review');
-    expect(loadCard(root, 'default', blockedCard.id)?.status).toBe('blocked');
-    expect(loadCard(root, 'default', backlogCard.id)?.status).toBe('backlog');
-    expect(loadCard(root, 'default', doneCard.id)?.status).toBe('done');
-    expect(loadCard(root, 'default', shelvedCard.id)?.status).toBe('shelved');
-    expect(loadCard(root, 'tenant2', otherTenant.id)?.status).toBe('running');
+    expect((await loadCard(root, 'default', future.id))?.status).toBe('running');
+    expect((await loadCard(root, 'default', readyCard.id))?.status).toBe('ready');
+    expect((await loadCard(root, 'default', reviewingCard.id))?.status).toBe('review');
+    expect((await loadCard(root, 'default', blockedCard.id))?.status).toBe('blocked');
+    expect((await loadCard(root, 'default', backlogCard.id))?.status).toBe('backlog');
+    expect((await loadCard(root, 'default', doneCard.id))?.status).toBe('done');
+    expect((await loadCard(root, 'default', shelvedCard.id))?.status).toBe('shelved');
+    expect((await loadCard(root, 'tenant2', otherTenant.id))?.status).toBe('running');
 
     const after = await cardDetailOf(root, 'default', passed.id);
     expect(after?.handoff).toEqual(handoffBefore);
@@ -253,9 +253,9 @@ describe('sweep', () => {
 
 describe("a reclaimed runtime's run id is refused", () => {
   it('rejects the old run id after reclaim and a new claim; the new run id is accepted', async () => {
-    const parent = createCard(root, 'default', { title: 'T5 parent' });
-    const child = createCard(root, 'default', { title: 'T5 child', dependsOn: [parent.id] });
-    const r1 = claimCard(root, 'default', parent.id, 'r1')!;
+    const parent = await createCard(root, 'default', { title: 'T5 parent' });
+    const child = await createCard(root, 'default', { title: 'T5 child', dependsOn: [parent.id] });
+    const r1 = (await claimCard(root, 'default', parent.id, 'r1'))!;
 
     const db = openHippoDb(root);
     try {
@@ -263,30 +263,30 @@ describe("a reclaimed runtime's run id is refused", () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(reclaimExpiredCards(root, 'default')).toEqual([parent.id]);
+    expect(await reclaimExpiredCards(root, 'default')).toEqual([parent.id]);
 
-    const r2 = claimCard(root, 'default', parent.id, 'r2')!;
+    const r2 = (await claimCard(root, 'default', parent.id, 'r2'))!;
     expect(r2.runId).not.toBe(r1.runId);
 
-    const before = loadCard(root, 'default', parent.id);
-    expect(heartbeatCard(root, 'default', parent.id, r1.runId)).toBeNull();
-    expect(blockCard(root, 'default', parent.id, 'why', r1.runId)).toBeNull();
-    expect(reviewCard(root, 'default', parent.id, r1.runId)).toBeNull();
-    expect(loadCard(root, 'default', parent.id)).toEqual(before);
+    const before = await loadCard(root, 'default', parent.id);
+    expect(await heartbeatCard(root, 'default', parent.id, r1.runId)).toBeNull();
+    expect(await blockCard(root, 'default', parent.id, 'why', r1.runId)).toBeNull();
+    expect(await reviewCard(root, 'default', parent.id, r1.runId)).toBeNull();
+    expect(await loadCard(root, 'default', parent.id)).toEqual(before);
 
-    const reviewed = reviewCard(root, 'default', parent.id, r2.runId);
+    const reviewed = await reviewCard(root, 'default', parent.id, r2.runId);
     expect(reviewed?.status).toBe('review');
 
-    expect(completeCard(root, 'default', parent.id, 'success', r1.runId)).toBeNull();
-    expect(completeCard(root, 'default', parent.id, 'failure', r1.runId)).toBeNull();
-    expect(completeCard(root, 'default', parent.id, 'partial', r1.runId)).toBeNull();
-    expect(loadCard(root, 'default', parent.id)?.status).toBe('review');
-    const liveRuns = loadCardRuns(root, 'default', parent.id).filter((run) => !run.ended);
+    expect(await completeCard(root, 'default', parent.id, 'success', r1.runId)).toBeNull();
+    expect(await completeCard(root, 'default', parent.id, 'failure', r1.runId)).toBeNull();
+    expect(await completeCard(root, 'default', parent.id, 'partial', r1.runId)).toBeNull();
+    expect((await loadCard(root, 'default', parent.id))?.status).toBe('review');
+    const liveRuns = (await loadCardRuns(root, 'default', parent.id)).filter((run) => !run.ended);
     expect(liveRuns).toHaveLength(1);
     expect(liveRuns[0]?.id).toBe(r2.runId);
-    expect(loadCard(root, 'default', child.id)?.status).toBe('backlog');
+    expect((await loadCard(root, 'default', child.id))?.status).toBe('backlog');
 
-    const completed = completeCard(root, 'default', parent.id, 'success', r2.runId);
+    const completed = await completeCard(root, 'default', parent.id, 'success', r2.runId);
     expect(completed?.card.status).toBe('done');
     expect(completed?.promotedChildren).toEqual([child.id]);
   });
@@ -294,22 +294,22 @@ describe("a reclaimed runtime's run id is refused", () => {
 
 describe('without a run id', () => {
   it('block, review and complete behave as they did before leases when runId is omitted', async () => {
-    const card = createCard(root, 'default', { title: 'T6 no run id' });
-    claimCard(root, 'default', card.id, 'r1');
-    const blocked = blockCard(root, 'default', card.id, 'why');
+    const card = await createCard(root, 'default', { title: 'T6 no run id' });
+    await claimCard(root, 'default', card.id, 'r1');
+    const blocked = await blockCard(root, 'default', card.id, 'why');
     expect(blocked?.status).toBe('blocked');
-    claimCard(root, 'default', card.id, 'r2');
-    const reviewed = reviewCard(root, 'default', card.id);
+    await claimCard(root, 'default', card.id, 'r2');
+    const reviewed = await reviewCard(root, 'default', card.id);
     expect(reviewed?.status).toBe('review');
-    const completed = completeCard(root, 'default', card.id, 'success');
+    const completed = await completeCard(root, 'default', card.id, 'success');
     expect(completed?.card.status).toBe('done');
   });
 
   it('a card whose lease has passed but is not yet swept still takes a block or review with its live run id', async () => {
-    const card = createCard(root, 'default', { title: 'T6 passed not swept' });
-    const claimed = claimCard(root, 'default', card.id, 'r1')!;
-    const blockMe = createCard(root, 'default', { title: 'T6 passed not swept, block' });
-    const blockClaim = claimCard(root, 'default', blockMe.id, 'r2')!;
+    const card = await createCard(root, 'default', { title: 'T6 passed not swept' });
+    const claimed = (await claimCard(root, 'default', card.id, 'r1'))!;
+    const blockMe = await createCard(root, 'default', { title: 'T6 passed not swept, block' });
+    const blockClaim = (await claimCard(root, 'default', blockMe.id, 'r2'))!;
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ?`).run(pastIso(), card.id);
@@ -317,57 +317,57 @@ describe('without a run id', () => {
     } finally {
       closeHippoDb(db);
     }
-    const reviewed = reviewCard(root, 'default', card.id, claimed.runId);
+    const reviewed = await reviewCard(root, 'default', card.id, claimed.runId);
     expect(reviewed?.status).toBe('review');
-    const blocked = blockCard(root, 'default', blockMe.id, 'why', blockClaim.runId);
+    const blocked = await blockCard(root, 'default', blockMe.id, 'why', blockClaim.runId);
     expect(blocked?.status).toBe('blocked');
   });
 });
 
 describe('invariant', () => {
-  function assertInvariant(id: string) {
-    const card = loadCard(root, 'default', id)!;
+  async function assertInvariant(id: string) {
+    const card = (await loadCard(root, 'default', id))!;
     expect(card.status === 'running').toBe(card.leaseUntil !== null);
     expect(card.status === 'running').toBe(card.heartbeatAt !== null);
-    const liveRuns = loadCardRuns(root, 'default', id).filter((run) => !run.ended);
+    const liveRuns = (await loadCardRuns(root, 'default', id)).filter((run) => !run.ended);
     expect(liveRuns.length === 1).toBe(card.status === 'running' || card.status === 'review');
   }
 
   it('holds after claim, heartbeat, block, a second claim, review, complete, reclaim and promotion', async () => {
-    const parent = createCard(root, 'default', { title: 'T7 parent' });
-    const child = createCard(root, 'default', { title: 'T7 child', dependsOn: [parent.id] });
-    assertInvariant(parent.id);
-    assertInvariant(child.id);
+    const parent = await createCard(root, 'default', { title: 'T7 parent' });
+    const child = await createCard(root, 'default', { title: 'T7 child', dependsOn: [parent.id] });
+    await assertInvariant(parent.id);
+    await assertInvariant(child.id);
 
-    const claimed = claimCard(root, 'default', parent.id, 'r1')!;
-    assertInvariant(parent.id);
+    const claimed = (await claimCard(root, 'default', parent.id, 'r1'))!;
+    await assertInvariant(parent.id);
 
-    heartbeatCard(root, 'default', parent.id, claimed.runId);
-    assertInvariant(parent.id);
+    await heartbeatCard(root, 'default', parent.id, claimed.runId);
+    await assertInvariant(parent.id);
 
-    blockCard(root, 'default', parent.id, 'why');
-    assertInvariant(parent.id);
+    await blockCard(root, 'default', parent.id, 'why');
+    await assertInvariant(parent.id);
 
-    const second = claimCard(root, 'default', parent.id, 'r2')!;
-    assertInvariant(parent.id);
+    const second = (await claimCard(root, 'default', parent.id, 'r2'))!;
+    await assertInvariant(parent.id);
 
-    reviewCard(root, 'default', parent.id, second.runId);
-    assertInvariant(parent.id);
+    await reviewCard(root, 'default', parent.id, second.runId);
+    await assertInvariant(parent.id);
 
-    completeCard(root, 'default', parent.id, 'success', second.runId);
-    assertInvariant(parent.id);
-    assertInvariant(child.id);
+    await completeCard(root, 'default', parent.id, 'success', second.runId);
+    await assertInvariant(parent.id);
+    await assertInvariant(child.id);
 
-    claimCard(root, 'default', child.id, 'r3');
-    assertInvariant(child.id);
+    await claimCard(root, 'default', child.id, 'r3');
+    await assertInvariant(child.id);
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ?`).run(pastIso(), child.id);
     } finally {
       closeHippoDb(db);
     }
-    reclaimExpiredCards(root, 'default');
-    assertInvariant(child.id);
+    await reclaimExpiredCards(root, 'default');
+    await assertInvariant(child.id);
   });
 });
 
@@ -412,9 +412,9 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
 
 describe('reclaim under a real second connection', () => {
   it('reclaims an expired card while a real second connection holds the write lock with an unrelated write', async () => {
-    const expiredCard = createCard(root, 'default', { title: 'T8a expired' });
-    claimCard(root, 'default', expiredCard.id, 'r1');
-    const otherReady = createCard(root, 'default', { title: 'T8a unrelated ready' });
+    const expiredCard = await createCard(root, 'default', { title: 'T8a expired' });
+    await claimCard(root, 'default', expiredCard.id, 'r1');
+    const otherReady = await createCard(root, 'default', { title: 'T8a unrelated ready' });
 
     const db = openHippoDb(root);
     try {
@@ -433,7 +433,7 @@ describe('reclaim under a real second connection', () => {
     await locked;
 
     startHold();
-    const reclaimed = reclaimExpiredCards(root, 'default');
+    const reclaimed = await reclaimExpiredCards(root, 'default');
     const endedByReturn = holdHadEnded();
 
     expect(reclaimed).toEqual([expiredCard.id]);
@@ -445,8 +445,8 @@ describe('reclaim under a real second connection', () => {
 
 describe('a heartbeat that commits while the sweep waits wins', () => {
   it('the sweep sees the revived lease and returns no ids; the card stays running with its run live', async () => {
-    const card = createCard(root, 'default', { title: 'T8b revived' });
-    const claimed = claimCard(root, 'default', card.id, 'r1')!;
+    const card = await createCard(root, 'default', { title: 'T8b revived' });
+    const claimed = (await claimCard(root, 'default', card.id, 'r1'))!;
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ?`).run(pastIso(), card.id);
@@ -465,13 +465,13 @@ describe('a heartbeat that commits while the sweep waits wins', () => {
     await locked;
 
     startHold();
-    const reclaimed = reclaimExpiredCards(root, 'default');
+    const reclaimed = await reclaimExpiredCards(root, 'default');
     expect(reclaimed).toEqual([]);
     await released;
 
-    const after = loadCard(root, 'default', card.id);
+    const after = await loadCard(root, 'default', card.id);
     expect(after?.status).toBe('running');
-    const liveRuns = loadCardRuns(root, 'default', card.id).filter((run) => !run.ended);
+    const liveRuns = (await loadCardRuns(root, 'default', card.id)).filter((run) => !run.ended);
     expect(liveRuns).toHaveLength(1);
     expect(liveRuns[0]?.id).toBe(claimed.runId);
   });

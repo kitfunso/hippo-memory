@@ -19,7 +19,7 @@ import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/st
 import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies, ledgerAt } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 
@@ -45,13 +45,13 @@ afterEach(() => {
 const writeConfig = (pilot: JsonValue): void =>
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ pilot }));
 /** Books the arm through the Ledger group on `handle`, so a test can hold the store's lock or fault that connection. */
-function ensurePilotArm(
+async function ensurePilotArm(
   handle: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
   rateBp: number,
   opts: { ownTenantOnly?: boolean } = {},
-): PilotArm {
+): Promise<PilotArm> {
   const ledger = sqliteLedger((fn) => fn(handle, { hippoRoot: root }));
   return ledger.pilotArm(tenantId, sessionId, rateBp, { write: true, ...opts });
 }
@@ -115,21 +115,21 @@ describe('pilot arm helpers', () => {
     expect(held).toBeLessThan(260);
   });
 
-  it('ensure twice books one row', () => {
-    expect(ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
-    expect(ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
+  it('ensure twice books one row', async () => {
+    expect(await ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
+    expect(await ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
     expect(armCount()).toBe(1);
   });
 
-  it('the stored row wins after a rate change', () => {
-    ensurePilotArm(db, 'default', 's1', 10000);
-    expect(ensurePilotArm(db, 'default', 's1', 1)).toBe('holdout');
+  it('the stored row wins after a rate change', async () => {
+    await ensurePilotArm(db, 'default', 's1', 10000);
+    expect(await ensurePilotArm(db, 'default', 's1', 1)).toBe('holdout');
     expect(readPilotArm(db, 's1')).toBe('holdout');
   });
 
-  it('finds a row across tenants and books no second one', () => {
-    ensurePilotArm(db, 'tenant-a', 's1', 10000);
-    expect(ensurePilotArm(db, 'tenant-b', 's1', 1)).toBe('holdout');
+  it('finds a row across tenants and books no second one', async () => {
+    await ensurePilotArm(db, 'tenant-a', 's1', 10000);
+    expect(await ensurePilotArm(db, 'tenant-b', 's1', 1)).toBe('holdout');
     expect(armCount()).toBe(1);
   });
 
@@ -138,23 +138,25 @@ describe('pilot arm helpers', () => {
     expect(armCount()).toBe(0);
   });
 
-  it('a failing database returns the hash arm and never throws', () => {
+  it('a failing database returns the hash arm and never throws', async () => {
     vi.spyOn(db, 'exec').mockImplementation(() => {
       throw new Error('locked');
     });
-    expect(ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
-    expect(ensurePilotArm(db, 'default', 's1', 0)).toBe('hippo');
+    expect(await ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
+    expect(await ensurePilotArm(db, 'default', 's1', 0)).toBe('hippo');
   });
 
-  it('a held write lock yields the hash arm, no row, and a wait that ends at the hook bound', () => {
+  it('a held write lock yields the hash arm, no row, and a wait that ends at the hook bound', async () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
       const reader = openHippoDb(root, { busyWaitMs: HOOK_DB_WAIT_MS });
       try {
-        const waited = waitOnSteppedClock(reader, () =>
-          expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'),
-        );
+        let arm: Promise<PilotArm> | undefined;
+        const waited = waitOnSteppedClock(reader, () => {
+          arm = ensurePilotArm(reader, 'default', 'locked', 10000);
+        });
+        expect(await arm).toBe('holdout');
         expect(waited).toBe(HOOK_DB_WAIT_MS);
       } finally {
         closeHippoDb(reader);
@@ -171,12 +173,14 @@ describe('pilot arm helpers', () => {
     try {
       holder.exec('BEGIN IMMEDIATE');
       await runWithRequestStores(
-        () => {
+        async () => {
           const reader = openHippoDb(root);
           try {
-            const waited = waitOnSteppedClock(reader, () =>
-              expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'),
-            );
+            let arm: Promise<PilotArm> | undefined;
+            const waited = waitOnSteppedClock(reader, () => {
+              arm = ensurePilotArm(reader, 'default', 'locked', 10000);
+            });
+            expect(await arm).toBe('holdout');
             expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
             expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
           } finally {
@@ -192,20 +196,20 @@ describe('pilot arm helpers', () => {
     expect(armCount()).toBe(0);
   });
 
-  it("a tenant-scoped read ignores another tenant's row for the same session", () => {
-    ensurePilotArm(db, 'tenant-a', 's1', 10000);
+  it("a tenant-scoped read ignores another tenant's row for the same session", async () => {
+    await ensurePilotArm(db, 'tenant-a', 's1', 10000);
     expect(readPilotArm(db, 's1', 'tenant-b')).toBeNull();
-    expect(ensurePilotArm(db, 'tenant-b', 's1', 0, { ownTenantOnly: true })).toBe('hippo');
+    expect(await ensurePilotArm(db, 'tenant-b', 's1', 0, { ownTenantOnly: true })).toBe('hippo');
     expect(readPilotArm(db, 's1', 'tenant-b')).toBe('hippo');
     expect(armCount()).toBe(2);
   });
 
-  it('a stored arm is read without the write lock', () => {
-    ensurePilotArm(db, 'default', 'kept', 10000);
+  it('a stored arm is read without the write lock', async () => {
+    await ensurePilotArm(db, 'default', 'kept', 10000);
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      const { result, statements } = recordStatements(() => ensurePilotArm(db, 'default', 'kept', 1));
+      const { result, statements } = await recordStatementsAsync(() => ensurePilotArm(db, 'default', 'kept', 1));
       expect(result).toBe('holdout');
       expect(countMatching(statements, 'BEGIN')).toBe(0);
     } finally {
@@ -214,9 +218,9 @@ describe('pilot arm helpers', () => {
     }
   });
 
-  it('rolls back and returns the hash arm when the insert fails', () => {
+  it('rolls back and returns the hash arm when the insert fails', async () => {
     db.exec('DROP TABLE token_ledger');
-    expect(ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
+    expect(await ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
     expect(() => db.exec('BEGIN IMMEDIATE')).not.toThrow();
     db.exec('ROLLBACK');
   });
@@ -226,7 +230,7 @@ describe('pilot arm helpers', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     db.exec('DROP TABLE token_ledger');
     try {
-      ensurePilotArm(db, 'default', 's1', 10000);
+      await ensurePilotArm(db, 'default', 's1', 10000);
       await bookTokenUse(
         { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 },
         { local: { ...ledgerAt(root), config: DEFAULT_CONFIG } },
@@ -252,8 +256,8 @@ interface ArmSql {
 }
 
 describe('the consumer contract', () => {
-  it('one arm, one rate, one tenant, exact row shape', () => {
-    ensurePilotArm(db, 'default', 'c1', 2500);
+  it('one arm, one rate, one tenant, exact row shape', async () => {
+    await ensurePilotArm(db, 'default', 'c1', 2500);
     // SAFETY: the SELECT names exactly the columns of ArmSql.
     const rows = db
       .prepare(
@@ -276,8 +280,8 @@ describe('the consumer contract', () => {
 });
 
 describe('ledger readers skip arm rows', () => {
-  it('summarizeTokenUse and tokensBySession ignore an arm-only session', () => {
-    ensurePilotArm(db, 'default', 'arm-only', 10000);
+  it('summarizeTokenUse and tokensBySession ignore an arm-only session', async () => {
+    await ensurePilotArm(db, 'default', 'arm-only', 10000);
     recordTokenUse(db, {
       tenantId: 'default',
       sessionId: 'real',

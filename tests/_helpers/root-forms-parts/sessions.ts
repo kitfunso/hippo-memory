@@ -1,8 +1,7 @@
 // Root-keyed sessions forms tests call; production code goes through the port or the handle-first forms.
 
 import type { HandoffOutcome, SessionHandoff } from '../../../src/base/session/handoff.js';
-import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
-import { handlesOf } from '../../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type {
   HandoffFilter,
@@ -98,22 +97,22 @@ export function loadFreshActiveTaskSnapshot(
   return freshActiveSnapshot(loadActiveTaskSnapshot(hippoRoot, tenantId, key), opts);
 }
 
-export function clearActiveTaskSnapshot(
+export async function clearActiveTaskSnapshot(
   hippoRoot: string,
   tenantId: string,
   clearedStatus: string = 'cleared',
-): boolean {
-  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.clearSnapshot(tenantId, clearedStatus);
+): Promise<boolean> {
+  return await sqliteStore(hippoRoot).sessions.clearSnapshot(tenantId, clearedStatus);
 }
 
-export function closeTaskSnapshotsForSession(
+export async function closeTaskSnapshotsForSession(
   hippoRoot: string,
   tenantId: string,
   sessionId: string,
   status: string = 'session-ended',
   key?: ContinuityKey,
-): number {
-  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.closeSessionSnapshots(tenantId, sessionId, status, key ?? null);
+): Promise<number> {
+  return await sqliteStore(hippoRoot).sessions.closeSessionSnapshots(tenantId, sessionId, status, key ?? null);
 }
 
 export function listSessionEvents(
@@ -132,7 +131,7 @@ export function findPromotableSessions(
   return onHandle(hippoRoot, (db) => sessionsSql.findPromotableSessions(db, tenantId, sinceMs), openStore);
 }
 
-export function wmPush(
+export async function wmPush(
   hippoRoot: string,
   opts: {
     scope: string;
@@ -143,11 +142,11 @@ export function wmPush(
     metadata?: JsonObject;
     tenantId?: string;
   },
-): number {
-  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.pushWorkingMemory(opts.tenantId ?? resolveTenantId({}), opts);
+): Promise<number> {
+  return await sqliteStore(hippoRoot).sessions.pushWorkingMemory(opts.tenantId ?? resolveTenantId({}), opts);
 }
 
-export function wmRead(
+export async function wmRead(
   hippoRoot: string,
   opts?: {
     scope?: string;
@@ -155,25 +154,19 @@ export function wmRead(
     limit?: number;
     tenantId?: string;
   },
-): WorkingMemoryItem[] {
-  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.readWorkingMemory(
-    opts?.tenantId ?? resolveTenantId({}),
-    opts ?? {},
-  );
+): Promise<WorkingMemoryItem[]> {
+  return await sqliteStore(hippoRoot).sessions.readWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
 }
 
-export function wmClear(
+export async function wmClear(
   hippoRoot: string,
   opts?: {
     scope?: string;
     sessionId?: string;
     tenantId?: string;
   },
-): number {
-  return sqliteSyncStore(handlesOf(hippoRoot)).sessions.clearWorkingMemory(
-    opts?.tenantId ?? resolveTenantId({}),
-    opts ?? {},
-  );
+): Promise<number> {
+  return await sqliteStore(hippoRoot).sessions.clearWorkingMemory(opts?.tenantId ?? resolveTenantId({}), opts ?? {});
 }
 
 export function updateStats(hippoRoot: string, delta: Parameters<typeof indexAndStatsSql.updateStats>[2]): void {

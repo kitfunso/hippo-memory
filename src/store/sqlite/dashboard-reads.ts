@@ -51,8 +51,7 @@ import {
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import type { StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
-import { bound, boundWithFiles } from './bound.js';
-import { served } from './served.js';
+import { answered, bound } from './bound.js';
 
 // One past the list's cut, so the cut and its truncated flag come out as they would on the whole text.
 const HEAD_READ = 241;
@@ -122,7 +121,7 @@ function projectTally(origin: Origin, tally: SqlValue, openConflicts: number): P
 
 type TallyRow = { origin: Origin; tally: SqlValue };
 
-function totals(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, nowMs: number): DashboardTotals {
+function totals(db: DatabaseSyncLike, tenantId: string, nowMs: number): DashboardTotals {
   return withReadSnapshot(db, () => {
     // SAFETY: one row per origin_project, its tally a BLOB from hippo_project_tally.
     const rows = cachedStatement(
@@ -197,7 +196,6 @@ function scatter(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs: 
 
 function project(
   db: DatabaseSyncLike,
-  _files: StoreFiles,
   tenantId: string,
   origin: Origin,
   nowMs: number,
@@ -366,7 +364,7 @@ function memoryPage(
   });
 }
 
-function search(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, needle: string): SearchTally[] {
+function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchTally[] {
   // SAFETY: one row per origin_project, each a count and a sum.
   const rows = cachedStatement(
     db,
@@ -393,51 +391,62 @@ function hasVector(db: DatabaseSyncLike, id: string): boolean {
   return cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
 }
 
-/** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
- * dashboard's functions scored by `rules`; while no hippo.db exists they answer empty and create none. */
-export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}): DashboardReads {
-  const { on } = handlesOf(hippoRoot, rules);
-  const open = (root: string): DatabaseSyncLike => {
+/** Opens the store writable with the dashboard's functions scored by `rules`. */
+function dashboardOpener(rules: LossAversion): (root: string) => DatabaseSyncLike {
+  return (root) => {
     const db = openStore(root);
     useDashboardFunctions(db, rules);
     return db;
   };
-  type Scans = Pick<DashboardReads, 'totals' | 'project' | 'memoryPage' | 'search'>;
-  const scans = boundWithFiles<Scans>(
+}
+
+/** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
+ * dashboard's functions scored by `rules`; while no hippo.db exists they answer empty and create none. */
+export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}): DashboardReads {
+  const { on, files } = handlesOf(hippoRoot, rules);
+  const open = dashboardOpener(rules);
+  type Scans = Pick<DashboardReads, 'totals' | 'project' | 'memoryPage' | 'search' | 'openConflictsOf'>;
+  const scans = bound<Scans>(
     on,
     {
-      totals: totals,
-      project: project,
-      memoryPage: memoryPage,
-      search: search,
+      totals,
+      project,
+      memoryPage: (db, ...args) => memoryPage(db, files, ...args),
+      search,
+      openConflictsOf: openConflictsNaming,
     },
     open,
   );
-  const points = bound<Pick<DashboardReads, 'openConflictsOf'>>(on, { openConflictsOf: openConflictsNaming }, open);
   const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));
   let held: DatabaseSyncLike | null = null;
   const reader = (): DatabaseSyncLike | null => {
     if (held === null && stored()) held = openHippoDbReadOnly(hippoRoot);
     return held;
   };
-  return served<DashboardReads>({
-    commitCount() {
-      const db = reader();
-      return db === null ? null : pragmaDataVersion(db);
-    },
+  return {
+    commitCount: () =>
+      answered(() => {
+        const db = reader();
+        return db === null ? null : pragmaDataVersion(db);
+      }),
     totals: (tenantId, nowMs) =>
-      stored() ? scans.totals(tenantId, nowMs) : { projects: [], excluded: noneExcluded(), openConflicts: 0 },
-    project: (tenantId, origin, nowMs) => (stored() ? scans.project(tenantId, origin, nowMs) : null),
-    memoryPage: (tenantId, query, nowMs) => (stored() ? scans.memoryPage(tenantId, query, nowMs) : null),
-    search: (tenantId, needle) => (stored() ? scans.search(tenantId, needle) : []),
-    openConflictsOf: points.openConflictsOf,
-    hasVector(id) {
-      const db = reader();
-      return db !== null && hasVector(db, id);
-    },
-    close() {
-      if (held !== null) closeHippoDb(held);
-      held = null;
-    },
-  });
+      stored()
+        ? scans.totals(tenantId, nowMs)
+        : Promise.resolve({ projects: [], excluded: noneExcluded(), openConflicts: 0 }),
+    project: (tenantId, origin, nowMs) => (stored() ? scans.project(tenantId, origin, nowMs) : Promise.resolve(null)),
+    memoryPage: (tenantId, query, nowMs) =>
+      stored() ? scans.memoryPage(tenantId, query, nowMs) : Promise.resolve(null),
+    search: (tenantId, needle) => (stored() ? scans.search(tenantId, needle) : Promise.resolve([])),
+    openConflictsOf: scans.openConflictsOf,
+    hasVector: (id) =>
+      answered(() => {
+        const db = reader();
+        return db !== null && hasVector(db, id);
+      }),
+    close: () =>
+      answered(() => {
+        if (held !== null) closeHippoDb(held);
+        held = null;
+      }),
+  };
 }

@@ -51,7 +51,7 @@ describe('goal recall log and retrieval policy failure paths', () => {
 
     // Push a goal locally with the same tag so the dlPFC depth boost path
     // engages on recalled rows.
-    const goal = pushGoal(env.hippoRoot, {
+    const goal = await pushGoal(env.hippoRoot, {
       sessionId: 's-rfx-1',
       tenantId: 'default',
       goalName: 'rfx',
@@ -78,9 +78,9 @@ describe('goal recall log and retrieval policy failure paths', () => {
     }
   });
 
-  it('retrieval_policy CHECK constraint rejects NaN / extreme weight values', () => {
+  it('retrieval_policy CHECK constraint rejects NaN / extreme weight values', async () => {
     // Need a parent goal_stack row so the FK is satisfied.
-    const g = pushGoal(env.hippoRoot, {
+    const g = await pushGoal(env.hippoRoot, {
       sessionId: 's-chk-1',
       tenantId: 'default',
       goalName: 'chk',

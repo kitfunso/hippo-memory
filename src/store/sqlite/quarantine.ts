@@ -12,11 +12,10 @@ import type {
   QuarantinedMemory,
   Quarantine,
 } from '../port.js';
-import type { Sync } from './served.js';
 import { QUARANTINE_LIST_LIMIT, type QuarantineRow, type QuarantineStatus } from '../port/quarantine.js';
 import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../base/scope/recall-scope.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { OnHandle, StoreFiles } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
 import { writeEntryMirrorsIn } from './entry-writes.js';
@@ -202,17 +201,22 @@ function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string
   }
 }
 
-export function sqliteQuarantine(on: OnHandle): Sync<Quarantine> {
+export function sqliteQuarantine({ on, files }: Handles): Quarantine {
   return {
     ...bound<Omit<Quarantine, 'approveQuarantined'>>(on, {
       listQuarantined: listQuarantined,
       rejectQuarantined: rejectQuarantined,
     }),
-    approveQuarantined: (tenantId, id, actor) =>
-      on((db, files) => {
-        const result = approveQuarantined(db, tenantId, id, actor);
-        if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
-        return result;
-      }, openStore),
+    ...bound<Pick<Quarantine, 'approveQuarantined'>>(
+      on,
+      {
+        approveQuarantined: (db, tenantId, id, actor) => {
+          const result = approveQuarantined(db, tenantId, id, actor);
+          if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
+          return result;
+        },
+      },
+      openStore,
+    ),
   };
 }

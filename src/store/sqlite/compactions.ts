@@ -1,6 +1,6 @@
 // hippo.db's Compactions group: a caller's compaction items, each call on a handle of its own.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import {
   compactionByRequest,
   recordSummary,
@@ -10,8 +10,7 @@ import {
   type Log,
 } from './compactions-record.js';
 import type { CallerItems, CallerItemsSaved, Compactions } from '../port/capture.js';
-import type { Sync } from './served.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 
 /** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,
  * and a `summarised` one is reused. */
@@ -70,9 +69,11 @@ const compactionsBodies: Bodies<Omit<Compactions, 'saveCallerItems'>> = {
   markSnapshotSaved,
 };
 
-export function sqliteCompactions(on: OnHandle): Sync<Compactions> {
+export function sqliteCompactions({ on, files }: Handles): Compactions {
   return {
     ...bound(on, compactionsBodies),
-    ...boundWithFiles<Pick<Compactions, 'saveCallerItems'>>(on, { saveCallerItems: saveCallerItems }),
+    ...bound<Pick<Compactions, 'saveCallerItems'>>(on, {
+      saveCallerItems: (db, ...args) => saveCallerItems(db, files, ...args),
+    }),
   };
 }

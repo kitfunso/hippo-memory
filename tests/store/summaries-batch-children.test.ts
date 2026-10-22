@@ -20,7 +20,7 @@ describe('childrenOfSummaries', () => {
     expect(childrenOf).toHaveLength(parents.length);
     for (const at of [0, 2, 510, 519]) {
       const p = parents[at];
-      const single = loadChildrenOfSummary(root, p.id, p.tenantId).map((c) => c.id);
+      const single = (await loadChildrenOfSummary(root, p.id, p.tenantId)).map((c) => c.id);
       expect(childrenOf[at].map((c) => c.id)).toEqual(single);
     }
     expect(childrenOf[2]).toEqual([]);

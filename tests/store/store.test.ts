@@ -12,8 +12,7 @@ import {
   appendSessionEvent,
 } from '../_helpers/root-forms.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -53,7 +52,7 @@ describe('store initialization', () => {
     expect(fs.existsSync(path.join(tmpDir, 'hippo.db'))).toBe(true);
   });
 
-  it('imports the explicit legacy markdown fixture into SQLite on first init', () => {
+  it('imports the explicit legacy markdown fixture into SQLite on first init', async () => {
     fs.cpSync(legacyFixtureRoot, tmpDir, { recursive: true });
 
     initTestStore(tmpDir);
@@ -75,7 +74,7 @@ describe('store initialization', () => {
 
     // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = sqliteSyncStore(handlesOf(tmpDir)).reports.stats() as {
+    const stats = (await sqliteStore(tmpDir).reports.stats()) as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;
@@ -197,7 +196,7 @@ describe('stats tracking', () => {
     expect(file.total_recalled).toBe(3);
   });
 
-  it('persists stat counters through the SQLite backbone', () => {
+  it('persists stat counters through the SQLite backbone', async () => {
     initTestStore(tmpDir);
     // Longer than any rewrite, so bytes left over from it would break the mirror's JSON.
     fs.writeFileSync(path.join(tmpDir, 'stats.json'), 'x'.repeat(4096));
@@ -206,7 +205,7 @@ describe('stats tracking', () => {
 
     // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = sqliteSyncStore(handlesOf(tmpDir)).reports.stats() as {
+    const stats = (await sqliteStore(tmpDir).reports.stats()) as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;
@@ -369,7 +368,7 @@ describe('active task snapshots', () => {
     }
   });
 
-  it('clears the active snapshot and removes the mirror file', () => {
+  it('clears the active snapshot and removes the mirror file', async () => {
     initTestStore(tmpDir);
 
     saveActiveTaskSnapshot(tmpDir, 'default', {
@@ -379,7 +378,7 @@ describe('active task snapshots', () => {
       source: 'test',
     });
 
-    expect(clearActiveTaskSnapshot(tmpDir, 'default')).toBe(true);
+    expect(await clearActiveTaskSnapshot(tmpDir, 'default')).toBe(true);
     expect(loadActiveTaskSnapshot(tmpDir, 'default')).toBeNull();
     expect(fs.existsSync(path.join(tmpDir, 'buffer', 'active-task.md'))).toBe(false);
   });

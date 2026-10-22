@@ -12,10 +12,9 @@ import { countOpenConflicts } from './conflicts.js';
 import { countAllEntries, loadEntriesPage } from './entry-reads.js';
 import { createdSinceLastSleep } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
-import type { OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
-import type { Sync } from './served.js';
+import { bound, type Bodies } from './bound.js';
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type CorrectionLinkDbRow = {
@@ -111,11 +110,13 @@ const reportTotalsBodies: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
 
 type Scored = 'memoryStatus' | 'statusCounts';
 
-// These two score strength, so they take the store's loss-aversion rules beside the handle.
-const scoredReadsBodies: FileBodies<Pick<Reports, Scored>> = {
-  memoryStatus: memoryStatus,
-  statusCounts: statusCounts,
-};
+// These two score strength, so they score by the store's loss-aversion rules.
+function scoredReadsBodies(files: StoreFiles): Bodies<Pick<Reports, Scored>> {
+  return {
+    memoryStatus: (db, ...args) => memoryStatus(db, files, ...args),
+    statusCounts: (db, ...args) => statusCounts(db, files, ...args),
+  };
+}
 
 const reportReadsBodies: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
   entriesPage: loadEntriesPage,
@@ -126,10 +127,10 @@ const reportReadsBodies: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>>
   createdSinceLastSleep: createdSinceLastSleep,
 };
 
-export function sqliteReports(on: OnHandle): Sync<Reports> {
+export function sqliteReports({ on, files }: Handles): Reports {
   return {
     ...bound(on, reportTotalsBodies),
     ...bound(on, reportReadsBodies, openStore),
-    ...boundWithFiles(on, scoredReadsBodies, openStore),
+    ...bound(on, scoredReadsBodies(files), openStore),
   };
 }

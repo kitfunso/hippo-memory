@@ -379,25 +379,25 @@ describe('graph.ts read helpers', () => {
   });
   afterEach(() => removeAfterRequest(home));
 
-  it('loadEntitiesByMemoryId maps source memory ids to entities (hit + miss)', () => {
+  it('loadEntitiesByMemoryId maps source memory ids to entities (hit + miss)', async () => {
     const a = mem(home, T, 'a');
     const ea = ent(home, T, a, 'A');
-    const got = loadEntitiesByMemoryId(home, T, [a.id, 'nonexistent']);
+    const got = await loadEntitiesByMemoryId(home, T, [a.id, 'nonexistent']);
     expect(got).toHaveLength(1);
     expect(got[0].id).toBe(ea);
-    expect(loadEntitiesByMemoryId(home, T, [])).toEqual([]);
+    expect(await loadEntitiesByMemoryId(home, T, [])).toEqual([]);
   });
 
-  it('loadEntitiesByIds resolves reached entity rows by id', () => {
+  it('loadEntitiesByIds resolves reached entity rows by id', async () => {
     const a = mem(home, T, 'a');
     const b = mem(home, T, 'b');
     const ea = ent(home, T, a, 'A');
     const eb = ent(home, T, b, 'B');
-    const got = loadEntitiesByIds(home, T, [ea, eb]).sort((x, y) => x.id - y.id);
+    const got = (await loadEntitiesByIds(home, T, [ea, eb])).sort((x, y) => x.id - y.id);
     expect(got.map((e) => e.id)).toEqual([ea, eb].sort((x, y) => x - y));
   });
 
-  it('loadNeighborRelations returns edges in BOTH directions for the frontier', () => {
+  it('loadNeighborRelations returns edges in BOTH directions for the frontier', async () => {
     const a = mem(home, T, 'a');
     const b = mem(home, T, 'b');
     const c = mem(home, T, 'c');
@@ -406,14 +406,14 @@ describe('graph.ts read helpers', () => {
     const ec = ent(home, T, c, 'C');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id }); // A->B
     insertRelationAt(home, T, { fromEntityId: ec, toEntityId: ea, relType: 'supersedes', memoryId: c.id }); // C->A
-    const rels = loadNeighborRelations(home, T, [ea]); // touches A as from (A->B) and as to (C->A)
+    const rels = await loadNeighborRelations(home, T, [ea]); // touches A as from (A->B) and as to (C->A)
     expect(rels).toHaveLength(2);
   });
 
-  it('loadNeighborRelations rejects a non-integer limit (guards the raw LIMIT ?)', () => {
+  it('loadNeighborRelations rejects a non-integer limit (guards the raw LIMIT ?)', async () => {
     const a = mem(home, T, 'a');
     const ea = ent(home, T, a, 'A');
-    expect(() => loadNeighborRelations(home, T, [ea], { limit: 1.5 })).toThrow(/non-negative integer/);
-    expect(() => loadNeighborRelations(home, T, [ea], { limit: -1 })).toThrow(/non-negative integer/);
+    await expect(loadNeighborRelations(home, T, [ea], { limit: 1.5 })).rejects.toThrow(/non-negative integer/);
+    await expect(loadNeighborRelations(home, T, [ea], { limit: -1 })).rejects.toThrow(/non-negative integer/);
   });
 });

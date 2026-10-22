@@ -29,13 +29,14 @@ import {
 } from '../../base/records/object-types.js';
 import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from './open.js';
 import { openStore } from './handles.js';
-import { bound, type Bodies } from './bound.js';
+import { answered, bound, type Bodies } from './bound.js';
 import type {
   IncidentOpen,
   IncidentOpenRefusal,
   IncidentResolve,
   ObjectClose,
   ObjectListQuery,
+  Objects,
   ObjectSave,
   PoliciesInForceQuery,
 } from '../port.js';
@@ -44,42 +45,17 @@ import { placeholders } from '../../db/sql.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
-/** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every
- * kind. */
-interface SyncObjects {
-  listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): ObjectByKind[K][];
-  objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): ObjectByKind[K] | null;
-  closeObject<K extends ObjectKind>(
-    tenantId: string,
-    kind: K,
-    id: number,
-    close: ObjectClose<K>,
-  ): ObjectByKind[K] | ObjectRefusal;
-  saveObject<K extends SavableKind>(tenantId: string, kind: K, save: ObjectSave<K>): ObjectByKind[K] | ObjectRefusal;
-  openIncident(tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal;
-  resolveIncident(tenantId: string, id: number, resolve: IncidentResolve): Incident | ObjectRefusal;
-  policiesInForce(tenantId: string, query: PoliciesInForceQuery): Policy[];
-  activeSkillsByName(tenantId: string, limit: number): Skill[];
-  briefReceipts(tenantId: string, tag: string, limit: number): BriefReceipt[];
-  objectIdByMemory<K extends ObjectKind>(
-    tenantId: string,
-    kind: K,
-    status: ObjectByKind[K]['status'],
-    memoryId: string,
-  ): number | null;
-}
-
-export function sqliteObjects(on: OnHandle): SyncObjects {
+export function sqliteObjects(on: OnHandle): Objects {
   return {
     ...objectReads(on),
-    closeObject: (tenantId, kind, id, change) => close(on, tenantId, kind, id, change),
-    saveObject: (tenantId, kind, object) => save(on, tenantId, kind, object),
-    openIncident: (tenantId, open) => openIncident(on, tenantId, open),
+    closeObject: (tenantId, kind, id, change) => answered(() => close(on, tenantId, kind, id, change)),
+    saveObject: (tenantId, kind, object) => answered(() => save(on, tenantId, kind, object)),
+    openIncident: (tenantId, open) => answered(() => openIncident(on, tenantId, open)),
   };
 }
 
 type ObjectReads = Pick<
-  SyncObjects,
+  Objects,
   | 'listObjects'
   | 'objectById'
   | 'resolveIncident'

@@ -26,7 +26,7 @@ import {
 } from './connectors/slack.js';
 import { claimDelivery, releaseDelivery } from './connectors/replay.js';
 import type { OnHandle } from './open.js';
-import { bound, type Bodies } from './bound.js';
+import { answered, bound, type Bodies } from './bound.js';
 import type {
   ArtifactArchive,
   ConnectorEvent,
@@ -37,7 +37,6 @@ import type {
   DeletionLookup,
   DeletionTarget,
 } from '../port.js';
-import type { Sync } from './served.js';
 
 function eventRecord(db: DatabaseSyncLike, event: ConnectorEvent): ConnectorEventRecord {
   return event.connector === 'slack'
@@ -89,13 +88,16 @@ type DeliveryMethods =
   | 'githubRouting'
   | 'parkDeadLetter';
 
-function sqliteConnectorState(on: OnHandle): Omit<Sync<ConnectorEvents>, DeliveryMethods> {
+function sqliteConnectorState(on: OnHandle): Omit<ConnectorEvents, DeliveryMethods> {
   return {
-    deadLetters: (connector, tenantId, limit): DeadLetterRows[DeadLetterConnector][] =>
-      on((db) => queueOf(connector).list(db, tenantId, limit)),
-    deadLetter: (connector, tenantId, id): DeadLetterRows[DeadLetterConnector] | null =>
-      on((db) => queueOf(connector).get(db, tenantId, id)),
-    markDeadLetterRetried: (connector, tenantId, id) => on((db) => queueOf(connector).markRetried(db, tenantId, id)),
+    // SAFETY: queueOf(connector) is the queue holding C's rows, so what it reads is DeadLetterRows[C].
+    deadLetters: <C extends DeadLetterConnector>(connector: C, tenantId: string, limit: number) =>
+      answered(() => on((db) => queueOf(connector).list(db, tenantId, limit) as DeadLetterRows[C][])),
+    // SAFETY: as above.
+    deadLetter: <C extends DeadLetterConnector>(connector: C, tenantId: string, id: number) =>
+      answered(() => on((db) => queueOf(connector).get(db, tenantId, id) as DeadLetterRows[C] | null)),
+    markDeadLetterRetried: (connector, tenantId, id) =>
+      answered(() => on((db) => queueOf(connector).markRetried(db, tenantId, id))),
     ...bound(on, connectorCursorsBodies),
   };
 }
@@ -134,11 +136,13 @@ const deliveriesBodies: Bodies<Pick<ConnectorEvents, Exclude<DeliveryMethods, 'p
   githubRouting: githubRouting,
 };
 
-export function sqliteConnectorEvents(on: OnHandle): Sync<ConnectorEvents> {
+export function sqliteConnectorEvents(on: OnHandle): ConnectorEvents {
   return {
     ...bound(on, deliveriesBodies),
     parkDeadLetter: (letter) =>
-      on((db) => (letter.connector === 'slack' ? SLACK_DLQ.insert(db, letter) : GITHUB_DLQ.insert(db, letter))),
+      answered(() =>
+        on((db) => (letter.connector === 'slack' ? SLACK_DLQ.insert(db, letter) : GITHUB_DLQ.insert(db, letter))),
+      ),
     ...sqliteConnectorState(on),
   };
 }

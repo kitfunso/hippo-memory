@@ -42,7 +42,7 @@ function seedRow(name: string, content: string, over: Parameters<typeof createMe
   return row;
 }
 
-function seedConflicts(): void {
+async function seedConflicts(): Promise<void> {
   seedRow('keep', 'deploys run from main');
   seedRow('lose', 'deploys never run from main');
   seedRow('redis', 'the cache lives in redis');
@@ -64,7 +64,7 @@ function seedConflicts(): void {
   }));
   replaceDetectedConflicts(fixture.dir, detected, DETECTED_AT);
   const pairOf = (...ids: string[]): string => ids.sort().join(' ');
-  for (const conflict of listMemoryConflicts(fixture.dir)) {
+  for (const conflict of await listMemoryConflicts(fixture.dir)) {
     const stored = pairOf(conflict.memory_a_id, conflict.memory_b_id);
     const name = named.find(([, [a, b]]) => pairOf(rows[a]!.id, rows[b]!.id) === stored);
     if (name) conflictIds[name[0]] = conflict.id;
@@ -91,9 +91,9 @@ function seedDormant(): void {
   }
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   fixture = seedTwoTenants();
-  seedConflicts();
+  await seedConflicts();
   seedDormant();
 });
 

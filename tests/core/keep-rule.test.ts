@@ -450,6 +450,6 @@ describe('kept rows are not merged and not sent to extraction', () => {
 
     await consolidate(root, { now: FIXED_NOW });
 
-    expect(listMemoryConflicts(root)).toHaveLength(1);
+    expect(await listMemoryConflicts(root)).toHaveLength(1);
   });
 });

@@ -93,8 +93,8 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
     return { entry: makeMemoryEntry(id, tags, 0.5), score };
   }
 
-  it('boosts rows whose tags match an active goal name', () => {
-    pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+  it('boosts rows whose tags match an active goal name', async () => {
+    await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const rows = [makeRow('m1', ['fix-auth'], 0.5), makeRow('m2', ['ui'], 0.6)];
     const db = openHippoDb(hippoRoot);
     try {
@@ -107,7 +107,7 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
   });
 
   it('writes one goal_recall_log row per (boosted_memory, goal) -- INSERT OR IGNORE on repeat', async () => {
-    const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    const goal = await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     // Memory must exist locally so the FK-safe INSERT path fires.
     const m = await remember(apiCtx(hippoRoot, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'fix auth bug',
@@ -130,8 +130,8 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
     }
   });
 
-  it('does NOT write goal_recall_log rows for memories absent from the local memories table (FK safety)', () => {
-    pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+  it('does NOT write goal_recall_log rows for memories absent from the local memories table (FK safety)', async () => {
+    await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     // m-global was never written via remember() -- simulates global-only id
     const rows = [makeRow('m-global', ['fix-auth'], 0.5)];
     const db = openHippoDb(hippoRoot);
@@ -147,8 +147,8 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
     }
   });
 
-  it('respects tenant isolation -- same sessionId in tenant B does NOT load tenant A goals', () => {
-    pushGoal(hippoRoot, { sessionId, tenantId: 'A', goalName: 'fix-auth' });
+  it('respects tenant isolation -- same sessionId in tenant B does NOT load tenant A goals', async () => {
+    await pushGoal(hippoRoot, { sessionId, tenantId: 'A', goalName: 'fix-auth' });
     // Pre-sorted as the BM25 caller would: m2 (0.6) ahead of m1 (0.5).
     const rows = [makeRow('m2', ['ui'], 0.6), makeRow('m1', ['fix-auth'], 0.5)];
     const db = openHippoDb(hippoRoot);
@@ -181,28 +181,28 @@ describe('the session goal boost policy branches', () => {
     return e;
   }
 
-  it('composes every policy type, caps at 3x, logs only local top-k rows', () => {
+  it('composes every policy type, caps at 3x, logs only local top-k rows', async () => {
     const tenantId = 'default';
     const sessionId = 's-a';
-    pushGoal(root, {
+    await pushGoal(root, {
       sessionId,
       tenantId,
       goalName: 'g-err',
       policy: { policyType: 'error-prioritized', errorPriority: 1.2 },
     });
-    pushGoal(root, {
+    await pushGoal(root, {
       sessionId,
       tenantId,
       goalName: 'g-fit',
       policy: { policyType: 'schema-fit-biased', weightSchemaFit: 1.5 },
     });
-    pushGoal(root, {
+    await pushGoal(root, {
       sessionId,
       tenantId,
       goalName: 'g-rec',
       policy: { policyType: 'recency-first', weightRecency: 1.1 },
     });
-    pushGoal(root, {
+    await pushGoal(root, {
       sessionId: 's-b',
       tenantId,
       goalName: 'g-hyb',

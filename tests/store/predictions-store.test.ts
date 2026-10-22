@@ -39,8 +39,8 @@ describe('predictions store (first-class object)', () => {
   });
   afterEach(() => removeAfterRequest(home));
 
-  it('savePrediction creates both memory and predictions row', () => {
-    const pred = savePrediction(home, 'default', {
+  it('savePrediction creates both memory and predictions row', async () => {
+    const pred = await savePrediction(home, 'default', {
       classTag: 'migration-effort',
       claimText: 'migration takes 2 days',
       estimateValue: 2,
@@ -79,14 +79,14 @@ describe('predictions store (first-class object)', () => {
     }
   });
 
-  it('closePrediction updates the row + emits predict_close audit', () => {
-    const pred = savePrediction(home, 'default', {
+  it('closePrediction updates the row + emits predict_close audit', async () => {
+    const pred = await savePrediction(home, 'default', {
       classTag: 'rollout-risk',
       claimText: 'low risk rollout',
       estimateValue: 0.1,
     });
 
-    const closed = closePrediction(home, 'default', pred.id, {
+    const closed = await closePrediction(home, 'default', pred.id, {
       closureState: 'closed',
       actualValue: 0.4,
       closureNote: 'higher than expected',
@@ -121,8 +121,8 @@ describe('predictions store (first-class object)', () => {
     }
   });
 
-  it('ON DELETE SET NULL: forgetting the memory orphans the prediction (memory_id NULL)', () => {
-    const pred = savePrediction(home, 'default', {
+  it('ON DELETE SET NULL: forgetting the memory orphans the prediction (memory_id NULL)', async () => {
+    const pred = await savePrediction(home, 'default', {
       classTag: 'test-class',
       claimText: 'soft-link test',
       estimateValue: 1,
@@ -134,47 +134,47 @@ describe('predictions store (first-class object)', () => {
     deleteEntry(home, pred.memoryId!);
 
     // Prediction row still exists, memory_id is now NULL
-    const reloaded = loadPredictionById(home, 'default', pred.id);
+    const reloaded = await loadPredictionById(home, 'default', pred.id);
     expect(reloaded).not.toBeNull();
     expect(reloaded!.memoryId).toBeNull();
     expect(reloaded!.claimText).toBe('soft-link test');
     expect(reloaded!.closureState).toBe('open');
   });
 
-  it('loadPredictionsByClass filters by class + closure_state', () => {
-    savePrediction(home, 'default', { classTag: 'a', claimText: 'open-a-1' });
-    savePrediction(home, 'default', { classTag: 'a', claimText: 'open-a-2' });
-    savePrediction(home, 'default', { classTag: 'b', claimText: 'open-b-1' });
+  it('loadPredictionsByClass filters by class + closure_state', async () => {
+    await savePrediction(home, 'default', { classTag: 'a', claimText: 'open-a-1' });
+    await savePrediction(home, 'default', { classTag: 'a', claimText: 'open-a-2' });
+    await savePrediction(home, 'default', { classTag: 'b', claimText: 'open-b-1' });
 
-    const aOpen = loadPredictionsByClass(home, 'default', 'a', { closureState: 'open' });
+    const aOpen = await loadPredictionsByClass(home, 'default', 'a', { closureState: 'open' });
     expect(aOpen.length).toBe(2);
     expect(aOpen.every((p) => p.classTag === 'a')).toBe(true);
     expect(aOpen.every((p) => p.closureState === 'open')).toBe(true);
 
-    const bOpen = loadPredictionsByClass(home, 'default', 'b');
+    const bOpen = await loadPredictionsByClass(home, 'default', 'b');
     expect(bOpen.length).toBe(1);
     expect(bOpen[0].classTag).toBe('b');
   });
 
-  it('loadOpenPredictions excludes closed', () => {
-    const p1 = savePrediction(home, 'default', { classTag: 'x', claimText: 'first prediction' });
-    savePrediction(home, 'default', { classTag: 'x', claimText: 'second prediction' });
-    closePrediction(home, 'default', p1.id, { closureState: 'closed', actualValue: 1 });
+  it('loadOpenPredictions excludes closed', async () => {
+    const p1 = await savePrediction(home, 'default', { classTag: 'x', claimText: 'first prediction' });
+    await savePrediction(home, 'default', { classTag: 'x', claimText: 'second prediction' });
+    await closePrediction(home, 'default', p1.id, { closureState: 'closed', actualValue: 1 });
 
-    const open = loadOpenPredictions(home, 'default');
+    const open = await loadOpenPredictions(home, 'default');
     expect(open.length).toBe(1);
     expect(open[0].closureState).toBe('open');
     expect(open[0].claimText).toBe('second prediction');
   });
 
-  it('VALID_CLOSURE_STATES rejection: invalid state throws at closePrediction', () => {
-    const pred = savePrediction(home, 'default', { classTag: 'x', claimText: 'open prediction text' });
-    expect(() => {
+  it('VALID_CLOSURE_STATES rejection: invalid state throws at closePrediction', async () => {
+    const pred = await savePrediction(home, 'default', { classTag: 'x', claimText: 'open prediction text' });
+    await expect(
       closePrediction(home, 'default', pred.id, {
         // @ts-expect-error — runtime validation test
         closureState: 'closed-clean',
-      });
-    }).toThrow(/closureState must be one of/);
+      }),
+    ).rejects.toThrow(/closureState must be one of/);
 
     expect(VALID_CLOSURE_STATES.has('open')).toBe(true);
     expect(VALID_CLOSURE_STATES.has('closed')).toBe(true);
@@ -183,13 +183,13 @@ describe('predictions store (first-class object)', () => {
     expect(VALID_CLOSURE_STATES.has('closed-clean')).toBe(false);
   });
 
-  it('tenant scoping: cross-tenant load returns empty', () => {
-    savePrediction(home, 'tenant-a', { classTag: 'x', claimText: 'a-mem' });
-    savePrediction(home, 'tenant-b', { classTag: 'x', claimText: 'b-mem' });
+  it('tenant scoping: cross-tenant load returns empty', async () => {
+    await savePrediction(home, 'tenant-a', { classTag: 'x', claimText: 'a-mem' });
+    await savePrediction(home, 'tenant-b', { classTag: 'x', claimText: 'b-mem' });
 
-    const aResults = loadPredictionsByClass(home, 'tenant-a', 'x');
-    const bResults = loadPredictionsByClass(home, 'tenant-b', 'x');
-    const cResults = loadPredictionsByClass(home, 'tenant-c', 'x');
+    const aResults = await loadPredictionsByClass(home, 'tenant-a', 'x');
+    const bResults = await loadPredictionsByClass(home, 'tenant-b', 'x');
+    const cResults = await loadPredictionsByClass(home, 'tenant-c', 'x');
 
     expect(aResults.length).toBe(1);
     expect(aResults[0].claimText).toBe('a-mem');
@@ -228,31 +228,31 @@ describe('predictions store (first-class object)', () => {
     }
   });
 
-  it('closePrediction rejects already-closed predictions', () => {
-    const pred = savePrediction(home, 'default', {
+  it('closePrediction rejects already-closed predictions', async () => {
+    const pred = await savePrediction(home, 'default', {
       classTag: 'reclose-test',
       claimText: 'predict and close once',
       estimateValue: 1,
     });
 
     // First close succeeds
-    closePrediction(home, 'default', pred.id, {
+    await closePrediction(home, 'default', pred.id, {
       closureState: 'closed',
       actualValue: 2,
       closureNote: 'first close',
     });
 
     // Second close throws — cannot re-close
-    expect(() => {
+    await expect(
       closePrediction(home, 'default', pred.id, {
         closureState: 'closed',
         actualValue: 99,
         closureNote: 'should be rejected',
-      });
-    }).toThrow(/already closed/);
+      }),
+    ).rejects.toThrow(/already closed/);
 
     // Confirm the original close survived (actual_value unchanged)
-    const reloaded = loadPredictionById(home, 'default', pred.id);
+    const reloaded = await loadPredictionById(home, 'default', pred.id);
     expect(reloaded!.actualValue).toBe(2);
     expect(reloaded!.closureNote).toBe('first close');
 
@@ -270,13 +270,13 @@ describe('predictions store (first-class object)', () => {
     }
   });
 
-  it('closePrediction throws clear error on missing id', () => {
-    expect(() => {
+  it('closePrediction throws clear error on missing id', async () => {
+    await expect(
       closePrediction(home, 'default', 99999, {
         closureState: 'closed',
         actualValue: 1,
-      });
-    }).toThrow(/not found for tenant/);
+      }),
+    ).rejects.toThrow(/not found for tenant/);
   });
 
   it('CHECK constraint rejects an unknown closure_state', () => {

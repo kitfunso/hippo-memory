@@ -3,8 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { sqliteSyncStore, sqliteStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { ConflictListQuery } from '../../src/store/port/conflicts.js';
 import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -32,14 +31,14 @@ const entry = (text: string) => createMemory(text, { baseHalfLifeDays: DEFAULT_H
 describe('sessions group', () => {
   it('keeps a snapshot, events and a handoff, in both forms', async () => {
     const r = root();
-    const sync = sqliteSyncStore(handlesOf(r)).sessions;
+    const sync = sqliteStore(r).sessions;
     const served = sqliteStore(r).sessions;
     const snap = { task: 'ship', summary: 'half done', nextStep: 'merge', sessionId: 's1' };
-    expect(sync.saveSnapshot(T, snap, null).task).toBe('ship');
+    expect((await sync.saveSnapshot(T, snap, null)).task).toBe('ship');
     expect((await served.loadSnapshot(T, null))?.nextStep).toBe('merge');
     await served.appendEvent(T, { sessionId: 's1', eventType: 'note', content: 'hello' });
     expect((await served.listEvents(T, { sessionId: 's1' })).map((e) => e.content)).toEqual(['hello']);
-    expect(sync.listEvents(T, { sessionId: 's1' })).toHaveLength(1);
+    expect(await sync.listEvents(T, { sessionId: 's1' })).toHaveLength(1);
     const handoff = await served.saveHandoff(T, { version: 1, sessionId: 's1', summary: 'carry on' }, null);
     expect(handoff.summary).toBe('carry on');
     expect((await served.latestHandoff(T, 's1', {}, null))?.summary).toBe('carry on');
@@ -60,9 +59,9 @@ describe('sessions group', () => {
 describe('cards group', () => {
   it('runs a card from create to complete in both forms', async () => {
     const r = root();
-    const sync = sqliteSyncStore(handlesOf(r)).cards;
+    const sync = sqliteStore(r).cards;
     const served = sqliteStore(r).cards;
-    const card = sync.create(T, { title: 'wire the port' });
+    const card = await sync.create(T, { title: 'wire the port' });
     expect((await served.load(T, card.id))?.title).toBe('wire the port');
     const claimed = await served.claim(T, card.id, 'claude');
     // The first row in a fresh store's AUTOINCREMENT card_runs table.
@@ -71,9 +70,9 @@ describe('cards group', () => {
     const detail = await served.detail(T, card.id);
     expect(detail?.comments).toHaveLength(1);
     expect(detail?.runs).toHaveLength(1);
-    expect(sync.list(T, {}).map((c) => c.id)).toContain(card.id);
+    expect((await sync.list(T, {})).map((c) => c.id)).toContain(card.id);
     expect(await served.load(T, 'nope')).toBeNull();
-    expect(() => sync.create(T, { title: '' })).toThrow();
+    await expect(sync.create(T, { title: '' })).rejects.toThrow();
     await expect(served.create(T, { title: '' })).rejects.toThrow();
   });
 });
@@ -81,14 +80,14 @@ describe('cards group', () => {
 describe('goals group', () => {
   it('pushes a goal and lists it, then completes it', async () => {
     const r = root();
-    const sync = sqliteSyncStore(handlesOf(r)).goals;
+    const sync = sqliteStore(r).goals;
     const served = sqliteStore(r).goals;
-    const goal = sync.push(T, { sessionId: 's1', goalName: 'ship the refactor' });
+    const goal = await sync.push(T, { sessionId: 's1', goalName: 'ship the refactor' });
     expect((await served.sessionGoals(T, 's1')).map((g) => g.id)).toEqual([goal.id]);
     await served.suspend(T, goal.id);
     await served.resume(T, goal.id);
     await served.complete(T, goal.id, { outcomeScore: 1 });
-    expect(sync.sessionGoals(T, 's1')[0]?.status).toBe('completed');
+    expect((await sync.sessionGoals(T, 's1'))[0]?.status).toBe('completed');
   });
 });
 
@@ -100,10 +99,10 @@ describe('conflicts group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'contradiction', score: 0.9 }]);
-    const sync = sqliteSyncStore(handlesOf(r)).conflicts;
+    const sync = sqliteStore(r).conflicts;
     const served = sqliteStore(r).conflicts;
     const query = (tenantId: TenantId): ConflictListQuery => ({ tenantId, status: 'open', limit: 10 });
-    const [open] = sync.list(query(T)).rows;
+    const [open] = (await sync.list(query(T))).rows;
     expect(open?.a).not.toBeNull();
     expect(open?.b).not.toBeNull();
     expect((await served.list(query(ALL_TENANTS))).rows).toHaveLength(1);
@@ -142,9 +141,9 @@ describe('dormant group', () => {
   it('lists, restores and forgets, and keeps another tenant out', async () => {
     const r = root();
     const row = seed(r);
-    const sync = sqliteSyncStore(handlesOf(r)).dormant;
+    const sync = sqliteStore(r).dormant;
     const served = sqliteStore(r).dormant;
-    expect(sync.list(T, null, {}).map((m) => m.id)).toEqual([row.id]);
+    expect((await sync.list(T, null, {})).map((m) => m.id)).toEqual([row.id]);
     expect(await served.holds(T, null, row.id)).toBe(true);
     expect(await served.holds('other', null, row.id)).toBe(false);
     const outcome = await served.restore(T, {
@@ -174,11 +173,11 @@ describe('reports group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'x', score: 0.9 }]);
-    const sync = sqliteSyncStore(handlesOf(r)).reports;
+    const sync = sqliteStore(r).reports;
     const served = sqliteStore(r).reports;
     const status = await served.memoryStatus(T, new Date(), 0.1);
     expect(status).toMatchObject({ total: 2, openConflicts: 1 });
-    expect(sync.memoryStatus(T, new Date(), 0.1).total).toBe(2);
+    expect((await sync.memoryStatus(T, new Date(), 0.1)).total).toBe(2);
     const first = await served.entriesPage(T, { limit: 1 });
     expect(first.entries).toHaveLength(1);
     expect(first.next).not.toBeNull();

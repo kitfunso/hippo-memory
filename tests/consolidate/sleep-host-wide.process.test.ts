@@ -16,8 +16,7 @@ import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -128,7 +127,7 @@ function onStore<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
 }
 
 /** Three tenants on the legacy half-life base, with particles, a completed session, an open conflict and a tombstoned merge. */
-function seed(config: { memoryValue?: { enabled: boolean } }): string {
+async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<string> {
   const root = makeRoot('sleep-host-golden', {
     config: { physics: { enabled: true }, ...config },
   });
@@ -157,7 +156,7 @@ function seed(config: { memoryValue?: { enabled: boolean } }): string {
       normalizedChars: normalizeValueForRejection(refused).length,
     });
   });
-  sqliteSyncStore(handlesOf(root)).consolidation.replaceConflicts(
+  await sqliteStore(root).consolidation.replaceConflicts(
     [
       {
         memory_a_id: 'mem_acme_04',
@@ -255,8 +254,10 @@ async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: numb
 
 /** The default page's sleep, after checking one-row pages and one page for the whole store end the same. */
 async function sleepAtEveryPageSize(config: { memoryValue?: { enabled: boolean } }, opts: { dryRun?: boolean } = {}) {
-  const pinned = await sleepOnce(seed(config), opts);
-  for (const pageRows of [1, Infinity]) expect(await sleepOnce(seed(config), { ...opts, pageRows })).toEqual(pinned);
+  const pinned = await sleepOnce(await seed(config), opts);
+  for (const pageRows of [1, Infinity]) {
+    expect(await sleepOnce(await seed(config), { ...opts, pageRows })).toEqual(pinned);
+  }
   return pinned;
 }
 
@@ -535,7 +536,7 @@ describe('one sleep over three tenants', () => {
   });
 
   it('previews the same run without writing', async () => {
-    const unslept = hostState(seed({}));
+    const unslept = hostState(await seed({}));
     const { result, state } = await sleepAtEveryPageSize({}, { dryRun: true });
     expect(state).toEqual(unslept);
     const { details: _, ...counts } = result;

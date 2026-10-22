@@ -24,7 +24,6 @@ import type {
 } from '../port/diagnostics.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 function attempt<T>(read: () => T): Attempt<T> {
@@ -98,6 +97,6 @@ const diagnosticsBodies: Bodies<Diagnostics> = {
   inventory: storeInventory,
 };
 
-export function sqliteDiagnostics(on: OnHandle): Sync<Diagnostics> {
+export function sqliteDiagnostics(on: OnHandle): Diagnostics {
   return bound(on, diagnosticsBodies, openHippoDbReadOnly);
 }

@@ -99,13 +99,13 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
   });
 
   it('GET /v1/predictions with no class and no status lists closed predictions too', async () => {
-    const open = savePrediction(home, 'default', { classTag: 'ship', claimText: 'the release ships friday' });
-    const done = savePrediction(home, 'default', {
+    const open = await savePrediction(home, 'default', { classTag: 'ship', claimText: 'the release ships friday' });
+    const done = await savePrediction(home, 'default', {
       classTag: 'migrate',
       claimText: 'the migration takes two days',
       estimateValue: 2,
     });
-    closePrediction(home, 'default', done.id, { closureState: 'closed', actualValue: 3 });
+    await closePrediction(home, 'default', done.id, { closureState: 'closed', actualValue: 3 });
     const res = await fetch(`${handle.url}/v1/predictions`, { headers: authHeaders() });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ predictions: Prediction[] }>(res);

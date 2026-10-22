@@ -2,14 +2,13 @@
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { writeEntryRow } from './entry-writes.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { appendAuditEvents } from './audit.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { keysetAfter } from '../../db/sql.js';
 import type { PredictionSave, Predictions } from '../port.js';
-import type { Sync } from './served.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { PredictionBaserate } from '../port/types.js';
@@ -20,7 +19,7 @@ import {
   type SavePredictionOptions,
 } from '../port/objects.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
@@ -469,8 +468,12 @@ const predictionsBodies: Bodies<Omit<Predictions, 'savePrediction'>> = {
 };
 
 // The save writes the prediction's mirror, so it alone opens the store with its mirror folders.
-const predictionSaveBodies: FileBodies<Pick<Predictions, 'savePrediction'>> = { savePrediction: writePrediction };
+function predictionSaveBodies(files: StoreFiles): Bodies<Pick<Predictions, 'savePrediction'>> {
+  return {
+    savePrediction: (db, ...args) => writePrediction(db, files, ...args),
+  };
+}
 
-export function sqlitePredictions(on: OnHandle): Sync<Predictions> {
-  return { ...bound(on, predictionsBodies), ...boundWithFiles(on, predictionSaveBodies, openStore) };
+export function sqlitePredictions({ on, files }: Handles): Predictions {
+  return { ...bound(on, predictionsBodies), ...bound(on, predictionSaveBodies(files), openStore) };
 }
