@@ -143,10 +143,10 @@ async function registerRoutes(root: string): Promise<void> {
   }
 }
 
-function copyOfFixture(prepare: (root: string) => void): string {
+async function copyOfFixture(prepare: (root: string) => void | Promise<void>): Promise<string> {
   const root = join(home, `copy-${String(++copies)}`);
   cpSync(fixture.dir, root, { recursive: true });
-  prepare(root);
+  await prepare(root);
   return root;
 }
 
@@ -159,9 +159,12 @@ async function runSide(side: ConnectorEventsSide, calls: readonly Call[], guard:
 }
 
 /** The other store's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
-async function conforms(calls: readonly Call[], prepare: (root: string) => void = () => undefined): Promise<Side> {
-  const sqlite = await runSide(sqliteConnectorEventsSide(copyOfFixture(prepare)), calls, (fn) => fn());
-  const memory = memorySide(copyOfFixture(prepare));
+async function conforms(
+  calls: readonly Call[],
+  prepare: (root: string) => void | Promise<void> = () => undefined,
+): Promise<Side> {
+  const sqlite = await runSide(sqliteConnectorEventsSide(await copyOfFixture(prepare)), calls, (fn) => fn());
+  const memory = memorySide(await copyOfFixture(prepare));
   const other = await runSide(memory, calls, (fn) => withSqliteBlocked(memory.store.kind, fn));
   expectSameOutcomes({ other, sqlite });
   return sqlite;

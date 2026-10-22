@@ -102,7 +102,16 @@ describe('server under a held write lock', () => {
     port2.postMessage('stop');
     await closed;
 
-    expect(reply).toMatchObject({ id: 1, ok: false, error: { message: 'database is locked', fields: { errcode: 5 } } });
+    // The job answers in the port's terms: a store-busy error whose cause is SQLite's own.
+    expect(reply).toMatchObject({
+      id: 1,
+      ok: false,
+      error: {
+        classes: expect.arrayContaining(['StoreBusyError']),
+        message: 'database is locked',
+        cause: { fields: { errcode: 5 } },
+      },
+    });
     expect(new Set(statements.filter((sql) => STORE_OPEN.test(sql)))).toEqual(new Set(['PRAGMA busy_timeout = 7']));
     expect(countMatching(statements, 'BEGIN IMMEDIATE')).toBe(1);
   });

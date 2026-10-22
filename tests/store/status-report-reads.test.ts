@@ -151,7 +151,7 @@ describe('physics status stats', () => {
   it('reads one column past the limit, whatever the particle count', async () => {
     await seedParticles(4);
     const stats = async () => await sqliteStore(root).embeddingIndex.particleStats(2);
-    const reads = recordStatements(stats).reads.filter((r) => r.sql.includes('memory_physics'));
+    const reads = (await recordStatementsAsync(stats)).reads.filter((r) => r.sql.includes('memory_physics'));
     expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
   });
 
