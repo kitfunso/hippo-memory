@@ -154,8 +154,8 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
   /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every row in scope. */
   searchRecallEntries(query: string, args: RecallSearchArgs): Promise<MemoryEntry[]>;
-  /** The rows of `tenantId` among `ids`, ordered by created, then content, then id, all ascending; the
-   * input order is ignored. */
+  /** The rows of `tenantId` among `ids`, any number of them, ordered by created, then content, then id, all
+   * ascending; the input order is ignored. */
   entriesByIds(ids: readonly string[], tenantId: TenantId): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
   activeGoals(opts: GetActiveGoalsOpts): Promise<ActiveGoals>;
