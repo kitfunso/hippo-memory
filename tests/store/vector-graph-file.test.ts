@@ -307,6 +307,28 @@ describe('a value out of bounds deep in the file', () => {
   });
 });
 
+describe('a reader that lives across queries', () => {
+  it('reads the file once for two queries and again after the file is replaced', async () => {
+    const rows = mixedRows(ROWS, 8);
+    const f = await savedStore(rows);
+    const q = near(rows[5].vector, 8);
+    const reads = recordReads();
+
+    await nearest(f, q, spec(ALL_TENANTS));
+    const first = reads.length;
+    await nearest(f, q, spec(ALL_TENANTS));
+    expect(first, 'the first query reads the file').toBeGreaterThan(0);
+    expect(reads.length, 'the second query reads nothing').toBe(first);
+
+    const tmp = `${graphFile(f.root)}.next`;
+    fs.writeFileSync(tmp, fs.readFileSync(graphFile(f.root)));
+    fs.renameSync(tmp, graphFile(f.root));
+    await nearest(f, q, spec(ALL_TENANTS));
+    expect(reads.length, 'a replaced file is read again').toBeGreaterThan(first);
+    expect(f.covered.every((c) => c !== undefined)).toBe(true);
+  });
+});
+
 const warned = (spy: { mock: { calls: unknown[][] } }): string[] =>
   spy.mock.calls.map(([line]) => String(line)).filter((line) => line.includes('vector graph'));
 

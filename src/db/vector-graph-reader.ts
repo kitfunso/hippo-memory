@@ -32,19 +32,28 @@ interface NodeRecord {
   readonly upperOffset: number;
 }
 
+/** What tells one saved file from the next: the writer replaces it by rename, so a new file has a new identity. */
+interface FileIdentity {
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ino: number;
+}
+
 /** One graph file's bytes, decoded a record at a time as a search reaches each node; each value is checked as it is
  * read, so a bad one throws GraphFileError and never steers a read out of the file. */
 class GraphFileView implements GraphView {
   readonly #bytes: Buffer;
   readonly #file: string;
   readonly stamp: GraphStamp;
+  readonly identity: FileIdentity;
   readonly #records = new Map<number, NodeRecord>();
   readonly #upper = new Map<number, Uint32Array>();
 
-  private constructor(bytes: Buffer, file: string, stamp: GraphStamp) {
+  private constructor(bytes: Buffer, file: string, stamp: GraphStamp, identity: FileIdentity) {
     this.#bytes = bytes;
     this.#file = file;
     this.stamp = stamp;
+    this.identity = identity;
   }
 
   /** Undefined when there is no file; throws GraphFileError when it cannot be read or trusted. */
@@ -57,7 +66,7 @@ class GraphFileView implements GraphView {
       throw badGraphFile(file, 'could not be opened', err);
     }
     try {
-      const size = fs.fstatSync(fd).size;
+      const { size, mtimeMs, ino } = fs.fstatSync(fd);
       const stamp = readStamp(fd, file, size);
       const bytes = Buffer.allocUnsafe(size);
       for (let got = 0; got < size;) {
@@ -65,7 +74,7 @@ class GraphFileView implements GraphView {
         if (read === 0) throw badGraphFile(file, 'short file');
         got += read;
       }
-      return new GraphFileView(bytes, file, stamp);
+      return new GraphFileView(bytes, file, stamp, { size, mtimeMs, ino });
     } catch (err) {
       throw err instanceof GraphFileError ? err : badGraphFile(file, 'could not be read', err);
     } finally {
@@ -224,6 +233,8 @@ export class GraphFileIndex implements VectorIndex {
   readonly #hippoRoot: string;
   // A file that cannot be trusted warns once, until it is replaced.
   readonly #warned = new Set<string>();
+  // The last view of each path, kept so a long-lived process reads the file once, not on every query.
+  readonly #views = new Map<string, GraphFileView>();
 
   constructor(hippoRoot: string) {
     this.#hippoRoot = hippoRoot;
@@ -256,13 +267,31 @@ export class GraphFileIndex implements VectorIndex {
   #onFile<T>(dim: number, read: (file: GraphFileView) => T | undefined): T | undefined {
     const path = graphFilePath(this.#hippoRoot, dim);
     try {
-      const file = GraphFileView.open(path);
+      const file = this.#view(path);
       return file && read(file);
     } catch (err) {
       if (!(err instanceof GraphFileError)) throw err;
       this.#warnOnce(path, err);
       return undefined;
     }
+  }
+
+  #view(path: string): GraphFileView | undefined {
+    const stat = fs.statSync(path, { throwIfNoEntry: false });
+    const kept = this.#views.get(path);
+    if (
+      stat &&
+      kept &&
+      kept.identity.size === stat.size &&
+      kept.identity.mtimeMs === stat.mtimeMs &&
+      kept.identity.ino === stat.ino
+    ) {
+      return kept;
+    }
+    this.#views.delete(path);
+    const opened = stat && GraphFileView.open(path);
+    if (opened) this.#views.set(path, opened);
+    return opened || undefined;
   }
 
   #warnOnce(path: string, err: GraphFileError): void {
