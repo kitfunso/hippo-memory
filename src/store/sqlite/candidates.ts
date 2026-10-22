@@ -19,6 +19,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } fro
 import { pickRarestFtsQuery, loadRecallEntries } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../base/util/tenant.js';
+import { oldestFirst } from '../rules/order.js';
 import { tenantAnd } from './tenant.js';
 import { holdingPhrase, IN_PHRASE_HITS, TENANT_IS } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
@@ -217,10 +218,7 @@ export function loadAmbientCandidates(
 
   // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort is stable, so input order is load-bearing
   // downstream.
-  const entries = [...byId.values()].sort((a, b) => {
-    const byCreated = a.created.localeCompare(b.created);
-    return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
-  });
+  const entries = [...byId.values()].sort(oldestFirst);
   if (!recall) return { entries, refused };
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
   const recallEntries = ftsQuery

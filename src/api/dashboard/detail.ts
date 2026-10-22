@@ -1,7 +1,6 @@
 // The dashboard drawer's detail of one memory, read fresh through the api and stamped with the id the client holds.
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
-import { chunked } from '../../base/util/chunked.js';
 import { round1 } from '../../base/util/format.js';
 import type { HippoStore } from '../../store/port.js';
 import type { MemoryConflict } from '../../store/port/conflicts.js';
@@ -25,8 +24,8 @@ async function openConflictsOf(
   const conflicts = (await reads.openConflictsOf(tenantId, entry.id)).map((row) => row.conflict);
   const otherId = (c: MemoryConflict): string => (c.memoryAId === entry.id ? c.memoryBId : c.memoryAId);
   const others = new Map<string, MemoryEntry>();
-  for (const ids of chunked([...new Set(conflicts.map(otherId))])) {
-    for (const other of await store.entriesByIds(ids, tenantId)) others.set(other.id, other);
+  for (const other of await store.entriesByIds([...new Set(conflicts.map(otherId))], tenantId)) {
+    others.set(other.id, other);
   }
   const out: MemoryConflictDetail[] = [];
   for (const c of conflicts) {

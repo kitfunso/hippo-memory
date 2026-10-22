@@ -4,7 +4,6 @@ import { BadRequestError } from '../../base/errors/api-errors.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
@@ -115,9 +114,8 @@ async function copyMissingRows(into: ConfiguredFolder<SharingStore>, from: Shari
   const candidates = await missingRows(into.store.sharing, from.sharing);
   if (candidates.length === 0) return 0;
   const byId = new Map<string, MemoryEntry>();
-  for (const ids of chunked(candidates.map((k) => k.id))) {
-    for (const entry of await from.entriesByIds(ids, ALL_TENANTS)) byId.set(entry.id, entry);
-  }
+  const wanted = candidates.map((k) => k.id);
+  for (const entry of await from.entriesByIds(wanted, ALL_TENANTS)) byId.set(entry.id, entry);
 
   // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret
   // rows never copied. origin_project is preserved on the copy (the write stamps it only when missing).
