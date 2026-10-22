@@ -1,10 +1,10 @@
 // The functions eval and benchmark scripts call by name, with the real embedder, models, HTTP and ports wired in: a
 // frozen script re-points its import line here and keeps every call as written.
 import { folderIndex as targetOf, type ConfiguredFolder, type EmbedTarget } from '../domain/search/embed-memories.js';
-import { judgeAll as judgeOver, type JudgeOptions, type Judgment } from '../domain/eval/judgment.js';
+import { judgeAll as judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
-import { realRerankers } from '../infra/rerankers.js';
+import { realRerankers } from '../infra/rerankers/index.js';
 import * as api from '../api/index.js';
 import type { Context, GatedRememberOptions, RememberOptions, RememberResult, RememberSkipped } from '../api/index.js';
 import type { InfraPorts } from '../base/ports/infra.js';
