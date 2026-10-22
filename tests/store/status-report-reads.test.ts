@@ -10,7 +10,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries, loadStoredParticles } from '../_helpers/root-forms.js';
 import { vecNorm } from '../../src/base/rank/physics.js';
-import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { correctionLinksOf, rawProvenanceOf } from '../../src/store/memory/reports.js';
 
