@@ -16,7 +16,8 @@ import {
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
-import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
+import { mergeWorkingState, type WorkingState } from '../../domain/capture/working-state.js';
+import { transcriptWorkingState } from './working-state.js';
 import type { StoreGroups } from '../../store/port.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.

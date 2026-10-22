@@ -5,7 +5,7 @@ import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState } from './caller-session.js';
-import { mergeWorkingState, type WorkingState } from './working-state.js';
+import { mergeWorkingState, type WorkingState } from '../../domain/capture/working-state.js';
 import type { ContinuityKey } from '../../store/port/types.js';
 import { withEntryInfra } from '../entry-infra.js';
 

@@ -117,4 +117,4 @@ export {
   type CallerSessionEndRequest,
   type CallerSessionEndResult,
 } from './surface/capture/session-end-caller.js';
-export type { WorkingState } from './surface/capture/working-state.js';
+export type { WorkingState } from './domain/capture/working-state.js';

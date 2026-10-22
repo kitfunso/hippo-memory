@@ -17,7 +17,7 @@ import { type ProjectRef } from '../../base/scope/project-identity.js';
 import { resolveProjectIdentity, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { runCapture, type CaptureOptions, type CaptureTarget } from '../capture/command.js';
 import { preCompactHook, postCompactHook } from '../capture/compact.js';
-import { snapshotFields, transcriptWorkingState } from '../capture/working-state.js';
+import { transcriptWorkingState } from '../capture/working-state.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import { type SessionTurn } from '../capture/transcript.js';
 import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcript.js';
@@ -333,10 +333,7 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
     },
     digest: (scan, key, log) =>
       recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
-    workingState: (log) => {
-      const state = transcriptPath ? transcriptWorkingState(transcriptPath, log) : null;
-      return state === null ? null : snapshotFields(state);
-    },
+    workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
     evidence: () => collectHandoffEvidence(process.cwd(), 'unknown'),
   });
 }
