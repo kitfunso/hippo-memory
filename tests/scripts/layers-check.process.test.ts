@@ -93,6 +93,15 @@ const LOCAL_IMPORT = "import { isLocal } from '../store/local/index.js';\nexport
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
 const FIXTURES_IMPORT = "import { seed } from '../store/sqlite/fixtures.js';\nexport const z = seed;\n";
 const ENTRY_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, entry: 'high' } };
+const KIT_DOOR = 'store/sqlite/fixtures.ts';
+const KIT_MAP = {
+  ...ENTRY_MAP,
+  adapter: {
+    ...ADAPTER,
+    doors: ['store/sqlite/index.ts'],
+    testKit: { file: 'surface/testing-kit.ts', door: KIT_DOOR },
+  },
+};
 const SURFACE_SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../../store/sqlite/store.js';\n";
 const APART_MAP = {
   order: ['low', 'high'],
@@ -383,6 +392,39 @@ const rows: Row[] = [
       'src/entry/testing.ts:1 imports src/store/sqlite/fixtures.ts; take the store from src/surface/open-store.ts',
       'src/store/port.ts:1 imports src/store/sqlite/store.ts',
     ],
+  },
+  {
+    name: 'the test kit may import its one door, and an entry re-exports from the kit',
+    files: {
+      ...SQLITE_BASE,
+      'src/surface/testing-kit.ts': ROOT_FIXTURES,
+      'src/entry/testing.ts': "export { seed } from '../surface/testing-kit.js';\n",
+    },
+    map: KIT_MAP,
+    status: 0,
+    output: ['Layer order OK'],
+  },
+  {
+    name: "the test kit past its door fails, and so does the root through the kit's door",
+    files: {
+      ...SQLITE_BASE,
+      'src/entry/keep.ts': '',
+      'src/surface/testing-kit.ts': `${ROOT_FIXTURES}${ROOT_DOOR}`,
+      'src/surface/open-store.ts': `${ROOT_DOOR}${ROOT_FIXTURES}`,
+    },
+    map: KIT_MAP,
+    status: 1,
+    output: [
+      "src/surface/testing-kit.ts:2 imports src/store/sqlite/index.ts past the adapter's doors in layers.json",
+      "src/surface/open-store.ts:2 imports src/store/sqlite/fixtures.ts past the adapter's doors in layers.json",
+    ],
+  },
+  {
+    name: 'a test kit layers.json names that does not exist fails',
+    files: { ...SQLITE_BASE, 'src/entry/keep.ts': '' },
+    map: { ...KIT_MAP, adapter: { ...KIT_MAP.adapter, testKit: { file: 'surface/gone.ts', door: KIT_DOOR } } },
+    status: 1,
+    output: ['layers.json adapter.testKit: src/surface/gone.ts does not exist'],
   },
   {
     name: 'the root importing a module behind the doors fails with file:line, type-only too',

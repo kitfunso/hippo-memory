@@ -4,9 +4,9 @@
 // .layers-baseline.json holds one number, the cap on root files in layers.json, which may fall but never rise.
 // A file under src/surface/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
 // So does a runtime import from src/surface/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
-// layers.json `adapter`: any import, re-export or import() (type-only too) into its folder from a file outside it and its
-// one `root` fails, as does a root import past its `doors`, a sqliteStoreOn name outside them, and any identifier
-// or string naming SQLite in an `unnamedIn` layer: every other file takes its store, and its errors, through the port.
+// layers.json `adapter`: any import, re-export or import() (type-only too) into its folder from a file outside it, its
+// one `root` and its `testKit` fails, as does a root import past its `doors`, a kit import past its one `door`, a
+// sqliteStoreOn name outside them, and any identifier or string naming SQLite in an `unnamedIn` layer.
 // So does a runtime import from src/surface/cli/** or src/surface/mcp/** into src/domain, with no list: commands reach business logic through src/api.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and local/**, which the next rule covers: the api reads the store through the port and takes shared rules from src/base.
 // So does any import from src/api/** or src/domain/** into src/store/local/**, with no list, any isLocalStore there, and any hippoRoot in src/api/**: both read the store through its port groups.
@@ -329,30 +329,39 @@ function findAdapterNames(map, rule, srcDir) {
   return out;
 }
 
-/** A root that is gone or no longer imports the adapter, so `adapter.root` names the wrong file. */
-function staleAdapterRoot(rule, srcDir, found) {
-  if (!existsSync(join(srcDir, rule.root))) return [`${MAP} adapter.root: src/${rule.root} does not exist`];
-  if (found.some((e) => e.file === rule.root)) return [];
-  return [`${MAP} adapter.root: src/${rule.root} no longer imports src/${rule.folder}`];
+/** A root or kit that is gone or no longer imports the adapter, so `adapter.<key>` names the wrong file. */
+function staleAdapterFile(rule, key, file, srcDir, found) {
+  if (!existsSync(join(srcDir, file))) return [`${MAP} adapter.${key}: src/${file} does not exist`];
+  if (found.some((e) => e.file === file)) return [];
+  return [`${MAP} adapter.${key}: src/${file} no longer imports src/${rule.folder}`];
 }
 
-/** Adapter imports outside its root, root imports past the doors, adapter names, then a stale root. */
+/** The files that may import the adapter, each with the doors it may use: the store root, and the test kit. */
+function adapterEntrances(rule) {
+  const entrances = new Map([[rule.root, new Set(rule.doors ?? [])]]);
+  if (rule.testKit) entrances.set(rule.testKit.file, new Set([rule.testKit.door]));
+  return entrances;
+}
+
+/** Adapter imports outside its root and kit, imports past their doors, adapter names, then a stale root or kit. */
 function adapterProblems(map, srcDir) {
   const rule = map.adapter;
   if (!rule) return [];
   const found = findAdapterReaches(rule, srcDir);
-  const doors = new Set(rule.doors ?? []);
+  const entrances = adapterEntrances(rule);
+  const kit = rule.testKit;
   return [
     ...found
-      .filter((e) => e.file !== rule.root)
+      .filter((e) => !entrances.has(e.file))
       .map(
         (e) => `src/${e.file}:${e.line} imports src/${e.target}; take the store from src/${rule.root} or the Context`,
       ),
     ...found
-      .filter((e) => e.file === rule.root && !doors.has(e.target))
+      .filter((e) => entrances.has(e.file) && !entrances.get(e.file).has(e.target))
       .map((e) => `src/${e.file}:${e.line} imports src/${e.target} past the adapter's doors in ${MAP}`),
     ...findAdapterNames(map, rule, srcDir),
-    ...staleAdapterRoot(rule, srcDir, found),
+    ...staleAdapterFile(rule, 'root', rule.root, srcDir, found),
+    ...(kit ? staleAdapterFile(rule, 'testKit', kit.file, srcDir, found) : []),
   ];
 }
 
