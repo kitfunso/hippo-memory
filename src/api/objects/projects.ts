@@ -14,7 +14,6 @@ import {
 import type { ProjectTags, ProjectTagScope } from '../../store/port/project-tags.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { sharedStoreOf, type ContextWith } from '../types.js';
-import { infraOf } from '../infra.js';
 
 export type {
   MergeResult,
@@ -39,7 +38,7 @@ function scopeOf(ctx: ContextWith<'projectTags'>): ProjectTagScope {
 }
 
 async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
-  if (ctx.reach?.isGlobal) return { isGlobal: true, machine: infraOf(ctx).machine };
+  if (ctx.reach?.isGlobal) return { isGlobal: true, machine: ctx.infra.machine };
   const { project } = await ctx.store.folderFiles.home();
   return { isGlobal: false, shared: sharedStoreOf(ctx), project };
 }

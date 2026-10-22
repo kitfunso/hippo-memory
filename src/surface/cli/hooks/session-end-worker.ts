@@ -12,7 +12,6 @@ import {
   turnsAfter,
   type WorkerMode,
 } from '../../capture/session-worker.js';
-import { infraOf } from '../../../api/infra.js';
 import { sessionEndWork as runSessionEnd } from '../../../api/session-end.js';
 import { cliApiContext } from '../api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
@@ -47,7 +46,7 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
       after: (id, file, turns) => turnsAfter(turns, loadTurnPosition(id, file)),
       save: (id, file, turns) => saveTurnPosition(id, file, turns, logLine),
     },
-    currentProject: () => infraOf(ctx).machine.projectIdentity(process.cwd()),
+    currentProject: () => ctx.infra.machine.projectIdentity(process.cwd()),
     // The run writes to this folder's own store, else to the global one in its reach.
     capture: async (into, turns, originProject) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;

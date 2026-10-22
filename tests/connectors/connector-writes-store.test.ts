@@ -17,6 +17,7 @@ import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { memorySide } from '../_helpers/memory-side.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -70,7 +71,14 @@ describe('a served store with connectorWrites takes connector traffic', () => {
   it('stores one Slack message and one GitHub event and archives on one Slack deletion, with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const memory = memorySide(copyOf());
-    const ctx = { hippoRoot, tenantId: TENANT_A, actor: connector, store: memory.store, config: loadConfig(hippoRoot) };
+    const ctx = {
+      hippoRoot,
+      tenantId: TENANT_A,
+      actor: connector,
+      store: memory.store,
+      config: loadConfig(hippoRoot),
+      infra: testInfra(),
+    };
     const slackMessage = messageToRememberOpts({
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
@@ -140,6 +148,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       actor: connector,
       store: memory.store,
       config: DEFAULT_CONFIG,
+      infra: testInfra(),
     };
     const comment = issueCommentEventToRememberOpts({
       action: 'created',

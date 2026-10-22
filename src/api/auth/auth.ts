@@ -8,7 +8,7 @@ import type { KeyMint, SelfKeyMint, HippoStore } from '../../store/port.js';
 import type { ApiKeyOwner, ApiKeyRecord } from '../../store/port/types.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { requireHostAdmin, type Actor, type Context } from '../types.js';
+import { requireHostAdmin, type Actor, type Context, type EntryContext } from '../types.js';
 import type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../../store/port/keys.js';
 
 const API_KEY_SUBJECT = 'api_key:';
@@ -42,7 +42,7 @@ export interface AuthCreateResult {
 /** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant
  * B. Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it
  * mints members. */
-export async function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
+export async function authCreate(ctx: EntryContext, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
@@ -64,7 +64,7 @@ interface MintedKeyRow<F extends KeyFields> {
 }
 
 /** A key row in the caller's tenant, made here so only its hash ever reaches a store. */
-function newKey<F extends KeyFields>(ctx: Context, fields: F): MintedKeyRow<F> {
+function newKey<F extends KeyFields>(ctx: EntryContext, fields: F): MintedKeyRow<F> {
   const { keyId, plaintext, keyHash } = mintApiKey();
   return { plaintext, key: { ...fields, keyId, keyHash, tenantId: ctx.tenantId, createdAt: new Date().toISOString() } };
 }
@@ -87,7 +87,7 @@ function mintExpiry({ ttlDays, noExpiry }: AuthCreateOpts): string | null {
   return new Date(Date.now() + days * DAY_MS).toISOString();
 }
 
-function adminKeyMint(ctx: Context, opts: AuthCreateOpts): KeyMintPlan<KeyMint> {
+function adminKeyMint(ctx: EntryContext, opts: AuthCreateOpts): KeyMintPlan<KeyMint> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can create API keys');
   }
@@ -132,14 +132,14 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
 
 /** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's
  * revokes, the mint and its audit rows commit or fail together. */
-export async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
+export async function authCreateSelf(ctx: EntryContext, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = selfKeyMint(ctx, opts);
   await keyWrites.createSelfApiKey(mint);
   return selfResult(mint, plaintext);
 }
 
-function selfKeyMint(ctx: Context, opts: AuthCreateSelfOpts): KeyMintPlan<SelfKeyMint> {
+function selfKeyMint(ctx: EntryContext, opts: AuthCreateSelfOpts): KeyMintPlan<SelfKeyMint> {
   if (!ctx.actor.viaAuthResolver) {
     throw new ForbiddenError('Only a caller signed in through the auth resolver can mint its own key');
   }
@@ -208,7 +208,7 @@ function memberListFilter(
 
 /** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or unowned key, so it cannot
  * probe key ids. */
-function assertMayRevoke(ctx: Context, keyId: string, row: ApiKeyOwner | undefined): asserts row is ApiKeyOwner {
+function assertMayRevoke(ctx: EntryContext, keyId: string, row: ApiKeyOwner | undefined): asserts row is ApiKeyOwner {
   const { actor } = ctx;
   if (
     actor.role !== 'admin' &&
@@ -234,7 +234,7 @@ export interface AuthRevokeResult {
 /** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it
  *  minted.
  *  The revoke and its auth_revoke row commit together on either store, so a failed audit write leaves the key live. */
-export async function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
+export async function authRevoke(ctx: EntryContext, keyId: string): Promise<AuthRevokeResult> {
   const store = ctx.store;
   const keyAudit = store.keyAudit;
   assertMemberKeyRevokesSelf(ctx, keyId);
@@ -244,7 +244,7 @@ export async function authRevoke(ctx: Context, keyId: string): Promise<AuthRevok
   return { ok: true, revokedAt: await keyAudit.revokeApiKey(revoke) };
 }
 
-function assertMemberKeyRevokesSelf(ctx: Context, keyId: string): void {
+function assertMemberKeyRevokesSelf(ctx: EntryContext, keyId: string): void {
   if (ctx.actor.role !== 'admin' && !ctx.actor.viaAuthResolver && keyIdOfSubject(ctx.actor.subject) !== keyId) {
     throw new ForbiddenError('A member key can revoke only itself');
   }

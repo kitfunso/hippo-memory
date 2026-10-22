@@ -18,7 +18,7 @@ export type { FailureSummary } from '../store/port/rejections.js';
 export { classifyOriginProject } from '../base/scope/project-identity.js';
 
 export { RecallContractError, adminActor, contextReach, ownerOrSubject, requireHostAdmin } from './types.js';
-export type { Actor, Context, ContextReach, GlobalInReach } from './types.js';
+export type { Actor, Context, ContextReach, EntryContext, GlobalInReach } from './types.js';
 export { remember } from './memories/remember.js';
 export type {
   GatedRememberOptions,

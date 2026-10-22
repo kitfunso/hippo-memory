@@ -1,6 +1,6 @@
 // PreCompact for a caller on another machine: the record and the owner's snapshot go under its tenant and project; only
 // a refused bind or the holdout arm withholds the instruction.
-import type { Context } from '../../api/types.js';
+import type { Context, EntryContext } from '../../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
@@ -32,7 +32,10 @@ async function logged<T>(what: string, fn: () => Promise<T>): Promise<T | null> 
   }
 }
 
-export async function preCompactForCaller(given: Context, req: CallerPreCompactRequest): Promise<CallerHookOutput> {
+export async function preCompactForCaller(
+  given: EntryContext,
+  req: CallerPreCompactRequest,
+): Promise<CallerHookOutput> {
   const ctx = withEntryInfra(given);
   assertTrigger(req.trigger);
   const state = checkedWorkingState(req.workingState);

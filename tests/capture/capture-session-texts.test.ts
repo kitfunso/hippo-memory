@@ -2,12 +2,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { ContextWith } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
-import { captureSessionTexts, type SessionCaptureRequest } from '../../src/surface/capture/session-texts.js';
+import {
+  captureSessionTexts,
+  type CaptureContext,
+  type SessionCaptureRequest,
+} from '../../src/surface/capture/session-texts.js';
 import { collectSessionTurns, sessionTail } from '../../src/surface/capture/transcript.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { deriveOriginProject } from '../../src/host/project-identity.js';
@@ -50,7 +53,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): ContextWith<'captures'> => ({
+const ctxFor = (hippoRoot: string, tenantId = 'default'): CaptureContext => ({
   store: sqliteStore(hippoRoot),
   config: loadConfig(hippoRoot),
   tenantId,

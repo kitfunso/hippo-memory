@@ -34,8 +34,3 @@ export function rootInfra(host: Host = createHost()): () => InfraPorts {
   let rerankers: RerankerLookup | undefined;
   return () => realInfra((rerankers ??= realRerankers()), host);
 }
-
-/** A Context with the real ports filled in when its builder set none, as a published entry takes one. */
-export function withRealInfra<C extends { readonly infra?: InfraPorts }>(ctx: C, infra: () => InfraPorts): C {
-  return ctx.infra === undefined ? { ...ctx, infra: infra() } : ctx;
-}

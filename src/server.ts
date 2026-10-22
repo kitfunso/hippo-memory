@@ -8,7 +8,7 @@ import {
   type AuthCreateSelfResult,
   authRevoke,
   type AuthRevokeResult,
-  type Context,
+  type EntryContext as Context,
 } from './api/index.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
 

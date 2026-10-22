@@ -1,13 +1,13 @@
 // The seams a server uses to end a session and to keep two owners and two request ids apart.
 import { describe, expect, it } from 'vitest';
 import { BadRequestError, ConflictError } from '../../src/base/errors/api-errors.js';
-import type { Context } from '../../src/api/types.js';
 import {
   bindSessionOwner,
   captureFailureForCaller,
   compactResumeForCaller,
   saveCompactionItemsForCaller,
   sessionEndHandoffForCaller,
+  type Context,
 } from '../../src/server.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { snapshotFields } from '../../src/domain/capture/working-state.js';

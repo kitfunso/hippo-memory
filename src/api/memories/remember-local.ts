@@ -9,7 +9,6 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, ContextWith } from '../types.js';
-import { infraOf } from '../infra.js';
 
 // The tags a caller in this process adds from the folder it runs in.
 export { extractPathTags } from '../../domain/search/path-context.js';
@@ -66,7 +65,7 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
 /** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index
  * is logged. */
 function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const target = folderIndex({ store: ctx.store, config: ctx.config, embedderFor: infraOf(ctx).embedderFor });
+  const target = folderIndex({ store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor });
   return embedMemory(target, entry).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
@@ -129,7 +128,7 @@ export async function extractRememberedFacts(
 ): Promise<FactExtraction> {
   const { extraction, defaultHalfLifeDays } = ctx.config;
   if (!request.requested && extraction.enabled !== true) return { status: 'off' };
-  const { llm } = infraOf(ctx);
+  const { llm } = ctx.infra;
   if (!llm) return { status: 'no_key' };
   const failures: string[] = [];
   let facts = 0;

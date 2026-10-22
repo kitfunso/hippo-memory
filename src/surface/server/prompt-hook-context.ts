@@ -1,6 +1,6 @@
 // The ./server entry's prompt hook: an add-on's Context gets the reach a root probes for its store's folder and the
 // entry's real ports, so the add-on renders what the hippo server would.
-import { contextReach, type Context, type ContextReach } from '../../api/index.js';
+import { contextReach, type ContextReach, type EntryContext } from '../../api/index.js';
 import {
   promptHookContext as renderPromptHook,
   type PromptHookOptions,
@@ -13,7 +13,7 @@ import { entryHost, withEntryInfra } from '../entry-infra.js';
 import { defaultReach } from '../open-store.js';
 
 export async function promptHookContext(
-  ctx: Context,
+  ctx: EntryContext,
   req: PromptHookRequest,
   opts?: PromptHookOptions,
 ): ReturnType<typeof renderPromptHook> {
