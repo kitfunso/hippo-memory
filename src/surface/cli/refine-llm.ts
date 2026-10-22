@@ -7,7 +7,6 @@ import { MemoryEntry, Layer } from '../../base/memory/memory.js';
 import { REFINED_TAG, storeRefinement } from '../../api/index.js';
 import { memoryList, memoryListByIds, type TenantReach } from '../../api/memories/memories.js';
 import { cliApiContext, type CliContext } from './api-context.js';
-import { chunked } from '../../base/util/chunked.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { log } from '../../base/util/log.js';
@@ -158,8 +157,7 @@ async function refineOneEntry(
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
   // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped, so refine still works from the merged
   // content alone.
-  const chunks = await Promise.all(chunked(parentIds).map((chunk) => memoryListByIds(ctx, chunk, reach)));
-  const found = new Map(chunks.flat().map((p) => [p.id, p]));
+  const found = new Map((await memoryListByIds(ctx, parentIds, reach)).map((p) => [p.id, p]));
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 
   const refined = await refineSemanticMemory(entry.content, sources, {
