@@ -9,6 +9,7 @@ export { runDetachedSqliteRequest, runSqliteBatch, runSqliteHookRequest, runSqli
 export { sqliteServerRuntime, type ServerRuntimeOptions, type SqliteServerRuntime } from './server-runtime.js';
 export { tenantOfApiKey, type ResolveOptions } from './tenant.js';
 export { askingNearestFirst } from './vector-reads.js';
+export { saveVectorGraphFile } from '../../db/vector-graph-build.js';
 export { OTHER_STORE_MARKER, withSharedStoreHandles } from '../../db/index.js';
 // The ./store-kit entry's vector rules, so an add-on store keeps hippo.db's bytes and ranking.
 export {
