@@ -18,7 +18,7 @@
  * Real SQLite stores in temp dirs, no mocks (project convention).
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import * as os from 'os';
 import * as path from 'path';
@@ -150,6 +150,35 @@ describe('recall cross-store determinism', () => {
     const groupOrderB = contentsB.filter((c) => TIE_GROUP_SORTED.includes(c));
     expect(groupOrderA).toEqual(TIE_GROUP_SORTED);
     expect(groupOrderB).toEqual(TIE_GROUP_SORTED);
+  });
+
+  it('searchBothHybrid starts the global load while the local one is still out', async () => {
+    const [local, global] = sharingStores(storeA, storeB);
+    const events: string[] = [];
+    const searchLocal = local.store.sharing.searchEntries.bind(local.store.sharing);
+    const searchGlobal = global.store.sharing.searchEntries.bind(global.store.sharing);
+    // The local answer waits a turn of the event loop, so a global load that waits on it starts after local:end.
+    vi.spyOn(local.store.sharing, 'searchEntries').mockImplementation(async (...args) => {
+      events.push('local:start');
+      await new Promise((done) => setImmediate(done));
+      const found = await searchLocal(...args);
+      events.push('local:end');
+      return found;
+    });
+    vi.spyOn(global.store.sharing, 'searchEntries').mockImplementation(async (...args) => {
+      events.push('global:start');
+      return searchGlobal(...args);
+    });
+
+    const results = await searchBothHybrid(QUERY, local, global, {
+      tenantId: ALL_TENANTS,
+      embedderFor: resolveEmbeddingProvider,
+      budget: 100_000,
+      now: NOW,
+    });
+
+    expect(events).toEqual(['local:start', 'global:start', 'local:end']);
+    expect(results.length).toBeGreaterThan(0);
   });
 
   it('searchBothHybrid returns identical top-K content sequences across differently-named fresh stores', async () => {
