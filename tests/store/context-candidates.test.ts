@@ -6,7 +6,7 @@ import { withSharedStoreHandles } from '../../src/db/index.js';
 import { strengthAblation } from '../../src/base/memory/ablation.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadContextCandidates, tallySources, loadTextsHoldingWords, writeEntry } from '../_helpers/root-forms.js';
+import { loadContextCandidates, tallySources, loadTextsHolding, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -86,25 +86,27 @@ describe('loadContextCandidates over the cap', () => {
     expect(all({ exactScope: 'slack:private:c1', project: ['proj'], cap: 100, now: NOW })).toEqual(['f-private']);
   });
 
-  it('tallies sources and finds rows by a word they hold', () => {
+  it('tallies sources and finds the rows holding a text', () => {
     expect(tallySources(root, 'default').map((t) => [t.source, t.count])).toEqual([['cli', 10]]);
     expect(tallySources(root).reduce((n, t) => n + t.count, 0)).toBe(11);
-    expect(loadTextsHoldingWords(root, 'default', ['e-mid', 'nothing']).map((r) => r.content)).toEqual([
+    expect(loadTextsHolding(root, 'default', ['row e-mid body', 'nothing']).map((r) => r.content)).toEqual([
       'row e-mid body',
     ]);
-    const scoped = loadTextsHoldingWords(root, 'default', ['e-mid', 'g-other', 'h-global', 'j-acme'], ['proj']);
+    const texts = ['e-mid', 'g-other', 'h-global', 'j-acme'].map((id) => `row ${id} body`);
+    const scoped = loadTextsHolding(root, 'default', texts, ['proj']);
     expect(scoped.map((r) => [r.content, r.originProject]).sort()).toEqual([
       ['row e-mid body', 'proj'],
       ['row h-global body', ''],
     ]);
   });
 
-  it('finds a row whose word falls on either side of a chunk boundary and in the last chunk', () => {
+  it('finds a row whose text falls on either side of a chunk boundary and in the last chunk', () => {
     const filler = (n: number): string[] => Array.from({ length: n }, (_, i) => `absent-${i}`);
-    const words = [...filler(ID_CHUNK - 1), 'e-mid', 'g-other', ...filler(ID_CHUNK), 'h-global'];
-    expect(words.length).toBeGreaterThan(2 * ID_CHUNK);
+    const held = (id: string): string => `row ${id} body`;
+    const texts = [...filler(ID_CHUNK - 1), held('e-mid'), held('g-other'), ...filler(ID_CHUNK), held('h-global')];
+    expect(texts.length).toBeGreaterThan(2 * ID_CHUNK);
     expect(
-      loadTextsHoldingWords(root, 'default', words)
+      loadTextsHolding(root, 'default', texts)
         .map((r) => r.content)
         .sort(),
     ).toEqual(['row e-mid body', 'row g-other body', 'row h-global body']);

@@ -133,7 +133,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
       ),
     /'sem_/,
   ),
-  read('lessonWrites.textsHoldingWords', (s) => s.lessonWrites.textsHoldingWords(TENANT, ['deploy'], null), PLAIN),
+  read('lessonWrites.textsHolding', (s) => s.lessonWrites.textsHolding(TENANT, [PLAIN], null), PLAIN),
   read(
     'lessonWrites.contentsWithTag',
     (s) => s.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined),

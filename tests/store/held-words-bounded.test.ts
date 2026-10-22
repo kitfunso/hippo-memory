@@ -4,7 +4,7 @@ import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '
 import { longestWord, mergedText, storedTextKeys, duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadTextsHoldingWords, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { loadTextsHolding, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 
 function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
@@ -48,9 +48,9 @@ function wholeScanKeys(root: string, words: readonly string[]): Set<string> {
   return storedTextKeys(held);
 }
 
-describe('loadTextsHoldingWords through the full-text index', () => {
+describe('loadTextsHolding through the full-text index', () => {
   let root: string;
-  const words = LESSONS.map(longestWord);
+  const words = LESSONS;
 
   beforeEach(() => {
     root = makeStore('held-words').root;
@@ -60,30 +60,30 @@ describe('loadTextsHoldingWords through the full-text index', () => {
 
   it.each([true, false])('finds exactly the lessons a whole scan finds, index in sync: %s', (inSync) => {
     withDb(root, (db) => setFtsInSync(db, inSync));
-    const keys = storedTextKeys(loadTextsHoldingWords(root, 'default', words));
-    const whole = wholeScanKeys(root, words);
+    const keys = storedTextKeys(loadTextsHolding(root, 'default', words));
+    const whole = wholeScanKeys(root, words.map(longestWord));
     expect(LESSONS.map((l) => keys.has(duplicateKey(l)))).toEqual(LESSONS.map((l) => whole.has(duplicateKey(l))));
     expect(LESSONS.map((l) => keys.has(duplicateKey(l)))).toEqual([true, true, true, true]);
   });
 
-  it('asks the index, not a tenant scan, for words it can name', () => {
-    const { statements } = recordStatements(() => loadTextsHoldingWords(root, 'default', words.slice(0, 2)));
-    const held = statements.filter((sql) => sql.includes('instr(content'));
+  it('asks the index, not a tenant scan, for texts it can name', () => {
+    const { statements } = recordStatements(() => loadTextsHolding(root, 'default', words.slice(0, 2)));
+    const held = statements.filter((sql) => sql.includes('memories_fts MATCH'));
     expect(held).toHaveLength(1);
     // SAFETY: EXPLAIN QUERY PLAN answers id, parent, notused and detail for each step.
     const plan = withDb(root, (db) => db.prepare(`EXPLAIN QUERY PLAN ${held[0]}`).all() as Array<{ detail: string }>);
     expect(plan.map((p) => p.detail).filter((d) => /^SCAN memories(?!_fts)/.test(d))).toEqual([]);
   });
 
-  it('reads the same rows when the store holds five times more rows without the words', () => {
+  it('reads the same rows when the store holds five times more rows without the texts', () => {
     const named = words.slice(0, 2);
-    const before = recordStatements(() => loadTextsHoldingWords(root, 'default', named));
+    const before = recordStatements(() => loadTextsHolding(root, 'default', named));
     writeEntriesTogether(
       root,
       Array.from({ length: 5 * STORED.length }, (_, i) => row(`unrelated filler ${i}`)),
     );
     withDb(root, (db) => setFtsInSync(db, true));
-    const after = recordStatements(() => loadTextsHoldingWords(root, 'default', named));
+    const after = recordStatements(() => loadTextsHolding(root, 'default', named));
     expect(after.rowsRead).toBe(before.rowsRead);
     expect(after.statements.length).toBe(before.statements.length);
     expect(after.result.map((r) => r.content).sort()).toEqual(before.result.map((r) => r.content).sort());

@@ -29,7 +29,7 @@ import {
   saveEmbeddingIndex,
   loadAmbientCandidates,
   loadContextCandidates,
-  loadTextsHoldingWords,
+  loadTextsHolding,
   countSessionRawMemories,
   loadLatestHandoff,
   loadVectorCandidateEntries,
@@ -213,7 +213,7 @@ describe('deny-only read sites', () => {
     }
   });
 
-  it('capture dedup: only the team row holds the word', () => {
+  it('capture dedup: of five rows holding the word, only the team row answers its own text', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: one COUNT row.
@@ -223,7 +223,8 @@ describe('deny-only read sites', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(loadTextsHoldingWords(root, T, ['zebrafish']).map((r) => r.content)).toEqual([
+    const texts = Object.keys(SCOPES).map((k) => `zebrafish note ${k} keeps the build cache warm`);
+    expect(loadTextsHolding(root, T, texts).map((r) => r.content)).toEqual([
       'zebrafish note team keeps the build cache warm',
     ]);
   });
@@ -250,7 +251,8 @@ describe('admin read sites', () => {
     scopes.forEach((scope, i) => writeEntry(root, mem(`gannet row ${i}`, { scope })));
     const actors: ScopeActor[] = [{ role: 'admin', owner: 'alice' }, { role: 'admin' }];
     for (const actor of actors) {
-      const rows = loadTextsHoldingWords(root, T, ['gannet'], undefined, touchableScopeSql('', personalScopeOf(actor)));
+      const texts = scopes.map((_, i) => `gannet row ${i}`);
+      const rows = loadTextsHolding(root, T, texts, undefined, touchableScopeSql('', personalScopeOf(actor)));
       const viaSql = rows.map((r) => scopes[Number(r.content.split(' ')[2])]);
       const viaJs = scopes.filter((s) => s === null || canReadScope(actor, s));
       expect(new Set(viaSql), actor.owner).toEqual(new Set(viaJs));

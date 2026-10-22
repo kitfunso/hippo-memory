@@ -21,6 +21,9 @@ oneRequestPerTest();
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const ALICE = 'personal:private:alice';
 const REFUSED = 'the release branch is cut on mondays';
+const MAIN = 'Deploy from main after the tests pass';
+const KEY = 'the deploy key rotates monthly';
+const ALIAS = 'my deploy alias is dpl';
 
 let fixture: TwoTenantFixture;
 
@@ -36,9 +39,9 @@ const heldByB = entry('tenant b deploys on fridays', { tenantId: TENANT_B });
 beforeAll(() => {
   fixture = seedTwoTenants();
   const seeded = [
-    entry('Deploy from main after the tests pass'),
-    entry('the deploy key rotates monthly', { scope: 'team:ops', source: 'cli' }),
-    entry('my deploy alias is dpl', { scope: ALICE }),
+    entry(MAIN),
+    entry(KEY, { scope: 'team:ops', source: 'cli' }),
+    entry(ALIAS, { scope: ALICE }),
     entry('nothing about shipping here'),
     heldByB,
   ];
@@ -65,17 +68,17 @@ async function conforms<G extends 'lessonWrites' | 'keyGrants'>(group: G, calls:
 describe('LessonWrites', () => {
   const sorted = (held: { content: string }[]) => [...held].sort((a, b) => a.content.localeCompare(b.content));
 
-  it('reads the rows holding a word within reach, writes a batch skipping a refused value, and counts it', async () => {
+  it('reads the copies of texts within reach, writes a batch skipping a refused value, and counts it', async () => {
     const first = entry('lessons batch one');
     const refused = entry(REFUSED);
     const second = entry('lessons batch two', { scope: 'team:ops' });
     const together = [entry('written together one'), entry('written together two')];
     const { outcomes, audit } = await conforms('lessonWrites', [
-      (g) => g.textsHoldingWords(TENANT_A, ['deploy', 'Deploy'], null).then(sorted),
-      (g) => g.textsHoldingWords(TENANT_A, ['deploy'], ALICE).then(sorted),
-      (g) => g.textsHoldingWords(TENANT_A, ['DEPLOY'], null),
-      (g) => g.textsHoldingWords(TENANT_B, ['deploy'], null),
-      (g) => g.textsHoldingWords(TENANT_A, ['from main', '!!'], null),
+      (g) => g.textsHolding(TENANT_A, [MAIN, KEY, ALIAS], null).then(sorted),
+      (g) => g.textsHolding(TENANT_A, [KEY, ALIAS], ALICE).then(sorted),
+      (g) => g.textsHolding(TENANT_A, [MAIN.toUpperCase(), 'Deploy from main'], null),
+      (g) => g.textsHolding(TENANT_A, [heldByB.content], null),
+      (g) => g.textsHolding(TENANT_A, ['Deploy  from\nmain after the tests pass', '!!'], null),
       (_g, s) =>
         s.rejections.apply({ tenantId: TENANT_A, actor: 'cli', reason: 'wrong', ownScope: null, value: REFUSED }),
       (g) => g.writeSkippingRejected([first, refused, second], 'git-learn'),
@@ -94,7 +97,7 @@ describe('LessonWrites', () => {
     ]);
     const contents = (o: (typeof outcomes)[number]) =>
       'value' in o && Array.isArray(o.value) ? o.value.map((held: { content: string }) => held.content) : o;
-    // A word must be a phrase the index holds and a case-sensitive substring, so 'deploys' and 'Deploy' miss 'deploy'.
+    // A copy matches a row apart from spacing only: case, a missing word and another tenant's row each miss.
     expect(outcomes.slice(0, 5).map(contents)).toEqual([
       ['Deploy from main after the tests pass', 'the deploy key rotates monthly'],
       ['my deploy alias is dpl', 'the deploy key rotates monthly'],
