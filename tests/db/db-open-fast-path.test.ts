@@ -201,6 +201,13 @@ describe('one open reads the store once', () => {
     expect(afterPragmas(() => openStore(root))).toHaveLength(1);
   });
 
+  it("a later openStore in one request asks once whether a memory row is there, for both of setup's steps", () => {
+    withRequestStoresSync(() => {
+      openStore(root);
+      expect(captureStatements(() => openStore(root))).toEqual(['SELECT 1 AS x FROM memories LIMIT 1']);
+    });
+  });
+
   it('a store emptied through another connection is re-read by the next openStore, which imports its markdown mirror again', () => {
     closeHippoDb(openStore(root));
     withDb((db) => db.exec('DELETE FROM memories'));

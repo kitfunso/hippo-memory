@@ -6,7 +6,13 @@ import { openHippoDbWithFacts } from '../../db/open.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
 import { recoverDueMirrors } from './due-mirrors.js';
-import { bootstrapLegacyStore, type Handles, recordHalfLifeBaseForNewStore, type StoreFiles } from './open.js';
+import {
+  bootstrapLegacyStore,
+  type Handles,
+  holdsMemory,
+  recordHalfLifeBaseForNewStore,
+  type StoreFiles,
+} from './open.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 
 export function initStore(hippoRoot: string): void {
@@ -24,8 +30,9 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
   try {
     ensureMirrorDirectories(hippoRoot);
     recoverDueMirrors(hippoRoot, db);
-    // Both steps act only on a store with no memory row, which the open's own probe has just ruled out.
-    if (facts?.hasMemories) return db;
+    // Both steps act only on a store with no memory row. A cached request handle has no probe facts, so it asks once
+    // for both; a store emptied on that handle is still set up again.
+    if (facts?.hasMemories ?? holdsMemory(db)) return db;
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
     if (bootstrapped) {
       syncMirrorFiles(hippoRoot, db);

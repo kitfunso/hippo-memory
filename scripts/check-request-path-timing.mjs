@@ -160,6 +160,9 @@ const tool =
     if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
   };
 
+// As the CLI and the prompt hook run it: one request scope, so each store opens and is set up once.
+const inHook = (run) => () => runSqliteRequest(run, 'hook');
+
 // With no global store a context query searches the local store alone, a separate load path; reach is probed afresh.
 const withoutGlobal = (run) => async () => {
   process.env.HIPPO_HOME = path.join(tmp, 'no-global');
@@ -232,17 +235,17 @@ const dashboardRead = (pathAndQuery) => async () => {
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
-  ['contextGet, no query', () => contextGet(ctx, { currentProject: 'proj' }), [330, 920, 11]],
-  ['contextGet, query', () => contextGet(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665, 16]],
+  ['contextGet, no query', inHook(() => contextGet(ctx, { currentProject: 'proj' })), [59, 917, 3]],
+  ['contextGet, query', inHook(() => contextGet(ctx, { q: 'kafka redis', currentProject: 'proj' })), [69, 661, 3]],
   [
     'contextGet, pinned only',
-    () => contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }),
-    [42, 141, 5],
+    inHook(() => contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' })),
+    [29, 141, 3],
   ],
   [
     'contextGet, local query',
-    withoutGlobal((c) => contextGet(c, { q: 'kafka redis', currentProject: 'proj' })),
-    [325, 395, 10],
+    inHook(withoutGlobal((c) => contextGet(c, { q: 'kafka redis', currentProject: 'proj' }))),
+    [46, 393, 2],
   ],
   [
     'ambient tallies, 2 stores',
@@ -253,16 +256,16 @@ const cases = [
     },
     [19, 6, 2],
   ],
-  ['mcp hippo_context', tool('hippo_context'), [345, 1730, 2]],
-  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [411, 1495, 1]],
-  ['mcp hippo_status', tool('hippo_status'), [13, 7, 1]],
+  ['mcp hippo_context', tool('hippo_context'), [75, 687, 2]],
+  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [32, 1495, 1]],
+  ['mcp hippo_status', tool('hippo_status'), [13, 4, 1]],
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
   ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0, 0]],
   ['served decisions list', () => served.objects.listObjects('default', 'decision', { limit: 20 }), [0, 0, 0]],
   ['served key lookup', keyLookup, [0, 0, 0]],
-  ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [62, 287, 1]],
+  ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [37, 281, 1]],
   // Fifty rows back, so one extra statement per returned row passes the ceiling, which ten rows would not.
-  ['http recall, limit 50', httpRecall(inProcessServer.url, 50), [166, 335, 1]],
+  ['http recall, limit 50', httpRecall(inProcessServer.url, 50), [37, 333, 1]],
   // As serve() answers by default: a statement or an open on the server thread during a recall fails here.
   ['served http recall, limit 10', httpRecall(server.url, 10), [0, 0, 0]],
   ['served http recall, limit 50', httpRecall(server.url, 50), [0, 0, 0]],
@@ -271,6 +274,9 @@ const cases = [
   ['served mcp hippo_context', httpTool(server.url, 'hippo_context'), [0, 0, 0]],
   ['served mcp hippo_recall', httpTool(server.url, 'hippo_recall', { query: 'kafka redis' }), [0, 0, 0]],
   ['dashboard overview, fresh', dashboardRead('/api/overview?fresh=1'), [0, 0, 0]],
+  // Page 1 takes a new snapshot, so its list is sorted again; page 5 of that snapshot reads the list page 1 kept.
+  ['dashboard page 1, fresh', dashboardRead('/api/projects/p%3Aproj/memories?fresh=1'), [0, 0, 0]],
+  ['dashboard page 5', dashboardRead('/api/projects/p%3Aproj/memories?offset=400'), [0, 0, 0]],
   ['dashboard search', dashboardRead(`/api/search?q=${encodeURIComponent('kafka redis')}`), [0, 0, 0]],
 ];
 

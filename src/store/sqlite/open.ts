@@ -57,6 +57,11 @@ export interface Handles {
   readonly files: StoreFiles;
 }
 
+/** Whether the store holds any memory row; existence, not COUNT(*), which would walk every row on each open. */
+export function holdsMemory(db: DatabaseSyncLike): boolean {
+  return db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined;
+}
+
 /** `meta` key holding the default half-life base a store's memories are on; see
  * src/domain/consolidate/half-life-migration.ts. */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
@@ -67,15 +72,14 @@ export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';
  * holds memories but no recorded base predates the record and keeps the legacy 7-day base until sleep migrates it. */
 export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, HALF_LIFE_BASE_META_KEY, '') !== '') return;
-  if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return;
+  if (holdsMemory(db)) return;
   setMeta(db, HALF_LIFE_BASE_META_KEY, String(DEFAULT_HALF_LIFE_DAYS));
   setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
 }
 
 /** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any row. */
 export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): boolean {
-  // Existence, not COUNT(*): a count walks every row on each write's open.
-  if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return false;
+  if (holdsMemory(db)) return false;
   // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the import on every open
   // and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
