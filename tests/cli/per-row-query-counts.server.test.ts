@@ -15,7 +15,7 @@ import { dashboardOf } from '../_helpers/dashboard-fixture.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadEntriesByIds, replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 import {
   ROW_READ,

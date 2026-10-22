@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copilotHomeDir } from '../../src/domain/hooks/shared.js';
+import { processHomes } from '../../src/host/agent-homes.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
 import { VSCODE_MCP, copilotMcpSnippet } from '../../src/domain/hooks/copilot.js';
 import { copilotPaths, installCopilot, uninstallCopilot } from '../../src/surface/hooks-install/copilot.js';
@@ -327,10 +328,10 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it('the Copilot folder is $COPILOT_HOME when set, else .copilot under os.homedir() whatever HOME says', () => {
     expect(copilotPaths().hooks).toBe(files.hooks);
-    expect(copilotHomeDir(undefined, { COPILOT_HOME: copilotHome })).toBe(copilotHome);
+    expect(copilotHomeDir({ home: os.homedir(), env: { COPILOT_HOME: copilotHome } })).toBe(copilotHome);
     vi.stubEnv('COPILOT_HOME', '');
     vi.stubEnv('HOME', path.join(fake.home, 'corporate-home'));
-    expect(copilotHomeDir()).toBe(path.join(os.homedir(), '.copilot'));
+    expect(copilotHomeDir(processHomes())).toBe(path.join(os.homedir(), '.copilot'));
     expect(copilotPaths().hooks).toBe(path.join(os.homedir(), '.copilot', 'hooks', 'hippo.json'));
   });
 

@@ -4,7 +4,7 @@ import nodeFs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { recordSessionDigest, type DigestEdit } from '../../src/surface/capture/session-digest.js';
 import { isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
 import { makeRoot } from '../_helpers/make-root.js';

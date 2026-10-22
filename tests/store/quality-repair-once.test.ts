@@ -1,3 +1,5 @@
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import type { StoreFiles } from '../../src/store/sqlite/open.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,7 +37,7 @@ const ids = (store: string) =>
   loadAllEntries(store, 'default')
     .map((entry) => entry.id)
     .sort();
-const repairQualityOnce = (files: { hippoRoot: string }, tenantId: string) => repairStoreOnce(files, tenantId, protect);
+const repairQualityOnce = (files: StoreFiles, tenantId: string) => repairStoreOnce(files, tenantId, protect);
 function flag(store: string): string {
   const db = new DatabaseSync(join(store, 'hippo.db'));
   try {
@@ -54,14 +56,14 @@ describe('repairQualityOnce', () => {
   it("sets aside certain defects on the first run only, and never a person's words", async () => {
     const bad = seed(root, CUT);
     const person = seed(root, CUT, { source: 'cli' });
-    const first = await repairQualityOnce({ hippoRoot: root }, 'default');
+    const first = await repairQualityOnce(storeFilesOf(root), 'default');
     expect(first?.appliedIds).toEqual([bad.id]);
     expect(existsSync(first!.backup!)).toBe(true);
     expect(ids(root)).toEqual([person.id]);
     expect(flag(root)).toBe('1');
 
     const later = seed(root, CUT);
-    expect(await repairQualityOnce({ hippoRoot: root }, 'default')).toBeNull();
+    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toBeNull();
     expect(ids(root)).toEqual([person.id, later.id].sort());
   });
 
@@ -69,11 +71,11 @@ describe('repairQualityOnce', () => {
     seed(root, CUT);
     const tenantPage = /FROM memories WHERE \(1\) AND tenant_id = \? ORDER BY created/;
     const preview = await recordStatementsAsync(
-      async () => await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect }),
+      async () => await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', protect }),
     );
     expect(countMatching(preview.statements, tenantPage)).toBe(1);
     const { statements } = await recordStatementsAsync(
-      async () => await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect, apply: true }),
+      async () => await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', protect, apply: true }),
     );
     const locked = statements.slice(statements.indexOf('BEGIN IMMEDIATE'));
     expect(countMatching(statements, tenantPage)).toBe(1);
@@ -87,7 +89,7 @@ describe('repairQualityOnce', () => {
       root,
       'Keep test schema setup outside production migrations because production applies every sorted migration.',
     );
-    expect(await repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ appliedIds: [], backup: null });
+    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({ appliedIds: [], backup: null });
     expect(existsSync(join(root, 'backups'))).toBe(false);
     expect(flag(root)).toBe('1');
   });
@@ -98,13 +100,13 @@ describe('repairQualityOnce', () => {
     const holder = new DatabaseSync(join(root, 'hippo.db'));
     holder.exec('BEGIN IMMEDIATE');
     try {
-      await expect(repairQualityOnce({ hippoRoot: root }, 'default')).rejects.toThrow();
+      await expect(repairQualityOnce(storeFilesOf(root), 'default')).rejects.toThrow();
     } finally {
       holder.exec('ROLLBACK');
       holder.close();
     }
     expect(flag(root)).toBe('');
-    expect((await repairQualityOnce({ hippoRoot: root }, 'default'))?.appliedIds).toEqual([bad.id]);
+    expect((await repairQualityOnce(storeFilesOf(root), 'default'))?.appliedIds).toEqual([bad.id]);
   }, 30_000);
 
   it('leaves a store whose schema it cannot repair unmarked', async () => {
@@ -115,7 +117,7 @@ describe('repairQualityOnce', () => {
     } finally {
       db.close();
     }
-    expect(await repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ supported: false, appliedIds: [] });
+    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({ supported: false, appliedIds: [] });
     expect(flag(root)).toBe('');
     expect(ids(root)).toEqual([bad.id]);
   });

@@ -7,7 +7,7 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import { closeHippoDb, openHippoDbReadOnly } from '../../src/db/index.js';
 import { readDeliveryEvents } from './delivery-events.js';
 import { blockHash } from '../../src/base/util/token-text.js';
-import { realpathOrResolve } from '../../src/base/util/real-path.js';
+import { realpathOrResolve } from '../../src/host/real-path.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { reconstruct, toolFailures } from '../../scripts/z10-reconstruct.mjs';
 import { hippo, hippoIn, promptPayload, PROMPT_HOOK, type Project, type RunOptions } from './delivery-boundary.js';

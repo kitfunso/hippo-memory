@@ -13,7 +13,7 @@ import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/bas
 import type { ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   saveEmbeddingIndex,

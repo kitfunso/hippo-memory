@@ -2,8 +2,8 @@
 // prompt hook can call it.
 import * as fs from 'fs';
 import * as path from 'path';
-import { isObjectLike, isStringValue } from '../session/capture-contract.js';
-import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
+import { isObjectLike, isStringValue } from '../base/session/capture-contract.js';
+import { errorCode, errorMessage, log, errorFields } from '../base/util/log.js';
 
 /** Where a `.git` file points: its own git dir, and the shared one when that dir names a `commondir` (a linked
  * worktree); null when the file names no git dir. */

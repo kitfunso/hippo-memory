@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { outsideRequestStores } from '../../db/index.js';
+import { isInitialized } from '../../host/project-identity.js';
 import { isStoreBusy, type StoreWith } from '../port.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from './handles.js';
@@ -15,6 +16,7 @@ type SqliteImportStore = StoreWith<'agentImport' | 'projectTags'>;
 
 interface SqliteImportStores {
   open(root: string, opts: { readonly busyWaitMs?: number }): SqliteImportStore;
+  exists(root: string): boolean;
   create(root: string): Promise<void>;
   standIn(): SqliteImportStore;
   isBusy<E>(err: E): boolean;
@@ -27,6 +29,7 @@ export function sqliteImportStores(rules: LossAversion): SqliteImportStores {
       ...sqliteStore(root, rules),
       agentImport: sqliteAgentImport(handlesOf(root, rules), busyWaitMs),
     }),
+    exists: isInitialized,
     create: async (root) => inPortTerms(() => initStore(root)),
     standIn: () => standIn(rules),
     isBusy: isStoreBusy,

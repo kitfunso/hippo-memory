@@ -3,8 +3,8 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { errorFields, errorMessage, log } from './log.js';
-import { envPath, envPathExt } from './env.js';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
+import { envPath, envPathExt } from '../base/util/env.js';
 import { isFile } from './real-path.js';
 
 /** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can expand. */

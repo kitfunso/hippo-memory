@@ -5,7 +5,8 @@ import { drillDown as apiDrillDown, assemble as apiAssemble, contextGet as apiGe
 import { autoDetectContext } from '../../api/context-auto.js';
 import { processGit } from '../../infra/git-runner.js';
 import { sharedStoreOf } from '../../api/types.js';
-import { resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
+import { type ProjectIdentity } from '../../base/scope/project-identity.js';
+import { resolveProjectIdentity } from '../../host/project-identity.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/context-render.js';
 import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
 import { resolveClientKey } from '../../api/recall/last-recalled.js';

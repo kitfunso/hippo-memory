@@ -72,7 +72,7 @@ interface SaveStep extends CompactionSave {
 
 function recordStep(step: SaveStep): CompactionRecord | null {
   try {
-    const record = recordSummary(step.db, step.files.hippoRoot, step.tenantId, {
+    const record = recordSummary(step.db, step.files, step.tenantId, {
       meta: step.meta,
       text: step.text,
       at: step.at,
@@ -97,7 +97,7 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
         tenantId: step.tenantId,
         recordId: record?.id ?? null,
         sessionId: meta.sessionId,
-        originProject: record?.originProject ?? compactionOrigin(files.hippoRoot, meta.cwd),
+        originProject: record?.originProject ?? compactionOrigin(files, meta.cwd),
         cwd: meta.cwd,
         items: step.text.items,
       },
@@ -152,7 +152,7 @@ function saveStalled(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, 
 }
 
 function recordSpooled(db: DatabaseSyncLike, files: StoreFiles, spooled: SpooledSummary): RecordedCompaction {
-  const { id, sessionId, originProject, cwd, items } = recordSummary(db, files.hippoRoot, spooled.tenantId, {
+  const { id, sessionId, originProject, cwd, items } = recordSummary(db, files, spooled.tenantId, {
     meta: spooled.payload,
     text: spooled.text,
     at: spooled.at,
@@ -233,10 +233,10 @@ function fill(db: DatabaseSyncLike, files: StoreFiles, { tenantId, record, text,
 
 type HookWaited = Pick<CompactionHooks, 'start' | 'markSnapshotSaved'>;
 
-function hookBodies({ hippoRoot }: StoreFiles): Bodies<HookWaited> {
+function hookBodies(files: StoreFiles): Bodies<HookWaited> {
   return {
     start: (db, tenantId, start) =>
-      startCompaction(db, tenantId, { ...start, originProject: compactionOrigin(hippoRoot, start.cwd) }),
+      startCompaction(db, tenantId, { ...start, originProject: compactionOrigin(files, start.cwd) }),
     markSnapshotSaved: markSnapshotSaved,
   };
 }

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isStoreBusy } from '../../src/store/port.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureHash, failureReport } from '../../src/surface/capture/failure-reading.js';

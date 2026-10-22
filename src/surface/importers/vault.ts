@@ -7,12 +7,12 @@ import { remember, rawArchive, isPrivateScope, type Context } from '../../api/in
 import type { HippoStore } from '../../store/port.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { loadConfig } from '../../base/config/config.js';
+import { loadConfig } from '../../host/config-file.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type ImportResult, type ImportOptions } from './core.js';
 import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
-import { realpathOrResolve } from '../../base/util/real-path.js';
+import { realpathOrResolve } from '../../host/real-path.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import type { RawRefRow } from '../../store/port/context-reads.js';
 import type { InfraPorts } from '../../base/ports/infra.js';

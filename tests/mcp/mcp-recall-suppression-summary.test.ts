@@ -29,7 +29,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';

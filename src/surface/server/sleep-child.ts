@@ -5,7 +5,8 @@ import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { isStoreBusy } from '../../store/port.js';
-import { configReader } from '../../base/config/config.js';
+import { configReader } from '../../host/config-file.js';
+import { createHost } from '../../host/host.js';
 import { defaultReach, defaultStore, runStoreRequest } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -18,8 +19,9 @@ type JobResult = SleepResult | ConsolidationResult;
 
 const loadConfig = configReader(envRuntimeSettings);
 const storeAt = (root: string) => defaultStore(root, { lossAversionRatio: envLossAversionRatio() });
-// The child runs one job, so its one root builds the ports once.
-const childInfra = rootInfra();
+// The child runs one job, so its one root builds the ports and its Host once.
+const childHost = createHost();
+const childInfra = rootInfra(childHost);
 
 function failed<E>(err: E): SleepReply<never> {
   return {
@@ -33,7 +35,11 @@ function failed<E>(err: E): SleepReply<never> {
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
 function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
   const store = storeAt(hippoRoot);
-  const reach = contextReach(defaultReach(hippoRoot, store, undefined, storeAt), loadConfig, resolveEmbeddingProvider);
+  const reach = contextReach(
+    defaultReach(hippoRoot, store, undefined, storeAt, childHost),
+    loadConfig,
+    resolveEmbeddingProvider,
+  );
   const config = loadConfig(hippoRoot);
   return sleep({ tenantId: job.tenantId, actor: job.actor, store, reach, config, infra: childInfra() }, job.opts);
 }

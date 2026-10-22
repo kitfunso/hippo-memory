@@ -3,7 +3,7 @@
 import * as path from 'path';
 import { PACKAGE_ROOT } from '../../base/config/package-root.js';
 import { HIPPO_CODEX_WRAPPER_MARKER } from './shared.js';
-import { homeDir, codexHomeDir } from '../../base/util/agent-homes.js';
+import { codexHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
 import { isJsonString } from '../../base/util/json.js';
 
 export interface CodexWrapperPaths {
@@ -47,9 +47,10 @@ export interface EnsureCodexWrapperResult {
   backupPath?: string;
 }
 
-export function resolveCodexWrapperPaths(): CodexWrapperPaths {
-  const home = homeDir();
-  const codexHome = codexHomeDir(home);
+/** Where the wrapper, its metadata and its logs live under the machine's home folder. */
+export function codexWrapperPathsOn(homes: Homes): CodexWrapperPaths {
+  const home = userHome(homes);
+  const codexHome = codexHomeDir(home, homes.env);
   const wrapperDir = path.join(home, '.hippo', 'bin');
   return {
     wrapperDir,

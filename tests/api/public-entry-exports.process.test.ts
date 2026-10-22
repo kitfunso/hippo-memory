@@ -7,7 +7,7 @@ import * as entry from '../../src/index.js';
 import { strengthTieKey } from '../../src/domain/consolidate/dedupe.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {

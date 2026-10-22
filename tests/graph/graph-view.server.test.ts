@@ -18,7 +18,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

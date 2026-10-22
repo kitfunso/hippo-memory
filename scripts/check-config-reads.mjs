@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// CI config-read gate. Only a surface-layer file (layers.json) and src/base/config/config.ts read config.json through loadConfig;
+// CI config-read gate. Only a surface-layer file (layers.json) and src/host/config-file.ts read config.json through loadConfig;
 // api code reads ctx.config, and domain, store and base code takes the config from its caller. Files that still do sit in
 // .config-reads-baseline.json and may go, never grow.
 // Usage: check-config-reads.mjs [--list] [--update]. --update rewrites the baseline; run it only after removing reads.
@@ -10,7 +10,7 @@ import { readFacts } from './lib/ts-facts.mjs';
 
 const BASELINE = '.config-reads-baseline.json';
 const MAP = 'layers.json';
-const ALLOWED = new Set(['src/base/config/config.ts']);
+const ALLOWED = new Set(['src/host/config-file.ts']);
 
 function tsFiles(dir, out = []) {
   if (!existsSync(dir)) return out;

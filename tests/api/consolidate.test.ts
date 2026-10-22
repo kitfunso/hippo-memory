@@ -11,7 +11,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
 } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../../src/base/rank/physics.js';

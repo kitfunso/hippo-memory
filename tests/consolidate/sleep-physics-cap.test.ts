@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { particlesToSimulate, physicsPass } from '../../src/domain/consolidate/physics-pass.js';
 import { newConsolidationResult, type SleepRun } from '../../src/domain/consolidate/run.js';
 import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from '../../src/domain/consolidate/survivors.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

@@ -12,7 +12,7 @@ import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/a
 import { truncateCodePointSafe } from '../../src/base/util/code-point-cut.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 

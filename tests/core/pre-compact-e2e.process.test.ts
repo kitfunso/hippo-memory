@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHippoRoot } from '../../src/base/scope/project-identity.js';
+import { getHippoRoot } from '../../src/host/project-identity.js';
 import { WORKING_STATE_CAPS } from '../../src/surface/capture/working-state.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {

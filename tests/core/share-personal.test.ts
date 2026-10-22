@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { autoShare, shareMemory, transferScore } from '../../src/domain/sharing/share.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';

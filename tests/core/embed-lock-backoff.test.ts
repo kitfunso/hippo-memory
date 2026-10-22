@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';

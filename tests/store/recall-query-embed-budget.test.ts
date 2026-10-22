@@ -13,7 +13,7 @@ import { embedQueryBy } from '../../src/domain/search/vector.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';

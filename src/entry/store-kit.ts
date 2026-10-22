@@ -183,5 +183,6 @@ export { tallyAmbientEntries } from '../base/memory/ambient.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
 // store copy --db writes the marker into the other store's folder.
 // An add-on that serves a team store checks the flag before it starts.
-export { isSharedStore, loadConfig, type HippoConfig } from '../base/config/config.js';
+export { type HippoConfig } from '../base/config/config.js';
+export { isSharedStore, loadConfig } from '../host/config-file.js';
 // A Context carries its store's config, so an integrator that builds one loads it here.

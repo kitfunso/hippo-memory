@@ -1,4 +1,4 @@
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import type { ObjectByKind, SavableKind } from '../../src/base/records/object-types.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import type { SavableDescriptor } from '../../src/domain/objects/descriptor.js';

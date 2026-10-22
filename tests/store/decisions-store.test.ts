@@ -23,7 +23,7 @@ import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';

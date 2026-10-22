@@ -5,7 +5,7 @@ import { slackDlq, replayDlqEntry as replaySlack } from '../../src/surface/conne
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();

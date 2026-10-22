@@ -24,7 +24,7 @@ import { createCallerState } from '../../src/api/callers.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { memorySide } from '../_helpers/memory-side.js';
 import { testInfra } from '../_helpers/infra.js';
 

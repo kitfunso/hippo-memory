@@ -8,11 +8,8 @@ import { errorClassFields, errorFields, errorMessage, log } from '../../base/uti
 import { currentRequestId } from '../../base/util/request-scope.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../../api/index.js';
-import {
-  findHippoStoreDir,
-  resolveGlobalRootDir,
-  type ResolveProjectIdentityOpts,
-} from '../../base/scope/project-identity.js';
+import { type ResolveProjectIdentityOpts } from '../../base/scope/project-identity.js';
+import { findHippoStoreDir, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';

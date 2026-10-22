@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cmdShimArgs, quoteCmdArg, spawnArgv } from '../../src/base/util/spawn-argv.js';
+import { cmdShimArgs, quoteCmdArg, spawnArgv } from '../../src/host/spawn-argv.js';
 
 const TRICKY_ARGS = [
   '%PATH%',

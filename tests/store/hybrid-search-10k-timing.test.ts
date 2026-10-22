@@ -6,7 +6,7 @@ import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { SCAN_PAGE_ROWS } from '../_helpers/vector-rows.js';

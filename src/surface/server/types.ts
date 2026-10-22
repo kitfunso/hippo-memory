@@ -5,7 +5,7 @@ import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../../store/index.js';
 import type { StoreReach } from '../../store/port.js';
-import type { ConfigReader } from '../../base/config/config.js';
+import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';

@@ -16,7 +16,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';

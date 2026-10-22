@@ -11,7 +11,7 @@ import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { retrieve, remember } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 

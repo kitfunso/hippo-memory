@@ -11,7 +11,7 @@ import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { readEntry } from '../_helpers/root-forms.js';
 
 /**

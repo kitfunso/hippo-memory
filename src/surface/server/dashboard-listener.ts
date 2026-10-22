@@ -3,7 +3,7 @@
 import type { ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
-import { configReader } from '../../base/config/config.js';
+import { configReader } from '../../host/config-file.js';
 import { evalNow } from '../../base/memory/ablation.js';
 import { builtStaticRoot } from '../dashboard/static-file.js';
 import { defaultServerRuntime, type ServerRuntime } from '../open-store.js';
@@ -52,11 +52,11 @@ export class DashboardListenError extends Error {
 }
 
 /** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
-function servingFor(opts: DashboardOpts, { store, offLoop }: ServerRuntime): DashboardServing {
+function servingFor(opts: DashboardOpts, { store, offLoop, host }: ServerRuntime): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const now = opts.now ?? ((): number => evalNow().getTime());
   const configAt = configReader(envRuntimeSettings);
-  const infra = rootInfra();
+  const infra = rootInfra(host);
   return {
     access: { token: opts.token, port: opts.port },
     reader: startDashboardReader({ hippoRoot, tenantId }, { now, cacheClock: opts.cacheClock ?? Date.now }),

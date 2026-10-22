@@ -14,7 +14,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { withFakeHome } from '../_helpers/with-fake-home.js';
-import { HIPPO_OPENCODE_PLUGIN_MARKER, resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
+import { HIPPO_OPENCODE_PLUGIN_MARKER } from '../../src/domain/hooks/opencode.js';
+import { resolveOpencodePluginPath } from '../../src/surface/hooks-install/opencode.js';
 import { installOpencodePlugin, uninstallOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
 

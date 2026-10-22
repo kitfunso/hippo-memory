@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { maskEmails } from '../../src/base/util/secret-detect.js';

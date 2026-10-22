@@ -9,7 +9,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { bindSessionOwner } from '../../src/server.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/base/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 interface StatementProto {

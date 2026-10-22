@@ -1,7 +1,7 @@
 // Leaf module: path canonicalisation shared by project identity and the importers.
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, log, errorFields } from './log.js';
+import { errorMessage, log, errorFields } from '../base/util/log.js';
 
 /** True for a regular file, or a symlink to one; false when the path is missing. */
 export function isFile(p: string): boolean {

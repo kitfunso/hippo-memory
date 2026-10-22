@@ -16,7 +16,7 @@ import { withSharedStoreHandles } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadEntities, loadRelations } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 

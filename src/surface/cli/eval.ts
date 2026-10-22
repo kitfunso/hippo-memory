@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
-import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { folderVectorSource } from '../../entry/folder-search.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import {

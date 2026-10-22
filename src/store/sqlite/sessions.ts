@@ -51,12 +51,13 @@ function loadFreshActiveTaskSnapshot(
 
 function clearActiveTaskSnapshot(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   tenantId: string,
   clearedStatus: string = 'cleared',
 ): boolean {
+  const { hippoRoot } = files;
   assertTenantId('clearActiveTaskSnapshot', tenantId);
-  assertKeyedOnSharedStore('clearActiveTaskSnapshot', hippoRoot, undefined);
+  assertKeyedOnSharedStore('clearActiveTaskSnapshot', files, undefined);
   const now = new Date().toISOString();
   const active = cachedStatement(
     db,

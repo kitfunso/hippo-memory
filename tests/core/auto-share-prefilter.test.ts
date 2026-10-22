@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';

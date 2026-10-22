@@ -10,7 +10,7 @@ import { HttpError } from '../../src/base/util/http-util.js';
 import { judgeAll } from '../../src/entry/eval-scripts.js';
 import { createLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
-import { resolveOpencodePluginPath } from '../../src/domain/hooks/opencode.js';
+import { resolveOpencodePluginPath } from '../../src/surface/hooks-install/opencode.js';
 import * as fs from 'node:fs';
 import { withFakeHome } from '../_helpers/with-fake-home.js';
 

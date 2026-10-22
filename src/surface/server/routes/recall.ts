@@ -1,6 +1,7 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
 import { dirname, resolve } from 'node:path';
-import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../../base/scope/project-identity.js';
+import { assertCallerProject, type ProjectRef } from '../../../base/scope/project-identity.js';
+import { resolveProjectIdentity } from '../../../host/project-identity.js';
 import { assembleCost, contextCost, drillCost } from '../../../api/context-render.js';
 import {
   assemble,

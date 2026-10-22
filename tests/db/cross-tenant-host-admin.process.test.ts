@@ -11,7 +11,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { isJsonObject, tryParseJson } from '../../src/base/util/json.js';
 import { testInfra } from '../_helpers/infra.js';
 

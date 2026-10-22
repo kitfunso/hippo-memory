@@ -2,7 +2,7 @@
 // store of many merged rows costs the same few reads as one of a few, and a tenant's rejection still binds only it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemory, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

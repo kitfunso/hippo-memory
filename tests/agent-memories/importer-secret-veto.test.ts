@@ -15,7 +15,7 @@ import * as os from 'os';
 import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
 import { totalTally, type Tally } from '../../src/domain/agent-memories/report.js';
 import { detectSecret } from '../../src/base/util/secret-detect.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

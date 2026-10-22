@@ -3,12 +3,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { stampOriginProjectForImport } from '../../src/store/sqlite/entry-row.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { createHost } from '../../src/host/host.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { originFromSource } from '../../src/base/scope/project-identity.js';
+import { originFromSource } from '../../src/host/project-identity.js';
 import { projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { saveCompaction } from '../../src/surface/capture/compaction-record.js';
@@ -96,9 +97,11 @@ describe('shared store origin stamp', () => {
 
   it('the import stamp gives NULL with no source evidence and keeps the source evidence', () => {
     for (const { store } of layouts(true)) {
-      expect(stampOriginProjectForImport(store, createMemory('an imported row')).originProject).toBeNull();
+      expect(
+        stampOriginProjectForImport(createHost(), store, createMemory('an imported row')).originProject,
+      ).toBeNull();
       const shared = createMemory('an imported shared row', { source: 'shared:proj:2026-01-01T00:00:00Z' });
-      expect(stampOriginProjectForImport(store, shared).originProject).toBe('proj');
+      expect(stampOriginProjectForImport(createHost(), store, shared).originProject).toBe('proj');
     }
   });
 

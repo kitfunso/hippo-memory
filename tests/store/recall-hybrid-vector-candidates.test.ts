@@ -12,7 +12,7 @@ import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { retrieve, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';

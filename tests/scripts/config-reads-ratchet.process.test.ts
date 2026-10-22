@@ -41,11 +41,11 @@ describe('check-config-reads.mjs', () => {
     });
   });
 
-  it('passes at the baseline and ignores surface files, base/config/config.ts, comments and type uses', () => {
+  it('passes at the baseline and ignores surface files, host/config-file.ts, comments and type uses', () => {
     const files = {
       'src/store/a.ts': READ,
       'src/surface/cli/b.ts': READ,
-      'src/base/config/config.ts': READ,
+      'src/host/config-file.ts': READ,
       'src/store/c.ts': '// loadConfig(root) is read by the caller\ntype T = typeof loadConfig;\n',
     };
     withFixture(files, { 'src/store/a.ts': 1 }, (run) => {

@@ -15,7 +15,7 @@ import {
 } from '../../api/memories/session-digest.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
-import { isInitialized } from '../../base/scope/project-identity.js';
+import { isInitialized } from '../../host/project-identity.js';
 import { isSyntheticMessage } from '../../base/session/transcript-calls.js';
 import { readOpenTranscriptTail } from '../../infra/transcript-tail.js';
 

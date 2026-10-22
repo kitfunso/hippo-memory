@@ -10,7 +10,7 @@ import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 

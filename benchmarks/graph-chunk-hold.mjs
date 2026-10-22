@@ -8,7 +8,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/base/memory/memory
 import { initStore } from '../dist/entry/testing.js';
 import { upsertEntryRow } from '../dist/entry/testing.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
-import { loadConfig } from '../dist/base/config/config.js';
+import { loadConfig } from '../dist/host/config-file.js';
 import { saveDecision } from '../dist/domain/objects/decisions.js';
 import { savePolicy } from '../dist/domain/objects/policies.js';
 import { extractGraphChunked } from '../dist/domain/graph/extract.js';

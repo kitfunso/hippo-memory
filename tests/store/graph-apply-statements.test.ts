@@ -1,4 +1,5 @@
 // A graph rebuild prepares a fixed set of statements however many ops it applies, and checks each endpoint once.
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -45,7 +46,7 @@ async function applyFresh(count: number) {
     const ids = Array.from({ length: count }, (_, i) =>
       Number(insert.run(`decision ${i}`, '2026-01-01T00:00:00.000Z').lastInsertRowid),
     );
-    const graphRebuild = sqliteGraphRebuild((fn) => fn(db, { hippoRoot: root }));
+    const graphRebuild = sqliteGraphRebuild((fn) => fn(db, storeFilesOf(root)));
     const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare');
     try {
       const { result, statements } = await recordStatementsAsync(() =>

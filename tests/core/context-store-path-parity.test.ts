@@ -5,7 +5,7 @@ import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';

@@ -6,7 +6,7 @@ import { adminActor, contextGet, remember, sleep } from '../../src/api/index.js'
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { recallRerankerPick } from '../../src/api/recall/rows.js';
 import { contextReach, type ContextWith } from '../../src/api/types.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import type { InfraPorts } from '../../src/base/ports/infra.js';
 import type { Llm, LlmRequest } from '../../src/base/ports/llm.js';
@@ -73,7 +73,17 @@ function fakeInfra(cwd: string): FakeInfra {
     listFiles: read('listFiles'),
     realPath: read('realPath'),
   };
-  const machine = { home: cwd, env: {}, platform: process.platform, files, git: { run: read('git') }, cwd };
+  const machine = {
+    home: cwd,
+    env: {},
+    platform: process.platform,
+    files,
+    git: { run: read('git') },
+    cwd,
+    projectIdentity: read('projectIdentity'),
+    globalRoot: read('globalRoot'),
+    isGlobalRoot: read('isGlobalRoot'),
+  };
   const infra: InfraPorts = {
     machine,
     llm,

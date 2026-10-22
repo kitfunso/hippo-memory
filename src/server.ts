@@ -20,7 +20,7 @@ import {
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
 import { defaultReach } from './surface/open-store.js';
-import { loadConfig } from './base/config/config.js';
+import { loadConfig } from './host/config-file.js';
 import { resolveEmbeddingProvider } from './infra/embedding-provider.js';
 import { withEntryInfra } from './surface/entry-infra.js';
 

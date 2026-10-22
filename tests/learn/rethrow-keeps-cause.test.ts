@@ -9,7 +9,7 @@ import { GitReadError, gitLsFilesAtHead } from '../../src/domain/learn/churn-git
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createListener } from '../../src/surface/server/tls.js';
 import { parseSteps } from '../../src/domain/consolidate/trace.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { processGit } from '../../src/infra/git-runner.js';
 
 afterEach(() => {

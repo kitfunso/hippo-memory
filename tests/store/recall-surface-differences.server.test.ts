@@ -9,7 +9,7 @@ import { handleRecall } from '../../src/surface/cli/recall.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { retrieveRanking, RecallContractError, type RecallResult } from '../../src/api/index.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import {
   CLEARED_ENV,

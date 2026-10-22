@@ -4,7 +4,6 @@ import { ConflictError } from '../../base/errors/api-errors.js';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
 import { itemWords, restates, writableItemRows } from '../../base/util/compaction-items.js';
-import { isSharedStore } from '../../base/config/config.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { gatedWrite } from './gated-write.js';
 import {
@@ -15,14 +14,9 @@ import {
   generateId,
   type MemoryEntry,
 } from '../../base/memory/memory.js';
-import {
-  fallbackOrigin,
-  isGlobalStoreRoot,
-  projectId,
-  projectNames,
-  resolveProjectIdentity,
-  type ProjectRef,
-} from '../../base/scope/project-identity.js';
+import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
+import { fallbackOrigin } from '../../host/host.js';
+import { isGlobalStoreRoot } from '../../host/project-identity.js';
 import {
   compactionProgress,
   compactionRowsByRequest,
@@ -68,28 +62,28 @@ export interface CompactionRecord {
 /**
  * Where the session ran: rows written through the global store or a shared store keep the project the session was in.
  */
-function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
-  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot)) {
-    return resolveProjectIdentity(path.dirname(hippoRoot));
+function compactionProject({ host, hippoRoot }: StoreFiles, cwd: string | null): ProjectRef {
+  if (!isGlobalStoreRoot(hippoRoot) && !host.isSharedStore(hippoRoot)) {
+    return host.projectIdentity(path.dirname(hippoRoot));
   }
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own
   // cwd.
-  return cwd === null ? '' : resolveProjectIdentity(cwd);
+  return cwd === null ? '' : host.projectIdentity(cwd);
 }
 
 /** The record column cannot hold NULL, but an item from an unknown folder on a shared store must not read as
  * user-global. */
-function itemOrigin(hippoRoot: string, ctx: ItemContext): string | null {
-  return ctx.cwd === null && isSharedStore(hippoRoot) ? fallbackOrigin(hippoRoot) : ctx.originProject;
+function itemOrigin({ host, hippoRoot }: StoreFiles, ctx: ItemContext): string | null {
+  return ctx.cwd === null && host.isSharedStore(hippoRoot) ? fallbackOrigin(host, hippoRoot) : ctx.originProject;
 }
 
-export function compactionOrigin(hippoRoot: string, cwd: string | null): string {
-  return projectId(compactionProject(hippoRoot, cwd));
+export function compactionOrigin(files: StoreFiles, cwd: string | null): string {
+  return projectId(compactionProject(files, cwd));
 }
 
 /** The names a record's held rows may carry: its origin, plus the folder name rows saved before project ids used. */
-function heldOrigins(hippoRoot: string, cwd: string | null, originProject: string): readonly string[] {
-  const names = projectNames(compactionProject(hippoRoot, cwd));
+function heldOrigins(files: StoreFiles, cwd: string | null, originProject: string): readonly string[] {
+  const names = projectNames(compactionProject(files, cwd));
   return names.includes(originProject) ? names : [originProject];
 }
 
@@ -217,7 +211,7 @@ interface RecordSummaryOptions {
  * statement each. */
 export function recordSummary(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   tenantId: string,
   options: RecordSummaryOptions,
 ): CompactionRecord {
@@ -229,7 +223,7 @@ export function recordSummary(
   if (started && markSummarized(db, tenantId, started.id, { text, summarizedAt: now, requestId })) {
     return { ...started, summary: text.summary, items: text.items, summarizedAt: now, status: 'summarised' };
   }
-  const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
+  const originProject = caller.originProject ?? compactionOrigin(files, meta.cwd);
   const id = generateId('cmp');
   insertSummarizedCompaction(
     db,
@@ -312,14 +306,14 @@ function compactionEntry(text: string, ctx: ItemContext, origin: string | null, 
 /** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go through the write gate. */
 function writeItemRows(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   ctx: ItemContext,
   rows: readonly string[],
   baseHalfLifeDays: number,
 ): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
-  const held = heldRows(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
-  const origin = ctx.caller === undefined ? itemOrigin(hippoRoot, ctx) : ctx.originProject;
+  const held = heldRows(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(files, ctx.cwd, ctx.originProject));
+  const origin = ctx.caller === undefined ? itemOrigin(files, ctx) : ctx.originProject;
   const restated = new Set<string>();
   for (const text of rows) {
     const textWords = itemWords(text);
@@ -335,7 +329,7 @@ function writeItemRows(
       continue;
     }
     const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
-    if (gatedWrite(db, hippoRoot, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
+    if (gatedWrite(db, files, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
       out.written.push(entry);
       held.push({ id: null, sessionId: ctx.sessionId, words: textWords });
     } else {
@@ -347,13 +341,13 @@ function writeItemRows(
 }
 
 /** After commit: report skips, mirror the new rows, bump the counter. */
-function finishItemWrites(db: DatabaseSyncLike, hippoRoot: string, writes: ItemWrites, log: Log): void {
+function finishItemWrites(db: DatabaseSyncLike, files: StoreFiles, writes: ItemWrites, log: Log): void {
   if (writes.repeats > 0) log(`skipped ${writes.repeats} item(s) the store already holds`);
   if (writes.refused > 0) log(`skipped ${writes.refused} item(s) the write gate refused`);
-  for (const entry of writes.written) writeEntryMirrors(hippoRoot, entry);
+  for (const entry of writes.written) writeEntryMirrors(files.hippoRoot, entry);
   if (writes.written.length > 0) {
     try {
-      updateStats(db, { hippoRoot }, { remembered: writes.written.length });
+      updateStats(db, files, { remembered: writes.written.length });
     } catch (err) {
       // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
       log(`remembered counter not updated: ${errorMessage(err)}`);
@@ -370,7 +364,6 @@ export function saveItems(
   log: Log,
   baseHalfLifeDays: number,
 ): number {
-  const { hippoRoot } = files;
   const rows = writableItemRows(ctx.items, log);
 
   let finishedItems = 0;
@@ -383,7 +376,7 @@ export function saveItems(
         return rollback(null);
       }
     }
-    const written = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
+    const written = writeItemRows(db, files, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
     const strengthen = { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() };
     strengthenRetrievedOn(db, written.restated, strengthen, files);
@@ -396,6 +389,6 @@ export function saveItems(
     log(`${ctx.recordId} was already finished by another process`);
     return finishedItems;
   }
-  finishItemWrites(db, hippoRoot, writes, log);
+  finishItemWrites(db, files, writes, log);
   return writes.written.length;
 }

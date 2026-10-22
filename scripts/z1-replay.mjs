@@ -15,7 +15,7 @@ const { textOverlap } = await distImport('base/util/tokenize.js');
 const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('base/util/token-text.js'), distImport('base/session/skip-unchanged.js')]);
 const { isWorthSurfacingWire: isWorthSurfacing } = await distImport('entry/testing.js');
 const { ambientSecretAdmitWire: ambientSecretAdmit } = await distImport('entry/testing.js');
-const { resolveProjectIdentity, classifyOriginProject } = await distImport('base/scope/project-identity.js');
+const [{ classifyOriginProject }, { resolveProjectIdentity }] = await Promise.all([distImport('base/scope/project-identity.js'), distImport('host/project-identity.js')]);
 const { passesScopeFilterForRecall } = await distImport('base/scope/recall-scope.js');
 const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('base/rank/prompt-recall.js');
 

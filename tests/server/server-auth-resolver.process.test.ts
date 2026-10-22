@@ -27,7 +27,7 @@ import { auditRowsOn } from '../_helpers/audit-rows.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {

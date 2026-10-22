@@ -8,6 +8,7 @@ import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
 import { recoverDueMirrors } from './due-mirrors.js';
 import { bootstrapLegacyStore, type Handles, recordHalfLifeBaseForNewStore, type StoreFiles } from './open.js';
 import type { LossAversion } from '../../base/memory/memory.js';
+import { createHost } from '../../host/host.js';
 
 export function initStore(hippoRoot: string): void {
   reproveStoreSchema(hippoRoot);
@@ -75,9 +76,14 @@ export async function onHandleAsync<T>(
   }
 }
 
+/** The files of the store under `hippoRoot`, with a Host of their own: a store object keeps its folder's walk. */
+export function storeFilesOf(hippoRoot: string, rules: LossAversion = {}): StoreFiles {
+  return { hippoRoot, lossAversionRatio: rules.lossAversionRatio, host: createHost() };
+}
+
 /** The handles of the store under `hippoRoot`, which only the adapter's composition root builds. */
 export function handlesOf(hippoRoot: string, rules: LossAversion = {}): Handles {
-  const files: StoreFiles = { hippoRoot, lossAversionRatio: rules.lossAversionRatio };
+  const files = storeFilesOf(hippoRoot, rules);
   return {
     on: (fn, open) => onHandle(hippoRoot, (db) => fn(db, files), open),
     onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(db, files), open),

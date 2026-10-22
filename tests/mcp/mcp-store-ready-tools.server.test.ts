@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/util/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';

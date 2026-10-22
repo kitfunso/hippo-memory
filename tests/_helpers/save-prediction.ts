@@ -1,5 +1,5 @@
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { assertTenantId } from '../../src/base/scope/tenant-id.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import type { Prediction, SavePredictionOptions } from '../../src/store/port/objects.js';

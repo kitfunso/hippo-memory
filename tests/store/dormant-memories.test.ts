@@ -22,7 +22,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { consolidate } from '../../src/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import {
   createMemory,
   Layer,

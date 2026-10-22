@@ -11,6 +11,7 @@
  * checkout.
  */
 
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { statSync } from 'node:fs';
@@ -146,7 +147,7 @@ describe('applyOutcome with an explicit traceId (store linkage)', () => {
       const target = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ...scopeReaderOf(ctx.actor) };
       const at = openHippoDb(home);
       try {
-        applyOutcome(at, { hippoRoot: home }, { ...target, ids, good: true }, traceId);
+        applyOutcome(at, storeFilesOf(home), { ...target, ids, good: true }, traceId);
       } finally {
         closeHippoDb(at);
       }

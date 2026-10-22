@@ -1,14 +1,14 @@
 // The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'path';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { adminActor, reject } from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { autoShare, neverAutoShareTags } from '../../src/domain/sharing/share.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { listMemoryConflicts, writeEntry, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { recordSessionDigest, type SessionScan } from '../../src/surface/capture/session-digest.js';
 import { sessionDigestId } from '../../src/base/session/session-digest-row.js';

@@ -1,4 +1,5 @@
 import { claudeConfigDir, claudeHomeIsSet } from '../../base/util/agent-homes.js';
+import { processHomes } from '../../host/agent-homes.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue, readSessionEnd } from '../../base/session/capture-contract.js';
@@ -223,9 +224,10 @@ export function resolveLastSessionTranscript(
 
   if (!opts.mayScan) return null;
   // With no home set, os.homedir() would send the scan into the real profile's transcripts.
-  if (!claudeHomeIsSet()) return null;
+  const { home, env } = processHomes();
+  if (!claudeHomeIsSet(env)) return null;
 
-  const projectsDir = path.join(claudeConfigDir(), 'projects');
+  const projectsDir = path.join(claudeConfigDir(home, env), 'projects');
   if (!fs.existsSync(projectsDir)) return null;
 
   let newest: { path: string; mtime: number } | null = null;

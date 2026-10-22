@@ -2,12 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  resolveProjectIdentity,
-  deriveOriginProject,
-  assertCallerProject,
-  MAX_PROJECT_ALIASES,
-} from '../../src/base/scope/project-identity.js';
+import { assertCallerProject, MAX_PROJECT_ALIASES } from '../../src/base/scope/project-identity.js';
+import { resolveProjectIdentity, deriveOriginProject } from '../../src/host/project-identity.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 

@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { closeHippoDb, getMeta, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';

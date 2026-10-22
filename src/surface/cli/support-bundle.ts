@@ -10,12 +10,13 @@ import {
   isGlobalStoreRoot,
   isInitialized,
   resolveGlobalRootDir,
-} from '../../base/scope/project-identity.js';
-import { realpathOrResolve } from '../../base/util/real-path.js';
+} from '../../host/project-identity.js';
+import { realpathOrResolve } from '../../host/real-path.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
-import { loadConfig } from '../../base/config/config.js';
+import { loadConfig } from '../../host/config-file.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { type JsonValue, isJsonString, isJsonObject, tryReadJsonFile, type JsonObject } from '../../base/util/json.js';
+import { type JsonValue, isJsonString, isJsonObject, type JsonObject } from '../../base/util/json.js';
+import { tryReadJsonFile } from '../../host/json-file.js';
 import { tryParseUrl } from '../../base/util/net.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';
 import { escapeRegex } from '../../base/util/escape.js';

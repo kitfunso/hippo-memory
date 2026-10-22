@@ -2,7 +2,7 @@
 
 import * as path from 'path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import { memoryQualityRepairOnce } from '../../api/auth/audit.js';
 import { cliApiContext } from './api-context.js';
 

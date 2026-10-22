@@ -12,12 +12,8 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import { importSessionFolder } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { summaryLine } from '../../api/agent-memory-report.js';
-import {
-  resolveProjectIdentity,
-  isInitialized,
-  type ProjectRef,
-  resolveGlobalRootDir,
-} from '../../base/scope/project-identity.js';
+import { type ProjectRef } from '../../base/scope/project-identity.js';
+import { resolveProjectIdentity, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { runCapture, type CaptureOptions, type CaptureTarget } from '../capture/command.js';
 import { preCompactHook, postCompactHook } from '../capture/compact.js';
 import { snapshotFields, transcriptWorkingState } from '../capture/working-state.js';
@@ -42,7 +38,7 @@ import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../../api/s
 import { normalizeHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { exitAfterFlush } from '../../base/util/crash-handlers.js';
-import { cmdShimArgs, npmShimEntry } from '../../base/util/spawn-argv.js';
+import { cmdShimArgs, npmShimEntry } from '../../host/spawn-argv.js';
 import { bookLedgerTurn } from '../../api/ledger-db.js';
 import {
   flushDeliveryRecorder,

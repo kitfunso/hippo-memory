@@ -14,7 +14,7 @@ import {
   type McpRequest,
   type McpResponse,
 } from './protocol.js';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import { handleMcpRequest } from './request.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';

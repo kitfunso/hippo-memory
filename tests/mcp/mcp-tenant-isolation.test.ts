@@ -9,7 +9,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
 

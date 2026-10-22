@@ -25,7 +25,7 @@ import type { MemoryConflict } from '../port/conflicts.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
 import { serializeEntry } from '../../base/memory/markdown.js';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
 import type { StoreFiles } from './open.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 

@@ -12,7 +12,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

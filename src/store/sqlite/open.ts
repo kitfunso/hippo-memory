@@ -22,11 +22,13 @@ import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { layerDir } from './mirrors.js';
 import { isJsonObject, type JsonValue } from '../../base/util/json.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { createHost, type Host } from '../../host/host.js';
 
 /** The folder a store keeps its mirror files in, beside hippo.db, with the ratio its root built it with; an adapter
- * hands it on and never reads it. */
+ * hands it on and never reads it. `host` keeps the folder's project walk and shared flag for the store's life. */
 export interface StoreFiles extends LossAversion {
   readonly hippoRoot: string;
+  readonly host: Host;
 }
 
 export type HandleOpener = (hippoRoot: string) => DatabaseSyncLike;
@@ -102,10 +104,11 @@ function importLegacyEntries(
   // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit() inline, because nothing
   // rolls back on a per-row skip.
   let rejectedCount = 0;
+  const host = createHost();
   for (const entry of legacyEntries) {
     // v39: legacy markdown carries no origin_project; stamp from the store location so bootstrapped rows stay visible
     // to ambient context.
-    const stamped = stampOriginProjectForImport(hippoRoot, entry);
+    const stamped = stampOriginProjectForImport(host, hippoRoot, entry);
     try {
       upsertEntryRow(db, stamped);
     } catch (err) {

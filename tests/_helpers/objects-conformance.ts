@@ -25,7 +25,7 @@ import {
   type TwoTenantFixture,
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';

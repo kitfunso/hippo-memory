@@ -52,6 +52,8 @@ export type ImportStore = StoreWith<'agentImport' | 'projectTags'>;
 export interface ImportStores {
   /** `root`'s store; a set `busyWaitMs` is how long its container writes wait on a locked store. */
   open(root: string, opts: { readonly busyWaitMs?: number }): ImportStore;
+  /** Whether a store has been created at `root`. */
+  exists(root: string): boolean;
   /** Creates the store at `root` with its folders. */
   create(root: string): Promise<void>;
   /** An empty store in a scratch folder a dry run plans against; closing it deletes the folder. */

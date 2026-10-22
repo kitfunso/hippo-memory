@@ -1,7 +1,5 @@
-import { processEnv } from '../../base/util/env.js';
-import * as os from 'os';
 import * as path from 'path';
-import { homeDir } from '../../base/util/agent-homes.js';
+import { userHome, type Homes } from '../../base/util/agent-homes.js';
 
 export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
@@ -25,25 +23,22 @@ export const HIPPO_COMPACT_RESUME_MARKER = 'hippo compact-resume';
 export const HIPPO_CAPTURE_ERROR_MARKER = 'hippo capture-error';
 export const HIPPO_POST_COMPACT_MARKER = 'hippo post-compact';
 
-/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the Copilot apps resolve it (a HOME
- * that differs from the profile must not move it). */
-export function copilotHomeDir(
-  home: string = os.homedir(),
-  env: Readonly<Record<string, string | undefined>> = processEnv(),
-): string {
+/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under the profile folder, as the Copilot apps resolve it (a
+ * HOME that differs from the profile must not move it). */
+export function copilotHomeDir({ home, env }: Homes): string {
   return env.COPILOT_HOME || path.join(home, '.copilot');
 }
 
 /** hippo's own hooks file, in the hooks folder the Copilot CLI reads. */
-export function copilotHooksFile(): string {
-  return path.join(copilotHomeDir(), 'hooks', 'hippo.json');
+export function copilotHooksFile(homes: Homes): string {
+  return path.join(copilotHomeDir(homes), 'hooks', 'hippo.json');
 }
 
 /**
  * Where VS Code's agent finds hippo.json: its docs name ~/.copilot/hooks as the user hooks folder, whatever
  * COPILOT_HOME says.
  */
-export function vscodeUserHooksFile(home: string = os.homedir()): string {
+export function vscodeUserHooksFile({ home }: Homes): string {
   return path.join(home, '.copilot', 'hooks', 'hippo.json');
 }
 
@@ -56,14 +51,14 @@ export const CODEX_TRUST_LINE =
   'after you trust them once in `/hooks`.';
 
 /** Default log path consumed by `hippo last-sleep` when a caller passes no --path. */
-export function defaultSleepLogPath(): string {
-  return path.join(homeDir(), '.hippo', 'logs', 'last-sleep.log');
+export function defaultSleepLogPath(homes: Homes): string {
+  return path.join(userHome(homes), '.hippo', 'logs', 'last-sleep.log');
 }
 
 /**
  * Diagnostic-only log path for `hippo pre-compact`, kept apart from the SessionEnd sleep log because `hippo last-sleep`
  * truncates that one every SessionStart.
  * Nothing reads it programmatically; overridden by `--log-file`. */
-export function defaultPreCompactLogPath(): string {
-  return path.join(homeDir(), '.hippo', 'logs', 'pre-compact.log');
+export function defaultPreCompactLogPath(homes: Homes): string {
+  return path.join(userHome(homes), '.hippo', 'logs', 'pre-compact.log');
 }

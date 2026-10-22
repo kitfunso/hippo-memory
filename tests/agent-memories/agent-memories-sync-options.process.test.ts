@@ -11,7 +11,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/base/memory/memory.js';
 import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
 import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
-import { isInitialized } from '../../src/base/scope/project-identity.js';
+import { isInitialized } from '../../src/host/project-identity.js';
 import {
   auditTotal,
   closeWorld,
@@ -29,7 +29,7 @@ import {
   writeConfig,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';

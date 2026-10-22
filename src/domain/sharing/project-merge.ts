@@ -8,7 +8,7 @@ import { AGENT_MEMORY_SOURCE_PREFIX, toolSourcePrefix, toolTag } from '../../bas
 import type { Machine } from '../../base/util/agent-homes.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
-import { projectNames, resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
+import { projectNames, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { ProjectFold, ProjectTags, ProjectTagScope, RowRetag } from '../../store/port/project-tags.js';
 import type { PageRequest } from '../../store/port/sharing.js';
@@ -60,7 +60,7 @@ export interface RepairResult {
 }
 
 /** The machine whose session folders and working folders the global store's compactions name. */
-export type SessionMachine = Pick<Machine, 'platform' | 'env' | 'files'>;
+export type SessionMachine = Pick<Machine, 'platform' | 'env' | 'files' | 'projectIdentity'>;
 
 /** What a plan knows of the store's folder: the global store reads session folders on its machine, and a project store
  * folds only its own folder's old name, unless many people share it. */
@@ -221,7 +221,7 @@ async function planFolds(
   const today = new Map<string, Set<string>>();
   for (const { origin, cwd } of await r.tags.compactionOriginsWithCwd(r.tenantId)) {
     if (folder.machine.files.exists(cwd)) {
-      today.set(origin, (today.get(origin) ?? new Set<string>()).add(resolveProjectIdentity(cwd).name));
+      today.set(origin, (today.get(origin) ?? new Set<string>()).add(folder.machine.projectIdentity(cwd).name));
     }
   }
   const folds: ProjectFold[] = [];

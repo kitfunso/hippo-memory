@@ -15,7 +15,7 @@ import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { testInfra } from '../_helpers/infra.js';

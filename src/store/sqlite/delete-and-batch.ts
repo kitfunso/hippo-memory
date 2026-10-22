@@ -215,14 +215,14 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
  * skip rows no longer auto-deletable. Returns ids that left `memories`. */
 export function batchWriteAndDelete(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   toWrite: MemoryEntry[],
   toDeleteIds: string[],
   opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
 ): string[] {
   // One component, so every op keeps the statement order this call has always had.
   const all: FlushComponent = { refreshes: [], writes: toWrite, deletes: toDeleteIds, dormant: opts?.dormant ?? [] };
-  return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
+  return batchWriteAndDeleteOn(db, files, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
 }
 
 /** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row. */
@@ -241,7 +241,7 @@ function noteFailedComponent(err: Error, component: FlushComponent | undefined):
  */
 function batchWriteAndDeleteOn(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   components: readonly FlushComponent[],
   from: number,
   opts: { snapshot?: LoadedRows; holdMs: number; clock?: () => number },
@@ -258,7 +258,7 @@ function batchWriteAndDeleteOn(
   // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a concurrent `hippo
   // reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
   withWriteScope(db, 'flush_chunk', () => {
-    next = applyUntilHold(db, hippoRoot, components, { ...opts, from, clock: now }, out);
+    next = applyUntilHold(db, files, components, { ...opts, from, clock: now }, out);
     const removed = new Set(out.removedIds);
     replaceFtsRows(
       db,
@@ -271,7 +271,7 @@ function batchWriteAndDeleteOn(
       markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID, 'batch');
     }
   });
-  reportChunk(hippoRoot, out);
+  reportChunk(files.hippoRoot, out);
   return { next, removedIds: out.removedIds };
 }
 
@@ -282,7 +282,7 @@ const FIRST_WINDOW_OPS = 16;
 /** Applies components from `from` until the hold runs out, each window of them planned on one read; the next index. */
 function applyUntilHold(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   components: readonly FlushComponent[],
   opts: { from: number; snapshot?: LoadedRows; holdMs: number; clock: () => number },
   out: ChunkLog,
@@ -295,7 +295,7 @@ function applyUntilHold(
     const at = next++;
     try {
       if (window === undefined || at >= window.until) {
-        window = planWindow(db, hippoRoot, components, { from: at, maxOps: windowOps, snapshot: opts.snapshot });
+        window = planWindow(db, files, components, { from: at, maxOps: windowOps, snapshot: opts.snapshot });
         windowOps = Math.min(windowOps * 2, ID_CHUNK);
       }
       applyComponent(db, components[at]!, window.writes[at - window.from]!, window.refused, out);
@@ -344,11 +344,11 @@ function applyComponent(
 
 /** A component's writes, one a row: v39 batch writers bypass writeEntry, so store-derived origins are stamped here (a
  * NULL origin hides new memories from ambient context). */
-function componentOps(hippoRoot: string, component: FlushComponent): Array<MemoryEntry | StrengthRefresh> {
+function componentOps(files: StoreFiles, component: FlushComponent): Array<MemoryEntry | StrengthRefresh> {
   // A row queued twice keeps its first place and its last version, the one the merge compares; refreshes come first,
   // so a later write of the same row replaces its refresh.
   const ops = new Map<string, MemoryEntry | StrengthRefresh>(component.refreshes.map((r) => [r.id, r]));
-  for (const entry of component.writes) ops.set(entry.id, stampOriginProject(hippoRoot, entry));
+  for (const entry of component.writes) ops.set(entry.id, stampOriginProject(files, entry));
   return [...ops.values()];
 }
 
@@ -442,14 +442,14 @@ interface PlannedWindow {
 // so a reject committed in between would be re-inserted.
 function planWindow(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   components: readonly FlushComponent[],
   at: { from: number; maxOps: number; snapshot: LoadedRows | undefined },
 ): PlannedWindow {
   const ops: Array<Array<MemoryEntry | StrengthRefresh>> = [];
   let count = 0;
   for (let i = at.from; i < components.length && (i === at.from || count < at.maxOps); i++) {
-    ops.push(componentOps(hippoRoot, components[i]!));
+    ops.push(componentOps(files, components[i]!));
     count += ops[ops.length - 1]!.length;
   }
   const liveRows = liveRowsById(
@@ -573,7 +573,7 @@ interface FtsChanges {
  * that left `memories`. The snapshot keeps what other writers changed after the caller loaded its rows. */
 export async function commitInChunks(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   components: readonly FlushComponent[],
   opts: { snapshot: LoadedRows; budget: WriteBudget },
 ): Promise<string[]> {
@@ -584,7 +584,7 @@ export async function commitInChunks(
     let committedAt = 0;
     while (next < components.length) {
       if (next > 0) await budget.pause(committedAt);
-      const chunk = batchWriteAndDeleteOn(db, hippoRoot, components, next, {
+      const chunk = batchWriteAndDeleteOn(db, files, components, next, {
         snapshot,
         holdMs: budget.holdMs,
         clock: budget.clock,

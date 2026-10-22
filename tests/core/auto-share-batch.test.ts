@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
