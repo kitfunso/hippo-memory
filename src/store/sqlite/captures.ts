@@ -1,23 +1,23 @@
 // hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up the mirror folders.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import { duplicateKey, longestWord, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
 import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/capture.js';
-import { loadTextsHoldingWords } from './candidates.js';
+import { loadTextsHolding } from './candidates.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';
 import { bound, skipEmpty, type Bodies } from './bound.js';
 
-/** The texts rows under `dedup` hold, of those the entries' longest words find. */
+/** The texts the rows under `dedup` hold, of the rows that may hold an entry's text. */
 function heldKeys(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: CaptureDedup): Set<string> {
-  const words = entries.map((entry) => longestWord(entry.content));
+  const texts = entries.map((entry) => entry.content);
   const admit = dedup.everyScope ? EVERY_SCOPE : undefined;
-  return storedTextKeys(loadTextsHoldingWords(db, dedup.tenantId, words, dedup.project, admit));
+  return storedTextKeys(loadTextsHolding(db, dedup.tenantId, texts, dedup.project, admit));
 }
 
 /** One outcome per entry, in order, in one transaction that reads the caller's dedup again first, so a text another
@@ -48,8 +48,8 @@ function writeCapturedEntries(
 }
 
 const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
-  textsHolding: (db, tenantId, words, { project, everyScope } = {}) =>
-    loadTextsHoldingWords(db, tenantId, words, project, everyScope ? EVERY_SCOPE : undefined),
+  textsHolding: (db, tenantId, texts, { project, everyScope } = {}) =>
+    loadTextsHolding(db, tenantId, texts, project, everyScope ? EVERY_SCOPE : undefined),
 };
 
 export function sqliteCaptures({ on, files }: Handles): Captures {

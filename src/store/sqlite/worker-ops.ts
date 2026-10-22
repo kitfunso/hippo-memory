@@ -152,7 +152,7 @@ export const WORKER_OPS = {
     repairQualityOnce: 'write',
   },
   lessonWrites: {
-    textsHoldingWords: 'read',
+    textsHolding: 'read',
     contentsWithTag: 'read',
     writeSkippingRejected: 'write',
     writeTogether: 'write',

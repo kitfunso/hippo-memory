@@ -9,10 +9,11 @@ export interface Captures {
    * caller leaves out texts its dedup read found and repeats within the batch; the write reads `opts.dedup` again in
    * its transaction and skips an entry whose text a row holds by then, so two captures never store one text twice. */
   write(entries: readonly MemoryEntry[], opts: CaptureWriteOptions): Promise<CapturedOutcome[]>;
-  /** The rows holding any of `words`, for the dedup before a write; a row equal to a text apart from spacing holds its
-   * every word. `project` keeps rows carrying one of those names plus user-global rows, `everyScope` lifts the
-   * team-visible filter for a reader that sees the whole store. */
-  textsHolding(tenantId: TenantId, words: readonly string[], opts?: TextsHoldingOptions): Promise<HeldText[]>;
+  /** The rows that may hold one of `texts`, for the dedup before a write: each row equal to a text apart from spacing,
+   * and each sleep-merged row holding one, plus any near copy; the caller checks them again with heldTextKeys.
+   * `project` keeps rows carrying one of those names plus user-global rows, `everyScope` lifts the team-visible filter
+   * for a reader that sees the whole store. */
+  textsHolding(tenantId: TenantId, texts: readonly string[], opts?: TextsHoldingOptions): Promise<HeldText[]>;
 }
 
 /** Which rows a `textsHolding` read keeps beyond the tenant. */

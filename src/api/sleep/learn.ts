@@ -25,7 +25,7 @@ import {
 } from '../../base/memory/memory.js';
 import { extractPathTags } from '../../domain/search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js';
-import { duplicateKey, heldTextKeys, longestWord, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same-text.js';
 import type { LessonWrites } from '../../store/port.js';
 import { memoryPages } from '../memories/memories.js';
 import type { Context, ContextWith } from '../types.js';
@@ -141,9 +141,9 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   for (const entry of landed) embedMemoryDetached(target, entry);
 }
 
-/** The keys of the rows holding a lesson's longest word, the only rows that can be its copy. */
+/** The keys of the rows that may hold a lesson, the only rows that can be its copy. */
 async function knownKeys(ctx: Context, writes: LessonWrites, lessons: readonly string[]): Promise<Set<string>> {
-  const held = await writes.textsHoldingWords(ctx.tenantId, lessons.map(longestWord), personalScopeOf(ctx.actor));
+  const held = await writes.textsHolding(ctx.tenantId, lessons, personalScopeOf(ctx.actor));
   return storedTextKeys(held);
 }
 

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
-import { duplicateKey, longestWord, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { embedMemoryDetached, type EmbedTarget } from '../../domain/search/embed-memories.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -140,15 +140,14 @@ async function captureFromCli(
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
 // stop its own copy.
-// Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
 async function storedKeysInView(
   store: Pick<StoreGroups, 'captures'>,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
 ): Promise<Set<string>> {
   const { tenantId, ...filter } = captureDedup(options);
-  const words = extracted.map((item) => longestWord(item.content));
-  return storedTextKeys(await store.captures.textsHolding(tenantId, words, filter));
+  const texts = extracted.map((item) => item.content);
+  return storedTextKeys(await store.captures.textsHolding(tenantId, texts, filter));
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its own transaction. */

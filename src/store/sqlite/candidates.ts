@@ -8,7 +8,7 @@ import {
 import { strengthSql } from './rule-sql.js';
 import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
-import { type DatabaseSyncLike, isFtsAvailable, isFtsInSync, withReadSnapshot } from '../../db/index.js';
+import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
@@ -19,8 +19,7 @@ import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { oldestFirst } from '../rules/order.js';
 import { tenantAnd } from './tenant.js';
-import { holdingPhrase, IN_PHRASE_HITS, TENANT_IS } from './entry-reads.js';
-import { chunked } from '../../base/util/chunked.js';
+import { rowsHoldingTexts } from './copy-rows.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { ENTRY_PAGE_ORDER, entryPage } from './keyset.js';
 import type { EntryCursor } from '../port/types.js';
@@ -327,69 +326,22 @@ export function loadContextCandidates(
 // No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
 
-interface HeldRowsFilter {
-  readonly tenantId: TenantId;
-  readonly project: readonly string[] | undefined;
-  readonly admit: SqlFragment;
-}
-
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-type HeldTextDbRow = { id: string; content: string; source: string | null; origin_project: string | null };
-
-/** Rows holding a word of `words`; with `phrases`, only the index's hits for them, so rows without one are never
- * read. */
-function heldRows(
-  db: DatabaseSyncLike,
-  filter: HeldRowsFilter,
-  words: readonly string[],
-  phrases?: readonly string[],
-): HeldTextDbRow[] {
-  const tenant = tenantAnd(filter.tenantId, phrases ? TENANT_IS : 'tenant_id = ?');
-  const { project, admit } = filter;
-  const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  // One JSON list of words, so the text, and the statement cached for it, stay the same at every chunk length.
-  const holds = 'EXISTS (SELECT 1 FROM json_each(?) WHERE instr(content, value) > 0)';
-  return cachedStatement(
-    db,
-    `SELECT id, content, source, origin_project FROM memories WHERE ${phrases ? IN_PHRASE_HITS : '1'}${tenant.sql}` +
-      `${originWhere} AND ${admit.sql} AND (${holds})`,
-  ).all(
-    ...(phrases ? [phrases.join(' OR ')] : []),
-    ...tenant.params,
-    ...(project ?? []),
-    ...admit.params,
-    JSON.stringify(words),
-  ) as HeldTextDbRow[];
-}
-
-/** Tenant rows holding any of `words` that `admit` passes (default: team-visible); a row equal to a text apart from
- * spacing holds its every word. With `project`, only rows carrying one of those names plus user-global rows, as
- * loadContextCandidates' filter. A row holds a word it has whole between spaces as one of the index's phrase hits, so
- * when the index is in sync it answers for each word it can name. */
-export function loadTextsHoldingWords(
+/** Tenant rows that may hold one of `texts` and that `admit` passes (default: team-visible): equal to a text apart from
+ * spacing, or a sleep-merged row holding one. With `project`, only rows carrying one of those names plus user-global
+ * rows, as loadContextCandidates' filter. A superset the caller checks again with heldTextKeys. */
+export function loadTextsHolding(
   db: DatabaseSyncLike,
   tenantId: TenantId,
-  words: readonly string[],
+  texts: readonly string[],
   project?: readonly string[],
   admit: SqlFragment = TEAM_VISIBLE,
 ): HeldText[] {
-  const filter: HeldRowsFilter = { tenantId, project, admit };
-  const indexed = isFtsAvailable(db) && isFtsInSync(db);
-  const phraseOf = new Map([...new Set(words)].map((w) => [w, indexed ? holdingPhrase(w) : null]));
-  const named = [...phraseOf].filter(([, phrase]) => phrase !== null).map(([w]) => w);
-  const unnamed = [...phraseOf].filter(([, phrase]) => phrase === null).map(([w]) => w);
+  const origin = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
+  const filter = { sql: `${origin} AND ${admit.sql}`, params: [...(project ?? []), ...admit.params] };
   const byId = new Map<string, HeldText>();
-  const keep = (row: HeldTextDbRow) =>
+  for (const row of rowsHoldingTexts(db, { tenantId, filter }, texts)) {
     byId.set(row.id, { content: row.content, source: row.source ?? 'cli', originProject: row.origin_project });
-  for (const chunk of chunked(named)) {
-    heldRows(
-      db,
-      filter,
-      chunk,
-      chunk.map((w) => phraseOf.get(w)!),
-    ).forEach(keep);
   }
-  for (const chunk of chunked(unnamed)) heldRows(db, filter, chunk).forEach(keep);
   return [...byId.values()];
 }
 

@@ -1,4 +1,4 @@
-// The in-memory LessonWrites group: git learn's word and tag reads and its batch writes.
+// The in-memory LessonWrites group: git learn's text and tag reads and its batch writes.
 import { CrossTenantIdError, RejectedValueError } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { ownScopeTouches, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
@@ -7,21 +7,22 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { LessonWrites } from '../port/entry-writes.js';
 import type { HeldText } from '../port/types.js';
+import { bareText, mayHoldCopy } from '../rules/copies.js';
 import { contentHoldsPhrase, openingPhrase } from '../rules/fts.js';
 import { bumpCounter } from './rows.js';
 import { put, refusalEvent, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
-/** A row one of a batch's phrases hits that holds one of its words as a case-sensitive substring; a word with no
- * phrase is the substring test alone. */
-function holdsBatch(entry: MemoryEntry, batch: readonly string[], phrased: boolean): boolean {
-  const hit = !phrased || batch.some((word) => contentHoldsPhrase(entry, openingPhrase(word)!));
-  return hit && batch.some((word) => entry.content.includes(word));
+/** A row one of a batch's phrases hits that mayHoldCopy keeps, as hippo.db's copy read; a text with no phrase is
+ * mayHoldCopy alone. */
+function holdsBatch(entry: MemoryEntry, batch: readonly string[], bares: ReadonlySet<string>, phrased: boolean) {
+  const hit = !phrased || batch.some((text) => contentHoldsPhrase(entry, openingPhrase(text)!));
+  return hit && mayHoldCopy(entry, bares);
 }
 
-/** The tenant's rows holding any of `words`, among rows the caller may touch. */
-function textsHoldingIn(t: MemoryTables, tenantId: string, words: readonly string[], ownScope: string | null) {
-  const wanted = [...new Set(words)];
+/** The tenant's rows that may hold one of `texts`, among rows the caller may touch. */
+function textsHoldingIn(t: MemoryTables, tenantId: string, texts: readonly string[], ownScope: string | null) {
+  const wanted = [...new Set(texts)];
   const rows = [...t.entries.values()].filter(
     (e) => e.tenantId === tenantId && ownScopeTouches(ownScope, e.scope ?? null),
   );
@@ -31,7 +32,8 @@ function textsHoldingIn(t: MemoryTables, tenantId: string, words: readonly strin
     ...chunked(wanted.filter((w) => openingPhrase(w) === null)).map((batch) => ({ batch, phrased: false })),
   ];
   for (const { batch, phrased } of batches) {
-    for (const e of rows) if (holdsBatch(e, batch, phrased)) held.set(e.id, e);
+    const bares = new Set(batch.map(bareText));
+    for (const e of rows) if (holdsBatch(e, batch, bares, phrased)) held.set(e.id, e);
   }
   return [...held.values()].map((e): HeldText => ({
     content: e.content,
@@ -80,7 +82,7 @@ function writeSkippingIn(
 
 export function memoryLessonWrites(t: MemoryTables): LessonWrites {
   return {
-    textsHoldingWords: async (tenantId, words, ownScope) => textsHoldingIn(t, tenantId, words, ownScope),
+    textsHolding: async (tenantId, texts, ownScope) => textsHoldingIn(t, tenantId, texts, ownScope),
     contentsWithTag: async (tenantId, tag, origins) => contentsWithTagIn(t, tenantId, tag, origins),
     writeSkippingRejected: async (entries, actor) => writeSkippingIn(t, entries, actor),
     async writeTogether(entries) {

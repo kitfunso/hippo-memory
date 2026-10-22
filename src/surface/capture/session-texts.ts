@@ -5,7 +5,7 @@ import type { ContextWith } from '../../api/types.js';
 import { infraOf } from '../../api/infra.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
-import { longestWord, storedTextKeys } from '../../base/util/same-text.js';
+import { storedTextKeys } from '../../base/util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { folderIndex } from '../../domain/search/embed-memories.js';
@@ -63,7 +63,7 @@ export async function captureSessionTexts(
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
   const held = await ctx.store.captures.textsHolding(
     dedup.tenantId,
-    items.map((i) => longestWord(i.content)),
+    items.map((i) => i.content),
     { project: dedup.project },
   );
   const { store, config } = ctx;

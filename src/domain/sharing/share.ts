@@ -8,7 +8,7 @@ import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../../base/memory
 import { isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
-import { duplicateKey, longestWord, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
@@ -300,8 +300,8 @@ async function* autoSharePages(
   } while (after !== null);
 }
 
-/** The page's rows that share. Only a global row holding a row's longest word can hold its text, so the global store,
- * the union of every tenant, is asked for those rows alone. */
+/** The page's rows that share. The global store, the union of every tenant, is asked only for the rows that may hold a
+ * page row's text. */
 async function pageCandidates(
   to: Captures,
   page: readonly MemoryEntry[],
@@ -310,8 +310,8 @@ async function pageCandidates(
 ): Promise<MemoryEntry[]> {
   const scored = page.filter((entry) => clearsShareRules(entry, minScore, stats));
   if (scored.length === 0) return [];
-  const words = scored.map((entry) => longestWord(entry.content)).filter((word) => word.length > 0);
-  const globalKeys = storedTextKeys(await to.textsHolding(ALL_TENANTS, words, { everyScope: true }));
+  const texts = scored.map((entry) => entry.content).filter((text) => duplicateKey(text) !== '');
+  const globalKeys = storedTextKeys(await to.textsHolding(ALL_TENANTS, texts, { everyScope: true }));
   return scored.filter((entry) => isNewAndClean(entry, globalKeys, stats));
 }
 
